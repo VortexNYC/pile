@@ -20,6 +20,9 @@ const base = {
   endedAt: null,
 } as const;
 
+const at = (m: number) =>
+  new Date(Date.parse(base.createdAt) + m * 60000).toISOString();
+
 describe("typicalLaneDurationMs", () => {
   it("returns null without usable history", () => {
     expect(typicalLaneDurationMs([])).toBeNull();
@@ -31,8 +34,6 @@ describe("typicalLaneDurationMs", () => {
   });
 
   it("takes the median, falling back to createdAt", () => {
-    const at = (m: number) =>
-      new Date(Date.parse(base.createdAt) + m * 60000).toISOString();
     expect(
       typicalLaneDurationMs([
         { createdAt: at(0), startedAt: null, endedAt: at(10) },

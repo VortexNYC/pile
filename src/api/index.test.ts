@@ -109,6 +109,26 @@ function request(
   });
 }
 
+async function signedGithubRequest(
+  event: string,
+  body: unknown
+): Promise<Request> {
+  const raw = JSON.stringify(body);
+  const signature = `sha256=${await hmacSha256Hex(
+    env.GITHUB_WEBHOOK_SECRET!,
+    raw
+  )}`;
+  return request("/github", {
+    method: "POST",
+    body: raw,
+    headers: {
+      "x-github-event": event,
+      "x-github-delivery": crypto.randomUUID(),
+      "x-hub-signature-256": signature,
+    },
+  });
+}
+
 describe("API integration", () => {
   it("requires a session to list workspaces", async () => {
     const res = await app.fetch(request("/workspaces"), env);
@@ -3528,26 +3548,6 @@ describe("API integration", () => {
       },
       repository: { full_name: "owner/repo" },
     };
-
-    async function signedGithubRequest(
-      event: string,
-      body: unknown
-    ): Promise<Request> {
-      const raw = JSON.stringify(body);
-      const signature = `sha256=${await hmacSha256Hex(
-        env.GITHUB_WEBHOOK_SECRET!,
-        raw
-      )}`;
-      return request("/github", {
-        method: "POST",
-        body: raw,
-        headers: {
-          "x-github-event": event,
-          "x-github-delivery": crypto.randomUUID(),
-          "x-hub-signature-256": signature,
-        },
-      });
-    }
 
     it("rejects a missing signature", async () => {
       const res = await app.fetch(

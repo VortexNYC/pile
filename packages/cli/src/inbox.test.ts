@@ -287,6 +287,129 @@ async function waitForRender(
   );
 }
 
+function createInboxFetch() {
+  const issues: Record<string, unknown>[] = [
+    issue({
+      id: "issue-a",
+      identifier: "ISS-10",
+      title: "First issue",
+      status: "todo",
+      description: "first body",
+      prUrl: "https://github.com/VortexNYC/pile/pull/234",
+      prState: "open",
+      prCheckState: "success",
+    }),
+    issue({
+      id: "issue-b",
+      identifier: "ISS-11",
+      title: "Second issue",
+      status: "triage",
+      description: "second body",
+    }),
+  ];
+  const comments: Record<string, unknown>[] = [
+    {
+      id: "c-1",
+      authorId: null,
+      externalAuthor: "jam",
+      body: "needs repro",
+      createdAt: "2026-09-30T10:30:00.000Z",
+    },
+  ];
+  const mockFetch = vi.fn().mockImplementation((url, init) => {
+    const requestUrl = new URL(
+      typeof url === "string" ? url : (url as URL).href
+    );
+    const pathname = requestUrl.pathname;
+    const method =
+      init && typeof init === "object" && "method" in init
+        ? String(init.method)
+        : "GET";
+    const bodyText =
+      init && typeof init === "object" && typeof init.body === "string"
+        ? init.body
+        : null;
+
+    if (pathname === "/workspaces/ws-1/teams") {
+      return jsonResponse({
+        teams: [{ id: "team-1", key: "ISS", name: "Pile" }],
+      });
+    }
+    if (pathname === "/workspaces/ws-1/memberships") {
+      return jsonResponse({
+        memberships: [
+          {
+            id: "m-1",
+            organizationId: "ws-1",
+            userId: "jam",
+            role: "owner",
+            createdAt: "2026-09-30T00:00:00.000Z",
+          },
+        ],
+      });
+    }
+    if (pathname === "/workspaces/ws-1/agent/providers") {
+      return jsonResponse([{ agentId: "devin-cli" }]);
+    }
+    if (pathname === "/workspaces/ws-1/issues" && method === "GET") {
+      const statusFilter = requestUrl.searchParams.get("status");
+      const search = requestUrl.searchParams.get("search");
+      let filtered = issues;
+      if (statusFilter !== null) {
+        filtered = filtered.filter((i) => i.status === statusFilter);
+      }
+      if (search !== null) {
+        filtered = filtered.filter((i) =>
+          String(i.title).toLowerCase().includes(search.toLowerCase())
+        );
+      }
+      return jsonResponse({ issues: filtered });
+    }
+    if (
+      pathname === "/workspaces/ws-1/issues/issue-a/comments" &&
+      method === "GET"
+    ) {
+      return jsonResponse({ comments });
+    }
+    if (
+      pathname === "/workspaces/ws-1/issues/issue-b/comments" &&
+      method === "GET"
+    ) {
+      return jsonResponse({ comments: [] });
+    }
+    if (
+      pathname === "/workspaces/ws-1/issues/issue-a/comments" &&
+      method === "POST"
+    ) {
+      const body = bodyText !== null ? JSON.parse(bodyText) : {};
+      const created = {
+        id: `c-${comments.length + 1}`,
+        authorId: "user-1",
+        externalAuthor: null,
+        body: body.body,
+        createdAt: "2026-09-30T12:00:00.000Z",
+      };
+      comments.push(created);
+      return jsonResponse(created, 201);
+    }
+    if (pathname === "/workspaces/ws-1/issues/issue-a" && method === "PATCH") {
+      const body = bodyText !== null ? JSON.parse(bodyText) : {};
+      Object.assign(issues[0], body);
+      return jsonResponse(issues[0]);
+    }
+    if (
+      pathname === "/workspaces/ws-1/issues/issue-a/assign" &&
+      method === "POST"
+    ) {
+      const body = bodyText !== null ? JSON.parse(bodyText) : {};
+      issues[0].assigneeId = body.assigneeId;
+      return jsonResponse({ issue: issues[0] });
+    }
+    return Promise.resolve(new Response("not found", { status: 404 }));
+  });
+  return { mockFetch, issues, comments };
+}
+
 describe("pile inbox", () => {
   let home: string;
   let originalHome: string | undefined;
@@ -305,132 +428,6 @@ describe("pile inbox", () => {
     process.env.PILE_API_KEY = originalApiKey;
     rmSync(home, { recursive: true, force: true });
   });
-
-  function createInboxFetch() {
-    const issues: Record<string, unknown>[] = [
-      issue({
-        id: "issue-a",
-        identifier: "ISS-10",
-        title: "First issue",
-        status: "todo",
-        description: "first body",
-        prUrl: "https://github.com/VortexNYC/pile/pull/234",
-        prState: "open",
-        prCheckState: "success",
-      }),
-      issue({
-        id: "issue-b",
-        identifier: "ISS-11",
-        title: "Second issue",
-        status: "triage",
-        description: "second body",
-      }),
-    ];
-    const comments: Record<string, unknown>[] = [
-      {
-        id: "c-1",
-        authorId: null,
-        externalAuthor: "jam",
-        body: "needs repro",
-        createdAt: "2026-09-30T10:30:00.000Z",
-      },
-    ];
-    const mockFetch = vi.fn().mockImplementation((url, init) => {
-      const requestUrl = new URL(
-        typeof url === "string" ? url : (url as URL).href
-      );
-      const pathname = requestUrl.pathname;
-      const method =
-        init && typeof init === "object" && "method" in init
-          ? String(init.method)
-          : "GET";
-      const bodyText =
-        init && typeof init === "object" && typeof init.body === "string"
-          ? init.body
-          : null;
-
-      if (pathname === "/workspaces/ws-1/teams") {
-        return jsonResponse({
-          teams: [{ id: "team-1", key: "ISS", name: "Pile" }],
-        });
-      }
-      if (pathname === "/workspaces/ws-1/memberships") {
-        return jsonResponse({
-          memberships: [
-            {
-              id: "m-1",
-              organizationId: "ws-1",
-              userId: "jam",
-              role: "owner",
-              createdAt: "2026-09-30T00:00:00.000Z",
-            },
-          ],
-        });
-      }
-      if (pathname === "/workspaces/ws-1/agent/providers") {
-        return jsonResponse([{ agentId: "devin-cli" }]);
-      }
-      if (pathname === "/workspaces/ws-1/issues" && method === "GET") {
-        const statusFilter = requestUrl.searchParams.get("status");
-        const search = requestUrl.searchParams.get("search");
-        let filtered = issues;
-        if (statusFilter !== null) {
-          filtered = filtered.filter((i) => i.status === statusFilter);
-        }
-        if (search !== null) {
-          filtered = filtered.filter((i) =>
-            String(i.title).toLowerCase().includes(search.toLowerCase())
-          );
-        }
-        return jsonResponse({ issues: filtered });
-      }
-      if (
-        pathname === "/workspaces/ws-1/issues/issue-a/comments" &&
-        method === "GET"
-      ) {
-        return jsonResponse({ comments });
-      }
-      if (
-        pathname === "/workspaces/ws-1/issues/issue-b/comments" &&
-        method === "GET"
-      ) {
-        return jsonResponse({ comments: [] });
-      }
-      if (
-        pathname === "/workspaces/ws-1/issues/issue-a/comments" &&
-        method === "POST"
-      ) {
-        const body = bodyText !== null ? JSON.parse(bodyText) : {};
-        const created = {
-          id: `c-${comments.length + 1}`,
-          authorId: "user-1",
-          externalAuthor: null,
-          body: body.body,
-          createdAt: "2026-09-30T12:00:00.000Z",
-        };
-        comments.push(created);
-        return jsonResponse(created, 201);
-      }
-      if (
-        pathname === "/workspaces/ws-1/issues/issue-a" &&
-        method === "PATCH"
-      ) {
-        const body = bodyText !== null ? JSON.parse(bodyText) : {};
-        Object.assign(issues[0], body);
-        return jsonResponse(issues[0]);
-      }
-      if (
-        pathname === "/workspaces/ws-1/issues/issue-a/assign" &&
-        method === "POST"
-      ) {
-        const body = bodyText !== null ? JSON.parse(bodyText) : {};
-        issues[0].assigneeId = body.assigneeId;
-        return jsonResponse({ issue: issues[0] });
-      }
-      return Promise.resolve(new Response("not found", { status: 404 }));
-    });
-    return { mockFetch, issues, comments };
-  }
 
   it("exits 1 without --workspace", async () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);

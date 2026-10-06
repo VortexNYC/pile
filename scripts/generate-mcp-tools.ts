@@ -24,8 +24,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function fail(message: string): never {
-  console.error(`generate-mcp-tools: ${message}`);
-  process.exit(1);
+  throw new Error(`generate-mcp-tools: ${message}`);
 }
 
 function generateOperationId(method: string, path: string): string {

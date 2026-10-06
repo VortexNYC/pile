@@ -7,11 +7,26 @@ updates:
       interval: weekly
     open-pull-requests-limit: 10
     groups:
+      # Only minors+patches group together. Majors each get their own PR so
+      # breaking changes (e.g. @cloudflare/sandbox, vitest, typescript)
+      # never ride a group bump into a broken CI run.
       dependencies:
         patterns:
           - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    # Same split — action majors (checkout, upload-artifact, ...) each get
+    # their own PR instead of a single weekly mega-bump.
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"

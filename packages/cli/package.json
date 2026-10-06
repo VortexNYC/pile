@@ -35,11 +35,11 @@
     "build:bin": "bun build --compile --minify src/index.ts --outfile dist/pile"
   },
   "dependencies": {
-    "@opentui/core": "0.5.12",
+    "@opentui/core": "0.5.14",
     "openapi-fetch": "0.17.0"
   },
   "devDependencies": {
     "@pile/tsconfig": "workspace:*",
-    "tsx": "4.23.13"
+    "tsx": "4.23.15"
   }
 }

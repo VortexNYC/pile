@@ -90,73 +90,73 @@ function makeRemote(remotes: string, repo: string): string {
   return bare;
 }
 
-describe("runner secondary repos (PILE-294)", () => {
-  function runLane(extra: Record<string, string> = {}) {
-    const root = mkdtempSync(join(tmpdir(), "pile-xrepo-"));
-    const remotes = join(root, "remotes");
-    const home = join(root, "home");
-    mkdirSync(home);
-    const vortex = makeRemote(remotes, "acme/vortex");
-    makeRemote(remotes, "acme/docs");
-    const canary = join(root, "hook-ran");
-    const harness = join(root, "harness.py");
-    writeFileSync(harness, HARNESS);
+function runLane(extra: Record<string, string> = {}) {
+  const root = mkdtempSync(join(tmpdir(), "pile-xrepo-"));
+  const remotes = join(root, "remotes");
+  const home = join(root, "home");
+  mkdirSync(home);
+  const vortex = makeRemote(remotes, "acme/vortex");
+  makeRemote(remotes, "acme/docs");
+  const canary = join(root, "hook-ran");
+  const harness = join(root, "harness.py");
+  writeFileSync(harness, HARNESS);
 
-    const env: NodeJS.ProcessEnv = {
-      ...process.env,
-      HOME: home,
-      REPO: "acme/pile",
-      BRANCH: LANE_BRANCH,
-      GITHUB_TOKEN: TOKEN,
-      ISSUE_TITLE: "Cross-repo fix",
-      ISSUE_IDENTIFIER: "PILE-294",
-      AGENT_LABEL: "Devin",
-      GIT_AUTHOR_NAME: "Agent",
-      GIT_AUTHOR_EMAIL: "agent@example.com",
-      GIT_COMMITTER_NAME: "Agent",
-      GIT_COMMITTER_EMAIL: "agent@example.com",
-      SECONDARY_REPOS_JSON: JSON.stringify([
-        { repo: "acme/vortex", access: "write", token: SECONDARY_TOKEN },
-        { repo: "acme/docs", access: "read", token: SECONDARY_TOKEN },
-      ]),
-      TEST_REMOTES: remotes,
-      TEST_CANARY: canary,
-      ...extra,
-    };
-    for (const key of [
-      "PILE_LOG_URL",
-      "PILE_LOG_TOKEN",
-      "PILE_CACHE_URL",
-      "PILE_TOKEN_URL",
-      "LANE_TOKEN",
-    ]) {
-      delete env[key];
-    }
-
-    const out = execFileSync("python3", [harness, CORE_PATH], {
-      encoding: "utf8",
-      env,
-      timeout: 60_000,
-    });
-    const line = out.split("\n").find((l) => l.startsWith("RESULT:"));
-    if (!line) throw new Error(`harness emitted no RESULT line:\n${out}`);
-    const res = JSON.parse(line.slice("RESULT:".length)) as {
-      calls: Array<{
-        method: string;
-        path: string;
-        repo: string | null;
-        secondaryToken: boolean;
-      }>;
-      digest: { secondaryPrs?: Array<{ repo: string; prUrl: string }> };
-      errors: string[];
-      agentEnvKeys: string[];
-      revoked: boolean[];
-      remote: string;
-    };
-
-    return { res, home, vortex, canary };
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    HOME: home,
+    REPO: "acme/pile",
+    BRANCH: LANE_BRANCH,
+    GITHUB_TOKEN: TOKEN,
+    ISSUE_TITLE: "Cross-repo fix",
+    ISSUE_IDENTIFIER: "PILE-294",
+    AGENT_LABEL: "Devin",
+    GIT_AUTHOR_NAME: "Agent",
+    GIT_AUTHOR_EMAIL: "agent@example.com",
+    GIT_COMMITTER_NAME: "Agent",
+    GIT_COMMITTER_EMAIL: "agent@example.com",
+    SECONDARY_REPOS_JSON: JSON.stringify([
+      { repo: "acme/vortex", access: "write", token: SECONDARY_TOKEN },
+      { repo: "acme/docs", access: "read", token: SECONDARY_TOKEN },
+    ]),
+    TEST_REMOTES: remotes,
+    TEST_CANARY: canary,
+    ...extra,
+  };
+  for (const key of [
+    "PILE_LOG_URL",
+    "PILE_LOG_TOKEN",
+    "PILE_CACHE_URL",
+    "PILE_TOKEN_URL",
+    "LANE_TOKEN",
+  ]) {
+    delete env[key];
   }
 
+  const out = execFileSync("python3", [harness, CORE_PATH], {
+    encoding: "utf8",
+    env,
+    timeout: 60_000,
+  });
+  const line = out.split("\n").find((l) => l.startsWith("RESULT:"));
+  if (!line) throw new Error(`harness emitted no RESULT line:\n${out}`);
+  const res = JSON.parse(line.slice("RESULT:".length)) as {
+    calls: Array<{
+      method: string;
+      path: string;
+      repo: string | null;
+      secondaryToken: boolean;
+    }>;
+    digest: { secondaryPrs?: Array<{ repo: string; prUrl: string }> };
+    errors: string[];
+    agentEnvKeys: string[];
+    revoked: boolean[];
+    remote: string;
+  };
+
+  return { res, home, vortex, canary };
+}
+
+describe("runner secondary repos (PILE-294)", () => {
   it("clones under ~/xrepo and pushes + opens a PR for write entries", () => {
     const { res, home, vortex, canary } = runLane();
     expect(res.errors).toEqual([]);

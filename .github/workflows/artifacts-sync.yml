@@ -11,6 +11,9 @@ on:
       # push on branches that exist only to hold a lane's PR diff. Lanes open
       # PRs off these branches; GitHub-side PR checks still run normally.
       - "issue-*"
+      # Dependabot branches are ephemeral PR heads and their pushes run
+      # without repo secrets, so the Artifacts push can never auth.
+      - "dependabot/**"
   workflow_dispatch:
 
 concurrency:

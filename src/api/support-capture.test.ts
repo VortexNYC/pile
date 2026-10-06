@@ -69,6 +69,30 @@ function captureFetch(path: string, init: RequestInit = {}): Promise<Response> {
   return app.fetch(request, env) as Promise<Response>;
 }
 
+async function issueCaptureToken(
+  publicKey: { key: string },
+  origin = "https://example.com",
+  reference?: string
+): Promise<{ token: string; recordingUrl: string }> {
+  const res = await captureFetch("/support/capture/token", {
+    method: "POST",
+    headers: {
+      "x-pile-capture-public-key": publicKey.key,
+      ...(reference ? { "x-pile-capture-reference": reference } : {}),
+      origin,
+    },
+  });
+  expect(res.status).toBe(200);
+  return (await res.json()) as { token: string; recordingUrl: string };
+}
+
+function linkToken(tokenValue: string): Promise<Response> {
+  return captureFetch("/support/capture/token", {
+    method: "POST",
+    headers: { "x-pile-capture-link": tokenValue },
+  });
+}
+
 async function signJamWebhook({
   payload,
   svixId,
@@ -141,21 +165,31 @@ describe("support-capture API", () => {
     return { id, key, webhookSecret };
   }
 
-  async function issueCaptureToken(
-    publicKey: { key: string },
-    origin = "https://example.com",
-    reference?: string
-  ): Promise<{ token: string; recordingUrl: string }> {
-    const res = await captureFetch("/support/capture/token", {
-      method: "POST",
-      headers: {
-        "x-pile-capture-public-key": publicKey.key,
-        ...(reference ? { "x-pile-capture-reference": reference } : {}),
-        origin,
-      },
-    });
-    expect(res.status).toBe(200);
-    return (await res.json()) as { token: string; recordingUrl: string };
+  async function createLink(
+    body: Record<string, unknown> = {}
+  ): Promise<{ id: string; token: string; url: string }> {
+    const publicKey = await createPublicKey();
+    const res = await captureFetch(
+      `/workspaces/${organizationId}/support/capture-links`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          publicKeyId: publicKey.id,
+          name: "Customer recording link",
+          ...body,
+        }),
+      }
+    );
+    expect(res.status).toBe(201);
+    return (await res.json()) as {
+      id: string;
+      token: string;
+      url: string;
+    };
   }
 
   it("rejects public key creation without auth", async () => {
@@ -1375,40 +1409,6 @@ describe("support-capture API", () => {
   });
 
   describe("capture links", () => {
-    async function createLink(
-      body: Record<string, unknown> = {}
-    ): Promise<{ id: string; token: string; url: string }> {
-      const publicKey = await createPublicKey();
-      const res = await captureFetch(
-        `/workspaces/${organizationId}/support/capture-links`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            publicKeyId: publicKey.id,
-            name: "Customer recording link",
-            ...body,
-          }),
-        }
-      );
-      expect(res.status).toBe(201);
-      return (await res.json()) as {
-        id: string;
-        token: string;
-        url: string;
-      };
-    }
-
-    function linkToken(tokenValue: string): Promise<Response> {
-      return captureFetch("/support/capture/token", {
-        method: "POST",
-        headers: { "x-pile-capture-link": tokenValue },
-      });
-    }
-
     it("creates, lists, and revokes a capture link", async () => {
       const link = await createLink();
       expect(link.token).toMatch(/^capl_/);

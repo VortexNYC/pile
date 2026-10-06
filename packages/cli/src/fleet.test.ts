@@ -394,6 +394,118 @@ async function waitForRender(
   );
 }
 
+function createFleetFetch() {
+  const sessions: Record<string, unknown>[] = [
+    session({
+      id: "sess-live",
+      issueId: "issue-live",
+      status: "running",
+      createdAt: "2026-09-30T11:00:00.000Z",
+    }),
+    session({
+      id: "sess-done",
+      issueId: "issue-done",
+      status: "failed",
+      endedAt: "2026-09-30T11:30:00.000Z",
+    }),
+  ];
+  return vi.fn().mockImplementation((url: URL | string, init?: RequestInit) => {
+    const pathname = new URL(typeof url === "string" ? url : url.href).pathname;
+    if (pathname === "/workspaces/ws-1/agent/sessions") {
+      return jsonResponse({ sessions });
+    }
+    if (pathname === "/workspaces/ws-1/agent/fleet-health") {
+      return jsonResponse({
+        live: 1,
+        missingEndedAt: 0,
+        providers: [
+          {
+            agentId: "devin-cli",
+            live: 1,
+            keptSandboxes: 0,
+            infraStreak: 0,
+            unhealthy: false,
+          },
+        ],
+      });
+    }
+    if (pathname === "/workspaces/ws-1/agent/sessions/sess-live/state") {
+      return jsonResponse({
+        session: sessions[0],
+        provider: { state: "running", logs: "lane-one\nstill going" },
+      });
+    }
+    if (pathname === "/workspaces/ws-1/agent/sessions/sess-done/state") {
+      return Promise.resolve(new Response("gone", { status: 400 }));
+    }
+    if (pathname === "/workspaces/ws-1/issues/issue-live") {
+      return jsonResponse({ id: "issue-live", identifier: "ISS-10" });
+    }
+    if (pathname === "/workspaces/ws-1/issues/issue-done") {
+      return jsonResponse({ id: "issue-done", identifier: "ISS-11" });
+    }
+    if (pathname === "/workspaces/ws-1/agent/setup-status") {
+      return jsonResponse({
+        githubConnected: true,
+        providers: [
+          {
+            agentId: "devin",
+            credentials: "workspace",
+            computeProvider: "daytona",
+            computeCredentials: "deployment",
+            missing: [],
+            ready: true,
+          },
+          {
+            agentId: "devin-cli",
+            credentials: "workspace",
+            computeProvider: "daytona",
+            computeCredentials: "deployment",
+            missing: [],
+            ready: true,
+          },
+          {
+            agentId: "cursor",
+            credentials: "none",
+            computeProvider: "daytona",
+            computeCredentials: "none",
+            missing: ["credentials", "compute credentials"],
+            ready: false,
+          },
+        ],
+      });
+    }
+    if (pathname === "/workspaces/ws-1/agent/dispatch-batch") {
+      const body =
+        typeof init?.body === "string"
+          ? (JSON.parse(init.body) as { items?: { issueId: string }[] })
+          : {};
+      return jsonResponse({
+        batchId: "batch-12345678",
+        results: (body.items ?? []).map((item) => ({
+          issueId: item.issueId,
+          sessionId: `sess-${item.issueId}`,
+          status: "created",
+          error: null,
+        })),
+      });
+    }
+    if (pathname.endsWith("/cancel")) {
+      return jsonResponse({ id: "sess-live", status: "canceled" });
+    }
+    if (pathname.endsWith("/prompt")) {
+      return jsonResponse({ id: "sess-live", status: "running" });
+    }
+    if (pathname.endsWith("/retry")) {
+      return jsonResponse(
+        session({ id: "sess-retry", status: "created" }),
+        201
+      );
+    }
+    return Promise.resolve(new Response("not found", { status: 404 }));
+  });
+}
+
 describe("pile fleet", () => {
   let home: string;
   let originalHome: string | undefined;
@@ -412,121 +524,6 @@ describe("pile fleet", () => {
     process.env.PILE_API_KEY = originalApiKey;
     rmSync(home, { recursive: true, force: true });
   });
-
-  function createFleetFetch() {
-    const sessions: Record<string, unknown>[] = [
-      session({
-        id: "sess-live",
-        issueId: "issue-live",
-        status: "running",
-        createdAt: "2026-09-30T11:00:00.000Z",
-      }),
-      session({
-        id: "sess-done",
-        issueId: "issue-done",
-        status: "failed",
-        endedAt: "2026-09-30T11:30:00.000Z",
-      }),
-    ];
-    return vi
-      .fn()
-      .mockImplementation((url: URL | string, init?: RequestInit) => {
-        const pathname = new URL(typeof url === "string" ? url : url.href)
-          .pathname;
-        if (pathname === "/workspaces/ws-1/agent/sessions") {
-          return jsonResponse({ sessions });
-        }
-        if (pathname === "/workspaces/ws-1/agent/fleet-health") {
-          return jsonResponse({
-            live: 1,
-            missingEndedAt: 0,
-            providers: [
-              {
-                agentId: "devin-cli",
-                live: 1,
-                keptSandboxes: 0,
-                infraStreak: 0,
-                unhealthy: false,
-              },
-            ],
-          });
-        }
-        if (pathname === "/workspaces/ws-1/agent/sessions/sess-live/state") {
-          return jsonResponse({
-            session: sessions[0],
-            provider: { state: "running", logs: "lane-one\nstill going" },
-          });
-        }
-        if (pathname === "/workspaces/ws-1/agent/sessions/sess-done/state") {
-          return Promise.resolve(new Response("gone", { status: 400 }));
-        }
-        if (pathname === "/workspaces/ws-1/issues/issue-live") {
-          return jsonResponse({ id: "issue-live", identifier: "ISS-10" });
-        }
-        if (pathname === "/workspaces/ws-1/issues/issue-done") {
-          return jsonResponse({ id: "issue-done", identifier: "ISS-11" });
-        }
-        if (pathname === "/workspaces/ws-1/agent/setup-status") {
-          return jsonResponse({
-            githubConnected: true,
-            providers: [
-              {
-                agentId: "devin",
-                credentials: "workspace",
-                computeProvider: "daytona",
-                computeCredentials: "deployment",
-                missing: [],
-                ready: true,
-              },
-              {
-                agentId: "devin-cli",
-                credentials: "workspace",
-                computeProvider: "daytona",
-                computeCredentials: "deployment",
-                missing: [],
-                ready: true,
-              },
-              {
-                agentId: "cursor",
-                credentials: "none",
-                computeProvider: "daytona",
-                computeCredentials: "none",
-                missing: ["credentials", "compute credentials"],
-                ready: false,
-              },
-            ],
-          });
-        }
-        if (pathname === "/workspaces/ws-1/agent/dispatch-batch") {
-          const body =
-            typeof init?.body === "string"
-              ? (JSON.parse(init.body) as { items?: { issueId: string }[] })
-              : {};
-          return jsonResponse({
-            batchId: "batch-12345678",
-            results: (body.items ?? []).map((item) => ({
-              issueId: item.issueId,
-              sessionId: `sess-${item.issueId}`,
-              status: "created",
-              error: null,
-            })),
-          });
-        }
-        if (pathname.endsWith("/cancel")) {
-          return jsonResponse({ id: "sess-live", status: "canceled" });
-        }
-        if (pathname.endsWith("/prompt")) {
-          return jsonResponse({ id: "sess-live", status: "running" });
-        }
-        if (pathname.endsWith("/retry")) {
-          return jsonResponse(
-            session({ id: "sess-retry", status: "created" }),
-            201
-          );
-        }
-        return Promise.resolve(new Response("not found", { status: 404 }));
-      });
-  }
 
   it("exits 1 without --workspace", async () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -1045,6 +1042,43 @@ function countCalls(
   ).length;
 }
 
+function createFleetRealtimeFetch() {
+  const sessions: Record<string, unknown>[] = [
+    session({
+      id: "sess-live",
+      issueId: "issue-live",
+      status: "running",
+      createdAt: "2026-09-30T11:00:00.000Z",
+    }),
+    session({
+      id: "sess-done",
+      issueId: "issue-done",
+      status: "failed",
+      endedAt: "2026-09-30T11:30:00.000Z",
+    }),
+  ];
+  return vi.fn().mockImplementation((url: URL | string) => {
+    const pathname = new URL(typeof url === "string" ? url : url.href).pathname;
+    if (pathname === "/workspaces/ws-1/agent/sessions") {
+      return jsonResponse({ sessions });
+    }
+    if (pathname === "/workspaces/ws-1/agent/fleet-health") {
+      return jsonResponse({
+        live: 1,
+        missingEndedAt: 0,
+        providers: [],
+      });
+    }
+    if (pathname === "/workspaces/ws-1/agent/sessions/sess-live/state") {
+      return jsonResponse({
+        session: sessions[0],
+        provider: { state: "running", logs: "lane-one\nstill going" },
+      });
+    }
+    return jsonResponse({ id: "x", identifier: "ISS-1" });
+  });
+}
+
 describe("pile fleet realtime mode", () => {
   let home: string;
   let originalHome: string | undefined;
@@ -1064,46 +1098,8 @@ describe("pile fleet realtime mode", () => {
     rmSync(home, { recursive: true, force: true });
   });
 
-  function createFleetFetch() {
-    const sessions: Record<string, unknown>[] = [
-      session({
-        id: "sess-live",
-        issueId: "issue-live",
-        status: "running",
-        createdAt: "2026-09-30T11:00:00.000Z",
-      }),
-      session({
-        id: "sess-done",
-        issueId: "issue-done",
-        status: "failed",
-        endedAt: "2026-09-30T11:30:00.000Z",
-      }),
-    ];
-    return vi.fn().mockImplementation((url: URL | string) => {
-      const pathname = new URL(typeof url === "string" ? url : url.href)
-        .pathname;
-      if (pathname === "/workspaces/ws-1/agent/sessions") {
-        return jsonResponse({ sessions });
-      }
-      if (pathname === "/workspaces/ws-1/agent/fleet-health") {
-        return jsonResponse({
-          live: 1,
-          missingEndedAt: 0,
-          providers: [],
-        });
-      }
-      if (pathname === "/workspaces/ws-1/agent/sessions/sess-live/state") {
-        return jsonResponse({
-          session: sessions[0],
-          provider: { state: "running", logs: "lane-one\nstill going" },
-        });
-      }
-      return jsonResponse({ id: "x", identifier: "ISS-1" });
-    });
-  }
-
   it("connects with ?token= and updates rows from events without refetching", async () => {
-    const mockFetch = createFleetFetch();
+    const mockFetch = createFleetRealtimeFetch();
     const { view, rendered, press } = createFakeView();
     const sockets: FakeSocket[] = [];
     const urls: string[] = [];
@@ -1173,7 +1169,7 @@ describe("pile fleet realtime mode", () => {
   });
 
   it("refreshes the log tail when an event lands on the selected lane", async () => {
-    const mockFetch = createFleetFetch();
+    const mockFetch = createFleetRealtimeFetch();
     const { view, rendered, press } = createFakeView();
     const sockets: FakeSocket[] = [];
 
@@ -1230,7 +1226,7 @@ describe("pile fleet realtime mode", () => {
   });
 
   it("updates the PR column on pr.updated events", async () => {
-    const mockFetch = createFleetFetch();
+    const mockFetch = createFleetRealtimeFetch();
     const { view, rendered, press } = createFakeView();
     const sockets: FakeSocket[] = [];
 
@@ -1278,7 +1274,7 @@ describe("pile fleet realtime mode", () => {
   });
 
   it("shows terminal status from the event without hitting /state", async () => {
-    const mockFetch = createFleetFetch();
+    const mockFetch = createFleetRealtimeFetch();
     const { view, rendered, press } = createFakeView();
     const sockets: FakeSocket[] = [];
 
@@ -1339,7 +1335,7 @@ describe("pile fleet realtime mode", () => {
   });
 
   it("falls back to polling when the socket drops", async () => {
-    const mockFetch = createFleetFetch();
+    const mockFetch = createFleetRealtimeFetch();
     const { view, rendered, press } = createFakeView();
     const sockets: FakeSocket[] = [];
 

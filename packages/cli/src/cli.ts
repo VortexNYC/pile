@@ -289,6 +289,17 @@ function printResponse(text: string): void {
   }
 }
 
+function parseBodyFlagValue(raw: string): unknown {
+  if (raw.startsWith("[") || raw.startsWith("{")) {
+    try {
+      return parseJson(raw);
+    } catch {
+      // keep as string if it looked like JSON but was not
+    }
+  }
+  return raw;
+}
+
 async function executeCommand(
   positionals: readonly string[],
   flags: Readonly<Record<string, string | boolean>>,
@@ -343,17 +354,6 @@ async function executeCommand(
     for (const [key, value] of Object.entries(queryJson)) {
       url.searchParams.set(key, String(value));
     }
-  }
-
-  function parseBodyFlagValue(raw: string): unknown {
-    if (raw.startsWith("[") || raw.startsWith("{")) {
-      try {
-        return parseJson(raw);
-      } catch {
-        // keep as string if it looked like JSON but was not
-      }
-    }
-    return raw;
   }
 
   const bodyJson = parseJsonObjectFlag(flags, "body-json");

@@ -605,63 +605,63 @@ describe("agent sessions API", () => {
     expect(seenInstructions).toContain("VortexNYC/pile");
   });
 
+  function workspaceStub() {
+    return env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+  }
+
+  async function createPlanIssue(title: string) {
+    const res = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ title }),
+      }),
+      env
+    );
+    expect(res.status).toBe(201);
+    return res.json<{ id: string }>();
+  }
+
+  async function dispatchPlan(issueId: string, body: Record<string, unknown>) {
+    return app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issueId}/dispatch`, {
+        method: "POST",
+        token,
+        body: JSON.stringify(body),
+      }),
+      env
+    );
+  }
+
+  async function comment(issueId: string, body: string) {
+    const res = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issueId}/comments`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ body }),
+      }),
+      env
+    );
+    expect(res.status).toBe(201);
+  }
+
+  async function completeWithPlan(sessionId: string, plan: string) {
+    await workspaceStub().applyAgentSessionResult(sessionId, {
+      status: "completed",
+      result: JSON.stringify({ output_tail: plan }),
+    });
+  }
+
   describe("plan mode (PILE-283)", () => {
-    function workspaceStub() {
-      return env.WORKSPACE_DURABLE_OBJECT.get(
-        env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
-      );
-    }
-
-    async function createIssue(title: string) {
-      const res = await app.fetch(
-        request(`/workspaces/${organizationId}/issues`, {
-          method: "POST",
-          token,
-          body: JSON.stringify({ title }),
-        }),
-        env
-      );
-      expect(res.status).toBe(201);
-      return res.json<{ id: string }>();
-    }
-
-    async function dispatch(issueId: string, body: Record<string, unknown>) {
-      return app.fetch(
-        request(`/workspaces/${organizationId}/issues/${issueId}/dispatch`, {
-          method: "POST",
-          token,
-          body: JSON.stringify(body),
-        }),
-        env
-      );
-    }
-
-    async function comment(issueId: string, body: string) {
-      const res = await app.fetch(
-        request(`/workspaces/${organizationId}/issues/${issueId}/comments`, {
-          method: "POST",
-          token,
-          body: JSON.stringify({ body }),
-        }),
-        env
-      );
-      expect(res.status).toBe(201);
-    }
-
-    async function completeWithPlan(sessionId: string, plan: string) {
-      await workspaceStub().applyAgentSessionResult(sessionId, {
-        status: "completed",
-        result: JSON.stringify({ output_tail: plan }),
-      });
-    }
-
     it("plan → revise → implement_plan dispatches a build lane from the plan", async () => {
       const { agentId, seen } = registerPlanMock();
-      const issue = await createIssue(
+      const issue = await createPlanIssue(
         `Plan-mode flow ${crypto.randomUUID().slice(0, 8)}`
       );
 
-      const planRes = await dispatch(issue.id, { agentId, mode: "plan" });
+      const planRes = await dispatchPlan(issue.id, { agentId, mode: "plan" });
       expect(planRes.status).toBe(201);
       const planSession = await planRes.json<{
         id: string;
@@ -696,7 +696,7 @@ describe("agent sessions API", () => {
       if (!revision) throw new Error("revision lane missing");
       await completeWithPlan(revision.id, "1. Approach: add a config key");
 
-      const buildRes = await dispatch(issue.id, {
+      const buildRes = await dispatchPlan(issue.id, {
         agentId,
         mode: "implement_plan",
       });
@@ -717,20 +717,23 @@ describe("agent sessions API", () => {
 
     it("implement_plan without a plan is rejected", async () => {
       const { agentId } = registerPlanMock();
-      const issue = await createIssue(
+      const issue = await createPlanIssue(
         `Planless ${crypto.randomUUID().slice(0, 8)}`
       );
-      const res = await dispatch(issue.id, { agentId, mode: "implement_plan" });
+      const res = await dispatchPlan(issue.id, {
+        agentId,
+        mode: "implement_plan",
+      });
       expect(res.status).toBe(400);
     });
 
     it("adding the plan label dispatches a plan lane", async () => {
       const { agentId, seen } = registerPlanMock();
-      const issue = await createIssue(
+      const issue = await createPlanIssue(
         `Plan label ${crypto.randomUUID().slice(0, 8)}`
       );
       // An earlier lane pins the agent the label trigger reuses.
-      const firstRes = await dispatch(issue.id, { agentId });
+      const firstRes = await dispatchPlan(issue.id, { agentId });
       expect(firstRes.status).toBe(201);
       const first = await firstRes.json<{ id: string }>();
       await workspaceStub().applyAgentSessionResult(first.id, {

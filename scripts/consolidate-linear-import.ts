@@ -6,7 +6,8 @@ const baseUrl = (process.env.PILE_BASE_URL ?? "https://pile.nyc").replace(
 );
 const apiKey = process.env.PILE_API_KEY;
 const workspace = process.argv.find(
-  (arg, index) => arg === "--workspace" && index + 1 < process.argv.length
+  (arg: string, index: number) =>
+    arg === "--workspace" && index + 1 < process.argv.length
 )
   ? process.argv[process.argv.indexOf("--workspace") + 1]
   : "org_vortex_main";
