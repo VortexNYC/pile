@@ -366,13 +366,23 @@ export function titleOverlapScore(a: string, b: string): number {
   return shared / size;
 }
 
+/** Lowercase alphanumeric-only form of a title, for verbatim-match checks
+ *  when a title has too few significant terms for the index to help. */
+export function normalizeIssueTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
 /** Open issues whose titles closely match `title`, best first. BM25 gathers
- *  candidates; `titleOverlapScore` ranks them and drops weak matches. */
+ *  candidates; `titleOverlapScore` ranks them and drops weak matches.
+ *  Index rows may be stale — callers re-verify against storage and apply
+ *  their own limit, so this returns the whole candidate pool. */
 export async function findDuplicateCandidates(
   index: WorkspaceSearchIndex,
   title: string,
-  teamIds: string[],
-  limit = 5
+  teamIds: string[]
 ): Promise<DuplicateCandidateHit[]> {
   const terms = similarityTerms(title);
   if (terms.length === 0) return [];
@@ -394,5 +404,5 @@ export async function findDuplicateCandidates(
     if (score < DUPLICATE_MIN_SCORE) continue;
     hits.push({ issueId: doc.issueId || doc.id, score });
   }
-  return hits.toSorted((a, b) => b.score - a.score).slice(0, limit);
+  return hits.toSorted((a, b) => b.score - a.score);
 }

@@ -132,7 +132,9 @@ import {
   findSimilarIssues,
   insertMultiple as insertSearchDocs,
   issueToSearchDocument,
+  normalizeIssueTitle,
   removeIssueDocuments,
+  similarityTerms,
   titleOverlapScore,
   searchDocuments,
   searchIssues,
@@ -1883,8 +1885,30 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     limit = 5
   ): Promise<Array<{ issue: Issue; score: number }>> {
     await this.ready;
+    if (teamIds.length === 0) return [];
+    if (similarityTerms(title).length === 0) {
+      // No indexable terms — the index can't help, and generic titles like
+      // "Fix it" are the likeliest collisions. Match them verbatim instead.
+      const wanted = title.toLowerCase();
+      const normalized = normalizeIssueTitle(title);
+      const rows = await this.db
+        .select()
+        .from(workspaceIssues)
+        .where(inArray(workspaceIssues.teamId, teamIds))
+        .all();
+      return rows
+        .flatMap((issue) => {
+          if (issue.status === "done" || issue.status === "canceled") return [];
+          const sameTitle =
+            issue.title.toLowerCase() === wanted ||
+            (normalized !== "" &&
+              normalizeIssueTitle(issue.title) === normalized);
+          return sameTitle ? [{ issue, score: 1 }] : [];
+        })
+        .slice(0, limit);
+    }
     const index = await this.ensureSearchIndex();
-    const hits = await findDuplicateCandidates(index, title, teamIds, limit);
+    const hits = await findDuplicateCandidates(index, title, teamIds);
     const matches = await Promise.all(
       hits.map((hit) => this.getIssue(hit.issueId))
     );
@@ -1900,7 +1924,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         const score = titleOverlapScore(title, issue.title);
         return score >= DUPLICATE_MIN_SCORE ? [{ issue, score }] : [];
       })
-      .toSorted((a, b) => b.score - a.score);
+      .toSorted((a, b) => b.score - a.score)
+      .slice(0, limit);
   }
 
   // Extract [[doc slug/id]] and ISSUE-KEY references from content.

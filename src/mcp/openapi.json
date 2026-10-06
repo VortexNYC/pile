@@ -220,6 +220,43 @@
           "status",
           "score"
         ]
+      },
+      "DuplicateConflictError": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "CONFLICT"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "hint": {
+            "type": "string"
+          },
+          "details": {
+            "type": "object",
+            "properties": {
+              "possibleDuplicates": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/PossibleDuplicate"
+                }
+              }
+            },
+            "required": [
+              "possibleDuplicates"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "hint",
+          "details"
+        ]
       }
     },
     "parameters": {}
@@ -1900,7 +1937,14 @@
             }
           },
           "409": {
-            "description": "dedupe=block and possible duplicates exist (details.possibleDuplicates)"
+            "description": "dedupe=block and possible duplicates exist (details.possibleDuplicates)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DuplicateConflictError"
+                }
+              }
+            }
           }
         },
         "summary": "Create issue"

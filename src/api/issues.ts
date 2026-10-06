@@ -545,6 +545,20 @@ const createIssueRoute = createRoute({
     409: {
       description:
         "dedupe=block and possible duplicates exist (details.possibleDuplicates)",
+      content: {
+        "application/json": {
+          schema: z
+            .object({
+              code: z.literal("CONFLICT"),
+              message: z.string(),
+              hint: z.string(),
+              details: z.object({
+                possibleDuplicates: z.array(possibleDuplicateSchema),
+              }),
+            })
+            .openapi("DuplicateConflictError"),
+        },
+      },
     },
     200: {
       description:

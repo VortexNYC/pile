@@ -887,7 +887,9 @@ export interface paths {
                     headers: {
                         [name: string]: unknown;
                     };
-                    content?: never;
+                    content: {
+                        "application/json": components["schemas"]["DuplicateConflictError"];
+                    };
                 };
             };
         };
@@ -25417,6 +25419,15 @@ export interface components {
             status: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
             /** @description Share of significant title terms in common with the new title (0-1) */
             score: number;
+        };
+        DuplicateConflictError: {
+            /** @enum {string} */
+            code: "CONFLICT";
+            message: string;
+            hint: string;
+            details: {
+                possibleDuplicates: components["schemas"]["PossibleDuplicate"][];
+            };
         };
     };
     responses: never;

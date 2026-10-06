@@ -1086,4 +1086,42 @@ describe("possible duplicates on create (PILE-163)", () => {
     );
     expect(statuses.toSorted()).toEqual([201, 409]);
   });
+
+  it("returns the existing issue on externalRef replay, even with dedupe=block", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const externalRef = `test:${crypto.randomUUID()}`;
+    const create = async (body: Record<string, unknown>, query = "") =>
+      fetch(
+        `/workspaces/${organizationId}/issues${query}`,
+        { method: "POST", body: JSON.stringify(body) },
+        token
+      );
+
+    const firstRes = await create({
+      title: "Retry storm exhausts worker budget",
+      externalRef,
+    });
+    expect(firstRes.status).toBe(201);
+    const first = z.object({ id: z.string() }).parse(await firstRes.json());
+
+    // A near-identical title means a fresh create would hit duplicates.
+    const dupRes = await create({
+      title: "Retry storm exhausts the worker budget",
+    });
+    expect(dupRes.status).toBe(201);
+
+    for (const query of ["?dedupe=block", "?dedupe=warn"]) {
+      const replay = await create(
+        { title: "Retry storm exhausts worker budget", externalRef },
+        query
+      );
+      expect(replay.status).toBe(200);
+      const body = (await replay.json()) as {
+        id: string;
+        possibleDuplicates?: unknown;
+      };
+      expect(body.id).toBe(first.id);
+      expect(body.possibleDuplicates).toBeUndefined();
+    }
+  });
 });
