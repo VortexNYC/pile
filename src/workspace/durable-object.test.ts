@@ -730,4 +730,68 @@ describe("WorkspaceDO", () => {
       first.id
     );
   });
+
+  it("re-anchors waiting dependents of a dead session onto its retry", async () => {
+    const stub = getStub();
+    const sessionBase = {
+      agentId: "mock",
+      provider: "mock",
+      actorId: "user-1",
+      actorType: "user" as const,
+    };
+
+    const deadIssue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Reanchor dead" })
+    );
+    const dead = await withWorkspace(stub, (instance) =>
+      instance.createAgentSession({
+        ...sessionBase,
+        issueId: deadIssue.id,
+        status: "failed",
+      })
+    );
+    const retry = await withWorkspace(stub, (instance) =>
+      instance.createAgentSession({
+        ...sessionBase,
+        issueId: deadIssue.id,
+        status: "waiting",
+      })
+    );
+    const depIssue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Reanchor dependent" })
+    );
+    const dependent = await withWorkspace(stub, (instance) =>
+      instance.createAgentSession({
+        ...sessionBase,
+        issueId: depIssue.id,
+        status: "waiting",
+        queuedAfter: dead.id,
+      })
+    );
+    const otherIssue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Reanchor unrelated" })
+    );
+    const unrelated = await withWorkspace(stub, (instance) =>
+      instance.createAgentSession({
+        ...sessionBase,
+        issueId: otherIssue.id,
+        status: "waiting",
+      })
+    );
+
+    // PILE-260 — a queuedAfter chain survives redispatch: lanes parked on the
+    // corpse re-point at its replacement; other parked lanes are untouched.
+    await withWorkspace(stub, (instance) =>
+      instance.reanchorQueuedDependents(dead.id, retry.id)
+    );
+
+    const after = await withWorkspace(stub, (instance) =>
+      instance.getAgentSession(dependent.id)
+    );
+    expect(after?.queuedAfter).toBe(retry.id);
+    const unrelatedAfter = await withWorkspace(stub, (instance) =>
+      instance.getAgentSession(unrelated.id)
+    );
+    expect(unrelatedAfter?.queuedAfter).toBeNull();
+  });
 });
