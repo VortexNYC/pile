@@ -20702,6 +20702,244 @@
         "summary": "Create leave"
       }
     },
+    "/workspaces/{organizationId}/invitations": {
+      "post": {
+        "tags": [
+          "workspace-users"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "owner",
+                      "admin",
+                      "member"
+                    ]
+                  },
+                  "teamId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "email",
+                  "role"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Invitation created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "email": {
+                      "type": "string"
+                    },
+                    "role": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "teamId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "expiresAt": {
+                      "type": "integer"
+                    },
+                    "inviterId": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "email",
+                    "role",
+                    "status",
+                    "teamId",
+                    "expiresAt",
+                    "inviterId",
+                    "createdAt"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid email, unknown team, or the address already belongs to a member or pending invitation"
+          }
+        },
+        "summary": "Create invitation"
+      },
+      "get": {
+        "tags": [
+          "workspace-users"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "accepted",
+                "canceled",
+                "rejected",
+                "all"
+              ],
+              "description": "Invitation status filter; defaults to pending"
+            },
+            "required": false,
+            "description": "Invitation status filter; defaults to pending",
+            "name": "status",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invitations list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "invitations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string"
+                          },
+                          "role": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "teamId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "expiresAt": {
+                            "type": "integer"
+                          },
+                          "inviterId": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "email",
+                          "role",
+                          "status",
+                          "teamId",
+                          "expiresAt",
+                          "inviterId",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "invitations"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List invitations"
+      }
+    },
+    "/workspaces/{organizationId}/invitations/{id}": {
+      "delete": {
+        "tags": [
+          "workspace-users"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Invitation canceled"
+          },
+          "404": {
+            "description": "Invitation not found"
+          },
+          "409": {
+            "description": "Invitation is not pending"
+          }
+        },
+        "summary": "Delete invitation"
+      }
+    },
     "/workspaces/{organizationId}/invitations/{id}/resend": {
       "post": {
         "tags": [

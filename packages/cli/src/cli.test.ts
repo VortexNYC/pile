@@ -242,6 +242,79 @@ describe("CLI integration", () => {
     spy.mockRestore();
   });
 
+  it("memberships invite posts to the invitations endpoint with a default role", async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ id: "inv-1", status: "pending" }), {
+        status: 201,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+    const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    const exitCode = await runCli(
+      [
+        "memberships",
+        "invite",
+        "--workspace",
+        "ws-1",
+        "--email",
+        "new@example.com",
+      ],
+      { fetch: mockFetch }
+    );
+
+    expect(exitCode).toBe(0);
+    const [url, init] = mockFetch.mock.calls[0] as [
+      URL,
+      { method: string; body?: string },
+    ];
+    expect(url.pathname).toBe("/workspaces/ws-1/invitations");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body as string)).toEqual({
+      email: "new@example.com",
+      role: "member",
+    });
+    spy.mockRestore();
+  });
+
+  it("memberships invite forwards role and team flags", async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ id: "inv-1", status: "pending" }), {
+        status: 201,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+    const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    const exitCode = await runCli(
+      [
+        "memberships",
+        "invite",
+        "--workspace",
+        "ws-1",
+        "--email",
+        "new@example.com",
+        "--role",
+        "admin",
+        "--team",
+        "team-1",
+      ],
+      { fetch: mockFetch }
+    );
+
+    expect(exitCode).toBe(0);
+    const [, init] = mockFetch.mock.calls[0] as [
+      URL,
+      { method: string; body?: string },
+    ];
+    expect(JSON.parse(init.body as string)).toEqual({
+      email: "new@example.com",
+      role: "admin",
+      teamId: "team-1",
+    });
+    spy.mockRestore();
+  });
+
   it("runs a nested command with positional params", async () => {
     const mockFetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ id: "c1" }), {
