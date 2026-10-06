@@ -901,7 +901,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         const raw = [
           `From: ${this.env.EMAIL_FROM}`,
           `To: ${recipient.email}`,
-          `Message-ID: <${crypto.randomUUID()}@pile>`,
+          `Message-ID: <${crypto.randomUUID()}@${this.env.EMAIL_FROM.split("@").pop() ?? "pile"}>`,
           `Subject: ${subject}`,
           "MIME-Version: 1.0",
           'Content-Type: text/plain; charset="utf-8"',

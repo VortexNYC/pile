@@ -123,15 +123,15 @@ describe("WorkspaceDO", () => {
     // suppressed, so no issue_assigned on create here.
     expect(assigned).toHaveLength(0);
 
-    // A member actor assigning emits it.
-    const reassigned = await withWorkspace(stub, (instance) =>
-      instance.updateIssue(issue.id, { assigneeId: "gh-user-1" }, "user-1")
+    // user-1 re-assigning to themselves (raw "user-1" → resolves to user-1;
+    // the assignee value changes) stays silent — the self-assign skip.
+    const selfAssign = await withWorkspace(stub, (instance) =>
+      instance.updateIssue(issue.id, { assigneeId: "user-1" }, "user-1")
     );
-    expect(reassigned?.assigneeId).toBe("gh-user-1");
+    expect(selfAssign?.assigneeId).toBe("user-1");
     const after = await withWorkspace(stub, (instance) =>
       instance.listNotificationsForRecipient("user-1", "user")
     );
-    // Self-assignment by user-1 stays silent.
     expect(
       after.filter((n) => n.type === "issue_assigned" && n.issueId === issue.id)
     ).toHaveLength(0);
