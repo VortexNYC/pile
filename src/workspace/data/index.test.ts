@@ -9,8 +9,10 @@ import {
   type AgentSessionInput,
   createAgentSession,
   getAgentSession,
+  getNotificationPreferences,
   reanchorQueuedDependents,
   updateAgentSession,
+  upsertNotificationPreferences,
   type WorkspaceDb,
 } from "./index.js";
 
@@ -136,6 +138,33 @@ describe("workspace agent session data", () => {
         status: "running",
       });
       expect(untouched?.createdAt).toBe(rewound);
+    });
+  });
+});
+
+describe("notification preferences", () => {
+  it("defaults email off at the row level; the DO applies its own high-signal default", async () => {
+    await withDb(async (db) => {
+      expect(
+        getNotificationPreferences(db, WORKSPACE_ID, "nobody")
+      ).toBeUndefined();
+
+      await upsertNotificationPreferences(db, WORKSPACE_ID, "nobody", {});
+      const row = getNotificationPreferences(db, WORKSPACE_ID, "nobody");
+      // Rows only record explicit choices — the default-on email for
+      // issue_assigned/mention lives in the DO for users with no row.
+      expect(row?.inApp).toBe(true);
+      expect(row?.email).toBe(false);
+      expect(row?.webhook).toBe(true);
+
+      // Explicit choices persist and mutedTypes round-trips.
+      await upsertNotificationPreferences(db, WORKSPACE_ID, "nobody", {
+        email: true,
+        mutedTypes: ["issue_updated"],
+      });
+      const updated = getNotificationPreferences(db, WORKSPACE_ID, "nobody");
+      expect(updated?.email).toBe(true);
+      expect(updated?.mutedTypes).toBe("issue_updated");
     });
   });
 });

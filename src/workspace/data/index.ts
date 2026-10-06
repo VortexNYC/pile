@@ -703,6 +703,7 @@ export async function createLinearUser(
 
 export type NotificationType =
   | "issue_created"
+  | "issue_assigned"
   | "issue_updated"
   | "issue_deleted"
   | "comment_created"
@@ -1538,8 +1539,10 @@ export function listAgentTimeline(
     listAgentSessionEvents(db, sessionId, { limit, order: "desc" }),
   ];
   const merged = [
-    ...activities.map((row) => ({ kind: "activity" as const, ...row })),
-    ...events.map((row) => ({ kind: "event" as const, ...row })),
+    ...activities.map((row) =>
+      Object.assign({ kind: "activity" as const }, row)
+    ),
+    ...events.map((row) => Object.assign({ kind: "event" as const }, row)),
   ];
   merged.sort((a, b) => {
     const t = a.createdAt.localeCompare(b.createdAt);
