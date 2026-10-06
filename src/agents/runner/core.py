@@ -757,10 +757,16 @@ def resume_repo():
     # from the prior run — fetch and fast-forward so the agent resumes on
     # current remote state (its earlier push included).
     validate_branch()
-    validate_branch()
+    refresh_github_token()
+    if not os.path.isdir(os.path.join(REPO_DIR, '.git')):
+        # The prior run never had a checkout — a repo-less lane whose issue
+        # gained a repo before this prompt. Treat the resume as a first run.
+        create_branch()
+        clone_repo()
+        clone_secondary_repos()
+        return
     if PUSH_POLICY == 'disabled':
         return
-    refresh_github_token()
     # The kept checkout's .git/config is agent-writable — rebuild it before
     # any runner git call so a tampered config can't redirect or hook us.
     _reset_git_config()
@@ -1047,6 +1053,22 @@ def push_command():
             f'https://github.com/{REPO}.git', f'HEAD:refs/heads/{BRANCH}']
 
 
+def remote_branch_head(env):
+    # The lane branch's head on origin — '' when origin doesn't have the
+    # branch, None when the lookup itself failed (callers push anyway and
+    # let the transport error classify). The local remote-tracking ref is
+    # not trusted: a lane can plant it, and a failed resume fetch leaves it
+    # missing even when origin has the branch — the first crashed rev-list,
+    # the second ended a lane with nothing shipped (PILE-322).
+    ls = run([GIT, '-C', REPO_DIR] + _GIT_SAFE_FLAGS + ['ls-remote', '--heads', 'origin', BRANCH],
+             env=env, capture_output=True, text=True, check=False)
+    if ls.returncode != 0:
+        print('ls-remote origin failed — cannot verify remote branch state')
+        return None
+    line = (ls.stdout or '').strip()
+    return line.split()[0] if line else ''
+
+
 def ensure_fresh_github_token():
     # refreshGitToken hook: re-mint ahead of expiry instead of letting a
     # long-running lane's GitHub calls start failing mid-run.
@@ -1166,9 +1188,23 @@ def commit_and_push(agent_env=None):
     _reset_git_config(with_token=not LANE_RESTRICTED)
     git = [GIT, '-C', REPO_DIR] + _GIT_SAFE_FLAGS
     env = git_auth_env()
-    committed = commit_local(agent_env)
-    ahead = run(git + ['rev-list', '--count', f'refs/remotes/origin/{BRANCH}..HEAD'], env=env, capture_output=True, text=True, check=True)
-    if not committed and ahead.stdout.strip() == '0':
+    commit_local(agent_env)
+    head_proc = run(git + ['rev-parse', '--verify', '--quiet', 'HEAD'], env=env, capture_output=True, text=True, check=False)
+    head = head_proc.stdout.strip() if head_proc.returncode == 0 else ''
+    remote_sha = remote_branch_head(env)
+    if remote_sha == head:
+        # Origin's tip already matches HEAD — or both are empty ('' == '').
+        # Nothing to push; when origin's tip carries lane work still count
+        # it as pushed so finalize guarantees a PR covers it — a prior run
+        # can have pushed and died before opening one.
+        if head and head != _base_sha():
+            print('lane branch already on origin — ensuring a PR covers it')
+            return True
+        print('no changes to commit')
+        return False
+    if not head or (remote_sha == '' and head == _base_sha()):
+        # No commits at all, or a first push on a branch that is still the
+        # clone base — shipping it would open an empty PR.
         print('no changes to commit')
         return False
     gate = run_hook('prePush', agent_env or scrubbed_env())
@@ -1180,6 +1216,12 @@ def commit_and_push(agent_env=None):
     _reset_git_config()
     try:
         run_transport(push_command(), env=git_auth_env())
+        # A lane that ends without its work on origin shipped nothing —
+        # verify the push landed instead of trusting the exit code, so a
+        # silent no-op classifies as infra and the sweep re-drives it.
+        after = remote_branch_head(git_auth_env())
+        if after is not None and after != head:
+            raise TransportError(f'git push succeeded but origin {BRANCH} is at {after[:12] or "<missing>"}, expected {head[:12]}')
         return True
     finally:
         lock_remote()

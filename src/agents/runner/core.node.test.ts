@@ -365,6 +365,59 @@ elif mode == "prepush":
     except ns["HookFailure"] as e:
         out = {"raised": str(e)}
     out["log"] = git("log", "--format=%s")
+elif mode == "pushstate":
+    # commit_and_push against a local bare "origin" so ls-remote/push run
+    # offline. TEST_REMOTE picks the remote state: absent (origin lacks the
+    # lane branch — the PILE-322 resume crash), base (branch at clone base),
+    # head (branch already at the local tip), behind (one commit back).
+    home = os.environ["HOME"]
+    bare = os.path.join(home, "bare.git")
+    subprocess.run(["git", "init", "--bare", "-q", bare], check=True)
+
+    def push_to_bare(sha):
+        # Seed the bare remote by pushing real objects — update-ref alone
+        # would point refs at commits the bare repo doesn't have.
+        subprocess.run(["git", "-C", repo, "push", "-q", bare, sha + ":refs/heads/" + branch], check=True, capture_output=True, text=True)
+
+    ns["remote_url"] = lambda: bare
+    ns["tokenless_remote_url"] = lambda: bare
+    # The harness pre-plants refs/remotes/origin/<branch>; the crash case is
+    # precisely that tracking ref being absent, so drop it and let the lane
+    # prove it never consults it.
+    git("update-ref", "-d", "refs/remotes/origin/" + branch)
+    state = os.environ.get("TEST_REMOTE", "absent")
+    if state.endswith("-clean"):
+        state = state[:-6]
+        os.remove(os.path.join(repo, "changed.txt"))
+    if state == "base":
+        push_to_bare(base)
+    elif state in ("head", "behind"):
+        git("add", "-A")
+        git("commit", "-q", "-m", "lane work")
+        push_to_bare(git("rev-parse", "HEAD") if state == "head" else base)
+    out = {}
+    try:
+        out["pushed"] = ns["commit_and_push"](env)
+    except Exception as e:
+        out["error"] = "%s: %s" % (type(e).__name__, e)
+    out["remoteSha"] = subprocess.run(
+        ["git", "--git-dir", bare, "rev-parse", "--verify", "--quiet", "refs/heads/" + branch],
+        capture_output=True, text=True).stdout.strip()
+    out["head"] = git("rev-parse", "HEAD")
+    out["base"] = base
+elif mode == "resume":
+    # A kept sandbox whose prior run was repo-less has no checkout —
+    # resume_repo must take the first-run clone path, not crash on the
+    # missing .git (PILE-322). clone_repo's network side is stubbed here;
+    # the test only proves the fallback fires.
+    import shutil
+    calls = []
+    ns["create_branch"] = lambda: calls.append("create_branch")
+    ns["clone_repo"] = lambda: calls.append("clone_repo")
+    ns["clone_secondary_repos"] = lambda: calls.append("clone_secondary_repos")
+    shutil.rmtree(os.path.join(repo, ".git"))
+    ns["resume_repo"]()
+    out = {"calls": calls}
 else:
     raise AssertionError("unknown mode " + mode)
 
@@ -376,13 +429,25 @@ writeFileSync(HOOKS_HARNESS_PATH, HOOKS_HARNESS);
 
 function runHooksHarness(
   config: Record<string, unknown>,
-  mode: "parse" | "run" | "heal" | "heal_finalize" | "prepush"
+  mode:
+    | "parse"
+    | "run"
+    | "heal"
+    | "heal_finalize"
+    | "prepush"
+    | "pushstate"
+    | "resume",
+  extraEnv: Record<string, string> = {}
 ): Record<string, unknown> {
   const home = mkdtempSync(join(tmpdir(), "pile-runner-hooks-"));
   const out = execFileSync(
     "python3",
     [HOOKS_HARNESS_PATH, CORE_PATH, JSON.stringify(config), mode],
-    { encoding: "utf8", env: { ...runnerEnv(), HOME: home }, timeout: 30_000 }
+    {
+      encoding: "utf8",
+      env: { ...runnerEnv(), HOME: home, ...extraEnv },
+      timeout: 30_000,
+    }
   );
   const line = out
     .trim()
@@ -477,5 +542,60 @@ describe("runner lane hooks (PILE-279)", () => {
     expect(res.raised).toContain("prePush hook failed (exit 1)");
     expect(res.raised).toContain("tests failed");
     expect(res.log).toBe(`Devin changes for ${LANE_BRANCH}\nbase`);
+  });
+});
+
+// PILE-322 — a resumed lane whose branch never reached origin used to die
+// on `git rev-list refs/remotes/origin/<branch>..HEAD` (unknown revision).
+// The runner now diffs against ls-remote's answer, treats a missing remote
+// branch as a first push, and still counts an up-to-date remote tip as
+// shipped so finalize guarantees PR coverage.
+describe("runner push state (PILE-322)", () => {
+  const pushState = (remote: string) =>
+    runHooksHarness({}, "pushstate", { TEST_REMOTE: remote });
+
+  it("first-pushes a lane whose branch never reached origin", () => {
+    const res = pushState("absent");
+    expect(res.error).toBeUndefined();
+    expect(res.pushed).toBe(true);
+    expect(res.remoteSha).toBe(res.head);
+    expect(res.remoteSha).not.toBe(res.base);
+  });
+
+  it("does not open an empty PR when origin lacks the branch and HEAD is still base", () => {
+    const res = pushState("absent-clean");
+    expect(res.error).toBeUndefined();
+    expect(res.pushed).toBe(false);
+    expect(res.remoteSha).toBe("");
+  });
+
+  it("reports no changes when origin's tip is still the clone base", () => {
+    const res = pushState("base-clean");
+    expect(res.error).toBeUndefined();
+    expect(res.pushed).toBe(false);
+    expect(res.remoteSha).toBe(res.base);
+  });
+
+  it("counts an already-shipped remote tip as pushed so a PR is ensured", () => {
+    const res = pushState("head");
+    expect(res.error).toBeUndefined();
+    expect(res.pushed).toBe(true);
+    expect(res.remoteSha).toBe(res.head);
+  });
+
+  it("pushes when origin's tip is behind HEAD", () => {
+    const res = pushState("behind");
+    expect(res.error).toBeUndefined();
+    expect(res.pushed).toBe(true);
+    expect(res.remoteSha).toBe(res.head);
+  });
+
+  it("takes the first-run clone path when the kept sandbox has no checkout", () => {
+    const res = runHooksHarness({}, "resume");
+    expect(res.calls).toEqual([
+      "create_branch",
+      "clone_repo",
+      "clone_secondary_repos",
+    ]);
   });
 });
