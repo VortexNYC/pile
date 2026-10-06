@@ -16,6 +16,11 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    # 0.22.0 hard-pins miniflare@5.20260815.0-alpha, which fails to boot the
+    # test pool — hold minors until upstream ships a working release.
+    ignore:
+      - dependency-name: "@cloudflare/vitest-pool-workers"
+        versions: ["0.20.x", "0.21.x", "0.22.x"]
 
   - package-ecosystem: github-actions
     directory: /
