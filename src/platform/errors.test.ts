@@ -82,6 +82,124 @@ describe("toErrorResponse", () => {
     expect(body.hint).toBeTruthy();
   });
 
+  it("rebuilds a VortexError serialized across the DO RPC boundary", async () => {
+    // Thrown inside a Durable Object, a VortexError arrives as a plain Error
+    // carrying its own enumerable properties — simulate that shape.
+    const serialized = Object.assign(new Error("Conflict"), {
+      code: "CONFLICT",
+      status: 409,
+      hint: "Issue ISS-1 already uses repo owner/repo and branch feat",
+      details: undefined,
+      remote: true,
+    });
+    const res = toErrorResponse(serialized);
+    expect(res.status).toBe(409);
+    expect(res.headers.get("X-Pile-Error-Code")).toBe("CONFLICT");
+    await expect(res.json()).resolves.toEqual({
+      code: "CONFLICT",
+      message: "Conflict",
+      hint: "Issue ISS-1 already uses repo owner/repo and branch feat",
+    });
+  });
+
+  it("redacts messages on serialized 5xx VortexErrors", async () => {
+    const serialized = Object.assign(new Error("d1 connection details"), {
+      code: "CONFIG_ERROR",
+      status: 500,
+      remote: true,
+    });
+    const res = toErrorResponse(serialized);
+    expect(res.status).toBe(500);
+    await expect(res.json()).resolves.toEqual({
+      code: "CONFIG_ERROR",
+      message: "Configuration error",
+    });
+  });
+
+  it("redacts hint and details on serialized 5xx VortexErrors", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const serialized = Object.assign(new Error("d1 connection details"), {
+      code: "INTERNAL_ERROR",
+      status: 500,
+      hint: "s3://bucket/secret-key",
+      details: { dsn: "postgres://user:pass@host" },
+      remote: true,
+    });
+    const res = toErrorResponse(serialized);
+    expect(res.status).toBe(500);
+    await expect(res.json()).resolves.toEqual({
+      code: "INTERNAL_ERROR",
+      message: "Internal error",
+    });
+    error.mockRestore();
+  });
+
+  it("ignores remote errors whose code is not in the catalog", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const serialized = Object.assign(new Error("nope"), {
+      code: "ENOENT",
+      status: 404,
+      remote: true,
+    });
+    const res = toErrorResponse(serialized);
+    expect(res.status).toBe(500);
+    error.mockRestore();
+  });
+
+  it("ignores remote errors whose code is a prototype key", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const serialized = Object.assign(new Error("nope"), {
+      code: "constructor",
+      status: 404,
+      remote: true,
+    });
+    const res = toErrorResponse(serialized);
+    expect(res.status).toBe(500);
+    error.mockRestore();
+  });
+
+  it("ignores in-process errors carrying code and status without remote", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const serialized = Object.assign(new Error("upstream internals"), {
+      code: "NOT_FOUND",
+      status: 404,
+    });
+    const res = toErrorResponse(serialized);
+    expect(res.status).toBe(500);
+    await expect(res.json()).resolves.toEqual({
+      code: "INTERNAL_ERROR",
+      message: "Internal error",
+    });
+    error.mockRestore();
+  });
+
+  it("falls back to the catalog status when the serialized status is invalid", async () => {
+    const serialized = Object.assign(new Error("Conflict"), {
+      code: "CONFLICT",
+      status: 700,
+      remote: true,
+    });
+    const res = toErrorResponse(serialized);
+    expect(res.status).toBe(409);
+    expect(res.headers.get("X-Pile-Error-Code")).toBe("CONFLICT");
+  });
+
+  it("passes details through on serialized 4xx VortexErrors", async () => {
+    const serialized = Object.assign(new Error("Conflict"), {
+      code: "CONFLICT",
+      status: 409,
+      details: { issueId: "ISS-1" },
+      remote: true,
+    });
+    const res = toErrorResponse(serialized);
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toEqual({
+      code: "CONFLICT",
+      message: "Conflict",
+      details: { issueId: "ISS-1" },
+    });
+  });
+
   it("does not leak unexpected Error messages to clients", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const res = toErrorResponse(new Error("db password expired"));

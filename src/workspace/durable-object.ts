@@ -4240,7 +4240,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       const d1 = createD1(this.env.D1);
       const team = await getTeamById(d1, patch.teamId, this.organizationId);
       if (!team) {
-        throw new Error("Team not found");
+        throw VortexError.fromCode("NOT_FOUND", "Team not found");
       }
       const last = await this.db
         .select({ number: sql<number | null>`MAX(number)` })
