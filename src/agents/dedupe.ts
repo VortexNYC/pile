@@ -178,6 +178,10 @@ export async function checkDispatchDedupe(
     if (s.prUrl) ownerByPrUrl.set(s.prUrl, s.id);
   }
 
+  // Pass 1 collects coverage and marks which identifier-overlap PRs with no
+  // owner need a reviews probe; pass 2 fetches them in parallel (the awaits
+  // used to serialize the whole loop) and applies the same decisions.
+  const needsReviews: Array<{ pull: GhPull; entry: DedupeCoverage }> = [];
   for (const pull of pulls) {
     const overlap = pullMatches(pull, identifier, tokens);
     if (!overlap) continue;
@@ -194,14 +198,28 @@ export async function checkDispatchDedupe(
       result.queueAfter = ownerSessionId;
       continue;
     }
+    needsReviews.push({ pull, entry });
+  }
+  const reviewsByNumber = new Map(
+    await Promise.all(
+      needsReviews.map(
+        async ({ pull }) =>
+          [
+            pull.number,
+            (await ghGet(
+              ghFetch,
+              token,
+              `/repos/${owner}/${name}/pulls/${pull.number}/reviews?per_page=100`
+            )) as GhReview[],
+          ] as const
+      )
+    )
+  );
+  for (const { pull, entry } of needsReviews) {
     // PILE-249 — before hard-blocking, check whether the covering PR still
     // has work: unresolved CHANGES_REQUESTED means a new session should
     // resume the lane branch, not dead-end on "PR already covers issue".
-    const reviews = (await ghGet(
-      ghFetch,
-      token,
-      `/repos/${owner}/${name}/pulls/${pull.number}/reviews?per_page=100`
-    )) as GhReview[];
+    const reviews = reviewsByNumber.get(pull.number);
     if (Array.isArray(reviews) && hasOutstandingChangeRequests(reviews)) {
       entry.changesRequested = true;
       continue;
@@ -213,33 +231,47 @@ export async function checkDispatchDedupe(
   }
 
   // Collision check — only against live lanes on the same repo whose PR file
-  // list shares a basename/path token with the issue title.
-  for (const s of liveSessions) {
-    if (!s.prUrl || !s.prUrl.includes(`/${owner}/${name}/pull/`)) continue;
+  // list shares a basename/path token with the issue title. File lists fetch
+  // in parallel; per-PR failures stay advisory.
+  const collisionCandidates = liveSessions.flatMap((s) => {
+    if (!s.prUrl || !s.prUrl.includes(`/${owner}/${name}/pull/`)) return [];
     const numMatch = /\/pull\/(\d+)/.exec(s.prUrl);
-    if (!numMatch) continue;
-    try {
-      const files = (await ghGet(
-        ghFetch,
-        token,
-        `/repos/${owner}/${name}/pulls/${numMatch[1]}/files?per_page=100`
-      )) as GhPullFile[];
-      if (!Array.isArray(files)) continue;
-      const shared = files
-        .map((f) => f.filename)
-        .filter((filename) => {
-          const parts = filename.toLowerCase().split(/[^a-z0-9]+/);
-          return tokens.some((t) => parts.includes(t));
-        });
-      if (shared.length > 0) {
-        result.collisions.push({
-          sessionId: s.id,
-          prUrl: s.prUrl,
-          files: shared,
-        });
-      }
-    } catch {
-      // Collision data is advisory — a failed file listing never blocks.
+    return numMatch ? [{ session: s, prNumber: numMatch[1] }] : [];
+  });
+  const filesBySession = new Map(
+    await Promise.all(
+      collisionCandidates.map(async ({ session, prNumber }) => {
+        try {
+          return [
+            session.id,
+            (await ghGet(
+              ghFetch,
+              token,
+              `/repos/${owner}/${name}/pulls/${prNumber}/files?per_page=100`
+            )) as GhPullFile[],
+          ] as const;
+        } catch {
+          // Collision data is advisory — a failed file listing never blocks.
+          return [session.id, null] as const;
+        }
+      })
+    )
+  );
+  for (const { session: s } of collisionCandidates) {
+    const files = filesBySession.get(s.id);
+    if (!Array.isArray(files)) continue;
+    const shared = files
+      .map((f) => f.filename)
+      .filter((filename) => {
+        const parts = filename.toLowerCase().split(/[^a-z0-9]+/);
+        return tokens.some((t) => parts.includes(t));
+      });
+    if (shared.length > 0) {
+      result.collisions.push({
+        sessionId: s.id,
+        prUrl: s.prUrl!,
+        files: shared,
+      });
     }
   }
 
