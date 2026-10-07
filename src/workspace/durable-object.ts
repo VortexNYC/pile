@@ -1,4 +1,3 @@
-import { EmailMessage } from "cloudflare:email";
 import { DurableObject } from "cloudflare:workers";
 import {
   and,
@@ -45,6 +44,7 @@ import {
   planTriageApplication,
   TRIAGE_PURPOSE,
 } from "../agents/triage.js";
+import { sendEmail } from "../email/send.js";
 import { createD1 } from "../global/db.js";
 import { sanitizeLaneResult } from "../global/lane-guard.js";
 import {
@@ -858,9 +858,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return [...recipients];
   }
 
-  // Bulk importers and webhook syncs write with machine actors
-  // ("gitlab"/"github"/undefined) — those can't mass-email real users on
-  // assign. Only a workspace-member actor triggers the directed notify.
+  // Webhook syncs write with machine actors ("gitlab"/"github"/
+  // undefined) — those can't mass-email real users on assign. Only a
+  // workspace-member actor triggers the directed notify. Importers run as
+  // the importing member, so they suppress via options.notify instead.
   private async isMemberActor(actorId?: string): Promise<boolean> {
     if (!actorId) return false;
     const d1 = createD1(this.env.D1);
@@ -938,14 +939,16 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         organizationId: this.organizationId,
       });
     }
-    // No prefs row: email defaults on for high-signal types (assigned an
-    // issue, @mentioned, a lane needs you) — a member who never visits the
-    // prefs page still hears about the things that need them. Explicit
-    // prefs always win.
-    const wantsEmail = prefs
+    // No explicit choice: email defaults on for high-signal types
+    // (assigned an issue, @mentioned, a lane needs you) — a member who
+    // never visits the prefs page still hears about the things that need
+    // them. An explicit email pref always wins; a prefs row written
+    // without touching email (emailExplicit false) keeps the default.
+    const wantsEmail = prefs?.emailExplicit
       ? Boolean(prefs.email)
       : WorkspaceDO.EMAIL_BY_DEFAULT_TYPES.has(input.type);
-    if (wantsEmail && this.env.EMAIL && this.env.EMAIL_FROM) {
+    const emailFrom = this.env.EMAIL_FROM;
+    if (wantsEmail && this.env.EMAIL && emailFrom) {
       try {
         const d1 = createD1(this.env.D1);
         const recipient = await d1
@@ -954,27 +957,22 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           .where(eq(globalUser.id, input.recipientId))
           .get();
         if (!recipient?.email) return;
-        const subject = `Pile: ${input.type.replace(/_/g, " ")}`;
-        const text = `You have a new ${input.type.replace(
-          /_/g,
-          " "
-        )} notification in workspace ${this.organizationId}.\n`;
-        const raw = [
-          `From: ${this.env.EMAIL_FROM}`,
-          `To: ${recipient.email}`,
-          `Message-ID: <${crypto.randomUUID()}@${this.env.EMAIL_FROM.split("@").pop() ?? "pile"}>`,
-          `Subject: ${subject}`,
-          "MIME-Version: 1.0",
-          'Content-Type: text/plain; charset="utf-8"',
-          "",
+        // issueId is the notification subject — document-scoped types can
+        // carry a document id instead, so this may resolve to nothing.
+        const issue = await this.getIssue(input.issueId);
+        const typeLabel = input.type.replace(/_/g, " ");
+        const subject = issue?.identifier
+          ? `Pile: ${issue.identifier} ${typeLabel}`
+          : `Pile: ${typeLabel}`;
+        const text = issue
+          ? `${issue.identifier ? `${issue.identifier}: ` : ""}${issue.title}\n\nYou have a new ${typeLabel} notification in workspace ${this.organizationId}.\n`
+          : `You have a new ${typeLabel} notification in workspace ${this.organizationId}.\n`;
+        await sendEmail(this.env, {
+          from: emailFrom,
+          to: recipient.email,
+          subject,
           text,
-        ].join("\r\n");
-        const message = new EmailMessage(
-          this.env.EMAIL_FROM,
-          recipient.email,
-          raw
-        );
-        await this.env.EMAIL.send(message);
+        });
       } catch {
         // Email delivery is best-effort; never block the notification.
       }
@@ -3716,8 +3714,21 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return this.db.select().from(workspaceIssueHistory).all();
   }
 
-  async createIssue(input: IssueInput, actorId?: string): Promise<Issue> {
-    const { issue } = await this.createIssueRecord(input, actorId);
+  async createIssue(
+    input: IssueInput,
+    actorId?: string,
+    // notify:false suppresses the directed issue_assigned emit — bulk
+    // importers run as member actors so the member check alone can't tell
+    // a migration apart from a human assigning one issue. The generic
+    // broadcast still runs.
+    options?: { notify?: boolean }
+  ): Promise<Issue> {
+    const { issue } = await this.createIssueRecord(
+      input,
+      actorId,
+      undefined,
+      options
+    );
     if (!issue) throw new Error("Failed to create issue");
     return issue;
   }
@@ -3729,15 +3740,17 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   createIssueWithDuplicates(
     input: IssueInput,
     actorId: string | undefined,
-    dedupe: { teamIds: string[]; block: boolean; viewer?: IssueViewer }
+    dedupe: { teamIds: string[]; block: boolean; viewer?: IssueViewer },
+    options?: { notify?: boolean }
   ) {
-    return this.createIssueRecord(input, actorId, dedupe);
+    return this.createIssueRecord(input, actorId, dedupe, options);
   }
 
   private async createIssueRecord(
     input: IssueInput,
     actorId?: string,
-    dedupe?: { teamIds: string[]; block: boolean; viewer?: IssueViewer }
+    dedupe?: { teamIds: string[]; block: boolean; viewer?: IssueViewer },
+    options?: { notify?: boolean }
   ): Promise<{
     issue: Issue | null;
     possibleDuplicates: Array<{ issue: Issue; score: number }>;
@@ -3893,14 +3906,16 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       });
     }
     // An assignee on create hears issue_assigned when a member did the
-    // assigning; machine actors (importers, webhook syncs) never trigger
-    // the directed emit — a bulk import must not mass-email — and the
-    // assignee stays in the issue_created fan-out instead.
+    // assigning; machine actors (webhook syncs) and notify:false writes
+    // (bulk imports) never trigger the directed emit — a bulk import must
+    // not mass-email — and the assignee stays in the issue_created fan-out
+    // instead.
     const createdAssignee =
       issue.assigneeId && !issue.assigneeId.startsWith("lane:")
         ? await this.resolveAssigneeUserId(issue.assigneeId)
         : null;
     const deliveredCreateAssign =
+      options?.notify !== false &&
       createdAssignee !== null &&
       createdAssignee !== actorId &&
       (await this.isMemberActor(actorId));
@@ -4526,7 +4541,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   async updateIssue(
     id: string,
     patch: IssuePatch,
-    actorId?: string
+    actorId?: string,
+    // notify:false suppresses the directed issue_assigned emit — bulk
+    // importers run as member actors so the member check alone can't tell
+    // a migration apart from a human assigning one issue. The generic
+    // broadcast still runs.
+    options?: { notify?: boolean }
   ): Promise<Issue | undefined> {
     await this.ready;
     const old = await this.getIssue(id);
@@ -4805,7 +4825,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }
     // A human assignee change is its own notification (issue_assigned),
     // and the assignee is excluded from the issue_updated fan-out so they
-    // don't get two rows for one edit. lane:* assignees are agents.
+    // don't get two rows for one edit — but only when the directed emit
+    // actually fires: machine actors (webhook syncs) and notify:false
+    // writes leave the assignee in the broadcast instead of silent.
+    // lane:* assignees are agents.
     const assigneeChanged = issue.assigneeId !== old.assigneeId;
     const newAssignee =
       assigneeChanged &&
@@ -4814,13 +4837,18 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         ? await this.resolveAssigneeUserId(issue.assigneeId)
         : null;
     const selfAssigned = newAssignee !== null && newAssignee === actorId;
+    const deliveredAssign =
+      options?.notify !== false &&
+      newAssignee !== null &&
+      !selfAssigned &&
+      (await this.isMemberActor(actorId));
     await this.notifyIssueEvent(
       issue,
       "issue_updated",
       actorId,
-      newAssignee ?? undefined
+      deliveredAssign ? (newAssignee ?? undefined) : undefined
     );
-    if (newAssignee && !selfAssigned && (await this.isMemberActor(actorId))) {
+    if (deliveredAssign && newAssignee) {
       await this.deliverNotification({
         recipientId: newAssignee,
         recipientType: "user",

@@ -46993,6 +46993,9 @@
                     "email": {
                       "type": "boolean"
                     },
+                    "emailExplicit": {
+                      "type": "boolean"
+                    },
                     "mutedTypes": {
                       "type": "array",
                       "nullable": true,
@@ -47010,6 +47013,7 @@
                     "inApp",
                     "webhook",
                     "email",
+                    "emailExplicit",
                     "mutedTypes",
                     "updatedAt"
                   ]
@@ -47084,6 +47088,9 @@
                     "email": {
                       "type": "boolean"
                     },
+                    "emailExplicit": {
+                      "type": "boolean"
+                    },
                     "mutedTypes": {
                       "type": "array",
                       "nullable": true,
@@ -47101,6 +47108,7 @@
                     "inApp",
                     "webhook",
                     "email",
+                    "emailExplicit",
                     "mutedTypes",
                     "updatedAt"
                   ]

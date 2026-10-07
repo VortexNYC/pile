@@ -1138,7 +1138,8 @@ export const linearImportSource: ImportSource<
         try {
           const createdIssue = await ctx.stub.createIssue(
             input,
-            ctx.importerId
+            ctx.importerId,
+            { notify: false }
           );
           issueCount++;
           issueIdMap.set(issue.id, createdIssue.id);
@@ -1237,7 +1238,8 @@ export const linearImportSource: ImportSource<
           await ctx.stub.updateIssue(
             childId,
             { parentId: parentVortexId },
-            ctx.importerId
+            ctx.importerId,
+            { notify: false }
           );
         }
       );

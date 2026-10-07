@@ -590,7 +590,8 @@ export const jiraImportSource: ImportSource<JiraCredentials, JiraOptions> = {
         try {
           const createdIssue = await ctx.stub.createIssue(
             input,
-            ctx.importerId
+            ctx.importerId,
+            { notify: false }
           );
           issueCount++;
           issueIdByJiraId.set(issue.id, createdIssue.id);
@@ -661,7 +662,8 @@ export const jiraImportSource: ImportSource<JiraCredentials, JiraOptions> = {
         await ctx.stub.updateIssue(
           issueId,
           { parentId: parentIssueId },
-          ctx.importerId
+          ctx.importerId,
+          { notify: false }
         );
       }
     );

@@ -862,6 +862,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS customer_intake_items_external_idx ON customer
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS customer_intake_items_customer_idx ON customer_intake_items (organization_id, customer_id)`;
 
+// Tri-state for the email pref: existing rows are marked explicit (their
+// current `email` value wins); rows written after this only set
+// email_explicit when the caller actually passed `email`.
+const v54 = `ALTER TABLE notification_preferences ADD COLUMN email_explicit INTEGER NOT NULL DEFAULT 1`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -918,6 +923,7 @@ export const workspaceMigrations = {
       { idx: 50, when: 50, tag: "v51", breakpoints: true },
       { idx: 51, when: 51, tag: "v52", breakpoints: true },
       { idx: 52, when: 52, tag: "v53", breakpoints: true },
+      { idx: 53, when: 53, tag: "v54", breakpoints: false },
     ],
   },
   migrations: {
@@ -974,5 +980,6 @@ export const workspaceMigrations = {
     m0050: v51,
     m0051: v52,
     m0052: v53,
+    m0053: v54,
   },
 } satisfies Parameters<typeof migrate>[1];

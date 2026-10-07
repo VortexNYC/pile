@@ -22960,6 +22960,7 @@ export interface paths {
                             inApp: boolean;
                             webhook: boolean;
                             email: boolean;
+                            emailExplicit: boolean;
                             mutedTypes: string[] | null;
                             updatedAt: string;
                         };
@@ -23000,6 +23001,7 @@ export interface paths {
                             inApp: boolean;
                             webhook: boolean;
                             email: boolean;
+                            emailExplicit: boolean;
                             mutedTypes: string[] | null;
                             updatedAt: string;
                         };

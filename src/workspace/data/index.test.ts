@@ -163,10 +163,19 @@ describe("notification preferences", () => {
       await upsertNotificationPreferences(db, WORKSPACE_ID, "nobody", {});
       const row = getNotificationPreferences(db, WORKSPACE_ID, "nobody");
       // Rows only record explicit choices — the default-on email for
-      // issue_assigned/mention lives in the DO for users with no row.
+      // issue_assigned/mention lives in the DO while email stays unset.
       expect(row?.inApp).toBe(true);
       expect(row?.email).toBe(false);
+      expect(row?.emailExplicit).toBe(false);
       expect(row?.webhook).toBe(true);
+
+      // Writing an unrelated field does not mark email as chosen.
+      await upsertNotificationPreferences(db, WORKSPACE_ID, "nobody", {
+        mutedTypes: ["issue_updated"],
+      });
+      expect(
+        getNotificationPreferences(db, WORKSPACE_ID, "nobody")?.emailExplicit
+      ).toBe(false);
 
       // Explicit choices persist and mutedTypes round-trips.
       await upsertNotificationPreferences(db, WORKSPACE_ID, "nobody", {
@@ -175,6 +184,7 @@ describe("notification preferences", () => {
       });
       const updated = getNotificationPreferences(db, WORKSPACE_ID, "nobody");
       expect(updated?.email).toBe(true);
+      expect(updated?.emailExplicit).toBe(true);
       expect(updated?.mutedTypes).toBe("issue_updated");
     });
   });

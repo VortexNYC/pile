@@ -171,6 +171,178 @@ describe("WorkspaceDO", () => {
     ).toHaveLength(1);
   });
 
+  it("keeps the generic broadcast for machine-actor assignments", async () => {
+    const stub = getStub();
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Webhook-assigned" }, "github")
+    );
+    await withWorkspace(stub, (instance) =>
+      instance.updateIssue(issue.id, { assigneeId: "user-1" }, "github")
+    );
+    const notes = await withWorkspace(stub, (instance) =>
+      instance.listNotificationsForRecipient("user-1", "user")
+    );
+    // Machine actors never emit the directed notification…
+    expect(
+      notes.filter((n) => n.type === "issue_assigned" && n.issueId === issue.id)
+    ).toHaveLength(0);
+    // …but the assignee still hears the generic update — suppressing both
+    // would leave webhook-synced assignments totally silent.
+    expect(
+      notes.filter((n) => n.type === "issue_updated" && n.issueId === issue.id)
+    ).toHaveLength(1);
+  });
+
+  it("suppresses the directed emit when writes pass notify:false (imports)", async () => {
+    const stub = getStub();
+    const imported = await withWorkspace(stub, (instance) =>
+      instance.createIssue(
+        { title: "Imported issue", assigneeId: "user-1" },
+        "user-2",
+        { notify: false }
+      )
+    );
+    let notes = await withWorkspace(stub, (instance) =>
+      instance.listNotificationsForRecipient("user-1", "user")
+    );
+    // Even though user-2 is a member actor, notify:false suppresses the
+    // directed emit (and its default-on email); the generic broadcast row
+    // still lands.
+    expect(
+      notes.filter(
+        (n) => n.type === "issue_assigned" && n.issueId === imported.id
+      )
+    ).toHaveLength(0);
+    expect(
+      notes.filter(
+        (n) => n.type === "issue_created" && n.issueId === imported.id
+      )
+    ).toHaveLength(1);
+
+    await withWorkspace(stub, (instance) =>
+      instance.updateIssue(imported.id, { assigneeId: "user-2" }, "user-1", {
+        notify: false,
+      })
+    );
+    notes = await withWorkspace(stub, (instance) =>
+      instance.listNotificationsForRecipient("user-2", "user")
+    );
+    expect(
+      notes.filter(
+        (n) => n.type === "issue_assigned" && n.issueId === imported.id
+      )
+    ).toHaveLength(0);
+    expect(
+      notes.filter(
+        (n) => n.type === "issue_updated" && n.issueId === imported.id
+      )
+    ).toHaveLength(1);
+  });
+
+  it("emails directed notifications by default and honors the email opt-out", async () => {
+    const stub = getStub();
+    const sent: Array<{ from: string; to: string; raw?: string }> = [];
+    const fakeEmail: SendEmail = {
+      send: async (message) => {
+        const msg = message as EmailMessage;
+        // workerd keeps the MIME payload under a hidden internal key.
+        const raw = (msg as unknown as Record<string, unknown>)[
+          "EmailMessage::raw"
+        ];
+        sent.push({
+          from: msg.from,
+          to: msg.to,
+          raw:
+            typeof raw === "string"
+              ? raw
+              : raw instanceof Uint8Array
+                ? new TextDecoder().decode(raw)
+                : undefined,
+        });
+        return { messageId: "" };
+      },
+    };
+    // Swap in a capturing EMAIL binding — the DO reads the same env
+    // object the test holds. Restore after each leg.
+    const withEmail = <T>(run: () => Promise<T>): Promise<T> => {
+      const prevEmail = env.EMAIL;
+      const prevFrom = env.EMAIL_FROM;
+      env.EMAIL = fakeEmail;
+      env.EMAIL_FROM = "notifications@example.com";
+      return run().finally(() => {
+        env.EMAIL = prevEmail;
+        env.EMAIL_FROM = prevFrom;
+      });
+    };
+
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Email me" })
+    );
+    // No prefs row: issue_assigned defaults to email on.
+    await withWorkspace(stub, (instance) =>
+      withEmail(() =>
+        instance.updateIssue(issue.id, { assigneeId: "gh-user-1" }, "user-2")
+      )
+    );
+    expect(sent).toHaveLength(1);
+    expect(sent[0].from).toBe("notifications@example.com");
+    expect(sent[0].to).toBe("user-1@test.local");
+    // The email identifies the issue — mimetext may base64-encode the
+    // header/body, so accept the identifier in either form.
+    const raw = sent[0].raw ?? "";
+    const encoded = issue.identifier
+      ? Buffer.from(issue.identifier).toString("base64")
+      : "";
+    expect(
+      issue.identifier !== null &&
+        (raw.includes(issue.identifier) || raw.includes(encoded))
+    ).toBe(true);
+
+    // Touching an unrelated pref field must not opt the member out of the
+    // directed-email default — email stays unset (tri-state).
+    await withWorkspace(stub, (instance) =>
+      instance.upsertNotificationPreferences("user-1", {
+        mutedTypes: ["issue_updated"],
+      })
+    );
+    sent.length = 0;
+    await withWorkspace(stub, (instance) =>
+      withEmail(async () => {
+        await instance.updateIssue(issue.id, { assigneeId: null }, "user-2");
+        await instance.updateIssue(
+          issue.id,
+          { assigneeId: "gh-user-1" },
+          "user-2"
+        );
+      })
+    );
+    expect(sent).toHaveLength(1);
+
+    // An explicit email opt-out wins: no send, but the in-app row lands.
+    await withWorkspace(stub, (instance) =>
+      instance.upsertNotificationPreferences("user-1", { email: false })
+    );
+    sent.length = 0;
+    await withWorkspace(stub, (instance) =>
+      withEmail(async () => {
+        await instance.updateIssue(issue.id, { assigneeId: null }, "user-2");
+        await instance.updateIssue(
+          issue.id,
+          { assigneeId: "gh-user-1" },
+          "user-2"
+        );
+      })
+    );
+    expect(sent).toHaveLength(0);
+    const notes = await withWorkspace(stub, (instance) =>
+      instance.listNotificationsForRecipient("user-1", "user")
+    );
+    expect(
+      notes.filter((n) => n.type === "issue_assigned" && n.issueId === issue.id)
+        .length
+    ).toBeGreaterThanOrEqual(2);
+  });
+
   it("supports triage status and resolution semantics", async () => {
     const stub = getStub();
     const triage = await withWorkspace(stub, (instance) =>

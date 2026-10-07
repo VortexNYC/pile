@@ -191,6 +191,7 @@ const preferencesSchema = z.object({
   inApp: z.boolean(),
   webhook: z.boolean(),
   email: z.boolean(),
+  emailExplicit: z.boolean(),
   mutedTypes: z.array(z.string()).nullable(),
   updatedAt: z.string(),
 });
@@ -247,6 +248,7 @@ function toPreferencesResponse(row: {
   inApp: boolean;
   webhook: boolean;
   email: boolean;
+  emailExplicit: boolean;
   mutedTypes: string | null;
   updatedAt: string;
 }) {
@@ -357,6 +359,7 @@ export function registerNotificationRoutes(app: OpenAPIHono<AppContext>) {
           inApp: true,
           webhook: true,
           email: false,
+          emailExplicit: false,
           mutedTypes: null,
           updatedAt: "",
         }

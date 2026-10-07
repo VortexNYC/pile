@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   workspaceAgentSessions,
   workspaceEntityAttachments,
+  workspaceNotificationPreferences,
 } from "./schema.js";
 
 describe("workspaceAgentSessions schema", () => {
@@ -63,5 +64,19 @@ describe("workspaceEntityAttachments schema", () => {
       "name" in c ? c.name : String(c)
     );
     expect(columns).toEqual(["organization_id", "entity_type", "entity_id"]);
+  });
+});
+
+describe("workspaceNotificationPreferences schema", () => {
+  it("keeps email_explicit as a not-null default-on tri-state flag", () => {
+    // PILE-320 — `email` is only a choice when email_explicit is set; the
+    // column defaults true so rows that predate it keep their stored
+    // `email` value instead of silently falling into the new default-on.
+    const column = workspaceNotificationPreferences.emailExplicit;
+    expect(column.name).toBe("email_explicit");
+    expect(column.notNull).toBe(true);
+    const config = getTableConfig(workspaceNotificationPreferences);
+    const explicit = config.columns.find((c) => c.name === "email_explicit");
+    expect(explicit?.hasDefault).toBe(true);
   });
 });

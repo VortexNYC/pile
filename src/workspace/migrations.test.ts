@@ -18,8 +18,9 @@ describe("workspaceMigrations", () => {
   });
 
   it("v51 creates entity_attachments scoped by org + entity type/id", () => {
-    const last = workspaceMigrations.journal.entries.at(-1);
-    expect(last?.tag).toBe("v51");
+    expect(
+      workspaceMigrations.journal.entries.some((e) => e.tag === "v51")
+    ).toBe(true);
     const sql = workspaceMigrations.migrations.m0050;
     expect(sql).toContain("CREATE TABLE IF NOT EXISTS entity_attachments");
     for (const col of [
