@@ -1,9 +1,11 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
+
+import { resolvePython } from "./python";
 
 // PILE-281: agent subprocesses get a scrubbed env (no provider tokens), and
 // restricted lanes run behind PATH shims that refuse credential/remote git
@@ -51,6 +53,10 @@ const harnessDir = mkdtempSync(join(tmpdir(), "pile-runner-isolation-"));
 const HARNESS_PATH = join(harnessDir, "harness.py");
 writeFileSync(HARNESS_PATH, HARNESS);
 
+// Real CPython resolved past any PATH shim; the suite skips when absent.
+const PYTHON = resolvePython();
+const describePy = describe.skipIf(PYTHON === null);
+
 const SECRETS = {
   GITHUB_TOKEN: "ghs_secret",
   LANE_TOKEN: "lane-secret",
@@ -79,8 +85,9 @@ function runHarness(
   };
   delete env.PILE_LOG_URL;
   const shimDir = mkdtempSync(join(harnessDir, "shims-"));
+  if (!PYTHON) throw new Error("unreachable: suite skipped without CPython");
   const out = execFileSync(
-    "python3",
+    PYTHON,
     [HARNESS_PATH, CORE_PATH, shimDir, mode, JSON.stringify(payload)],
     { encoding: "utf8", env, timeout: 30_000 }
   );
@@ -94,7 +101,7 @@ function runHarness(
 
 const RESTRICTED = { PILE_LANE_RESTRICTED: "1" };
 
-describe("scrubbed agent env (PILE-281)", () => {
+describePy("scrubbed agent env (PILE-281)", () => {
   it("drops runner-only and secret-named vars", () => {
     const { env } = runHarness("env", {}) as { env: Record<string, string> };
     for (const key of Object.keys(SECRETS)) {
@@ -128,7 +135,7 @@ describe("scrubbed agent env (PILE-281)", () => {
   });
 });
 
-describe("restricted lane command policy (PILE-281)", () => {
+describePy("restricted lane command policy (PILE-281)", () => {
   const cases: Array<[string[], boolean]> = [
     [["git", "status"], true],
     [["git", "commit", "-m", "x"], true],
@@ -183,5 +190,25 @@ describe("restricted lane command policy (PILE-281)", () => {
     expect(results[0]?.stderr).toContain("pile restricted lane");
     expect(results[1]?.rc).toBe(0);
     expect(results[2]?.rc).toBe(126);
+  });
+
+  it("shims pin the runner interpreter instead of re-resolving python3", () => {
+    // PILE-317: the installed shim's shebang must name the interpreter
+    // absolutely — `#!/usr/bin/env python3` re-resolves python3 on the
+    // scrubbed PATH, and a shim/broken binary there makes the denial die
+    // as rc 1 (e.g. a V8 SyntaxError) instead of exiting 126.
+    const dir = mkdtempSync(join(harnessDir, "py-impostor-"));
+    writeFileSync(
+      join(dir, "python3"),
+      "#!/bin/sh\necho 'SyntaxError: Unexpected identifier file' >&2\nexit 1\n"
+    );
+    chmodSync(join(dir, "python3"), 0o755);
+    const { results } = runHarness(
+      "exec",
+      { argvs: [["git", "push", "origin", "main"]] },
+      { ...RESTRICTED, PATH: `${dir}:${process.env.PATH}` }
+    ) as { results: Array<{ rc: number; stderr: string }> };
+    expect(results[0]?.rc).toBe(126);
+    expect(results[0]?.stderr).toContain("pile restricted lane");
   });
 });

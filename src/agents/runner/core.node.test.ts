@@ -5,6 +5,8 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { resolvePython } from "./python";
+
 // The lane runner (core.py) ships to sandboxes as embedded Python — the
 // workerd pool can't spawn processes, so this suite runs under the "node"
 // project in vitest.config.ts and exercises the real script with a stubbed
@@ -134,17 +136,16 @@ function runnerEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
   return { ...env, ...extra };
 }
 
-const PYTHON = execFileSync(
-  "python3",
-  ["-c", "import sys; print(sys.executable)"],
-  { encoding: "utf8" }
-).trim();
+// Real CPython resolved past any PATH shim; the suite skips when absent.
+const PYTHON = resolvePython();
+const describePy = describe.skipIf(PYTHON === null);
 
 function runHarness(
   pulls: Array<Record<string, unknown>>,
   mode: "find" | "finalize" | "browser" | "push",
   extraEnv: Record<string, string> = {}
 ): HarnessResult {
+  if (!PYTHON) throw new Error("unreachable: suite skipped without CPython");
   const out = execFileSync(
     PYTHON,
     [HARNESS_PATH, CORE_PATH, JSON.stringify(pulls), mode],
@@ -160,7 +161,7 @@ function runHarness(
   return JSON.parse(line.slice("RESULT:".length)) as HarnessResult;
 }
 
-describe("runner PR resolution (PILE-257)", () => {
+describePy("runner PR resolution (PILE-257)", () => {
   it("does not count a merged PR on the lane branch as coverage", () => {
     const res = runHarness([MERGED_PR], "find");
     expect(res.found).toBe("");
@@ -200,7 +201,7 @@ describe("runner PR resolution (PILE-257)", () => {
   });
 });
 
-describe("runner headless browser (PILE-292)", () => {
+describePy("runner headless browser (PILE-292)", () => {
   const PROMPT = "# Fix the settings page";
   const promptB64 = Buffer.from(PROMPT, "utf8").toString("base64");
 
@@ -268,7 +269,7 @@ describe("runner headless browser (PILE-292)", () => {
   });
 });
 
-describe("runner plan mode (PILE-283)", () => {
+describePy("runner plan mode (PILE-283)", () => {
   it("never commits or pushes a plan lane", () => {
     // A real push would need git + a remote; the guard returns first.
     const res = runHarness([], "push", { PILE_LANE_MODE: "plan" });
@@ -440,8 +441,9 @@ function runHooksHarness(
   extraEnv: Record<string, string> = {}
 ): Record<string, unknown> {
   const home = mkdtempSync(join(tmpdir(), "pile-runner-hooks-"));
+  if (!PYTHON) throw new Error("unreachable: suite skipped without CPython");
   const out = execFileSync(
-    "python3",
+    PYTHON,
     [HOOKS_HARNESS_PATH, CORE_PATH, JSON.stringify(config), mode],
     {
       encoding: "utf8",
@@ -459,7 +461,7 @@ function runHooksHarness(
   return JSON.parse(line.slice("RESULT:".length)) as Record<string, unknown>;
 }
 
-describe("runner lane hooks (PILE-279)", () => {
+describePy("runner lane hooks (PILE-279)", () => {
   it("reads only well-formed hooks from .pile/config.json", () => {
     const res = runHooksHarness(
       {

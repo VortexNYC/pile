@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { isSafeLaneBranch } from "../../global/lane-guard.js";
+import { resolvePython } from "./python";
 
 // PILE-277 — runner half of the lane adversarial suite, ported from
 // pullfrog's test/crossagent + test/adhoc vectors. Each case plays the
@@ -90,6 +91,10 @@ interface Lane {
 }
 
 const lanes: string[] = [];
+
+// Real CPython resolved past any PATH shim; the suite skips when absent.
+const PYTHON = resolvePython();
+const describePy = describe.skipIf(PYTHON === null);
 
 afterEach(() => {
   for (const dir of lanes.splice(0))
@@ -194,8 +199,9 @@ function runHarness(
   arg = "",
   extraEnv: Record<string, string> = {}
 ): HarnessOut {
+  if (!PYTHON) throw new Error("unreachable: suite skipped without CPython");
   const out = execFileSync(
-    "python3",
+    PYTHON,
     [lane.harness, CORE_PATH, DRIVER_PATH, mode, arg],
     { encoding: "utf8", env: runnerEnv(lane, extraEnv), timeout: 60_000 }
   );
@@ -241,7 +247,7 @@ function expectLanePushed(lane: Lane, file: string): void {
   );
 }
 
-describe("lane security: runner commit/push (PILE-277)", () => {
+describePy("lane security: runner commit/push (PILE-277)", () => {
   it("gitHooks: planted hooks, hooksPath and fsmonitor never run under the runner", () => {
     const lane = makeLane();
     const hooks = join(lane.repo, ".git", "hooks");
