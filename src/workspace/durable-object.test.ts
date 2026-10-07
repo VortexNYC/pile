@@ -76,9 +76,56 @@ async function withWorkspace<T>(
   });
 }
 
+// mimetext may base64-encode the body — decode it back to plain text so
+// assertions don't depend on the transfer encoding.
+function mimeBodyText(raw: string): string {
+  const body = raw
+    .split(/\r?\n\r?\n/)
+    .slice(1)
+    .join("\n\n");
+  const compact = body.replace(/\s+/g, "");
+  return compact.length > 0 && /^[A-Za-z0-9+/=]+$/.test(compact)
+    ? Buffer.from(compact, "base64").toString("utf8")
+    : body;
+}
+
 describe("WorkspaceDO", () => {
   beforeAll(ensureWorkspace);
 
+  // Capturing EMAIL binding — the DO reads the same env object the test
+  // holds, so swapping env.EMAIL intercepts real sends. Restore after
+  // each leg.
+  const sent: Array<{ from: string; to: string; raw?: string }> = [];
+  const fakeEmail: SendEmail = {
+    send: async (message) => {
+      const msg = message as EmailMessage;
+      // workerd keeps the MIME payload under a hidden internal key.
+      const raw = (msg as unknown as Record<string, unknown>)[
+        "EmailMessage::raw"
+      ];
+      sent.push({
+        from: msg.from,
+        to: msg.to,
+        raw:
+          typeof raw === "string"
+            ? raw
+            : raw instanceof Uint8Array
+              ? new TextDecoder().decode(raw)
+              : undefined,
+      });
+      return { messageId: "" };
+    },
+  };
+  const withEmail = <T>(run: () => Promise<T>): Promise<T> => {
+    const prevEmail = env.EMAIL;
+    const prevFrom = env.EMAIL_FROM;
+    env.EMAIL = fakeEmail;
+    env.EMAIL_FROM = "notifications@example.com";
+    return run().finally(() => {
+      env.EMAIL = prevEmail;
+      env.EMAIL_FROM = prevFrom;
+    });
+  };
   it("creates and lists issues", async () => {
     const stub = getStub();
     const issue = await withWorkspace(stub, (instance) =>
@@ -241,40 +288,6 @@ describe("WorkspaceDO", () => {
 
   it("emails directed notifications by default and honors the email opt-out", async () => {
     const stub = getStub();
-    const sent: Array<{ from: string; to: string; raw?: string }> = [];
-    const fakeEmail: SendEmail = {
-      send: async (message) => {
-        const msg = message as EmailMessage;
-        // workerd keeps the MIME payload under a hidden internal key.
-        const raw = (msg as unknown as Record<string, unknown>)[
-          "EmailMessage::raw"
-        ];
-        sent.push({
-          from: msg.from,
-          to: msg.to,
-          raw:
-            typeof raw === "string"
-              ? raw
-              : raw instanceof Uint8Array
-                ? new TextDecoder().decode(raw)
-                : undefined,
-        });
-        return { messageId: "" };
-      },
-    };
-    // Swap in a capturing EMAIL binding — the DO reads the same env
-    // object the test holds. Restore after each leg.
-    const withEmail = <T>(run: () => Promise<T>): Promise<T> => {
-      const prevEmail = env.EMAIL;
-      const prevFrom = env.EMAIL_FROM;
-      env.EMAIL = fakeEmail;
-      env.EMAIL_FROM = "notifications@example.com";
-      return run().finally(() => {
-        env.EMAIL = prevEmail;
-        env.EMAIL_FROM = prevFrom;
-      });
-    };
-
     const issue = await withWorkspace(stub, (instance) =>
       instance.createIssue({ title: "Email me" })
     );
@@ -341,6 +354,66 @@ describe("WorkspaceDO", () => {
       notes.filter((n) => n.type === "issue_assigned" && n.issueId === issue.id)
         .length
     ).toBeGreaterThanOrEqual(2);
+  });
+
+  it("emails a batch assignee once and links the issue in the body", async () => {
+    const stub = getStub();
+    // user-2 needs a user + member row to receive mail — create them
+    // idempotently so this test also passes under a focused -t run.
+    const db = createD1(env.D1);
+    await db
+      .insert(userTable)
+      .values({
+        id: "user-2",
+        name: "Other",
+        email: "user-2@test.local",
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .onConflictDoNothing();
+    await db
+      .insert(member)
+      .values({
+        id: crypto.randomUUID(),
+        organizationId: WORKSPACE_ID,
+        userId: "user-2",
+        role: "member",
+        createdAt: new Date(),
+      })
+      .onConflictDoNothing();
+    const [first, second] = await withWorkspace(stub, async (instance) => {
+      const a = await instance.createIssue({ title: "Batch one" });
+      const b = await instance.createIssue({ title: "Batch two" });
+      return [a, b];
+    });
+    sent.length = 0;
+    const updated = await withWorkspace(stub, (instance) =>
+      withEmail(() =>
+        instance.batchUpdateIssues(
+          [first.id, second.id],
+          { assigneeId: "user-2" },
+          "user-1"
+        )
+      )
+    );
+    expect(updated).toHaveLength(2);
+    // One email for the whole batch, not one per issue…
+    expect(sent).toHaveLength(1);
+    expect(sent[0].to).toBe("user-2@test.local");
+    // …and it carries a link back to the issue.
+    expect(mimeBodyText(sent[0].raw ?? "")).toContain(
+      `/${WORKSPACE_ID}/issues/${first.identifier}`
+    );
+    // Every issue still writes its directed in-app row.
+    const notes = await withWorkspace(stub, (instance) =>
+      instance.listNotificationsForRecipient("user-2", "user")
+    );
+    for (const id of [first.id, second.id]) {
+      expect(
+        notes.filter((n) => n.type === "issue_assigned" && n.issueId === id)
+      ).toHaveLength(1);
+    }
   });
 
   it("supports triage status and resolution semantics", async () => {

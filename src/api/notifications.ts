@@ -190,7 +190,9 @@ const preferencesSchema = z.object({
   userId: z.string(),
   inApp: z.boolean(),
   webhook: z.boolean(),
-  email: z.boolean(),
+  // null = unset: directed high-signal notifications email by default
+  // until the member makes an explicit choice (emailExplicit true).
+  email: z.boolean().nullable(),
   emailExplicit: z.boolean(),
   mutedTypes: z.array(z.string()).nullable(),
   updatedAt: z.string(),
@@ -254,6 +256,10 @@ function toPreferencesResponse(row: {
 }) {
   return {
     ...row,
+    // The stored `email` flag only means something once the member picked
+    // it — surface null while unset so a naive toggle doesn't render "off"
+    // for someone the default-on directed emails actually reach.
+    email: row.emailExplicit ? row.email : null,
     mutedTypes: row.mutedTypes ? row.mutedTypes.split(",") : null,
   };
 }

@@ -46991,7 +46991,8 @@
                       "type": "boolean"
                     },
                     "email": {
-                      "type": "boolean"
+                      "type": "boolean",
+                      "nullable": true
                     },
                     "emailExplicit": {
                       "type": "boolean"
@@ -47086,7 +47087,8 @@
                       "type": "boolean"
                     },
                     "email": {
-                      "type": "boolean"
+                      "type": "boolean",
+                      "nullable": true
                     },
                     "emailExplicit": {
                       "type": "boolean"
