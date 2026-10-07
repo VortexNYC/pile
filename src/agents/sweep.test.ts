@@ -283,7 +283,9 @@ function registerMock(
 
 async function ghFetchStub(input: RequestInfo | URL) {
   const url = String(input);
-  if (url.endsWith("/pulls/210")) {
+  // /pulls/210 and /pulls/211 both answer "merged" — distinct URLs because a
+  // prUrl can only be claimed by one issue in this suite's shared workspace.
+  if (url.endsWith("/pulls/210") || url.endsWith("/pulls/211")) {
     return new Response(
       JSON.stringify({
         state: "closed",
@@ -2236,7 +2238,7 @@ describe("syncOpenPrSessions", () => {
       actorId: userId,
       actorType: "user",
       status: "completed",
-      prUrl: "https://github.com/vortexnyc/pile/pull/210",
+      prUrl: "https://github.com/vortexnyc/pile/pull/211",
       prState: "open",
     });
 

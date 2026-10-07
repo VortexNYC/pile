@@ -52,6 +52,9 @@ function fetch(
   token?: string
 ): Promise<Response> {
   const headers: Record<string, string> = {
+    ...(init.body !== undefined
+      ? { "Content-Type": "application/json" }
+      : undefined),
     ...(token ? { Authorization: `Bearer ${token}` } : undefined),
     ...(init.headers as Record<string, string> | undefined),
   };
