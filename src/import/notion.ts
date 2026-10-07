@@ -370,7 +370,8 @@ async function importNotionDatabase(
           await ctx.stub.updateIssue(
             mapping.issueId,
             { title: row.title, description: markdown },
-            actorId
+            actorId,
+            { notify: false }
           );
           updated++;
         } else {
@@ -379,7 +380,9 @@ async function importNotionDatabase(
             description: markdown,
             teamId,
           };
-          const issue = await ctx.stub.createIssue(issueInput, actorId);
+          const issue = await ctx.stub.createIssue(issueInput, actorId, {
+            notify: false,
+          });
           await upsertNotionIssueMapping(
             ctx.db,
             ctx.organizationId,

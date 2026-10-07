@@ -216,7 +216,8 @@ async function syncIntercomConversation(
           priority: intercomPriorityToVortexPriority(conversation.priority),
           updatedAt,
         },
-        ctx.importerId
+        ctx.importerId,
+        { notify: false }
       );
       return "updated";
     }
@@ -231,7 +232,8 @@ async function syncIntercomConversation(
         createdAt,
         updatedAt,
       },
-      ctx.importerId
+      ctx.importerId,
+      { notify: false }
     );
     await createIntercomConversation(
       ctx.db,

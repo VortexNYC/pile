@@ -580,6 +580,14 @@ export const workspaceNotificationPreferences = sqliteTable(
     email: integer("email" as string, { mode: "boolean" })
       .notNull()
       .default(false),
+    // Whether `email` is an explicit choice or the unset default. Rows
+    // predating this column are marked explicit so the directed-email
+    // default never surprises a member who already has prefs.
+    emailExplicit: integer("email_explicit" as string, {
+      mode: "boolean",
+    })
+      .notNull()
+      .default(true),
     // Comma-separated event types the user wants suppressed entirely.
     mutedTypes: text("muted_types" as string),
     updatedAt: text("updated_at" as string).notNull(),

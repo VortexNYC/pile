@@ -2518,6 +2518,11 @@ export function upsertNotificationPreferences(
     inApp: input.inApp ?? existing?.inApp ?? true,
     webhook: input.webhook ?? existing?.webhook ?? true,
     email: input.email ?? existing?.email ?? false,
+    // `email` only counts as a choice when the caller passes it — a row
+    // created to toggle inApp/mutedTypes stays unset so the DO's
+    // default-on types still reach the member.
+    emailExplicit:
+      input.email !== undefined ? true : (existing?.emailExplicit ?? false),
     mutedTypes,
     updatedAt: now,
   };

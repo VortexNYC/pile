@@ -209,7 +209,8 @@ async function syncGithubIssue(
         repo,
         teamId,
       },
-      actorId
+      actorId,
+      { notify: false }
     );
     return "updated";
   }
@@ -226,7 +227,8 @@ async function syncGithubIssue(
       repo,
       teamId,
     },
-    actorId
+    actorId,
+    { notify: false }
   );
   await createRepoIssue(
     ctx.db,
