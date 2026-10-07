@@ -63,6 +63,15 @@ async function fetch(
   return app.fetch(request, env);
 }
 
+const prefsSchema = z.object({
+  inApp: z.boolean(),
+  webhook: z.boolean(),
+  email: z.boolean(),
+  emailExplicit: z.boolean(),
+  mutedTypes: z.array(z.string()).nullable(),
+  updatedAt: z.string(),
+});
+
 describe("notification preferences API", () => {
   let organizationId: string;
   let token: string;
@@ -78,7 +87,7 @@ describe("notification preferences API", () => {
   it("returns unset defaults when the member has no prefs row", async () => {
     const res = await fetch(prefsPath(), {}, token);
     expect(res.status).toBe(200);
-    const prefs = await res.json();
+    const prefs = prefsSchema.parse(await res.json());
     expect(prefs.inApp).toBe(true);
     expect(prefs.email).toBe(false);
     expect(prefs.emailExplicit).toBe(false);
@@ -95,7 +104,7 @@ describe("notification preferences API", () => {
       token
     );
     expect(res.status).toBe(200);
-    const prefs = await res.json();
+    const prefs = prefsSchema.parse(await res.json());
     // The write did not pass `email`, so the member keeps the
     // default-on directed-email behavior rather than an implicit opt-out.
     expect(prefs.emailExplicit).toBe(false);
@@ -109,7 +118,7 @@ describe("notification preferences API", () => {
       token
     );
     expect(res.status).toBe(200);
-    const prefs = await res.json();
+    const prefs = prefsSchema.parse(await res.json());
     expect(prefs.email).toBe(false);
     expect(prefs.emailExplicit).toBe(true);
 
@@ -118,7 +127,7 @@ describe("notification preferences API", () => {
       { method: "PUT", body: JSON.stringify({ email: true }) },
       token
     );
-    const enabledPrefs = await enabled.json();
+    const enabledPrefs = prefsSchema.parse(await enabled.json());
     expect(enabledPrefs.email).toBe(true);
     expect(enabledPrefs.emailExplicit).toBe(true);
   });
