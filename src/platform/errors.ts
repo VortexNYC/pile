@@ -162,12 +162,10 @@ export function toErrorResponse(error: unknown): Response {
     });
   } else if (isSerializedVortexError(error)) {
     const catalog = ERROR_CATALOG[error.code];
-    const status =
-      Number.isInteger(error.status) &&
-      error.status >= 400 &&
-      error.status < 600
-        ? error.status
-        : catalog.status;
+    // The catalog is authoritative for status — honoring a serialized status
+    // would let a mismatched pair (e.g. a 5xx code with a 4xx status) leak
+    // internals or contradict the code on the wire.
+    const status = catalog.status;
     vortex = new VortexError({
       code: error.code,
       status,

@@ -173,7 +173,7 @@ describe("toErrorResponse", () => {
     error.mockRestore();
   });
 
-  it("falls back to the catalog status when the serialized status is invalid", async () => {
+  it("uses the catalog status over a serialized status that is out of range", async () => {
     const serialized = Object.assign(new Error("Conflict"), {
       code: "CONFLICT",
       status: 700,
@@ -182,6 +182,33 @@ describe("toErrorResponse", () => {
     const res = toErrorResponse(serialized);
     expect(res.status).toBe(409);
     expect(res.headers.get("X-Pile-Error-Code")).toBe("CONFLICT");
+  });
+
+  it("does not let a serialized status contradict the catalog code", async () => {
+    // A mismatched pair must not downgrade a 5xx code into a
+    // message-leaking 4xx, nor upgrade a 4xx code into a 5xx.
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const downgrade = Object.assign(new Error("d1 internals"), {
+      code: "INTERNAL_ERROR",
+      status: 400,
+      remote: true,
+    });
+    const downgraded = toErrorResponse(downgrade);
+    expect(downgraded.status).toBe(500);
+    await expect(downgraded.json()).resolves.toEqual({
+      code: "INTERNAL_ERROR",
+      message: "Internal error",
+    });
+
+    const upgrade = Object.assign(new Error("Conflict"), {
+      code: "CONFLICT",
+      status: 500,
+      remote: true,
+    });
+    const upgraded = toErrorResponse(upgrade);
+    expect(upgraded.status).toBe(409);
+    expect(upgraded.headers.get("X-Pile-Error-Code")).toBe("CONFLICT");
+    error.mockRestore();
   });
 
   it("passes details through on serialized 4xx VortexErrors", async () => {
