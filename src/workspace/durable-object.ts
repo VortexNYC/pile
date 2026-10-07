@@ -1295,7 +1295,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (!bucket) {
       throw new VortexError({
         code: "INTERNAL_ERROR",
-        status: 503,
+        status: 500,
         message: "File storage not configured",
       });
     }
@@ -3804,9 +3804,11 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       ? await getTeamById(d1, teamId, this.organizationId)
       : await getDefaultTeam(d1, this.organizationId);
     if (!team) {
-      throw new Error(
-        input.teamId ? "Team not found" : "Workspace has no default team"
-      );
+      // Coded errors so a bad teamId surfaces as 404 (not a 500) once the
+      // throw crosses the DO RPC boundary — same contract as updateIssue.
+      throw input.teamId
+        ? VortexError.fromCode("NOT_FOUND", "Team not found")
+        : VortexError.fromCode("CONFIG_ERROR", "Workspace has no default team");
     }
     const resolvedAssigneeId =
       input.assigneeId === undefined
@@ -4581,8 +4583,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }
 
     // prUrl feeds getIssueByPrUrl exact-match routing for webhook comments,
-    // so a second issue claiming the same URL would be ambiguous.
-    const newPrUrl = patch.prUrl !== undefined ? patch.prUrl : old.prUrl;
+    // so a second issue claiming the same URL would be ambiguous. An empty
+    // string normalizes to null — it's a clear, not a distinct unset state.
+    const newPrUrl =
+      patch.prUrl !== undefined ? patch.prUrl || null : old.prUrl;
     if (typeof newPrUrl === "string" && newPrUrl !== old.prUrl) {
       const claimedBy = await this.getIssueByPrUrl(newPrUrl);
       if (claimedBy && claimedBy.id !== old.id) {
@@ -4721,7 +4725,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (patch.labelIds !== undefined) set.labelIds = patch.labelIds;
     if (patch.repo !== undefined) set.repo = patch.repo;
     if (patch.branch !== undefined) set.branch = patch.branch;
-    if (patch.prUrl !== undefined) set.prUrl = patch.prUrl;
+    if (patch.prUrl !== undefined) set.prUrl = newPrUrl;
     if (patch.prState !== undefined) set.prState = patch.prState;
 
     // Fields below are written without an explicit patch key — track them so
@@ -4731,7 +4735,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     // Re-pointing prUrl means the stored prCheckState belongs to the old
     // PR's head SHA — clear it. prState clears too unless the caller
     // supplied a new one in the same patch.
-    if (patch.prUrl !== undefined && patch.prUrl !== old.prUrl) {
+    if (patch.prUrl !== undefined && newPrUrl !== old.prUrl) {
       if (patch.prState === undefined) {
         set.prState = null;
         implicitKeys.add("prState");
@@ -4911,7 +4915,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   ): Promise<Issue[]> {
     // A non-null prUrl maps to exactly one issue — reject multi-id batches
     // up front so they can't half-apply before hitting the claim check.
-    if (ids.length > 1 && typeof patch.prUrl === "string") {
+    // Falsy values (null, "") are clears, not claims.
+    if (ids.length > 1 && patch.prUrl) {
       throw VortexError.fromCode(
         "BAD_REQUEST",
         "prUrl can only be set on a single issue"

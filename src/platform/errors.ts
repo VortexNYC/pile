@@ -44,6 +44,9 @@ export class VortexError extends Error {
   readonly status: number;
   readonly hint: string | undefined;
   readonly details: Record<string, unknown> | undefined;
+  // Own-prop sentinel: survives RPC serialization and distinguishes a real
+  // VortexError from a lookalike carrying a coincidental code/status.
+  readonly isVortexError = true;
 
   constructor({ code, status, message, hint, details }: VortexErrorCode) {
     super(message);
@@ -111,22 +114,25 @@ function isDetailsRecord(value: unknown): value is Record<string, unknown> {
 
 // A VortexError thrown inside a Durable Object loses its prototype across
 // the RPC boundary, so `instanceof` misses it. workerd still serializes the
-// own properties (code, status, hint, details) and marks the tunneled
-// exception `.remote === true` — recognize that shape and rebuild the error
-// instead of collapsing every DO-side validation failure to a 500. The
-// `remote` check matters: an in-process Error that happens to carry
-// code/status props must not leak its message as a 4xx.
+// own properties (code, status, hint, details, isVortexError) and marks the
+// tunneled exception `.remote === true` — recognize that shape and rebuild
+// the error instead of collapsing every DO-side validation failure to a
+// 500. Both discriminants matter: `remote` excludes in-process lookalikes
+// and `isVortexError` excludes DO-thrown non-VortexErrors — either way a
+// coincidental code/status pair must not leak its message as a 4xx.
 function isSerializedVortexError(
   error: unknown
 ): error is Error & VortexErrorCode {
   if (!(error instanceof Error)) return false;
-  const { code, status, remote } = error as {
+  const { code, status, remote, isVortexError } = error as {
     code?: unknown;
     status?: unknown;
     remote?: unknown;
+    isVortexError?: unknown;
   };
   return (
     remote === true &&
+    isVortexError === true &&
     typeof code === "string" &&
     Object.hasOwn(ERROR_CATALOG, code) &&
     typeof status === "number"

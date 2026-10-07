@@ -91,6 +91,7 @@ describe("toErrorResponse", () => {
       hint: "Issue ISS-1 already uses repo owner/repo and branch feat",
       details: undefined,
       remote: true,
+      isVortexError: true,
     });
     const res = toErrorResponse(serialized);
     expect(res.status).toBe(409);
@@ -107,6 +108,7 @@ describe("toErrorResponse", () => {
       code: "CONFIG_ERROR",
       status: 500,
       remote: true,
+      isVortexError: true,
     });
     const res = toErrorResponse(serialized);
     expect(res.status).toBe(500);
@@ -124,6 +126,7 @@ describe("toErrorResponse", () => {
       hint: "s3://bucket/secret-key",
       details: { dsn: "postgres://user:pass@host" },
       remote: true,
+      isVortexError: true,
     });
     const res = toErrorResponse(serialized);
     expect(res.status).toBe(500);
@@ -140,6 +143,7 @@ describe("toErrorResponse", () => {
       code: "ENOENT",
       status: 404,
       remote: true,
+      isVortexError: true,
     });
     const res = toErrorResponse(serialized);
     expect(res.status).toBe(500);
@@ -152,6 +156,7 @@ describe("toErrorResponse", () => {
       code: "constructor",
       status: 404,
       remote: true,
+      isVortexError: true,
     });
     const res = toErrorResponse(serialized);
     expect(res.status).toBe(500);
@@ -163,6 +168,25 @@ describe("toErrorResponse", () => {
     const serialized = Object.assign(new Error("upstream internals"), {
       code: "NOT_FOUND",
       status: 404,
+      isVortexError: true,
+    });
+    const res = toErrorResponse(serialized);
+    expect(res.status).toBe(500);
+    await expect(res.json()).resolves.toEqual({
+      code: "INTERNAL_ERROR",
+      message: "Internal error",
+    });
+    error.mockRestore();
+  });
+
+  it("ignores remote errors without the VortexError sentinel", async () => {
+    // A non-VortexError thrown inside the DO is still remote-tunneled —
+    // a coincidental catalog code/status must not leak its message.
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const serialized = Object.assign(new Error("upstream internals"), {
+      code: "NOT_FOUND",
+      status: 404,
+      remote: true,
     });
     const res = toErrorResponse(serialized);
     expect(res.status).toBe(500);
@@ -178,6 +202,7 @@ describe("toErrorResponse", () => {
       code: "CONFLICT",
       status: 700,
       remote: true,
+      isVortexError: true,
     });
     const res = toErrorResponse(serialized);
     expect(res.status).toBe(409);
@@ -192,6 +217,7 @@ describe("toErrorResponse", () => {
       code: "INTERNAL_ERROR",
       status: 400,
       remote: true,
+      isVortexError: true,
     });
     const downgraded = toErrorResponse(downgrade);
     expect(downgraded.status).toBe(500);
@@ -204,6 +230,7 @@ describe("toErrorResponse", () => {
       code: "CONFLICT",
       status: 500,
       remote: true,
+      isVortexError: true,
     });
     const upgraded = toErrorResponse(upgrade);
     expect(upgraded.status).toBe(409);
@@ -217,6 +244,7 @@ describe("toErrorResponse", () => {
       status: 409,
       details: { issueId: "ISS-1" },
       remote: true,
+      isVortexError: true,
     });
     const res = toErrorResponse(serialized);
     expect(res.status).toBe(409);

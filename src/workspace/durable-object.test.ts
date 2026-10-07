@@ -904,8 +904,15 @@ describe("WorkspaceDO", () => {
         branch: "self-branch",
       })
     );
+    // Re-sending the issue's own repo/branch exercises the claim-check's
+    // self-exclusion — a missing `existing.id !== old.id` guard would
+    // CONFLICT here.
     const updated = await withWorkspace(stub, (instance) =>
-      instance.updateIssue(issue.id, { title: "Self claim renamed" })
+      instance.updateIssue(issue.id, {
+        title: "Self claim renamed",
+        repo: "owner/self",
+        branch: "self-branch",
+      })
     );
     expect(updated?.repo).toBe("owner/self");
     expect(updated?.branch).toBe("self-branch");
@@ -942,6 +949,34 @@ describe("WorkspaceDO", () => {
       instance.updateIssue(owner.id, { prUrl: null })
     );
     expect(cleared?.prUrl).toBeNull();
+  });
+
+  it("normalizes an empty-string prUrl to null on update", async () => {
+    const stub = getStub();
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Empty prUrl" })
+    );
+    const prUrl = `https://github.com/owner/repo/pull/${crypto.randomUUID().slice(0, 8)}`;
+    await withWorkspace(stub, (instance) =>
+      instance.updateIssue(issue.id, { prUrl })
+    );
+    const cleared = await withWorkspace(stub, (instance) =>
+      instance.updateIssue(issue.id, { prUrl: "" })
+    );
+    expect(cleared?.prUrl).toBeNull();
+  });
+
+  it("throws a NOT_FOUND-coded error when createIssue gets an unknown teamId", async () => {
+    const stub = getStub();
+    const err: unknown = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Bad team", teamId: "missing-team" })
+    ).then(
+      () => undefined,
+      (e: unknown) => e
+    );
+    expect(err).toBeInstanceOf(Error);
+    expect((err as { code?: unknown }).code).toBe("NOT_FOUND");
+    expect((err as { status?: unknown }).status).toBe(404);
   });
 
   it("supports parent/child issue hierarchy", async () => {
