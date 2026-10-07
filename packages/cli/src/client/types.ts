@@ -25562,6 +25562,142 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/intake": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create intake */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        intakeId?: string;
+                        businessName: string;
+                        address?: string;
+                        /** Format: uri */
+                        websiteUrl?: string;
+                        visitedAt?: string;
+                        spokeWith?: {
+                            name?: string;
+                            role?: string;
+                            isDecisionMaker?: boolean;
+                        };
+                        owner?: {
+                            name?: string;
+                            phone?: string;
+                            /** Format: email */
+                            email?: string;
+                            bestTime?: string;
+                        };
+                        meeting?: {
+                            booked: boolean;
+                            at?: string;
+                            returnAt?: string;
+                            /** Format: uri */
+                            bookingUrl?: string;
+                        };
+                        discovery?: {
+                            businessType?: string;
+                            billingSystems?: string[];
+                            paymentMethods?: string[];
+                            hardware?: string;
+                            hardwareOwnership?: string;
+                            signage?: string;
+                            fitNotes?: string;
+                        };
+                        pricing?: {
+                            currentProcessor?: string;
+                            posSystem?: string;
+                            underContract?: boolean;
+                            contractEnd?: string;
+                            earlyTerminationFee?: string;
+                            timeWithProvider?: string;
+                            monthlyCardVolume?: string;
+                            averageTicket?: string;
+                            transactionsPerDay?: string;
+                            cardMix?: string;
+                            channelMix?: string;
+                            seasonality?: string;
+                            monthlySalesTotals?: string;
+                        };
+                        pain?: {
+                            biggestComplaint?: string;
+                            switchedBefore?: string;
+                            wishes?: string;
+                        };
+                        pipelineStatusId?: string;
+                        nextStep?: string;
+                        nextStepDate?: string;
+                        repNotes?: string;
+                        statementFiles?: {
+                            key: string;
+                            url: string;
+                            name?: string;
+                        }[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Intake already recorded (idempotent retry) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            customerId: string;
+                            contactId: string | null;
+                            documentId: string | null;
+                            statusId: string | null;
+                            bookingLinkId: string | null;
+                            deduped: boolean;
+                        };
+                    };
+                };
+                /** @description Intake recorded */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            customerId: string;
+                            contactId: string | null;
+                            documentId: string | null;
+                            statusId: string | null;
+                            bookingLinkId: string | null;
+                            deduped: boolean;
+                        };
+                    };
+                };
+                /** @description Invalid request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {

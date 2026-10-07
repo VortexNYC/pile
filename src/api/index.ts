@@ -48,6 +48,7 @@ import { registerGithubRoutes } from "./github.js";
 import { registerGitlabRoutes } from "./gitlab.js";
 import { registerHardeningRoutes } from "./hardening.js";
 import { registerImportRoutes } from "./import.js";
+import { registerIntakeRoutes } from "./intake.js";
 import { registerIssueExternalLinkRoutes } from "./issue-external-links.js";
 import { registerIssueHistoryRoutes } from "./issue-history.js";
 import { registerIssueRelationRoutes } from "./issue-relations.js";
@@ -374,6 +375,7 @@ app.get("/api/auth/organization/accept-invitation", (c) => {
 });
 
 registerAppRoute(app);
+registerIntakeRoutes(app);
 
 app.all("/api/auth/*", async (c) => {
   return (await createAuth(c.env)).handler(c.req.raw);

@@ -11054,6 +11054,227 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdIntake",
+    "description": "Create intake (POST /workspaces/{organizationId}/intake) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: intakeId, businessName*, address, websiteUrl, visitedAt, spokeWith, owner, meeting, discovery, pricing, pain, pipelineStatusId, nextStep, nextStepDate, repNotes, statementFiles (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/intake",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "intakeId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "businessName": {
+              "type": "string",
+              "minLength": 1
+            },
+            "address": {
+              "type": "string"
+            },
+            "websiteUrl": {
+              "type": "string",
+              "format": "uri"
+            },
+            "visitedAt": {
+              "type": "string"
+            },
+            "spokeWith": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "role": {
+                  "type": "string"
+                },
+                "isDecisionMaker": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "owner": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "phone": {
+                  "type": "string"
+                },
+                "email": {
+                  "type": "string",
+                  "format": "email"
+                },
+                "bestTime": {
+                  "type": "string"
+                }
+              }
+            },
+            "meeting": {
+              "type": "object",
+              "properties": {
+                "booked": {
+                  "type": "boolean"
+                },
+                "at": {
+                  "type": "string"
+                },
+                "returnAt": {
+                  "type": "string"
+                },
+                "bookingUrl": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "required": [
+                "booked"
+              ]
+            },
+            "discovery": {
+              "type": "object",
+              "properties": {
+                "businessType": {
+                  "type": "string"
+                },
+                "billingSystems": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "paymentMethods": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "hardware": {
+                  "type": "string"
+                },
+                "hardwareOwnership": {
+                  "type": "string"
+                },
+                "signage": {
+                  "type": "string"
+                },
+                "fitNotes": {
+                  "type": "string"
+                }
+              }
+            },
+            "pricing": {
+              "type": "object",
+              "properties": {
+                "currentProcessor": {
+                  "type": "string"
+                },
+                "posSystem": {
+                  "type": "string"
+                },
+                "underContract": {
+                  "type": "boolean"
+                },
+                "contractEnd": {
+                  "type": "string"
+                },
+                "earlyTerminationFee": {
+                  "type": "string"
+                },
+                "timeWithProvider": {
+                  "type": "string"
+                },
+                "monthlyCardVolume": {
+                  "type": "string"
+                },
+                "averageTicket": {
+                  "type": "string"
+                },
+                "transactionsPerDay": {
+                  "type": "string"
+                },
+                "cardMix": {
+                  "type": "string"
+                },
+                "channelMix": {
+                  "type": "string"
+                },
+                "seasonality": {
+                  "type": "string"
+                },
+                "monthlySalesTotals": {
+                  "type": "string"
+                }
+              }
+            },
+            "pain": {
+              "type": "object",
+              "properties": {
+                "biggestComplaint": {
+                  "type": "string"
+                },
+                "switchedBefore": {
+                  "type": "string"
+                },
+                "wishes": {
+                  "type": "string"
+                }
+              }
+            },
+            "pipelineStatusId": {
+              "type": "string"
+            },
+            "nextStep": {
+              "type": "string"
+            },
+            "nextStepDate": {
+              "type": "string"
+            },
+            "repNotes": {
+              "type": "string"
+            },
+            "statementFiles": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "url": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "key",
+                  "url"
+                ]
+              }
+            }
+          },
+          "required": [
+            "businessName"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdInvitations",
     "description": "Create invitation (POST /workspaces/{organizationId}/invitations) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: email*, role*, teamId (* = required).",
     "method": "POST",

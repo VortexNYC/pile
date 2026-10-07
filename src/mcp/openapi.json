@@ -51360,6 +51360,323 @@
         },
         "summary": "Open realtime connection"
       }
+    },
+    "/workspaces/{organizationId}/intake": {
+      "post": {
+        "tags": [
+          "customers"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "intakeId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "businessName": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "address": {
+                    "type": "string"
+                  },
+                  "websiteUrl": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "visitedAt": {
+                    "type": "string"
+                  },
+                  "spokeWith": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "role": {
+                        "type": "string"
+                      },
+                      "isDecisionMaker": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "owner": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "phone": {
+                        "type": "string"
+                      },
+                      "email": {
+                        "type": "string",
+                        "format": "email"
+                      },
+                      "bestTime": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "meeting": {
+                    "type": "object",
+                    "properties": {
+                      "booked": {
+                        "type": "boolean"
+                      },
+                      "at": {
+                        "type": "string"
+                      },
+                      "returnAt": {
+                        "type": "string"
+                      },
+                      "bookingUrl": {
+                        "type": "string",
+                        "format": "uri"
+                      }
+                    },
+                    "required": [
+                      "booked"
+                    ]
+                  },
+                  "discovery": {
+                    "type": "object",
+                    "properties": {
+                      "businessType": {
+                        "type": "string"
+                      },
+                      "billingSystems": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "paymentMethods": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "hardware": {
+                        "type": "string"
+                      },
+                      "hardwareOwnership": {
+                        "type": "string"
+                      },
+                      "signage": {
+                        "type": "string"
+                      },
+                      "fitNotes": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "pricing": {
+                    "type": "object",
+                    "properties": {
+                      "currentProcessor": {
+                        "type": "string"
+                      },
+                      "posSystem": {
+                        "type": "string"
+                      },
+                      "underContract": {
+                        "type": "boolean"
+                      },
+                      "contractEnd": {
+                        "type": "string"
+                      },
+                      "earlyTerminationFee": {
+                        "type": "string"
+                      },
+                      "timeWithProvider": {
+                        "type": "string"
+                      },
+                      "monthlyCardVolume": {
+                        "type": "string"
+                      },
+                      "averageTicket": {
+                        "type": "string"
+                      },
+                      "transactionsPerDay": {
+                        "type": "string"
+                      },
+                      "cardMix": {
+                        "type": "string"
+                      },
+                      "channelMix": {
+                        "type": "string"
+                      },
+                      "seasonality": {
+                        "type": "string"
+                      },
+                      "monthlySalesTotals": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "pain": {
+                    "type": "object",
+                    "properties": {
+                      "biggestComplaint": {
+                        "type": "string"
+                      },
+                      "switchedBefore": {
+                        "type": "string"
+                      },
+                      "wishes": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "pipelineStatusId": {
+                    "type": "string"
+                  },
+                  "nextStep": {
+                    "type": "string"
+                  },
+                  "nextStepDate": {
+                    "type": "string"
+                  },
+                  "repNotes": {
+                    "type": "string"
+                  },
+                  "statementFiles": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "url": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "key",
+                        "url"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "businessName"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Intake already recorded (idempotent retry)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "customerId": {
+                      "type": "string"
+                    },
+                    "contactId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "documentId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "statusId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "bookingLinkId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "deduped": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "customerId",
+                    "contactId",
+                    "documentId",
+                    "statusId",
+                    "bookingLinkId",
+                    "deduped"
+                  ]
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Intake recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "customerId": {
+                      "type": "string"
+                    },
+                    "contactId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "documentId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "statusId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "bookingLinkId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "deduped": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "customerId",
+                    "contactId",
+                    "documentId",
+                    "statusId",
+                    "bookingLinkId",
+                    "deduped"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          }
+        },
+        "summary": "Create intake"
+      }
     }
   }
 }
