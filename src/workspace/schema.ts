@@ -216,6 +216,28 @@ export const workspaceIssueApprovals = sqliteTable(
   (table) => [index("issue_approvals_issue_idx" as string).on(table.issueId)]
 );
 
+// Per-issue access grants. When an issue has no rows it is open to the
+// workspace; any row restricts it to listed actors (+ workspace admins).
+export const workspaceIssuePermissions = sqliteTable(
+  "issue_permissions" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    issueId: text("issue_id" as string).notNull(),
+    actorId: text("actor_id" as string).notNull(),
+    actorType: text("actor_type" as string)
+      .notNull()
+      .default("user"),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    uniqueIndex("issue_permissions_issue_actor_idx" as string).on(
+      table.issueId,
+      table.actorId
+    ),
+  ]
+);
+
 export const workspaceReactions = sqliteTable(
   "reactions" as string,
   {
@@ -676,6 +698,32 @@ export const workspaceCustomerNeeds = sqliteTable(
     index("customer_needs_issue_idx" as string).on(
       table.organizationId,
       table.issueId
+    ),
+  ]
+);
+
+// Entity attachments: R2-backed file uploads scoped to an arbitrary workspace
+// entity (entityType + entityId). First consumer is customers (statements,
+// photos, onboarding docs); issues/documents can reuse the same plumbing.
+export const workspaceEntityAttachments = sqliteTable(
+  "entity_attachments" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    entityType: text("entity_type" as string).notNull(),
+    entityId: text("entity_id" as string).notNull(),
+    fileName: text("file_name" as string).notNull(),
+    contentType: text("content_type" as string).notNull(),
+    size: integer("size" as string).notNull(),
+    r2Key: text("r2_key" as string).notNull(),
+    createdById: text("created_by_id" as string),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    index("entity_attachments_entity_idx" as string).on(
+      table.organizationId,
+      table.entityType,
+      table.entityId
     ),
   ]
 );

@@ -23,6 +23,7 @@ import type { WorkspaceDO } from "../workspace/durable-object.js";
 import { loadProviderConfig } from "./credentials.js";
 import { resolveAgentEnv } from "./daytona.js";
 import { dispatchAgent } from "./index.js";
+import { nudgeLane, resolveLaneForIssue } from "./nudge.js";
 
 export const REVIEW_CHECK_NAME = "pile-review";
 export const REVIEW_PURPOSE = "review";
@@ -123,6 +124,10 @@ const requestedPayloadSchema = z.object({
   pullNumber: z.number(),
   headSha: z.string(),
   checkRunId: z.number().nullable().optional(),
+});
+
+const publishedPayloadSchema = z.object({
+  reviewId: z.number().nullable().optional(),
 });
 
 type RequestedPayload = z.infer<typeof requestedPayloadSchema>;
@@ -403,6 +408,15 @@ function ghHeaders(token: string): Record<string, string> {
   };
 }
 
+class GhHttpError extends Error {
+  readonly status: number;
+  constructor(method: string, path: string, status: number) {
+    super(`github ${method} ${path} -> ${status}`);
+    this.name = "GhHttpError";
+    this.status = status;
+  }
+}
+
 async function gh(
   ghFetch: typeof fetch,
   token: string,
@@ -416,7 +430,7 @@ async function gh(
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
   if (!res.ok) {
-    throw new Error(`github ${method} ${path} -> ${res.status}`);
+    throw new GhHttpError(method, path, res.status);
   }
   return res.json();
 }
@@ -690,12 +704,121 @@ export async function requestPrReview(
   }
 }
 
+/** The verdict as a real GitHub review event. Posted alongside the check
+ *  run so the verdict shows up in `pulls/{n}/reviews` — the webhook and
+ *  sweep review-detection paths then treat it like any reviewer. Approves
+ *  never reach this map: they stay a plain comment at the call site. */
+const VERDICT_REVIEW_EVENT: Record<
+  Exclude<ReviewVerdict, "approve">,
+  "COMMENT" | "REQUEST_CHANGES"
+> = {
+  comment: "COMMENT",
+  "request-changes": "REQUEST_CHANGES",
+};
+
+/** POST /pulls/{n}/reviews for a verdict. Two failure shapes matter: the
+ *  app authored the PR (GitHub 422s REQUEST_CHANGES on own PRs) and a
+ *  stale commit_id after a force-push — both are definitive 4xx rejections
+ *  and degrade to a bare COMMENT so the verdict still lands as a review.
+ *  A 5xx or a failed response read is *not* definitive — the review may
+ *  have been created server-side, so the POST is never blindly retried;
+ *  the caller's issue-comment fallback carries the verdict instead.
+ *  Returns null only when no review could be posted at all. */
+async function postPrReview(
+  ghFetch: typeof fetch,
+  token: string,
+  req: RequestedPayload,
+  event: "COMMENT" | "REQUEST_CHANGES",
+  body: string
+): Promise<{ id: number | null; url: string | null } | null> {
+  const path = `/repos/${req.repo}/pulls/${req.pullNumber}/reviews`;
+  let raw: unknown = null;
+  try {
+    raw = await gh(ghFetch, token, "POST", path, {
+      commit_id: req.headSha,
+      event,
+      body,
+    });
+  } catch (err) {
+    if (err instanceof GhHttpError && err.status >= 400 && err.status < 500) {
+      try {
+        raw = await gh(ghFetch, token, "POST", path, {
+          event: "COMMENT",
+          body,
+        });
+      } catch (retryErr) {
+        console.error("pile-review verdict review failed", {
+          prUrl: req.prUrl,
+          error:
+            retryErr instanceof Error ? retryErr.message : String(retryErr),
+        });
+      }
+    } else {
+      console.error("pile-review verdict review failed", {
+        prUrl: req.prUrl,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  const parsed = z
+    .object({ id: z.number(), html_url: z.string() })
+    .safeParse(raw);
+  return parsed.success
+    ? { id: parsed.data.id, url: parsed.data.html_url }
+    : null;
+}
+
+/** PILE-315 — a published verdict is work for the author lane, not just a
+ *  PR artifact: deliver it through the shared nudge path so it lands as a
+ *  `prompt.followup` like pr.ci_failed does. The dedupeKey carries the
+ *  posted review's `review-<id>` marker, so whichever of this nudge and the
+ *  pull_request_review webhook/sweep detection runs first wins and the
+ *  other dedupes away. */
+async function nudgeWorkLaneWithVerdict(
+  env: WorkerEnv,
+  stub: WorkspaceStub,
+  organizationId: string,
+  session: AgentSession,
+  req: RequestedPayload,
+  review: ParsedReview,
+  body: string,
+  reviewId: number | null
+): Promise<void> {
+  try {
+    const workLane = await resolveLaneForIssue(stub, session.issueId, {
+      excludePurpose: REVIEW_PURPOSE,
+      limit: 50,
+    });
+    if (!workLane) return;
+    const issue = await stub.getIssue(session.issueId).catch(() => undefined);
+    await nudgeLane(env, stub, organizationId, workLane, issue, req.prUrl, {
+      prompt:
+        `Pile's review lane ${review.verdict === "request-changes" ? "requested changes" : "left review feedback"} ` +
+        `on ${req.prUrl} (sha ${req.headSha.slice(0, 12)}).\n\n${body}\n\n` +
+        "Address the review feedback on the PR and push.",
+      reason: "review feedback",
+      dedupeKey:
+        reviewId !== null ? `review-${reviewId}` : `pile-review-${req.headSha}`,
+      headSha: req.headSha,
+    });
+  } catch (err) {
+    console.error("pile-review verdict nudge failed", {
+      session: session.id,
+      prUrl: req.prUrl,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
 /** Publish verdicts for terminal review sessions: complete the check run,
- *  post the structured comment, record `review.published`. Idempotent per
- *  session — a failed publish retries on the next sweep. */
+ *  post the verdict as a PR review (plain comment as fallback), hand it to
+ *  the work lane as a follow-up prompt, record `review.published`.
+ *  Idempotent per session — a failed publish retries on the next sweep. */
 export async function publishReviewVerdicts(
   stub: WorkspaceStub,
   deps: ReviewDeps & {
+    env: WorkerEnv;
+    organizationId: string;
     tokenForRepo: (owner: string, name: string) => Promise<string | undefined>;
     now?: number;
   }
@@ -716,7 +839,6 @@ export async function publishReviewVerdicts(
         limit: 100,
         order: "desc",
       });
-      if (events.some((e) => e.type === "review.published")) continue;
       const requestedEvent = events.find((e) => e.type === "review.requested");
       if (!requestedEvent) continue;
       const requested = requestedPayloadSchema.safeParse(
@@ -724,13 +846,42 @@ export async function publishReviewVerdicts(
       );
       if (!requested.success) continue;
       const req = requested.data;
+      const review =
+        session.status === "completed"
+          ? parseReviewVerdict(session.result)
+          : null;
+      const body = review ? renderReviewBody(review, req.headSha) : null;
+
+      // PILE-315 — review.published marks the GitHub side done, not the
+      // handoff: a rejected (or throttled) verdict nudge retries on every
+      // sweep until nudgeLane's delivery dedupe sees it, mirroring how
+      // detected reviews retry. This is also what carries the
+      // pile-review-<sha> fallback key no detection pass can see — the
+      // compound failure that left a request-changes verdict stranded.
+      const publishedEvent = events.find((e) => e.type === "review.published");
+      if (publishedEvent) {
+        if (review && review.verdict !== "approve" && body !== null) {
+          const recorded = publishedPayloadSchema.safeParse(
+            parsePayload(publishedEvent.payload)
+          );
+          await nudgeWorkLaneWithVerdict(
+            deps.env,
+            stub,
+            deps.organizationId,
+            session,
+            req,
+            review,
+            body,
+            recorded.success ? (recorded.data.reviewId ?? null) : null
+          );
+        }
+        continue;
+      }
+
       const [owner, name] = req.repo.split("/");
       const token = await deps.tokenForRepo(owner, name);
       if (!token) continue;
 
-      const completed = session.status === "completed";
-      const review = completed ? parseReviewVerdict(session.result) : null;
-      const body = review ? renderReviewBody(review, req.headSha) : null;
       const output = review
         ? { title: reviewCheckTitle(review), summary: body ?? "" }
         : {
@@ -760,8 +911,24 @@ export async function publishReviewVerdicts(
         });
       }
 
+      // PILE-315 — actionable verdicts land as a real pull_request_review
+      // (REQUEST_CHANGES/COMMENT), so the webhook + sweep review detection
+      // treat it like any reviewer. Approve stays a plain comment: an
+      // approval is a terminal signal for humans, not work for the lane.
       let commentUrl: string | null = null;
-      if (body) {
+      let reviewId: number | null = null;
+      if (body && review && review.verdict !== "approve") {
+        const posted = await postPrReview(
+          ghFetch,
+          token,
+          req,
+          VERDICT_REVIEW_EVENT[review.verdict],
+          `${reviewCommentMarker(req.headSha)}\n${body}`
+        );
+        reviewId = posted?.id ?? null;
+        commentUrl = posted?.url ?? null;
+      }
+      if (body && commentUrl === null) {
         const comment = await gh(
           ghFetch,
           token,
@@ -785,10 +952,24 @@ export async function publishReviewVerdicts(
           verdict: review?.verdict ?? null,
           conclusion,
           commentUrl,
+          reviewId,
           checkRunId: req.checkRunId ?? null,
         },
       });
       published++;
+
+      if (review && review.verdict !== "approve" && body !== null) {
+        await nudgeWorkLaneWithVerdict(
+          deps.env,
+          stub,
+          deps.organizationId,
+          session,
+          req,
+          review,
+          body,
+          reviewId
+        );
+      }
     } catch (err) {
       console.error("pile-review publish failed", {
         session: session.id,

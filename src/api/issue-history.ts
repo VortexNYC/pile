@@ -1,9 +1,11 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
+import { createD1 } from "../global/db.js";
+import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
-import { resolveIssueRef } from "./stub.js";
+import { assertIssueAccess } from "./issue-access.js";
 
 const historySchema = z.object({
   id: z.string(),
@@ -40,12 +42,21 @@ const listIssueHistoryRoute = createRoute({
 export function registerIssueHistoryRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listIssueHistoryRoute, async (c) => {
     const { organizationId, issueId } = c.req.valid("param");
+    const identity = c.get("workspaceIdentity");
+    const db = createD1(c.env.D1);
     const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(
       c.env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
     );
-    const items = await stub.listIssueHistory(
-      await resolveIssueRef(stub, issueId)
-    );
+    const issue = await stub.getIssue(issueId);
+    if (!issue) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Issue not found",
+      });
+    }
+    await assertIssueAccess(db, stub, issue, identity);
+    const items = await stub.listIssueHistory(issue.id);
     return c.json({ history: items });
   });
 }

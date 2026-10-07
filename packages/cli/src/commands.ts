@@ -800,6 +800,14 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "branch",
         flag: "branch",
       },
+      {
+        name: "prUrl",
+        flag: "pr-url",
+      },
+      {
+        name: "prState",
+        flag: "pr-state",
+      },
     ],
   },
   "issues delete": {
@@ -813,6 +821,67 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "id",
         flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "issues permissions list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/issues/{id}/permissions",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "issues permissions update": {
+    method: "PUT",
+    path: "/workspaces/{organizationId}/issues/{id}/permissions",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "actorId",
+        flag: "actor",
+      },
+      {
+        name: "actorType",
+        flag: "actor-type",
+      },
+    ],
+  },
+  "issues permissions delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/issues/{id}/permissions/{actorId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+      {
+        name: "actorId",
+        flag: "actor",
       },
     ],
     query: [],
@@ -5913,6 +5982,95 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "id",
         flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "customers attachments": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/{id}/attachments",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "fileName",
+        flag: "file-name",
+      },
+      {
+        name: "contentType",
+        flag: "content-type",
+      },
+      {
+        name: "contentBase64",
+        flag: "content-base64",
+      },
+    ],
+  },
+  "customers attachments get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/customers/{id}/attachments/{attachmentId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+      {
+        name: "attachmentId",
+        flag: "attachment",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "customers attachments delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/customers/{id}/attachments/{attachmentId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+      {
+        name: "attachmentId",
+        flag: "attachment",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "customers attachments content list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/customers/{id}/attachments/{attachmentId}/content",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+      {
+        name: "attachmentId",
+        flag: "attachment",
       },
     ],
     query: [],

@@ -574,7 +574,10 @@ def install_shims():
     os.makedirs(SHIM_DIR, exist_ok=True)
     src = os.path.join(SHIM_DIR, '_pile_shim.py')
     with open(src, 'w') as f:
-        f.write('#!/usr/bin/env python3\n' + SHIM_POLICY_SRC)
+        # Pin the running interpreter: under the shim's own scrubbed PATH,
+        # `env python3` could re-resolve to a shim or a non-Python binary
+        # and the denial would die as rc 1 instead of 126 (PILE-317).
+        f.write('#!' + sys.executable + '\n' + SHIM_POLICY_SRC)
         f.write('\nif __name__ == "__main__":\n    shim_main(' + repr(set(net_allowlist())) + ')\n')
     os.chmod(src, 0o755)
     for name in _SHIMMED_COMMANDS:

@@ -8,6 +8,7 @@ import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "../types/workspace.js";
+import { issueViewer } from "./issue-access.js";
 import { getWorkspaceStub } from "./stub.js";
 
 const exportRequestSchema = z.object({
@@ -76,6 +77,7 @@ export function registerCsvExportRoutes(app: OpenAPIHono<AppContext>) {
       const stub = getWorkspaceStub(c.env, organizationId);
       const issues = await stub.listIssues({
         teamIds: visibleTeamIds,
+        viewer: await issueViewer(db, identity),
         teamId: input.teamId,
         status: input.status,
         priority: input.priority,

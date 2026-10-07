@@ -284,6 +284,31 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdCustomersIdAttachmentsAttachmentId",
+    "description": "Delete customer attachment (DELETE /workspaces/{organizationId}/customers/{id}/attachments/{attachmentId}) Path params (top-level, required): organizationId, id, attachmentId.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/customers/{id}/attachments/{attachmentId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "attachmentId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "attachmentId",
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdCustomerstatusesId",
     "description": "Delete customer statuse (DELETE /workspaces/{organizationId}/customer-statuses/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
@@ -685,6 +710,31 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "deleteWorkspacesOrganizationIdIssuesIdPermissionsActorId",
+    "description": "Delete issue permission — Revoke an actor's access grant. When the last grant is removed the issue is open to the workspace again. (DELETE /workspaces/{organizationId}/issues/{id}/permissions/{actorId}) Path params (top-level, required): organizationId, id, actorId.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/issues/{id}/permissions/{actorId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "actorId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "actorId",
         "id",
         "organizationId"
       ]
@@ -2255,6 +2305,77 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdCustomersIdAttachments",
+    "description": "List customer attachments (GET /workspaces/{organizationId}/customers/{id}/attachments) Path params (top-level, required): organizationId, id.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/customers/{id}/attachments",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdCustomersIdAttachmentsAttachmentId",
+    "description": "Get customer attachment (GET /workspaces/{organizationId}/customers/{id}/attachments/{attachmentId}) Path params (top-level, required): organizationId, id, attachmentId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/customers/{id}/attachments/{attachmentId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "attachmentId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "attachmentId",
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdCustomersIdAttachmentsAttachmentIdContent",
+    "description": "List customer attachment content (GET /workspaces/{organizationId}/customers/{id}/attachments/{attachmentId}/content) Path params (top-level, required): organizationId, id, attachmentId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/customers/{id}/attachments/{attachmentId}/content",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "attachmentId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "attachmentId",
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdCustomerstatuses",
     "description": "List customer statuses (GET /workspaces/{organizationId}/customer-statuses) Path params (top-level, required): organizationId.",
     "method": "GET",
@@ -3166,6 +3287,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "List issue children (GET /workspaces/{organizationId}/issues/{id}/children) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues/{id}/children",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdIssuesIdPermissions",
+    "description": "List issue permissions (GET /workspaces/{organizationId}/issues/{id}/permissions) Path params (top-level, required): organizationId, id.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/issues/{id}/permissions",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -6344,7 +6486,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdIssuesId",
-    "description": "Update issue (PATCH /workspaces/{organizationId}/issues/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: title, externalRef, teamId, teamKey, description, status, priority, resolution, parentId, subIssueSortOrder, estimate, isDraft, templateId, snoozedUntil, assigneeId, projectId, cycleId, labelIds, repo, branch.",
+    "description": "Update issue (PATCH /workspaces/{organizationId}/issues/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: title, externalRef, teamId, teamKey, description, status, priority, resolution, parentId, subIssueSortOrder, estimate, isDraft, templateId, snoozedUntil, assigneeId, projectId, cycleId, labelIds, repo, branch, prUrl, prState.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/issues/{id}",
     "inputSchema": {
@@ -6461,6 +6603,22 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "branch": {
               "type": "string",
               "nullable": true
+            },
+            "prUrl": {
+              "type": "string",
+              "nullable": true,
+              "format": "uri"
+            },
+            "prState": {
+              "type": "string",
+              "nullable": true,
+              "enum": [
+                "draft",
+                "open",
+                "merged",
+                "closed",
+                null
+              ]
             }
           }
         }
@@ -9964,6 +10122,47 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdCustomersIdAttachments",
+    "description": "Create customer attachment (POST /workspaces/{organizationId}/customers/{id}/attachments) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: fileName*, contentType, contentBase64* (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers/{id}/attachments",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "fileName": {
+              "type": "string",
+              "minLength": 1
+            },
+            "contentType": {
+              "type": "string"
+            },
+            "contentBase64": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "fileName",
+            "contentBase64"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdCustomerstatuses",
     "description": "Create customer statuse (POST /workspaces/{organizationId}/customer-statuses) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, color, position (* = required).",
     "method": "POST",
@@ -11363,6 +11562,22 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "branch": {
                   "type": "string",
                   "nullable": true
+                },
+                "prUrl": {
+                  "type": "string",
+                  "nullable": true,
+                  "format": "uri"
+                },
+                "prState": {
+                  "type": "string",
+                  "nullable": true,
+                  "enum": [
+                    "draft",
+                    "open",
+                    "merged",
+                    "closed",
+                    null
+                  ]
                 }
               }
             }
@@ -15416,6 +15631,47 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "required": [
             "actorId",
             "level"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "putWorkspacesOrganizationIdIssuesIdPermissions",
+    "description": "Update issue permissions — Grant an actor access to this issue. The first grant restricts the issue to listed actors + workspace admins; revoking the last grant reopens it. (PUT /workspaces/{organizationId}/issues/{id}/permissions) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: actorId*, actorType (* = required).",
+    "method": "PUT",
+    "path": "/workspaces/{organizationId}/issues/{id}/permissions",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "actorId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "actorType": {
+              "type": "string",
+              "enum": [
+                "user",
+                "agent",
+                "team"
+              ]
+            }
+          },
+          "required": [
+            "actorId"
           ]
         }
       },

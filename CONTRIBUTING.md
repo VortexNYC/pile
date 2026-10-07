@@ -13,6 +13,11 @@ pnpm dev                                              # wrangler dev → http://
 pnpm run test                                         # vitest (workerd pool)
 ```
 
+The `*.node.test.ts` suites under `src/agents/runner/` exec the real `core.py`
+lane runner, so they need a CPython 3 interpreter. They resolve `$PYTHON`, then
+`python3`, then `python` (shims are fine — the real `sys.executable` is what
+gets spawned) and skip cleanly when none is usable.
+
 `pnpm run seed:local` (while `pnpm dev` is running) creates a demo workspace,
 team, issues, and a voted-on public ticket — and prints an API key you can use
 with `PILE_BASE_URL=http://127.0.0.1:8787`.

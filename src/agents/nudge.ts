@@ -1,3 +1,4 @@
+import { createD1 } from "../global/db.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { AgentSession, Issue } from "../types/workspace.js";
@@ -5,7 +6,11 @@ import type { WorkspaceDO } from "../workspace/durable-object.js";
 import { loadProviderConfig } from "./credentials.js";
 import { resolveAgentEnv } from "./daytona.js";
 import { followupThrottleWindowMs, laneFollowupThrottled } from "./followup.js";
-import { dispatchAgent, getAgentProvider } from "./index.js";
+import {
+  dispatchAgent,
+  getAgentProvider,
+  inheritTeamDefaultRepo,
+} from "./index.js";
 
 const DELIVERED_TYPES = new Set(["prompt.followup", "prompt.redispatch"]);
 
@@ -25,6 +30,38 @@ export interface NudgeOptions {
   reason: string;
   dedupeKey?: string;
   headSha?: string | null;
+}
+
+export interface LaneResolutionOptions {
+  /** Side-lane purposes that never own the issue's PR (e.g. review). */
+  excludePurpose?: string;
+  limit?: number;
+}
+
+// Resolve the lane for an issue: a live session first, else the most
+// recent completed one — kept-sandbox providers resume completed lanes on
+// the follow-up. Returns null when the issue never had a lane.
+// PILE-249 — dead lanes still resolve: a review on a failed/canceled
+// lane's PR gets its detection event plus a prompt.followup_skipped
+// record from nudgeLane instead of silence.
+export async function resolveLaneForIssue(
+  stub: DurableObjectStub<WorkspaceDO>,
+  issueId: string,
+  opts: LaneResolutionOptions = {}
+): Promise<AgentSession | null> {
+  const sessions = await stub
+    .listAgentSessions({ issueId, limit: opts.limit ?? 20 })
+    .catch(() => []);
+  const lanes =
+    opts.excludePurpose === undefined
+      ? sessions
+      : sessions.filter((s) => s.purpose !== opts.excludePurpose);
+  return (
+    lanes.find((s) => s.status === "running" || s.status === "waiting") ??
+    lanes.find((s) => s.status === "completed") ??
+    lanes.find((s) => s.status === "failed" || s.status === "canceled") ??
+    null
+  );
 }
 
 type SessionEvent = Awaited<
@@ -404,11 +441,20 @@ async function redispatchCompletedLane(
   };
   try {
     const providerConfig = await loadProviderConfig(env, stub, session.agentId);
+    // PILE-321 — a cold redispatch is a fresh dispatch: a repo-less issue
+    // inherits the team's defaultRepo, same as the retry endpoint.
+    const target = await inheritTeamDefaultRepo(
+      createD1(env.D1),
+      stub,
+      organizationId,
+      issue,
+      session.actorId
+    );
     const dispatched = await dispatchAgent(
       resolveAgentEnv(env, providerConfig ?? undefined),
       session.agentId,
       organizationId,
-      issue,
+      target,
       {
         id: session.actorId,
         organizationId,

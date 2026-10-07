@@ -2,11 +2,11 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
 import { createD1 } from "../global/db.js";
-import { canAccessTeam } from "../global/teams.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
-import { getWorkspaceStub, resolveIssueRef } from "./stub.js";
+import { assertIssueAccess } from "./issue-access.js";
+import { getWorkspaceStub } from "./stub.js";
 
 const attachmentSchema = z.object({
   id: z.string(),
@@ -122,10 +122,19 @@ function toAttachmentResponse(row: z.infer<typeof attachmentSchema>) {
 export function registerAttachmentRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listAttachmentsRoute, async (c) => {
     const { organizationId, issueId } = c.req.valid("param");
+    const identity = c.var.workspaceIdentity;
+    const db = createD1(c.env.D1);
     const stub = getWorkspaceStub(c.env, organizationId);
-    const items = await stub.listAttachments(
-      await resolveIssueRef(stub, issueId)
-    );
+    const issue = await stub.getIssue(issueId);
+    if (!issue) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Issue not found",
+      });
+    }
+    await assertIssueAccess(db, stub, issue, identity);
+    const items = await stub.listAttachments(issue.id);
     return c.json({ attachments: items.map(toAttachmentResponse) });
   });
 
@@ -142,14 +151,7 @@ export function registerAttachmentRoutes(app: OpenAPIHono<AppContext>) {
         message: "Issue not found",
       });
     }
-    const allowed = await canAccessTeam(db, issue.teamId, identity);
-    if (!allowed) {
-      throw new VortexError({
-        code: "NOT_FOUND",
-        status: 404,
-        message: "Attachment not found",
-      });
-    }
+    await assertIssueAccess(db, stub, issue, identity);
     const item = await stub.getAttachment(id);
     if (!item || item.issueId !== issue.id) {
       throw new VortexError({
@@ -175,14 +177,7 @@ export function registerAttachmentRoutes(app: OpenAPIHono<AppContext>) {
         message: "Issue not found",
       });
     }
-    const allowed = await canAccessTeam(db, issue.teamId, identity);
-    if (!allowed) {
-      throw new VortexError({
-        code: "FORBIDDEN",
-        status: 403,
-        message: "Cannot attach to this issue",
-      });
-    }
+    await assertIssueAccess(db, stub, issue, identity);
     const item = await stub.createAttachment({
       issueId: issue.id,
       linearId: "",
@@ -207,14 +202,7 @@ export function registerAttachmentRoutes(app: OpenAPIHono<AppContext>) {
         message: "Issue not found",
       });
     }
-    const allowed = await canAccessTeam(db, issue.teamId, identity);
-    if (!allowed) {
-      throw new VortexError({
-        code: "NOT_FOUND",
-        status: 404,
-        message: "Attachment not found",
-      });
-    }
+    await assertIssueAccess(db, stub, issue, identity);
     const item = await stub.getAttachment(id);
     if (!item || item.issueId !== issue.id) {
       throw new VortexError({

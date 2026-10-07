@@ -4,15 +4,19 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { createD1 } from "../global/db.js";
 import { supportTickets, user as userTable } from "../global/schema.js";
+import { createTeam } from "../global/teams.js";
 import { createWorkspace } from "../global/workspaces.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
 import { MockAgentProvider } from "./harness.js";
 import { registerAgentProvider } from "./index.js";
 import { MAX_NUDGES_PER_HEAD_SHA, MAX_NUDGES_PER_LANE } from "./nudge.js";
+import { automationEventTarget } from "./repo-triggers.js";
+import { REVIEW_PURPOSE } from "./review.js";
 import {
   DEFAULT_INACTIVITY_MINUTES,
   DEFAULT_PROVISION_TIMEOUT_MINUTES,
   DEFAULT_TIMEOUT_MINUTES,
+  fireEventAutomations,
   hashAgentState,
   ingestFailedAgentSession,
   parseAgentTimeouts,
@@ -1807,6 +1811,187 @@ describe("sweepAgentSessions", () => {
   });
 });
 
+// PILE-321 — every sweep-driven dispatch path (provision-timeout retry,
+// queue promotion, automation fire) inherits the issue's team defaultRepo
+// so the lane clones a repo instead of returning a spec-only package.
+// A dedicated workspace keeps fleet/provider infra streaks clean.
+describe("sweep repo inheritance (PILE-321)", () => {
+  const userId = "user-sweep-repo";
+  let organizationId = "";
+  let stub: ReturnType<typeof env.WORKSPACE_DURABLE_OBJECT.get>;
+  let defaultedTeamId = "";
+  const teamRepo = "VortexNYC/sweep-default";
+
+  beforeAll(async () => {
+    const db = createD1(env.D1);
+    const now = new Date();
+    await db
+      .insert(userTable)
+      .values({
+        id: userId,
+        name: "Sweep Repo",
+        email: `${userId}@example.com`,
+        emailVerified: false,
+        image: null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({ target: [userTable.email] });
+    const headers = await createAdminHeaders(env, userId);
+    const workspace = await createWorkspace(db, env, headers, {
+      name: "Sweep repo",
+      slug: `sweep-repo-${crypto.randomUUID()}`,
+      key: `SR${crypto.randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+      ownerId: userId,
+    });
+    organizationId = workspace!.id;
+    stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const team = await createTeam(db, env, new Headers(), {
+      organizationId,
+      key: "SWR",
+      name: "Sweep repo team",
+      ownerId: userId,
+      defaultRepo: teamRepo,
+    });
+    defaultedTeamId = team.id;
+  });
+
+  it("auto-retries a provision-stalled repo-less lane on the team's defaultRepo", async () => {
+    const agentId = `mock-retry-repo-${crypto.randomUUID().slice(0, 8)}`;
+    const seen: { repo: string | null | undefined } = { repo: undefined };
+    registerMock(agentId, {
+      dispatch: (_org, dispatchedIssue) => {
+        seen.repo = dispatchedIssue.repo;
+        return {
+          id: `retry-${crypto.randomUUID()}`,
+          agentId,
+          issueId: dispatchedIssue.id,
+          status: "created" as const,
+        };
+      },
+      poll: (id) => ({ id, agentId, status: "created" }),
+    });
+    await stub.upsertAgentProviderConfig({
+      agentId,
+      config: { provisionTimeout: 0 },
+    });
+    const issue = await stub.createIssue({
+      title: "Repo-less stalled lane",
+      teamId: defaultedTeamId,
+    });
+    expect(issue.repo).toBeNull();
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "created",
+    });
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    expect((await stub.getAgentSession(session.id))?.status).toBe("failed");
+    expect(seen.repo).toBe(teamRepo);
+    expect((await stub.getIssue(issue.id))?.repo).toBe(teamRepo);
+    const retried = (await stub.listAgentSessions({ issueId: issue.id })).find(
+      (s) => s.retryOf === session.id
+    );
+    expect(retried).toBeDefined();
+  });
+
+  it("promotes a queued repo-less lane onto the team's defaultRepo", async () => {
+    const agentId = `mock-promote-repo-${crypto.randomUUID().slice(0, 8)}`;
+    const seen: { repo: string | null | undefined } = { repo: undefined };
+    registerMock(agentId, {
+      dispatch: (_org, dispatchedIssue) => {
+        seen.repo = dispatchedIssue.repo;
+        return {
+          id: `promo-${crypto.randomUUID()}`,
+          agentId,
+          issueId: dispatchedIssue.id,
+          status: "created" as const,
+        };
+      },
+      poll: (id) => ({ id, agentId, status: "created" }),
+    });
+    const blockerIssue = await stub.createIssue({ title: "Blocker" });
+    const blocker = await stub.createAgentSession({
+      issueId: blockerIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "completed",
+    });
+    const issue = await stub.createIssue({
+      title: "Repo-less queued lane",
+      teamId: defaultedTeamId,
+    });
+    const queued = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "waiting",
+      queuedAfter: blocker.id,
+    });
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    expect(seen.repo).toBe(teamRepo);
+    expect((await stub.getIssue(issue.id))?.repo).toBe(teamRepo);
+    expect((await stub.getAgentSession(queued.id))?.status).not.toBe("waiting");
+  });
+
+  it("fires an event automation bound to a repo-less issue on the team's defaultRepo", async () => {
+    const agentId = `mock-auto-repo-${crypto.randomUUID().slice(0, 8)}`;
+    const seen: { repo: string | null | undefined } = { repo: undefined };
+    registerMock(agentId, {
+      dispatch: (_org, dispatchedIssue) => {
+        seen.repo = dispatchedIssue.repo;
+        return {
+          id: `auto-${crypto.randomUUID()}`,
+          agentId,
+          issueId: dispatchedIssue.id,
+          status: "created" as const,
+        };
+      },
+    });
+    const issue = await stub.createIssue({
+      title: "Repo-less bound issue",
+      teamId: defaultedTeamId,
+    });
+    await stub.createAgentAutomation({
+      name: "bound automation",
+      prompt: "do the thing",
+      agentId,
+      issueId: issue.id,
+      triggerKind: "event",
+      triggerValue: "pile.test.bound",
+    });
+
+    await fireEventAutomations(
+      env,
+      stub,
+      organizationId,
+      "pile.test.bound",
+      automationEventTarget(async () => null, null),
+      undefined,
+      undefined,
+      undefined,
+      { skipRepoTriggers: true }
+    );
+
+    expect(seen.repo).toBe(teamRepo);
+    expect((await stub.getIssue(issue.id))?.repo).toBe(teamRepo);
+  });
+});
+
 describe("syncOpenPrSessions", () => {
   const userId = "user-sweep-prs";
   let organizationId = "";
@@ -1889,6 +2074,156 @@ describe("syncOpenPrSessions", () => {
     expect(issueAfter?.prCheckState).toBe("passing");
     const events = await stub.listAgentSessionEvents(session.id);
     expect(events.some((e) => e.type === "pr.ci_failed")).toBe(false);
+  });
+
+  // PILE-315 — the sweep's publish pass hands a terminal review lane's
+  // verdict to the work lane: the review goes up as a real
+  // pull_request_review and the lane gets a prompt.followup under the same
+  // review-<id> key the webhook/sweep review detection dedupes on.
+  it("publishes a terminal review verdict and nudges the work lane", async () => {
+    const agentId = `mock-verdict-${crypto.randomUUID().slice(0, 8)}`;
+    const prompts: string[] = [];
+    registerMock(agentId, {
+      sendPrompt: async (_id, prompt) => {
+        prompts.push(prompt);
+        return true;
+      },
+    });
+    const issue = await stub.createIssue({ title: "Verdict handoff" });
+    const workLane = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      prUrl: "https://github.com/vortexnyc/pile/pull/991",
+      prState: "open",
+    });
+    const reviewLane = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      purpose: REVIEW_PURPOSE,
+    });
+    await stub.addAgentSessionEvent({
+      sessionId: reviewLane.id,
+      type: "review.requested",
+      message:
+        "Review requested for https://github.com/vortexnyc/pile/pull/991",
+      payload: {
+        prUrl: "https://github.com/vortexnyc/pile/pull/991",
+        repo: "vortexnyc/pile",
+        pullNumber: 991,
+        headSha: "verdictsha991",
+        checkRunId: 9001,
+      },
+    });
+    await stub.applyAgentSessionResult(reviewLane.id, {
+      status: "completed",
+      result:
+        "```json\n" +
+        JSON.stringify({
+          verdict: "request-changes",
+          summary: "Breaks the build.",
+          findings: [{ severity: "must", title: "Fix the type error" }],
+        }) +
+        "\n```",
+    });
+
+    const writes: Array<{ url: string; body: Record<string, unknown> }> = [];
+    const ghFetchVerdict = async (
+      input: RequestInfo | URL,
+      init?: RequestInit
+    ) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      if (method !== "GET" && typeof init?.body === "string") {
+        writes.push({
+          url,
+          body: JSON.parse(init.body) as Record<string, unknown>,
+        });
+      }
+      if (method === "GET" && url.endsWith("/pulls/991")) {
+        return new Response(
+          JSON.stringify({
+            state: "open",
+            merged_at: null,
+            head: { sha: "verdictsha991" },
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.includes("/commits/verdictsha991/check-runs")) {
+        return new Response(
+          JSON.stringify({
+            check_runs: [{ status: "completed", conclusion: "success" }],
+          }),
+          { status: 200 }
+        );
+      }
+      if (method === "GET" && url.includes("/pulls/991/reviews")) {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+      if (method === "PATCH" && url.endsWith("/check-runs/9001")) {
+        return new Response(JSON.stringify({ id: 9001 }), { status: 200 });
+      }
+      if (method === "POST" && url.endsWith("/pulls/991/reviews")) {
+        return new Response(
+          JSON.stringify({
+            id: 4242,
+            html_url:
+              "https://github.com/vortexnyc/pile/pull/991#pullrequestreview-4242",
+          }),
+          { status: 200 }
+        );
+      }
+      if (method === "POST" && url.endsWith("/issues/991/comments")) {
+        return new Response(
+          JSON.stringify({
+            html_url:
+              "https://github.com/vortexnyc/pile/pull/991#issuecomment-1",
+          }),
+          { status: 200 }
+        );
+      }
+      return new Response("not found", { status: 404 });
+    };
+
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: ghFetchVerdict as typeof fetch,
+    });
+
+    // The verdict went up as a real pull_request_review and closed out the
+    // check run — no plain issue comment.
+    const prReview = writes.find((w) => w.url.endsWith("/pulls/991/reviews"));
+    expect(prReview?.body).toMatchObject({
+      commit_id: "verdictsha991",
+      event: "REQUEST_CHANGES",
+    });
+    expect(writes.some((w) => w.url.endsWith("/issues/991/comments"))).toBe(
+      false
+    );
+    const checkPatch = writes.find((w) => w.url.endsWith("/check-runs/9001"));
+    expect(checkPatch?.body).toMatchObject({
+      status: "completed",
+      conclusion: "failure",
+    });
+
+    // The work lane heard the verdict as a follow-up prompt, deduped under
+    // the posted review's review-<id> key.
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toContain("requested changes");
+    expect(prompts[0]).toContain("Fix the type error");
+    const workEvents = await stub.listAgentSessionEvents(workLane.id);
+    const followup = workEvents.find((e) => e.type === "prompt.followup");
+    expect(followup?.payload).toContain("review-4242");
+    const reviewEvents = await stub.listAgentSessionEvents(reviewLane.id);
+    expect(reviewEvents.some((e) => e.type === "review.published")).toBe(true);
   });
 
   it("does not reopen a terminal issue when its PR merges", async () => {

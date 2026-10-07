@@ -164,9 +164,13 @@ function fakeGithub(opts: {
   config?: Record<string, unknown> | null;
   files: Array<{ filename: string; patch?: string }>;
   existingCheck?: boolean;
+  /** "reject" 422s the first review POST (own-PR shape), "fail" 422s both,
+   *  "flaky" 500s the first — a non-4xx is never retried. */
+  reviewPost?: "ok" | "reject" | "fail" | "flaky";
 }) {
   const calls: GhCall[] = [];
   let nextCheckId = 500;
+  let reviewAttempts = 0;
   const fetchFn = async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const method = init?.method ?? "GET";
@@ -194,6 +198,25 @@ function fakeGithub(opts: {
     if (url.includes("/check-runs/") && method === "PATCH") {
       return json({ id: 500 });
     }
+    if (url.includes("/reviews") && method === "POST") {
+      reviewAttempts += 1;
+      if (opts.reviewPost === "fail") {
+        return json({ message: "Can not comment" }, 422);
+      }
+      if (opts.reviewPost === "reject" && reviewAttempts === 1) {
+        return json(
+          { message: "Can not request changes on your own pull request" },
+          422
+        );
+      }
+      if (opts.reviewPost === "flaky" && reviewAttempts === 1) {
+        return json({ message: "Internal Server Error" }, 500);
+      }
+      return json(
+        { id: 42, html_url: "https://github.com/r/1#review-42" },
+        201
+      );
+    }
     if (url.includes("/issues/") && method === "POST") {
       return json({ html_url: "https://github.com/c/1" }, 201);
     }
@@ -212,6 +235,8 @@ describe("requestPrReview / publishReviewVerdicts", () => {
   let organizationId = "";
   let stub: ReturnType<typeof env.WORKSPACE_DURABLE_OBJECT.get>;
   const dispatched: Array<{ instructions?: string; repo: string | null }> = [];
+  const followUpPrompts: string[] = [];
+  let rejectFollowUps = false;
   let pr = 1000;
 
   beforeAll(async () => {
@@ -255,6 +280,11 @@ describe("requestPrReview / publishReviewVerdicts", () => {
               agentId: "review-mock",
               status: "running",
             };
+          },
+          sendPrompt: async (_id, prompt) => {
+            if (rejectFollowUps) return false;
+            followUpPrompts.push(prompt);
+            return true;
           },
         })
     );
@@ -412,6 +442,8 @@ describe("requestPrReview / publishReviewVerdicts", () => {
 
     const publishGh = fakeGithub({ config: REVIEW_CONFIG, files: [] });
     const deps = {
+      env: workerEnv,
+      organizationId,
       fetch: publishGh.fetch,
       tokenForRepo: async () => "tok",
     };
@@ -424,13 +456,35 @@ describe("requestPrReview / publishReviewVerdicts", () => {
       conclusion: "failure",
       output: { title: "Request changes: 1 will break" },
     });
-    const comment = publishGh.calls.find(
-      (c) => c.method === "POST" && c.url.includes(`/issues/${t.pullNumber}/`)
+    // The verdict lands as a real pull_request_review — no plain comment.
+    const prReview = publishGh.calls.find(
+      (c) =>
+        c.method === "POST" && c.url.includes(`/pulls/${t.pullNumber}/reviews`)
     );
-    expect(String(comment?.body?.body)).toContain("> [!CAUTION]");
-    expect(String(comment?.body?.body)).toContain(
+    expect(prReview?.body).toMatchObject({
+      commit_id: "sha-review-1",
+      event: "REQUEST_CHANGES",
+    });
+    expect(String(prReview?.body?.body)).toContain("> [!CAUTION]");
+    expect(String(prReview?.body?.body)).toContain(
       "<!-- pile-review sha=sha-review-1 -->"
     );
+    expect(
+      publishGh.calls.some((c) => c.url.includes(`/issues/${t.pullNumber}/`))
+    ).toBe(false);
+
+    // The work lane hears the verdict as a follow-up prompt, deduped under
+    // the review-<id> key the webhook/sweep detection path also uses.
+    expect(followUpPrompts.at(-1)).toContain("requested changes");
+    expect(followUpPrompts.at(-1)).toContain("Type error");
+    const workLane = sessions.find((s) => s.purpose !== REVIEW_PURPOSE)!;
+    const workEvents = await stub.listAgentSessionEvents(workLane.id);
+    const followup = workEvents.find((e) => e.type === "prompt.followup");
+    expect(followup?.payload).toContain("review-42");
+
+    const events = await stub.listAgentSessionEvents(review.id);
+    const publishedEvent = events.find((e) => e.type === "review.published");
+    expect(publishedEvent?.payload).toContain('"reviewId":42');
 
     // Idempotent: a second pass publishes nothing for this session.
     const replay = fakeGithub({ config: REVIEW_CONFIG, files: [] });
@@ -438,8 +492,255 @@ describe("requestPrReview / publishReviewVerdicts", () => {
     expect(
       replay.calls.some((c) => c.url.includes(`/issues/${t.pullNumber}/`))
     ).toBe(false);
-    const events = await stub.listAgentSessionEvents(review.id);
+    expect(
+      replay.calls.some((c) => c.url.includes(`/pulls/${t.pullNumber}/reviews`))
+    ).toBe(false);
     expect(events.filter((e) => e.type === "review.published")).toHaveLength(1);
+  });
+
+  async function finishReviewLane(
+    issue: Awaited<ReturnType<typeof laneIssue>>,
+    headSha: string,
+    result: string
+  ) {
+    const t = target(headSha);
+    const gh = fakeGithub({
+      config: REVIEW_CONFIG,
+      files: [{ filename: "src/a.ts", patch: "@@" }],
+    });
+    const outcome = await requestPrReview(
+      workerEnv,
+      stub,
+      organizationId,
+      issue,
+      t,
+      "tok",
+      { fetch: gh.fetch }
+    );
+    expect(outcome).toBe("dispatched");
+    const review = (await stub.listAgentSessions({ issueId: issue.id })).find(
+      (s) => s.purpose === REVIEW_PURPOSE
+    )!;
+    await stub.applyAgentSessionResult(review.id, {
+      status: "completed",
+      result,
+    });
+    return { t, review };
+  }
+
+  const publishDeps = (gh: ReturnType<typeof fakeGithub>) => ({
+    env: workerEnv,
+    organizationId,
+    fetch: gh.fetch,
+    tokenForRepo: async () => "tok",
+  });
+
+  it("downgrades to a COMMENT review when the app authored the PR", async () => {
+    const issue = await laneIssue();
+    const promptsBefore = followUpPrompts.length;
+    const { t } = await finishReviewLane(
+      issue,
+      "sha-own-pr",
+      "```json\n" +
+        JSON.stringify({
+          verdict: "request-changes",
+          summary: "Needs work.",
+          findings: [{ severity: "must", title: "Fix it" }],
+        }) +
+        "\n```"
+    );
+    const publishGh = fakeGithub({
+      config: REVIEW_CONFIG,
+      files: [],
+      reviewPost: "reject",
+    });
+    await publishReviewVerdicts(stub, publishDeps(publishGh));
+    const posts = publishGh.calls.filter(
+      (c) =>
+        c.method === "POST" && c.url.includes(`/pulls/${t.pullNumber}/reviews`)
+    );
+    expect(posts).toHaveLength(2);
+    expect(posts[0].body?.event).toBe("REQUEST_CHANGES");
+    expect(posts[1].body?.event).toBe("COMMENT");
+    expect(posts[1].body).not.toHaveProperty("commit_id");
+    expect(followUpPrompts.length).toBe(promptsBefore + 1);
+  });
+
+  it("falls back to a PR comment when no review can be posted", async () => {
+    const issue = await laneIssue();
+    const promptsBefore = followUpPrompts.length;
+    const { t, review } = await finishReviewLane(
+      issue,
+      "sha-no-review",
+      "```json\n" +
+        JSON.stringify({
+          verdict: "request-changes",
+          summary: "Needs work.",
+          findings: [{ severity: "must", title: "Fix it" }],
+        }) +
+        "\n```"
+    );
+    const publishGh = fakeGithub({
+      config: REVIEW_CONFIG,
+      files: [],
+      reviewPost: "fail",
+    });
+    await publishReviewVerdicts(stub, publishDeps(publishGh));
+    const comment = publishGh.calls.find(
+      (c) =>
+        c.method === "POST" &&
+        c.url.includes(`/issues/${t.pullNumber}/comments`)
+    );
+    expect(String(comment?.body?.body)).toContain("⛔ Request changes");
+    // The lane still gets the verdict; dedupe falls back to a sha key.
+    expect(followUpPrompts.length).toBe(promptsBefore + 1);
+    const reviewEvents = await stub.listAgentSessionEvents(review.id);
+    expect(
+      reviewEvents.find((e) => e.type === "review.published")?.payload
+    ).toContain('"reviewId":null');
+  });
+
+  it("keeps an approve verdict to a comment — no review, no lane nudge", async () => {
+    const issue = await laneIssue();
+    const promptsBefore = followUpPrompts.length;
+    const { t } = await finishReviewLane(
+      issue,
+      "sha-approve",
+      "```json\n" +
+        JSON.stringify({ verdict: "approve", summary: "Looks good." }) +
+        "\n```"
+    );
+    const publishGh = fakeGithub({ config: REVIEW_CONFIG, files: [] });
+    await publishReviewVerdicts(stub, publishDeps(publishGh));
+    expect(
+      publishGh.calls.some((c) =>
+        c.url.includes(`/pulls/${t.pullNumber}/reviews`)
+      )
+    ).toBe(false);
+    const comment = publishGh.calls.find(
+      (c) =>
+        c.method === "POST" &&
+        c.url.includes(`/issues/${t.pullNumber}/comments`)
+    );
+    expect(String(comment?.body?.body)).toContain("✅ Approve");
+    expect(followUpPrompts.length).toBe(promptsBefore);
+  });
+
+  // A 5xx (or a dropped response) is not a definitive rejection — the
+  // review may exist server-side, so the POST isn't retried and the
+  // verdict degrades straight to the issue comment.
+  it("never retries the review POST on a non-4xx failure", async () => {
+    const issue = await laneIssue();
+    const promptsBefore = followUpPrompts.length;
+    const { t, review } = await finishReviewLane(
+      issue,
+      "sha-flaky-review",
+      "```json\n" +
+        JSON.stringify({
+          verdict: "request-changes",
+          summary: "Needs work.",
+          findings: [{ severity: "must", title: "Fix it" }],
+        }) +
+        "\n```"
+    );
+    const publishGh = fakeGithub({
+      config: REVIEW_CONFIG,
+      files: [],
+      reviewPost: "flaky",
+    });
+    await publishReviewVerdicts(stub, publishDeps(publishGh));
+    const posts = publishGh.calls.filter(
+      (c) =>
+        c.method === "POST" && c.url.includes(`/pulls/${t.pullNumber}/reviews`)
+    );
+    expect(posts).toHaveLength(1);
+    const comment = publishGh.calls.find(
+      (c) =>
+        c.method === "POST" &&
+        c.url.includes(`/issues/${t.pullNumber}/comments`)
+    );
+    expect(String(comment?.body?.body)).toContain("⛔ Request changes");
+    expect(followUpPrompts.length).toBe(promptsBefore + 1);
+    const reviewEvents = await stub.listAgentSessionEvents(review.id);
+    expect(
+      reviewEvents.find((e) => e.type === "review.published")?.payload
+    ).toContain('"reviewId":null');
+  });
+
+  // PILE-315 — a rejected verdict nudge is not the end: every later sweep
+  // re-attempts it until nudgeLane's delivery dedupe sees it, which is
+  // also what carries the pile-review-<sha> fallback key no GitHub
+  // detection pass can see.
+  it("retries an undelivered verdict nudge until the lane takes it", async () => {
+    const issue = await laneIssue();
+    // No follow-up throttle here — a retry inside the 5m window would
+    // legitimately wait it out.
+    await stub.upsertAgentProviderConfig({
+      agentId: "review-mock",
+      config: { followupThrottleMinutes: 0 },
+    });
+    const { review } = await finishReviewLane(
+      issue,
+      "sha-nudge-retry",
+      "```json\n" +
+        JSON.stringify({
+          verdict: "request-changes",
+          summary: "Needs work.",
+          findings: [{ severity: "must", title: "Fix it" }],
+        }) +
+        "\n```"
+    );
+    const workLane = (await stub.listAgentSessions({ issueId: issue.id })).find(
+      (s) => s.purpose !== REVIEW_PURPOSE
+    )!;
+    const promptsBefore = followUpPrompts.length;
+    rejectFollowUps = true;
+    try {
+      // Pass 1: no pull_request_review posts → plain comment fallback; the
+      // provider rejects the prompt → prompt.followup_failed.
+      const pass1 = fakeGithub({
+        config: REVIEW_CONFIG,
+        files: [],
+        reviewPost: "fail",
+      });
+      await publishReviewVerdicts(stub, publishDeps(pass1));
+      expect(followUpPrompts.length).toBe(promptsBefore);
+      let workEvents = await stub.listAgentSessionEvents(workLane.id);
+      const failed = workEvents.find(
+        (e) => e.type === "prompt.followup_failed"
+      );
+      expect(failed?.payload).toContain("pile-review-sha-nudge-retry");
+      expect(
+        (await stub.listAgentSessionEvents(review.id)).some(
+          (e) => e.type === "review.published"
+        )
+      ).toBe(true);
+
+      // Pass 2: provider healthy again — the already-published session
+      // re-attempts the nudge under the same key, no GitHub calls needed.
+      rejectFollowUps = false;
+      const pass2 = fakeGithub({ config: REVIEW_CONFIG, files: [] });
+      await publishReviewVerdicts(stub, publishDeps(pass2));
+      expect(pass2.calls).toHaveLength(0);
+      expect(followUpPrompts.length).toBe(promptsBefore + 1);
+      workEvents = await stub.listAgentSessionEvents(workLane.id);
+      expect(
+        workEvents.filter(
+          (e) =>
+            e.type === "prompt.followup" &&
+            typeof e.payload === "string" &&
+            e.payload.includes("pile-review-sha-nudge-retry")
+        )
+      ).toHaveLength(1);
+
+      // Pass 3: delivered — the dedupe holds.
+      const pass3 = fakeGithub({ config: REVIEW_CONFIG, files: [] });
+      await publishReviewVerdicts(stub, publishDeps(pass3));
+      expect(followUpPrompts.length).toBe(promptsBefore + 1);
+      expect(pass3.calls).toHaveLength(0);
+    } finally {
+      rejectFollowUps = false;
+    }
   });
 
   it("defers to an existing pile-review check run for the headSha", async () => {

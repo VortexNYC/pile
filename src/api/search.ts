@@ -1,9 +1,12 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
+import { createD1 } from "../global/db.js";
+import { getVisibleTeamIds } from "../global/teams.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
+import { issueViewer } from "./issue-access.js";
 
 const searchResultSchema = z.object({
   issueIds: z.array(z.string()),
@@ -39,6 +42,8 @@ export function registerSearchRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(searchRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const input = c.req.valid("json");
+    const identity = c.get("workspaceIdentity");
+    const db = createD1(c.env.D1);
     const env = c.env;
     if (!env.WORKSPACE_DURABLE_OBJECT) {
       throw new VortexError({
@@ -47,14 +52,25 @@ export function registerSearchRoutes(app: OpenAPIHono<AppContext>) {
         message: "Workspace Durable Object binding missing",
       });
     }
+    // Caller-supplied teamIds intersect with the caller's visible teams —
+    // otherwise the filter could be pointed at private teams.
+    const visibleTeamIds = await getVisibleTeamIds(
+      db,
+      organizationId,
+      identity
+    );
+    const teamIds = input.teamIds.length
+      ? input.teamIds.filter((id) => visibleTeamIds.includes(id))
+      : visibleTeamIds;
     const stub = env.WORKSPACE_DURABLE_OBJECT.get(
       env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
     );
     await stub.setOrganizationId(organizationId);
     const results = await stub.searchAll(
       input.query,
-      input.teamIds,
-      input.limit
+      teamIds,
+      input.limit,
+      await issueViewer(db, identity)
     );
     return c.json(results);
   });

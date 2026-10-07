@@ -9,6 +9,7 @@ import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
+import { assertIssueAccess } from "./issue-access.js";
 import { resolveMentions } from "./mentions.js";
 import { getWorkspaceStub } from "./stub.js";
 
@@ -111,33 +112,6 @@ function notFound(): never {
     status: 404,
     message: "Document not found",
   });
-}
-
-// `issueId` inputs accept the issue UUID or its identifier (`ISS-123`) —
-// agent callers know the identifier, not the internal id. Returns the UUID,
-// or null when nothing matches.
-async function resolveIssueId(
-  stub: ReturnType<typeof getWorkspaceStub>,
-  ref: string
-): Promise<string | null> {
-  const issue =
-    (await stub.getIssue(ref)) ?? (await stub.getIssueByIdentifier(ref));
-  return issue ? issue.id : null;
-}
-
-async function requireIssueId(
-  stub: ReturnType<typeof getWorkspaceStub>,
-  ref: string
-): Promise<string> {
-  const id = await resolveIssueId(stub, ref);
-  if (!id) {
-    throw new VortexError({
-      code: "BAD_REQUEST",
-      status: 400,
-      message: "Issue not found",
-    });
-  }
-  return id;
 }
 
 // Per-doc grants: when a doc has any permission rows, only listed actors
@@ -800,10 +774,25 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId } = c.req.valid("param");
     const query = c.req.valid("query");
     const stub = getWorkspaceStub(c.env, organizationId);
-    const issueId =
-      query.issueId === undefined
-        ? undefined
-        : ((await resolveIssueId(stub, query.issueId)) ?? query.issueId);
+    let issueId: string | undefined;
+    if (query.issueId !== undefined) {
+      // issue-scoped document list is a read on the issue — grants apply.
+      const issue = await stub.getIssue(query.issueId);
+      if (!issue) {
+        throw new VortexError({
+          code: "NOT_FOUND",
+          status: 404,
+          message: "Issue not found",
+        });
+      }
+      await assertIssueAccess(
+        createD1(c.env.D1),
+        stub,
+        issue,
+        c.get("workspaceIdentity")
+      );
+      issueId = issue.id;
+    }
     const rows = await stub.listDocuments({
       projectId: query.projectId,
       issueId,
@@ -821,12 +810,24 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
     const input = c.req.valid("json");
     const identity = c.get("workspaceIdentity");
     const stub = getWorkspaceStub(c.env, organizationId);
+    let issueId: string | undefined;
+    if (input.issueId !== undefined) {
+      // Linking a document to an issue is a write on the issue — grants
+      // apply, and identifier refs (ISS-1) resolve here too.
+      const issue = await stub.getIssue(input.issueId);
+      if (!issue) {
+        throw new VortexError({
+          code: "NOT_FOUND",
+          status: 404,
+          message: "Issue not found",
+        });
+      }
+      await assertIssueAccess(createD1(c.env.D1), stub, issue, identity);
+      issueId = issue.id;
+    }
     const doc = await stub.createDocument({
       ...input,
-      issueId:
-        input.issueId === undefined
-          ? undefined
-          : await requireIssueId(stub, input.issueId),
+      issueId,
       createdById: identity.id,
     });
     return c.json(toResponse(doc), 201);
@@ -847,13 +848,21 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
     const identity = c.get("workspaceIdentity");
     const stub = getWorkspaceStub(c.env, organizationId);
     await assertDocAccess(c, stub, id, "edit");
-    const doc = await stub.updateDocument(
-      id,
-      typeof input.issueId === "string"
-        ? { ...input, issueId: await requireIssueId(stub, input.issueId) }
-        : input,
-      identity.id
-    );
+    let issueIdPatch = input;
+    if (typeof input.issueId === "string") {
+      // Relinking a document to an issue is a write on the issue.
+      const issue = await stub.getIssue(input.issueId);
+      if (!issue) {
+        throw new VortexError({
+          code: "NOT_FOUND",
+          status: 404,
+          message: "Issue not found",
+        });
+      }
+      await assertIssueAccess(createD1(c.env.D1), stub, issue, identity);
+      issueIdPatch = { ...input, issueId: issue.id };
+    }
+    const doc = await stub.updateDocument(id, issueIdPatch, identity.id);
     if (!doc) return notFound();
     return c.json(toResponse(doc));
   });
@@ -1099,7 +1108,21 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(issueDocumentsRoute, async (c) => {
     const { organizationId, issueId } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
-    const resolved = (await resolveIssueId(stub, issueId)) ?? issueId;
+    const issue = await stub.getIssue(issueId);
+    if (!issue) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Issue not found",
+      });
+    }
+    await assertIssueAccess(
+      createD1(c.env.D1),
+      stub,
+      issue,
+      c.get("workspaceIdentity")
+    );
+    const resolved = issue.id;
     const links = await stub.listDocumentLinks({
       targetType: "issue",
       targetId: resolved,

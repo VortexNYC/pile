@@ -1,9 +1,11 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
+import { createD1 } from "../global/db.js";
+import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
-import { resolveIssueRef } from "./stub.js";
+import { assertIssueAccess } from "./issue-access.js";
 
 const activitySchema = z.discriminatedUnion("kind", [
   z.object({
@@ -60,10 +62,21 @@ const issueActivityRoute = createRoute({
 export function registerActivityRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(issueActivityRoute, async (c) => {
     const { organizationId, issueId: issueRef } = c.req.valid("param");
+    const identity = c.get("workspaceIdentity");
+    const db = createD1(c.env.D1);
 
     const doId = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId);
     const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(doId);
-    const issueId = await resolveIssueRef(stub, issueRef);
+    const issue = await stub.getIssue(issueRef);
+    if (!issue) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Issue not found",
+      });
+    }
+    await assertIssueAccess(db, stub, issue, identity);
+    const issueId = issue.id;
     const history = await stub.listIssueHistory(issueId);
     const comments = await stub.listComments(issueId);
     const sessions = await stub.listAgentSessions({ issueId });

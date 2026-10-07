@@ -33,13 +33,13 @@ import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import type { Issue } from "../types/workspace.js";
 import { loadProviderConfig } from "./credentials.js";
 import { resolveAgentEnv } from "./daytona.js";
-import { dispatchAgent } from "./index.js";
+import { dispatchAgent, inheritTeamDefaultRepo } from "./index.js";
 import {
   buildMentionPrompt,
   isTrustedAssociation,
   parsePileMention,
 } from "./mention.js";
-import { nudgeLane, type NudgeOptions } from "./nudge.js";
+import { nudgeLane, type NudgeOptions, resolveLaneForIssue } from "./nudge.js";
 import {
   type AutomationEventTarget,
   automationEventTarget,
@@ -609,6 +609,7 @@ async function processIssueComment(
       await routePileMention(env, db, stub, organizationId, pileIssue, {
         targetUrl: issue.html_url ?? comment.html_url,
         isPullRequest: false,
+        repo,
         comment,
       });
     }
@@ -760,6 +761,7 @@ async function routePrMention(
   await routePileMention(env, db, stub, organizationId, pileIssue, {
     targetUrl: prUrl,
     isPullRequest: true,
+    repo: repository.full_name,
     comment,
   });
 }
@@ -777,6 +779,8 @@ async function routePileMention(
   ctx: {
     targetUrl: string;
     isPullRequest: boolean;
+    /** Repo the comment was posted in (`repository.full_name`). */
+    repo?: string;
     comment: IssueCommentPayload["comment"];
   }
 ): Promise<void> {
@@ -799,6 +803,33 @@ async function routePileMention(
   }
 
   try {
+    // PILE-321 — the mention happened in ctx.repo, so a repo-less issue
+    // adopts it (persisted, like the dispatch-time team-defaultRepo
+    // inheritance) and the lane clones the repo the commenter was looking
+    // at instead of returning a spec. Team defaultRepo covers the
+    // repo-less event case.
+    const actorId = linked?.userId ?? `github:${author}`;
+    if (!issue.repo && ctx.repo) {
+      const persisted = await stub
+        .updateIssue(issue.id, { repo: ctx.repo }, actorId)
+        .catch((err: unknown) => {
+          console.warn("@pile mention could not persist the webhook repo", {
+            issueId: issue.id,
+            repo: ctx.repo,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          return undefined;
+        });
+      issue = persisted ?? { ...issue, repo: ctx.repo };
+    }
+    issue = await inheritTeamDefaultRepo(
+      db,
+      stub,
+      organizationId,
+      issue,
+      actorId
+    );
+
     const thread = (await stub.listComments(issue.id))
       .filter((c) => c.externalId !== comment.id.toString())
       .toSorted((a, b) => a.createdAt.localeCompare(b.createdAt))
@@ -820,7 +851,9 @@ async function routePileMention(
       ? ctx.targetUrl
       : (issue.prUrl ?? ctx.targetUrl);
 
-    const session = await resolveLaneForIssue(stub, issue.id);
+    const session = await resolveLaneForIssue(stub, issue.id, {
+      excludePurpose: REVIEW_PURPOSE,
+    });
     if (
       session &&
       (session.status === "running" ||
@@ -910,30 +943,6 @@ async function routePileMention(
   }
 }
 
-// Resolve the lane for an issue: a live session first, else the most
-// recent completed one — kept-sandbox providers resume completed lanes on
-// the follow-up. Returns null when the issue never had a lane.
-async function resolveLaneForIssue(
-  stub: WorkspaceStub,
-  issueId: string
-): Promise<
-  Awaited<ReturnType<WorkspaceStub["listAgentSessions"]>>[number] | null
-> {
-  const sessions = await stub
-    .listAgentSessions({ issueId, limit: 20 })
-    .catch(() => []);
-  // PILE-249 — dead lanes still resolve: a review on a failed/canceled
-  // lane's PR gets its detection event plus a prompt.followup_skipped
-  // record from nudgeLane instead of silence.
-  const lanes = sessions.filter((s) => s.purpose !== REVIEW_PURPOSE);
-  return (
-    lanes.find((s) => s.status === "running" || s.status === "waiting") ??
-    lanes.find((s) => s.status === "completed") ??
-    lanes.find((s) => s.status === "failed" || s.status === "canceled") ??
-    null
-  );
-}
-
 // PILE-224 — a review/CI event on a lane's PR is steering. Delegates to the
 // shared nudge path so webhook and sweep deliveries share the same
 // dedupeKey, throttle, and audit events.
@@ -946,7 +955,9 @@ async function nudgeLaneForIssue(
   opts: NudgeOptions
 ): Promise<void> {
   try {
-    const session = await resolveLaneForIssue(stub, issue.id);
+    const session = await resolveLaneForIssue(stub, issue.id, {
+      excludePurpose: REVIEW_PURPOSE,
+    });
     if (!session) return;
     await nudgeLane(env, stub, organizationId, session, issue, prUrl, opts);
   } catch (err) {
@@ -1023,7 +1034,9 @@ async function processPullRequestReview(
   // Emit the same detection event the sweep produces so neither path
   // re-detects a review the other already recorded; the dedupeKey carries
   // delivery semantics (retry until the lane actually has it).
-  const session = await resolveLaneForIssue(stub, issue.id);
+  const session = await resolveLaneForIssue(stub, issue.id, {
+    excludePurpose: REVIEW_PURPOSE,
+  });
   const reviewState = (review.state ?? "").toUpperCase();
   let isNewReview = false;
   if (session) {
@@ -1407,7 +1420,9 @@ async function resolveThreadsOnPush(
     await stub.setOrganizationId(pr.organizationId);
     const issue = await stub.getIssueByBranch(pr.repo, pr.branch);
     if (!issue) return;
-    const session = await resolveLaneForIssue(stub, issue.id);
+    const session = await resolveLaneForIssue(stub, issue.id, {
+      excludePurpose: REVIEW_PURPOSE,
+    });
     if (!session) return;
     const [owner, name] = pr.repo.split("/");
     if (!owner || !name) return;
@@ -1760,7 +1775,9 @@ async function processCheckRun(
   await stub.setOrganizationId(workspaceRecord.organizationId);
   const issue = await stub.getIssueByBranch(repo, branch);
   if (!issue) return;
-  const session = await resolveLaneForIssue(stub, issue.id);
+  const session = await resolveLaneForIssue(stub, issue.id, {
+    excludePurpose: REVIEW_PURPOSE,
+  });
   if (!session) return;
 
   const dedupeKey = `ci-${check_run.head_sha}`;

@@ -12,6 +12,7 @@ import { getTicketById, listTicketEvents } from "../global/support-tickets.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
+import { assertIssueAccess } from "./issue-access.js";
 import { getWorkspaceStub } from "./stub.js";
 
 const traceRoute = createRoute({
@@ -179,10 +180,25 @@ export function registerSupportTraceRoutes(app: OpenAPIHono<AppContext>) {
     let agentSessions: unknown[] = [];
     if (ticket.issueId) {
       const stub = getWorkspaceStub(c.env, organizationId);
-      issue = (await stub.getIssue(ticket.issueId)) ?? null;
-      agentSessions = await stub.listAgentSessions({
-        issueId: ticket.issueId,
-      });
+      const resolved = (await stub.getIssue(ticket.issueId)) ?? null;
+      // A ticket linked to a restricted issue must not hand its content or
+      // lane sessions to members without a grant.
+      const accessible = await (async () => {
+        if (!resolved) return false;
+        try {
+          await assertIssueAccess(db, stub, resolved, c.var.workspaceIdentity);
+          return true;
+        } catch (err) {
+          if (!(err instanceof VortexError)) throw err;
+          return false;
+        }
+      })();
+      if (accessible) {
+        issue = resolved;
+        agentSessions = await stub.listAgentSessions({
+          issueId: ticket.issueId,
+        });
+      }
     }
 
     return c.json({

@@ -87,8 +87,10 @@ import {
   type GitIdentity,
   type Issue,
   type IssueInput,
+  type IssuePatch,
   type IssueResolution,
   type IssueStatus,
+  type IssueViewer,
   type ListIssuesArgs,
   type RealtimeEvent,
 } from "../types/workspace.js";
@@ -106,6 +108,7 @@ import {
   workspaceGitIdentities,
   workspaceIssueApprovals,
   workspaceIssueHistory,
+  workspaceIssuePermissions,
   workspaceIssueRelations,
   workspaceIssues,
   workspaceIssueSubscribers,
@@ -143,9 +146,18 @@ import {
 } from "./search.js";
 import { deliverWebhooks, retryWebhookDeliveries } from "./webhooks.js";
 
-type IssueKey = keyof Issue & keyof IssueInput;
+type IssueKey = keyof Issue & keyof IssuePatch;
 
 const TERMINAL_STATUSES: ReadonlyArray<IssueStatus> = ["done", "canceled"];
+
+/** Canonical prState → issue status mapping shared by every prState writer
+ *  (webhooks, reconcile, PATCH). */
+const PR_STATE_TO_STATUS: Record<string, Issue["status"] | undefined> = {
+  draft: "backlog",
+  open: "in_progress",
+  merged: "done",
+  closed: "canceled",
+};
 
 function isTerminalStatus(status: IssueStatus): boolean {
   return status === "done" || status === "canceled";
@@ -212,6 +224,15 @@ function hasWorkspaceNamespace(env: AppEnv): env is WorkerEnv {
 }
 
 const LANE_GITHUB_TOKEN_PREFIX = "laneGithubToken:";
+
+// Viewer stamped on each websocket at connect (x-pile-ws-viewer) — used to
+// filter issue-bearing realtime events for restricted issues.
+const wsViewerSchema = z.object({
+  actorId: z.string(),
+  teamIds: z.array(z.string()),
+  admin: z.boolean(),
+});
+type WsViewer = z.infer<typeof wsViewerSchema>;
 
 export class WorkspaceDO extends DurableObject<AppEnv> {
   private organizationId: string;
@@ -429,6 +450,23 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const [client, server] = [pair[0], pair[1]];
     this.ctx.acceptWebSocket(server);
 
+    // The API layer stamps the connecting identity on `x-pile-ws-viewer`;
+    // issue-bearing events are filtered per socket so restricted issues
+    // (issue_permissions) never reach members without a grant. Grants
+    // changed after connect apply on the next connection.
+    const viewerHeader = request.headers.get("x-pile-ws-viewer");
+    if (viewerHeader) {
+      try {
+        const viewer = wsViewerSchema.parse(JSON.parse(viewerHeader));
+        server.serializeAttachment(viewer);
+      } catch {
+        // Unparseable viewer — socket stays unrestricted-until-checked:
+        // without an attachment we cannot attribute it, so treat as a
+        // non-admin nobody (open issues only).
+        server.serializeAttachment({ actorId: "", teamIds: [], admin: false });
+      }
+    }
+
     await this.emit({
       type: "connected",
       organizationId: this.organizationId,
@@ -522,8 +560,31 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   private emitWebSockets(event: RealtimeEvent): void {
+    const eventIssueId =
+      "issue" in event
+        ? event.issue.id
+        : "issueId" in event
+          ? event.issueId
+          : event.type === "audit.entry" && event.entry.entityType === "issue"
+            ? event.entry.entityId
+            : undefined;
     for (const ws of this.ctx.getWebSockets()) {
       try {
+        if (eventIssueId !== undefined) {
+          const viewer = ws.deserializeAttachment() as WsViewer | null;
+          if (
+            viewer &&
+            !viewer.admin &&
+            !data.hasIssueAccess(
+              this.db,
+              eventIssueId,
+              viewer.actorId,
+              viewer.teamIds
+            )
+          ) {
+            continue;
+          }
+        }
         ws.send(JSON.stringify(event));
       } catch {
         // socket may be closing
@@ -531,7 +592,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }
   }
 
-  private async emit(event: RealtimeEvent) {
+  async emit(event: RealtimeEvent) {
     this.emitWebSockets(event);
     this.ctx.waitUntil(this.sendWebhookEvent(event));
   }
@@ -977,26 +1038,29 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       snoozedOnly?: boolean;
       includeSnoozed?: boolean;
       limit?: number;
-    } = {}
+    } = {},
+    viewer?: IssueViewer
   ) {
     return data.getNotificationsForRecipient(
       this.db,
       this.organizationId,
       recipientId,
       recipientType,
-      options
+      { ...options, excludeIssueIds: this.hiddenIssueIdsFor(viewer) }
     );
   }
 
   unreadNotificationCount(
     recipientId: string,
-    recipientType: data.RecipientType
+    recipientType: data.RecipientType,
+    viewer?: IssueViewer
   ) {
     return data.getUnreadNotificationCount(
       this.db,
       this.organizationId,
       recipientId,
-      recipientType
+      recipientType,
+      this.hiddenIssueIdsFor(viewer)
     );
   }
 
@@ -1205,6 +1269,63 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   listWorkspaceAttachments() {
     return this.db.select().from(workspaceAttachments).all();
+  }
+
+  // ---- entity attachments (R2-backed, scoped to entityType + entityId) ----
+  listEntityAttachments(entityType: string, entityId: string) {
+    return data.listEntityAttachments(
+      this.db,
+      this.organizationId,
+      entityType,
+      entityId
+    );
+  }
+
+  getEntityAttachment(id: string) {
+    return data.getEntityAttachment(this.db, this.organizationId, id);
+  }
+
+  async storeEntityAttachment(input: {
+    entityType: string;
+    entityId: string;
+    fileName: string;
+    contentType?: string;
+    dataBase64: string;
+    createdById?: string;
+  }) {
+    const bucket = this.env.ATTACHMENTS_BUCKET;
+    if (!bucket) {
+      throw new VortexError({
+        code: "INTERNAL_ERROR",
+        status: 503,
+        message: "File storage not configured",
+      });
+    }
+    const id = crypto.randomUUID();
+    const contentType = input.contentType ?? "application/octet-stream";
+    const bytes = new Uint8Array(
+      Array.from(atob(input.dataBase64), (char) => char.charCodeAt(0))
+    );
+    const r2Key = `attachments/${this.organizationId}/${input.entityType}/${input.entityId}/${id}`;
+    await bucket.put(r2Key, bytes, { httpMetadata: { contentType } });
+    return data.createEntityAttachment(this.db, this.organizationId, {
+      id,
+      entityType: input.entityType,
+      entityId: input.entityId,
+      fileName: input.fileName,
+      contentType,
+      size: bytes.length,
+      r2Key,
+      createdById: input.createdById,
+    });
+  }
+
+  async deleteEntityAttachment(id: string) {
+    const row = data.deleteEntityAttachment(this.db, this.organizationId, id);
+    if (row && this.env.ATTACHMENTS_BUCKET) {
+      await this.env.ATTACHMENTS_BUCKET.delete(row.r2Key);
+    }
+    return row;
   }
 
   // ---- saved views / favorites / prefs ----
@@ -1572,8 +1693,14 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   // ---- issue external links ----
 
-  listExternalLinks(args: { entityType?: string; entityId?: string } = {}) {
-    return data.listExternalLinks(this.db, this.organizationId, args);
+  listExternalLinks(
+    args: { entityType?: string; entityId?: string } = {},
+    viewer?: IssueViewer
+  ) {
+    return data.listExternalLinks(this.db, this.organizationId, {
+      ...args,
+      excludeIssueIds: this.hiddenIssueIdsFor(viewer),
+    });
   }
 
   getExternalLink(id: string) {
@@ -1667,9 +1794,24 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return customer;
   }
 
-  deleteCustomer(id: string, actorId?: string) {
+  async deleteCustomer(id: string, actorId?: string) {
+    const r2Keys = data
+      .listEntityAttachments(this.db, this.organizationId, "customer", id)
+      .map((a) => a.r2Key);
     const deleted = data.deleteCustomer(this.db, this.organizationId, id);
-    if (deleted) this.audit("customer.deleted", "customer", id, actorId);
+    if (deleted) {
+      this.audit("customer.deleted", "customer", id, actorId);
+      if (r2Keys.length > 0 && this.env.ATTACHMENTS_BUCKET) {
+        try {
+          await this.env.ATTACHMENTS_BUCKET.delete(r2Keys);
+        } catch (err) {
+          console.error("customer attachment R2 cleanup failed", {
+            customerId: id,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+    }
     return deleted;
   }
 
@@ -1882,23 +2024,33 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return searchDocuments(index, query, limit);
   }
 
+  // `teamIds` is the caller's resolved visibility set — an empty array means
+  // no issues are in scope (never "unfiltered").
   async searchAll(
     query: string,
     teamIds: string[],
-    limit = 50
+    limit = 50,
+    viewer?: IssueViewer
   ): Promise<{ issueIds: string[]; documentIds: string[] }> {
     const index = await this.ensureSearchIndex();
     const [issueIds, documentIds] = await Promise.all([
-      searchIssues(index, query, teamIds, limit),
+      teamIds.length > 0
+        ? searchIssues(index, query, teamIds, limit)
+        : Promise.resolve([]),
       searchDocuments(index, query, limit),
     ]);
-    return { issueIds, documentIds };
+    const hidden = new Set(this.hiddenIssueIdsFor(viewer));
+    return {
+      issueIds: issueIds.filter((id) => !hidden.has(id)),
+      documentIds,
+    };
   }
 
   async findSimilarIssues(
     issueId: string,
     teamIds: string[],
-    limit = 10
+    limit = 10,
+    viewer?: IssueViewer
   ): Promise<Array<{ issue: Issue; score: number }>> {
     await this.ready;
     const issue = await this.getIssue(issueId);
@@ -1908,9 +2060,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const matches = await Promise.all(
       hits.map((hit) => this.getIssue(hit.issueId))
     );
+    const hidden = new Set(this.hiddenIssueIdsFor(viewer));
     return hits.flatMap((hit, i) => {
       const match = matches[i];
-      return match ? [{ issue: match, score: hit.score }] : [];
+      return match && !hidden.has(match.id)
+        ? [{ issue: match, score: hit.score }]
+        : [];
     });
   }
 
@@ -1920,10 +2075,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   async findPossibleDuplicates(
     title: string,
     teamIds: string[],
-    limit = 5
+    limit = 5,
+    viewer?: IssueViewer
   ): Promise<Array<{ issue: Issue; score: number }>> {
     await this.ready;
     if (teamIds.length === 0) return [];
+    const hidden = new Set(this.hiddenIssueIdsFor(viewer));
     if (similarityTerms(title).length === 0) {
       // No indexable terms — the index can't help, and generic titles like
       // "Fix it" are the likeliest collisions. Match them verbatim instead.
@@ -1936,7 +2093,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         .all();
       return rows
         .flatMap((issue) => {
-          if (issue.status === "done" || issue.status === "canceled") return [];
+          if (
+            hidden.has(issue.id) ||
+            issue.status === "done" ||
+            issue.status === "canceled"
+          )
+            return [];
           const sameTitle =
             issue.title.toLowerCase() === wanted ||
             (normalized !== "" &&
@@ -1954,6 +2116,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       .flatMap((issue) => {
         if (
           !issue ||
+          hidden.has(issue.id) ||
           !teamIds.includes(issue.teamId) ||
           issue.status === "done" ||
           issue.status === "canceled"
@@ -2047,6 +2210,57 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     teamIds: string[] = []
   ) {
     return data.documentAccessLevel(this.db, documentId, actorId, teamIds);
+  }
+
+  // ---- issue permissions (PILE-328) ----
+  // Same grant model as documents: no rows = open to the workspace; any row
+  // restricts the issue to listed actors (+ workspace admins, bypassed by
+  // callers).
+
+  setIssuePermission(
+    issueId: string,
+    actorId: string,
+    actorType: string,
+    grantedBy?: string
+  ) {
+    const grant = data.setIssuePermission(
+      this.db,
+      this.organizationId,
+      issueId,
+      actorId,
+      actorType
+    );
+    if (grant) {
+      // Restricted-issue grant changes stay out of ungranted members' audit
+      // feeds — the entry itself asserts entityType "issue" on this issueId.
+      this.audit("issue.permission.granted", "issue", issueId, grantedBy, {
+        grant: { from: null, to: `${actorType}:${actorId}` },
+      });
+    }
+    return grant;
+  }
+
+  revokeIssuePermission(issueId: string, actorId: string, revokedBy?: string) {
+    const removed = data.revokeIssuePermission(this.db, issueId, actorId);
+    if (removed) {
+      this.audit("issue.permission.revoked", "issue", issueId, revokedBy, {
+        grant: { from: actorId, to: null },
+      });
+    }
+    return removed;
+  }
+
+  listIssuePermissions(issueId: string) {
+    return data.listIssuePermissions(this.db, issueId);
+  }
+
+  issueVisibleTo(issueId: string, actorId: string, teamIds: string[] = []) {
+    return data.hasIssueAccess(this.db, issueId, actorId, teamIds);
+  }
+
+  hiddenIssueIdsFor(viewer?: IssueViewer): string[] {
+    if (!viewer) return [];
+    return data.hiddenIssueIds(this.db, viewer.actorId, viewer.teamIds);
   }
 
   listDocumentLinks(
@@ -2155,9 +2369,14 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       status?: AgentSessionStatus;
       openPr?: boolean;
       limit?: number;
+      viewer?: IssueViewer;
     } = {}
   ) {
-    return data.listAgentSessions(this.db, this.organizationId, options);
+    const { viewer, ...rest } = options;
+    return data.listAgentSessions(this.db, this.organizationId, {
+      ...rest,
+      excludeIssueIds: this.hiddenIssueIdsFor(viewer),
+    });
   }
 
   listAgentSessionSummaries(
@@ -2166,13 +2385,14 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       status?: AgentSessionStatus;
       openPr?: boolean;
       limit?: number;
+      viewer?: IssueViewer;
     } = {}
   ) {
-    return data.listAgentSessionSummaries(
-      this.db,
-      this.organizationId,
-      options
-    );
+    const { viewer, ...rest } = options;
+    return data.listAgentSessionSummaries(this.db, this.organizationId, {
+      ...rest,
+      excludeIssueIds: this.hiddenIssueIdsFor(viewer),
+    });
   }
 
   async getMaxConcurrentAgentChildren(): Promise<number> {
@@ -2868,15 +3088,46 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       toValue: string | null;
     }> = [];
 
-    if (result.prUrl && result.prUrl !== issue.prUrl) {
+    // A prUrl maps to exactly one issue — a lane reporting a URL another
+    // issue already claims has its link (and its prState, which describes
+    // that same PR) dropped rather than forking webhook comment routing.
+    const claimedBy = result.prUrl
+      ? await this.getIssueByPrUrl(result.prUrl)
+      : undefined;
+    const prClaimedElsewhere =
+      claimedBy !== undefined && claimedBy.id !== issue.id;
+
+    if (result.prUrl && result.prUrl !== issue.prUrl && !prClaimedElsewhere) {
       issueSet.prUrl = result.prUrl;
       historyEntries.push({
         field: "pr_url",
         fromValue: issue.prUrl,
         toValue: result.prUrl,
       });
+      // The stored states describe the previous PR — re-pointing clears
+      // whatever the lane didn't re-report (same rule as updateIssue).
+      if (!result.prState && issue.prState !== null) {
+        issueSet.prState = null;
+        historyEntries.push({
+          field: "pr_state",
+          fromValue: issue.prState,
+          toValue: null,
+        });
+      }
+      if (issue.prCheckState !== null) {
+        issueSet.prCheckState = null;
+        historyEntries.push({
+          field: "pr_check_state",
+          fromValue: issue.prCheckState,
+          toValue: null,
+        });
+      }
     }
-    if (result.prState && result.prState !== issue.prState) {
+    if (
+      result.prState &&
+      result.prState !== issue.prState &&
+      !prClaimedElsewhere
+    ) {
       issueSet.prState = result.prState;
       historyEntries.push({
         field: "pr_state",
@@ -3338,10 +3589,14 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       action?: string;
       actorId?: string;
       limit?: number;
-    } = {}
+    } = {},
+    viewer?: IssueViewer
   ) {
     await this.ready;
-    return data.listAuditLog(this.db, this.organizationId, args);
+    return data.listAuditLog(this.db, this.organizationId, {
+      ...args,
+      excludeIssueIds: this.hiddenIssueIdsFor(viewer),
+    });
   }
 
   async getAuditLogEntry(id: string) {
@@ -3427,7 +3682,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   createIssueWithDuplicates(
     input: IssueInput,
     actorId: string | undefined,
-    dedupe: { teamIds: string[]; block: boolean }
+    dedupe: { teamIds: string[]; block: boolean; viewer?: IssueViewer }
   ) {
     return this.createIssueRecord(input, actorId, dedupe);
   }
@@ -3435,7 +3690,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   private async createIssueRecord(
     input: IssueInput,
     actorId?: string,
-    dedupe?: { teamIds: string[]; block: boolean }
+    dedupe?: { teamIds: string[]; block: boolean; viewer?: IssueViewer }
   ): Promise<{
     issue: Issue | null;
     possibleDuplicates: Array<{ issue: Issue; score: number }>;
@@ -3523,7 +3778,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }
 
     const possibleDuplicates = dedupe
-      ? await this.findPossibleDuplicates(input.title, dedupe.teamIds)
+      ? await this.findPossibleDuplicates(
+          input.title,
+          dedupe.teamIds,
+          5,
+          dedupe.viewer
+        )
       : [];
     if (dedupe?.block && possibleDuplicates.length > 0) {
       return { issue: null, possibleDuplicates };
@@ -3876,7 +4136,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       | "teamId"
       | "projectId"
       | "cycleId",
-    teamIds?: string[]
+    teamIds?: string[],
+    viewer?: IssueViewer
   ): Promise<{ group: string | null; count: number; estimateTotal: number }[]> {
     await this.ready;
     if (teamIds && teamIds.length === 0) return [];
@@ -3892,6 +4153,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const conditions = teamIds
       ? [inArray(workspaceIssues.teamId, teamIds)]
       : [];
+    const hiddenIssueIds = this.hiddenIssueIdsFor(viewer);
+    if (hiddenIssueIds.length > 0) {
+      conditions.push(notInArray(workspaceIssues.id, hiddenIssueIds));
+    }
     return this.db
       .select({
         group: column,
@@ -3907,7 +4172,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   async burndown(
     cycleId: string,
     teamIds?: string[],
-    window?: { startDate?: string | null; endDate?: string | null }
+    window?: { startDate?: string | null; endDate?: string | null },
+    viewer?: IssueViewer
   ): Promise<{
     total: number;
     totalEstimate: number;
@@ -3920,6 +4186,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const conditions = [eq(workspaceIssues.cycleId, cycleId)];
     if (teamIds) {
       conditions.push(inArray(workspaceIssues.teamId, teamIds));
+    }
+    const hiddenIssueIds = this.hiddenIssueIdsFor(viewer);
+    if (hiddenIssueIds.length > 0) {
+      conditions.push(notInArray(workspaceIssues.id, hiddenIssueIds));
     }
     const rows = await this.db
       .select({
@@ -4025,9 +4295,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return this.getIssueByIdentifier(id);
   }
 
-  async getIssueChildren(id: string): Promise<Issue[]> {
+  async getIssueChildren(id: string, viewer?: IssueViewer): Promise<Issue[]> {
     await this.ready;
-    return this.db
+    const rows = await this.db
       .select()
       .from(workspaceIssues)
       .where(eq(workspaceIssues.parentId, id))
@@ -4036,6 +4306,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         desc(workspaceIssues.createdAt)
       )
       .all();
+    if (!viewer) return rows;
+    const hidden = new Set(this.hiddenIssueIdsFor(viewer));
+    return rows.filter((row) => !hidden.has(row.id));
   }
 
   async getIssueByBranch(
@@ -4090,6 +4363,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
     if (visibleTeamIds) {
       conditions.push(inArray(workspaceIssues.teamId, visibleTeamIds));
+    }
+    const hiddenIssueIds = this.hiddenIssueIdsFor(args.viewer);
+    if (hiddenIssueIds.length > 0) {
+      conditions.push(notInArray(workspaceIssues.id, hiddenIssueIds));
     }
     if (args.teamId) {
       conditions.push(eq(workspaceIssues.teamId, args.teamId));
@@ -4201,7 +4478,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   async updateIssue(
     id: string,
-    patch: Partial<IssueInput>,
+    patch: IssuePatch,
     actorId?: string
   ): Promise<Issue | undefined> {
     await this.ready;
@@ -4236,6 +4513,19 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       }
     }
 
+    // prUrl feeds getIssueByPrUrl exact-match routing for webhook comments,
+    // so a second issue claiming the same URL would be ambiguous.
+    const newPrUrl = patch.prUrl !== undefined ? patch.prUrl : old.prUrl;
+    if (typeof newPrUrl === "string" && newPrUrl !== old.prUrl) {
+      const claimedBy = await this.getIssueByPrUrl(newPrUrl);
+      if (claimedBy && claimedBy.id !== old.id) {
+        throw VortexError.fromCode(
+          "CONFLICT",
+          `Issue ${claimedBy.identifier} already links PR ${newPrUrl}`
+        );
+      }
+    }
+
     const set: Partial<Issue> = {
       updatedAt: new Date().toISOString(),
     };
@@ -4259,6 +4549,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       { key: "labelIds", field: "label_ids" },
       { key: "repo", field: "repo" },
       { key: "branch", field: "branch" },
+      { key: "prUrl", field: "pr_url" },
+      { key: "prState", field: "pr_state" },
     ];
 
     let newParentId: string | null | undefined = undefined;
@@ -4362,6 +4654,38 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (patch.labelIds !== undefined) set.labelIds = patch.labelIds;
     if (patch.repo !== undefined) set.repo = patch.repo;
     if (patch.branch !== undefined) set.branch = patch.branch;
+    if (patch.prUrl !== undefined) set.prUrl = patch.prUrl;
+    if (patch.prState !== undefined) set.prState = patch.prState;
+
+    // Fields below are written without an explicit patch key — track them so
+    // history still records the change.
+    const implicitKeys = new Set<IssueKey>();
+
+    // Re-pointing prUrl means the stored prCheckState belongs to the old
+    // PR's head SHA — clear it. prState clears too unless the caller
+    // supplied a new one in the same patch.
+    if (patch.prUrl !== undefined && patch.prUrl !== old.prUrl) {
+      if (patch.prState === undefined) {
+        set.prState = null;
+        implicitKeys.add("prState");
+      }
+      set.prCheckState = null;
+    }
+
+    // A manual prState PATCH applies the same statusMap the webhook and
+    // reconcile writers use, so status and prState can't drift apart. An
+    // explicit status in the same PATCH wins.
+    if (patch.status === undefined && typeof set.prState === "string") {
+      const mapped = PR_STATE_TO_STATUS[set.prState];
+      if (
+        mapped !== undefined &&
+        !isTerminalStatus(old.status) &&
+        (old.status !== "triage" || isTerminalStatus(mapped))
+      ) {
+        set.status = mapped;
+        implicitKeys.add("status");
+      }
+    }
 
     if (Object.keys(set).length === 1 && "updatedAt" in set) {
       return old;
@@ -4376,7 +4700,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (!issue) return undefined;
 
     const historyEntries = allowed
-      .filter(({ key }) => key in patch)
+      .filter(({ key }) => key in patch || implicitKeys.has(key))
       .map(({ key, field }) => {
         const before = old[key];
         const after = issue[key];
@@ -4396,6 +4720,16 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         } => entry !== undefined
       );
 
+    // prCheckState isn't a patch field — the only write path is the implicit
+    // stale-pair clear above — so record its history row by hand.
+    if (old.prCheckState !== issue.prCheckState) {
+      historyEntries.push({
+        field: "pr_check_state",
+        fromValue: old.prCheckState,
+        toValue: issue.prCheckState,
+      });
+    }
+
     if (historyEntries.length > 0) {
       await this.recordIssueHistory(issue.id, historyEntries, actorId);
     }
@@ -4408,6 +4742,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       organizationId: this.organizationId,
       issue,
     });
+    if (issue.prUrl !== old.prUrl || issue.prState !== old.prState) {
+      await this.emit({
+        type: "pr.updated",
+        organizationId: this.organizationId,
+        issue,
+      });
+    }
     if (issue.isDraft || old.isDraft) {
       await this.emit({
         type: "draft.updated",
@@ -4490,16 +4831,24 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   async batchUpdateIssues(
     ids: string[],
-    patch: Partial<IssueInput>,
+    patch: IssuePatch,
     actorId?: string
   ): Promise<Issue[]> {
+    // A non-null prUrl maps to exactly one issue — reject multi-id batches
+    // up front so they can't half-apply before hitting the claim check.
+    if (ids.length > 1 && typeof patch.prUrl === "string") {
+      throw VortexError.fromCode(
+        "BAD_REQUEST",
+        "prUrl can only be set on a single issue"
+      );
+    }
     return this.batchUpdateSequentially(ids, 0, patch, actorId, []);
   }
 
   private async batchUpdateSequentially(
     ids: string[],
     index: number,
-    patch: Partial<IssueInput>,
+    patch: IssuePatch,
     actorId: string | undefined,
     acc: Issue[]
   ): Promise<Issue[]> {
@@ -4569,6 +4918,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     await this.db
       .delete(workspaceIssueApprovals)
       .where(eq(workspaceIssueApprovals.issueId, issueId));
+    await this.db
+      .delete(workspaceIssuePermissions)
+      .where(eq(workspaceIssuePermissions.issueId, issueId));
     const reactionTargets = [issueId, ...commentIds];
     if (reactionTargets.length > 0) {
       await this.db
@@ -4682,13 +5034,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (old.repo !== null && old.repo !== repo) return undefined;
     if (old.branch !== null && old.branch !== branch) return undefined;
 
-    const statusMap: Record<string, Issue["status"] | undefined> = {
-      draft: "backlog",
-      open: "in_progress",
-      merged: "done",
-      closed: "canceled",
-    };
-    const status = statusMap[prState];
+    const status = PR_STATE_TO_STATUS[prState];
     const set: {
       prUrl: string;
       prState: string;
@@ -4771,13 +5117,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const old = await this.getIssueByBranch(repo, branch);
     if (!old) return undefined;
 
-    const statusMap: Record<string, Issue["status"] | undefined> = {
-      draft: "backlog",
-      open: "in_progress",
-      merged: "done",
-      closed: "canceled",
-    };
-    const status = statusMap[prState];
+    const status = PR_STATE_TO_STATUS[prState];
     const set: {
       prUrl: string;
       prState: string;
@@ -4894,13 +5234,19 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const old = await this.getIssue(issueId);
     if (!old) return undefined;
 
-    const statusMap: Record<string, Issue["status"] | undefined> = {
-      draft: "backlog",
-      open: "in_progress",
-      merged: "done",
-      closed: "canceled",
-    };
-    const status = prState ? statusMap[prState] : undefined;
+    // Same uniqueness rule as updateIssue — a prUrl already claimed by
+    // another issue would fork getIssueByPrUrl webhook routing.
+    if (typeof prUrl === "string" && prUrl !== old.prUrl) {
+      const claimedBy = await this.getIssueByPrUrl(prUrl);
+      if (claimedBy && claimedBy.id !== old.id) {
+        throw VortexError.fromCode(
+          "CONFLICT",
+          `Issue ${claimedBy.identifier} already links PR ${prUrl}`
+        );
+      }
+    }
+
+    const status = prState ? PR_STATE_TO_STATUS[prState] : undefined;
     const set: {
       prUrl: string | null;
       prState: string | null;

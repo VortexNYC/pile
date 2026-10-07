@@ -14,7 +14,7 @@ import type { AgentSession, Issue } from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
 import { loadProviderConfig } from "./credentials.js";
 import { resolveAgentEnv } from "./daytona.js";
-import { dispatchAgent } from "./index.js";
+import { dispatchAgent, inheritTeamDefaultRepo } from "./index.js";
 import {
   buildImplementPlanInstructions,
   buildPlanInstructions,
@@ -178,16 +178,25 @@ export async function triggerPlanMode(
       issueId: issue.id,
       limit: 1,
     });
+    // PILE-321 — triggered lanes inherit the team's defaultRepo too, so a
+    // /plan comment or label on a repo-less issue plans against the repo.
+    const target = await inheritTeamDefaultRepo(
+      db,
+      stub,
+      organizationId,
+      issue,
+      identity.id
+    );
     const { agentId, model } = await resolveDispatchAgent(
       env,
       db,
       organizationId,
-      issue,
+      target,
       { agentId: previous?.agentId }
     );
     const options = await planLaneOptions(
       stub,
-      issue,
+      target,
       command.kind,
       command.kind === "plan" ? command.feedback : null
     );
@@ -196,7 +205,7 @@ export async function triggerPlanMode(
       resolveAgentEnv(env, providerConfig ?? undefined),
       agentId,
       organizationId,
-      issue,
+      target,
       identity,
       model,
       ctx,

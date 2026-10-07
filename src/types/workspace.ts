@@ -70,6 +70,11 @@ export const ISSUE_RESOLUTIONS = [
 ] as const;
 export type IssueResolution = (typeof ISSUE_RESOLUTIONS)[number];
 
+/** Canonical prState domain — every writer (GitHub/GitLab webhooks, lane
+ *  results, reconcile) normalizes into these four values. */
+export const ISSUE_PR_STATES = ["draft", "open", "merged", "closed"] as const;
+export type IssuePrState = (typeof ISSUE_PR_STATES)[number];
+
 export interface IssueInput {
   id?: Id;
   externalRef?: string | null;
@@ -97,14 +102,32 @@ export interface IssueInput {
   updatedAt?: Timestamp;
 }
 
+/** Patch surface for updateIssue: every create input plus the PR linkage
+ *  fields, which createIssueRecord always seeds to null — the webhook and
+ *  lane-completion paths are the usual writers, PATCH exists so a human or
+ *  agent can link/unlink a PR without a session. */
+export type IssuePatch = Partial<IssueInput> & {
+  prUrl?: string | null;
+  prState?: IssuePrState | null;
+};
+
 export interface IssueCursor {
   createdAt: Timestamp;
   id: Id;
 }
 
+// Per-issue visibility (issue_permissions): undefined viewer = unrestricted
+// (workspace admin); otherwise list/search/analytics queries exclude
+// restricted issues the viewer isn't granted.
+export interface IssueViewer {
+  actorId: string;
+  teamIds: string[];
+}
+
 export interface ListIssuesArgs {
   limit?: number;
   cursor?: IssueCursor;
+  viewer?: IssueViewer;
   teamId?: string;
   teamIds?: string[];
   status?: IssueStatus;

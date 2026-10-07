@@ -1,12 +1,13 @@
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { createD1 } from "../global/db.js";
+import { createD1, type D1Client } from "../global/db.js";
 import {
   DEFAULT_LANE_PERMISSIONS,
   fetchLanePermissions,
 } from "../global/pile-repo-config.js";
 import { organization } from "../global/schema.js";
+import { getTeamById } from "../global/teams.js";
 import { createAuth } from "../platform/auth.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
@@ -16,6 +17,7 @@ import {
   type AgentSession,
   type Issue,
 } from "../types/workspace.js";
+import type { WorkspaceDO } from "../workspace/durable-object.js";
 import {
   parseEffortModels,
   resolveDispatchEffort,
@@ -142,6 +144,31 @@ async function laneDbConfigForOrgRepo(
     parsed = null;
   }
   return laneDbConfigForRepo(parsed, repo);
+}
+
+/** PILE-321 — dispatch-time repo resolution: a repo-less issue inherits its
+ *  team's defaultRepo (the same fallback issue create applies). The resolved
+ *  repo is persisted on the issue so lane-token minting, dedupe, and
+ *  redispatches all see the repo the lane actually works. Callers that take
+ *  a `repo` body field skip this when it was sent — explicit null still
+ *  forces a repo-less lane. */
+export async function inheritTeamDefaultRepo(
+  db: D1Client,
+  stub: DurableObjectStub<WorkspaceDO>,
+  organizationId: string,
+  issue: Issue,
+  actorId: string
+): Promise<Issue> {
+  if (issue.repo || !issue.teamId) return issue;
+  const defaultRepo = (await getTeamById(db, issue.teamId, organizationId))
+    ?.defaultRepo;
+  if (!defaultRepo) return issue;
+  return (
+    (await stub.updateIssue(issue.id, { repo: defaultRepo }, actorId)) ?? {
+      ...issue,
+      repo: defaultRepo,
+    }
+  );
 }
 
 export async function dispatchAgent(

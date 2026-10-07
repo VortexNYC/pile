@@ -242,6 +242,44 @@ describe("CLI integration", () => {
     spy.mockRestore();
   });
 
+  it("issues update forwards --pr-url and --pr-state in the PATCH body", async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ id: "i1" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+    const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    const exitCode = await runCli(
+      [
+        "issues",
+        "update",
+        "ISS-1",
+        "--workspace",
+        "ws-1",
+        "--pr-url",
+        "https://github.com/VortexNYC/pile/pull/316",
+        "--pr-state",
+        "open",
+      ],
+      { fetch: mockFetch }
+    );
+
+    expect(exitCode).toBe(0);
+    const [url, init] = mockFetch.mock.calls[0] as [
+      URL,
+      { method: string; body?: string },
+    ];
+    expect(url.pathname).toBe("/workspaces/ws-1/issues/ISS-1");
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(init.body as string)).toEqual({
+      prUrl: "https://github.com/VortexNYC/pile/pull/316",
+      prState: "open",
+    });
+    spy.mockRestore();
+  });
+
   it("memberships invite posts to the invitations endpoint with a default role", async () => {
     const mockFetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ id: "inv-1", status: "pending" }), {

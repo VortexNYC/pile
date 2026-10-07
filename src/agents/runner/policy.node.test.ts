@@ -5,6 +5,8 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { resolvePython } from "./python";
+
 // Lane permission tiers (PILE-276) as enforced by the real core.py: env
 // scrubbing, git-hook kill under shell=disabled, and the push tiers. Runs a
 // real git checkout under a temp HOME; network transport is stubbed.
@@ -107,6 +109,10 @@ const harnessDir = mkdtempSync(join(tmpdir(), "pile-policy-test-"));
 const HARNESS_PATH = join(harnessDir, "harness.py");
 writeFileSync(HARNESS_PATH, HARNESS);
 
+// Real CPython resolved past any PATH shim; the suite skips when absent.
+const PYTHON = resolvePython();
+const describePy = describe.skipIf(PYTHON === null);
+
 interface PolicyResult {
   env?: string[];
   hooks?: string[];
@@ -138,7 +144,8 @@ function runPolicy(
     PILE_SHELL_POLICY: policy.shell,
     ...extra,
   };
-  const out = execFileSync("python3", [HARNESS_PATH, CORE_PATH, mode], {
+  if (!PYTHON) throw new Error("unreachable: suite skipped without CPython");
+  const out = execFileSync(PYTHON, [HARNESS_PATH, CORE_PATH, mode], {
     encoding: "utf8",
     env,
     timeout: 30_000,
@@ -163,7 +170,7 @@ const SECRETS = {
   PILE_EXTRA_ENV_KEYS: "REPO_INJECTED",
 };
 
-describe("runner lane permission tiers (PILE-276)", () => {
+describePy("runner lane permission tiers (PILE-276)", () => {
   it("leaves the agent env untouched when every tier is enabled", () => {
     const res = runPolicy(
       "scrub",

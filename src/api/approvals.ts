@@ -1,10 +1,12 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
+import { createD1 } from "../global/db.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
-import { getWorkspaceStub, resolveIssueRef } from "./stub.js";
+import { assertIssueAccess } from "./issue-access.js";
+import { getWorkspaceStub } from "./stub.js";
 
 const approvalSchema = z.object({
   id: z.string(),
@@ -93,10 +95,21 @@ export function registerApprovalRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(createApprovalRoute, async (c) => {
     const { organizationId, issueId } = c.req.valid("param");
     const { approverId, comment } = c.req.valid("json");
+    const identity = c.get("workspaceIdentity");
+    const db = createD1(c.env.D1);
     const stub = getWorkspaceStub(c.env, organizationId);
+    const issue = await stub.getIssue(issueId);
+    if (!issue) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Issue not found",
+      });
+    }
+    await assertIssueAccess(db, stub, issue, identity);
     const item = await stub.createIssueApproval({
-      issueId: await resolveIssueRef(stub, issueId),
-      requestedById: c.get("workspaceIdentity").id,
+      issueId: issue.id,
+      requestedById: identity.id,
       approverId,
       comment,
     });
@@ -105,10 +118,19 @@ export function registerApprovalRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(listApprovalsRoute, async (c) => {
     const { organizationId, issueId } = c.req.valid("param");
+    const identity = c.get("workspaceIdentity");
+    const db = createD1(c.env.D1);
     const stub = getWorkspaceStub(c.env, organizationId);
-    const items = await stub.listIssueApprovals(
-      await resolveIssueRef(stub, issueId)
-    );
+    const issue = await stub.getIssue(issueId);
+    if (!issue) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Issue not found",
+      });
+    }
+    await assertIssueAccess(db, stub, issue, identity);
+    const items = await stub.listIssueApprovals(issue.id);
     return c.json({ approvals: items });
   });
 
@@ -125,6 +147,15 @@ export function registerApprovalRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     const identity = c.get("workspaceIdentity");
+    const issue = await stub.getIssue(item.issueId);
+    if (!issue) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Approval not found",
+      });
+    }
+    await assertIssueAccess(createD1(c.env.D1), stub, issue, identity);
     const isApprover = identity.id === item.approverId;
     const isAdmin = identity.permissions.includes("admin");
     if (!isApprover && !isAdmin) {
