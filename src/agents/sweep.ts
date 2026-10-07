@@ -567,14 +567,16 @@ async function promoteQueuedSessions(
   // whose blocker died re-anchors onto the replacement instead of promoting
   // off the corpse — checked here so the chain holds even when the retry
   // row landed after the dependent parked, or the retry's own re-anchor
-  // write was lost mid-flight (PILE-260).
+  // write was lost mid-flight (PILE-260). The lookup must fail CLOSED:
+  // swallowed into [] a query error reads as "no retries" and the dependent
+  // degrades to grace-window → promote while the replacement may still be
+  // live — the concurrent-lane mode this pass exists to prevent. Failures
+  // aren't cached, so the next dependent or pass re-queries fresh.
   const retriesCache = new Map<string, AgentSession[]>();
   const retriesFor = async (deadId: string): Promise<AgentSession[]> => {
     const cached = retriesCache.get(deadId);
     if (cached) return cached;
-    const rows = await stub
-      .listAgentSessions({ retryOf: deadId })
-      .catch(() => [] as AgentSession[]);
+    const rows = await stub.listAgentSessions({ retryOf: deadId });
     retriesCache.set(deadId, rows);
     return rows;
   };
@@ -596,9 +598,21 @@ async function promoteQueuedSessions(
         .catch(() => null);
       continue;
     }
-    const blocker = await stub
-      .getAgentSession(session.queuedAfter)
-      .catch(() => null);
+    // Fail closed here too: an unreadable blocker may still be live, so a
+    // lookup error parks the lane for this pass rather than promoting it
+    // into a concurrent dispatch (PILE-260). Only a confirmed-missing row
+    // falls through to promotion.
+    let blocker: AgentSession | undefined;
+    try {
+      blocker = await stub.getAgentSession(session.queuedAfter);
+    } catch (err) {
+      console.error("queued session blocker lookup failed — staying parked", {
+        session: session.id,
+        queuedAfter: session.queuedAfter,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      continue;
+    }
     if (blocker && !TERMINAL_STATUSES.has(blocker.status)) continue;
     if (blocker) {
       // The blocker's retry graph, walked breadth-first to a live tail.
@@ -623,17 +637,32 @@ async function promoteQueuedSessions(
       // session.id joins the guard so a dependent can never re-anchor onto
       // itself if its own row ever sits inside the blocker's retry graph.
       const visited = new Set<string>([blocker.id, session.id]);
-      const chain = [...(await retriesFor(blocker.id))];
-      for (let i = 0; i < chain.length; i += 1) {
-        const next = chain[i];
-        if (visited.has(next.id)) continue;
-        visited.add(next.id);
-        if (!TERMINAL_STATUSES.has(next.status)) {
-          successor = next.id;
-          break;
+      try {
+        const chain = [...(await retriesFor(blocker.id))];
+        for (let i = 0; i < chain.length; i += 1) {
+          const next = chain[i];
+          if (visited.has(next.id)) continue;
+          visited.add(next.id);
+          if (!TERMINAL_STATUSES.has(next.status)) {
+            successor = next.id;
+            break;
+          }
+          noteInfraDeath(next);
+          chain.push(...(await retriesFor(next.id)));
         }
-        noteInfraDeath(next);
-        chain.push(...(await retriesFor(next.id)));
+      } catch (err) {
+        // The retry graph couldn't be read, so a live tail may exist —
+        // stay parked this pass instead of promoting off the corpse and
+        // racing the in-flight replacement (PILE-260).
+        console.error(
+          "queued session successor lookup failed — staying parked",
+          {
+            session: session.id,
+            blocker: blocker.id,
+            error: err instanceof Error ? err.message : String(err),
+          }
+        );
+        continue;
       }
       if (successor) {
         await stub

@@ -1,4 +1,4 @@
-import { env } from "cloudflare:test";
+import { env, runInDurableObject } from "cloudflare:test";
 import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 
@@ -7,6 +7,7 @@ import { supportTickets, user as userTable } from "../global/schema.js";
 import { createTeam } from "../global/teams.js";
 import { createWorkspace } from "../global/workspaces.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
+import type { WorkspaceDO } from "../workspace/durable-object.js";
 import { MockAgentProvider } from "./harness.js";
 import { registerAgentProvider } from "./index.js";
 import { MAX_NUDGES_PER_HEAD_SHA, MAX_NUDGES_PER_LANE } from "./nudge.js";
@@ -1053,6 +1054,91 @@ describe("sweepAgentSessions", () => {
     await stub.updateAgentSession(head.id, {
       endedAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
     });
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+    const after = await stub.getAgentSession(dependent.id);
+    expect(after?.status).toBe("created");
+    expect(dispatches).toBe(1);
+  });
+
+  it("keeps a dependent parked when the retry-graph lookup fails (fail-closed)", async () => {
+    const agentId = `mock-fc-${crypto.randomUUID().slice(0, 8)}`;
+    let dispatches = 0;
+    registerMock(agentId, {
+      dispatch: () => {
+        dispatches += 1;
+        return { id: `fc-${dispatches}`, agentId, status: "created" };
+      },
+      poll: (id) => ({ id, agentId, status: "running" }),
+    });
+    const headIssue = await stub.createIssue({ title: "Fail-closed head" });
+    const head = await stub.createAgentSession({
+      issueId: headIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "created",
+    });
+    // Non-infra death so the shared workspace's fleet-breaker streak stays
+    // closed, and aged past the grace window — if the lookup error below
+    // were swallowed into "no retries", the dependent would promote off
+    // the corpse on this very pass.
+    await stub.applyAgentSessionResult(head.id, {
+      status: "failed",
+      result: "task reported failure",
+    });
+    await stub.updateAgentSession(head.id, {
+      endedAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+    });
+    const depIssue = await stub.createIssue({ title: "Dependent" });
+    const dependent = await stub.createAgentSession({
+      issueId: depIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "waiting",
+      queuedAfter: head.id,
+    });
+
+    // Fault-inject the retryOf read on the DO's prototype — own-property
+    // overrides aren't RPC-visible (the stub rejects them), so the patch
+    // has to land on the prototype the live instance dispatches through.
+    // A fail-open catch can't tell the error apart from an empty graph,
+    // so the dependent must stay parked rather than risk racing a live
+    // replacement it can't see.
+    let originalList: WorkspaceDO["listAgentSessions"] | undefined;
+    try {
+      await runInDurableObject(stub, (instance) => {
+        const proto = Object.getPrototypeOf(instance) as WorkspaceDO;
+        originalList = proto.listAgentSessions;
+        proto.listAgentSessions = function (this: WorkspaceDO, options = {}) {
+          if (options.retryOf) {
+            throw new Error("injected retry-graph read failure");
+          }
+          return originalList!.call(this, options);
+        };
+      });
+
+      await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+      const parked = await stub.getAgentSession(dependent.id);
+      expect(parked?.status).toBe("waiting");
+      expect(parked?.queuedAfter).toBe(head.id);
+      expect(dispatches).toBe(0);
+    } finally {
+      // Restore even on assertion failure — a leaked prototype patch would
+      // poison every later sweep pass in this shared workspace.
+      await runInDurableObject(stub, (instance) => {
+        if (originalList) {
+          (Object.getPrototypeOf(instance) as WorkspaceDO).listAgentSessions =
+            originalList;
+        }
+      });
+    }
+
+    // The failure isn't latched: with the read restored, the same pass
+    // promotes the dependent off the long-dead, retry-less blocker.
     await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
     const after = await stub.getAgentSession(dependent.id);
     expect(after?.status).toBe("created");
