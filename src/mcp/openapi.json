@@ -2669,6 +2669,22 @@
                   "branch": {
                     "type": "string",
                     "nullable": true
+                  },
+                  "prUrl": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "uri"
+                  },
+                  "prState": {
+                    "type": "string",
+                    "nullable": true,
+                    "enum": [
+                      "draft",
+                      "open",
+                      "merged",
+                      "closed",
+                      null
+                    ]
                   }
                 }
               }
@@ -2974,6 +2990,22 @@
                       "branch": {
                         "type": "string",
                         "nullable": true
+                      },
+                      "prUrl": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri"
+                      },
+                      "prState": {
+                        "type": "string",
+                        "nullable": true,
+                        "enum": [
+                          "draft",
+                          "open",
+                          "merged",
+                          "closed",
+                          null
+                        ]
                       }
                     }
                   }

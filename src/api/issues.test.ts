@@ -734,6 +734,196 @@ describe("issues API", () => {
     expect(conflict.status).toBe(409);
   });
 
+  it("sets and clears prUrl and prState via PATCH", async () => {
+    const createRes = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      {
+        method: "POST",
+        body: JSON.stringify({ title: "Link a pull request" }),
+      },
+      token
+    );
+    expect(createRes.status).toBe(201);
+    const issue = z
+      .object({
+        id: z.string(),
+        prUrl: z.string().nullable(),
+        prState: z.string().nullable(),
+      })
+      .parse(await createRes.json());
+    expect(issue.prUrl).toBeNull();
+    expect(issue.prState).toBeNull();
+
+    const patchRes = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          prUrl: "https://github.com/VortexNYC/pile/pull/316",
+          prState: "open",
+        }),
+      },
+      token
+    );
+    expect(patchRes.status).toBe(200);
+    const patched = z
+      .object({
+        prUrl: z.string().nullable(),
+        prState: z.string().nullable(),
+      })
+      .parse(await patchRes.json());
+    expect(patched).toEqual({
+      prUrl: "https://github.com/VortexNYC/pile/pull/316",
+      prState: "open",
+    });
+
+    const clearedRes = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ prUrl: null, prState: null }),
+      },
+      token
+    );
+    expect(clearedRes.status).toBe(200);
+    const cleared = z
+      .object({
+        prUrl: z.string().nullable(),
+        prState: z.string().nullable(),
+      })
+      .parse(await clearedRes.json());
+    expect(cleared).toEqual({ prUrl: null, prState: null });
+  });
+
+  it("rejects a non-URL prUrl and a non-canonical prState via PATCH", async () => {
+    const createRes = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      {
+        method: "POST",
+        body: JSON.stringify({ title: "Validate PR link fields" }),
+      },
+      token
+    );
+    expect(createRes.status).toBe(201);
+    const issue = z.object({ id: z.string() }).parse(await createRes.json());
+
+    const badUrl = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ prUrl: "not-a-url" }),
+      },
+      token
+    );
+    expect(badUrl.status).toBe(400);
+
+    const badState = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ prState: "in_review" }),
+      },
+      token
+    );
+    expect(badState.status).toBe(400);
+
+    // A URL-shaped but non-http(s) link is not a PR.
+    const badScheme = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ prUrl: "ftp://example.com/pr/1" }),
+      },
+      token
+    );
+    expect(badScheme.status).toBe(400);
+
+    // prUrl is not GitHub-locked — GitLab MR URLs are legitimate links.
+    const gitlab = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          prUrl: "https://gitlab.com/owner/repo/-/merge_requests/3",
+          prState: "open",
+        }),
+      },
+      token
+    );
+    expect(gitlab.status).toBe(200);
+  });
+
+  it("returns 409 when a PATCHed prUrl is claimed by another issue", async () => {
+    const create = async (title: string) => {
+      const res = await fetch(
+        `/workspaces/${organizationId}/issues`,
+        {
+          method: "POST",
+          body: JSON.stringify({ title }),
+        },
+        token
+      );
+      expect(res.status).toBe(201);
+      return z.object({ id: z.string() }).parse(await res.json());
+    };
+    const owner = await create("Owns the PR link");
+    const other = await create("Wants the same PR link");
+
+    const claim = await fetch(
+      `/workspaces/${organizationId}/issues/${owner.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          prUrl: "https://github.com/VortexNYC/pile/pull/999",
+        }),
+      },
+      token
+    );
+    expect(claim.status).toBe(200);
+
+    const conflict = await fetch(
+      `/workspaces/${organizationId}/issues/${other.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          prUrl: "https://github.com/VortexNYC/pile/pull/999",
+        }),
+      },
+      token
+    );
+    expect(conflict.status).toBe(409);
+  });
+
+  it("rejects a batch patch that sets prUrl on multiple issues", async () => {
+    const create = async (title: string) => {
+      const res = await fetch(
+        `/workspaces/${organizationId}/issues`,
+        {
+          method: "POST",
+          body: JSON.stringify({ title }),
+        },
+        token
+      );
+      expect(res.status).toBe(201);
+      return z.object({ id: z.string() }).parse(await res.json());
+    };
+    const first = await create("Batch first");
+    const second = await create("Batch second");
+
+    const res = await fetch(
+      `/workspaces/${organizationId}/issues/batch`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          ids: [first.id, second.id],
+          patch: { prUrl: "https://github.com/VortexNYC/pile/pull/500" },
+        }),
+      },
+      token
+    );
+    expect(res.status).toBe(400);
+  });
+
   it("rejects an invalid resolution status combination", async () => {
     const res = await fetch(
       `/workspaces/${organizationId}/issues`,

@@ -1263,6 +1263,10 @@ export interface paths {
                         labelIds?: string[] | null;
                         repo?: string | null;
                         branch?: string | null;
+                        /** Format: uri */
+                        prUrl?: string | null;
+                        /** @enum {string|null} */
+                        prState?: "draft" | "open" | "merged" | "closed" | null;
                     };
                 };
             };
@@ -1414,6 +1418,10 @@ export interface paths {
                             labelIds?: string[] | null;
                             repo?: string | null;
                             branch?: string | null;
+                            /** Format: uri */
+                            prUrl?: string | null;
+                            /** @enum {string|null} */
+                            prState?: "draft" | "open" | "merged" | "closed" | null;
                         };
                     };
                 };

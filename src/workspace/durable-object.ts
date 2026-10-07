@@ -87,6 +87,7 @@ import {
   type GitIdentity,
   type Issue,
   type IssueInput,
+  type IssuePatch,
   type IssueResolution,
   type IssueStatus,
   type ListIssuesArgs,
@@ -143,9 +144,18 @@ import {
 } from "./search.js";
 import { deliverWebhooks, retryWebhookDeliveries } from "./webhooks.js";
 
-type IssueKey = keyof Issue & keyof IssueInput;
+type IssueKey = keyof Issue & keyof IssuePatch;
 
 const TERMINAL_STATUSES: ReadonlyArray<IssueStatus> = ["done", "canceled"];
+
+/** Canonical prState → issue status mapping shared by every prState writer
+ *  (webhooks, reconcile, PATCH). */
+const PR_STATE_TO_STATUS: Record<string, Issue["status"] | undefined> = {
+  draft: "backlog",
+  open: "in_progress",
+  merged: "done",
+  closed: "canceled",
+};
 
 function isTerminalStatus(status: IssueStatus): boolean {
   return status === "done" || status === "canceled";
@@ -531,7 +541,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }
   }
 
-  private async emit(event: RealtimeEvent) {
+  async emit(event: RealtimeEvent) {
     this.emitWebSockets(event);
     this.ctx.waitUntil(this.sendWebhookEvent(event));
   }
@@ -2868,15 +2878,46 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       toValue: string | null;
     }> = [];
 
-    if (result.prUrl && result.prUrl !== issue.prUrl) {
+    // A prUrl maps to exactly one issue — a lane reporting a URL another
+    // issue already claims has its link (and its prState, which describes
+    // that same PR) dropped rather than forking webhook comment routing.
+    const claimedBy = result.prUrl
+      ? await this.getIssueByPrUrl(result.prUrl)
+      : undefined;
+    const prClaimedElsewhere =
+      claimedBy !== undefined && claimedBy.id !== issue.id;
+
+    if (result.prUrl && result.prUrl !== issue.prUrl && !prClaimedElsewhere) {
       issueSet.prUrl = result.prUrl;
       historyEntries.push({
         field: "pr_url",
         fromValue: issue.prUrl,
         toValue: result.prUrl,
       });
+      // The stored states describe the previous PR — re-pointing clears
+      // whatever the lane didn't re-report (same rule as updateIssue).
+      if (!result.prState && issue.prState !== null) {
+        issueSet.prState = null;
+        historyEntries.push({
+          field: "pr_state",
+          fromValue: issue.prState,
+          toValue: null,
+        });
+      }
+      if (issue.prCheckState !== null) {
+        issueSet.prCheckState = null;
+        historyEntries.push({
+          field: "pr_check_state",
+          fromValue: issue.prCheckState,
+          toValue: null,
+        });
+      }
     }
-    if (result.prState && result.prState !== issue.prState) {
+    if (
+      result.prState &&
+      result.prState !== issue.prState &&
+      !prClaimedElsewhere
+    ) {
       issueSet.prState = result.prState;
       historyEntries.push({
         field: "pr_state",
@@ -4201,7 +4242,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   async updateIssue(
     id: string,
-    patch: Partial<IssueInput>,
+    patch: IssuePatch,
     actorId?: string
   ): Promise<Issue | undefined> {
     await this.ready;
@@ -4236,6 +4277,19 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       }
     }
 
+    // prUrl feeds getIssueByPrUrl exact-match routing for webhook comments,
+    // so a second issue claiming the same URL would be ambiguous.
+    const newPrUrl = patch.prUrl !== undefined ? patch.prUrl : old.prUrl;
+    if (typeof newPrUrl === "string" && newPrUrl !== old.prUrl) {
+      const claimedBy = await this.getIssueByPrUrl(newPrUrl);
+      if (claimedBy && claimedBy.id !== old.id) {
+        throw VortexError.fromCode(
+          "CONFLICT",
+          `Issue ${claimedBy.identifier} already links PR ${newPrUrl}`
+        );
+      }
+    }
+
     const set: Partial<Issue> = {
       updatedAt: new Date().toISOString(),
     };
@@ -4259,6 +4313,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       { key: "labelIds", field: "label_ids" },
       { key: "repo", field: "repo" },
       { key: "branch", field: "branch" },
+      { key: "prUrl", field: "pr_url" },
+      { key: "prState", field: "pr_state" },
     ];
 
     let newParentId: string | null | undefined = undefined;
@@ -4362,6 +4418,38 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (patch.labelIds !== undefined) set.labelIds = patch.labelIds;
     if (patch.repo !== undefined) set.repo = patch.repo;
     if (patch.branch !== undefined) set.branch = patch.branch;
+    if (patch.prUrl !== undefined) set.prUrl = patch.prUrl;
+    if (patch.prState !== undefined) set.prState = patch.prState;
+
+    // Fields below are written without an explicit patch key — track them so
+    // history still records the change.
+    const implicitKeys = new Set<IssueKey>();
+
+    // Re-pointing prUrl means the stored prCheckState belongs to the old
+    // PR's head SHA — clear it. prState clears too unless the caller
+    // supplied a new one in the same patch.
+    if (patch.prUrl !== undefined && patch.prUrl !== old.prUrl) {
+      if (patch.prState === undefined) {
+        set.prState = null;
+        implicitKeys.add("prState");
+      }
+      set.prCheckState = null;
+    }
+
+    // A manual prState PATCH applies the same statusMap the webhook and
+    // reconcile writers use, so status and prState can't drift apart. An
+    // explicit status in the same PATCH wins.
+    if (patch.status === undefined && typeof set.prState === "string") {
+      const mapped = PR_STATE_TO_STATUS[set.prState];
+      if (
+        mapped !== undefined &&
+        !isTerminalStatus(old.status) &&
+        (old.status !== "triage" || isTerminalStatus(mapped))
+      ) {
+        set.status = mapped;
+        implicitKeys.add("status");
+      }
+    }
 
     if (Object.keys(set).length === 1 && "updatedAt" in set) {
       return old;
@@ -4376,7 +4464,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (!issue) return undefined;
 
     const historyEntries = allowed
-      .filter(({ key }) => key in patch)
+      .filter(({ key }) => key in patch || implicitKeys.has(key))
       .map(({ key, field }) => {
         const before = old[key];
         const after = issue[key];
@@ -4396,6 +4484,16 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         } => entry !== undefined
       );
 
+    // prCheckState isn't a patch field — the only write path is the implicit
+    // stale-pair clear above — so record its history row by hand.
+    if (old.prCheckState !== issue.prCheckState) {
+      historyEntries.push({
+        field: "pr_check_state",
+        fromValue: old.prCheckState,
+        toValue: issue.prCheckState,
+      });
+    }
+
     if (historyEntries.length > 0) {
       await this.recordIssueHistory(issue.id, historyEntries, actorId);
     }
@@ -4408,6 +4506,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       organizationId: this.organizationId,
       issue,
     });
+    if (issue.prUrl !== old.prUrl || issue.prState !== old.prState) {
+      await this.emit({
+        type: "pr.updated",
+        organizationId: this.organizationId,
+        issue,
+      });
+    }
     if (issue.isDraft || old.isDraft) {
       await this.emit({
         type: "draft.updated",
@@ -4490,16 +4595,24 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   async batchUpdateIssues(
     ids: string[],
-    patch: Partial<IssueInput>,
+    patch: IssuePatch,
     actorId?: string
   ): Promise<Issue[]> {
+    // A non-null prUrl maps to exactly one issue — reject multi-id batches
+    // up front so they can't half-apply before hitting the claim check.
+    if (ids.length > 1 && typeof patch.prUrl === "string") {
+      throw VortexError.fromCode(
+        "BAD_REQUEST",
+        "prUrl can only be set on a single issue"
+      );
+    }
     return this.batchUpdateSequentially(ids, 0, patch, actorId, []);
   }
 
   private async batchUpdateSequentially(
     ids: string[],
     index: number,
-    patch: Partial<IssueInput>,
+    patch: IssuePatch,
     actorId: string | undefined,
     acc: Issue[]
   ): Promise<Issue[]> {
@@ -4682,13 +4795,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (old.repo !== null && old.repo !== repo) return undefined;
     if (old.branch !== null && old.branch !== branch) return undefined;
 
-    const statusMap: Record<string, Issue["status"] | undefined> = {
-      draft: "backlog",
-      open: "in_progress",
-      merged: "done",
-      closed: "canceled",
-    };
-    const status = statusMap[prState];
+    const status = PR_STATE_TO_STATUS[prState];
     const set: {
       prUrl: string;
       prState: string;
@@ -4771,13 +4878,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const old = await this.getIssueByBranch(repo, branch);
     if (!old) return undefined;
 
-    const statusMap: Record<string, Issue["status"] | undefined> = {
-      draft: "backlog",
-      open: "in_progress",
-      merged: "done",
-      closed: "canceled",
-    };
-    const status = statusMap[prState];
+    const status = PR_STATE_TO_STATUS[prState];
     const set: {
       prUrl: string;
       prState: string;
@@ -4894,13 +4995,19 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const old = await this.getIssue(issueId);
     if (!old) return undefined;
 
-    const statusMap: Record<string, Issue["status"] | undefined> = {
-      draft: "backlog",
-      open: "in_progress",
-      merged: "done",
-      closed: "canceled",
-    };
-    const status = prState ? statusMap[prState] : undefined;
+    // Same uniqueness rule as updateIssue — a prUrl already claimed by
+    // another issue would fork getIssueByPrUrl webhook routing.
+    if (typeof prUrl === "string" && prUrl !== old.prUrl) {
+      const claimedBy = await this.getIssueByPrUrl(prUrl);
+      if (claimedBy && claimedBy.id !== old.id) {
+        throw VortexError.fromCode(
+          "CONFLICT",
+          `Issue ${claimedBy.identifier} already links PR ${prUrl}`
+        );
+      }
+    }
+
+    const status = prState ? PR_STATE_TO_STATUS[prState] : undefined;
     const set: {
       prUrl: string | null;
       prState: string | null;

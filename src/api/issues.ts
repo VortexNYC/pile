@@ -53,6 +53,7 @@ import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 import {
   ISSUE_PRIORITIES,
+  ISSUE_PR_STATES,
   ISSUE_RESOLUTIONS,
   ISSUE_STATUSES,
   type Issue,
@@ -258,7 +259,22 @@ const createIssueSchema = z.object({
   branch: z.string().nullable().optional(),
 }) satisfies z.ZodType<IssueInput>;
 
-const updateIssueSchema = createIssueSchema.partial();
+// prUrl/prState are PATCH-only: create seeds them to null and the GitHub
+// webhook / lane-completion paths are the usual writers. PATCH exists so a
+// human or agent can link (or unlink) a PR without a session. prUrl stays a
+// plain URL (not github.com-specific — GitLab MR URLs are valid) and prState
+// is the canonical four-value domain the webhook writers normalize into.
+const updateIssueSchema = createIssueSchema.partial().extend({
+  prUrl: z
+    .string()
+    .url()
+    .refine((u) => /^https?:\/\//.test(u), {
+      message: "prUrl must be an http(s) URL",
+    })
+    .nullable()
+    .optional(),
+  prState: z.enum(ISSUE_PR_STATES).nullable().optional(),
+});
 
 const CAPTURE_SCREENSHOT_MAX_BYTES = 8 * 1024 * 1024;
 

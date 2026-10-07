@@ -4,6 +4,7 @@
  * Pile's point of view, so it passes through these before it is persisted
  * or acted on.
  */
+import { ISSUE_PR_STATES } from "../types/workspace.js";
 import { scrubLaneText } from "./redact.js";
 
 const PR_URL_RE = /^https:\/\/github\.com\/([^/\s]+)\/([^/\s]+)\/pull\/\d+$/;
@@ -31,6 +32,14 @@ export function sanitizeLaneResult<
   if (typeof next.result === "string") next.result = scrubLaneText(next.result);
   if (repo && next.prUrl && !prUrlOnRepo(next.prUrl, repo)) {
     next.prUrl = null;
+    next.prState = null;
+  }
+  // Issue consumers assume the canonical four-state domain — a lane
+  // reporting anything else ("opened", "in_review") stores null.
+  if (
+    next.prState &&
+    !(ISSUE_PR_STATES as readonly string[]).includes(next.prState)
+  ) {
     next.prState = null;
   }
   return next;

@@ -6344,7 +6344,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdIssuesId",
-    "description": "Update issue (PATCH /workspaces/{organizationId}/issues/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: title, externalRef, teamId, teamKey, description, status, priority, resolution, parentId, subIssueSortOrder, estimate, isDraft, templateId, snoozedUntil, assigneeId, projectId, cycleId, labelIds, repo, branch.",
+    "description": "Update issue (PATCH /workspaces/{organizationId}/issues/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: title, externalRef, teamId, teamKey, description, status, priority, resolution, parentId, subIssueSortOrder, estimate, isDraft, templateId, snoozedUntil, assigneeId, projectId, cycleId, labelIds, repo, branch, prUrl, prState.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/issues/{id}",
     "inputSchema": {
@@ -6461,6 +6461,22 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "branch": {
               "type": "string",
               "nullable": true
+            },
+            "prUrl": {
+              "type": "string",
+              "nullable": true,
+              "format": "uri"
+            },
+            "prState": {
+              "type": "string",
+              "nullable": true,
+              "enum": [
+                "draft",
+                "open",
+                "merged",
+                "closed",
+                null
+              ]
             }
           }
         }
@@ -11363,6 +11379,22 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "branch": {
                   "type": "string",
                   "nullable": true
+                },
+                "prUrl": {
+                  "type": "string",
+                  "nullable": true,
+                  "format": "uri"
+                },
+                "prState": {
+                  "type": "string",
+                  "nullable": true,
+                  "enum": [
+                    "draft",
+                    "open",
+                    "merged",
+                    "closed",
+                    null
+                  ]
                 }
               }
             }
