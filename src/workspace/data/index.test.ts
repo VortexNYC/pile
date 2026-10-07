@@ -8,8 +8,14 @@ import { workspaceSchema } from "../schema-map.js";
 import {
   type AgentSessionInput,
   createAgentSession,
+  createCustomer,
+  createEntityAttachment,
+  deleteCustomer,
+  deleteEntityAttachment,
   getAgentSession,
+  getEntityAttachment,
   getNotificationPreferences,
+  listEntityAttachments,
   reanchorQueuedDependents,
   updateAgentSession,
   upsertNotificationPreferences,
@@ -165,6 +171,106 @@ describe("notification preferences", () => {
       const updated = getNotificationPreferences(db, WORKSPACE_ID, "nobody");
       expect(updated?.email).toBe(true);
       expect(updated?.mutedTypes).toBe("issue_updated");
+    });
+  });
+});
+
+describe("entity attachment data", () => {
+  it("creates, lists, gets, and deletes rows within an entity scope", async () => {
+    await withDb(async (db) => {
+      const customer = await createCustomer(db, {
+        organizationId: WORKSPACE_ID,
+        name: "Attachment subject",
+      });
+      const row = await createEntityAttachment(db, WORKSPACE_ID, {
+        entityType: "customer",
+        entityId: customer.id,
+        fileName: "statement.pdf",
+        contentType: "application/pdf",
+        size: 42,
+        r2Key: `attachments/${WORKSPACE_ID}/customer/${customer.id}/a1`,
+        createdById: "user-1",
+      });
+      expect(row.organizationId).toBe(WORKSPACE_ID);
+      expect(row.entityType).toBe("customer");
+      expect(row.createdById).toBe("user-1");
+
+      expect(
+        await listEntityAttachments(db, WORKSPACE_ID, "customer", customer.id)
+      ).toHaveLength(1);
+      // The scope is (organizationId, entityType, entityId): a different
+      // entity type or org on the same entity id sees nothing.
+      expect(
+        await listEntityAttachments(db, WORKSPACE_ID, "issue", customer.id)
+      ).toHaveLength(0);
+      expect(
+        await listEntityAttachments(db, "other-org", "customer", customer.id)
+      ).toHaveLength(0);
+
+      expect((await getEntityAttachment(db, WORKSPACE_ID, row.id))?.r2Key).toBe(
+        row.r2Key
+      );
+      expect(
+        await getEntityAttachment(db, "other-org", row.id)
+      ).toBeUndefined();
+
+      const removed = await deleteEntityAttachment(db, WORKSPACE_ID, row.id);
+      expect(removed?.id).toBe(row.id);
+      expect(
+        await deleteEntityAttachment(db, WORKSPACE_ID, row.id)
+      ).toBeUndefined();
+    });
+  });
+
+  it("cascades only customer-scoped rows when the customer is deleted", async () => {
+    await withDb(async (db) => {
+      const doomed = await createCustomer(db, {
+        organizationId: WORKSPACE_ID,
+        name: "Doomed",
+      });
+      const kept = await createCustomer(db, {
+        organizationId: WORKSPACE_ID,
+        name: "Kept",
+      });
+      const onDoomed = await createEntityAttachment(db, WORKSPACE_ID, {
+        entityType: "customer",
+        entityId: doomed.id,
+        fileName: "a.pdf",
+        contentType: "application/pdf",
+        size: 1,
+        r2Key: `attachments/${WORKSPACE_ID}/customer/${doomed.id}/a`,
+      });
+      // Same entity id under a different type, and another customer's row,
+      // must survive the cascade.
+      const sameIdOtherType = await createEntityAttachment(db, WORKSPACE_ID, {
+        entityType: "issue",
+        entityId: doomed.id,
+        fileName: "b.pdf",
+        contentType: "application/pdf",
+        size: 1,
+        r2Key: `attachments/${WORKSPACE_ID}/issue/${doomed.id}/b`,
+      });
+      const onKept = await createEntityAttachment(db, WORKSPACE_ID, {
+        entityType: "customer",
+        entityId: kept.id,
+        fileName: "c.pdf",
+        contentType: "application/pdf",
+        size: 1,
+        r2Key: `attachments/${WORKSPACE_ID}/customer/${kept.id}/c`,
+      });
+
+      const deleted = await deleteCustomer(db, WORKSPACE_ID, doomed.id);
+      expect(deleted).toBe(true);
+
+      expect(
+        await getEntityAttachment(db, WORKSPACE_ID, onDoomed.id)
+      ).toBeUndefined();
+      expect(
+        (await getEntityAttachment(db, WORKSPACE_ID, sameIdOtherType.id))?.id
+      ).toBe(sameIdOtherType.id);
+      expect((await getEntityAttachment(db, WORKSPACE_ID, onKept.id))?.id).toBe(
+        onKept.id
+      );
     });
   });
 });

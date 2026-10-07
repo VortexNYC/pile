@@ -1,7 +1,10 @@
 import { getTableConfig } from "drizzle-orm/sqlite-core";
 import { describe, expect, it } from "vitest";
 
-import { workspaceAgentSessions } from "./schema.js";
+import {
+  workspaceAgentSessions,
+  workspaceEntityAttachments,
+} from "./schema.js";
 
 describe("workspaceAgentSessions schema", () => {
   it("keeps queuedAfter as a nullable edge column", () => {
@@ -21,5 +24,44 @@ describe("workspaceAgentSessions schema", () => {
     const config = getTableConfig(workspaceAgentSessions);
     const infra = config.columns.find((c) => c.name === "infra_failure");
     expect(infra?.hasDefault).toBe(true);
+  });
+});
+
+describe("workspaceEntityAttachments schema", () => {
+  it("scopes rows to an org + entity pair and keeps the R2 key", () => {
+    const config = getTableConfig(workspaceEntityAttachments);
+    expect(config.name).toBe("entity_attachments");
+    const names = config.columns.map((c) => c.name);
+    for (const col of [
+      "id",
+      "organization_id",
+      "entity_type",
+      "entity_id",
+      "file_name",
+      "content_type",
+      "size",
+      "r2_key",
+      "created_by_id",
+      "created_at",
+    ]) {
+      expect(names).toContain(col);
+    }
+    expect(workspaceEntityAttachments.organizationId.notNull).toBe(true);
+    expect(workspaceEntityAttachments.entityType.notNull).toBe(true);
+    expect(workspaceEntityAttachments.entityId.notNull).toBe(true);
+    expect(workspaceEntityAttachments.r2Key.notNull).toBe(true);
+    expect(workspaceEntityAttachments.createdById.notNull).toBe(false);
+  });
+
+  it("indexes the (org, entity type, entity id) lookup used by list/delete", () => {
+    const config = getTableConfig(workspaceEntityAttachments);
+    const idx = config.indexes.find(
+      (i) => i.config.name === "entity_attachments_entity_idx"
+    );
+    expect(idx).toBeDefined();
+    const columns = idx?.config.columns.map((c) =>
+      "name" in c ? c.name : String(c)
+    );
+    expect(columns).toEqual(["organization_id", "entity_type", "entity_id"]);
   });
 });
