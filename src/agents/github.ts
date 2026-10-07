@@ -33,7 +33,7 @@ import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import type { Issue } from "../types/workspace.js";
 import { loadProviderConfig } from "./credentials.js";
 import { resolveAgentEnv } from "./daytona.js";
-import { dispatchAgent } from "./index.js";
+import { dispatchAgent, inheritTeamDefaultRepo } from "./index.js";
 import {
   buildMentionPrompt,
   isTrustedAssociation,
@@ -609,6 +609,7 @@ async function processIssueComment(
       await routePileMention(env, db, stub, organizationId, pileIssue, {
         targetUrl: issue.html_url ?? comment.html_url,
         isPullRequest: false,
+        repo,
         comment,
       });
     }
@@ -760,6 +761,7 @@ async function routePrMention(
   await routePileMention(env, db, stub, organizationId, pileIssue, {
     targetUrl: prUrl,
     isPullRequest: true,
+    repo: repository.full_name,
     comment,
   });
 }
@@ -777,6 +779,8 @@ async function routePileMention(
   ctx: {
     targetUrl: string;
     isPullRequest: boolean;
+    /** Repo the comment was posted in (`repository.full_name`). */
+    repo?: string;
     comment: IssueCommentPayload["comment"];
   }
 ): Promise<void> {
@@ -799,6 +803,33 @@ async function routePileMention(
   }
 
   try {
+    // PILE-321 — the mention happened in ctx.repo, so a repo-less issue
+    // adopts it (persisted, like the dispatch-time team-defaultRepo
+    // inheritance) and the lane clones the repo the commenter was looking
+    // at instead of returning a spec. Team defaultRepo covers the
+    // repo-less event case.
+    const actorId = linked?.userId ?? `github:${author}`;
+    if (!issue.repo && ctx.repo) {
+      const persisted = await stub
+        .updateIssue(issue.id, { repo: ctx.repo }, actorId)
+        .catch((err: unknown) => {
+          console.warn("@pile mention could not persist the webhook repo", {
+            issueId: issue.id,
+            repo: ctx.repo,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          return undefined;
+        });
+      issue = persisted ?? { ...issue, repo: ctx.repo };
+    }
+    issue = await inheritTeamDefaultRepo(
+      db,
+      stub,
+      organizationId,
+      issue,
+      actorId
+    );
+
     const thread = (await stub.listComments(issue.id))
       .filter((c) => c.externalId !== comment.id.toString())
       .toSorted((a, b) => a.createdAt.localeCompare(b.createdAt))

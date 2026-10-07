@@ -2716,6 +2716,40 @@ describe("agent sessions API", () => {
       expect(await issueRepo(issue.id)).toBe(teamRepo);
     });
 
+    it("prefers an explicit dispatch repo over the team defaultRepo", async () => {
+      const agentId = `mock-override-${crypto.randomUUID().slice(0, 8)}`;
+      let seenRepo: string | null | undefined;
+      registerAgentProvider(
+        agentId,
+        () =>
+          new MockAgentProvider(agentId, {
+            dispatch: (_org, dispatchedIssue) => {
+              seenRepo = dispatchedIssue.repo;
+              return {
+                id: `override-${crypto.randomUUID()}`,
+                agentId,
+                issueId: dispatchedIssue.id,
+                status: "created" as const,
+              };
+            },
+          })
+      );
+      const issue = await createRepolessIssue("Explicit repo wins");
+
+      const dispatchRes = await app.fetch(
+        request(`/workspaces/${repoOrg}/issues/${issue.id}/dispatch`, {
+          method: "POST",
+          token: repoToken,
+          body: JSON.stringify({ agentId, repo: "VortexNYC/override" }),
+        }),
+        env
+      );
+      expect(dispatchRes.status).toBe(201);
+      expect(seenRepo).toBe("VortexNYC/override");
+      // The override is per-dispatch — the stored issue stays repo-less.
+      expect(await issueRepo(issue.id)).toBeNull();
+    });
+
     it("stays repo-less when dispatch passes repo: null explicitly", async () => {
       const agentId = `mock-norepo-${crypto.randomUUID().slice(0, 8)}`;
       let seenRepo: string | null | undefined;
@@ -2767,6 +2801,51 @@ describe("agent sessions API", () => {
       }>();
       expect(body.results[0].sessionId).toBeTruthy();
       expect(body.results[0].error).toBeNull();
+      expect(await issueRepo(issue.id)).toBe(teamRepo);
+    });
+
+    it("retry inherits the team's defaultRepo for a pre-repo lane", async () => {
+      const agentId = `mock-retry-${crypto.randomUUID().slice(0, 8)}`;
+      let seenRepo: string | null | undefined;
+      registerAgentProvider(
+        agentId,
+        () =>
+          new MockAgentProvider(agentId, {
+            dispatch: (_org, dispatchedIssue) => {
+              seenRepo = dispatchedIssue.repo;
+              return {
+                id: `retry-${crypto.randomUUID()}`,
+                agentId,
+                issueId: dispatchedIssue.id,
+                status: "created" as const,
+              };
+            },
+          })
+      );
+      const issue = await createRepolessIssue("Retry inherits the default");
+      const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+        env.WORKSPACE_DURABLE_OBJECT.idFromName(repoOrg)
+      );
+      const session = await stub.createAgentSession({
+        issueId: issue.id,
+        agentId,
+        provider: agentId,
+        actorId: "user-1",
+        actorType: "user",
+        status: "completed",
+        result: "spec-only run",
+      });
+
+      const retryRes = await app.fetch(
+        request(`/workspaces/${repoOrg}/agent/sessions/${session.id}/retry`, {
+          method: "POST",
+          token: repoToken,
+          body: JSON.stringify({ context: "try again with the repo" }),
+        }),
+        env
+      );
+      expect(retryRes.status).toBe(201);
+      expect(seenRepo).toBe(teamRepo);
       expect(await issueRepo(issue.id)).toBe(teamRepo);
     });
   });

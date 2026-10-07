@@ -18,6 +18,7 @@ import { getCustomerById } from "../global/support-contacts.js";
 import { replyLaneResultToTicket } from "../global/support-escalation.js";
 import { maybeEscalate } from "../global/support-escalation.js";
 import { createTicket, getTicketById } from "../global/support-tickets.js";
+import { createTeam } from "../global/teams.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
@@ -326,6 +327,77 @@ describe("support-escalation API", () => {
     });
     expect(sessions.length).toBeGreaterThanOrEqual(1);
     expect(sessions[0]?.agentId).toBe(agentId);
+    void db;
+  });
+
+  // PILE-321 — a rule that binds a team but names no repo still produces a
+  // repo-backed lane via the team's defaultRepo.
+  it("applies the team's defaultRepo when the rule action sets only a teamId", async () => {
+    const db = createD1(env.D1);
+    const team = await createTeam(db, env, new Headers(), {
+      organizationId,
+      key: `ED${crypto.randomUUID().replace(/-/g, "").slice(0, 4).toUpperCase()}`,
+      name: "Escalation default",
+      ownerId: "user-1",
+      defaultRepo: "VortexNYC/esc-default",
+    });
+    const agentId = `mock-esc-${crypto.randomUUID().slice(0, 8)}`;
+    let seenRepo: string | null | undefined;
+    registerAgentProvider(
+      agentId,
+      () =>
+        new MockAgentProvider(agentId, {
+          dispatch: (_org, dispatchedIssue) => {
+            seenRepo = dispatchedIssue.repo;
+            return {
+              id: `esc-${crypto.randomUUID()}`,
+              agentId,
+              issueId: dispatchedIssue.id,
+              status: "created" as const,
+            };
+          },
+        })
+    );
+    const ruleRes = await fetch(
+      `/workspaces/${organizationId}/support/escalation-rules`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "escalate via team default",
+          conditions: { keywords: ["panic"], channels: ["api"] },
+          action: { type: "create_issue", agentId, teamId: team.id },
+        }),
+      }
+    );
+    expect(ruleRes.status).toBe(201);
+
+    const customerId = await createCustomer("defaulted@example.com");
+    const ticketRes = await fetch(
+      `/workspaces/${organizationId}/support/tickets`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          customerId,
+          title: "panic on checkout",
+          sourceChannel: "api",
+          message: { textContent: "panic", channel: "api" },
+        }),
+      }
+    );
+    const ticketBody = (await ticketRes.json()) as {
+      ticket: { issueId: string | null };
+    };
+    expect(ticketBody.ticket.issueId).toBeTruthy();
+
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const issue = await stub.getIssue(ticketBody.ticket.issueId!);
+    expect(issue?.repo).toBe("VortexNYC/esc-default");
+    const sessions = await stub.listAgentSessions({ issueId: issue!.id });
+    expect(sessions[0]?.agentId).toBe(agentId);
+    expect(seenRepo).toBe("VortexNYC/esc-default");
     void db;
   });
 

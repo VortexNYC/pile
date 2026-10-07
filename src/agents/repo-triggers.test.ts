@@ -7,7 +7,7 @@ import {
   parsePileRepoConfig,
 } from "../global/pile-repo-config.js";
 import { githubInstallations, user as userTable } from "../global/schema.js";
-import { createDefaultTeam } from "../global/teams.js";
+import { createDefaultTeam, createTeam } from "../global/teams.js";
 import { createWorkspace } from "../global/workspaces.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
@@ -131,6 +131,7 @@ describe("repo trigger config (PILE-275)", () => {
 describe("fireRepoTriggers (PILE-275)", () => {
   const dispatched: Array<{
     issueId: string;
+    repo?: string | null;
     model?: string;
     instructions?: string;
   }> = [];
@@ -144,6 +145,7 @@ describe("fireRepoTriggers (PILE-275)", () => {
           dispatch: (_org, issue, model, context) => {
             dispatched.push({
               issueId: issue.id,
+              repo: issue.repo,
               model,
               instructions: context?.instructions,
             });
@@ -213,6 +215,46 @@ describe("fireRepoTriggers (PILE-275)", () => {
     expect(dispatched.length).toBe(before + 1);
   });
 
+  // PILE-321 — a trigger fires because a repo's config matched, so a
+  // repo-less issue adopts that repo (persisted) instead of producing a
+  // spec-only lane.
+  it("adopts the event repo on a repo-less issue", async () => {
+    const issue = await stub().createIssue({ title: "Repo-less trigger" });
+    const before = dispatched.length;
+    const fired = await fireRepoTriggers(
+      env as unknown as WorkerEnv,
+      stub(),
+      ORG,
+      "pr.opened",
+      automationEventTarget(async () => issue, REPO),
+      { loadConfig: async () => CONFIG }
+    );
+    expect(fired).toBe(1);
+    expect(dispatched.length).toBe(before + 1);
+    expect(dispatched.at(-1)?.repo).toBe(REPO);
+    expect((await stub().getIssue(issue.id))?.repo).toBe(REPO);
+  });
+
+  it("does not overwrite an issue repo that differs from the event repo", async () => {
+    const issue = await stub().createIssue({
+      title: "Own repo wins",
+      repo: "VortexNYC/other-repo",
+    });
+    const fired = await fireRepoTriggers(
+      env as unknown as WorkerEnv,
+      stub(),
+      ORG,
+      "pr.opened",
+      automationEventTarget(async () => issue, REPO),
+      { loadConfig: async () => CONFIG }
+    );
+    expect(fired).toBe(1);
+    expect(dispatched.at(-1)?.repo).toBe("VortexNYC/other-repo");
+    expect((await stub().getIssue(issue.id))?.repo).toBe(
+      "VortexNYC/other-repo"
+    );
+  });
+
   it("never resolves the issue when no trigger matches", async () => {
     let resolved = false;
     const fired = await fireRepoTriggers(
@@ -228,6 +270,45 @@ describe("fireRepoTriggers (PILE-275)", () => {
     );
     expect(fired).toBe(0);
     expect(resolved).toBe(false);
+  });
+
+  // PILE-321 — event automations without a bound issue create one with
+  // only the automation's teamId; dispatch inherits that team's
+  // defaultRepo so the lane doesn't come back spec-only.
+  it("automation-created issues inherit the team's defaultRepo", async () => {
+    const db = createD1(env.D1);
+    const team = await createTeam(db, env, new Headers(), {
+      organizationId: ORG,
+      key: "ADT",
+      name: "Automation default",
+      ownerId: "trigger-user",
+      defaultRepo: "VortexNYC/auto-default",
+    });
+    await stub().createAgentAutomation({
+      name: "defaulted automation",
+      prompt: "do the thing",
+      agentId: "trigger-mock",
+      teamId: team.id,
+      triggerKind: "event",
+      triggerValue: "pile.test.event",
+    });
+    const before = dispatched.length;
+    await fireEventAutomations(
+      env as unknown as WorkerEnv,
+      stub(),
+      ORG,
+      "pile.test.event",
+      automationEventTarget(async () => null, null),
+      undefined,
+      undefined,
+      undefined,
+      { skipRepoTriggers: true }
+    );
+    expect(dispatched.length).toBe(before + 1);
+    const lane = dispatched.at(-1);
+    expect(lane?.repo).toBe("VortexNYC/auto-default");
+    const created = await stub().getIssue(lane!.issueId);
+    expect(created?.repo).toBe("VortexNYC/auto-default");
   });
 
   it("does not materialize a per-PR issue when the repo declares no triggers", async () => {

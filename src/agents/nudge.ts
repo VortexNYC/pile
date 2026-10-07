@@ -1,3 +1,4 @@
+import { createD1 } from "../global/db.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { AgentSession, Issue } from "../types/workspace.js";
@@ -5,7 +6,11 @@ import type { WorkspaceDO } from "../workspace/durable-object.js";
 import { loadProviderConfig } from "./credentials.js";
 import { resolveAgentEnv } from "./daytona.js";
 import { followupThrottleWindowMs, laneFollowupThrottled } from "./followup.js";
-import { dispatchAgent, getAgentProvider } from "./index.js";
+import {
+  dispatchAgent,
+  getAgentProvider,
+  inheritTeamDefaultRepo,
+} from "./index.js";
 
 const DELIVERED_TYPES = new Set(["prompt.followup", "prompt.redispatch"]);
 
@@ -404,11 +409,20 @@ async function redispatchCompletedLane(
   };
   try {
     const providerConfig = await loadProviderConfig(env, stub, session.agentId);
+    // PILE-321 — a cold redispatch is a fresh dispatch: a repo-less issue
+    // inherits the team's defaultRepo, same as the retry endpoint.
+    const target = await inheritTeamDefaultRepo(
+      createD1(env.D1),
+      stub,
+      organizationId,
+      issue,
+      session.actorId
+    );
     const dispatched = await dispatchAgent(
       resolveAgentEnv(env, providerConfig ?? undefined),
       session.agentId,
       organizationId,
-      issue,
+      target,
       {
         id: session.actorId,
         organizationId,
