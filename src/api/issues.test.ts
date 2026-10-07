@@ -826,6 +826,17 @@ describe("issues API", () => {
     );
     expect(badState.status).toBe(400);
 
+    // A URL-shaped but non-http(s) link is not a PR.
+    const badScheme = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ prUrl: "ftp://example.com/pr/1" }),
+      },
+      token
+    );
+    expect(badScheme.status).toBe(400);
+
     // prUrl is not GitHub-locked — GitLab MR URLs are legitimate links.
     const gitlab = await fetch(
       `/workspaces/${organizationId}/issues/${issue.id}`,
@@ -880,6 +891,36 @@ describe("issues API", () => {
       token
     );
     expect(conflict.status).toBe(409);
+  });
+
+  it("rejects a batch patch that sets prUrl on multiple issues", async () => {
+    const create = async (title: string) => {
+      const res = await fetch(
+        `/workspaces/${organizationId}/issues`,
+        {
+          method: "POST",
+          body: JSON.stringify({ title }),
+        },
+        token
+      );
+      expect(res.status).toBe(201);
+      return z.object({ id: z.string() }).parse(await res.json());
+    };
+    const first = await create("Batch first");
+    const second = await create("Batch second");
+
+    const res = await fetch(
+      `/workspaces/${organizationId}/issues/batch`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          ids: [first.id, second.id],
+          patch: { prUrl: "https://github.com/VortexNYC/pile/pull/500" },
+        }),
+      },
+      token
+    );
+    expect(res.status).toBe(400);
   });
 
   it("rejects an invalid resolution status combination", async () => {

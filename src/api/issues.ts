@@ -261,7 +261,14 @@ const createIssueSchema = z.object({
 // plain URL (not github.com-specific — GitLab MR URLs are valid) and prState
 // is the canonical four-value domain the webhook writers normalize into.
 const updateIssueSchema = createIssueSchema.partial().extend({
-  prUrl: z.string().url().nullable().optional(),
+  prUrl: z
+    .string()
+    .url()
+    .refine((u) => /^https?:\/\//.test(u), {
+      message: "prUrl must be an http(s) URL",
+    })
+    .nullable()
+    .optional(),
   prState: z.enum(ISSUE_PR_STATES).nullable().optional(),
 });
 

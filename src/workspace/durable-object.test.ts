@@ -370,7 +370,7 @@ describe("WorkspaceDO", () => {
     await withWorkspace(stub, (instance) =>
       instance.reconcileIssuePr(
         created.id,
-        "https://github.com/owner/repo/pull/1",
+        "https://github.com/owner/repo/pull/801",
         "closed",
         "success"
       )
@@ -379,11 +379,11 @@ describe("WorkspaceDO", () => {
     const repointed = await withWorkspace(stub, (instance) =>
       instance.updateIssue(
         created.id,
-        { prUrl: "https://github.com/owner/repo/pull/2" },
+        { prUrl: "https://github.com/owner/repo/pull/802" },
         "user-1"
       )
     );
-    expect(repointed?.prUrl).toBe("https://github.com/owner/repo/pull/2");
+    expect(repointed?.prUrl).toBe("https://github.com/owner/repo/pull/802");
     expect(repointed?.prState).toBeNull();
     expect(repointed?.prCheckState).toBeNull();
 
@@ -529,6 +529,149 @@ describe("WorkspaceDO", () => {
     });
     expect(renamedEvents).toContain("issue.updated");
     expect(renamedEvents).not.toContain("pr.updated");
+  });
+
+  it("rejects a multi-issue batch patch that sets prUrl", async () => {
+    const stub = getStub();
+    const first = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Batch first" })
+    );
+    const second = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Batch second" })
+    );
+
+    await expect(
+      withWorkspace(stub, (instance) =>
+        instance.batchUpdateIssues(
+          [first.id, second.id],
+          { prUrl: "https://github.com/owner/repo/pull/50" },
+          "user-1"
+        )
+      )
+    ).rejects.toThrow(/Invalid request/);
+
+    // The batch is refused before any write — no partial application.
+    const after = await withWorkspace(stub, (instance) =>
+      instance.getIssue(first.id)
+    );
+    expect(after?.prUrl).toBeNull();
+  });
+
+  it("rejects reconcileIssuePr for a prUrl claimed by another issue", async () => {
+    const stub = getStub();
+    const owner = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Reconcile owner" })
+    );
+    const claimant = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Reconcile claimant" })
+    );
+    await withWorkspace(stub, (instance) =>
+      instance.reconcileIssuePr(
+        owner.id,
+        "https://github.com/owner/repo/pull/60",
+        "open",
+        null
+      )
+    );
+
+    await expect(
+      withWorkspace(stub, (instance) =>
+        instance.reconcileIssuePr(
+          claimant.id,
+          "https://github.com/owner/repo/pull/60",
+          "open",
+          null
+        )
+      )
+    ).rejects.toThrow(/Conflict/);
+  });
+
+  it("drops a lane-reported prUrl claimed by another issue", async () => {
+    const stub = getStub();
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Lane issue" })
+    );
+    const other = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Holds the link" })
+    );
+    await withWorkspace(stub, (instance) =>
+      instance.updateIssue(
+        other.id,
+        { prUrl: "https://github.com/owner/repo/pull/70" },
+        "user-1"
+      )
+    );
+    const session = await withWorkspace(stub, (instance) =>
+      instance.createAgentSession({
+        issueId: issue.id,
+        agentId: "mock",
+        provider: "mock",
+        actorId: "user-1",
+        actorType: "user",
+        status: "running",
+      })
+    );
+
+    await withWorkspace(stub, (instance) =>
+      instance.applyAgentSessionResult(
+        session.id,
+        {
+          status: "running",
+          prUrl: "https://github.com/owner/repo/pull/70",
+          prState: "open",
+        },
+        "user-1"
+      )
+    );
+
+    const after = await withWorkspace(stub, (instance) =>
+      instance.getIssue(issue.id)
+    );
+    expect(after?.prUrl).toBeNull();
+    expect(after?.prState).toBeNull();
+  });
+
+  it("clears stale pr state when a lane result re-points the issue prUrl", async () => {
+    const stub = getStub();
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Lane re-point issue" })
+    );
+    await withWorkspace(stub, (instance) =>
+      instance.reconcileIssuePr(
+        issue.id,
+        "https://github.com/owner/repo/pull/80",
+        "open",
+        "success"
+      )
+    );
+    const session = await withWorkspace(stub, (instance) =>
+      instance.createAgentSession({
+        issueId: issue.id,
+        agentId: "mock",
+        provider: "mock",
+        actorId: "user-1",
+        actorType: "user",
+        status: "running",
+      })
+    );
+
+    await withWorkspace(stub, (instance) =>
+      instance.applyAgentSessionResult(
+        session.id,
+        {
+          status: "running",
+          prUrl: "https://github.com/owner/repo/pull/81",
+        },
+        "user-1"
+      )
+    );
+
+    const after = await withWorkspace(stub, (instance) =>
+      instance.getIssue(issue.id)
+    );
+    expect(after?.prUrl).toBe("https://github.com/owner/repo/pull/81");
+    expect(after?.prState).toBeNull();
+    expect(after?.prCheckState).toBeNull();
   });
 
   it("rejects two issues with the same repo and branch", async () => {

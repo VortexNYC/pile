@@ -2878,15 +2878,46 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       toValue: string | null;
     }> = [];
 
-    if (result.prUrl && result.prUrl !== issue.prUrl) {
+    // A prUrl maps to exactly one issue — a lane reporting a URL another
+    // issue already claims has its link (and its prState, which describes
+    // that same PR) dropped rather than forking webhook comment routing.
+    const claimedBy = result.prUrl
+      ? await this.getIssueByPrUrl(result.prUrl)
+      : undefined;
+    const prClaimedElsewhere =
+      claimedBy !== undefined && claimedBy.id !== issue.id;
+
+    if (result.prUrl && result.prUrl !== issue.prUrl && !prClaimedElsewhere) {
       issueSet.prUrl = result.prUrl;
       historyEntries.push({
         field: "pr_url",
         fromValue: issue.prUrl,
         toValue: result.prUrl,
       });
+      // The stored states describe the previous PR — re-pointing clears
+      // whatever the lane didn't re-report (same rule as updateIssue).
+      if (!result.prState && issue.prState !== null) {
+        issueSet.prState = null;
+        historyEntries.push({
+          field: "pr_state",
+          fromValue: issue.prState,
+          toValue: null,
+        });
+      }
+      if (issue.prCheckState !== null) {
+        issueSet.prCheckState = null;
+        historyEntries.push({
+          field: "pr_check_state",
+          fromValue: issue.prCheckState,
+          toValue: null,
+        });
+      }
     }
-    if (result.prState && result.prState !== issue.prState) {
+    if (
+      result.prState &&
+      result.prState !== issue.prState &&
+      !prClaimedElsewhere
+    ) {
       issueSet.prState = result.prState;
       historyEntries.push({
         field: "pr_state",
@@ -4567,6 +4598,14 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     patch: IssuePatch,
     actorId?: string
   ): Promise<Issue[]> {
+    // A non-null prUrl maps to exactly one issue — reject multi-id batches
+    // up front so they can't half-apply before hitting the claim check.
+    if (ids.length > 1 && typeof patch.prUrl === "string") {
+      throw VortexError.fromCode(
+        "BAD_REQUEST",
+        "prUrl can only be set on a single issue"
+      );
+    }
     return this.batchUpdateSequentially(ids, 0, patch, actorId, []);
   }
 
@@ -4955,6 +4994,18 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     await this.ready;
     const old = await this.getIssue(issueId);
     if (!old) return undefined;
+
+    // Same uniqueness rule as updateIssue — a prUrl already claimed by
+    // another issue would fork getIssueByPrUrl webhook routing.
+    if (typeof prUrl === "string" && prUrl !== old.prUrl) {
+      const claimedBy = await this.getIssueByPrUrl(prUrl);
+      if (claimedBy && claimedBy.id !== old.id) {
+        throw VortexError.fromCode(
+          "CONFLICT",
+          `Issue ${claimedBy.identifier} already links PR ${prUrl}`
+        );
+      }
+    }
 
     const status = prState ? PR_STATE_TO_STATUS[prState] : undefined;
     const set: {
