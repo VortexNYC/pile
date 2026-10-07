@@ -58,11 +58,16 @@ export function tuiUnavailableError(command: string, error: unknown): Error {
   const message = errorMessage(error);
   // `bun build --compile` leaves an unresolvable dynamic import in the bundle
   // instead of failing the build, so a binary produced without @opentui
-  // resolvable (e.g. pruned optional deps) only blows up here. Name that
-  // build failure instead of blaming the terminal.
-  if (/cannot find (?:module|package)[^\n]*@opentui\//iu.test(message)) {
+  // resolvable (e.g. pruned optional deps) only blows up here. The second
+  // pattern is upstream zig.ts's wrapper for a failed dlopen of libopentui —
+  // a binary that bundled the JS but not the .so. Name the build failure
+  // instead of blaming the terminal.
+  if (
+    /cannot find (?:module|package)[^\n]*@opentui\//iu.test(message) ||
+    /Failed to initialize OpenTUI render library/iu.test(message)
+  ) {
     return new Error(
-      `${command}: this pile build does not include OpenTUI — @opentui/core was not resolvable at build/install time. Rebuild with dependencies installed or use a released binary.`,
+      `${command}: this pile build does not include OpenTUI — @opentui/core or its native library was not resolvable at build/install time. Rebuild with dependencies installed or use a released binary.`,
       { cause: error }
     );
   }

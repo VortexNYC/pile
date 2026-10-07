@@ -13,7 +13,7 @@ import { fleetCommand, type FleetDeps } from "./fleet.js";
 import { homeCommand } from "./home.js";
 import { inboxCommand, type InboxDeps } from "./inbox.js";
 import { supportCommand, type InboxDeps as SupportDeps } from "./support.js";
-import { checkTuiSupport, errorMessage } from "./tui.js";
+import { checkTuiSupport, tuiUnavailableError } from "./tui.js";
 
 type Json =
   | null
@@ -1234,7 +1234,7 @@ async function tuiCheckCommand(deps: CliDeps = {}): Promise<number> {
   try {
     await probe();
   } catch (error) {
-    console.error(`tui-check: OpenTUI failed to load: ${errorMessage(error)}`);
+    console.error(tuiUnavailableError("tui-check", error).message);
     return 1;
   }
   console.log(JSON.stringify({ ok: true, tui: "opentui" }, null, 2));

@@ -1022,6 +1022,9 @@ describe("CLI integration", () => {
 
     expect(exitCode).toBe(1);
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("tui-check"));
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("does not include OpenTUI")
+    );
     errorSpy.mockRestore();
   });
 

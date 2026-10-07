@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { checkTuiSupport, tuiUnavailableError } from "./tui.js";
 
@@ -11,6 +11,10 @@ vi.mock("@opentui/core", () => ({
   createCliRenderer,
   resolveRenderLib,
 }));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 describe("checkTuiSupport", () => {
   it("probes the native library without terminal setup", async () => {
@@ -50,6 +54,17 @@ describe("tuiUnavailableError", () => {
         "Cannot find package '@opentui/core-linux-x64' imported from /x/tui.js"
       )
     );
+    expect(error.message).toContain("does not include OpenTUI");
+  });
+
+  it("names a missing embedded native library as a broken build", () => {
+    const error = tuiUnavailableError(
+      "pile fleet",
+      new Error(
+        "Failed to initialize OpenTUI render library: missing libopentui.so"
+      )
+    );
+    expect(error.message).toContain("pile fleet");
     expect(error.message).toContain("does not include OpenTUI");
   });
 
