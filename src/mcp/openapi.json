@@ -15324,6 +15324,10 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "customerId": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "enabled": {
                             "type": "boolean"
                           },
@@ -15340,6 +15344,7 @@
                           "address",
                           "teamId",
                           "projectId",
+                          "customerId",
                           "enabled",
                           "createdAt",
                           "updatedAt"
@@ -15387,6 +15392,9 @@
                   "projectId": {
                     "type": "string"
                   },
+                  "customerId": {
+                    "type": "string"
+                  },
                   "enabled": {
                     "type": "boolean",
                     "default": true
@@ -15424,6 +15432,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "customerId": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "enabled": {
                       "type": "boolean"
                     },
@@ -15440,6 +15452,7 @@
                     "address",
                     "teamId",
                     "projectId",
+                    "customerId",
                     "enabled",
                     "createdAt",
                     "updatedAt"
@@ -29788,6 +29801,157 @@
           }
         },
         "summary": "Delete customer need"
+      }
+    },
+    "/workspaces/{organizationId}/customers/{id}/intake": {
+      "get": {
+        "tags": [
+          "customers"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Customer intake items (inbound mail filed on the record)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "customerId": {
+                            "type": "string"
+                          },
+                          "source": {
+                            "type": "string"
+                          },
+                          "inboxId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "fromAddress": {
+                            "type": "string"
+                          },
+                          "fromName": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "toAddress": {
+                            "type": "string"
+                          },
+                          "subject": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "text": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "html": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "externalId": {
+                            "type": "string"
+                          },
+                          "messageId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "attachments": {
+                            "type": "array",
+                            "nullable": true,
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "key": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "filename": {
+                                  "type": "string"
+                                },
+                                "contentType": {
+                                  "type": "string"
+                                },
+                                "size": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "key",
+                                "filename",
+                                "contentType",
+                                "size"
+                              ]
+                            }
+                          },
+                          "receivedAt": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "customerId",
+                          "source",
+                          "inboxId",
+                          "fromAddress",
+                          "fromName",
+                          "toAddress",
+                          "subject",
+                          "text",
+                          "html",
+                          "externalId",
+                          "messageId",
+                          "attachments",
+                          "receivedAt",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Customer not found"
+          }
+        },
+        "summary": "List customer intake"
       }
     },
     "/support/unsubscribe": {

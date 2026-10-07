@@ -3160,6 +3160,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "project",
       },
       {
+        name: "customerId",
+        flag: "customer-id",
+      },
+      {
         name: "enabled",
         flag: "enabled",
       },
@@ -6386,6 +6390,22 @@ export const COMMANDS: Record<string, CommandDef> = {
   "customer needs delete": {
     method: "DELETE",
     path: "/workspaces/{organizationId}/customer-needs/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "customers intake list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/customers/{id}/intake",
     params: [
       {
         name: "organizationId",

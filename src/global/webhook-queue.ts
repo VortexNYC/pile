@@ -12,6 +12,7 @@ export type WebhookSource =
   | "github"
   | "gitlab"
   | "email"
+  | "email-intake"
   | "notion"
   | "slack"
   | "zendesk"

@@ -38,6 +38,28 @@ POST /workspaces/{org}/support/channels
 Outbound replies send from that same address and thread on the
 customer's last inbound `Message-ID`.
 
+## Customer intake addresses (PILE-325)
+
+An `email_inboxes` row routes inbound mail to the customer intake flow
+instead of support tickets — for merchant/rep document drop-off
+(`intake@yourdomain.com`, or a per-customer address):
+
+```bash
+POST /workspaces/{org}/email-inboxes
+{ "address": "intake@yourdomain.com", "customerId": null, "projectId": null }
+```
+
+- Recipient address must match the inbox `address` exactly (lowercased).
+- `customerId` pins every mail to that customer; when null the worker
+  resolves by sender domain ↔ customer `url` host, and creates a customer
+  when nothing matches (freemail senders are named by display name, never
+  by domain).
+- Attachments land in R2 under `{org}/intake/{hash}/` and are listed on the
+  intake item; bodies and metadata are filed on the record and readable via
+  `GET /workspaces/{org}/customers/{id}/intake`.
+- Dedup is on `Message-ID` (or a SHA-256 of the raw MIME when the header is
+  missing), so retries and redeliveries can't double-file.
+
 ## Templates & transport
 
 - Templates: `src/email/templates.tsx` (React Email — ticket reply,

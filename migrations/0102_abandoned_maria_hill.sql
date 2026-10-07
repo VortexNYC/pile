@@ -1,0 +1,1 @@
+ALTER TABLE `email_inboxes` ADD `customer_id` text;

@@ -8,7 +8,10 @@ import {
   processJamIntercomRecordedWebhookPayload,
   processJamRecordingLinkCreatedWebhookPayload,
 } from "../api/support-capture.js";
-import { processEmailWebhookPayload } from "../channels/email.js";
+import {
+  processEmailIntakePayload,
+  processEmailWebhookPayload,
+} from "../channels/email.js";
 import { processSlackSupportWebhookPayload } from "../channels/slack.js";
 import type { WebhookProcessor, WebhookSource } from "./webhook-queue.js";
 
@@ -17,6 +20,7 @@ export const webhookProcessors = new Map<WebhookSource, WebhookProcessor>([
   ["github", processGithubWebhookPayload],
   ["gitlab", processGitlabWebhookPayload],
   ["email", processEmailWebhookPayload],
+  ["email-intake", processEmailIntakePayload],
   ["notion", processNotionWebhookPayload],
   ["slack", processSlackSupportWebhookPayload],
   ["jam", processJamCreatedWebhookPayload],
