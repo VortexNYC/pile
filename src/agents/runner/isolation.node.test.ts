@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -190,5 +190,25 @@ describePy("restricted lane command policy (PILE-281)", () => {
     expect(results[0]?.stderr).toContain("pile restricted lane");
     expect(results[1]?.rc).toBe(0);
     expect(results[2]?.rc).toBe(126);
+  });
+
+  it("shims pin the runner interpreter instead of re-resolving python3", () => {
+    // PILE-317: the installed shim's shebang must name the interpreter
+    // absolutely — `#!/usr/bin/env python3` re-resolves python3 on the
+    // scrubbed PATH, and a shim/broken binary there makes the denial die
+    // as rc 1 (e.g. a V8 SyntaxError) instead of exiting 126.
+    const dir = mkdtempSync(join(harnessDir, "py-impostor-"));
+    writeFileSync(
+      join(dir, "python3"),
+      "#!/bin/sh\necho 'SyntaxError: Unexpected identifier file' >&2\nexit 1\n"
+    );
+    chmodSync(join(dir, "python3"), 0o755);
+    const { results } = runHarness(
+      "exec",
+      { argvs: [["git", "push", "origin", "main"]] },
+      { ...RESTRICTED, PATH: `${dir}:${process.env.PATH}` }
+    ) as { results: Array<{ rc: number; stderr: string }> };
+    expect(results[0]?.rc).toBe(126);
+    expect(results[0]?.stderr).toContain("pile restricted lane");
   });
 });

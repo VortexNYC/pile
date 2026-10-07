@@ -49,4 +49,28 @@ describe("resolvePython (PILE-317)", () => {
       else process.env.PYTHON = saved.PYTHON;
     }
   });
+
+  itPy("parses past wrapper banner noise and CRLF endings", () => {
+    if (!REAL_PYTHON) return; // unreachable — narrowed for TS
+    // A forwarding wrapper that chatters on stdout before delegating, with
+    // CRLF appended to every answer line — both must parse cleanly.
+    const dir = mkdtempSync(join(tmpdir(), "pile-py-noise-"));
+    const noisy = join(dir, "python3");
+    writeFileSync(
+      noisy,
+      `#!/bin/sh\necho "shim banner noise"\n${JSON.stringify(REAL_PYTHON)} "$@" | sed 's/$/\\r/'\n`
+    );
+    chmodSync(noisy, 0o755);
+
+    const saved = { PATH: process.env.PATH, PYTHON: process.env.PYTHON };
+    try {
+      process.env.PATH = `${dir}:${process.env.PATH ?? ""}`;
+      delete process.env.PYTHON;
+      expect(resolvePython()).toBe(REAL_PYTHON);
+    } finally {
+      process.env.PATH = saved.PATH;
+      if (saved.PYTHON === undefined) delete process.env.PYTHON;
+      else process.env.PYTHON = saved.PYTHON;
+    }
+  });
 });
