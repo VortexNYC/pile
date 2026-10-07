@@ -1481,6 +1481,16 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     await assertIssueAccess(db, stub, issue, identity);
+    // Grant management is admin-only: a granted member could otherwise
+    // declassify the issue by revoking every grant, and any member could
+    // restrict an open issue to themselves.
+    if (!identity.permissions.includes("admin")) {
+      throw new VortexError({
+        code: "FORBIDDEN",
+        status: 403,
+        message: "Only workspace admins can manage issue permissions",
+      });
+    }
     const grant = await stub.setIssuePermission(
       issue.id,
       input.actorId,
@@ -1504,6 +1514,13 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     await assertIssueAccess(db, stub, issue, identity);
+    if (!identity.permissions.includes("admin")) {
+      throw new VortexError({
+        code: "FORBIDDEN",
+        status: 403,
+        message: "Only workspace admins can manage issue permissions",
+      });
+    }
     await stub.revokeIssuePermission(issue.id, actorId, identity.id);
     return c.body(null, 204);
   });

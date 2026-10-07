@@ -198,6 +198,10 @@ export function registerSupportTraceRoutes(app: OpenAPIHono<AppContext>) {
         agentSessions = await stub.listAgentSessions({
           issueId: ticket.issueId,
         });
+      } else {
+        // The ticket row still links the issue — blank it so the response
+        // doesn't reveal which restricted issue it traces.
+        ticket = { ...ticket, issueId: null };
       }
     }
 

@@ -108,7 +108,6 @@ import {
   workspaceGitIdentities,
   workspaceIssueApprovals,
   workspaceIssueHistory,
-  workspaceIssuePermissions,
   workspaceIssueRelations,
   workspaceIssues,
   workspaceIssueSubscribers,
@@ -453,19 +452,19 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     // The API layer stamps the connecting identity on `x-pile-ws-viewer`;
     // issue-bearing events are filtered per socket so restricted issues
     // (issue_permissions) never reach members without a grant. Grants
-    // changed after connect apply on the next connection.
+    // changed after connect apply on the next connection. A missing or
+    // unparseable stamp is a non-admin nobody (open issues only) — never
+    // unfiltered.
     const viewerHeader = request.headers.get("x-pile-ws-viewer");
+    let wsViewer: WsViewer = { actorId: "", teamIds: [], admin: false };
     if (viewerHeader) {
       try {
-        const viewer = wsViewerSchema.parse(JSON.parse(viewerHeader));
-        server.serializeAttachment(viewer);
+        wsViewer = wsViewerSchema.parse(JSON.parse(viewerHeader));
       } catch {
-        // Unparseable viewer — socket stays unrestricted-until-checked:
-        // without an attachment we cannot attribute it, so treat as a
-        // non-admin nobody (open issues only).
-        server.serializeAttachment({ actorId: "", teamIds: [], admin: false });
+        // keep the nobody default
       }
     }
+    server.serializeAttachment(wsViewer);
 
     await this.emit({
       type: "connected",
@@ -4993,9 +4992,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     await this.db
       .delete(workspaceIssueApprovals)
       .where(eq(workspaceIssueApprovals.issueId, issueId));
-    await this.db
-      .delete(workspaceIssuePermissions)
-      .where(eq(workspaceIssuePermissions.issueId, issueId));
+    // issue_permissions rows are deliberately kept: a deleted restricted
+    // issue's audit entries, notifications, and `issue.deleted` frames must
+    // stay filtered (no grant rows = open would un-hide them post-delete).
+    // Ids are never reused, so the rows are inert tombstones.
     const reactionTargets = [issueId, ...commentIds];
     if (reactionTargets.length > 0) {
       await this.db
