@@ -3097,9 +3097,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "accepted",
             "canceled",
             "rejected",
+            "expired",
             "all"
           ],
-          "description": "Invitation status filter; defaults to pending"
+          "description": "Invitation status filter; defaults to pending (excludes expired rows). `expired` lists pending invitations past their expiry"
         }
       },
       "required": [

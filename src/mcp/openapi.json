@@ -21039,6 +21039,9 @@
                     "expiresAt": {
                       "type": "integer"
                     },
+                    "expired": {
+                      "type": "boolean"
+                    },
                     "inviterId": {
                       "type": "string"
                     },
@@ -21054,6 +21057,7 @@
                     "status",
                     "teamId",
                     "expiresAt",
+                    "expired",
                     "inviterId",
                     "createdAt"
                   ]
@@ -21088,12 +21092,13 @@
                 "accepted",
                 "canceled",
                 "rejected",
+                "expired",
                 "all"
               ],
-              "description": "Invitation status filter; defaults to pending"
+              "description": "Invitation status filter; defaults to pending (excludes expired rows). `expired` lists pending invitations past their expiry"
             },
             "required": false,
-            "description": "Invitation status filter; defaults to pending",
+            "description": "Invitation status filter; defaults to pending (excludes expired rows). `expired` lists pending invitations past their expiry",
             "name": "status",
             "in": "query"
           }
@@ -21133,6 +21138,9 @@
                           "expiresAt": {
                             "type": "integer"
                           },
+                          "expired": {
+                            "type": "boolean"
+                          },
                           "inviterId": {
                             "type": "string"
                           },
@@ -21148,6 +21156,7 @@
                           "status",
                           "teamId",
                           "expiresAt",
+                          "expired",
                           "inviterId",
                           "createdAt"
                         ]
@@ -21255,6 +21264,9 @@
                     "expiresAt": {
                       "type": "integer"
                     },
+                    "expired": {
+                      "type": "boolean"
+                    },
                     "inviterId": {
                       "type": "string"
                     },
@@ -21270,6 +21282,7 @@
                     "status",
                     "teamId",
                     "expiresAt",
+                    "expired",
                     "inviterId",
                     "createdAt"
                   ]
@@ -21279,6 +21292,9 @@
           },
           "404": {
             "description": "Invitation not found"
+          },
+          "409": {
+            "description": "Invitation is not pending"
           },
           "503": {
             "description": "Email not configured"

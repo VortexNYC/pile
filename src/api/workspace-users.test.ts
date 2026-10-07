@@ -442,4 +442,32 @@ describe("workspace invitations API", () => {
     const body = invitationSchema.parse(await res.json());
     expect(body.status).toBe("pending");
   });
+
+  it("returns 409 resending a canceled invitation", async () => {
+    const created = await invite(organizationId, adminToken, {
+      email: `resend-canceled-${crypto.randomUUID()}@example.com`,
+      role: "member",
+    });
+    const createdBody = invitationSchema.parse(await created.json());
+    const canceled = await fetch(
+      `/workspaces/${organizationId}/invitations/${createdBody.id}`,
+      { method: "DELETE" },
+      adminToken
+    );
+    expect(canceled.status).toBe(204);
+
+    const res = await fetch(
+      `/workspaces/${organizationId}/invitations/${createdBody.id}/resend`,
+      { method: "POST" },
+      adminToken
+    );
+    expect(res.status).toBe(409);
+
+    const row = await createD1(env.D1)
+      .select()
+      .from(invitation)
+      .where(eq(invitation.id, createdBody.id))
+      .get();
+    expect(row?.status).toBe("canceled");
+  });
 });
