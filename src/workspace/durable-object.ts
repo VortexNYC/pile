@@ -2412,6 +2412,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       issueId?: string;
       status?: AgentSessionStatus;
       openPr?: boolean;
+      retryOf?: string;
       limit?: number;
       viewer?: IssueViewer;
     } = {}

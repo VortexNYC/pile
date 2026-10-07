@@ -944,6 +944,47 @@ describe("WorkspaceDO", () => {
     expect(cleared?.prUrl).toBeNull();
   });
 
+  it("lists agent sessions filtered by retryOf", async () => {
+    const stub = getStub();
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Retry chain issue" })
+    );
+    const dead = await withWorkspace(stub, (instance) =>
+      instance.createAgentSession({
+        issueId: issue.id,
+        agentId: "mock",
+        provider: "mock",
+        actorId: "user-1",
+        actorType: "user",
+        status: "failed",
+      })
+    );
+    const retry = await withWorkspace(stub, (instance) =>
+      instance.createAgentSession({
+        issueId: issue.id,
+        agentId: "mock",
+        provider: "mock",
+        actorId: "user-1",
+        actorType: "user",
+        status: "running",
+      })
+    );
+    await stub.updateAgentSession(retry.id, { retryOf: dead.id });
+    await withWorkspace(stub, (instance) =>
+      instance.createAgentSession({
+        issueId: issue.id,
+        agentId: "mock",
+        provider: "mock",
+        actorId: "user-1",
+        actorType: "user",
+        status: "running",
+      })
+    );
+
+    const retries = await stub.listAgentSessions({ retryOf: dead.id });
+    expect(retries.map((s: { id: string }) => s.id)).toEqual([retry.id]);
+  });
+
   it("supports parent/child issue hierarchy", async () => {
     const stub = getStub();
     const parent = await withWorkspace(stub, (instance) =>

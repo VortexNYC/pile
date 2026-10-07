@@ -22,6 +22,7 @@ import {
   listIssuePermissions,
   setIssuePermission,
   revokeIssuePermission,
+  listAgentSessions,
   listEntityAttachments,
   listCustomerIntakeItems,
   listCustomers,
@@ -154,6 +155,41 @@ describe("workspace agent session data", () => {
         status: "running",
       });
       expect(untouched?.createdAt).toBe(rewound);
+    });
+  });
+
+  it("filters sessions by retryOf so the retry walk finds every successor", async () => {
+    await withDb(async (db) => {
+      const dead = await createAgentSession(
+        db,
+        sessionInput({ status: "failed" })
+      );
+      const retryA = await createAgentSession(
+        db,
+        sessionInput({ status: "running" })
+      );
+      const retryB = await createAgentSession(
+        db,
+        sessionInput({ status: "waiting" })
+      );
+      await updateAgentSession(db, WORKSPACE_ID, retryA.id, {
+        retryOf: dead.id,
+      });
+      await updateAgentSession(db, WORKSPACE_ID, retryB.id, {
+        retryOf: dead.id,
+      });
+      await createAgentSession(db, sessionInput({ status: "running" }));
+
+      const retries = listAgentSessions(db, WORKSPACE_ID, {
+        retryOf: dead.id,
+      });
+      expect(retries.map((s) => s.id).toSorted()).toEqual(
+        [retryA.id, retryB.id].toSorted()
+      );
+      // No filter: retries surface alongside everything else.
+      expect(
+        listAgentSessions(db, WORKSPACE_ID, {}).length
+      ).toBeGreaterThanOrEqual(4);
     });
   });
 });
