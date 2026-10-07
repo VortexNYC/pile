@@ -32,6 +32,7 @@ import {
   workspaceDocumentShares,
   workspaceDocumentSpaces,
   workspaceDocumentWatchers,
+  workspaceEntityAttachments,
   workspaceAgentProviderConfigs,
   workspaceAgentSessions,
   workspaceAgentEnvironmentFiles,
@@ -2608,6 +2609,15 @@ export function deleteCustomer(
       )
     )
     .run();
+  db.delete(workspaceEntityAttachments)
+    .where(
+      and(
+        eq(workspaceEntityAttachments.entityType, "customer"),
+        eq(workspaceEntityAttachments.entityId, id),
+        eq(workspaceEntityAttachments.organizationId, organizationId)
+      )
+    )
+    .run();
   return (
     db
       .delete(workspaceCustomers)
@@ -2620,6 +2630,97 @@ export function deleteCustomer(
       .returning()
       .all().length > 0
   );
+}
+
+// ---- entity attachments ----
+// R2-backed file rows scoped to (entityType, entityId). The DO owns the R2
+// object lifecycle; these functions only manage the metadata rows.
+
+export interface EntityAttachmentInput {
+  entityType: string;
+  entityId: string;
+  fileName: string;
+  contentType: string;
+  size: number;
+  r2Key: string;
+  id?: string;
+  createdById?: string | null;
+}
+
+export function createEntityAttachment(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: EntityAttachmentInput
+) {
+  return db
+    .insert(workspaceEntityAttachments)
+    .values({
+      id: input.id ?? crypto.randomUUID(),
+      organizationId,
+      entityType: input.entityType,
+      entityId: input.entityId,
+      fileName: input.fileName,
+      contentType: input.contentType,
+      size: input.size,
+      r2Key: input.r2Key,
+      createdById: input.createdById ?? null,
+      createdAt: new Date().toISOString(),
+    })
+    .returning()
+    .get();
+}
+
+export function listEntityAttachments(
+  db: WorkspaceDb,
+  organizationId: string,
+  entityType: string,
+  entityId: string
+) {
+  return db
+    .select()
+    .from(workspaceEntityAttachments)
+    .where(
+      and(
+        eq(workspaceEntityAttachments.organizationId, organizationId),
+        eq(workspaceEntityAttachments.entityType, entityType),
+        eq(workspaceEntityAttachments.entityId, entityId)
+      )
+    )
+    .all();
+}
+
+export function getEntityAttachment(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return db
+    .select()
+    .from(workspaceEntityAttachments)
+    .where(
+      and(
+        eq(workspaceEntityAttachments.organizationId, organizationId),
+        eq(workspaceEntityAttachments.id, id)
+      )
+    )
+    .get();
+}
+
+export function deleteEntityAttachment(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return db
+    .delete(workspaceEntityAttachments)
+    .where(
+      and(
+        eq(workspaceEntityAttachments.organizationId, organizationId),
+        eq(workspaceEntityAttachments.id, id)
+      )
+    )
+    .returning()
+    .get();
 }
 
 // ---- external links ----

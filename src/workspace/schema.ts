@@ -680,6 +680,32 @@ export const workspaceCustomerNeeds = sqliteTable(
   ]
 );
 
+// Entity attachments: R2-backed file uploads scoped to an arbitrary workspace
+// entity (entityType + entityId). First consumer is customers (statements,
+// photos, onboarding docs); issues/documents can reuse the same plumbing.
+export const workspaceEntityAttachments = sqliteTable(
+  "entity_attachments" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    entityType: text("entity_type" as string).notNull(),
+    entityId: text("entity_id" as string).notNull(),
+    fileName: text("file_name" as string).notNull(),
+    contentType: text("content_type" as string).notNull(),
+    size: integer("size" as string).notNull(),
+    r2Key: text("r2_key" as string).notNull(),
+    createdById: text("created_by_id" as string),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    index("entity_attachments_entity_idx" as string).on(
+      table.organizationId,
+      table.entityType,
+      table.entityId
+    ),
+  ]
+);
+
 // Releases: Linear's release pipelines (named ordered stage lists) and
 // releases (versioned targets attached to projects).
 export const workspaceReleasePipelines = sqliteTable(

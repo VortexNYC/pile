@@ -262,6 +262,15 @@ describe("deletion", () => {
       r2Key,
       fileName: "x.log",
     });
+    // Keys tracked only in the DO (entity attachments) or not tracked at all
+    // (ad-hoc file uploads) are swept by prefix, not by row lookup.
+    const entityKey = `attachments/${organizationId}/customer/${crypto.randomUUID()}/${crypto.randomUUID()}`;
+    await env.ATTACHMENTS_BUCKET.put(entityKey, "statement");
+    const fileKey = `${organizationId}/files/${crypto.randomUUID()}/note.txt`;
+    await env.ATTACHMENTS_BUCKET.put(fileKey, "note");
+    // Another workspace's object under the same prefixes must survive.
+    const foreignKey = `attachments/org_other_ws/customer/c/${crypto.randomUUID()}`;
+    await env.ATTACHMENTS_BUCKET.put(foreignKey, "foreign");
 
     // Human session required — API keys cannot delete workspaces.
     const anonRes = await app.fetch(
@@ -295,5 +304,9 @@ describe("deletion", () => {
         .where(eq(supportTickets.organizationId, organizationId))
     ).toHaveLength(0);
     expect(await env.ATTACHMENTS_BUCKET.get(r2Key)).toBeNull();
+    expect(await env.ATTACHMENTS_BUCKET.get(entityKey)).toBeNull();
+    expect(await env.ATTACHMENTS_BUCKET.get(fileKey)).toBeNull();
+    expect(await env.ATTACHMENTS_BUCKET.get(foreignKey)).not.toBeNull();
+    await env.ATTACHMENTS_BUCKET.delete(foreignKey);
   });
 });

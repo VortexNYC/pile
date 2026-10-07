@@ -5,7 +5,6 @@ import type { D1Client } from "./db.js";
 import {
   organization,
   supportCustomers,
-  supportTicketAttachments,
   supportWidgetSessions,
 } from "./schema.js";
 
@@ -22,16 +21,28 @@ export async function deleteWorkspaceData(
   env: WorkerEnv,
   organizationId: string
 ): Promise<{ r2Objects: number; tables: Record<string, number> }> {
-  const keyRows = await db
-    .select({ r2Key: supportTicketAttachments.r2Key })
-    .from(supportTicketAttachments)
-    .where(eq(supportTicketAttachments.organizationId, organizationId))
-    .all();
-  const r2Keys = keyRows
-    .map((r) => r.r2Key)
-    .filter((k): k is string => typeof k === "string" && k.length > 0);
-  for (let i = 0; i < r2Keys.length; i += 500) {
-    await env.ATTACHMENTS_BUCKET.delete(r2Keys.slice(i, i + 500));
+  // Sweep every org-scoped R2 object. Object keys are partitioned under three
+  // prefix families — `${org}/` (files, capture artifacts), `attachments/${org}/`
+  // (issue imports, Slack, entity attachments), and `artifacts/${org}/` (agent
+  // session artifacts) — so prefix listing covers keys tracked in DO storage as
+  // well as D1 rows and catches strays whose rows were already deleted.
+  const bucket = env.ATTACHMENTS_BUCKET;
+  let r2Objects = 0;
+  for (const prefix of [
+    `${organizationId}/`,
+    `attachments/${organizationId}/`,
+    `artifacts/${organizationId}/`,
+  ]) {
+    let cursor: string | undefined;
+    do {
+      const page = await bucket.list({ prefix, cursor });
+      const keys = page.objects.map((o) => o.key);
+      for (let i = 0; i < keys.length; i += 500) {
+        await bucket.delete(keys.slice(i, i + 500));
+      }
+      r2Objects += keys.length;
+      cursor = page.truncated ? page.cursor : undefined;
+    } while (cursor);
   }
 
   const tables = await db.all<OrgTable>(
@@ -102,7 +113,7 @@ export async function deleteWorkspaceData(
 
   await db.delete(organization).where(eq(organization.id, organizationId));
 
-  return { r2Objects: r2Keys.length, tables: deleted };
+  return { r2Objects, tables: deleted };
 }
 
 /**

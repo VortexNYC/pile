@@ -284,6 +284,31 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdCustomersIdAttachmentsAttachmentId",
+    "description": "Delete customer attachment (DELETE /workspaces/{organizationId}/customers/{id}/attachments/{attachmentId}) Path params (top-level, required): organizationId, id, attachmentId.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/customers/{id}/attachments/{attachmentId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "attachmentId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "attachmentId",
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdCustomerstatusesId",
     "description": "Delete customer statuse (DELETE /workspaces/{organizationId}/customer-statuses/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
@@ -2249,6 +2274,77 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdCustomersIdAttachments",
+    "description": "List customer attachments (GET /workspaces/{organizationId}/customers/{id}/attachments) Path params (top-level, required): organizationId, id.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/customers/{id}/attachments",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdCustomersIdAttachmentsAttachmentId",
+    "description": "Get customer attachment (GET /workspaces/{organizationId}/customers/{id}/attachments/{attachmentId}) Path params (top-level, required): organizationId, id, attachmentId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/customers/{id}/attachments/{attachmentId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "attachmentId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "attachmentId",
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdCustomersIdAttachmentsAttachmentIdContent",
+    "description": "List customer attachment content (GET /workspaces/{organizationId}/customers/{id}/attachments/{attachmentId}/content) Path params (top-level, required): organizationId, id, attachmentId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/customers/{id}/attachments/{attachmentId}/content",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "attachmentId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "attachmentId",
         "id",
         "organizationId"
       ]
@@ -9975,6 +10071,47 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdCustomersIdAttachments",
+    "description": "Create customer attachment (POST /workspaces/{organizationId}/customers/{id}/attachments) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: fileName*, contentType, contentBase64* (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers/{id}/attachments",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "fileName": {
+              "type": "string",
+              "minLength": 1
+            },
+            "contentType": {
+              "type": "string"
+            },
+            "contentBase64": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "fileName",
+            "contentBase64"
+          ]
+        }
+      },
+      "required": [
+        "id",
         "organizationId"
       ]
     }
