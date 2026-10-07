@@ -866,6 +866,84 @@ describe("WorkspaceDO", () => {
     ).rejects.toThrow();
   });
 
+  it("throws a CONFLICT-coded error when updateIssue claims a taken branch", async () => {
+    // PILE-313 — this throw crosses the DO RPC boundary; the API relies on
+    // its serialized code/status to answer 409 instead of a 500.
+    const stub = getStub();
+    await withWorkspace(stub, (instance) =>
+      instance.createIssue({
+        title: "Branch owner",
+        repo: "owner/taken",
+        branch: "taken-branch",
+      })
+    );
+    const claimant = await withWorkspace(stub, (instance) =>
+      instance.createIssue({
+        title: "Branch claimant",
+        repo: "owner/taken",
+        branch: `issue-${crypto.randomUUID()}`,
+      })
+    );
+    const err: unknown = await withWorkspace(stub, (instance) =>
+      instance.updateIssue(claimant.id, { branch: "taken-branch" })
+    ).then(
+      () => undefined,
+      (e: unknown) => e
+    );
+    expect(err).toBeInstanceOf(Error);
+    expect((err as { code?: unknown }).code).toBe("CONFLICT");
+    expect((err as { status?: unknown }).status).toBe(409);
+  });
+
+  it("lets an issue keep its own repo and branch on update", async () => {
+    const stub = getStub();
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({
+        title: "Self claim",
+        repo: "owner/self",
+        branch: "self-branch",
+      })
+    );
+    const updated = await withWorkspace(stub, (instance) =>
+      instance.updateIssue(issue.id, { title: "Self claim renamed" })
+    );
+    expect(updated?.repo).toBe("owner/self");
+    expect(updated?.branch).toBe("self-branch");
+  });
+
+  it("throws a CONFLICT-coded error when updateIssue claims a taken prUrl", async () => {
+    const stub = getStub();
+    const prUrl = `https://github.com/owner/repo/pull/${crypto.randomUUID().slice(0, 8)}`;
+    const owner = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "PR owner" })
+    );
+    await withWorkspace(stub, (instance) =>
+      instance.updateIssue(owner.id, { prUrl })
+    );
+
+    const claimant = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "PR claimant" })
+    );
+    const err: unknown = await withWorkspace(stub, (instance) =>
+      instance.updateIssue(claimant.id, { prUrl })
+    ).then(
+      () => undefined,
+      (e: unknown) => e
+    );
+    expect(err).toBeInstanceOf(Error);
+    expect((err as { code?: unknown }).code).toBe("CONFLICT");
+
+    // Re-linking the same PR to its owner and clearing with null both work.
+    const relinked = await withWorkspace(stub, (instance) =>
+      instance.updateIssue(owner.id, { prUrl })
+    );
+    expect(relinked?.prUrl).toBe(prUrl);
+    const cleared = await withWorkspace(stub, (instance) =>
+      instance.updateIssue(owner.id, { prUrl: null })
+    );
+    expect(cleared?.prUrl).toBeNull();
+  });
+
   it("supports parent/child issue hierarchy", async () => {
     const stub = getStub();
     const parent = await withWorkspace(stub, (instance) =>
