@@ -4,16 +4,19 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { createD1 } from "../global/db.js";
 import { supportTickets, user as userTable } from "../global/schema.js";
+import { createTeam } from "../global/teams.js";
 import { createWorkspace } from "../global/workspaces.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
 import { MockAgentProvider } from "./harness.js";
 import { registerAgentProvider } from "./index.js";
 import { MAX_NUDGES_PER_HEAD_SHA, MAX_NUDGES_PER_LANE } from "./nudge.js";
+import { automationEventTarget } from "./repo-triggers.js";
 import { REVIEW_PURPOSE } from "./review.js";
 import {
   DEFAULT_INACTIVITY_MINUTES,
   DEFAULT_PROVISION_TIMEOUT_MINUTES,
   DEFAULT_TIMEOUT_MINUTES,
+  fireEventAutomations,
   hashAgentState,
   ingestFailedAgentSession,
   parseAgentTimeouts,
@@ -1805,6 +1808,187 @@ describe("sweepAgentSessions", () => {
       `{"backupId":"bk-${session.providerSessionId ?? session.id}"}`
     );
     expect(after?.lastStateHash).toBe("reaped");
+  });
+});
+
+// PILE-321 — every sweep-driven dispatch path (provision-timeout retry,
+// queue promotion, automation fire) inherits the issue's team defaultRepo
+// so the lane clones a repo instead of returning a spec-only package.
+// A dedicated workspace keeps fleet/provider infra streaks clean.
+describe("sweep repo inheritance (PILE-321)", () => {
+  const userId = "user-sweep-repo";
+  let organizationId = "";
+  let stub: ReturnType<typeof env.WORKSPACE_DURABLE_OBJECT.get>;
+  let defaultedTeamId = "";
+  const teamRepo = "VortexNYC/sweep-default";
+
+  beforeAll(async () => {
+    const db = createD1(env.D1);
+    const now = new Date();
+    await db
+      .insert(userTable)
+      .values({
+        id: userId,
+        name: "Sweep Repo",
+        email: `${userId}@example.com`,
+        emailVerified: false,
+        image: null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({ target: [userTable.email] });
+    const headers = await createAdminHeaders(env, userId);
+    const workspace = await createWorkspace(db, env, headers, {
+      name: "Sweep repo",
+      slug: `sweep-repo-${crypto.randomUUID()}`,
+      key: `SR${crypto.randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+      ownerId: userId,
+    });
+    organizationId = workspace!.id;
+    stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const team = await createTeam(db, env, new Headers(), {
+      organizationId,
+      key: "SWR",
+      name: "Sweep repo team",
+      ownerId: userId,
+      defaultRepo: teamRepo,
+    });
+    defaultedTeamId = team.id;
+  });
+
+  it("auto-retries a provision-stalled repo-less lane on the team's defaultRepo", async () => {
+    const agentId = `mock-retry-repo-${crypto.randomUUID().slice(0, 8)}`;
+    const seen: { repo: string | null | undefined } = { repo: undefined };
+    registerMock(agentId, {
+      dispatch: (_org, dispatchedIssue) => {
+        seen.repo = dispatchedIssue.repo;
+        return {
+          id: `retry-${crypto.randomUUID()}`,
+          agentId,
+          issueId: dispatchedIssue.id,
+          status: "created" as const,
+        };
+      },
+      poll: (id) => ({ id, agentId, status: "created" }),
+    });
+    await stub.upsertAgentProviderConfig({
+      agentId,
+      config: { provisionTimeout: 0 },
+    });
+    const issue = await stub.createIssue({
+      title: "Repo-less stalled lane",
+      teamId: defaultedTeamId,
+    });
+    expect(issue.repo).toBeNull();
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "created",
+    });
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    expect((await stub.getAgentSession(session.id))?.status).toBe("failed");
+    expect(seen.repo).toBe(teamRepo);
+    expect((await stub.getIssue(issue.id))?.repo).toBe(teamRepo);
+    const retried = (await stub.listAgentSessions({ issueId: issue.id })).find(
+      (s) => s.retryOf === session.id
+    );
+    expect(retried).toBeDefined();
+  });
+
+  it("promotes a queued repo-less lane onto the team's defaultRepo", async () => {
+    const agentId = `mock-promote-repo-${crypto.randomUUID().slice(0, 8)}`;
+    const seen: { repo: string | null | undefined } = { repo: undefined };
+    registerMock(agentId, {
+      dispatch: (_org, dispatchedIssue) => {
+        seen.repo = dispatchedIssue.repo;
+        return {
+          id: `promo-${crypto.randomUUID()}`,
+          agentId,
+          issueId: dispatchedIssue.id,
+          status: "created" as const,
+        };
+      },
+      poll: (id) => ({ id, agentId, status: "created" }),
+    });
+    const blockerIssue = await stub.createIssue({ title: "Blocker" });
+    const blocker = await stub.createAgentSession({
+      issueId: blockerIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "completed",
+    });
+    const issue = await stub.createIssue({
+      title: "Repo-less queued lane",
+      teamId: defaultedTeamId,
+    });
+    const queued = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "waiting",
+      queuedAfter: blocker.id,
+    });
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    expect(seen.repo).toBe(teamRepo);
+    expect((await stub.getIssue(issue.id))?.repo).toBe(teamRepo);
+    expect((await stub.getAgentSession(queued.id))?.status).not.toBe("waiting");
+  });
+
+  it("fires an event automation bound to a repo-less issue on the team's defaultRepo", async () => {
+    const agentId = `mock-auto-repo-${crypto.randomUUID().slice(0, 8)}`;
+    const seen: { repo: string | null | undefined } = { repo: undefined };
+    registerMock(agentId, {
+      dispatch: (_org, dispatchedIssue) => {
+        seen.repo = dispatchedIssue.repo;
+        return {
+          id: `auto-${crypto.randomUUID()}`,
+          agentId,
+          issueId: dispatchedIssue.id,
+          status: "created" as const,
+        };
+      },
+    });
+    const issue = await stub.createIssue({
+      title: "Repo-less bound issue",
+      teamId: defaultedTeamId,
+    });
+    await stub.createAgentAutomation({
+      name: "bound automation",
+      prompt: "do the thing",
+      agentId,
+      issueId: issue.id,
+      triggerKind: "event",
+      triggerValue: "pile.test.bound",
+    });
+
+    await fireEventAutomations(
+      env,
+      stub,
+      organizationId,
+      "pile.test.bound",
+      automationEventTarget(async () => null, null),
+      undefined,
+      undefined,
+      undefined,
+      { skipRepoTriggers: true }
+    );
+
+    expect(seen.repo).toBe(teamRepo);
+    expect((await stub.getIssue(issue.id))?.repo).toBe(teamRepo);
   });
 });
 

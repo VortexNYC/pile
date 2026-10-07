@@ -23,6 +23,7 @@ import {
 import {
   dispatchAgent,
   getAgentProvider,
+  inheritTeamDefaultRepo,
   providerKeepsTerminalSandbox,
 } from "./index.js";
 import { getLaneDbProvider, type LaneDbRef } from "./lane-db.js";
@@ -453,13 +454,22 @@ async function retryDeadLane(
   try {
     const issue = await stub.getIssue(session.issueId);
     if (!issue) return;
+    // PILE-321 — same as a manual retry: a lane dispatched before the issue
+    // had a repo inherits the team's defaultRepo on redispatch.
+    const retriedIssue = await inheritTeamDefaultRepo(
+      createD1(env.D1),
+      stub,
+      organizationId,
+      issue,
+      session.actorId
+    );
     const providerConfig = await loadProviderConfig(env, stub, session.agentId);
     const effectiveEnv = resolveAgentEnv(env, providerConfig ?? undefined);
     const retried = await dispatchAgent(
       effectiveEnv,
       session.agentId,
       organizationId,
-      issue,
+      retriedIssue,
       {
         id: session.actorId,
         organizationId,
@@ -648,11 +658,20 @@ async function promoteQueuedSessions(
         session.agentId
       );
       const effectiveEnv = resolveAgentEnv(env, providerConfig ?? undefined);
+      // PILE-321 — promotion is a dispatch: a repo-less issue inherits the
+      // team's defaultRepo here too.
+      const promotedIssue = await inheritTeamDefaultRepo(
+        createD1(env.D1),
+        stub,
+        organizationId,
+        issue,
+        session.actorId
+      );
       await dispatchAgent(
         effectiveEnv,
         session.agentId,
         organizationId,
-        issue,
+        promotedIssue,
         {
           id: session.actorId,
           organizationId,
@@ -926,17 +945,26 @@ async function fireAutomation(
     const issue = automation.issueId
       ? await stub.getIssue(automation.issueId)
       : null;
-    const targetIssue =
+    const actorId = automation.createdBy ?? "automation";
+    // PILE-321 — a repo-less issue (bound or freshly created) inherits its
+    // team's defaultRepo so the automation lane clones a repo instead of
+    // returning a spec-only package.
+    const targetIssue = await inheritTeamDefaultRepo(
+      createD1(env.D1),
+      stub,
+      organizationId,
       issue ??
-      (await stub.createIssue(
-        {
-          title: `Automation: ${automation.name}`,
-          description: automation.prompt,
-          teamId: automation.teamId ?? undefined,
-          status: "backlog",
-        },
-        automation.createdBy ?? undefined
-      ));
+        (await stub.createIssue(
+          {
+            title: `Automation: ${automation.name}`,
+            description: automation.prompt,
+            teamId: automation.teamId ?? undefined,
+            status: "backlog",
+          },
+          automation.createdBy ?? undefined
+        )),
+      actorId
+    );
     const providerConfig = await loadProviderConfig(
       env,
       stub,
@@ -949,7 +977,7 @@ async function fireAutomation(
       organizationId,
       targetIssue,
       {
-        id: automation.createdBy ?? "automation",
+        id: actorId,
         organizationId,
         type: "agent",
         permissions: [],

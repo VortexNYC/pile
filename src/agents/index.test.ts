@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { createD1 } from "../global/db.js";
 import { user as userTable } from "../global/schema.js";
+import { createTeam } from "../global/teams.js";
 import { createWorkspace } from "../global/workspaces.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
@@ -11,6 +12,7 @@ import { MockAgentProvider } from "./harness.js";
 import {
   dispatchAgent,
   getAgentProvider,
+  inheritTeamDefaultRepo,
   registerAgentProvider,
 } from "./index.js";
 import type { AgentDispatchContext } from "./provider.js";
@@ -871,5 +873,110 @@ describe("agent providers", () => {
     expect(Date.parse(stored?.createdAt ?? "")).toBeGreaterThan(
       Date.parse(stale)
     );
+  });
+});
+
+describe("inheritTeamDefaultRepo (PILE-321)", () => {
+  const getStub = () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
+    );
+    return stub;
+  };
+
+  it("inherits and persists the team's defaultRepo on a repo-less issue", async () => {
+    const db = createD1(env.D1);
+    const stub = getStub();
+    await stub.setOrganizationId(actor.organizationId);
+    const team = await createTeam(db, env, new Headers(), {
+      organizationId: actor.organizationId,
+      key: "INH",
+      name: "Inherited",
+      ownerId: actor.id,
+      defaultRepo: "VortexNYC/team-default",
+    });
+    const issue = await stub.createIssue({
+      title: "Repo-less dispatch",
+      teamId: team.id,
+    });
+    expect(issue.repo).toBeNull();
+
+    const resolved = await inheritTeamDefaultRepo(
+      db,
+      stub,
+      actor.organizationId,
+      issue,
+      actor.id
+    );
+
+    expect(resolved.repo).toBe("VortexNYC/team-default");
+    // Persisted — redispatches and lane-token minting read issue.repo.
+    expect((await stub.getIssue(issue.id))?.repo).toBe(
+      "VortexNYC/team-default"
+    );
+  });
+
+  it("leaves an issue that already has a repo untouched", async () => {
+    const db = createD1(env.D1);
+    const stub = getStub();
+    await stub.setOrganizationId(actor.organizationId);
+    const issue = await stub.createIssue({
+      title: "Has its own repo",
+      repo: "VortexNYC/own-repo",
+    });
+
+    const resolved = await inheritTeamDefaultRepo(
+      db,
+      stub,
+      actor.organizationId,
+      issue,
+      actor.id
+    );
+
+    expect(resolved.repo).toBe("VortexNYC/own-repo");
+    expect((await stub.getIssue(issue.id))?.repo).toBe("VortexNYC/own-repo");
+  });
+
+  it("stays repo-less when the team has no defaultRepo", async () => {
+    const db = createD1(env.D1);
+    const stub = getStub();
+    await stub.setOrganizationId(actor.organizationId);
+    const team = await createTeam(db, env, new Headers(), {
+      organizationId: actor.organizationId,
+      key: "NODEF",
+      name: "No default repo",
+      ownerId: actor.id,
+    });
+    const issue = await stub.createIssue({
+      title: "Deliberately repo-less",
+      teamId: team.id,
+    });
+
+    const resolved = await inheritTeamDefaultRepo(
+      db,
+      stub,
+      actor.organizationId,
+      issue,
+      actor.id
+    );
+
+    expect(resolved.repo).toBeNull();
+    expect((await stub.getIssue(issue.id))?.repo).toBeNull();
+  });
+
+  it("no-ops when the issue has no team", async () => {
+    const db = createD1(env.D1);
+    const stub = getStub();
+    const issue = await stub.createIssue({ title: "No team" });
+
+    const resolved = await inheritTeamDefaultRepo(
+      db,
+      stub,
+      actor.organizationId,
+      { ...issue, teamId: "" },
+      actor.id
+    );
+
+    expect(resolved.repo).toBeNull();
   });
 });

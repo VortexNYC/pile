@@ -20,6 +20,7 @@ import {
   type SupportTicketStatus,
 } from "./support-tickets.js";
 import { safeJSON } from "./team-metadata.js";
+import { getTeamById } from "./teams.js";
 
 export const SUPPORT_TICKET_STATUSES = [
   "todo",
@@ -401,6 +402,13 @@ async function createIssueFromTicket(
   const now = new Date().toISOString();
   const issueId = `escalation:${ticket.id}`;
 
+  // PILE-321 — same fallback the issues API applies: an action repo wins,
+  // else the team's defaultRepo fills in so a dispatched lane clones a
+  // repo instead of producing a spec-only package.
+  const teamDefaultRepo = action.teamId
+    ? ((await getTeamById(db, action.teamId, organizationId))?.defaultRepo ??
+      undefined)
+    : undefined;
   const issue = await stub.createIssue({
     id: issueId,
     title: ticket.title,
@@ -408,7 +416,7 @@ async function createIssueFromTicket(
     status: action.status ?? "triage",
     priority: action.priority ?? ticket.priority,
     teamId: action.teamId,
-    repo: action.repo ?? undefined,
+    repo: action.repo ?? teamDefaultRepo,
     labelIds:
       action.labelIds && action.labelIds.length > 0
         ? action.labelIds.join(",")

@@ -157,6 +157,25 @@ export async function fireRepoTriggers(
   if (triggers.length === 0) return 0;
   const issue = await target.issue();
   if (!issue) return 0;
+  // PILE-321 — the event's repo is authoritative here (the trigger's config
+  // was read from it), so a repo-less issue adopts it rather than the team
+  // default. Persisted like the dispatch-time inheritance so redispatches
+  // and lane-token minting see the repo the lane actually works; a failed
+  // write (e.g. a repo+branch collision) must not stop the dispatch.
+  let targetIssue = issue;
+  if (!issue.repo) {
+    const persisted = await stub
+      .updateIssue(issue.id, { repo }, "automation")
+      .catch((err: unknown) => {
+        console.warn("repo trigger could not persist the event repo", {
+          issueId: issue.id,
+          repo,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return undefined;
+      });
+    targetIssue = persisted ?? { ...issue, repo };
+  }
   // An event storm during a capacity outage would dispatch lanes onto the
   // substrate that's already failing — fleet breaker closes the loop.
   if ((await fleetInfraStreak(stub)) >= FLEET_UNHEALTHY_STREAK) {
@@ -178,7 +197,7 @@ export async function fireRepoTriggers(
         resolveAgentEnv(env, providerConfig ?? undefined),
         trigger.agent,
         organizationId,
-        issue,
+        targetIssue,
         {
           id: "automation",
           organizationId,

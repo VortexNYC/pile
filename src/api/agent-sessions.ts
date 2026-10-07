@@ -19,6 +19,7 @@ import { resolveAgentEnv } from "../agents/daytona.js";
 import {
   dispatchAgent,
   getAgentProvider,
+  inheritTeamDefaultRepo,
   providerKeepsTerminalSandbox,
 } from "../agents/index.js";
 import { mintLaneGithubToken } from "../agents/lane-github-token.js";
@@ -1296,9 +1297,20 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
             `"${item.branch}" is a repo default branch — branch sets the lane's working branch (leave empty for issue-<id>)`
           );
         }
+        // PILE-321 — repo-less issues inherit the team's defaultRepo, same
+        // as single dispatch (batch items carry no repo override of their
+        // own).
+        const resolvedIssue = await inheritTeamDefaultRepo(
+          db,
+          stub,
+          organizationId,
+          issue,
+          identity.id
+        );
         const target: Issue = {
-          ...issue,
-          branch: item.branch === undefined ? issue.branch : item.branch,
+          ...resolvedIssue,
+          branch:
+            item.branch === undefined ? resolvedIssue.branch : item.branch,
         };
 
         // Explicit agentId wins; otherwise the repo's configured default
@@ -2592,6 +2604,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId, sessionId } = c.req.valid("param");
     const body = c.req.valid("json");
     const identity = c.var.workspaceIdentity;
+    const db = createD1(c.env.D1);
     const stub = getWorkspaceStub(c.env, organizationId);
 
     const session = await stub.getAgentSession(sessionId);
@@ -2602,6 +2615,15 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     if (!issue) {
       return c.json({ message: "Issue not found" }, 404);
     }
+    // PILE-321 — retrying a lane dispatched before the issue had a repo
+    // inherits the team's defaultRepo, same as a fresh dispatch.
+    const retryIssue = await inheritTeamDefaultRepo(
+      db,
+      stub,
+      organizationId,
+      issue,
+      identity.id
+    );
 
     const agentId = body.agentId ?? session.agentId;
     const providerConfig = await loadProviderConfig(c.env, stub, agentId);
@@ -2622,7 +2644,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       effectiveEnv,
       agentId,
       organizationId,
-      issue,
+      retryIssue,
       identity,
       body.model,
       getExecutionCtx(c),

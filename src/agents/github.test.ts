@@ -568,7 +568,11 @@ function deliver(body: unknown) {
 
 describe("github @pile mention → lane (PILE-278)", () => {
   const prompts: string[] = [];
-  const dispatched: Array<{ issueId: string; instructions?: string }> = [];
+  const dispatched: Array<{
+    issueId: string;
+    repo?: string | null;
+    instructions?: string;
+  }> = [];
 
   beforeAll(async () => {
     if (!ORG) await seedWorkspace();
@@ -583,6 +587,7 @@ describe("github @pile mention → lane (PILE-278)", () => {
           dispatch: (_org, issue, _model, ctx) => {
             dispatched.push({
               issueId: issue.id,
+              repo: issue.repo,
               instructions: ctx?.instructions,
             });
             return {
@@ -672,5 +677,39 @@ describe("github @pile mention → lane (PILE-278)", () => {
     expect(dispatched.at(-1)?.issueId).toBe(issue.id);
     expect(dispatched.at(-1)?.instructions).toContain("please take this one");
     expect(dispatched.at(-1)?.instructions).toContain("issues/900");
+  });
+
+  // PILE-321 — a synced GitHub issue whose Pile issue never got a repo
+  // adopts the repo the mention was posted in, so the lane clones it
+  // instead of returning a spec-only package.
+  it("adopts the webhook repo for a repo-less synced issue", async () => {
+    const db = createD1(env.D1);
+    await db
+      .update(githubInstallations)
+      .set({ defaultAgentId: "mention-mock" })
+      .where(eq(githubInstallations.repo, REPO));
+    const issue = await stub().createIssue({
+      title: "Repo-less synced issue",
+    });
+    await createRepoIssue(db, ORG, REPO, 901, issue.id);
+    const before = dispatched.length;
+    await deliver({
+      action: "created",
+      issue: { number: 901, html_url: `https://github.com/${REPO}/issues/901` },
+      comment: {
+        id: 90_101,
+        body: "@pile repo should be inherited",
+        user: { login: "human-gh", type: "User" },
+        author_association: "OWNER",
+        html_url: `https://github.com/${REPO}/issues/901#issuecomment-90101`,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      repository: { full_name: REPO },
+    });
+    expect(dispatched.length).toBe(before + 1);
+    expect(dispatched.at(-1)?.issueId).toBe(issue.id);
+    expect(dispatched.at(-1)?.repo).toBe(REPO);
+    expect((await stub().getIssue(issue.id))?.repo).toBe(REPO);
   });
 });

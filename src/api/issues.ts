@@ -9,7 +9,11 @@ import {
 } from "../agents/budget.js";
 import { loadProviderConfig } from "../agents/credentials.js";
 import { resolveAgentEnv } from "../agents/daytona.js";
-import { dispatchAgent, getAgentProvider } from "../agents/index.js";
+import {
+  dispatchAgent,
+  getAgentProvider,
+  inheritTeamDefaultRepo,
+} from "../agents/index.js";
 import { resolveResultSchema } from "../agents/lane-result.js";
 import {
   notePlanSource,
@@ -750,7 +754,8 @@ const dispatchRoute = createRoute({
               // Dispatch-time overrides: repo/branch win over the issue's
               // stored fields for this run only; explicit null clears the
               // stored value; instructions are appended to the prompt's
-              // context section.
+              // context section. When neither body nor issue carries a repo,
+              // the team's defaultRepo fills in (PILE-321).
               repo: z.string().nullable().optional(),
               // The lane's WORKING branch (created off the repo default and
               // pushed by the runner) — not the base. PILE-241.
@@ -1658,10 +1663,23 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         message: `"${branch}" is a repo default branch — branch sets the lane's working branch (leave empty for issue-<id>)`,
       });
     }
+    // PILE-321 — a repo-less issue inherits the team's defaultRepo at
+    // dispatch (the same fallback issue create applies). An explicit `repo`
+    // body field still wins — null deliberately forces a repo-less lane.
+    const dispatchIssue =
+      repo === undefined
+        ? await inheritTeamDefaultRepo(
+            db,
+            stub,
+            organizationId,
+            issue,
+            identity.id
+          )
+        : issue;
     const target: Issue = {
-      ...issue,
-      repo: repo === undefined ? issue.repo : repo,
-      branch: branch === undefined ? issue.branch : branch,
+      ...dispatchIssue,
+      repo: repo === undefined ? dispatchIssue.repo : repo,
+      branch: branch === undefined ? dispatchIssue.branch : branch,
     };
 
     if (preflight && mode && mode !== "build") {
@@ -1899,11 +1917,20 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
           c.env,
           providerConfig ?? undefined
         );
+        // PILE-321 — assigning an agent dispatches a lane, so the same
+        // team-defaultRepo inheritance as /dispatch applies here.
+        const dispatchTarget = await inheritTeamDefaultRepo(
+          db,
+          stub,
+          organizationId,
+          issue,
+          identity.id
+        );
         session = await dispatchAgent(
           effectiveEnv,
           assigneeId,
           organizationId,
-          issue,
+          dispatchTarget,
           identity,
           undefined,
           getExecutionCtx(c)
