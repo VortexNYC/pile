@@ -758,7 +758,7 @@ def resume_repo():
     # current remote state (its earlier push included).
     validate_branch()
     refresh_github_token()
-    if not os.path.isdir(os.path.join(REPO_DIR, '.git')):
+    if not os.path.exists(os.path.join(REPO_DIR, '.git')):
         # The prior run never had a checkout — a repo-less lane whose issue
         # gained a repo before this prompt. Treat the resume as a first run.
         create_branch()
@@ -1060,13 +1060,18 @@ def remote_branch_head(env):
     # not trusted: a lane can plant it, and a failed resume fetch leaves it
     # missing even when origin has the branch — the first crashed rev-list,
     # the second ended a lane with nothing shipped (PILE-322).
-    ls = run([GIT, '-C', REPO_DIR] + _GIT_SAFE_FLAGS + ['ls-remote', '--heads', 'origin', BRANCH],
+    ls = run([GIT, '-C', REPO_DIR] + _GIT_SAFE_FLAGS + ['ls-remote', '--heads', 'origin', f'refs/heads/{BRANCH}'],
              env=env, capture_output=True, text=True, check=False)
     if ls.returncode != 0:
         print('ls-remote origin failed — cannot verify remote branch state')
         return None
-    line = (ls.stdout or '').strip()
-    return line.split()[0] if line else ''
+    # ls-remote patterns tail-match path components — compare the refname
+    # exactly so refs/heads/foo/<branch> can't pass for the lane branch.
+    for line in (ls.stdout or '').splitlines():
+        sha, _, ref = line.partition('\t')
+        if ref == f'refs/heads/{BRANCH}':
+            return sha.strip()
+    return ''
 
 
 def ensure_fresh_github_token():
@@ -1202,9 +1207,10 @@ def commit_and_push(agent_env=None):
             return True
         print('no changes to commit')
         return False
-    if not head or (remote_sha == '' and head == _base_sha()):
-        # No commits at all, or a first push on a branch that is still the
-        # clone base — shipping it would open an empty PR.
+    if not head or head == _base_sha():
+        # No commits at all, or the lane is still at its clone base while
+        # the remote tip differs (branch missing, diverged, or the lookup
+        # failed) — pushing base would open an empty PR or clobber commits.
         print('no changes to commit')
         return False
     gate = run_hook('prePush', agent_env or scrubbed_env())
@@ -1220,7 +1226,9 @@ def commit_and_push(agent_env=None):
         # verify the push landed instead of trusting the exit code, so a
         # silent no-op classifies as infra and the sweep re-drives it.
         after = remote_branch_head(git_auth_env())
-        if after is not None and after != head:
+        if after is None:
+            raise TransportError(f'git push succeeded but the re-check of origin {BRANCH} failed — cannot verify it landed')
+        if after != head:
             raise TransportError(f'git push succeeded but origin {BRANCH} is at {after[:12] or "<missing>"}, expected {head[:12]}')
         return True
     finally:

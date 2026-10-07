@@ -395,6 +395,19 @@ elif mode == "pushstate":
         git("add", "-A")
         git("commit", "-q", "-m", "lane work")
         push_to_bare(git("rev-parse", "HEAD") if state == "head" else base)
+    if state == "silent":
+        # The push transport reports success without landing — the
+        # post-push re-check must fail loudly, not end with nothing shipped.
+        ns["run_transport"] = lambda *a, **k: None
+    elif state == "flaky":
+        # The push lands for real but the verify ls-remote fails —
+        # unverified is infra, not success.
+        real_rbh = ns["remote_branch_head"]
+        rbh_calls = []
+        def flaky_rbh(e):
+            rbh_calls.append(1)
+            return real_rbh(e) if len(rbh_calls) == 1 else None
+        ns["remote_branch_head"] = flaky_rbh
     out = {}
     try:
         out["pushed"] = ns["commit_and_push"](env)
@@ -416,8 +429,15 @@ elif mode == "resume":
     ns["clone_repo"] = lambda: calls.append("clone_repo")
     ns["clone_secondary_repos"] = lambda: calls.append("clone_secondary_repos")
     shutil.rmtree(os.path.join(repo, ".git"))
-    ns["resume_repo"]()
+    if os.environ.get("TEST_GITFILE"):
+        # A linked worktree keeps .git as a gitdir file — still a checkout.
+        with open(os.path.join(repo, ".git"), "w") as f:
+            f.write("gitdir: /tmp/pile-worktree\\n")
     out = {"calls": calls}
+    try:
+        ns["resume_repo"]()
+    except Exception as e:
+        out["error"] = "%s: %s" % (type(e).__name__, e)
 else:
     raise AssertionError("unknown mode " + mode)
 
@@ -590,6 +610,22 @@ describe("runner push state (PILE-322)", () => {
     expect(res.remoteSha).toBe(res.head);
   });
 
+  it("fails loudly when the push reports success but never lands", () => {
+    const res = pushState("silent");
+    expect(res.pushed).toBeUndefined();
+    expect(res.error).toContain("TransportError");
+    expect(res.error).toContain("<missing>");
+    expect(res.remoteSha).toBe("");
+  });
+
+  it("fails loudly when the post-push re-check cannot verify the tip", () => {
+    const res = pushState("flaky");
+    expect(res.pushed).toBeUndefined();
+    expect(res.error).toContain("TransportError");
+    expect(res.error).toContain("cannot verify");
+    expect(res.remoteSha).toBe(res.head);
+  });
+
   it("takes the first-run clone path when the kept sandbox has no checkout", () => {
     const res = runHooksHarness({}, "resume");
     expect(res.calls).toEqual([
@@ -597,5 +633,13 @@ describe("runner push state (PILE-322)", () => {
       "clone_repo",
       "clone_secondary_repos",
     ]);
+  });
+
+  it("treats a .git file (linked worktree) as a present checkout", () => {
+    const res = runHooksHarness({}, "resume", { TEST_GITFILE: "1" });
+    expect(res.calls).toEqual([]);
+    // _reset_git_config refuses a non-plain-directory .git — a loud stop,
+    // not a silent re-clone that would rmtree the worktree's working tree.
+    expect(res.error).toContain("refusing to push");
   });
 });
