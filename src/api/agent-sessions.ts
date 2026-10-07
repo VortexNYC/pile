@@ -48,8 +48,8 @@ import { scrubLaneText } from "../global/redact.js";
 import { createRepoBranch } from "../global/repo-branches.js";
 import { githubInstallations } from "../global/schema.js";
 import { replyLaneResultToTicket } from "../global/support-escalation.js";
-import { canAccessTeam } from "../global/teams.js";
 import { VortexError } from "../platform/errors.js";
+import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 import {
@@ -64,6 +64,7 @@ import type {
 } from "../workspace/schema.js";
 import { captureSessionPrArtifact } from "./agent-artifacts.js";
 import { getExecutionCtx } from "./execution-ctx.js";
+import { assertIssueAccess, issueViewer } from "./issue-access.js";
 import { fetchGitHubCheckRuns, fetchGitHubPull, parsePrUrl } from "./pr.js";
 import { getWorkspaceStub, resolveIssueRef } from "./stub.js";
 
@@ -78,6 +79,38 @@ const agentActivityTypeSchema = z.enum([
 ]);
 
 type AgentSession = InferSelectModel<typeof workspaceAgentSessions>;
+
+// Session-scoped routes deny access when the session's issue is restricted
+// for the caller (issue_permissions) — session rows and lane activities
+// carry issue content. Denial reports "Session not found" so restricted
+// issues and their lanes stay invisible.
+async function assertSessionIssueAccess(
+  db: ReturnType<typeof createD1>,
+  stub: ReturnType<typeof getWorkspaceStub>,
+  session: Pick<AgentSession, "issueId">,
+  identity: WorkspaceIdentity
+): Promise<void> {
+  // Lane tokens ("lane:<sessionId>") are verified against this exact
+  // session upstream — the token is the grant; a restricted issue's lane
+  // must still read/write its own session.
+  if (identity.id.startsWith("lane:")) return;
+  const issue = await stub.getIssue(session.issueId);
+  // Sessions outlive deleted issues — nothing to check against.
+  if (!issue) return;
+  try {
+    await assertIssueAccess(db, stub, issue, identity);
+  } catch (err) {
+    if (err instanceof VortexError && err.status === 404) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Session not found",
+      });
+    }
+    throw err;
+  }
+}
+
 type AgentActivity = InferSelectModel<typeof workspaceAgentActivities>;
 
 const agentSessionStatusSchema = z.enum([
@@ -1286,7 +1319,14 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         if (!issue) {
           return dispatchBatchItemError(issueId, "Issue not found");
         }
-        if (!(await canAccessTeam(db, issue.teamId, identity))) {
+        let accessible = true;
+        try {
+          await assertIssueAccess(db, stub, issue, identity);
+        } catch (err) {
+          if (!(err instanceof VortexError)) throw err;
+          accessible = false;
+        }
+        if (!accessible) {
           return dispatchBatchItemError(issueId, "Issue not found");
         }
         // Same guard as single dispatch: branch is the lane's working branch,
@@ -1436,10 +1476,15 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId } = c.req.valid("param");
     const query = c.req.valid("query");
     const stub = getWorkspaceStub(c.env, organizationId);
+    const viewer = await issueViewer(
+      createD1(c.env.D1),
+      c.get("workspaceIdentity")
+    );
     if (isSummaryQuery(query.summary)) {
       const rows = await stub.listAgentSessionSummaries({
         issueId: query.issueId,
         limit: query.limit ? Number(query.limit) : undefined,
+        viewer,
       });
       return c.json({ sessions: rows.map(toSessionSummary) }, 200);
     }
@@ -1449,6 +1494,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
           ? undefined
           : await resolveIssueRef(stub, query.issueId),
       limit: query.limit ? Number(query.limit) : undefined,
+      viewer,
     });
     return c.json(
       {
@@ -1461,7 +1507,9 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(agentStatsRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
-    const rows = await stub.listAgentSessions({});
+    const rows = await stub.listAgentSessions({
+      viewer: await issueViewer(createD1(c.env.D1), c.get("workspaceIdentity")),
+    });
 
     const TERMINAL = new Set(["completed", "failed", "canceled"]);
     const byStatus: Record<string, number> = {};
@@ -1520,7 +1568,10 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(fleetHealthRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
-    const rows = await stub.listAgentSessions({ limit: 200 });
+    const rows = await stub.listAgentSessions({
+      limit: 200,
+      viewer: await issueViewer(createD1(c.env.D1), c.get("workspaceIdentity")),
+    });
 
     const TERMINAL = new Set(["completed", "failed", "canceled"]);
     const UNHEALTHY_STREAK = 3;
@@ -1588,9 +1639,19 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(issueLiveRoute, async (c) => {
     const { organizationId, issueId } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
-    const live = await stub.getActiveAgentSessionForIssue(
-      await resolveIssueRef(stub, issueId)
-    );
+    const issue = await stub.getIssue(issueId);
+    // Sessions may reference issue refs with no issue row (synthetic
+    // sessions, imported lanes) — keep the historical pass-through; only
+    // real issues carry grants to check.
+    if (issue) {
+      await assertIssueAccess(
+        createD1(c.env.D1),
+        stub,
+        issue,
+        c.get("workspaceIdentity")
+      );
+    }
+    const live = await stub.getActiveAgentSessionForIssue(issue?.id ?? issueId);
     return c.json({
       session: live ? toSessionResponse(live.session, live.activities) : null,
       activities: live?.activities.map(toActivityResponse) ?? [],
@@ -1612,6 +1673,12 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     if (!session) {
       return c.json({ message: "Session not found" }, 404);
     }
+    await assertSessionIssueAccess(
+      createD1(c.env.D1),
+      stub,
+      session,
+      c.var.workspaceIdentity
+    );
     return c.json(toSessionResponse(session, session.activities), 200);
   });
 
@@ -1623,6 +1690,12 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     if (!session) {
       return c.json({ message: "Session not found" }, 404);
     }
+    await assertSessionIssueAccess(
+      createD1(c.env.D1),
+      stub,
+      session,
+      c.var.workspaceIdentity
+    );
     // One stream: activity spans + lifecycle events merged chronologically.
     const timeline = await stub.listAgentTimeline(sessionId, {
       limit: limit ? Number(limit) : undefined,
@@ -1655,6 +1728,12 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     if (!session) {
       return c.json({ message: "Session not found" }, 404);
     }
+    await assertSessionIssueAccess(
+      createD1(c.env.D1),
+      stub,
+      session,
+      c.var.workspaceIdentity
+    );
     if (!session.prUrl) {
       return c.json({ checks: [], prCheckState: null });
     }
@@ -1708,6 +1787,12 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     if (!session) {
       return c.json({ message: "Session not found" }, 404);
     }
+    await assertSessionIssueAccess(
+      createD1(c.env.D1),
+      stub,
+      session,
+      c.var.workspaceIdentity
+    );
 
     const activity = await stub.addAgentActivity({
       sessionId,
@@ -1733,6 +1818,12 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     if (!session) {
       return c.json({ message: "Session not found" }, 404);
     }
+    await assertSessionIssueAccess(
+      createD1(c.env.D1),
+      stub,
+      session,
+      c.var.workspaceIdentity
+    );
 
     const activity = await stub.addAgentSessionArtifact({
       sessionId,
@@ -1757,6 +1848,12 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     if (!session) {
       return c.json({ message: "Session not found" }, 404);
     }
+    await assertSessionIssueAccess(
+      createD1(c.env.D1),
+      stub,
+      session,
+      c.var.workspaceIdentity
+    );
 
     const updated = await stub.applyAgentSessionResult(
       sessionId,
@@ -2299,6 +2396,12 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     if (!session) {
       return c.json({ message: "Session not found" }, 404);
     }
+    await assertSessionIssueAccess(
+      createD1(c.env.D1),
+      stub,
+      session,
+      c.var.workspaceIdentity
+    );
     const terminal =
       session.status === "completed" ||
       session.status === "failed" ||
@@ -2343,6 +2446,12 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     if (!session) {
       return c.json({ message: "Session not found" }, 404);
     }
+    await assertSessionIssueAccess(
+      createD1(c.env.D1),
+      stub,
+      session,
+      c.var.workspaceIdentity
+    );
 
     const providerConfig = await loadProviderConfig(
       c.env,
@@ -2381,6 +2490,12 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     if (!session) {
       return c.json({ message: "Session not found" }, 404);
     }
+    await assertSessionIssueAccess(
+      createD1(c.env.D1),
+      stub,
+      session,
+      c.var.workspaceIdentity
+    );
 
     const providerConfig = await loadProviderConfig(
       c.env,
@@ -2425,6 +2540,12 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     if (!session) {
       return c.json({ message: "Session not found" }, 404);
     }
+    await assertSessionIssueAccess(
+      createD1(c.env.D1),
+      stub,
+      session,
+      c.var.workspaceIdentity
+    );
 
     const parentIssue = await stub.getIssue(session.issueId);
     if (!parentIssue) {
@@ -2541,6 +2662,12 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     if (!session) {
       return c.json({ message: "Session not found" }, 404);
     }
+    await assertSessionIssueAccess(
+      createD1(c.env.D1),
+      stub,
+      session,
+      c.var.workspaceIdentity
+    );
     const issue = await stub.getIssue(session.issueId);
     if (!issue) {
       return c.json({ message: "Issue not found" }, 404);
@@ -2611,6 +2738,12 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     if (!session) {
       return c.json({ message: "Session not found" }, 404);
     }
+    await assertSessionIssueAccess(
+      createD1(c.env.D1),
+      stub,
+      session,
+      c.var.workspaceIdentity
+    );
     const issue = await stub.getIssue(session.issueId);
     if (!issue) {
       return c.json({ message: "Issue not found" }, 404);

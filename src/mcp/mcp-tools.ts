@@ -716,6 +716,31 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdIssuesIdPermissionsActorId",
+    "description": "Delete issue permission — Revoke an actor's access grant. When the last grant is removed the issue is open to the workspace again. (DELETE /workspaces/{organizationId}/issues/{id}/permissions/{actorId}) Path params (top-level, required): organizationId, id, actorId.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/issues/{id}/permissions/{actorId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "actorId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "actorId",
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdIssuesIssueIdAttachmentsId",
     "description": "Delete issue attachment (DELETE /workspaces/{organizationId}/issues/{issueId}/attachments/{id}) Path params (top-level, required): organizationId, issueId, id.",
     "method": "DELETE",
@@ -3262,6 +3287,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "List issue children (GET /workspaces/{organizationId}/issues/{id}/children) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues/{id}/children",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdIssuesIdPermissions",
+    "description": "List issue permissions (GET /workspaces/{organizationId}/issues/{id}/permissions) Path params (top-level, required): organizationId, id.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/issues/{id}/permissions",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -15585,6 +15631,47 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "required": [
             "actorId",
             "level"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "putWorkspacesOrganizationIdIssuesIdPermissions",
+    "description": "Update issue permissions — Grant an actor access to this issue. The first grant restricts the issue to listed actors + workspace admins; revoking the last grant reopens it. (PUT /workspaces/{organizationId}/issues/{id}/permissions) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: actorId*, actorType (* = required).",
+    "method": "PUT",
+    "path": "/workspaces/{organizationId}/issues/{id}/permissions",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "actorId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "actorType": {
+              "type": "string",
+              "enum": [
+                "user",
+                "agent",
+                "team"
+              ]
+            }
+          },
+          "required": [
+            "actorId"
           ]
         }
       },

@@ -1,6 +1,7 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
+import { createD1 } from "../global/db.js";
 import {
   GITHUB_USER_AGENT,
   getInstallationTokenForRepo,
@@ -8,6 +9,7 @@ import {
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
+import { assertIssueAccess } from "./issue-access.js";
 import { getWorkspaceStub } from "./stub.js";
 
 const reconcileResponseSchema = z.object({
@@ -254,6 +256,12 @@ export function registerPrRoutes(app: OpenAPIHono<AppContext>) {
     if (!issue) {
       return c.json({ message: "Issue not found" }, 404);
     }
+    await assertIssueAccess(
+      createD1(c.env.D1),
+      stub,
+      issue,
+      c.var.workspaceIdentity
+    );
 
     const override = body.prUrl;
     if (override === undefined) {
@@ -330,6 +338,12 @@ export function registerPrRoutes(app: OpenAPIHono<AppContext>) {
     if (!issue) {
       return c.json({ message: "Issue not found" }, 404);
     }
+    await assertIssueAccess(
+      createD1(c.env.D1),
+      stub,
+      issue,
+      c.var.workspaceIdentity
+    );
 
     return c.json({
       id: issue.id,

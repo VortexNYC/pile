@@ -3,12 +3,11 @@ import { createRoute, z } from "@hono/zod-openapi";
 import emojiRegex from "emoji-regex";
 
 import { createD1 } from "../global/db.js";
-import { canAccessTeam } from "../global/teams.js";
 import { VortexError } from "../platform/errors.js";
-import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 import type { Issue } from "../types/workspace.js";
+import { assertIssueAccess } from "./issue-access.js";
 
 const reactionSchema = z.object({
   id: z.string(),
@@ -44,21 +43,6 @@ async function getIssue(
     });
   }
   return issue;
-}
-
-async function assertIssueAccess(
-  db: ReturnType<typeof createD1>,
-  issue: Issue,
-  identity: WorkspaceIdentity
-): Promise<void> {
-  const allowed = await canAccessTeam(db, issue.teamId, identity);
-  if (!allowed) {
-    throw new VortexError({
-      code: "NOT_FOUND",
-      status: 404,
-      message: "Issue not found",
-    });
-  }
 }
 
 async function getStub(env: WorkerEnv, organizationId: string) {
@@ -171,7 +155,7 @@ export function registerReactionRoutes(app: OpenAPIHono<AppContext>) {
     const db = createD1(c.env.D1);
     const stub = await getStub(c.env, organizationId);
     const issue = await getIssue(stub, id);
-    await assertIssueAccess(db, issue, identity);
+    await assertIssueAccess(db, stub, issue, identity);
     const rows = await stub.listReactions("issue", issue.id);
     return c.json({ reactions: rows });
   });
@@ -183,7 +167,7 @@ export function registerReactionRoutes(app: OpenAPIHono<AppContext>) {
     const db = createD1(c.env.D1);
     const stub = await getStub(c.env, organizationId);
     const issue = await getIssue(stub, id);
-    await assertIssueAccess(db, issue, identity);
+    await assertIssueAccess(db, stub, issue, identity);
     const reaction = await stub.createReaction({
       targetType: "issue",
       targetId: issue.id,
@@ -210,7 +194,7 @@ export function registerReactionRoutes(app: OpenAPIHono<AppContext>) {
     const stub = await getStub(c.env, organizationId);
     if (comment.issueId) {
       const issue = await getIssue(stub, comment.issueId);
-      await assertIssueAccess(db, issue, identity);
+      await assertIssueAccess(db, stub, issue, identity);
     }
     const rows = await stub.listReactions("comment", commentId);
     return c.json({ reactions: rows });
@@ -234,7 +218,7 @@ export function registerReactionRoutes(app: OpenAPIHono<AppContext>) {
     const stub = await getStub(c.env, organizationId);
     if (comment.issueId) {
       const issue = await getIssue(stub, comment.issueId);
-      await assertIssueAccess(db, issue, identity);
+      await assertIssueAccess(db, stub, issue, identity);
     }
     const reaction = await stub.createReaction({
       targetType: "comment",
@@ -248,6 +232,7 @@ export function registerReactionRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(deleteReactionRoute, async (c) => {
     const { organizationId, reactionId } = c.req.valid("param");
     const identity = c.get("workspaceIdentity");
+    const db = createD1(c.env.D1);
     const stub = await getStub(c.env, organizationId);
     const reaction = await stub.getReaction(reactionId);
     if (!reaction) {
@@ -256,6 +241,16 @@ export function registerReactionRoutes(app: OpenAPIHono<AppContext>) {
         status: 404,
         message: "Reaction not found",
       });
+    }
+    const targetIssueId =
+      reaction.targetType === "issue"
+        ? reaction.targetId
+        : reaction.targetType === "comment"
+          ? (await stub.getComment(reaction.targetId))?.issueId
+          : undefined;
+    if (targetIssueId) {
+      const issue = await getIssue(stub, targetIssueId);
+      await assertIssueAccess(db, stub, issue, identity);
     }
     if (
       reaction.actorId !== identity.id &&

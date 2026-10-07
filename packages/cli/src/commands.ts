@@ -826,6 +826,67 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "issues permissions list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/issues/{id}/permissions",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "issues permissions update": {
+    method: "PUT",
+    path: "/workspaces/{organizationId}/issues/{id}/permissions",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "actorId",
+        flag: "actor",
+      },
+      {
+        name: "actorType",
+        flag: "actor-type",
+      },
+    ],
+  },
+  "issues permissions delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/issues/{id}/permissions/{actorId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+      {
+        name: "actorId",
+        flag: "actor",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "issues children list": {
     method: "GET",
     path: "/workspaces/{organizationId}/issues/{id}/children",

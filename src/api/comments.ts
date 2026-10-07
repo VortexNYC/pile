@@ -16,12 +16,12 @@ import { findGithubInstallation } from "../global/github-installations.js";
 import { gitlabFetch } from "../global/gitlab-auth.js";
 import { findGitlabInstallation } from "../global/gitlab-installations.js";
 import { findRepoIssueByIssueId } from "../global/repo-issues.js";
-import { canAccessTeam } from "../global/teams.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 import { getExecutionCtx } from "./execution-ctx.js";
+import { assertIssueAccess } from "./issue-access.js";
 import { resolveMentions } from "./mentions.js";
 
 async function getStub(env: WorkerEnv, organizationId: string) {
@@ -217,14 +217,7 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
         message: "Issue not found",
       });
     }
-    const allowed = await canAccessTeam(db, issue.teamId, identity);
-    if (!allowed) {
-      throw new VortexError({
-        code: "NOT_FOUND",
-        status: 404,
-        message: "Issue not found",
-      });
-    }
+    await assertIssueAccess(db, issueStub, issue, identity);
     const items = await issueStub.listComments(issue.id);
     return c.json({ comments: items });
   });
@@ -250,14 +243,7 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
         message: "Issue not found",
       });
     }
-    const allowed = await canAccessTeam(db, issue.teamId, identity);
-    if (!allowed) {
-      throw new VortexError({
-        code: "FORBIDDEN",
-        status: 403,
-        message: "Cannot comment on this issue",
-      });
-    }
+    await assertIssueAccess(db, issueStub, issue, identity);
     const mentions = await resolveMentions(db, organizationId, body);
     const created = await issueStub.createComment({
       issueId: issue.id,
@@ -485,14 +471,7 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
         message: "Comment not found",
       });
     }
-    const allowed = await canAccessTeam(db, issue.teamId, identity);
-    if (!allowed) {
-      throw new VortexError({
-        code: "NOT_FOUND",
-        status: 404,
-        message: "Comment not found",
-      });
-    }
+    await assertIssueAccess(db, issueStub, issue, identity);
     return c.json(item);
   });
 
@@ -511,14 +490,7 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
         message: "Comment not found",
       });
     }
-    const allowed = await canAccessTeam(db, issue.teamId, identity);
-    if (!allowed) {
-      throw new VortexError({
-        code: "NOT_FOUND",
-        status: 404,
-        message: "Comment not found",
-      });
-    }
+    await assertIssueAccess(db, issueStub, issue, identity);
     const item = await issueStub.updateComment(id, { body });
     if (!item) {
       throw new VortexError({
@@ -545,14 +517,7 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
         message: "Comment not found",
       });
     }
-    const allowed = await canAccessTeam(db, issue.teamId, identity);
-    if (!allowed) {
-      throw new VortexError({
-        code: "NOT_FOUND",
-        status: 404,
-        message: "Comment not found",
-      });
-    }
+    await assertIssueAccess(db, issueStub, issue, identity);
     await issueStub.deleteComment(id);
     await issueStub.emitCommentDeleted(id, issue.id);
     return c.body(null, 204);
@@ -572,14 +537,7 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
         message: "Comment not found",
       });
     }
-    const allowed = await canAccessTeam(db, issue.teamId, identity);
-    if (!allowed) {
-      throw new VortexError({
-        code: "FORBIDDEN",
-        status: 403,
-        message: "Cannot resolve this comment",
-      });
-    }
+    await assertIssueAccess(db, stub, issue, identity);
     const item = await stub.resolveComment(id, identity.id);
     return c.json(item!);
   });
@@ -598,14 +556,7 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
         message: "Comment not found",
       });
     }
-    const allowed = await canAccessTeam(db, issue.teamId, identity);
-    if (!allowed) {
-      throw new VortexError({
-        code: "FORBIDDEN",
-        status: 403,
-        message: "Cannot unresolve this comment",
-      });
-    }
+    await assertIssueAccess(db, stub, issue, identity);
     const item = await stub.unresolveComment(id);
     return c.json(item!);
   });
