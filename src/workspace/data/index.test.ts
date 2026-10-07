@@ -17,6 +17,11 @@ import {
   getAgentSession,
   getEntityAttachment,
   getNotificationPreferences,
+  hasIssueAccess,
+  hiddenIssueIds,
+  listIssuePermissions,
+  setIssuePermission,
+  revokeIssuePermission,
   listEntityAttachments,
   listCustomerIntakeItems,
   listCustomers,
@@ -394,11 +399,13 @@ describe("customer email intake resolution", () => {
         organizationId: WORKSPACE_ID,
         name: "Older",
         url: "https://dupe.example",
+        createdAt: "2026-01-01T00:00:00.000Z",
       });
       createCustomer(db, {
         organizationId: WORKSPACE_ID,
         name: "Newer",
         url: "https://mail.dupe.example",
+        createdAt: "2026-01-02T00:00:00.000Z",
       });
       // Force distinct createdAt so the ordering is exercised, not insertion
       // order luck.
@@ -449,5 +456,45 @@ describe("customerUrlHost", () => {
     expect(customerUrlHost("http://acme.example:8080/x")).toBe("acme.example");
     expect(customerUrlHost("")).toBeNull();
     expect(customerUrlHost("   ")).toBeNull();
+  });
+});
+
+describe("issue permission grants", () => {
+  it("defaults open, restricts on first grant, covers teams, and reopens on revoke", async () => {
+    await withDb(async (db) => {
+      const issueId = crypto.randomUUID();
+      const otherIssueId = crypto.randomUUID();
+
+      // No rows = open to everyone.
+      expect(hasIssueAccess(db, issueId, "user-x", [])).toBe(true);
+      expect(hiddenIssueIds(db, "user-x", [])).toEqual([]);
+
+      // A direct grant restricts the issue to the listed actor.
+      setIssuePermission(db, WORKSPACE_ID, issueId, "user-a", "user");
+      expect(hasIssueAccess(db, issueId, "user-a", [])).toBe(true);
+      expect(hasIssueAccess(db, issueId, "user-x", [])).toBe(false);
+      expect(hiddenIssueIds(db, "user-x", [])).toEqual([issueId]);
+      expect(hiddenIssueIds(db, "user-a", [])).toEqual([]);
+
+      // A team grant covers every member of that team.
+      setIssuePermission(db, WORKSPACE_ID, issueId, "team-1", "team");
+      expect(hasIssueAccess(db, issueId, "user-x", ["team-1"])).toBe(true);
+      expect(hasIssueAccess(db, issueId, "user-x", ["team-2"])).toBe(false);
+      expect(hiddenIssueIds(db, "user-x", ["team-1"])).toEqual([]);
+
+      // Grants on one issue don't leak to another.
+      expect(hasIssueAccess(db, otherIssueId, "user-x", [])).toBe(true);
+
+      // setIssuePermission upserts on (issue, actor) — no duplicate rows.
+      setIssuePermission(db, WORKSPACE_ID, issueId, "user-a", "user");
+      expect(listIssuePermissions(db, issueId)).toHaveLength(2);
+
+      // Revoking all grants reopens the issue.
+      expect(revokeIssuePermission(db, issueId, "user-a")).toBe(true);
+      expect(revokeIssuePermission(db, issueId, "team-1")).toBe(true);
+      expect(revokeIssuePermission(db, issueId, "user-a")).toBe(false);
+      expect(hasIssueAccess(db, issueId, "user-x", [])).toBe(true);
+      expect(hiddenIssueIds(db, "user-x", [])).toEqual([]);
+    });
   });
 });

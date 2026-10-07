@@ -1,9 +1,14 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
+import { createD1 } from "../global/db.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
-import { getWorkspaceStub, resolveIssueRef } from "./stub.js";
+import {
+  hiddenIssueIdsForIdentity,
+  resolveVisibleIssueRef,
+} from "./issue-access.js";
+import { getWorkspaceStub } from "./stub.js";
 
 const mcpServerScopeSchema = z.enum(["workspace", "repo", "issue"]);
 
@@ -113,7 +118,19 @@ export function registerMcpServerRoutes(app: OpenAPIHono<AppContext>) {
     const { scope } = c.req.valid("query");
     const stub = getWorkspaceStub(c.env, organizationId);
     const rows = await stub.listMcpServers(scope);
-    return c.json({ servers: rows });
+    // Hide links to restricted issues the caller can't see.
+    const hidden = new Set(
+      await hiddenIssueIdsForIdentity(
+        createD1(c.env.D1),
+        stub,
+        c.var.workspaceIdentity
+      )
+    );
+    return c.json({
+      servers: rows.map((row) =>
+        row.issueId && hidden.has(row.issueId) ? { ...row, issueId: null } : row
+      ),
+    });
   });
 
   app.openapi(createMcpServerRoute, async (c) => {
@@ -125,7 +142,12 @@ export function registerMcpServerRoutes(app: OpenAPIHono<AppContext>) {
       issueId:
         body.issueId === undefined
           ? undefined
-          : await resolveIssueRef(stub, body.issueId),
+          : await resolveVisibleIssueRef(
+              createD1(c.env.D1),
+              stub,
+              body.issueId,
+              c.var.workspaceIdentity
+            ),
     });
     return c.json(row, 201);
   });
@@ -136,6 +158,16 @@ export function registerMcpServerRoutes(app: OpenAPIHono<AppContext>) {
     const row = await stub.getMcpServer(id);
     if (!row) {
       return c.json({ message: "MCP server not found" }, 404);
+    }
+    if (row.issueId) {
+      const hidden = await hiddenIssueIdsForIdentity(
+        createD1(c.env.D1),
+        stub,
+        c.var.workspaceIdentity
+      );
+      if (hidden.includes(row.issueId)) {
+        return c.json({ ...row, issueId: null });
+      }
     }
     return c.json(row);
   });

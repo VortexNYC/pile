@@ -2555,6 +2555,7 @@ export interface CustomerInput {
   tierId?: string | null;
   statusId?: string | null;
   ownerId?: string | null;
+  createdAt?: string;
 }
 
 export function createCustomer(db: WorkspaceDb, input: CustomerInput) {
@@ -2571,7 +2572,7 @@ export function createCustomer(db: WorkspaceDb, input: CustomerInput) {
       tierId: input.tierId ?? null,
       statusId: input.statusId ?? null,
       ownerId: input.ownerId ?? null,
-      createdAt: now,
+      createdAt: input.createdAt ?? now,
       updatedAt: now,
     })
     .returning()

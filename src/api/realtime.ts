@@ -4,6 +4,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
+import { wsViewerStampedRequest } from "./issue-access.js";
 
 const realtimeRoute = createRoute({
   method: "get",
@@ -64,6 +65,6 @@ export function registerRealtimeRoutes(app: OpenAPIHono<AppContext>) {
       env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
     );
     await stub.setOrganizationId(organizationId);
-    return toMutableResponse(await stub.fetch(c.req.raw));
+    return toMutableResponse(await stub.fetch(await wsViewerStampedRequest(c)));
   });
 }

@@ -1,11 +1,17 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
+import type { Context } from "hono";
 
+import { createD1 } from "../global/db.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 import type { workspaceEntityAttachments } from "../workspace/schema.js";
-import { getWorkspaceStub, resolveIssueRef } from "./stub.js";
+import {
+  hiddenIssueIdsForIdentity,
+  resolveVisibleIssueRef,
+} from "./issue-access.js";
+import { getWorkspaceStub } from "./stub.js";
 
 const customerSchema = z.object({
   id: z.string(),
@@ -603,6 +609,22 @@ const listIntakeItemsRoute = createRoute({
   },
 });
 
+// Needs keep their row but drop `issueId` when it points at a restricted
+// issue the caller can't see — the link alone proves the issue exists.
+async function scrubNeedIssueId<T extends { issueId: string | null }>(
+  c: Context<AppContext>,
+  stub: ReturnType<typeof getWorkspaceStub>,
+  need: T
+): Promise<T> {
+  if (!need.issueId) return need;
+  const hidden = await hiddenIssueIdsForIdentity(
+    createD1(c.env.D1),
+    stub,
+    c.var.workspaceIdentity
+  );
+  return hidden.includes(need.issueId) ? { ...need, issueId: null } : need;
+}
+
 export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listCustomersRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
@@ -811,6 +833,8 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listNeedsRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const query = c.req.valid("query");
+    const db = createD1(c.env.D1);
+    const identity = c.var.workspaceIdentity;
     const stub = getWorkspaceStub(c.env, organizationId);
     await stub.setOrganizationId(organizationId);
     const needs = await stub.listCustomerNeeds({
@@ -818,9 +842,18 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
       issueId:
         query.issueId === undefined
           ? undefined
-          : await resolveIssueRef(stub, query.issueId),
+          : await resolveVisibleIssueRef(db, stub, query.issueId, identity),
     });
-    return c.json({ needs });
+    // Needs linked to issues the caller can't see keep the row but drop the
+    // link — the issueId alone proves a restricted issue exists.
+    const hidden = new Set(await hiddenIssueIdsForIdentity(db, stub, identity));
+    return c.json({
+      needs: needs.map((need) =>
+        need.issueId && hidden.has(need.issueId)
+          ? { ...need, issueId: null }
+          : need
+      ),
+    });
   });
 
   app.openapi(createNeedRoute, async (c) => {
@@ -835,7 +868,12 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
         issueId:
           input.issueId === undefined
             ? undefined
-            : await resolveIssueRef(stub, input.issueId),
+            : await resolveVisibleIssueRef(
+                createD1(c.env.D1),
+                stub,
+                input.issueId,
+                identity
+              ),
       },
       identity.id
     );
@@ -848,7 +886,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     await stub.setOrganizationId(organizationId);
     const need = await stub.getCustomerNeed(id);
     if (!need) return notFound("Need not found");
-    return c.json(need);
+    return c.json(await scrubNeedIssueId(c, stub, need));
   });
 
   app.openapi(updateNeedRoute, async (c) => {
@@ -864,12 +902,17 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
         issueId:
           input.issueId === undefined
             ? undefined
-            : await resolveIssueRef(stub, input.issueId),
+            : await resolveVisibleIssueRef(
+                createD1(c.env.D1),
+                stub,
+                input.issueId,
+                identity
+              ),
       },
       identity.id
     );
     if (!need) return notFound("Need not found");
-    return c.json(need);
+    return c.json(await scrubNeedIssueId(c, stub, need));
   });
 
   app.openapi(deleteNeedRoute, async (c) => {

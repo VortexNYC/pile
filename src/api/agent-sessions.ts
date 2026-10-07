@@ -64,7 +64,11 @@ import type {
 } from "../workspace/schema.js";
 import { captureSessionPrArtifact } from "./agent-artifacts.js";
 import { getExecutionCtx } from "./execution-ctx.js";
-import { assertIssueAccess, issueViewer } from "./issue-access.js";
+import {
+  assertIssueAccess,
+  issueViewer,
+  resolveVisibleIssueRef,
+} from "./issue-access.js";
 import { fetchGitHubCheckRuns, fetchGitHubPull, parsePrUrl } from "./pr.js";
 import { getWorkspaceStub, resolveIssueRef } from "./stub.js";
 
@@ -1115,6 +1119,9 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     if (!issue) {
       return c.json({ message: "Issue not found" }, 404);
     }
+    // Registering a session mints a lane token for the issue and the label
+    // embeds its title — restricted issues must not be reachable here.
+    await assertIssueAccess(createD1(c.env.D1), stub, issue, identity);
 
     const laneUrls = async (sessionId: string) => ({
       laneToken: await agentLogToken(c.env, organizationId, sessionId),
@@ -1296,21 +1303,30 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
             queueAfter = upstream.sessionId;
           } else {
             // A session id, or the issueId of an issue with a live session.
+            // Access-checked the same way as the target issue itself —
+            // otherwise the error/success split is a liveness oracle for
+            // restricted issues.
             const named = await stub.getAgentSession(queuedAfter);
-            if (named) {
-              if (!["completed", "failed", "canceled"].includes(named.status)) {
-                queueAfter = named.id;
+            const target =
+              named ??
+              (await stub.getActiveAgentSessionForIssue(queuedAfter))?.session;
+            let denied = false;
+            if (target) {
+              try {
+                await assertSessionIssueAccess(db, stub, target, identity);
+              } catch (err) {
+                if (!(err instanceof VortexError)) throw err;
+                denied = true;
               }
-            } else {
-              const live =
-                await stub.getActiveAgentSessionForIssue(queuedAfter);
-              if (!live) {
-                return dispatchBatchItemError(
-                  issueId,
-                  `queuedAfter target not found: ${item.queuedAfter}`
-                );
-              }
-              queueAfter = live.session.id;
+            }
+            if (!target || denied) {
+              return dispatchBatchItemError(
+                issueId,
+                `queuedAfter target not found: ${item.queuedAfter}`
+              );
+            }
+            if (!["completed", "failed", "canceled"].includes(target.status)) {
+              queueAfter = target.id;
             }
           }
         }
@@ -2814,7 +2830,21 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
     const automations = await stub.listAgentAutomations({});
-    return c.json({ automations }, 200);
+    // Automations bound to restricted issues are hidden entirely — their
+    // prompts and issue links embed issue context.
+    const hidden = new Set(
+      await stub.hiddenIssueIdsFor(
+        await issueViewer(createD1(c.env.D1), c.var.workspaceIdentity)
+      )
+    );
+    return c.json(
+      {
+        automations: automations.filter(
+          (a) => !a.issueId || !hidden.has(a.issueId)
+        ),
+      },
+      200
+    );
   });
 
   app.openapi(createAutomationRoute, async (c) => {
@@ -2827,7 +2857,12 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       issueId:
         body.issueId === undefined
           ? undefined
-          : await resolveIssueRef(stub, body.issueId),
+          : await resolveVisibleIssueRef(
+              createD1(c.env.D1),
+              stub,
+              body.issueId,
+              identity
+            ),
       enabled: true,
       createdBy: identity.id,
     });
@@ -2840,6 +2875,20 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     const existing = await stub.getAgentAutomation(automationId);
     if (!existing) {
       return c.json({ message: "Automation not found" }, 404);
+    }
+    // An automation bound to a restricted issue is invisible to members
+    // without a grant — deleting it is gated the same way.
+    if (existing.issueId) {
+      const bound = await stub.getIssue(existing.issueId);
+      if (bound) {
+        const db = createD1(c.env.D1);
+        try {
+          await assertIssueAccess(db, stub, bound, c.var.workspaceIdentity);
+        } catch (err) {
+          if (!(err instanceof VortexError)) throw err;
+          return c.json({ message: "Automation not found" }, 404);
+        }
+      }
     }
     await stub.deleteAgentAutomation(automationId);
     return c.json({ ok: true }, 200);

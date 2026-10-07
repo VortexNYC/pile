@@ -428,4 +428,227 @@ describe("issue permissions", () => {
     ).json<{ notifications: Array<{ issueId: string | null }> }>();
     expect(after.notifications.some((n) => n.issueId === issue.id)).toBe(false);
   });
+
+  it("filters restricted issues from the realtime socket stream", async () => {
+    const restricted = await createIssue(
+      seeded.organizationId,
+      seeded.adminToken,
+      { title: "Realtime restricted issue", teamId: seeded.teamId }
+    );
+    const open = await createIssue(seeded.organizationId, seeded.adminToken, {
+      title: "Realtime open issue",
+      teamId: seeded.teamId,
+    });
+    await grant(seeded, restricted.id, OTHER_ID);
+
+    // Both realtime endpoints must filter per-socket.
+    for (const path of ["realtime", "ws"]) {
+      const res = await app.fetch(
+        new Request(
+          `https://example.com/workspaces/${seeded.organizationId}/${path}`,
+          {
+            headers: {
+              Connection: "Upgrade",
+              Upgrade: "websocket",
+              "Sec-WebSocket-Version": "13",
+              "Sec-WebSocket-Key": "dGhlIHNhbXBsZSBub25jZQ==",
+              Authorization: `Bearer ${seeded.memberToken}`,
+            },
+          }
+        ),
+        env
+      );
+      expect(res.status, `GET /${path}`).toBe(101);
+      const ws = res.webSocket!;
+      ws.accept();
+
+      const frames: string[] = [];
+      ws.addEventListener("message", (event) =>
+        frames.push(String(event.data))
+      );
+
+      // Drain the `connected` frame, then touch the restricted issue followed
+      // by the open one — the open update proves the socket is live.
+      await waitFor(() => frames.some((f) => f.includes('"connected"')));
+      await fetch(
+        `/workspaces/${seeded.organizationId}/issues/${restricted.id}`,
+        { method: "PATCH", body: JSON.stringify({ title: "retitled" }) },
+        seeded.adminToken
+      );
+      await fetch(
+        `/workspaces/${seeded.organizationId}/issues/${open.id}`,
+        { method: "PATCH", body: JSON.stringify({ title: "retitled open" }) },
+        seeded.adminToken
+      );
+
+      await waitFor(() =>
+        frames.some((f) => f.includes('"issue.updated"') && f.includes(open.id))
+      );
+      expect(
+        frames.some((f) => f.includes(restricted.id)),
+        `/${path} leaked a restricted issue event`
+      ).toBe(false);
+      ws.close();
+    }
+  });
+
+  it("denies session registration on restricted issues", async () => {
+    const issue = await createIssue(seeded.organizationId, seeded.adminToken, {
+      title: "Restricted lane target",
+      teamId: seeded.teamId,
+    });
+    await grant(seeded, issue.id, OTHER_ID);
+
+    // Registering mints a lane token (which bypasses session-level checks)
+    // and embeds the title in the session label — members must not reach it.
+    const res = await fetch(
+      `/workspaces/${seeded.organizationId}/agent/sessions/register`,
+      {
+        method: "POST",
+        body: JSON.stringify({ issueId: issue.id, provider: "devin" }),
+      },
+      seeded.memberToken
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("keeps grant management admin-only", async () => {
+    const issue = await createIssue(seeded.organizationId, seeded.adminToken, {
+      title: "Grant management test",
+      teamId: seeded.teamId,
+    });
+    await grant(seeded, issue.id, MEMBER_ID);
+
+    // A granted member can see the issue but cannot revoke grants (that
+    // would declassify it) nor add new ones.
+    const base = `/workspaces/${seeded.organizationId}/issues/${issue.id}/permissions`;
+    const revokeRes = await fetch(
+      `${base}/${MEMBER_ID}`,
+      { method: "DELETE" },
+      seeded.memberToken
+    );
+    expect(revokeRes.status).toBe(403);
+    const grantSelf = await fetch(
+      base,
+      { method: "PUT", body: JSON.stringify({ actorId: OTHER_ID }) },
+      seeded.memberToken
+    );
+    expect(grantSelf.status).toBe(403);
+
+    // Nor can a member restrict an open issue to themselves.
+    const open = await createIssue(seeded.organizationId, seeded.adminToken, {
+      title: "Open issue hijack target",
+      teamId: seeded.teamId,
+    });
+    const hijack = await fetch(
+      `/workspaces/${seeded.organizationId}/issues/${open.id}/permissions`,
+      { method: "PUT", body: JSON.stringify({ actorId: MEMBER_ID }) },
+      seeded.memberToken
+    );
+    expect(hijack.status).toBe(403);
+    expect(
+      (
+        await fetch(
+          `/workspaces/${seeded.organizationId}/issues/${open.id}`,
+          {},
+          seeded.otherToken
+        )
+      ).status
+    ).toBe(200);
+  });
+
+  it("keeps a deleted restricted issue's audit entries hidden", async () => {
+    const issue = await createIssue(seeded.organizationId, seeded.adminToken, {
+      title: "Soon deleted restricted issue",
+      teamId: seeded.teamId,
+    });
+    await grant(seeded, issue.id, OTHER_ID);
+    await fetch(
+      `/workspaces/${seeded.organizationId}/issues/${issue.id}`,
+      { method: "PATCH", body: JSON.stringify({ title: "retitled" }) },
+      seeded.adminToken
+    );
+    const del = await fetch(
+      `/workspaces/${seeded.organizationId}/issues/${issue.id}`,
+      { method: "DELETE" },
+      seeded.adminToken
+    );
+    expect(del.status).toBe(204);
+
+    // The audit trail outlives the issue; its entries (title diffs included)
+    // must stay filtered for members without a grant.
+    const audit = await (
+      await fetch(
+        `/workspaces/${seeded.organizationId}/audit-log?entityType=issue`,
+        {},
+        seeded.memberToken
+      )
+    ).json<{ entries: Array<{ entityId: string }> }>();
+    expect(audit.entries.some((e) => e.entityId === issue.id)).toBe(false);
+  });
+
+  it("gates issue references on customer needs", async () => {
+    const issue = await createIssue(seeded.organizationId, seeded.adminToken, {
+      title: "Restricted need target",
+      teamId: seeded.teamId,
+    });
+    await grant(seeded, issue.id, OTHER_ID);
+
+    const customer = await (
+      await fetch(
+        `/workspaces/${seeded.organizationId}/customers`,
+        { method: "POST", body: JSON.stringify({ name: "Acme" }) },
+        seeded.adminToken
+      )
+    ).json<{ id: string }>();
+
+    // Linking a need to a restricted issue must fail like a missing issue.
+    const link = await fetch(
+      `/workspaces/${seeded.organizationId}/customer-needs`,
+      {
+        method: "POST",
+        body: JSON.stringify({ customerId: customer.id, issueId: issue.id }),
+      },
+      seeded.memberToken
+    );
+    expect(link.status).toBe(404);
+
+    // Filtering needs by a restricted ref is denied identically.
+    const filtered = await fetch(
+      `/workspaces/${seeded.organizationId}/customer-needs?issueId=${issue.id}`,
+      {},
+      seeded.memberToken
+    );
+    expect(filtered.status).toBe(404);
+
+    // An existing link's issueId is scrubbed from the member's view.
+    const linked = await fetch(
+      `/workspaces/${seeded.organizationId}/customer-needs`,
+      {
+        method: "POST",
+        body: JSON.stringify({ customerId: customer.id, issueId: issue.id }),
+      },
+      seeded.adminToken
+    );
+    expect(linked.status).toBe(201);
+    const memberNeeds = await (
+      await fetch(
+        `/workspaces/${seeded.organizationId}/customer-needs`,
+        {},
+        seeded.memberToken
+      )
+    ).json<{ needs: Array<{ id: string; issueId: string | null }> }>();
+    expect(memberNeeds.needs.map((n) => n.issueId)).not.toContain(issue.id);
+  });
 });
+
+async function waitFor(
+  predicate: () => boolean,
+  timeoutMs = 5000
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate()) {
+    if (Date.now() > deadline) throw new Error("timed out waiting for frame");
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+}
