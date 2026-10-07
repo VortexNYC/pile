@@ -29,12 +29,17 @@ with open(core_path) as f:
 g = mod.__dict__
 
 transport = []
+pushed_tip = [""]
 def fake_transport(cmd, **kwargs):
     env = kwargs.get("env") or {}
     keys = {env[k]: env.get("GIT_CONFIG_VALUE_" + k[len("GIT_CONFIG_KEY_"):])
             for k in env if k.startswith("GIT_CONFIG_KEY_")}
     transport.append({"cmd": cmd, "config": keys})
+    # Simulate a healthy remote: the recorded push lands, so the runner's
+    # post-push ls-remote verify sees origin's tip at HEAD.
+    pushed_tip[0] = subprocess.run(["git", "-C", g["REPO_DIR"], "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
 g["run_transport"] = fake_transport
+g["remote_branch_head"] = lambda env: pushed_tip[0]
 g["refresh_github_token"] = lambda: None
 g["github_api"] = lambda method, path, body=None: {"default_branch": "main"}
 
