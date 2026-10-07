@@ -298,6 +298,70 @@ describe("WorkspaceDO", () => {
     expect(updated?.prState).toBe("open");
   });
 
+  it("sets and clears prUrl/prState via updateIssue with history entries", async () => {
+    const stub = getStub();
+    const created = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Link a PR manually" })
+    );
+    expect(created.prUrl).toBeNull();
+    expect(created.prState).toBeNull();
+
+    const linked = await withWorkspace(stub, (instance) =>
+      instance.updateIssue(
+        created.id,
+        {
+          prUrl: "https://github.com/owner/repo/pull/7",
+          prState: "open",
+        },
+        "user-1"
+      )
+    );
+    expect(linked?.prUrl).toBe("https://github.com/owner/repo/pull/7");
+    expect(linked?.prState).toBe("open");
+
+    const linkHistory = await withWorkspace(stub, (instance) =>
+      instance.listIssueHistory(created.id)
+    );
+    expect(linkHistory).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "pr_url",
+          fromValue: null,
+          toValue: "https://github.com/owner/repo/pull/7",
+        }),
+        expect.objectContaining({
+          field: "pr_state",
+          fromValue: null,
+          toValue: "open",
+        }),
+      ])
+    );
+
+    const cleared = await withWorkspace(stub, (instance) =>
+      instance.updateIssue(created.id, { prUrl: null, prState: null }, "user-1")
+    );
+    expect(cleared?.prUrl).toBeNull();
+    expect(cleared?.prState).toBeNull();
+
+    const clearHistory = await withWorkspace(stub, (instance) =>
+      instance.listIssueHistory(created.id)
+    );
+    expect(clearHistory).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "pr_url",
+          fromValue: "https://github.com/owner/repo/pull/7",
+          toValue: null,
+        }),
+        expect.objectContaining({
+          field: "pr_state",
+          fromValue: "open",
+          toValue: null,
+        }),
+      ])
+    );
+  });
+
   it("rejects two issues with the same repo and branch", async () => {
     const stub = getStub();
     await withWorkspace(stub, (instance) =>
