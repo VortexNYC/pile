@@ -794,6 +794,94 @@ describe("issues API", () => {
     expect(cleared).toEqual({ prUrl: null, prState: null });
   });
 
+  it("rejects a non-URL prUrl and a non-canonical prState via PATCH", async () => {
+    const createRes = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      {
+        method: "POST",
+        body: JSON.stringify({ title: "Validate PR link fields" }),
+      },
+      token
+    );
+    expect(createRes.status).toBe(201);
+    const issue = z.object({ id: z.string() }).parse(await createRes.json());
+
+    const badUrl = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ prUrl: "not-a-url" }),
+      },
+      token
+    );
+    expect(badUrl.status).toBe(400);
+
+    const badState = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ prState: "in_review" }),
+      },
+      token
+    );
+    expect(badState.status).toBe(400);
+
+    // prUrl is not GitHub-locked — GitLab MR URLs are legitimate links.
+    const gitlab = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          prUrl: "https://gitlab.com/owner/repo/-/merge_requests/3",
+          prState: "open",
+        }),
+      },
+      token
+    );
+    expect(gitlab.status).toBe(200);
+  });
+
+  it("returns 409 when a PATCHed prUrl is claimed by another issue", async () => {
+    const create = async (title: string) => {
+      const res = await fetch(
+        `/workspaces/${organizationId}/issues`,
+        {
+          method: "POST",
+          body: JSON.stringify({ title }),
+        },
+        token
+      );
+      expect(res.status).toBe(201);
+      return z.object({ id: z.string() }).parse(await res.json());
+    };
+    const owner = await create("Owns the PR link");
+    const other = await create("Wants the same PR link");
+
+    const claim = await fetch(
+      `/workspaces/${organizationId}/issues/${owner.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          prUrl: "https://github.com/VortexNYC/pile/pull/999",
+        }),
+      },
+      token
+    );
+    expect(claim.status).toBe(200);
+
+    const conflict = await fetch(
+      `/workspaces/${organizationId}/issues/${other.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          prUrl: "https://github.com/VortexNYC/pile/pull/999",
+        }),
+      },
+      token
+    );
+    expect(conflict.status).toBe(409);
+  });
+
   it("rejects an invalid resolution status combination", async () => {
     const res = await fetch(
       `/workspaces/${organizationId}/issues`,

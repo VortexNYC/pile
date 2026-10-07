@@ -70,6 +70,11 @@ export const ISSUE_RESOLUTIONS = [
 ] as const;
 export type IssueResolution = (typeof ISSUE_RESOLUTIONS)[number];
 
+/** Canonical prState domain — every writer (GitHub/GitLab webhooks, lane
+ *  results, reconcile) normalizes into these four values. */
+export const ISSUE_PR_STATES = ["draft", "open", "merged", "closed"] as const;
+export type IssuePrState = (typeof ISSUE_PR_STATES)[number];
+
 export interface IssueInput {
   id?: Id;
   externalRef?: string | null;
@@ -93,11 +98,18 @@ export interface IssueInput {
   labelIds?: string | null;
   repo?: string | null;
   branch?: string | null;
-  prUrl?: string | null;
-  prState?: string | null;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }
+
+/** Patch surface for updateIssue: every create input plus the PR linkage
+ *  fields, which createIssueRecord always seeds to null — the webhook and
+ *  lane-completion paths are the usual writers, PATCH exists so a human or
+ *  agent can link/unlink a PR without a session. */
+export type IssuePatch = Partial<IssueInput> & {
+  prUrl?: string | null;
+  prState?: IssuePrState | null;
+};
 
 export interface IssueCursor {
   createdAt: Timestamp;

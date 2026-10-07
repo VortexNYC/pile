@@ -2672,11 +2672,19 @@
                   },
                   "prUrl": {
                     "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "format": "uri"
                   },
                   "prState": {
                     "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "enum": [
+                      "draft",
+                      "open",
+                      "merged",
+                      "closed",
+                      null
+                    ]
                   }
                 }
               }
@@ -2985,11 +2993,19 @@
                       },
                       "prUrl": {
                         "type": "string",
-                        "nullable": true
+                        "nullable": true,
+                        "format": "uri"
                       },
                       "prState": {
                         "type": "string",
-                        "nullable": true
+                        "nullable": true,
+                        "enum": [
+                          "draft",
+                          "open",
+                          "merged",
+                          "closed",
+                          null
+                        ]
                       }
                     }
                   }

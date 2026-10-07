@@ -1,6 +1,6 @@
 import { env, runInDurableObject } from "cloudflare:test";
 import { eq } from "drizzle-orm";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { createD1 } from "../global/db.js";
 import {
@@ -360,6 +360,175 @@ describe("WorkspaceDO", () => {
         }),
       ])
     );
+  });
+
+  it("clears stale prState/prCheckState when prUrl is re-pointed alone", async () => {
+    const stub = getStub();
+    const created = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Re-point a PR link" })
+    );
+    await withWorkspace(stub, (instance) =>
+      instance.reconcileIssuePr(
+        created.id,
+        "https://github.com/owner/repo/pull/1",
+        "closed",
+        "success"
+      )
+    );
+
+    const repointed = await withWorkspace(stub, (instance) =>
+      instance.updateIssue(
+        created.id,
+        { prUrl: "https://github.com/owner/repo/pull/2" },
+        "user-1"
+      )
+    );
+    expect(repointed?.prUrl).toBe("https://github.com/owner/repo/pull/2");
+    expect(repointed?.prState).toBeNull();
+    expect(repointed?.prCheckState).toBeNull();
+
+    const history = await withWorkspace(stub, (instance) =>
+      instance.listIssueHistory(created.id)
+    );
+    expect(history).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "pr_state",
+          fromValue: "closed",
+          toValue: null,
+        }),
+        expect.objectContaining({
+          field: "pr_check_state",
+          fromValue: "success",
+          toValue: null,
+        }),
+      ])
+    );
+  });
+
+  it("maps a manual prState PATCH through the canonical status map", async () => {
+    const stub = getStub();
+    const created = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Merged PR closes issue" })
+    );
+    expect(created.status).toBe("backlog");
+
+    const merged = await withWorkspace(stub, (instance) =>
+      instance.updateIssue(
+        created.id,
+        { prUrl: "https://github.com/owner/repo/pull/9", prState: "merged" },
+        "user-1"
+      )
+    );
+    expect(merged?.prState).toBe("merged");
+    expect(merged?.status).toBe("done");
+
+    const reopened = await withWorkspace(stub, (instance) =>
+      instance.updateIssue(
+        created.id,
+        { prState: "open", status: "backlog" },
+        "user-1"
+      )
+    );
+    expect(reopened?.prState).toBe("open");
+    expect(reopened?.status).toBe("backlog");
+  });
+
+  it("keeps a triage issue in triage on a non-terminal prState PATCH", async () => {
+    const stub = getStub();
+    const created = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Escalation with a PR" })
+    );
+    await withWorkspace(stub, (instance) =>
+      instance.updateIssue(created.id, { status: "triage" }, "user-1")
+    );
+
+    const opened = await withWorkspace(stub, (instance) =>
+      instance.updateIssue(
+        created.id,
+        { prUrl: "https://github.com/owner/repo/pull/11", prState: "open" },
+        "user-1"
+      )
+    );
+    expect(opened?.status).toBe("triage");
+
+    const closed = await withWorkspace(stub, (instance) =>
+      instance.updateIssue(created.id, { prState: "closed" }, "user-1")
+    );
+    expect(closed?.status).toBe("canceled");
+  });
+
+  it("rejects a prUrl already linked to another issue", async () => {
+    const stub = getStub();
+    const owner = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Owns the PR link" })
+    );
+    const claimant = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Wants the same PR link" })
+    );
+    await withWorkspace(stub, (instance) =>
+      instance.updateIssue(
+        owner.id,
+        { prUrl: "https://github.com/owner/repo/pull/42" },
+        "user-1"
+      )
+    );
+
+    await expect(
+      withWorkspace(stub, (instance) =>
+        instance.updateIssue(
+          claimant.id,
+          { prUrl: "https://github.com/owner/repo/pull/42" },
+          "user-1"
+        )
+      )
+    ).rejects.toThrow(/Conflict/);
+  });
+
+  it("emits pr.updated on prUrl/prState change and stays silent otherwise", async () => {
+    const stub = getStub();
+    const created = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Emit coverage" })
+    );
+
+    const linkedEvents = await withWorkspace(stub, async (instance) => {
+      const emitted: string[] = [];
+      const spy = vi
+        .spyOn(instance, "emit")
+        .mockImplementation(async (event) => {
+          emitted.push(event.type);
+        });
+      try {
+        await instance.updateIssue(
+          created.id,
+          { prUrl: "https://github.com/owner/repo/pull/5", prState: "open" },
+          "user-1"
+        );
+      } finally {
+        spy.mockRestore();
+      }
+      return emitted;
+    });
+    expect(linkedEvents).toEqual(
+      expect.arrayContaining(["issue.updated", "pr.updated"])
+    );
+
+    const renamedEvents = await withWorkspace(stub, async (instance) => {
+      const emitted: string[] = [];
+      const spy = vi
+        .spyOn(instance, "emit")
+        .mockImplementation(async (event) => {
+          emitted.push(event.type);
+        });
+      try {
+        await instance.updateIssue(created.id, { title: "Renamed" }, "user-1");
+      } finally {
+        spy.mockRestore();
+      }
+      return emitted;
+    });
+    expect(renamedEvents).toContain("issue.updated");
+    expect(renamedEvents).not.toContain("pr.updated");
   });
 
   it("rejects two issues with the same repo and branch", async () => {

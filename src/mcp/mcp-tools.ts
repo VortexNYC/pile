@@ -6464,11 +6464,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "prUrl": {
               "type": "string",
-              "nullable": true
+              "nullable": true,
+              "format": "uri"
             },
             "prState": {
               "type": "string",
-              "nullable": true
+              "nullable": true,
+              "enum": [
+                "draft",
+                "open",
+                "merged",
+                "closed",
+                null
+              ]
             }
           }
         }
@@ -11374,11 +11382,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 },
                 "prUrl": {
                   "type": "string",
-                  "nullable": true
+                  "nullable": true,
+                  "format": "uri"
                 },
                 "prState": {
                   "type": "string",
-                  "nullable": true
+                  "nullable": true,
+                  "enum": [
+                    "draft",
+                    "open",
+                    "merged",
+                    "closed",
+                    null
+                  ]
                 }
               }
             }

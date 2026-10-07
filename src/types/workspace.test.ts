@@ -4,10 +4,11 @@ import {
   AGENT_SESSION_STATUSES,
   DEFAULT_GIT_IDENTITY_REPO,
   ISSUE_PRIORITIES,
+  ISSUE_PR_STATES,
   ISSUE_RESOLUTIONS,
   ISSUE_STATUSES,
 } from "./workspace.js";
-import type { IssueInput } from "./workspace.js";
+import type { IssueInput, IssuePatch } from "./workspace.js";
 
 describe("workspace shared types", () => {
   it("keeps the issue picklist constants stable", () => {
@@ -37,26 +38,34 @@ describe("workspace shared types", () => {
       "failed",
       "canceled",
     ]);
+    expect(ISSUE_PR_STATES).toEqual(["draft", "open", "merged", "closed"]);
     expect(DEFAULT_GIT_IDENTITY_REPO).toBe("*");
   });
 
-  it("IssueInput accepts the PATCH-only prUrl/prState fields (PILE-316)", () => {
+  it("IssuePatch accepts the PATCH-only prUrl/prState fields (PILE-316)", () => {
     // `satisfies` pins the fields at typecheck time (`vp check`); the runtime
     // assertions guard the values a PATCH body would carry.
     const link = {
-      title: "Link a pull request",
       prUrl: "https://github.com/owner/repo/pull/7",
       prState: "open",
-    } satisfies IssueInput;
+    } satisfies IssuePatch;
     expect(link.prUrl).toBe("https://github.com/owner/repo/pull/7");
     expect(link.prState).toBe("open");
 
     const unlink = {
-      title: "Unlink a pull request",
       prUrl: null,
       prState: null,
-    } satisfies IssueInput;
+    } satisfies IssuePatch;
     expect(unlink.prUrl).toBeNull();
     expect(unlink.prState).toBeNull();
+  });
+
+  it("keeps prUrl/prState off IssueInput (patch-only)", () => {
+    // createIssueRecord seeds both to null — pinning them as IssuePatch-only
+    // keys turns "ignored on create" into a type error instead of a silent
+    // no-op. If they ever reappear on IssueInput this stops compiling.
+    type PatchOnlyKeys = Exclude<keyof IssuePatch, keyof IssueInput>;
+    const keys: PatchOnlyKeys[] = ["prUrl", "prState"];
+    expect(keys).toEqual(["prUrl", "prState"]);
   });
 });
