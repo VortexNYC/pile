@@ -86,6 +86,32 @@ const uploadCustomerAttachmentSchema = z.object({
   contentBase64: z.string().min(1),
 });
 
+const intakeAttachmentSchema = z.object({
+  key: z.string().nullable(),
+  filename: z.string(),
+  contentType: z.string(),
+  size: z.number(),
+});
+
+const intakeItemSchema = z.object({
+  id: z.string(),
+  organizationId: z.string(),
+  customerId: z.string(),
+  source: z.string(),
+  inboxId: z.string().nullable(),
+  fromAddress: z.string(),
+  fromName: z.string().nullable(),
+  toAddress: z.string(),
+  subject: z.string().nullable(),
+  text: z.string().nullable(),
+  html: z.string().nullable(),
+  externalId: z.string(),
+  messageId: z.string().nullable(),
+  attachments: z.array(intakeAttachmentSchema).nullable(),
+  receivedAt: z.string(),
+  createdAt: z.string(),
+});
+
 function notFound(message = "Not found"): never {
   throw new VortexError({ code: "NOT_FOUND", status: 404, message });
 }
@@ -558,6 +584,25 @@ async function getOwnedCustomerAttachment(
   return row;
 }
 
+const listIntakeItemsRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/customers/{id}/intake",
+  tags: ["customers"],
+  middleware: [rls("read")],
+  request: { params: orgIdParam },
+  responses: {
+    200: {
+      description: "Customer intake items (inbound mail filed on the record)",
+      content: {
+        "application/json": {
+          schema: z.object({ items: z.array(intakeItemSchema) }),
+        },
+      },
+    },
+    404: { description: "Customer not found" },
+  },
+});
+
 export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listCustomersRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
@@ -833,5 +878,24 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     await stub.setOrganizationId(organizationId);
     if (!(await stub.deleteCustomerNeed(id))) return notFound("Need not found");
     return c.body(null, 204);
+  });
+
+  app.openapi(listIntakeItemsRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const customer = await stub.getCustomer(id);
+    if (!customer) return notFound("Customer not found");
+    const items = await stub.listCustomerIntakeItems(id);
+    return c.json({
+      items: items.map((item) =>
+        Object.assign(item, {
+          attachments: item.attachments
+            ? (JSON.parse(item.attachments) as z.infer<
+                typeof intakeAttachmentSchema
+              >[])
+            : null,
+        })
+      ),
+    });
   });
 }

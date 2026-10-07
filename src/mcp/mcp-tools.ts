@@ -2376,6 +2376,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdCustomersIdIntake",
+    "description": "List customer intake (GET /workspaces/{organizationId}/customers/{id}/intake) Path params (top-level, required): organizationId, id.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/customers/{id}/intake",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdCustomerstatuses",
     "description": "List customer statuses (GET /workspaces/{organizationId}/customer-statuses) Path params (top-level, required): organizationId.",
     "method": "GET",
@@ -10644,7 +10665,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdEmailinboxes",
-    "description": "Create email inboxe (POST /workspaces/{organizationId}/email-inboxes) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: address*, teamId, projectId, enabled (* = required).",
+    "description": "Create email inboxe (POST /workspaces/{organizationId}/email-inboxes) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: address*, teamId, projectId, customerId, enabled (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/email-inboxes",
     "inputSchema": {
@@ -10664,6 +10685,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "projectId": {
+              "type": "string"
+            },
+            "customerId": {
               "type": "string"
             },
             "enabled": {

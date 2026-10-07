@@ -728,6 +728,45 @@ export const workspaceEntityAttachments = sqliteTable(
   ]
 );
 
+// Customer intake: inbound mail filed on a customer record (PILE-325).
+// Each row is one received email; attachments live in R2 and are referenced
+// by key inside the JSON `attachments` column.
+export const workspaceCustomerIntakeItems = sqliteTable(
+  "customer_intake_items" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    customerId: text("customer_id" as string).notNull(),
+    source: text("source" as string)
+      .notNull()
+      .default("email"),
+    inboxId: text("inbox_id" as string),
+    fromAddress: text("from_address" as string).notNull(),
+    fromName: text("from_name" as string),
+    toAddress: text("to_address" as string).notNull(),
+    subject: text("subject" as string),
+    text: text("text" as string),
+    html: text("html" as string),
+    // Stable dedup key: the RFC Message-ID, or a hash of the raw MIME when the
+    // sender omitted the header. Unique per org so retries can't double-file.
+    externalId: text("external_id" as string).notNull(),
+    messageId: text("message_id" as string),
+    attachments: text("attachments" as string),
+    receivedAt: text("received_at" as string).notNull(),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    uniqueIndex("customer_intake_items_external_idx" as string).on(
+      table.organizationId,
+      table.externalId
+    ),
+    index("customer_intake_items_customer_idx" as string).on(
+      table.organizationId,
+      table.customerId
+    ),
+  ]
+);
+
 // Releases: Linear's release pipelines (named ordered stage lists) and
 // releases (versioned targets attached to projects).
 export const workspaceReleasePipelines = sqliteTable(

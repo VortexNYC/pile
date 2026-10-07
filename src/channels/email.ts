@@ -1,9 +1,9 @@
-import { and, eq } from "drizzle-orm";
-import PostalMime from "postal-mime";
+import { and, asc, eq } from "drizzle-orm";
+import PostalMime, { type Attachment } from "postal-mime";
 import { z } from "zod";
 
 import { createD1, type D1Client } from "../global/db.js";
-import { supportChannels } from "../global/schema.js";
+import { emailInboxes, supportChannels } from "../global/schema.js";
 import { processIncomingMessage } from "../global/support-channels.js";
 import {
   enqueueWebhook,
@@ -94,6 +94,24 @@ async function findChannelByEmailAddress(
   return match ? { organizationId: match.organizationId } : null;
 }
 
+async function findInboxByEmailAddress(
+  db: D1Client,
+  address: string
+): Promise<typeof emailInboxes.$inferSelect | null> {
+  const normalized = address.toLowerCase().trim();
+  // Addresses aren't globally unique (same as support_channels); oldest row
+  // wins so a duplicate registration can't silently reroute mail.
+  const [match] = await db
+    .select()
+    .from(emailInboxes)
+    .where(
+      and(eq(emailInboxes.address, normalized), eq(emailInboxes.enabled, true))
+    )
+    .orderBy(asc(emailInboxes.createdAt))
+    .limit(1);
+  return match ?? null;
+}
+
 const emailQueuePayloadSchema = z.object({
   organizationId: z.string(),
   to: z.string(),
@@ -131,6 +149,141 @@ export async function processEmailWebhookPayload(
   );
 }
 
+const emailIntakeAttachmentSchema = z.object({
+  key: z.string().nullable(),
+  filename: z.string(),
+  contentType: z.string(),
+  size: z.number(),
+});
+
+const emailIntakePayloadSchema = z.object({
+  organizationId: z.string(),
+  inboxId: z.string().nullable(),
+  customerId: z.string().nullable(),
+  to: z.string(),
+  from: z.string(),
+  fromName: z.string().nullable(),
+  subject: z.string(),
+  text: z.string(),
+  html: z.string().nullable(),
+  messageId: z.string().nullable(),
+  externalId: z.string(),
+  receivedAt: z.string(),
+  attachments: z.array(emailIntakeAttachmentSchema).default([]),
+});
+
+// Files an inbound intake email on the matched (or newly created) workspace
+// customer. Idempotent on `externalId` (the Message-ID / raw-MIME hash) via
+// the customer_intake_items unique index, so queue retries can't double-file.
+export async function processEmailIntakePayload(
+  _db: D1Client,
+  env: WorkerEnv,
+  payload: unknown
+) {
+  const data = emailIntakePayloadSchema.parse(payload);
+  const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+    env.WORKSPACE_DURABLE_OBJECT.idFromName(data.organizationId)
+  );
+  await stub.setOrganizationId(data.organizationId);
+
+  let customerId = data.customerId
+    ? ((await stub.getCustomer(data.customerId))?.id ?? null)
+    : null;
+  let customerCreated = false;
+  if (!customerId) {
+    const resolved = await stub.resolveCustomerForEmail({
+      email: data.from,
+      name: data.fromName,
+    });
+    customerId = resolved.customer.id;
+    customerCreated = resolved.created;
+  }
+
+  const { item, isNew } = await stub.fileCustomerIntakeItem({
+    customerId,
+    inboxId: data.inboxId,
+    fromAddress: data.from,
+    fromName: data.fromName,
+    toAddress: data.to,
+    subject: data.subject,
+    text: data.text,
+    html: data.html,
+    externalId: data.externalId,
+    messageId: data.messageId,
+    attachments: data.attachments,
+    receivedAt: data.receivedAt,
+  });
+
+  return {
+    customerId,
+    customerCreated,
+    intakeItemId: item?.id ?? null,
+    isNew,
+  };
+}
+
+async function sha256Hex(data: BufferSource): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(digest), (b) =>
+    b.toString(16).padStart(2, "0")
+  ).join("");
+}
+
+function attachmentBytes(
+  content: ArrayBuffer | Uint8Array | string
+): Uint8Array {
+  if (typeof content === "string") {
+    return new TextEncoder().encode(content);
+  }
+  return content instanceof Uint8Array ? content : new Uint8Array(content);
+}
+
+function sanitizeFilename(filename: string | null): string {
+  const stripped = (filename ?? "")
+    .split("")
+    .filter((ch) => {
+      const code = ch.charCodeAt(0);
+      return code >= 0x20 && code !== 0x7f;
+    })
+    .join("");
+  const cleaned = stripped.replace(/[/\\]/g, "_").trim();
+  return cleaned || "attachment";
+}
+
+// Stores parsed MIME parts in R2 so the queued payload stays small. Keys are
+// deterministic per externalId+position, so a redelivered message overwrites
+// the same objects instead of piling up orphans.
+async function storeIntakeAttachments(
+  env: WorkerEnv,
+  organizationId: string,
+  storageKey: string,
+  attachments: Attachment[]
+): Promise<z.infer<typeof emailIntakeAttachmentSchema>[]> {
+  const bucket = env.ATTACHMENTS_BUCKET;
+  return Promise.all(
+    attachments.map(async (attachment, index) => {
+      const bytes = attachmentBytes(attachment.content);
+      const filename = sanitizeFilename(attachment.filename);
+      const contentType = attachment.mimeType || "application/octet-stream";
+      let key: string | null = null;
+      if (bucket && bytes.byteLength > 0) {
+        key = `${organizationId}/intake/${storageKey}/${index}-${filename}`;
+        try {
+          await bucket.put(key, bytes, { httpMetadata: { contentType } });
+        } catch (error) {
+          console.error("intake attachment upload failed", {
+            organizationId,
+            filename,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          key = null;
+        }
+      }
+      return { key, filename, contentType, size: bytes.byteLength };
+    })
+  );
+}
+
 export async function handleIncomingEmail(
   message: IncomingEmailMessage,
   env: WorkerEnv
@@ -143,8 +296,11 @@ export async function handleIncomingEmail(
 
   const db = createD1(env.D1);
   const channel = await findChannelByEmailAddress(db, to.address);
-  if (!channel) {
-    message.setReject("No active support channel for recipient");
+  // Support-channel addresses keep the ticket flow; an address registered as
+  // a customer intake inbox routes to the intake flow instead (PILE-325).
+  const inbox = channel ? null : await findInboxByEmailAddress(db, to.address);
+  if (!channel && !inbox) {
+    message.setReject("No active destination for recipient");
     return;
   }
 
@@ -172,31 +328,84 @@ export async function handleIncomingEmail(
   const messageIdValue = extractReferenceMessageId(messageId);
   const inReplyToValue = extractReferenceMessageId(inReplyTo);
 
-  if (!messageIdValue) {
-    message.setReject("Missing Message-ID header");
+  const processors = new Map<WebhookSource, WebhookProcessor>([
+    ["email", processEmailWebhookPayload],
+    ["email-intake", processEmailIntakePayload],
+  ]);
+
+  if (channel) {
+    if (!messageIdValue) {
+      message.setReject("Missing Message-ID header");
+      return;
+    }
+
+    await enqueueWebhook(
+      db,
+      env,
+      {
+        deliveryId: scopedDeliveryId(
+          "email",
+          channel.organizationId,
+          messageIdValue
+        ),
+        source: "email",
+        event: "received",
+        organizationId: channel.organizationId,
+        payload: {
+          organizationId: channel.organizationId,
+          to: to.address,
+          from: from.address,
+          fromName: from.name,
+          subject,
+          text,
+          html,
+          messageId: messageIdValue,
+          inReplyTo: inReplyToValue,
+        },
+      },
+      processors
+    );
     return;
   }
 
-  const deliveryId = scopedDeliveryId(
-    "email",
-    channel.organizationId,
-    messageIdValue
+  if (!inbox) {
+    message.setReject("No active destination for recipient");
+    return;
+  }
+
+  // Senders sometimes omit Message-ID; hash the raw MIME so dedup still works.
+  const externalId = messageIdValue ?? `sha256:${await sha256Hex(raw)}`;
+  const storageKey = await sha256Hex(new TextEncoder().encode(externalId));
+  const attachments = await storeIntakeAttachments(
+    env,
+    inbox.organizationId,
+    storageKey,
+    parsed.attachments
   );
 
-  const processors = new Map<WebhookSource, WebhookProcessor>([
-    ["email", processEmailWebhookPayload],
-  ]);
+  const parsedDate =
+    typeof parsed.date === "string" ? new Date(parsed.date) : null;
+  const receivedAt =
+    parsedDate && !Number.isNaN(parsedDate.getTime())
+      ? parsedDate.toISOString()
+      : new Date().toISOString();
 
   await enqueueWebhook(
     db,
     env,
     {
-      deliveryId,
-      source: "email",
+      deliveryId: scopedDeliveryId(
+        "email-intake",
+        inbox.organizationId,
+        externalId
+      ),
+      source: "email-intake",
       event: "received",
-      organizationId: channel.organizationId,
+      organizationId: inbox.organizationId,
       payload: {
-        organizationId: channel.organizationId,
+        organizationId: inbox.organizationId,
+        inboxId: inbox.id,
+        customerId: inbox.customerId,
         to: to.address,
         from: from.address,
         fromName: from.name,
@@ -204,7 +413,9 @@ export async function handleIncomingEmail(
         text,
         html,
         messageId: messageIdValue,
-        inReplyTo: inReplyToValue,
+        externalId,
+        receivedAt,
+        attachments,
       },
     },
     processors

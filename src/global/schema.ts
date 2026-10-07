@@ -1031,6 +1031,7 @@ export const emailInboxes = sqliteTable(
     address: text("address" as string).notNull(),
     teamId: text("team_id" as string),
     projectId: text("project_id" as string).references(() => projects.id),
+    customerId: text("customer_id" as string),
     enabled: integer("enabled" as string, { mode: "boolean" })
       .notNull()
       .default(true),

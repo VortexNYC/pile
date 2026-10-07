@@ -1905,6 +1905,53 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.deleteCustomerNeed(this.db, this.organizationId, id);
   }
 
+  // ---- customer email intake (PILE-325) ----
+  resolveCustomerForEmail(input: data.ResolveCustomerForEmailInput) {
+    const result = data.resolveCustomerForEmail(
+      this.db,
+      this.organizationId,
+      input
+    );
+    if (result.created) {
+      this.audit(
+        "customer.created",
+        "customer",
+        result.customer.id,
+        undefined,
+        undefined,
+        { actorType: "automation" }
+      );
+    }
+    return result;
+  }
+
+  fileCustomerIntakeItem(input: data.CustomerIntakeItemInput) {
+    const result = data.fileCustomerIntakeItem(
+      this.db,
+      this.organizationId,
+      input
+    );
+    if (result.isNew && result.item) {
+      this.audit(
+        "customer_intake.filed",
+        "customer",
+        result.item.customerId,
+        undefined,
+        undefined,
+        { actorType: "automation" }
+      );
+    }
+    return result;
+  }
+
+  listCustomerIntakeItems(customerId: string) {
+    return data.listCustomerIntakeItems(
+      this.db,
+      this.organizationId,
+      customerId
+    );
+  }
+
   // ---- releases ----
   createReleasePipeline(input: { name: string; stages?: string[] }) {
     return data.createReleasePipeline(this.db, this.organizationId, input);

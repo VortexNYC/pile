@@ -39,6 +39,7 @@ import {
   workspaceAgentEnvironmentFiles,
   workspaceAttachments,
   workspaceAuditLog,
+  workspaceCustomerIntakeItems,
   workspaceCustomerNeeds,
   workspaceCustomers,
   workspaceCustomerStatuses,
@@ -2652,6 +2653,14 @@ export function deleteCustomer(
       )
     )
     .run();
+  db.delete(workspaceCustomerIntakeItems)
+    .where(
+      and(
+        eq(workspaceCustomerIntakeItems.customerId, id),
+        eq(workspaceCustomerIntakeItems.organizationId, organizationId)
+      )
+    )
+    .run();
   return (
     db
       .delete(workspaceCustomers)
@@ -3448,6 +3457,215 @@ export function deleteCustomerNeed(
       .returning()
       .all().length > 0
   );
+}
+
+// ---- customer email intake (PILE-325) ----
+
+// Consumer mailboxes can't identify a business, so they never drive domain
+// matching or the created customer's url — the sender's display name / local
+// part names the record instead.
+const FREEMAIL_DOMAINS = new Set([
+  "gmail.com",
+  "googlemail.com",
+  "yahoo.com",
+  "outlook.com",
+  "hotmail.com",
+  "live.com",
+  "msn.com",
+  "icloud.com",
+  "me.com",
+  "mac.com",
+  "aol.com",
+  "proton.me",
+  "protonmail.com",
+  "pm.me",
+  "mail.com",
+  "gmx.com",
+  "gmx.net",
+  "zoho.com",
+  "yandex.com",
+  "fastmail.com",
+  "hey.com",
+]);
+
+export function emailAddressDomain(email: string): string | null {
+  const at = email.lastIndexOf("@");
+  if (at < 0 || at === email.length - 1) return null;
+  const domain = email
+    .slice(at + 1)
+    .trim()
+    .toLowerCase();
+  return domain.length > 0 ? domain : null;
+}
+
+export function customerUrlHost(url: string): string | null {
+  const trimmed = url.trim().toLowerCase();
+  if (!trimmed) return null;
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//.test(trimmed)
+    ? trimmed
+    : `https://${trimmed}`;
+  try {
+    const host = new URL(withScheme).hostname;
+    return host.startsWith("www.") ? host.slice(4) : host;
+  } catch {
+    return null;
+  }
+}
+
+// Sender domain ↔ customer URL host. Subdomains match in both directions
+// (mail.acme.com ↔ acme.com) but the dot boundary keeps lookalikes out
+// (evil-acme.com, acme.com.evil.org never equal acme.com).
+function emailDomainsMatch(senderDomain: string, customerHost: string) {
+  return (
+    senderDomain === customerHost ||
+    senderDomain.endsWith(`.${customerHost}`) ||
+    customerHost.endsWith(`.${senderDomain}`)
+  );
+}
+
+export interface ResolveCustomerForEmailInput {
+  email: string;
+  name?: string | null;
+}
+
+export function resolveCustomerForEmail(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: ResolveCustomerForEmailInput
+) {
+  const email = input.email.trim().toLowerCase();
+  const domain = emailAddressDomain(email);
+  const businessDomain =
+    domain !== null && !FREEMAIL_DOMAINS.has(domain) ? domain : null;
+  const customers = listCustomers(db, organizationId);
+
+  if (businessDomain) {
+    const matches = customers.filter((customer) => {
+      const host = customer.url ? customerUrlHost(customer.url) : null;
+      return (
+        host !== null &&
+        !FREEMAIL_DOMAINS.has(host) &&
+        emailDomainsMatch(businessDomain, host)
+      );
+    });
+    // Deterministic pick when several customers share a domain — oldest
+    // record wins so repeated mail can't scatter across duplicates.
+    matches.sort(
+      (a, b) =>
+        a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)
+    );
+    const match = matches[0];
+    if (match) return { customer: match, created: false };
+  }
+
+  // Freemail senders carry no business domain — key the record to the exact
+  // address so repeat mail from the same mailbox lands on the same customer
+  // instead of minting a duplicate per message.
+  const senderKey = `email:${email}`;
+  const bySenderKey = customers.find(
+    (customer) => customer.externalId === senderKey
+  );
+  if (bySenderKey) return { customer: bySenderKey, created: false };
+
+  const customer = createCustomer(db, {
+    organizationId,
+    name: businessDomain || input.name?.trim() || email.split("@")[0] || email,
+    url: businessDomain ? `https://${businessDomain}` : null,
+    externalId: senderKey,
+  });
+  return { customer, created: true };
+}
+
+export interface CustomerIntakeAttachment {
+  key: string | null;
+  filename: string;
+  contentType: string;
+  size: number;
+}
+
+export interface CustomerIntakeItemInput {
+  customerId: string;
+  source?: string;
+  inboxId?: string | null;
+  fromAddress: string;
+  fromName?: string | null;
+  toAddress: string;
+  subject?: string | null;
+  text?: string | null;
+  html?: string | null;
+  externalId: string;
+  messageId?: string | null;
+  attachments?: CustomerIntakeAttachment[];
+  receivedAt?: string;
+}
+
+export function fileCustomerIntakeItem(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: CustomerIntakeItemInput
+) {
+  const now = new Date().toISOString();
+  const inserted = db
+    .insert(workspaceCustomerIntakeItems)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId,
+      customerId: input.customerId,
+      source: input.source ?? "email",
+      inboxId: input.inboxId ?? null,
+      fromAddress: input.fromAddress,
+      fromName: input.fromName ?? null,
+      toAddress: input.toAddress,
+      subject: input.subject ?? null,
+      text: input.text ?? null,
+      html: input.html ?? null,
+      externalId: input.externalId,
+      messageId: input.messageId ?? null,
+      attachments:
+        input.attachments === undefined
+          ? null
+          : JSON.stringify(input.attachments),
+      receivedAt: input.receivedAt ?? now,
+      createdAt: now,
+    })
+    .onConflictDoNothing({
+      target: [
+        workspaceCustomerIntakeItems.organizationId,
+        workspaceCustomerIntakeItems.externalId,
+      ],
+    })
+    .returning()
+    .get();
+  if (inserted) return { item: inserted, isNew: true };
+  const existing = db
+    .select()
+    .from(workspaceCustomerIntakeItems)
+    .where(
+      and(
+        eq(workspaceCustomerIntakeItems.organizationId, organizationId),
+        eq(workspaceCustomerIntakeItems.externalId, input.externalId)
+      )
+    )
+    .get();
+  return { item: existing ?? null, isNew: false };
+}
+
+export function listCustomerIntakeItems(
+  db: WorkspaceDb,
+  organizationId: string,
+  customerId: string
+) {
+  return db
+    .select()
+    .from(workspaceCustomerIntakeItems)
+    .where(
+      and(
+        eq(workspaceCustomerIntakeItems.organizationId, organizationId),
+        eq(workspaceCustomerIntakeItems.customerId, customerId)
+      )
+    )
+    .orderBy(desc(workspaceCustomerIntakeItems.receivedAt))
+    .all();
 }
 
 // ---- release pipelines / releases ----

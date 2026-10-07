@@ -16,6 +16,7 @@ const emailInboxSchema = z.object({
   address: z.string(),
   teamId: z.string().nullable(),
   projectId: z.string().nullable(),
+  customerId: z.string().nullable(),
   enabled: z.boolean(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -25,6 +26,7 @@ const emailInboxBodySchema = z.object({
   address: z.string().email(),
   teamId: z.string().optional(),
   projectId: z.string().optional(),
+  customerId: z.string().optional(),
   enabled: z.boolean().default(true),
 });
 
@@ -85,6 +87,7 @@ function toInboxResponse(row: typeof emailInboxes.$inferSelect) {
     address: row.address,
     teamId: row.teamId,
     projectId: row.projectId,
+    customerId: row.customerId,
     enabled: row.enabled,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -112,9 +115,10 @@ export function registerEmailInboxRoutes(app: OpenAPIHono<AppContext>) {
     await db.insert(emailInboxes).values({
       id,
       organizationId,
-      address: input.address,
+      address: input.address.trim().toLowerCase(),
       teamId: input.teamId ?? null,
       projectId: input.projectId ?? null,
+      customerId: input.customerId ?? null,
       enabled: input.enabled,
       createdAt: ts,
       updatedAt: ts,

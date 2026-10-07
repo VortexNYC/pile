@@ -7264,6 +7264,7 @@ export interface paths {
                                 address: string;
                                 teamId: string | null;
                                 projectId: string | null;
+                                customerId: string | null;
                                 enabled: boolean;
                                 createdAt: string;
                                 updatedAt: string;
@@ -7291,6 +7292,7 @@ export interface paths {
                         address: string;
                         teamId?: string;
                         projectId?: string;
+                        customerId?: string;
                         /** @default true */
                         enabled?: boolean;
                     };
@@ -7309,6 +7311,7 @@ export interface paths {
                             address: string;
                             teamId: string | null;
                             projectId: string | null;
+                            customerId: string | null;
                             enabled: boolean;
                             createdAt: string;
                             updatedAt: string;
@@ -15495,6 +15498,76 @@ export interface paths {
                 };
             };
         };
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/customers/{id}/intake": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List customer intake */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Customer intake items (inbound mail filed on the record) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            items: {
+                                id: string;
+                                organizationId: string;
+                                customerId: string;
+                                source: string;
+                                inboxId: string | null;
+                                fromAddress: string;
+                                fromName: string | null;
+                                toAddress: string;
+                                subject: string | null;
+                                text: string | null;
+                                html: string | null;
+                                externalId: string;
+                                messageId: string | null;
+                                attachments: {
+                                    key: string | null;
+                                    filename: string;
+                                    contentType: string;
+                                    size: number;
+                                }[] | null;
+                                receivedAt: string;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Customer not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/support/unsubscribe": {

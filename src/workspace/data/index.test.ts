@@ -12,11 +12,16 @@ import {
   createEntityAttachment,
   deleteCustomer,
   deleteEntityAttachment,
+  customerUrlHost,
+  fileCustomerIntakeItem,
   getAgentSession,
   getEntityAttachment,
   getNotificationPreferences,
   listEntityAttachments,
+  listCustomerIntakeItems,
+  listCustomers,
   reanchorQueuedDependents,
+  resolveCustomerForEmail,
   updateAgentSession,
   upsertNotificationPreferences,
   type WorkspaceDb,
@@ -272,5 +277,167 @@ describe("entity attachment data", () => {
         onKept.id
       );
     });
+  });
+});
+
+describe("customer email intake resolution", () => {
+  it("creates a customer from the sender domain when nothing matches", async () => {
+    await withDb(async (db) => {
+      const { customer, created } = resolveCustomerForEmail(db, WORKSPACE_ID, {
+        email: "rep@merchant-one.example",
+        name: "Rep One",
+      });
+      expect(created).toBe(true);
+      expect(customer.name).toBe("merchant-one.example");
+      expect(customer.url).toBe("https://merchant-one.example");
+    });
+  });
+
+  it("matches an existing customer by URL host, including subdomains", async () => {
+    await withDb(async (db) => {
+      createCustomer(db, {
+        organizationId: WORKSPACE_ID,
+        name: "Acme",
+        url: "https://www.acme-match.example/about",
+      });
+      for (const email of [
+        "ap@acme-match.example",
+        "ap@mail.acme-match.example",
+      ]) {
+        const { customer, created } = resolveCustomerForEmail(
+          db,
+          WORKSPACE_ID,
+          { email }
+        );
+        expect(created).toBe(false);
+        expect(customer.name).toBe("Acme");
+      }
+    });
+  });
+
+  it("matches scheme-less and path-bearing customer URLs", async () => {
+    await withDb(async (db) => {
+      createCustomer(db, {
+        organizationId: WORKSPACE_ID,
+        name: "Bare",
+        url: "bare-host.example/docs",
+      });
+      const { customer, created } = resolveCustomerForEmail(db, WORKSPACE_ID, {
+        email: "x@bare-host.example",
+      });
+      expect(created).toBe(false);
+      expect(customer.name).toBe("Bare");
+    });
+  });
+
+  it("does not match lookalike domains", async () => {
+    await withDb(async (db) => {
+      createCustomer(db, {
+        organizationId: WORKSPACE_ID,
+        name: "Lookalike",
+        url: "https://lookalike.example",
+      });
+      for (const email of [
+        "x@evil-lookalike.example",
+        "x@lookalike.example.evil.org",
+        "x@other-lookalike.example",
+      ]) {
+        const { customer, created } = resolveCustomerForEmail(
+          db,
+          WORKSPACE_ID,
+          { email }
+        );
+        expect(created).toBe(true);
+        expect(customer.name).not.toBe("Lookalike");
+      }
+    });
+  });
+
+  it("names freemail senders by display name and never by domain", async () => {
+    await withDb(async (db) => {
+      createCustomer(db, {
+        organizationId: WORKSPACE_ID,
+        name: "Traps",
+        url: "https://gmail.com",
+      });
+      const { customer, created } = resolveCustomerForEmail(db, WORKSPACE_ID, {
+        email: "jane.doe@gmail.com",
+        name: "Jane Doe",
+      });
+      expect(created).toBe(true);
+      expect(customer.name).toBe("Jane Doe");
+      expect(customer.url).toBeNull();
+
+      // Repeat mail from the same freemail mailbox reuses the record.
+      const again = resolveCustomerForEmail(db, WORKSPACE_ID, {
+        email: "jane.doe@gmail.com",
+        name: "Jane D.",
+      });
+      expect(again.created).toBe(false);
+      expect(again.customer.id).toBe(customer.id);
+    });
+  });
+
+  it("picks the oldest record deterministically when several match", async () => {
+    await withDb(async (db) => {
+      const older = createCustomer(db, {
+        organizationId: WORKSPACE_ID,
+        name: "Older",
+        url: "https://dupe.example",
+      });
+      createCustomer(db, {
+        organizationId: WORKSPACE_ID,
+        name: "Newer",
+        url: "https://mail.dupe.example",
+      });
+      // Force distinct createdAt so the ordering is exercised, not insertion
+      // order luck.
+      const { customer } = resolveCustomerForEmail(db, WORKSPACE_ID, {
+        email: "x@dupe.example",
+      });
+      expect(customer.id).toBe(older.id);
+    });
+  });
+
+  it("dedupes intake items on externalId", async () => {
+    await withDb(async (db) => {
+      const input = {
+        customerId: "cust-1",
+        fromAddress: "rep@acme.example",
+        toAddress: "intake@vortex.example",
+        subject: "Dedup me",
+        externalId: "dedup-msg@acme.example",
+        attachments: [
+          {
+            key: null,
+            filename: "a.pdf",
+            contentType: "application/pdf",
+            size: 3,
+          },
+        ],
+      };
+      const first = fileCustomerIntakeItem(db, WORKSPACE_ID, input);
+      const second = fileCustomerIntakeItem(db, WORKSPACE_ID, input);
+      expect(first.isNew).toBe(true);
+      expect(second.isNew).toBe(false);
+      expect(second.item?.id).toBe(first.item?.id);
+      expect(listCustomerIntakeItems(db, WORKSPACE_ID, "cust-1")).toHaveLength(
+        1
+      );
+      const customers = listCustomers(db, WORKSPACE_ID);
+      expect(customers.every((c) => c.id !== undefined)).toBe(true);
+    });
+  });
+});
+
+describe("customerUrlHost", () => {
+  it("normalizes schemes, www, and paths", () => {
+    expect(customerUrlHost("https://www.acme.example/path")).toBe(
+      "acme.example"
+    );
+    expect(customerUrlHost("acme.example")).toBe("acme.example");
+    expect(customerUrlHost("http://acme.example:8080/x")).toBe("acme.example");
+    expect(customerUrlHost("")).toBeNull();
+    expect(customerUrlHost("   ")).toBeNull();
   });
 });

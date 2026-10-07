@@ -836,6 +836,32 @@ const v52 = `CREATE TABLE IF NOT EXISTS issue_permissions (
 )
 --> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS issue_permissions_issue_actor_idx ON issue_permissions (issue_id, actor_id)`;
+// PILE-325 — customer email intake: each inbound mail filed on the matched
+// customer record. external_id is the Message-ID (or a hash of the raw MIME)
+// so queue retries can't double-file.
+const v53 = `CREATE TABLE customer_intake_items (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  customer_id TEXT NOT NULL,
+  source TEXT NOT NULL DEFAULT 'email',
+  inbox_id TEXT,
+  from_address TEXT NOT NULL,
+  from_name TEXT,
+  to_address TEXT NOT NULL,
+  subject TEXT,
+  text TEXT,
+  html TEXT,
+  external_id TEXT NOT NULL,
+  message_id TEXT,
+  attachments TEXT,
+  received_at TEXT NOT NULL,
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS customer_intake_items_external_idx ON customer_intake_items (organization_id, external_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS customer_intake_items_customer_idx ON customer_intake_items (organization_id, customer_id)`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -891,6 +917,7 @@ export const workspaceMigrations = {
       { idx: 49, when: 49, tag: "v50", breakpoints: true },
       { idx: 50, when: 50, tag: "v51", breakpoints: true },
       { idx: 51, when: 51, tag: "v52", breakpoints: true },
+      { idx: 52, when: 52, tag: "v53", breakpoints: true },
     ],
   },
   migrations: {
@@ -946,5 +973,6 @@ export const workspaceMigrations = {
     m0049: v50,
     m0050: v51,
     m0051: v52,
+    m0052: v53,
   },
 } satisfies Parameters<typeof migrate>[1];
