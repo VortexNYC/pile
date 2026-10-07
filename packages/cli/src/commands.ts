@@ -10305,4 +10305,81 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "intake create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/intake",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "intakeId",
+        flag: "intake-id",
+      },
+      {
+        name: "businessName",
+        flag: "business-name",
+      },
+      {
+        name: "address",
+        flag: "address",
+      },
+      {
+        name: "websiteUrl",
+        flag: "website-url",
+      },
+      {
+        name: "visitedAt",
+        flag: "visited-at",
+      },
+      {
+        name: "spokeWith",
+        flag: "spoke-with",
+      },
+      {
+        name: "owner",
+        flag: "owner",
+      },
+      {
+        name: "meeting",
+        flag: "meeting",
+      },
+      {
+        name: "discovery",
+        flag: "discovery",
+      },
+      {
+        name: "pricing",
+        flag: "pricing",
+      },
+      {
+        name: "pain",
+        flag: "pain",
+      },
+      {
+        name: "pipelineStatusId",
+        flag: "pipeline-status-id",
+      },
+      {
+        name: "nextStep",
+        flag: "next-step",
+      },
+      {
+        name: "nextStepDate",
+        flag: "next-step-date",
+      },
+      {
+        name: "repNotes",
+        flag: "rep-notes",
+      },
+      {
+        name: "statementFiles",
+        flag: "statement-files",
+      },
+    ],
+  },
 };
