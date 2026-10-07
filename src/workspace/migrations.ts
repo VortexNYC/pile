@@ -806,6 +806,23 @@ const v48 = `ALTER TABLE agent_sessions ADD COLUMN last_reviewed_sha TEXT
 --> statement-breakpoint
 ALTER TABLE agent_sessions ADD COLUMN review_summary TEXT`;
 
+// PILE-324 — R2-backed file attachments scoped to an arbitrary workspace
+// entity (entity_type + entity_id). Customers are the first consumer.
+const v51 = `CREATE TABLE IF NOT EXISTS entity_attachments (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  file_name TEXT NOT NULL,
+  content_type TEXT NOT NULL,
+  size INTEGER NOT NULL,
+  r2_key TEXT NOT NULL,
+  created_by_id TEXT,
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS entity_attachments_entity_idx ON entity_attachments (organization_id, entity_type, entity_id)`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -859,6 +876,7 @@ export const workspaceMigrations = {
       { idx: 47, when: 47, tag: "v48", breakpoints: true },
       { idx: 48, when: 48, tag: "v49", breakpoints: true },
       { idx: 49, when: 49, tag: "v50", breakpoints: true },
+      { idx: 50, when: 50, tag: "v51", breakpoints: true },
     ],
   },
   migrations: {
@@ -912,5 +930,6 @@ export const workspaceMigrations = {
     m0047: v48,
     m0048: v49,
     m0049: v50,
+    m0050: v51,
   },
 } satisfies Parameters<typeof migrate>[1];

@@ -1217,6 +1217,63 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return this.db.select().from(workspaceAttachments).all();
   }
 
+  // ---- entity attachments (R2-backed, scoped to entityType + entityId) ----
+  listEntityAttachments(entityType: string, entityId: string) {
+    return data.listEntityAttachments(
+      this.db,
+      this.organizationId,
+      entityType,
+      entityId
+    );
+  }
+
+  getEntityAttachment(id: string) {
+    return data.getEntityAttachment(this.db, this.organizationId, id);
+  }
+
+  async storeEntityAttachment(input: {
+    entityType: string;
+    entityId: string;
+    fileName: string;
+    contentType?: string;
+    dataBase64: string;
+    createdById?: string;
+  }) {
+    const bucket = this.env.ATTACHMENTS_BUCKET;
+    if (!bucket) {
+      throw new VortexError({
+        code: "INTERNAL_ERROR",
+        status: 503,
+        message: "File storage not configured",
+      });
+    }
+    const id = crypto.randomUUID();
+    const contentType = input.contentType ?? "application/octet-stream";
+    const bytes = new Uint8Array(
+      Array.from(atob(input.dataBase64), (char) => char.charCodeAt(0))
+    );
+    const r2Key = `attachments/${this.organizationId}/${input.entityType}/${input.entityId}/${id}`;
+    await bucket.put(r2Key, bytes, { httpMetadata: { contentType } });
+    return data.createEntityAttachment(this.db, this.organizationId, {
+      id,
+      entityType: input.entityType,
+      entityId: input.entityId,
+      fileName: input.fileName,
+      contentType,
+      size: bytes.length,
+      r2Key,
+      createdById: input.createdById,
+    });
+  }
+
+  async deleteEntityAttachment(id: string) {
+    const row = data.deleteEntityAttachment(this.db, this.organizationId, id);
+    if (row && this.env.ATTACHMENTS_BUCKET) {
+      await this.env.ATTACHMENTS_BUCKET.delete(row.r2Key);
+    }
+    return row;
+  }
+
   // ---- saved views / favorites / prefs ----
   createSavedView(input: Omit<data.SavedViewInput, "organizationId">) {
     return data.createSavedView(this.db, {
@@ -1677,9 +1734,24 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return customer;
   }
 
-  deleteCustomer(id: string, actorId?: string) {
+  async deleteCustomer(id: string, actorId?: string) {
+    const r2Keys = data
+      .listEntityAttachments(this.db, this.organizationId, "customer", id)
+      .map((a) => a.r2Key);
     const deleted = data.deleteCustomer(this.db, this.organizationId, id);
-    if (deleted) this.audit("customer.deleted", "customer", id, actorId);
+    if (deleted) {
+      this.audit("customer.deleted", "customer", id, actorId);
+      if (r2Keys.length > 0 && this.env.ATTACHMENTS_BUCKET) {
+        try {
+          await this.env.ATTACHMENTS_BUCKET.delete(r2Keys);
+        } catch (err) {
+          console.error("customer attachment R2 cleanup failed", {
+            customerId: id,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+    }
     return deleted;
   }
 

@@ -5926,6 +5926,95 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "customers attachments": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/{id}/attachments",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "fileName",
+        flag: "file-name",
+      },
+      {
+        name: "contentType",
+        flag: "content-type",
+      },
+      {
+        name: "contentBase64",
+        flag: "content-base64",
+      },
+    ],
+  },
+  "customers attachments get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/customers/{id}/attachments/{attachmentId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+      {
+        name: "attachmentId",
+        flag: "attachment",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "customers attachments delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/customers/{id}/attachments/{attachmentId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+      {
+        name: "attachmentId",
+        flag: "attachment",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "customers attachments content list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/customers/{id}/attachments/{attachmentId}/content",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+      {
+        name: "attachmentId",
+        flag: "attachment",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "customer tiers list": {
     method: "GET",
     path: "/workspaces/{organizationId}/customer-tiers",

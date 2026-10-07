@@ -4,6 +4,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
+import type { workspaceEntityAttachments } from "../workspace/schema.js";
 import { getWorkspaceStub, resolveIssueRef } from "./stub.js";
 
 const customerSchema = z.object({
@@ -64,6 +65,25 @@ const needBodySchema = z.object({
   projectId: z.string().optional(),
   priority: z.string().optional(),
   note: z.string().optional(),
+});
+
+const customerAttachmentSchema = z.object({
+  id: z.string(),
+  organizationId: z.string(),
+  customerId: z.string(),
+  fileName: z.string(),
+  contentType: z.string(),
+  size: z.number().int(),
+  r2Key: z.string(),
+  url: z.string(),
+  createdById: z.string().nullable(),
+  createdAt: z.string(),
+});
+
+const uploadCustomerAttachmentSchema = z.object({
+  fileName: z.string().min(1),
+  contentType: z.string().optional(),
+  contentBase64: z.string().min(1),
 });
 
 function notFound(message = "Not found"): never {
@@ -157,6 +177,96 @@ const deleteCustomerRoute = createRoute({
   responses: {
     204: { description: "Customer deleted" },
     404: { description: "Customer not found" },
+  },
+});
+
+const attachmentParams = z.object({
+  organizationId: z.string(),
+  id: z.string(),
+  attachmentId: z.string(),
+});
+
+const listCustomerAttachmentsRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/customers/{id}/attachments",
+  tags: ["customers"],
+  middleware: [rls("read")],
+  request: { params: orgIdParam },
+  responses: {
+    200: {
+      description: "Customer attachments",
+      content: {
+        "application/json": {
+          schema: z.object({
+            attachments: z.array(customerAttachmentSchema),
+          }),
+        },
+      },
+    },
+    404: { description: "Customer not found" },
+  },
+});
+
+const uploadCustomerAttachmentRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/customers/{id}/attachments",
+  tags: ["customers"],
+  middleware: [rls("write")],
+  request: {
+    params: orgIdParam,
+    body: {
+      content: {
+        "application/json": { schema: uploadCustomerAttachmentSchema },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Attachment uploaded",
+      content: { "application/json": { schema: customerAttachmentSchema } },
+    },
+    404: { description: "Customer not found" },
+    503: { description: "File storage not configured" },
+  },
+});
+
+const getCustomerAttachmentRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/customers/{id}/attachments/{attachmentId}",
+  tags: ["customers"],
+  middleware: [rls("read")],
+  request: { params: attachmentParams },
+  responses: {
+    200: {
+      description: "Customer attachment",
+      content: { "application/json": { schema: customerAttachmentSchema } },
+    },
+    404: { description: "Attachment not found" },
+  },
+});
+
+const getCustomerAttachmentContentRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/customers/{id}/attachments/{attachmentId}/content",
+  tags: ["customers"],
+  middleware: [rls("read")],
+  request: { params: attachmentParams },
+  responses: {
+    200: { description: "Attachment content" },
+    404: { description: "Attachment not found" },
+    503: { description: "File storage not configured" },
+  },
+});
+
+const deleteCustomerAttachmentRoute = createRoute({
+  method: "delete",
+  path: "/workspaces/{organizationId}/customers/{id}/attachments/{attachmentId}",
+  tags: ["customers"],
+  middleware: [rls("write")],
+  request: { params: attachmentParams },
+  responses: {
+    204: { description: "Attachment deleted" },
+    404: { description: "Attachment not found" },
   },
 });
 
@@ -419,10 +529,40 @@ const deleteNeedRoute = createRoute({
   },
 });
 
+function toCustomerAttachmentResponse(
+  row: typeof workspaceEntityAttachments.$inferSelect
+) {
+  return {
+    id: row.id,
+    organizationId: row.organizationId,
+    customerId: row.entityId,
+    fileName: row.fileName,
+    contentType: row.contentType,
+    size: row.size,
+    r2Key: row.r2Key,
+    url: `/workspaces/${row.organizationId}/customers/${row.entityId}/attachments/${row.id}/content`,
+    createdById: row.createdById,
+    createdAt: row.createdAt,
+  };
+}
+
+async function getOwnedCustomerAttachment(
+  stub: ReturnType<typeof getWorkspaceStub>,
+  customerId: string,
+  attachmentId: string
+) {
+  const row = await stub.getEntityAttachment(attachmentId);
+  if (!row || row.entityType !== "customer" || row.entityId !== customerId) {
+    return notFound("Attachment not found");
+  }
+  return row;
+}
+
 export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listCustomersRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
     return c.json({ customers: await stub.listCustomers() });
   });
 
@@ -430,6 +570,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId } = c.req.valid("param");
     const input = c.req.valid("json");
     const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
     const customer = await stub.createCustomer(input);
     return c.json(customer, 201);
   });
@@ -437,6 +578,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(getCustomerRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
     const customer = await stub.getCustomer(id);
     if (!customer) return notFound("Customer not found");
     return c.json(customer);
@@ -447,6 +589,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     const input = c.req.valid("json");
     const identity = c.var.workspaceIdentity;
     const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
     const customer = await stub.updateCustomer(id, input, identity.id);
     if (!customer) return notFound("Customer not found");
     return c.json(customer);
@@ -456,14 +599,89 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId, id } = c.req.valid("param");
     const identity = c.var.workspaceIdentity;
     const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
     const deleted = await stub.deleteCustomer(id, identity.id);
     if (!deleted) return notFound("Customer not found");
+    return c.body(null, 204);
+  });
+
+  app.openapi(listCustomerAttachmentsRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
+    const customer = await stub.getCustomer(id);
+    if (!customer) return notFound("Customer not found");
+    const items = await stub.listEntityAttachments("customer", id);
+    return c.json({ attachments: items.map(toCustomerAttachmentResponse) });
+  });
+
+  app.openapi(uploadCustomerAttachmentRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const identity = c.var.workspaceIdentity;
+    const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
+    const customer = await stub.getCustomer(id);
+    if (!customer) return notFound("Customer not found");
+    const row = await stub.storeEntityAttachment({
+      entityType: "customer",
+      entityId: id,
+      fileName: input.fileName,
+      contentType: input.contentType,
+      dataBase64: input.contentBase64,
+      createdById: identity.id,
+    });
+    return c.json(toCustomerAttachmentResponse(row), 201);
+  });
+
+  app.openapi(getCustomerAttachmentRoute, async (c) => {
+    const { organizationId, id, attachmentId } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
+    const row = await getOwnedCustomerAttachment(stub, id, attachmentId);
+    return c.json(toCustomerAttachmentResponse(row));
+  });
+
+  app.openapi(getCustomerAttachmentContentRoute, async (c) => {
+    const { organizationId, id, attachmentId } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
+    const row = await getOwnedCustomerAttachment(stub, id, attachmentId);
+    const bucket = c.env.ATTACHMENTS_BUCKET;
+    if (!bucket) {
+      throw new VortexError({
+        code: "INTERNAL_ERROR",
+        status: 503,
+        message: "File storage not configured",
+      });
+    }
+    const object = await bucket.get(row.r2Key);
+    if (!object || !object.body) {
+      return notFound("Attachment content not found");
+    }
+    const safeFileName = row.fileName.replace(/["\\\r\n]/g, "_");
+    const headers: Record<string, string> = {
+      "content-type": object.httpMetadata?.contentType || row.contentType,
+      "content-disposition": `attachment; filename="${safeFileName}"`,
+      "x-content-type-options": "nosniff",
+    };
+    if (object.size) headers["content-length"] = String(object.size);
+    return c.body(object.body, { headers });
+  });
+
+  app.openapi(deleteCustomerAttachmentRoute, async (c) => {
+    const { organizationId, id, attachmentId } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
+    const row = await getOwnedCustomerAttachment(stub, id, attachmentId);
+    await stub.deleteEntityAttachment(row.id);
     return c.body(null, 204);
   });
 
   app.openapi(listTiersRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
     return c.json({ tiers: await stub.listCustomerTiers() });
   });
 
@@ -471,12 +689,14 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId } = c.req.valid("param");
     const input = c.req.valid("json");
     const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
     return c.json(await stub.createCustomerTier(input), 201);
   });
 
   app.openapi(getTierRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
     const tier = await stub.getCustomerTier(id);
     if (!tier) return notFound("Tier not found");
     return c.json(tier);
@@ -486,6 +706,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId, id } = c.req.valid("param");
     const input = c.req.valid("json");
     const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
     const tier = await stub.updateCustomerTier(id, input);
     if (!tier) return notFound("Tier not found");
     return c.json(tier);
@@ -494,6 +715,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(deleteTierRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
     if (!(await stub.deleteCustomerTier(id))) return notFound("Tier not found");
     return c.body(null, 204);
   });
@@ -501,6 +723,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listStatusesRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
     return c.json({ statuses: await stub.listCustomerStatuses() });
   });
 
@@ -508,12 +731,14 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId } = c.req.valid("param");
     const input = c.req.valid("json");
     const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
     return c.json(await stub.createCustomerStatus(input), 201);
   });
 
   app.openapi(getStatusRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
     const status = await stub.getCustomerStatus(id);
     if (!status) return notFound("Status not found");
     return c.json(status);
@@ -523,6 +748,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId, id } = c.req.valid("param");
     const input = c.req.valid("json");
     const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
     const status = await stub.updateCustomerStatus(id, input);
     if (!status) return notFound("Status not found");
     return c.json(status);
@@ -531,6 +757,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(deleteStatusRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
     if (!(await stub.deleteCustomerStatus(id)))
       return notFound("Status not found");
     return c.body(null, 204);
@@ -540,6 +767,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId } = c.req.valid("param");
     const query = c.req.valid("query");
     const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
     const needs = await stub.listCustomerNeeds({
       ...query,
       issueId:
@@ -555,6 +783,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     const input = c.req.valid("json");
     const identity = c.var.workspaceIdentity;
     const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
     const need = await stub.createCustomerNeed(
       {
         ...input,
@@ -571,6 +800,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(getNeedRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
     const need = await stub.getCustomerNeed(id);
     if (!need) return notFound("Need not found");
     return c.json(need);
@@ -581,6 +811,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     const input = c.req.valid("json");
     const identity = c.var.workspaceIdentity;
     const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
     const need = await stub.updateCustomerNeed(
       id,
       {
@@ -599,6 +830,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(deleteNeedRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
     if (!(await stub.deleteCustomerNeed(id))) return notFound("Need not found");
     return c.body(null, 204);
   });

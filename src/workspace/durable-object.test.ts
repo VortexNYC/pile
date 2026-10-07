@@ -1263,4 +1263,76 @@ describe("WorkspaceDO", () => {
     );
     expect(unrelatedAfter?.queuedAfter).toBeNull();
   });
+
+  it("stores entity attachments in R2 and cascades them on customer delete", async () => {
+    const stub = getStub();
+    const customer = await withWorkspace(stub, (instance) =>
+      instance.createCustomer({ name: "Attachment customer" })
+    );
+
+    const stored = await withWorkspace(stub, (instance) =>
+      instance.storeEntityAttachment({
+        entityType: "customer",
+        entityId: customer.id,
+        fileName: "statement.pdf",
+        contentType: "application/pdf",
+        dataBase64: btoa("statement-bytes"),
+        createdById: "user-1",
+      })
+    );
+    expect(stored.entityType).toBe("customer");
+    expect(stored.entityId).toBe(customer.id);
+    expect(stored.organizationId).toBe(WORKSPACE_ID);
+    expect(stored.size).toBe("statement-bytes".length);
+    expect(stored.r2Key).toContain(
+      `attachments/${WORKSPACE_ID}/customer/${customer.id}/`
+    );
+    const object = await env.ATTACHMENTS_BUCKET.get(stored.r2Key);
+    expect(object).not.toBeNull();
+    expect(await object!.text()).toBe("statement-bytes");
+
+    const listed = await withWorkspace(stub, (instance) =>
+      instance.listEntityAttachments("customer", customer.id)
+    );
+    expect(listed.map((a) => a.id)).toEqual([stored.id]);
+    const otherScope = await withWorkspace(stub, (instance) =>
+      instance.listEntityAttachments("issue", customer.id)
+    );
+    expect(otherScope).toHaveLength(0);
+
+    const deleted = await withWorkspace(stub, (instance) =>
+      instance.deleteCustomer(customer.id, "user-1")
+    );
+    expect(deleted).toBe(true);
+    const orphans = await withWorkspace(stub, (instance) =>
+      instance.listEntityAttachments("customer", customer.id)
+    );
+    expect(orphans).toHaveLength(0);
+    expect(await env.ATTACHMENTS_BUCKET.get(stored.r2Key)).toBeNull();
+  });
+
+  it("deletes a single entity attachment row and its R2 object", async () => {
+    const stub = getStub();
+    const customer = await withWorkspace(stub, (instance) =>
+      instance.createCustomer({ name: "Detach customer" })
+    );
+    const stored = await withWorkspace(stub, (instance) =>
+      instance.storeEntityAttachment({
+        entityType: "customer",
+        entityId: customer.id,
+        fileName: "doc.txt",
+        dataBase64: btoa("doc"),
+      })
+    );
+
+    const removed = await withWorkspace(stub, (instance) =>
+      instance.deleteEntityAttachment(stored.id)
+    );
+    expect(removed?.id).toBe(stored.id);
+    expect(await env.ATTACHMENTS_BUCKET.get(stored.r2Key)).toBeNull();
+    const missing = await withWorkspace(stub, (instance) =>
+      instance.deleteEntityAttachment(stored.id)
+    );
+    expect(missing).toBeUndefined();
+  });
 });
