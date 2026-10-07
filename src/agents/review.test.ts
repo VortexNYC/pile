@@ -164,8 +164,9 @@ function fakeGithub(opts: {
   config?: Record<string, unknown> | null;
   files: Array<{ filename: string; patch?: string }>;
   existingCheck?: boolean;
-  /** "reject" 422s the first review POST (own-PR shape), "fail" 422s both. */
-  reviewPost?: "ok" | "reject" | "fail";
+  /** "reject" 422s the first review POST (own-PR shape), "fail" 422s both,
+   *  "flaky" 500s the first — a non-4xx is never retried. */
+  reviewPost?: "ok" | "reject" | "fail" | "flaky";
 }) {
   const calls: GhCall[] = [];
   let nextCheckId = 500;
@@ -208,6 +209,9 @@ function fakeGithub(opts: {
           422
         );
       }
+      if (opts.reviewPost === "flaky" && reviewAttempts === 1) {
+        return json({ message: "Internal Server Error" }, 500);
+      }
       return json(
         { id: 42, html_url: "https://github.com/r/1#review-42" },
         201
@@ -232,6 +236,7 @@ describe("requestPrReview / publishReviewVerdicts", () => {
   let stub: ReturnType<typeof env.WORKSPACE_DURABLE_OBJECT.get>;
   const dispatched: Array<{ instructions?: string; repo: string | null }> = [];
   const followUpPrompts: string[] = [];
+  let rejectFollowUps = false;
   let pr = 1000;
 
   beforeAll(async () => {
@@ -277,6 +282,7 @@ describe("requestPrReview / publishReviewVerdicts", () => {
             };
           },
           sendPrompt: async (_id, prompt) => {
+            if (rejectFollowUps) return false;
             followUpPrompts.push(prompt);
             return true;
           },
@@ -618,6 +624,123 @@ describe("requestPrReview / publishReviewVerdicts", () => {
     );
     expect(String(comment?.body?.body)).toContain("✅ Approve");
     expect(followUpPrompts.length).toBe(promptsBefore);
+  });
+
+  // A 5xx (or a dropped response) is not a definitive rejection — the
+  // review may exist server-side, so the POST isn't retried and the
+  // verdict degrades straight to the issue comment.
+  it("never retries the review POST on a non-4xx failure", async () => {
+    const issue = await laneIssue();
+    const promptsBefore = followUpPrompts.length;
+    const { t, review } = await finishReviewLane(
+      issue,
+      "sha-flaky-review",
+      "```json\n" +
+        JSON.stringify({
+          verdict: "request-changes",
+          summary: "Needs work.",
+          findings: [{ severity: "must", title: "Fix it" }],
+        }) +
+        "\n```"
+    );
+    const publishGh = fakeGithub({
+      config: REVIEW_CONFIG,
+      files: [],
+      reviewPost: "flaky",
+    });
+    await publishReviewVerdicts(stub, publishDeps(publishGh));
+    const posts = publishGh.calls.filter(
+      (c) =>
+        c.method === "POST" && c.url.includes(`/pulls/${t.pullNumber}/reviews`)
+    );
+    expect(posts).toHaveLength(1);
+    const comment = publishGh.calls.find(
+      (c) =>
+        c.method === "POST" &&
+        c.url.includes(`/issues/${t.pullNumber}/comments`)
+    );
+    expect(String(comment?.body?.body)).toContain("⛔ Request changes");
+    expect(followUpPrompts.length).toBe(promptsBefore + 1);
+    const reviewEvents = await stub.listAgentSessionEvents(review.id);
+    expect(
+      reviewEvents.find((e) => e.type === "review.published")?.payload
+    ).toContain('"reviewId":null');
+  });
+
+  // PILE-315 — a rejected verdict nudge is not the end: every later sweep
+  // re-attempts it until nudgeLane's delivery dedupe sees it, which is
+  // also what carries the pile-review-<sha> fallback key no GitHub
+  // detection pass can see.
+  it("retries an undelivered verdict nudge until the lane takes it", async () => {
+    const issue = await laneIssue();
+    // No follow-up throttle here — a retry inside the 5m window would
+    // legitimately wait it out.
+    await stub.upsertAgentProviderConfig({
+      agentId: "review-mock",
+      config: { followupThrottleMinutes: 0 },
+    });
+    const { review } = await finishReviewLane(
+      issue,
+      "sha-nudge-retry",
+      "```json\n" +
+        JSON.stringify({
+          verdict: "request-changes",
+          summary: "Needs work.",
+          findings: [{ severity: "must", title: "Fix it" }],
+        }) +
+        "\n```"
+    );
+    const workLane = (await stub.listAgentSessions({ issueId: issue.id })).find(
+      (s) => s.purpose !== REVIEW_PURPOSE
+    )!;
+    const promptsBefore = followUpPrompts.length;
+    rejectFollowUps = true;
+    try {
+      // Pass 1: no pull_request_review posts → plain comment fallback; the
+      // provider rejects the prompt → prompt.followup_failed.
+      const pass1 = fakeGithub({
+        config: REVIEW_CONFIG,
+        files: [],
+        reviewPost: "fail",
+      });
+      await publishReviewVerdicts(stub, publishDeps(pass1));
+      expect(followUpPrompts.length).toBe(promptsBefore);
+      let workEvents = await stub.listAgentSessionEvents(workLane.id);
+      const failed = workEvents.find(
+        (e) => e.type === "prompt.followup_failed"
+      );
+      expect(failed?.payload).toContain("pile-review-sha-nudge-retry");
+      expect(
+        (await stub.listAgentSessionEvents(review.id)).some(
+          (e) => e.type === "review.published"
+        )
+      ).toBe(true);
+
+      // Pass 2: provider healthy again — the already-published session
+      // re-attempts the nudge under the same key, no GitHub calls needed.
+      rejectFollowUps = false;
+      const pass2 = fakeGithub({ config: REVIEW_CONFIG, files: [] });
+      await publishReviewVerdicts(stub, publishDeps(pass2));
+      expect(pass2.calls).toHaveLength(0);
+      expect(followUpPrompts.length).toBe(promptsBefore + 1);
+      workEvents = await stub.listAgentSessionEvents(workLane.id);
+      expect(
+        workEvents.filter(
+          (e) =>
+            e.type === "prompt.followup" &&
+            typeof e.payload === "string" &&
+            e.payload.includes("pile-review-sha-nudge-retry")
+        )
+      ).toHaveLength(1);
+
+      // Pass 3: delivered — the dedupe holds.
+      const pass3 = fakeGithub({ config: REVIEW_CONFIG, files: [] });
+      await publishReviewVerdicts(stub, publishDeps(pass3));
+      expect(followUpPrompts.length).toBe(promptsBefore + 1);
+      expect(pass3.calls).toHaveLength(0);
+    } finally {
+      rejectFollowUps = false;
+    }
   });
 
   it("defers to an existing pile-review check run for the headSha", async () => {

@@ -32,6 +32,38 @@ export interface NudgeOptions {
   headSha?: string | null;
 }
 
+export interface LaneResolutionOptions {
+  /** Side-lane purposes that never own the issue's PR (e.g. review). */
+  excludePurpose?: string;
+  limit?: number;
+}
+
+// Resolve the lane for an issue: a live session first, else the most
+// recent completed one — kept-sandbox providers resume completed lanes on
+// the follow-up. Returns null when the issue never had a lane.
+// PILE-249 — dead lanes still resolve: a review on a failed/canceled
+// lane's PR gets its detection event plus a prompt.followup_skipped
+// record from nudgeLane instead of silence.
+export async function resolveLaneForIssue(
+  stub: DurableObjectStub<WorkspaceDO>,
+  issueId: string,
+  opts: LaneResolutionOptions = {}
+): Promise<AgentSession | null> {
+  const sessions = await stub
+    .listAgentSessions({ issueId, limit: opts.limit ?? 20 })
+    .catch(() => []);
+  const lanes =
+    opts.excludePurpose === undefined
+      ? sessions
+      : sessions.filter((s) => s.purpose !== opts.excludePurpose);
+  return (
+    lanes.find((s) => s.status === "running" || s.status === "waiting") ??
+    lanes.find((s) => s.status === "completed") ??
+    lanes.find((s) => s.status === "failed" || s.status === "canceled") ??
+    null
+  );
+}
+
 type SessionEvent = Awaited<
   ReturnType<WorkspaceDO["listAgentSessionEvents"]>
 >[number];
