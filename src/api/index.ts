@@ -8,6 +8,7 @@ import {
   processIntercomWebhook,
 } from "../agents/intercom.js";
 import { docsBundle } from "../assets/docs-bundle.js";
+import { createD1 } from "../global/db.js";
 import { handleMcpRequest } from "../mcp/server.js";
 import { createAuth } from "../platform/auth.js";
 import { toErrorResponse, VortexError } from "../platform/errors.js";
@@ -48,6 +49,7 @@ import { registerGithubRoutes } from "./github.js";
 import { registerGitlabRoutes } from "./gitlab.js";
 import { registerHardeningRoutes } from "./hardening.js";
 import { registerImportRoutes } from "./import.js";
+import { issueViewer } from "./issue-access.js";
 import { registerIssueExternalLinkRoutes } from "./issue-external-links.js";
 import { registerIssueHistoryRoutes } from "./issue-history.js";
 import { registerIssueRelationRoutes } from "./issue-relations.js";
@@ -308,7 +310,24 @@ app.openapi(
     const { organizationId } = c.req.valid("param");
     const id = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId);
     const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(id);
-    return toMutableResponse(await stub.fetch(c.req.raw));
+    // Stamp the caller's issue-grant viewer onto the socket so the DO can
+    // filter issue events per connection (issue_permissions). A missing
+    // identity is treated as non-admin nobody rather than unfiltered.
+    const identity = c.get("workspaceIdentity");
+    const viewer = identity
+      ? await issueViewer(createD1(c.env.D1), identity)
+      : { actorId: "", teamIds: [] };
+    const forwarded = new Request(c.req.raw);
+    forwarded.headers.set(
+      "x-pile-ws-viewer",
+      JSON.stringify({
+        actorId: viewer?.actorId ?? "",
+        teamIds: viewer?.teamIds ?? [],
+        // issueViewer returns undefined only for admin identities.
+        admin: identity !== undefined && viewer === undefined,
+      })
+    );
+    return toMutableResponse(await stub.fetch(forwarded));
   }
 );
 

@@ -2,10 +2,11 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
 import { createD1 } from "../global/db.js";
-import { canAccessTeam } from "../global/teams.js";
 import { VortexError } from "../platform/errors.js";
+import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
+import { assertIssueAccess } from "./issue-access.js";
 import { getWorkspaceStub } from "./stub.js";
 
 const linkSchema = z.object({
@@ -126,7 +127,7 @@ async function checkIssueAccess(
   db: ReturnType<typeof createD1>,
   organizationId: string,
   issueId: string,
-  identity: { id: string; permissions: string[] }
+  identity: WorkspaceIdentity
 ) {
   const stub = getWorkspaceStub(env, organizationId);
   const issue = await stub.getIssue(issueId);
@@ -137,14 +138,7 @@ async function checkIssueAccess(
       message: "Issue not found",
     });
   }
-  const allowed = await canAccessTeam(db, issue.teamId, identity);
-  if (!allowed) {
-    throw new VortexError({
-      code: "NOT_FOUND",
-      status: 404,
-      message: "External link not found",
-    });
-  }
+  await assertIssueAccess(db, stub, issue, identity);
   // Links are keyed by the canonical UUID even when the caller used the
   // KEY-N identifier in the path.
   return { stub, issue };

@@ -68,6 +68,7 @@ import {
   toSessionResponse,
 } from "./agent-sessions.js";
 import { getExecutionCtx } from "./execution-ctx.js";
+import { assertIssueAccess, issueViewer } from "./issue-access.js";
 import {
   encodeCursor,
   listIssuesQuerySchema,
@@ -167,21 +168,6 @@ async function loadVisibleTeamIds(
   identity: WorkspaceIdentity
 ): Promise<string[]> {
   return getVisibleTeamIds(db, organizationId, identity);
-}
-
-async function assertIssueAccess(
-  db: ReturnType<typeof createD1>,
-  issue: Issue,
-  identity: WorkspaceIdentity
-): Promise<void> {
-  const allowed = await canAccessTeam(db, issue.teamId, identity);
-  if (!allowed) {
-    throw new VortexError({
-      code: "NOT_FOUND",
-      status: 404,
-      message: "Issue not found",
-    });
-  }
 }
 
 async function assertTeamAccess(
@@ -828,6 +814,90 @@ const assignIssueResponseSchema = z.object({
   session: agentSessionSchema.optional(),
 });
 
+// Per-issue access grants (PILE-328): no rows = open to the workspace; any
+// row restricts the issue to the listed actors + workspace admins.
+const issuePermissionSchema = z.object({
+  id: z.string(),
+  organizationId: z.string(),
+  issueId: z.string(),
+  actorId: z.string(),
+  actorType: z.string(),
+  createdAt: z.string(),
+});
+
+const issuePermissionBodySchema = z.object({
+  // User id, API-key id, or Better Auth team id (actorType="team").
+  actorId: z.string().min(1),
+  actorType: z.enum(["user", "agent", "team"]).optional(),
+});
+
+const listIssuePermissionsRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/issues/{id}/permissions",
+  tags: ["issues"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Access grants for this issue",
+      content: {
+        "application/json": {
+          schema: z.object({
+            permissions: z.array(issuePermissionSchema),
+          }),
+        },
+      },
+    },
+    404: { description: "Issue not found" },
+  },
+});
+
+const setIssuePermissionRoute = createRoute({
+  method: "put",
+  path: "/workspaces/{organizationId}/issues/{id}/permissions",
+  tags: ["issues"],
+  middleware: [rls("write")],
+  description:
+    "Grant an actor access to this issue. The first grant restricts the issue to listed actors + workspace admins; revoking the last grant reopens it.",
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+    body: {
+      content: { "application/json": { schema: issuePermissionBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Permission set",
+      content: {
+        "application/json": { schema: issuePermissionSchema },
+      },
+    },
+    404: { description: "Issue not found" },
+  },
+});
+
+const revokeIssuePermissionRoute = createRoute({
+  method: "delete",
+  path: "/workspaces/{organizationId}/issues/{id}/permissions/{actorId}",
+  tags: ["issues"],
+  middleware: [rls("write")],
+  description:
+    "Revoke an actor's access grant. When the last grant is removed the issue is open to the workspace again.",
+  request: {
+    params: z.object({
+      organizationId: z.string(),
+      id: z.string(),
+      actorId: z.string(),
+    }),
+  },
+  responses: {
+    204: { description: "Permission revoked" },
+    404: { description: "Issue not found" },
+  },
+});
+
 const assignIssueRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/issues/{id}/assign",
@@ -866,7 +936,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     if (query.identifier) {
       const issue = await stub.getIssueByIdentifier(query.identifier);
       if (issue) {
-        await assertIssueAccess(db, issue, identity);
+        await assertIssueAccess(db, stub, issue, identity);
       }
       return c.json({ issues: issue ? [issue] : [] });
     }
@@ -915,6 +985,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       args.parentId = (await stub.getIssue(args.parentId))?.id ?? args.parentId;
     }
     args.teamIds = visibleTeamIds;
+    args.viewer = await issueViewer(db, identity);
     const issues = await stub.listIssues(args);
     const nextCursor =
       issues.length === query.limit && issues.length > 0
@@ -939,6 +1010,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     const issues = await stub.listIssues({
       status: "triage",
       teamIds: visibleTeamIds,
+      viewer: await issueViewer(db, identity),
     });
     return c.json({ issues });
   });
@@ -956,7 +1028,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         message: "Issue not found",
       });
     }
-    await assertIssueAccess(db, issue, identity);
+    await assertIssueAccess(db, stub, issue, identity);
     const branchName = suggestBranchName(
       issue.identifier ?? issue.id,
       issue.title
@@ -975,7 +1047,11 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       organizationId,
       identity
     );
-    const groups = await stub.issueStats(groupBy, visibleTeamIds);
+    const groups = await stub.issueStats(
+      groupBy,
+      visibleTeamIds,
+      await issueViewer(db, identity)
+    );
     return c.json({ groups });
   });
 
@@ -994,10 +1070,15 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     }
     const teamIds = await loadVisibleTeamIds(db, organizationId, identity);
     const stub = await getStub(c.env, organizationId);
-    const result = await stub.burndown(cycleId, teamIds, {
-      startDate: cycle.startDate,
-      endDate: cycle.endDate,
-    });
+    const result = await stub.burndown(
+      cycleId,
+      teamIds,
+      {
+        startDate: cycle.startDate,
+        endDate: cycle.endDate,
+      },
+      await issueViewer(db, identity)
+    );
     return c.json(result);
   });
 
@@ -1021,6 +1102,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       args.parentId = (await stub.getIssue(args.parentId))?.id ?? args.parentId;
     }
     args.teamIds = visibleTeamIds;
+    args.viewer = await issueViewer(db, identity);
     const issues = await stub.listIssues(args);
     const nextCursor =
       issues.length === query.limit && issues.length > 0
@@ -1059,7 +1141,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
           message: "Parent issue not found",
         });
       }
-      await assertIssueAccess(db, parent, identity);
+      await assertIssueAccess(db, stub, parent, identity);
       if (parent.parentId) {
         throw new VortexError({
           code: "BAD_REQUEST",
@@ -1087,7 +1169,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     if (input.externalRef) {
       const existing = await stub.getIssueByExternalRef(input.externalRef);
       if (existing) {
-        await assertIssueAccess(db, existing, identity);
+        await assertIssueAccess(db, stub, existing, identity);
         return c.json(existing, 200);
       }
     }
@@ -1153,7 +1235,11 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         branch: input.branch,
       },
       identity.id,
-      { teamIds: visibleTeamIds, block: dedupe === "block" }
+      {
+        teamIds: visibleTeamIds,
+        block: dedupe === "block",
+        viewer: await issueViewer(db, identity),
+      }
     );
     const possibleDuplicates = created.possibleDuplicates.map(
       ({ issue: match, score }) => ({
@@ -1359,8 +1445,67 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         message: "Issue not found",
       });
     }
-    await assertIssueAccess(db, issue, identity);
+    await assertIssueAccess(db, stub, issue, identity);
     return c.json(issue);
+  });
+
+  app.openapi(listIssuePermissionsRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const identity = c.get("workspaceIdentity");
+    const db = createD1(c.env.D1);
+    const stub = await getStub(c.env, organizationId);
+    const issue = await stub.getIssue(id);
+    if (!issue) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Issue not found",
+      });
+    }
+    await assertIssueAccess(db, stub, issue, identity);
+    return c.json({ permissions: await stub.listIssuePermissions(issue.id) });
+  });
+
+  app.openapi(setIssuePermissionRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const identity = c.get("workspaceIdentity");
+    const db = createD1(c.env.D1);
+    const stub = await getStub(c.env, organizationId);
+    const issue = await stub.getIssue(id);
+    if (!issue) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Issue not found",
+      });
+    }
+    await assertIssueAccess(db, stub, issue, identity);
+    const grant = await stub.setIssuePermission(
+      issue.id,
+      input.actorId,
+      input.actorType ?? "user",
+      identity.id
+    );
+    return c.json(grant);
+  });
+
+  app.openapi(revokeIssuePermissionRoute, async (c) => {
+    const { organizationId, id, actorId } = c.req.valid("param");
+    const identity = c.get("workspaceIdentity");
+    const db = createD1(c.env.D1);
+    const stub = await getStub(c.env, organizationId);
+    const issue = await stub.getIssue(id);
+    if (!issue) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Issue not found",
+      });
+    }
+    await assertIssueAccess(db, stub, issue, identity);
+    await stub.revokeIssuePermission(issue.id, actorId, identity.id);
+    return c.body(null, 204);
   });
 
   app.openapi(getIssueChildrenRoute, async (c) => {
@@ -1376,12 +1521,15 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         message: "Issue not found",
       });
     }
-    await assertIssueAccess(db, issue, identity);
-    const children = await stub.getIssueChildren(issue.id);
+    await assertIssueAccess(db, stub, issue, identity);
     const visibleTeamIds = await loadVisibleTeamIds(
       db,
       organizationId,
       identity
+    );
+    const children = await stub.getIssueChildren(
+      issue.id,
+      await issueViewer(db, identity)
     );
     const visibleChildren = children.filter((child) =>
       visibleTeamIds.includes(child.teamId)
@@ -1403,7 +1551,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         message: "Issue not found",
       });
     }
-    await assertIssueAccess(db, issue, identity);
+    await assertIssueAccess(db, stub, issue, identity);
     const visibleTeamIds = await loadVisibleTeamIds(
       db,
       organizationId,
@@ -1412,7 +1560,8 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     const similar = await stub.findSimilarIssues(
       issue.id,
       visibleTeamIds,
-      limit ?? 10
+      limit ?? 10,
+      await issueViewer(db, identity)
     );
     return c.json({
       similar: similar.filter((hit) =>
@@ -1435,7 +1584,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         message: "Issue not found",
       });
     }
-    await assertIssueAccess(db, existing, identity);
+    await assertIssueAccess(db, stub, existing, identity);
     let teamId = existing.teamId;
     if (input.teamId !== undefined) {
       teamId = await assertTeamAccess(
@@ -1454,7 +1603,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
           message: "Parent issue not found",
         });
       }
-      await assertIssueAccess(db, parent, identity);
+      await assertIssueAccess(db, stub, parent, identity);
       if (parent.parentId) {
         throw new VortexError({
           code: "BAD_REQUEST",
@@ -1559,7 +1708,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
           message: "Parent issue not found",
         });
       }
-      await assertIssueAccess(db, parent, identity);
+      await assertIssueAccess(db, stub, parent, identity);
     }
 
     const existingIssues = await Promise.all(
@@ -1581,7 +1730,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     }
 
     await Promise.all(
-      validIssues.map((issue) => assertIssueAccess(db, issue, identity))
+      validIssues.map((issue) => assertIssueAccess(db, stub, issue, identity))
     );
     for (const issue of validIssues) {
       validateIssueState(patch.status ?? issue.status, patch.resolution);
@@ -1617,7 +1766,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         message: "Issue not found",
       });
     }
-    await assertIssueAccess(db, existing, identity);
+    await assertIssueAccess(db, stub, existing, identity);
     const deleted = await stub.deleteIssue(existing.id, identity.id);
     if (!deleted) {
       throw new VortexError({
@@ -1667,7 +1816,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         message: "Issue not found",
       });
     }
-    await assertIssueAccess(db, issue, identity);
+    await assertIssueAccess(db, stub, issue, identity);
 
     // PILE-241 — branch names the lane's working branch: the runner creates
     // it off the repo default and pushes it. Passing "main"/"master" makes
@@ -1866,7 +2015,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         message: "Issue not found",
       });
     }
-    await assertIssueAccess(db, existing, identity);
+    await assertIssueAccess(db, stub, existing, identity);
 
     const issue = await stub.updateIssue(
       existing.id,

@@ -90,6 +90,7 @@ import {
   type IssuePatch,
   type IssueResolution,
   type IssueStatus,
+  type IssueViewer,
   type ListIssuesArgs,
   type RealtimeEvent,
 } from "../types/workspace.js";
@@ -107,6 +108,7 @@ import {
   workspaceGitIdentities,
   workspaceIssueApprovals,
   workspaceIssueHistory,
+  workspaceIssuePermissions,
   workspaceIssueRelations,
   workspaceIssues,
   workspaceIssueSubscribers,
@@ -222,6 +224,15 @@ function hasWorkspaceNamespace(env: AppEnv): env is WorkerEnv {
 }
 
 const LANE_GITHUB_TOKEN_PREFIX = "laneGithubToken:";
+
+// Viewer stamped on each websocket at connect (x-pile-ws-viewer) — used to
+// filter issue-bearing realtime events for restricted issues.
+const wsViewerSchema = z.object({
+  actorId: z.string(),
+  teamIds: z.array(z.string()),
+  admin: z.boolean(),
+});
+type WsViewer = z.infer<typeof wsViewerSchema>;
 
 export class WorkspaceDO extends DurableObject<AppEnv> {
   private organizationId: string;
@@ -439,6 +450,23 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const [client, server] = [pair[0], pair[1]];
     this.ctx.acceptWebSocket(server);
 
+    // The API layer stamps the connecting identity on `x-pile-ws-viewer`;
+    // issue-bearing events are filtered per socket so restricted issues
+    // (issue_permissions) never reach members without a grant. Grants
+    // changed after connect apply on the next connection.
+    const viewerHeader = request.headers.get("x-pile-ws-viewer");
+    if (viewerHeader) {
+      try {
+        const viewer = wsViewerSchema.parse(JSON.parse(viewerHeader));
+        server.serializeAttachment(viewer);
+      } catch {
+        // Unparseable viewer — socket stays unrestricted-until-checked:
+        // without an attachment we cannot attribute it, so treat as a
+        // non-admin nobody (open issues only).
+        server.serializeAttachment({ actorId: "", teamIds: [], admin: false });
+      }
+    }
+
     await this.emit({
       type: "connected",
       organizationId: this.organizationId,
@@ -532,8 +560,31 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   private emitWebSockets(event: RealtimeEvent): void {
+    const eventIssueId =
+      "issue" in event
+        ? event.issue.id
+        : "issueId" in event
+          ? event.issueId
+          : event.type === "audit.entry" && event.entry.entityType === "issue"
+            ? event.entry.entityId
+            : undefined;
     for (const ws of this.ctx.getWebSockets()) {
       try {
+        if (eventIssueId !== undefined) {
+          const viewer = ws.deserializeAttachment() as WsViewer | null;
+          if (
+            viewer &&
+            !viewer.admin &&
+            !data.hasIssueAccess(
+              this.db,
+              eventIssueId,
+              viewer.actorId,
+              viewer.teamIds
+            )
+          ) {
+            continue;
+          }
+        }
         ws.send(JSON.stringify(event));
       } catch {
         // socket may be closing
@@ -987,26 +1038,29 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       snoozedOnly?: boolean;
       includeSnoozed?: boolean;
       limit?: number;
-    } = {}
+    } = {},
+    viewer?: IssueViewer
   ) {
     return data.getNotificationsForRecipient(
       this.db,
       this.organizationId,
       recipientId,
       recipientType,
-      options
+      { ...options, excludeIssueIds: this.hiddenIssueIdsFor(viewer) }
     );
   }
 
   unreadNotificationCount(
     recipientId: string,
-    recipientType: data.RecipientType
+    recipientType: data.RecipientType,
+    viewer?: IssueViewer
   ) {
     return data.getUnreadNotificationCount(
       this.db,
       this.organizationId,
       recipientId,
-      recipientType
+      recipientType,
+      this.hiddenIssueIdsFor(viewer)
     );
   }
 
@@ -1639,8 +1693,14 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   // ---- issue external links ----
 
-  listExternalLinks(args: { entityType?: string; entityId?: string } = {}) {
-    return data.listExternalLinks(this.db, this.organizationId, args);
+  listExternalLinks(
+    args: { entityType?: string; entityId?: string } = {},
+    viewer?: IssueViewer
+  ) {
+    return data.listExternalLinks(this.db, this.organizationId, {
+      ...args,
+      excludeIssueIds: this.hiddenIssueIdsFor(viewer),
+    });
   }
 
   getExternalLink(id: string) {
@@ -1964,23 +2024,33 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return searchDocuments(index, query, limit);
   }
 
+  // `teamIds` is the caller's resolved visibility set — an empty array means
+  // no issues are in scope (never "unfiltered").
   async searchAll(
     query: string,
     teamIds: string[],
-    limit = 50
+    limit = 50,
+    viewer?: IssueViewer
   ): Promise<{ issueIds: string[]; documentIds: string[] }> {
     const index = await this.ensureSearchIndex();
     const [issueIds, documentIds] = await Promise.all([
-      searchIssues(index, query, teamIds, limit),
+      teamIds.length > 0
+        ? searchIssues(index, query, teamIds, limit)
+        : Promise.resolve([]),
       searchDocuments(index, query, limit),
     ]);
-    return { issueIds, documentIds };
+    const hidden = new Set(this.hiddenIssueIdsFor(viewer));
+    return {
+      issueIds: issueIds.filter((id) => !hidden.has(id)),
+      documentIds,
+    };
   }
 
   async findSimilarIssues(
     issueId: string,
     teamIds: string[],
-    limit = 10
+    limit = 10,
+    viewer?: IssueViewer
   ): Promise<Array<{ issue: Issue; score: number }>> {
     await this.ready;
     const issue = await this.getIssue(issueId);
@@ -1990,9 +2060,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const matches = await Promise.all(
       hits.map((hit) => this.getIssue(hit.issueId))
     );
+    const hidden = new Set(this.hiddenIssueIdsFor(viewer));
     return hits.flatMap((hit, i) => {
       const match = matches[i];
-      return match ? [{ issue: match, score: hit.score }] : [];
+      return match && !hidden.has(match.id)
+        ? [{ issue: match, score: hit.score }]
+        : [];
     });
   }
 
@@ -2002,10 +2075,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   async findPossibleDuplicates(
     title: string,
     teamIds: string[],
-    limit = 5
+    limit = 5,
+    viewer?: IssueViewer
   ): Promise<Array<{ issue: Issue; score: number }>> {
     await this.ready;
     if (teamIds.length === 0) return [];
+    const hidden = new Set(this.hiddenIssueIdsFor(viewer));
     if (similarityTerms(title).length === 0) {
       // No indexable terms — the index can't help, and generic titles like
       // "Fix it" are the likeliest collisions. Match them verbatim instead.
@@ -2018,7 +2093,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         .all();
       return rows
         .flatMap((issue) => {
-          if (issue.status === "done" || issue.status === "canceled") return [];
+          if (
+            hidden.has(issue.id) ||
+            issue.status === "done" ||
+            issue.status === "canceled"
+          )
+            return [];
           const sameTitle =
             issue.title.toLowerCase() === wanted ||
             (normalized !== "" &&
@@ -2036,6 +2116,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       .flatMap((issue) => {
         if (
           !issue ||
+          hidden.has(issue.id) ||
           !teamIds.includes(issue.teamId) ||
           issue.status === "done" ||
           issue.status === "canceled"
@@ -2129,6 +2210,57 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     teamIds: string[] = []
   ) {
     return data.documentAccessLevel(this.db, documentId, actorId, teamIds);
+  }
+
+  // ---- issue permissions (PILE-328) ----
+  // Same grant model as documents: no rows = open to the workspace; any row
+  // restricts the issue to listed actors (+ workspace admins, bypassed by
+  // callers).
+
+  setIssuePermission(
+    issueId: string,
+    actorId: string,
+    actorType: string,
+    grantedBy?: string
+  ) {
+    const grant = data.setIssuePermission(
+      this.db,
+      this.organizationId,
+      issueId,
+      actorId,
+      actorType
+    );
+    if (grant) {
+      // Restricted-issue grant changes stay out of ungranted members' audit
+      // feeds — the entry itself asserts entityType "issue" on this issueId.
+      this.audit("issue.permission.granted", "issue", issueId, grantedBy, {
+        grant: { from: null, to: `${actorType}:${actorId}` },
+      });
+    }
+    return grant;
+  }
+
+  revokeIssuePermission(issueId: string, actorId: string, revokedBy?: string) {
+    const removed = data.revokeIssuePermission(this.db, issueId, actorId);
+    if (removed) {
+      this.audit("issue.permission.revoked", "issue", issueId, revokedBy, {
+        grant: { from: actorId, to: null },
+      });
+    }
+    return removed;
+  }
+
+  listIssuePermissions(issueId: string) {
+    return data.listIssuePermissions(this.db, issueId);
+  }
+
+  issueVisibleTo(issueId: string, actorId: string, teamIds: string[] = []) {
+    return data.hasIssueAccess(this.db, issueId, actorId, teamIds);
+  }
+
+  hiddenIssueIdsFor(viewer?: IssueViewer): string[] {
+    if (!viewer) return [];
+    return data.hiddenIssueIds(this.db, viewer.actorId, viewer.teamIds);
   }
 
   listDocumentLinks(
@@ -2237,9 +2369,14 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       status?: AgentSessionStatus;
       openPr?: boolean;
       limit?: number;
+      viewer?: IssueViewer;
     } = {}
   ) {
-    return data.listAgentSessions(this.db, this.organizationId, options);
+    const { viewer, ...rest } = options;
+    return data.listAgentSessions(this.db, this.organizationId, {
+      ...rest,
+      excludeIssueIds: this.hiddenIssueIdsFor(viewer),
+    });
   }
 
   listAgentSessionSummaries(
@@ -2248,13 +2385,14 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       status?: AgentSessionStatus;
       openPr?: boolean;
       limit?: number;
+      viewer?: IssueViewer;
     } = {}
   ) {
-    return data.listAgentSessionSummaries(
-      this.db,
-      this.organizationId,
-      options
-    );
+    const { viewer, ...rest } = options;
+    return data.listAgentSessionSummaries(this.db, this.organizationId, {
+      ...rest,
+      excludeIssueIds: this.hiddenIssueIdsFor(viewer),
+    });
   }
 
   async getMaxConcurrentAgentChildren(): Promise<number> {
@@ -3451,10 +3589,14 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       action?: string;
       actorId?: string;
       limit?: number;
-    } = {}
+    } = {},
+    viewer?: IssueViewer
   ) {
     await this.ready;
-    return data.listAuditLog(this.db, this.organizationId, args);
+    return data.listAuditLog(this.db, this.organizationId, {
+      ...args,
+      excludeIssueIds: this.hiddenIssueIdsFor(viewer),
+    });
   }
 
   async getAuditLogEntry(id: string) {
@@ -3540,7 +3682,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   createIssueWithDuplicates(
     input: IssueInput,
     actorId: string | undefined,
-    dedupe: { teamIds: string[]; block: boolean }
+    dedupe: { teamIds: string[]; block: boolean; viewer?: IssueViewer }
   ) {
     return this.createIssueRecord(input, actorId, dedupe);
   }
@@ -3548,7 +3690,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   private async createIssueRecord(
     input: IssueInput,
     actorId?: string,
-    dedupe?: { teamIds: string[]; block: boolean }
+    dedupe?: { teamIds: string[]; block: boolean; viewer?: IssueViewer }
   ): Promise<{
     issue: Issue | null;
     possibleDuplicates: Array<{ issue: Issue; score: number }>;
@@ -3636,7 +3778,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }
 
     const possibleDuplicates = dedupe
-      ? await this.findPossibleDuplicates(input.title, dedupe.teamIds)
+      ? await this.findPossibleDuplicates(
+          input.title,
+          dedupe.teamIds,
+          5,
+          dedupe.viewer
+        )
       : [];
     if (dedupe?.block && possibleDuplicates.length > 0) {
       return { issue: null, possibleDuplicates };
@@ -3989,7 +4136,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       | "teamId"
       | "projectId"
       | "cycleId",
-    teamIds?: string[]
+    teamIds?: string[],
+    viewer?: IssueViewer
   ): Promise<{ group: string | null; count: number; estimateTotal: number }[]> {
     await this.ready;
     if (teamIds && teamIds.length === 0) return [];
@@ -4005,6 +4153,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const conditions = teamIds
       ? [inArray(workspaceIssues.teamId, teamIds)]
       : [];
+    const hiddenIssueIds = this.hiddenIssueIdsFor(viewer);
+    if (hiddenIssueIds.length > 0) {
+      conditions.push(notInArray(workspaceIssues.id, hiddenIssueIds));
+    }
     return this.db
       .select({
         group: column,
@@ -4020,7 +4172,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   async burndown(
     cycleId: string,
     teamIds?: string[],
-    window?: { startDate?: string | null; endDate?: string | null }
+    window?: { startDate?: string | null; endDate?: string | null },
+    viewer?: IssueViewer
   ): Promise<{
     total: number;
     totalEstimate: number;
@@ -4033,6 +4186,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const conditions = [eq(workspaceIssues.cycleId, cycleId)];
     if (teamIds) {
       conditions.push(inArray(workspaceIssues.teamId, teamIds));
+    }
+    const hiddenIssueIds = this.hiddenIssueIdsFor(viewer);
+    if (hiddenIssueIds.length > 0) {
+      conditions.push(notInArray(workspaceIssues.id, hiddenIssueIds));
     }
     const rows = await this.db
       .select({
@@ -4138,9 +4295,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return this.getIssueByIdentifier(id);
   }
 
-  async getIssueChildren(id: string): Promise<Issue[]> {
+  async getIssueChildren(id: string, viewer?: IssueViewer): Promise<Issue[]> {
     await this.ready;
-    return this.db
+    const rows = await this.db
       .select()
       .from(workspaceIssues)
       .where(eq(workspaceIssues.parentId, id))
@@ -4149,6 +4306,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         desc(workspaceIssues.createdAt)
       )
       .all();
+    if (!viewer) return rows;
+    const hidden = new Set(this.hiddenIssueIdsFor(viewer));
+    return rows.filter((row) => !hidden.has(row.id));
   }
 
   async getIssueByBranch(
@@ -4203,6 +4363,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
     if (visibleTeamIds) {
       conditions.push(inArray(workspaceIssues.teamId, visibleTeamIds));
+    }
+    const hiddenIssueIds = this.hiddenIssueIdsFor(args.viewer);
+    if (hiddenIssueIds.length > 0) {
+      conditions.push(notInArray(workspaceIssues.id, hiddenIssueIds));
     }
     if (args.teamId) {
       conditions.push(eq(workspaceIssues.teamId, args.teamId));
@@ -4754,6 +4918,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     await this.db
       .delete(workspaceIssueApprovals)
       .where(eq(workspaceIssueApprovals.issueId, issueId));
+    await this.db
+      .delete(workspaceIssuePermissions)
+      .where(eq(workspaceIssuePermissions.issueId, issueId));
     const reactionTargets = [issueId, ...commentIds];
     if (reactionTargets.length > 0) {
       await this.db

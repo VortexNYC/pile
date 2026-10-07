@@ -1,9 +1,11 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
+import { createD1 } from "../global/db.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
+import { issueViewer } from "./issue-access.js";
 import { getWorkspaceStub } from "./stub.js";
 
 const auditEntrySchema = z.object({
@@ -73,13 +75,16 @@ export function registerAuditRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId } = c.req.valid("param");
     const query = c.req.valid("query");
     const stub = getWorkspaceStub(c.env, organizationId);
-    const rows = await stub.listAuditLog({
-      entityType: query.entityType,
-      entityId: query.entityId,
-      action: query.action,
-      actorId: query.actorId,
-      limit: query.limit,
-    });
+    const rows = await stub.listAuditLog(
+      {
+        entityType: query.entityType,
+        entityId: query.entityId,
+        action: query.action,
+        actorId: query.actorId,
+        limit: query.limit,
+      },
+      await issueViewer(createD1(c.env.D1), c.get("workspaceIdentity"))
+    );
     return c.json({
       entries: rows.map((r) => ({
         id: r.id,
@@ -104,7 +109,17 @@ export function registerAuditRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId, id } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
     const row = await stub.getAuditLogEntry(id);
-    if (!row) {
+    const identity = c.get("workspaceIdentity");
+    const viewer = await issueViewer(createD1(c.env.D1), identity);
+    const hidden =
+      viewer &&
+      row?.entityType === "issue" &&
+      !(await stub.issueVisibleTo(
+        row.entityId,
+        viewer.actorId,
+        viewer.teamIds
+      ));
+    if (!row || hidden) {
       throw new VortexError({
         code: "NOT_FOUND",
         status: 404,

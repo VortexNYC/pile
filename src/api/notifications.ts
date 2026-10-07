@@ -1,8 +1,10 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
+import { createD1 } from "../global/db.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
+import { issueViewer } from "./issue-access.js";
 import { getWorkspaceStub } from "./stub.js";
 
 const notificationSchema = z.object({
@@ -269,7 +271,8 @@ export function registerNotificationRoutes(app: OpenAPIHono<AppContext>) {
         includeSnoozed:
           query.includeSnoozed === "true" || query.includeSnoozed === "1",
         limit: query.limit ? Number(query.limit) : undefined,
-      }
+      },
+      await issueViewer(createD1(c.env.D1), identity)
     );
     return c.json({ notifications: rows.map(toNotificationResponse) });
   });
@@ -280,7 +283,8 @@ export function registerNotificationRoutes(app: OpenAPIHono<AppContext>) {
     const identity = c.var.workspaceIdentity;
     const count = await stub.unreadNotificationCount(
       identity.id,
-      identity.type
+      identity.type,
+      await issueViewer(createD1(c.env.D1), identity)
     );
     return c.json({ count });
   });

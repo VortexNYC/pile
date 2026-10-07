@@ -216,6 +216,28 @@ export const workspaceIssueApprovals = sqliteTable(
   (table) => [index("issue_approvals_issue_idx" as string).on(table.issueId)]
 );
 
+// Per-issue access grants. When an issue has no rows it is open to the
+// workspace; any row restricts it to listed actors (+ workspace admins).
+export const workspaceIssuePermissions = sqliteTable(
+  "issue_permissions" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    issueId: text("issue_id" as string).notNull(),
+    actorId: text("actor_id" as string).notNull(),
+    actorType: text("actor_type" as string)
+      .notNull()
+      .default("user"),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    uniqueIndex("issue_permissions_issue_actor_idx" as string).on(
+      table.issueId,
+      table.actorId
+    ),
+  ]
+);
+
 export const workspaceReactions = sqliteTable(
   "reactions" as string,
   {

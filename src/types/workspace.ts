@@ -116,9 +116,18 @@ export interface IssueCursor {
   id: Id;
 }
 
+// Per-issue visibility (issue_permissions): undefined viewer = unrestricted
+// (workspace admin); otherwise list/search/analytics queries exclude
+// restricted issues the viewer isn't granted.
+export interface IssueViewer {
+  actorId: string;
+  teamIds: string[];
+}
+
 export interface ListIssuesArgs {
   limit?: number;
   cursor?: IssueCursor;
+  viewer?: IssueViewer;
   teamId?: string;
   teamIds?: string[];
   status?: IssueStatus;

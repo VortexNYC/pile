@@ -13,6 +13,7 @@ import {
   isNull,
   lte,
   ne,
+  notInArray,
   or,
   sql,
 } from "drizzle-orm";
@@ -43,6 +44,7 @@ import {
   workspaceCustomerStatuses,
   workspaceCustomerTiers,
   workspaceIssueApprovals,
+  workspaceIssuePermissions,
   workspaceIssues,
   workspaceIssueRelations,
   workspaceIssueSubscribers,
@@ -760,6 +762,9 @@ export async function getNotificationsForRecipient(
     snoozedOnly?: boolean;
     includeSnoozed?: boolean;
     limit?: number;
+    // Restricted issues the recipient isn't granted — their events stay out
+    // of the feed entirely (issue_permissions).
+    excludeIssueIds?: string[];
   } = {}
 ) {
   const nowIso = new Date().toISOString();
@@ -768,6 +773,11 @@ export async function getNotificationsForRecipient(
     eq(workspaceNotifications.recipientId, recipientId),
     eq(workspaceNotifications.recipientType, recipientType),
   ];
+  if (options.excludeIssueIds && options.excludeIssueIds.length > 0) {
+    conditions.push(
+      notInArray(workspaceNotifications.issueId, options.excludeIssueIds)
+    );
+  }
   if (options.unreadOnly) {
     conditions.push(eq(workspaceNotifications.read, false));
   }
@@ -792,7 +802,8 @@ export async function getUnreadNotificationCount(
   db: WorkspaceDb,
   organizationId: string,
   recipientId: string,
-  recipientType: RecipientType
+  recipientType: RecipientType,
+  excludeIssueIds: string[] = []
 ) {
   const nowIso = new Date().toISOString();
   const result = await db
@@ -804,6 +815,9 @@ export async function getUnreadNotificationCount(
         eq(workspaceNotifications.recipientId, recipientId),
         eq(workspaceNotifications.recipientType, recipientType),
         eq(workspaceNotifications.read, false),
+        ...(excludeIssueIds.length > 0
+          ? [notInArray(workspaceNotifications.issueId, excludeIssueIds)]
+          : []),
         or(
           isNull(workspaceNotifications.snoozedUntil),
           lte(workspaceNotifications.snoozedUntil, nowIso)
@@ -1037,6 +1051,9 @@ type ListAgentSessionsOptions = {
   status?: AgentSessionStatus;
   openPr?: boolean;
   limit?: number;
+  // Restricted issues the caller isn't granted (issue_permissions) —
+  // session rows carry lane results that can embed issue content.
+  excludeIssueIds?: string[];
 };
 
 function agentSessionListConditions(
@@ -1048,6 +1065,11 @@ function agentSessionListConditions(
   ];
   if (options.issueId) {
     conditions.push(eq(workspaceAgentSessions.issueId, options.issueId));
+  }
+  if (options.excludeIssueIds && options.excludeIssueIds.length > 0) {
+    conditions.push(
+      notInArray(workspaceAgentSessions.issueId, options.excludeIssueIds)
+    );
   }
   if (options.status) {
     conditions.push(eq(workspaceAgentSessions.status, options.status));
@@ -2398,11 +2420,23 @@ export function listAuditLog(
     action?: string;
     actorId?: string;
     limit?: number;
+    // Restricted issues the caller isn't granted — their entries carry
+    // field diffs (titles) and stay out of the feed.
+    excludeIssueIds?: string[];
   } = {}
 ) {
   const conditions = [eq(workspaceAuditLog.organizationId, organizationId)];
   if (args.entityType !== undefined) {
     conditions.push(eq(workspaceAuditLog.entityType, args.entityType));
+  }
+  if (args.excludeIssueIds && args.excludeIssueIds.length > 0) {
+    const hiddenFilter = or(
+      ne(workspaceAuditLog.entityType, "issue"),
+      notInArray(workspaceAuditLog.entityId, args.excludeIssueIds)
+    );
+    if (hiddenFilter) {
+      conditions.push(hiddenFilter);
+    }
   }
   if (args.entityId !== undefined) {
     conditions.push(eq(workspaceAuditLog.entityId, args.entityId));
@@ -2735,13 +2769,28 @@ export interface ExternalLinkInput {
 export function listExternalLinks(
   db: WorkspaceDb,
   organizationId: string,
-  args: { entityType?: string; entityId?: string } = {}
+  args: {
+    entityType?: string;
+    entityId?: string;
+    // Restricted issues the caller isn't granted — links carry their
+    // entity ids, so hide them rather than leaking existence.
+    excludeIssueIds?: string[];
+  } = {}
 ) {
   const conditions = [eq(externalLinks.organizationId, organizationId)];
   if (args.entityType !== undefined)
     conditions.push(eq(externalLinks.entityType, args.entityType));
   if (args.entityId !== undefined)
     conditions.push(eq(externalLinks.entityId, args.entityId));
+  if (args.excludeIssueIds && args.excludeIssueIds.length > 0) {
+    const hiddenFilter = or(
+      ne(externalLinks.entityType, "issue"),
+      notInArray(externalLinks.entityId, args.excludeIssueIds)
+    );
+    if (hiddenFilter) {
+      conditions.push(hiddenFilter);
+    }
+  }
   return db
     .select()
     .from(externalLinks)
@@ -3896,6 +3945,123 @@ export function documentAccessLevel(
     }
   }
   return level;
+}
+
+// ---- issue permissions ----
+// Same grant model as documents: no rows = open to the workspace; any row
+// restricts the issue to the listed actors (+ workspace admins, enforced by
+// callers). Grants carry no level — access is binary.
+
+export function setIssuePermission(
+  db: WorkspaceDb,
+  organizationId: string,
+  issueId: string,
+  actorId: string,
+  actorType: string
+) {
+  const existing = db
+    .select()
+    .from(workspaceIssuePermissions)
+    .where(
+      and(
+        eq(workspaceIssuePermissions.issueId, issueId),
+        eq(workspaceIssuePermissions.actorId, actorId)
+      )
+    )
+    .get();
+  if (existing) {
+    db.update(workspaceIssuePermissions)
+      .set({ actorType })
+      .where(eq(workspaceIssuePermissions.id, existing.id))
+      .run();
+    return { ...existing, actorType };
+  }
+  return db
+    .insert(workspaceIssuePermissions)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId,
+      issueId,
+      actorId,
+      actorType,
+      createdAt: new Date().toISOString(),
+    })
+    .returning()
+    .get();
+}
+
+export function revokeIssuePermission(
+  db: WorkspaceDb,
+  issueId: string,
+  actorId: string
+) {
+  return (
+    db
+      .delete(workspaceIssuePermissions)
+      .where(
+        and(
+          eq(workspaceIssuePermissions.issueId, issueId),
+          eq(workspaceIssuePermissions.actorId, actorId)
+        )
+      )
+      .returning()
+      .all().length > 0
+  );
+}
+
+export function listIssuePermissions(db: WorkspaceDb, issueId: string) {
+  return db
+    .select()
+    .from(workspaceIssuePermissions)
+    .where(eq(workspaceIssuePermissions.issueId, issueId))
+    .all();
+}
+
+// True when the issue has no grants (open) or the actor is covered by one.
+// Team grants (Better Auth organization teams) cover every member.
+export function hasIssueAccess(
+  db: WorkspaceDb,
+  issueId: string,
+  actorId: string,
+  teamIds: string[] = []
+): boolean {
+  const grants = listIssuePermissions(db, issueId);
+  if (grants.length === 0) return true;
+  return grants.some(
+    (grant) =>
+      grant.actorId === actorId ||
+      (grant.actorType === "team" && teamIds.includes(grant.actorId))
+  );
+}
+
+// Ids of every restricted issue the actor cannot see — restricted issues
+// minus the ones their grants cover. List/search/analytics queries exclude
+// this set.
+export function hiddenIssueIds(
+  db: WorkspaceDb,
+  actorId: string,
+  teamIds: string[] = []
+): string[] {
+  const grants = db
+    .select({
+      issueId: workspaceIssuePermissions.issueId,
+      actorId: workspaceIssuePermissions.actorId,
+      actorType: workspaceIssuePermissions.actorType,
+    })
+    .from(workspaceIssuePermissions)
+    .all();
+  const visible = new Set(
+    grants
+      .filter(
+        (grant) =>
+          grant.actorId === actorId ||
+          (grant.actorType === "team" && teamIds.includes(grant.actorId))
+      )
+      .map((grant) => grant.issueId)
+  );
+  return [...new Set(grants.map((grant) => grant.issueId))].filter(
+    (issueId) => !visible.has(issueId)
+  );
 }
 
 export function replaceDocumentLinks(
