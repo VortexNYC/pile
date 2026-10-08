@@ -152,6 +152,11 @@ migrations_dir = "migrations"
 binding = "ATTACHMENTS_BUCKET"
 bucket_name = "pile-attachments"
 
+# Same as top level — env configs don't inherit bindings.
+[[env.production.r2_buckets]]
+binding = "LANE_CACHE_BUCKET"
+bucket_name = "pile-lane-cache"
+
 
 [[env.production.durable_objects.bindings]]
 name = "WORKSPACE_DURABLE_OBJECT"
