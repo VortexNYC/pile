@@ -269,7 +269,7 @@ export async function createAuth(env: AppEnv) {
           if (!env.BETTER_AUTH_URL) {
             return;
           }
-          const url = `${env.BETTER_AUTH_URL}/api/auth/organization/accept-invitation?id=${encodeURIComponent(data.id)}`;
+          const url = `${env.BETTER_AUTH_URL}/app/accept-invitation?id=${encodeURIComponent(data.id)}`;
           await sendAuthEmail(
             env,
             data.email,
