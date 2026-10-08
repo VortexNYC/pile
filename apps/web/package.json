@@ -1,0 +1,40 @@
+{
+  "name": "@pile/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pile member console — the browser SPA for non-technical members, served same-origin at /app.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite --port 5181",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@cloudflare/kumo": "2.14.0",
+    "@phosphor-icons/react": "^2.1.10",
+    "@tanstack/react-query": "^5.102.8",
+    "@tanstack/react-router": "1.170.19",
+    "@vortex-api/better-auth-ui": "0.2.15",
+    "better-auth": "^1.7.7",
+    "openapi-fetch": "0.17.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@tanstack/router-plugin": "1.168.24",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.6.0",
+    "vite": "^8.3.2",
+    "vitest": "^4.1.11"
+  }
+}

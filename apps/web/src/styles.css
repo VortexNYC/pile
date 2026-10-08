@@ -1,0 +1,13 @@
+@import "@cloudflare/kumo/styles";
+@import "tailwindcss";
+
+/* Kumo ships Tailwind class strings inside its JS chunks; scan them so
+ * component utilities (sidebar collapsibles, popovers) are generated. */
+@source "../node_modules/@cloudflare/kumo/dist/**/*.js";
+/* better-auth-ui renders kumo-* utilities from its own bundle. */
+@source "../node_modules/@vortex-api/better-auth-ui/dist/**/*.js";
+
+html,
+body {
+  @apply bg-kumo-canvas text-kumo-default;
+}

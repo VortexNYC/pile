@@ -3,6 +3,8 @@ import type { Sandbox } from "@cloudflare/sandbox";
 export interface AppEnv {
   D1: D1Database;
   ATTACHMENTS_BUCKET: R2Bucket;
+  /** Workers Static Assets: the apps/web member console build. */
+  ASSETS?: Fetcher;
   BETTER_AUTH_SECRET: string;
   BETTER_AUTH_URL: string;
   BETTER_AUTH_ADMIN_IDS?: string;
