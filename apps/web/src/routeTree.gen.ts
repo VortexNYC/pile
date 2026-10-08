@@ -19,6 +19,7 @@ import { Route as AuthSignInRouteImport } from './routes/_auth/sign-in'
 import { Route as AuthSignUpRouteImport } from './routes/_auth/sign-up'
 import { Route as AuthVerifyEmailRouteImport } from './routes/_auth/verify-email'
 import { Route as AuthenticatedSlugRouteImport } from './routes/_authenticated/$slug'
+import { Route as AuthenticatedAcceptInvitationRouteImport } from './routes/_authenticated/accept-invitation'
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
 import { Route as AuthenticatedSlugIndexRouteImport } from './routes/_authenticated/$slug/index'
 import { Route as AuthenticatedSlugInboxRouteImport } from './routes/_authenticated/$slug/inbox'
@@ -103,6 +104,12 @@ const AuthenticatedSlugRoute = AuthenticatedSlugRouteImport.update({
   path: '/$slug',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedAcceptInvitationRoute =
+  AuthenticatedAcceptInvitationRouteImport.update({
+    id: '/accept-invitation',
+    path: '/accept-invitation',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedOnboardingRoute = AuthenticatedOnboardingRouteImport.update({
   id: '/onboarding',
   path: '/onboarding',
@@ -317,6 +324,7 @@ export interface FileRoutesByFullPath {
   '/sign-up': typeof AuthSignUpRoute
   '/verify-email': typeof AuthVerifyEmailRoute
   '/$slug': typeof AuthenticatedSlugRouteWithChildren
+  '/accept-invitation': typeof AuthenticatedAcceptInvitationRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/$slug/inbox': typeof AuthenticatedSlugInboxRoute
   '/share/capture/$ticketId': typeof ShareCaptureTicketIdRoute
@@ -361,6 +369,7 @@ export interface FileRoutesByTo {
   '/sign-in': typeof AuthSignInRoute
   '/sign-up': typeof AuthSignUpRoute
   '/verify-email': typeof AuthVerifyEmailRoute
+  '/accept-invitation': typeof AuthenticatedAcceptInvitationRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/$slug/inbox': typeof AuthenticatedSlugInboxRoute
   '/share/capture/$ticketId': typeof ShareCaptureTicketIdRoute
@@ -409,6 +418,7 @@ export interface FileRoutesById {
   '/_auth/sign-up': typeof AuthSignUpRoute
   '/_auth/verify-email': typeof AuthVerifyEmailRoute
   '/_authenticated/$slug': typeof AuthenticatedSlugRouteWithChildren
+  '/_authenticated/accept-invitation': typeof AuthenticatedAcceptInvitationRoute
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
   '/_authenticated/$slug/inbox': typeof AuthenticatedSlugInboxRoute
   '/share/capture/$ticketId': typeof ShareCaptureTicketIdRoute
@@ -456,6 +466,7 @@ export interface FileRouteTypes {
     | '/sign-up'
     | '/verify-email'
     | '/$slug'
+    | '/accept-invitation'
     | '/onboarding'
     | '/$slug/inbox'
     | '/share/capture/$ticketId'
@@ -500,6 +511,7 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/sign-up'
     | '/verify-email'
+    | '/accept-invitation'
     | '/onboarding'
     | '/$slug/inbox'
     | '/share/capture/$ticketId'
@@ -547,6 +559,7 @@ export interface FileRouteTypes {
     | '/_auth/sign-up'
     | '/_auth/verify-email'
     | '/_authenticated/$slug'
+    | '/_authenticated/accept-invitation'
     | '/_authenticated/onboarding'
     | '/_authenticated/$slug/inbox'
     | '/share/capture/$ticketId'
@@ -663,6 +676,13 @@ declare module '@tanstack/react-router' {
       path: '/$slug'
       fullPath: '/$slug'
       preLoaderRoute: typeof AuthenticatedSlugRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/accept-invitation': {
+      id: '/_authenticated/accept-invitation'
+      path: '/accept-invitation'
+      fullPath: '/accept-invitation'
+      preLoaderRoute: typeof AuthenticatedAcceptInvitationRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/onboarding': {
@@ -1014,11 +1034,13 @@ const AuthenticatedSlugRouteWithChildren =
 
 interface AuthenticatedRouteChildren {
   AuthenticatedSlugRoute: typeof AuthenticatedSlugRouteWithChildren
+  AuthenticatedAcceptInvitationRoute: typeof AuthenticatedAcceptInvitationRoute
   AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedSlugRoute: AuthenticatedSlugRouteWithChildren,
+  AuthenticatedAcceptInvitationRoute: AuthenticatedAcceptInvitationRoute,
   AuthenticatedOnboardingRoute: AuthenticatedOnboardingRoute,
 }
 

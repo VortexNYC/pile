@@ -9,7 +9,11 @@ import { useState } from "react";
 
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap, unwrapEmpty } from "@/lib/api";
-import { formatRelative, notificationLabel } from "@/lib/labels";
+import {
+  formatRelative,
+  notificationLabel,
+  notificationTarget,
+} from "@/lib/labels";
 import { toastError } from "@/lib/toast";
 
 const POLL_MS = 30_000;
@@ -131,27 +135,25 @@ export function NotificationsBell() {
                   className="hover:bg-kumo-tint flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-2 text-left"
                   onClick={() => {
                     if (!item.read) markRead.mutate(item.id);
+                    const target = notificationTarget(item);
+                    if (!target) return;
                     setOpen(false);
-                    const meta = item.metadata as
-                      | { ticketId?: string }
-                      | undefined;
-                    void navigate(
-                      meta?.ticketId
-                        ? {
-                            to: "/$slug/tickets/$ticketId",
-                            params: {
-                              slug: workspace.slug,
-                              ticketId: meta.ticketId,
-                            },
-                          }
-                        : {
-                            to: "/$slug/issues/$issueId",
-                            params: {
-                              slug: workspace.slug,
-                              issueId: item.issueId,
-                            },
-                          }
-                    );
+                    if (target.kind === "document") {
+                      void navigate({
+                        to: "/$slug/documents/$documentId",
+                        params: { slug: workspace.slug, documentId: target.id },
+                      });
+                    } else if (target.kind === "ticket") {
+                      void navigate({
+                        to: "/$slug/tickets/$ticketId",
+                        params: { slug: workspace.slug, ticketId: target.id },
+                      });
+                    } else {
+                      void navigate({
+                        to: "/$slug/issues/$issueId",
+                        params: { slug: workspace.slug, issueId: target.id },
+                      });
+                    }
                   }}
                 >
                   <span className="flex w-full items-center gap-2">

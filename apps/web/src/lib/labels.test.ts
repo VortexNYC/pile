@@ -7,6 +7,7 @@ import {
   isIssueStatus,
   isTicketStatus,
   notificationLabel,
+  notificationTarget,
   sessionStatusVariant,
   slugify,
 } from "./labels";
@@ -24,6 +25,40 @@ describe("labels", () => {
     );
     expect(notificationLabel("ticket.reopened")).toBe("Ticket reopened");
     expect(notificationLabel("")).toBe("Notification");
+  });
+  it("hides CLI-only notification wording", () => {
+    expect(notificationLabel("lane_needs_input")).toBe(
+      "An issue needs your input"
+    );
+  });
+  it("routes notifications to their real subject", () => {
+    expect(
+      notificationTarget({
+        type: "document_commented",
+        issueId: "doc_1",
+        metadata: { documentId: "doc_1", commentId: "c" },
+      })
+    ).toEqual({ kind: "document", id: "doc_1" });
+    expect(
+      notificationTarget({
+        type: "document_updated",
+        issueId: "iss_1",
+        metadata: { documentId: "doc_2" },
+      })
+    ).toEqual({ kind: "document", id: "doc_2" });
+    expect(
+      notificationTarget({
+        type: "mention",
+        issueId: "iss_3",
+        metadata: { documentId: null, issueId: "iss_3" },
+      })
+    ).toEqual({ kind: "issue", id: "iss_3" });
+    expect(
+      notificationTarget({ type: "issue_assigned", issueId: "iss_4" })
+    ).toEqual({ kind: "issue", id: "iss_4" });
+    expect(
+      notificationTarget({ type: "issue_deleted", issueId: "iss_5" })
+    ).toBeNull();
   });
   it("flattens block content", () => {
     expect(documentText("plain")).toBe("plain");

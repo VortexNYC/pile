@@ -3,7 +3,8 @@ export const APP_BASE = "/app";
 /**
  * Map an href (as better-auth-ui and Kumo render them, with the /app mount
  * prefix) to a router path relative to the basepath. Returns null for
- * external URLs and same-page `#`/`?` hrefs, which must stay real anchors.
+ * external URLs, same-origin paths outside /app, and same-page `#`/`?`
+ * hrefs, which must stay real anchors.
  */
 export function toRouterPath(href: string): string | null {
   if (
@@ -25,7 +26,8 @@ export function toRouterPath(href: string): string | null {
     const rest = absolute.slice(APP_BASE.length);
     return rest.startsWith("/") ? rest : `/${rest}`;
   }
-  return absolute;
+  // Same-origin paths outside the console (/api, /agents…) need a real load.
+  return href.startsWith("/") ? null : absolute;
 }
 
 /** Absolute in-app href, for links rendered outside the router. */
