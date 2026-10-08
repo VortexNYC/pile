@@ -27,6 +27,7 @@ import {
   createWidgetKey,
   createWidgetSession,
   findWidgetKeyByKey,
+  findVerifiedWidgetSession,
   findWidgetSessionByToken,
   listWidgetKeys,
   revokeWidgetKey,
@@ -734,6 +735,43 @@ export function registerSupportWidgetRoutes(app: OpenAPIHono<AppContext>) {
           widgetKey,
           identifier,
           body.identifierHash
+        );
+      }
+    }
+
+    // A returning verified user picks their own thread back up, even when the
+    // browser's stored token belonged to someone else.
+    if (identityVerified && body.externalId) {
+      const existing = await findVerifiedWidgetSession(
+        db,
+        widgetKey.id,
+        body.externalId
+      );
+      if (existing) {
+        const existingCustomer = existing.customerId
+          ? await getCustomerById(
+              db,
+              widgetKey.organizationId,
+              existing.customerId
+            )
+          : null;
+        return c.json(
+          widgetSessionResponseSchema.parse({
+            sessionToken: existing.token,
+            ticketId: existing.ticketId,
+            identityVerified: true,
+            config: {
+              greeting: widgetKey.greeting,
+              brandColor: widgetKey.brandColor,
+              requireEmail: widgetKey.requireEmail,
+            },
+            customer: existingCustomer
+              ? {
+                  email: existingCustomer.email,
+                  fullName: existingCustomer.fullName,
+                }
+              : null,
+          })
         );
       }
     }

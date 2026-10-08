@@ -547,6 +547,9 @@ function boot(settings: WidgetSettings): void {
   const g = globalThis as { PileChat?: PileChatFn };
   const queued = g.PileChat?.q ?? [];
   g.PileChat = ((cmd: string, arg?: unknown) => {
+    // A destroyed widget is gone for good; ignore stray calls so nothing
+    // re-creates a session or writes localStorage.
+    if (destroyed) return;
     switch (cmd) {
       case "open":
         setOpen(true);
