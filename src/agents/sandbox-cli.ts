@@ -417,6 +417,47 @@ export class SandboxCliAgentProvider implements AgentProvider {
     return minted;
   }
 
+  /**
+   * Mount the repo's shared lane cache and return the runner env that points
+   * at it, or null when there is no mount (the runner then uses HTTP only).
+   */
+  private async mountLaneCache(
+    compute: ComputeBackend,
+    sandbox: ComputeSandbox,
+    lane: {
+      organizationId: string | undefined;
+      sessionId: string;
+      repo: string | null | undefined;
+      permissions: LanePermissions;
+    },
+    span?: ActivitySpanOptions
+  ): Promise<{ PILE_CACHE_DIR: string } | null> {
+    if (!lane.repo || !lane.organizationId || !compute.mountCache) return null;
+    const dir = await compute.mountCache(sandbox, {
+      organizationId: lane.organizationId,
+      repo: lane.repo,
+      readOnly: laneCacheReadOnly(lane.permissions),
+    });
+    if (!dir) return null;
+    await this.note(
+      lane.organizationId,
+      lane.sessionId,
+      "status",
+      `lane cache mounted at ${dir}`,
+      { sandbox: sandbox.id, path: dir },
+      span
+    );
+    return { PILE_CACHE_DIR: dir };
+  }
+
+  private async followupPermissions(
+    repo: string | null | undefined
+  ): Promise<LanePermissions> {
+    return repo
+      ? (await fetchLanePermissions(this.env, repo, this.id)).permissions
+      : DEFAULT_LANE_PERMISSIONS;
+  }
+
   private assertEnforceable(permissions: LanePermissions): void {
     if (
       this.d.externalExecution &&
@@ -724,31 +765,17 @@ export class SandboxCliAgentProvider implements AgentProvider {
             },
             { parentId: spanId }
           );
-          const cacheDir =
-            issue.repo && compute.mountCache
-              ? await compute.mountCache(sandbox, {
-                  organizationId,
-                  repo: issue.repo,
-                  readOnly: laneCacheReadOnly(permissions),
-                })
-              : null;
-          if (cacheDir) {
-            await this.note(
-              organizationId,
-              sessionId,
-              "status",
-              `lane cache mounted at ${cacheDir}`,
-              { sandbox: sandbox.id, path: cacheDir },
-              { parentId: spanId }
-            );
-          }
+          const cacheEnv = await this.mountLaneCache(
+            compute,
+            sandbox,
+            { organizationId, sessionId, repo: issue.repo, permissions },
+            { parentId: spanId }
+          );
           await compute.startRunner(
             sandbox,
             sessionId,
             "printf '%s' \"$RUNNER_PY_B64\" | base64 -d > /tmp/run.py && python3 /tmp/run.py",
-            cacheDir
-              ? { ...sandbox.runnerEnv, PILE_CACHE_DIR: cacheDir }
-              : undefined
+            cacheEnv ? { ...sandbox.runnerEnv, ...cacheEnv } : undefined
           );
           // Real readiness: the runner binds :8787 when it's alive, so the
           // 'runner started' marker means the process is actually up — not
@@ -1172,9 +1199,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
     }
 
     const credentialEnv = this.resolveCredential().env;
-    const permissions = issue.repo
-      ? (await fetchLanePermissions(this.env, issue.repo, this.id)).permissions
-      : DEFAULT_LANE_PERMISSIONS;
+    const permissions = await this.followupPermissions(issue.repo);
     this.assertEnforceable(permissions);
     const github = issue.repo
       ? await this.githubToken(
@@ -1188,6 +1213,14 @@ export class SandboxCliAgentProvider implements AgentProvider {
             : null
         )
       : null;
+    // Restored lanes reinstall (node_modules isn't in worktree backups), so
+    // they need the shared store as much as a cold provision does.
+    const cacheEnv = await this.mountLaneCache(compute, sandbox, {
+      organizationId: sandbox.organizationId,
+      sessionId: trackerSessionId,
+      repo: issue.repo,
+      permissions,
+    });
     const followupId = `${trackerSessionId}-fu-${Date.now().toString(36)}`;
     const followupEnv = this.buildSandboxEnv(
       issue,
@@ -1207,7 +1240,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
       },
       {
         instructions: prompt,
-        extra: { FOLLOWUP: "1" },
+        extra: { FOLLOWUP: "1", ...cacheEnv },
         permissions,
         // org may be absent when the sandbox was found via result file — no
         // lane token without it, refresh just no-ops in the runner.

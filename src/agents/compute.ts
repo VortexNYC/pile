@@ -795,6 +795,10 @@ export class CloudflareBackend implements ComputeBackend {
       );
       return LANE_CACHE_MOUNT;
     } catch (err) {
+      // A live sandbox keeps its provision-time mount; follow-ups reuse it.
+      if (err instanceof Error && err.message.includes("already in use")) {
+        return LANE_CACHE_MOUNT;
+      }
       console.warn("lane cache mount failed — using HTTP cache", err);
       return null;
     }
