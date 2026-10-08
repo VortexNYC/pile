@@ -876,13 +876,14 @@ describe("agent providers", () => {
   });
 });
 
+function inheritTeamDefaultRepoStub() {
+  return env.WORKSPACE_DURABLE_OBJECT.get(
+    env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
+  );
+}
+
 describe("inheritTeamDefaultRepo (PILE-321)", () => {
-  const getStub = () => {
-    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
-      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
-    );
-    return stub;
-  };
+  const getStub = inheritTeamDefaultRepoStub;
 
   it("inherits and persists the team's defaultRepo on a repo-less issue", async () => {
     const db = createD1(env.D1);

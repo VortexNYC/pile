@@ -10426,8 +10426,8 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
-                    /** @description Invitation status filter; defaults to pending */
-                    status?: "pending" | "accepted" | "canceled" | "rejected" | "all";
+                    /** @description Invitation status filter; defaults to pending (excludes expired rows). `expired` lists pending invitations past their expiry */
+                    status?: "pending" | "accepted" | "canceled" | "rejected" | "expired" | "all";
                 };
                 header?: never;
                 path: {
@@ -10452,6 +10452,7 @@ export interface paths {
                                 status: string;
                                 teamId: string | null;
                                 expiresAt: number;
+                                expired: boolean;
                                 inviterId: string;
                                 createdAt: number;
                             }[];
@@ -10497,6 +10498,7 @@ export interface paths {
                             status: string;
                             teamId: string | null;
                             expiresAt: number;
+                            expired: boolean;
                             inviterId: string;
                             createdAt: number;
                         };
@@ -10604,6 +10606,7 @@ export interface paths {
                             status: string;
                             teamId: string | null;
                             expiresAt: number;
+                            expired: boolean;
                             inviterId: string;
                             createdAt: number;
                         };
@@ -10611,6 +10614,13 @@ export interface paths {
                 };
                 /** @description Invitation not found */
                 404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invitation is not pending */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };

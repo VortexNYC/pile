@@ -1,5 +1,6 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
+import type { Context } from "hono";
 
 import {
   createChangelogEntry,
@@ -15,7 +16,11 @@ import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { publicRateLimit } from "../platform/rate-limit.js";
 import { rls } from "../platform/rls.js";
-import { getWorkspaceStub, resolveIssueRef } from "./stub.js";
+import {
+  hiddenIssueIdsForIdentity,
+  resolveVisibleIssueRef,
+} from "./issue-access.js";
+import { getWorkspaceStub } from "./stub.js";
 
 const orgParam = z.object({ organizationId: z.string() });
 const entryIdParam = z.object({
@@ -240,22 +245,46 @@ function escapeXml(s: string): string {
 }
 
 // Changelog links name issues by UUID or KEY-N identifier — store UUIDs.
+// Restricted refs 404 like missing ones so linkage can't probe existence.
 async function resolveLinkIssueIds(
-  env: AppContext["Bindings"],
+  c: Context<AppContext>,
   organizationId: string,
   links: { ticketId?: string; issueId?: string }[] | undefined
 ) {
   if (!links) return undefined;
-  const stub = getWorkspaceStub(env, organizationId);
+  const db = createD1(c.env.D1);
+  const identity = c.get("workspaceIdentity");
+  const stub = getWorkspaceStub(c.env, organizationId);
   return Promise.all(
     links.map(async (link) => ({
       ...link,
       issueId:
         link.issueId === undefined
           ? undefined
-          : await resolveIssueRef(stub, link.issueId),
+          : await resolveVisibleIssueRef(db, stub, link.issueId, identity),
     }))
   );
+}
+
+// Entry links pointing at restricted issues are scrubbed for callers
+// without a grant (including anonymous changelog readers).
+async function scrubEntryLinks<
+  T extends { links: { issueId: string | null }[] },
+>(c: Context<AppContext>, organizationId: string, entries: T[]): Promise<T[]> {
+  const db = createD1(c.env.D1);
+  const stub = getWorkspaceStub(c.env, organizationId);
+  const hidden = new Set(
+    await hiddenIssueIdsForIdentity(db, stub, c.get("workspaceIdentity"))
+  );
+  if (hidden.size === 0) return entries;
+  return entries.map((entry) => ({
+    ...entry,
+    links: entry.links.map((link) =>
+      link.issueId && hidden.has(link.issueId)
+        ? { ...link, issueId: null }
+        : link
+    ),
+  }));
 }
 
 export function registerChangelogRoutes(app: OpenAPIHono<AppContext>) {
@@ -303,7 +332,10 @@ ${items}
       organizationId,
       { publishedOnly, limit: query.limit, cursor: query.cursor }
     );
-    return c.json({ entries, nextCursor });
+    return c.json({
+      entries: await scrubEntryLinks(c, organizationId, entries),
+      nextCursor,
+    });
   });
 
   app.openapi(createEntryRoute, async (c) => {
@@ -312,7 +344,7 @@ ${items}
     const db = createD1(c.env.D1);
     const entry = await createChangelogEntry(db, organizationId, {
       ...body,
-      links: await resolveLinkIssueIds(c.env, organizationId, body.links),
+      links: await resolveLinkIssueIds(c, organizationId, body.links),
     });
     return c.json({ entry }, 201);
   });
@@ -322,7 +354,9 @@ ${items}
     const db = createD1(c.env.D1);
     const entry = await getChangelogEntryWithLinks(db, organizationId, entryId);
     if (!entry) entryNotFound();
-    return c.json({ entry });
+    return c.json({
+      entry: (await scrubEntryLinks(c, organizationId, [entry]))[0],
+    });
   });
 
   app.openapi(updateEntryRoute, async (c) => {
@@ -331,7 +365,7 @@ ${items}
     const db = createD1(c.env.D1);
     const entry = await updateChangelogEntry(db, organizationId, entryId, {
       ...body,
-      links: await resolveLinkIssueIds(c.env, organizationId, body.links),
+      links: await resolveLinkIssueIds(c, organizationId, body.links),
     });
     if (!entry) entryNotFound();
     return c.json({ entry });

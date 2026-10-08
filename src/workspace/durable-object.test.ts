@@ -89,6 +89,14 @@ function mimeBodyText(raw: string): string {
     : body;
 }
 
+// Email sends ride ctx.waitUntil (PILE-330) — the RPC returns before
+// they run; flushNotificationEmails is the deterministic test seam.
+function flushEmails() {
+  return withWorkspace(getStub(), (instance) =>
+    instance.flushNotificationEmails()
+  );
+}
+
 describe("WorkspaceDO", () => {
   beforeAll(ensureWorkspace);
 
@@ -297,6 +305,7 @@ describe("WorkspaceDO", () => {
         instance.updateIssue(issue.id, { assigneeId: "gh-user-1" }, "user-2")
       )
     );
+    await flushEmails();
     expect(sent).toHaveLength(1);
     expect(sent[0].from).toBe("notifications@example.com");
     expect(sent[0].to).toBe("user-1@test.local");
@@ -329,6 +338,7 @@ describe("WorkspaceDO", () => {
         );
       })
     );
+    await flushEmails();
     expect(sent).toHaveLength(1);
 
     // An explicit email opt-out wins: no send, but the in-app row lands.
@@ -346,6 +356,7 @@ describe("WorkspaceDO", () => {
         );
       })
     );
+    await flushEmails();
     expect(sent).toHaveLength(0);
     const notes = await withWorkspace(stub, (instance) =>
       instance.listNotificationsForRecipient("user-1", "user")
@@ -398,6 +409,7 @@ describe("WorkspaceDO", () => {
       )
     );
     expect(updated).toHaveLength(2);
+    await flushEmails();
     // One email for the whole batch, not one per issue…
     expect(sent).toHaveLength(1);
     expect(sent[0].to).toBe("user-2@test.local");
@@ -488,6 +500,7 @@ describe("WorkspaceDO", () => {
         )
       )
     );
+    await flushEmails();
     // The new assignee still gets exactly one directed email.
     expect(sent.filter((m) => m.to === "user-2@test.local")).toHaveLength(1);
     // The opted-in subscriber hears about every issue — the batch email
@@ -531,6 +544,7 @@ describe("WorkspaceDO", () => {
     await withWorkspace(stub, (instance) =>
       withEmail(() => instance.deleteIssue(issue.id, "user-1"))
     );
+    await flushEmails();
     expect(sent).toHaveLength(1);
     expect(sent[0].to).toBe("user-2@test.local");
     const body = mimeBodyText(sent[0].raw ?? "");
@@ -538,6 +552,35 @@ describe("WorkspaceDO", () => {
     // gone, so it would 404.
     expect(body).toContain("Delete me");
     expect(body).not.toContain("/issues/");
+  });
+
+  it("does not block or lose a write when the email send stalls (PILE-330)", async () => {
+    const stub = getStub();
+    // issue_assigned defaults to email-on; a provider send that never
+    // resolves used to sit inline in updateIssue and hang the PATCH until
+    // the request aborted — rolling the write back with it.
+    const hangingEmail: SendEmail = {
+      send: () => new Promise(() => undefined),
+    };
+    const prevEmail = env.EMAIL;
+    const prevFrom = env.EMAIL_FROM;
+    env.EMAIL = hangingEmail;
+    env.EMAIL_FROM = "notifications@example.com";
+    try {
+      const issue = await withWorkspace(stub, (instance) =>
+        instance.createIssue({ title: "Stalled email write" })
+      );
+      await withWorkspace(stub, (instance) =>
+        instance.updateIssue(issue.id, { assigneeId: "gh-user-1" }, "user-2")
+      );
+      const updated = await withWorkspace(stub, (instance) =>
+        instance.getIssue(issue.id)
+      );
+      expect(updated?.assigneeId).toBe("gh-user-1");
+    } finally {
+      env.EMAIL = prevEmail;
+      env.EMAIL_FROM = prevFrom;
+    }
   });
 
   it("supports triage status and resolution semantics", async () => {
@@ -1061,6 +1104,125 @@ describe("WorkspaceDO", () => {
         })
       )
     ).rejects.toThrow();
+  });
+
+  it("throws a CONFLICT-coded error when updateIssue claims a taken branch", async () => {
+    // PILE-313 — this throw crosses the DO RPC boundary; the API relies on
+    // its serialized code/status to answer 409 instead of a 500.
+    const stub = getStub();
+    await withWorkspace(stub, (instance) =>
+      instance.createIssue({
+        title: "Branch owner",
+        repo: "owner/taken",
+        branch: "taken-branch",
+      })
+    );
+    const claimant = await withWorkspace(stub, (instance) =>
+      instance.createIssue({
+        title: "Branch claimant",
+        repo: "owner/taken",
+        branch: `issue-${crypto.randomUUID()}`,
+      })
+    );
+    const err: unknown = await withWorkspace(stub, (instance) =>
+      instance.updateIssue(claimant.id, { branch: "taken-branch" })
+    ).then(
+      () => undefined,
+      (e: unknown) => e
+    );
+    expect(err).toBeInstanceOf(Error);
+    expect((err as { code?: unknown }).code).toBe("CONFLICT");
+    expect((err as { status?: unknown }).status).toBe(409);
+  });
+
+  it("lets an issue keep its own repo and branch on update", async () => {
+    const stub = getStub();
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({
+        title: "Self claim",
+        repo: "owner/self",
+        branch: "self-branch",
+      })
+    );
+    const updated = await withWorkspace(stub, (instance) =>
+      instance.updateIssue(issue.id, { title: "Self claim renamed" })
+    );
+    expect(updated?.repo).toBe("owner/self");
+    expect(updated?.branch).toBe("self-branch");
+  });
+
+  it("throws a CONFLICT-coded error when updateIssue claims a taken prUrl", async () => {
+    const stub = getStub();
+    const prUrl = `https://github.com/owner/repo/pull/${crypto.randomUUID().slice(0, 8)}`;
+    const owner = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "PR owner" })
+    );
+    await withWorkspace(stub, (instance) =>
+      instance.updateIssue(owner.id, { prUrl })
+    );
+
+    const claimant = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "PR claimant" })
+    );
+    const err: unknown = await withWorkspace(stub, (instance) =>
+      instance.updateIssue(claimant.id, { prUrl })
+    ).then(
+      () => undefined,
+      (e: unknown) => e
+    );
+    expect(err).toBeInstanceOf(Error);
+    expect((err as { code?: unknown }).code).toBe("CONFLICT");
+
+    // Re-linking the same PR to its owner and clearing with null both work.
+    const relinked = await withWorkspace(stub, (instance) =>
+      instance.updateIssue(owner.id, { prUrl })
+    );
+    expect(relinked?.prUrl).toBe(prUrl);
+    const cleared = await withWorkspace(stub, (instance) =>
+      instance.updateIssue(owner.id, { prUrl: null })
+    );
+    expect(cleared?.prUrl).toBeNull();
+  });
+
+  it("lists agent sessions filtered by retryOf", async () => {
+    const stub = getStub();
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Retry chain issue" })
+    );
+    const dead = await withWorkspace(stub, (instance) =>
+      instance.createAgentSession({
+        issueId: issue.id,
+        agentId: "mock",
+        provider: "mock",
+        actorId: "user-1",
+        actorType: "user",
+        status: "failed",
+      })
+    );
+    const retry = await withWorkspace(stub, (instance) =>
+      instance.createAgentSession({
+        issueId: issue.id,
+        agentId: "mock",
+        provider: "mock",
+        actorId: "user-1",
+        actorType: "user",
+        status: "running",
+      })
+    );
+    await stub.updateAgentSession(retry.id, { retryOf: dead.id });
+    await withWorkspace(stub, (instance) =>
+      instance.createAgentSession({
+        issueId: issue.id,
+        agentId: "mock",
+        provider: "mock",
+        actorId: "user-1",
+        actorType: "user",
+        status: "running",
+      })
+    );
+
+    const retries = await stub.listAgentSessions({ retryOf: dead.id });
+    expect(retries.map((s: { id: string }) => s.id)).toEqual([retry.id]);
   });
 
   it("supports parent/child issue hierarchy", async () => {

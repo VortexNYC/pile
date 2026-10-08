@@ -1051,6 +1051,7 @@ type ListAgentSessionsOptions = {
   issueId?: string;
   status?: AgentSessionStatus;
   openPr?: boolean;
+  retryOf?: string;
   limit?: number;
   // Restricted issues the caller isn't granted (issue_permissions) —
   // session rows carry lane results that can embed issue content.
@@ -1074,6 +1075,9 @@ function agentSessionListConditions(
   }
   if (options.status) {
     conditions.push(eq(workspaceAgentSessions.status, options.status));
+  }
+  if (options.retryOf) {
+    conditions.push(eq(workspaceAgentSessions.retryOf, options.retryOf));
   }
   // "Not known closed", not `= 'open'` (PILE-269): drafts, unreported
   // (null) and provider-cased states ("OPEN") still need the sweep to
@@ -2555,6 +2559,7 @@ export interface CustomerInput {
   tierId?: string | null;
   statusId?: string | null;
   ownerId?: string | null;
+  createdAt?: string;
 }
 
 export function createCustomer(db: WorkspaceDb, input: CustomerInput) {
@@ -2571,7 +2576,7 @@ export function createCustomer(db: WorkspaceDb, input: CustomerInput) {
       tierId: input.tierId ?? null,
       statusId: input.statusId ?? null,
       ownerId: input.ownerId ?? null,
-      createdAt: now,
+      createdAt: input.createdAt ?? now,
       updatedAt: now,
     })
     .returning()

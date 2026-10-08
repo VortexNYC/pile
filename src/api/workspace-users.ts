@@ -1,7 +1,7 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 import { isAPIError } from "better-auth/api";
-import { and, desc, eq, gt, notInArray } from "drizzle-orm";
+import { and, desc, eq, gt, lte, notInArray } from "drizzle-orm";
 
 import { createD1 } from "../global/db.js";
 import { invitation, member, user as userTable } from "../global/schema.js";
@@ -35,6 +35,7 @@ function toInvitationResponse(
     status: row.status,
     teamId: row.teamId ?? null,
     expiresAt: row.expiresAt.getTime(),
+    expired: row.status === "pending" && row.expiresAt.getTime() <= Date.now(),
     inviterId: row.inviterId,
     createdAt: row.createdAt.getTime(),
   };
@@ -55,6 +56,7 @@ const invitationSchema = z.object({
   status: z.string(),
   teamId: z.string().nullable(),
   expiresAt: z.number().int(),
+  expired: z.boolean(),
   inviterId: z.string(),
   createdAt: z.number().int(),
 });
@@ -108,6 +110,7 @@ const resendInviteRoute = createRoute({
       content: { "application/json": { schema: invitationSchema } },
     },
     404: { description: "Invitation not found" },
+    409: { description: "Invitation is not pending" },
     503: { description: "Email not configured" },
   },
 });
@@ -152,10 +155,12 @@ const listInvitationsRoute = createRoute({
     params: z.object({ organizationId: z.string() }),
     query: z.object({
       status: z
-        .enum(["pending", "accepted", "canceled", "rejected", "all"])
+        .enum(["pending", "accepted", "canceled", "rejected", "expired", "all"])
         .optional()
         .openapi({
-          description: "Invitation status filter; defaults to pending",
+          description:
+            "Invitation status filter; defaults to pending (excludes expired rows). " +
+            "`expired` lists pending invitations past their expiry",
         }),
     }),
   },
@@ -319,6 +324,7 @@ export function registerWorkspaceUserRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId } = c.req.valid("param");
     const { status } = c.req.valid("query");
     const statusFilter = status ?? "pending";
+    const now = new Date();
     const db = createD1(c.env.D1);
     const rows = await db
       .select()
@@ -328,15 +334,20 @@ export function registerWorkspaceUserRoutes(app: OpenAPIHono<AppContext>) {
           eq(invitation.organizationId, organizationId),
           statusFilter === "all"
             ? undefined
-            : and(
-                eq(invitation.status, statusFilter),
-                // "pending" means still actionable — expired rows are dead
-                // to better-auth's accept flow, so keep them out of the
-                // default view (they remain visible via status=all).
-                statusFilter === "pending"
-                  ? gt(invitation.expiresAt, new Date())
-                  : undefined
-              )
+            : statusFilter === "expired"
+              ? and(
+                  eq(invitation.status, "pending"),
+                  lte(invitation.expiresAt, now)
+                )
+              : and(
+                  eq(invitation.status, statusFilter),
+                  // "pending" means still actionable — expired rows are dead
+                  // to better-auth's accept flow, so keep them out of the
+                  // default view (they remain visible via status=all/expired).
+                  statusFilter === "pending"
+                    ? gt(invitation.expiresAt, now)
+                    : undefined
+                )
         )
       )
       .orderBy(desc(invitation.createdAt))
@@ -399,6 +410,17 @@ export function registerWorkspaceUserRoutes(app: OpenAPIHono<AppContext>) {
         code: "NOT_FOUND",
         status: 404,
         message: "Invitation not found",
+      });
+    }
+
+    // better-auth's createInvitation(resend: true) falls through to minting a
+    // fresh pending invitation when none is pending — without this gate,
+    // "resending" a canceled or accepted invite silently resurrects it.
+    if (invite.status !== "pending") {
+      throw new VortexError({
+        code: "CONFLICT",
+        status: 409,
+        message: `Invitation is ${invite.status}; only pending invitations can be resent`,
       });
     }
 

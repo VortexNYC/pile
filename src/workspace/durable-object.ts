@@ -108,7 +108,6 @@ import {
   workspaceGitIdentities,
   workspaceIssueApprovals,
   workspaceIssueHistory,
-  workspaceIssuePermissions,
   workspaceIssueRelations,
   workspaceIssues,
   workspaceIssueSubscribers,
@@ -453,19 +452,19 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     // The API layer stamps the connecting identity on `x-pile-ws-viewer`;
     // issue-bearing events are filtered per socket so restricted issues
     // (issue_permissions) never reach members without a grant. Grants
-    // changed after connect apply on the next connection.
+    // changed after connect apply on the next connection. A missing or
+    // unparseable stamp is a non-admin nobody (open issues only) — never
+    // unfiltered.
     const viewerHeader = request.headers.get("x-pile-ws-viewer");
+    let wsViewer: WsViewer = { actorId: "", teamIds: [], admin: false };
     if (viewerHeader) {
       try {
-        const viewer = wsViewerSchema.parse(JSON.parse(viewerHeader));
-        server.serializeAttachment(viewer);
+        wsViewer = wsViewerSchema.parse(JSON.parse(viewerHeader));
       } catch {
-        // Unparseable viewer — socket stays unrestricted-until-checked:
-        // without an attachment we cannot attribute it, so treat as a
-        // non-admin nobody (open issues only).
-        server.serializeAttachment({ actorId: "", teamIds: [], admin: false });
+        // keep the nobody default
       }
     }
+    server.serializeAttachment(wsViewer);
 
     await this.emit({
       type: "connected",
@@ -957,56 +956,91 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         : WorkspaceDO.EMAIL_BY_DEFAULT_TYPES.has(input.type));
     const emailFrom = this.env.EMAIL_FROM;
     if (wantsEmail && this.env.EMAIL && emailFrom) {
-      try {
-        const d1 = createD1(this.env.D1);
-        const recipient = await d1
-          .select({ email: globalUser.email })
-          .from(globalUser)
-          .where(eq(globalUser.id, input.recipientId))
-          .get();
-        if (!recipient?.email) return;
-        const typeLabel = input.type.replace(/_/g, " ");
-        // issueId is the notification subject — document-scoped types
-        // carry a document id (metadata.documentId) instead, so resolve
-        // whichever record it points at rather than a guaranteed issue
-        // miss.
-        const documentId =
-          typeof input.metadata?.documentId === "string"
-            ? input.metadata.documentId
-            : null;
-        let subject = `Pile: ${typeLabel}`;
-        let text = `You have a new ${typeLabel} notification in workspace ${this.organizationId}.\n`;
-        if (documentId !== null && documentId === input.issueId) {
-          const doc = await this.getDocument(documentId);
-          if (doc) {
-            subject = `Pile: ${doc.title} ${typeLabel}`;
-            text = `${doc.title}\n\n${text}`;
-          }
-        } else {
-          const issue = options?.issue ?? (await this.getIssue(input.issueId));
-          if (issue) {
-            // BETTER_AUTH_URL is the product origin — PUBLIC_API_URL is
-            // the agent-callback API origin and may not serve the UI.
-            const link =
-              options?.linkIssue === false
-                ? ""
-                : `${this.env.BETTER_AUTH_URL}/${this.organizationId}/issues/${issue.identifier ?? issue.id}\n`;
-            subject = issue.identifier
-              ? `Pile: ${issue.identifier} ${typeLabel}`
-              : subject;
-            text = `${issue.identifier ? `${issue.identifier}: ` : ""}${issue.title}\n\n${text}${link}`;
-          }
-        }
-        await sendEmail(this.env, {
-          from: emailFrom,
-          to: recipient.email,
-          subject,
-          text,
-        });
-      } catch {
-        // Email delivery is best-effort; never block the notification.
+      // PILE-330 — a stalled provider send used to sit on the mutation's
+      // critical path: PATCHes timed out (~40s) and the DO's uncommitted
+      // write rolled back. Email is best-effort; it runs in waitUntil so a
+      // slow/hung provider can never block or lose the write.
+      const task = this.sendNotificationEmail(
+        input,
+        this.env.EMAIL,
+        emailFrom,
+        options
+      ).catch((err: unknown) => {
+        console.warn(
+          `notification email failed: ${err instanceof Error ? err.message : String(err)}`
+        );
+      });
+      this.pendingEmailTasks.add(task);
+      void task.finally(() => this.pendingEmailTasks.delete(task));
+      this.ctx.waitUntil(task);
+    }
+  }
+
+  private readonly pendingEmailTasks = new Set<Promise<void>>();
+
+  // Resolves once every in-flight notification email settles — the seam
+  // tests use to assert deferred sends deterministically.
+  async flushNotificationEmails(): Promise<void> {
+    while (this.pendingEmailTasks.size > 0) {
+      await Promise.allSettled(this.pendingEmailTasks);
+    }
+  }
+
+  private async sendNotificationEmail(
+    input: Omit<data.NotificationInput, "organizationId">,
+    emailBinding: SendEmail,
+    emailFrom: string,
+    options?: { issue?: Issue; linkIssue?: boolean }
+  ): Promise<void> {
+    const d1 = createD1(this.env.D1);
+    const recipient = await d1
+      .select({ email: globalUser.email })
+      .from(globalUser)
+      .where(eq(globalUser.id, input.recipientId))
+      .get();
+    if (!recipient?.email) return;
+    const typeLabel = input.type.replace(/_/g, " ");
+    // issueId is the notification subject — document-scoped types
+    // carry a document id (metadata.documentId) instead, so resolve
+    // whichever record it points at rather than a guaranteed issue
+    // miss.
+    const documentId =
+      typeof input.metadata?.documentId === "string"
+        ? input.metadata.documentId
+        : null;
+    let subject = `Pile: ${typeLabel}`;
+    let text = `You have a new ${typeLabel} notification in workspace ${this.organizationId}.\n`;
+    if (documentId !== null && documentId === input.issueId) {
+      const doc = await this.getDocument(documentId);
+      if (doc) {
+        subject = `Pile: ${doc.title} ${typeLabel}`;
+        text = `${doc.title}\n\n${text}`;
+      }
+    } else {
+      const issue = options?.issue ?? (await this.getIssue(input.issueId));
+      if (issue) {
+        // BETTER_AUTH_URL is the product origin — PUBLIC_API_URL is
+        // the agent-callback API origin and may not serve the UI.
+        const link =
+          options?.linkIssue === false
+            ? ""
+            : `${this.env.BETTER_AUTH_URL}/${this.organizationId}/issues/${issue.identifier ?? issue.id}\n`;
+        subject = issue.identifier
+          ? `Pile: ${issue.identifier} ${typeLabel}`
+          : subject;
+        text = `${issue.identifier ? `${issue.identifier}: ` : ""}${issue.title}\n\n${text}${link}`;
       }
     }
+    await sendEmail(
+      this.env,
+      {
+        from: emailFrom,
+        to: recipient.email,
+        subject,
+        text,
+      },
+      emailBinding
+    );
   }
 
   private async notifyIssueEvent(
@@ -2447,6 +2481,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       issueId?: string;
       status?: AgentSessionStatus;
       openPr?: boolean;
+      retryOf?: string;
       limit?: number;
       viewer?: IssueViewer;
     } = {}
@@ -5047,9 +5082,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     await this.db
       .delete(workspaceIssueApprovals)
       .where(eq(workspaceIssueApprovals.issueId, issueId));
-    await this.db
-      .delete(workspaceIssuePermissions)
-      .where(eq(workspaceIssuePermissions.issueId, issueId));
+    // issue_permissions rows are deliberately kept: a deleted restricted
+    // issue's audit entries, notifications, and `issue.deleted` frames must
+    // stay filtered (no grant rows = open would un-hide them post-delete).
+    // Ids are never reused, so the rows are inert tombstones.
     const reactionTargets = [issueId, ...commentIds];
     if (reactionTargets.length > 0) {
       await this.db

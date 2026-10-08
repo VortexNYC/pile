@@ -561,22 +561,23 @@ async function promoteQueuedSessions(
   }
   // Dead session id -> its retries (newest first, terminal ones included —
   // a retry can die too, so the successor check below walks the retry graph
-  // to a live tail rather than resolving a single hop). A parked lane whose
-  // blocker died re-anchors onto the replacement instead of promoting off
-  // the corpse — checked here so the chain holds even when the retry row
-  // landed after the dependent parked, or the retry's own re-anchor write
-  // was lost mid-flight (PILE-260).
-  const retriesByDeadSession = new Map<string, string[]>();
-  const sessionById = new Map<string, AgentSession>();
-  if (queued.some((s) => s.queuedAfter)) {
-    for (const s of await stub.listAgentSessions({ limit: 200 })) {
-      sessionById.set(s.id, s);
-      if (!s.retryOf) continue;
-      const retries = retriesByDeadSession.get(s.retryOf);
-      if (retries) retries.push(s.id);
-      else retriesByDeadSession.set(s.retryOf, [s.id]);
-    }
-  }
+  // to a live tail rather than resolving a single hop). Fetched lazily per
+  // dead id, not from a recency-window scan — a live retry can never fall
+  // outside the lookup no matter how busy the workspace is. A parked lane
+  // whose blocker died re-anchors onto the replacement instead of promoting
+  // off the corpse — checked here so the chain holds even when the retry
+  // row landed after the dependent parked, or the retry's own re-anchor
+  // write was lost mid-flight (PILE-260).
+  const retriesCache = new Map<string, AgentSession[]>();
+  const retriesFor = async (deadId: string): Promise<AgentSession[]> => {
+    const cached = retriesCache.get(deadId);
+    if (cached) return cached;
+    const rows = await stub
+      .listAgentSessions({ retryOf: deadId })
+      .catch(() => [] as AgentSession[]);
+    retriesCache.set(deadId, rows);
+    return rows;
+  };
   for (const session of queued) {
     // A `waiting` row with a live remote is provider-parked (blocked on
     // input), not queue-parked — flipping it to `created` would both burn
@@ -622,17 +623,17 @@ async function promoteQueuedSessions(
       // session.id joins the guard so a dependent can never re-anchor onto
       // itself if its own row ever sits inside the blocker's retry graph.
       const visited = new Set<string>([blocker.id, session.id]);
-      const chain = [...(retriesByDeadSession.get(blocker.id) ?? [])];
+      const chain = [...(await retriesFor(blocker.id))];
       for (let i = 0; i < chain.length; i += 1) {
-        const next = sessionById.get(chain[i]);
-        if (!next || visited.has(next.id)) continue;
+        const next = chain[i];
+        if (visited.has(next.id)) continue;
         visited.add(next.id);
         if (!TERMINAL_STATUSES.has(next.status)) {
           successor = next.id;
           break;
         }
         noteInfraDeath(next);
-        chain.push(...(retriesByDeadSession.get(next.id) ?? []));
+        chain.push(...(await retriesFor(next.id)));
       }
       if (successor) {
         await stub
