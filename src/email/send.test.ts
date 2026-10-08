@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { buildMime } from "./send.js";
+import { buildMime, sendEmail } from "./send.js";
 import { renderTicketReply } from "./templates.js";
 
 describe("outbound email", () => {
@@ -37,5 +37,18 @@ describe("outbound email", () => {
     const html = await renderTicketReply("Fixed in the latest deploy");
     expect(html).toContain("Fixed in the latest deploy");
     expect(html).toContain("<html");
+  });
+
+  // PILE-330 — deferred callers pass the binding snapshot taken when the
+  // notification was decided, so a reassigned env.EMAIL can't redirect the
+  // send and a missing env binding can't silently skip it.
+  it("sends through the binding override, not env.EMAIL", async () => {
+    const send = vi.fn().mockResolvedValue({ messageId: "m1" });
+    await sendEmail(
+      { EMAIL: undefined },
+      { from: "a@x.example", to: "b@y.example", subject: "s", text: "t" },
+      { send }
+    );
+    expect(send).toHaveBeenCalledOnce();
   });
 });
