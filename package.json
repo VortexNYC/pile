@@ -16,7 +16,7 @@
   "scripts": {
     "dev": "pnpm run web:build && wrangler dev",
     "deploy": "pnpm run web:build && vp exec wrangler deploy -e production",
-    "web:build": "pnpm -C apps/web build",
+    "web:build": "pnpm -C apps/web run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit && tsc --noEmit -p packages/capture && tsc --noEmit -p packages/cli && tsc --noEmit -p packages/widget && tsc --noEmit -p apps/web",
