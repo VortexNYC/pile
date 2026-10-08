@@ -4096,19 +4096,51 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   // PILE-282 — fire-and-forget: a triage-lane failure (provider down, team
-  // not configured) must never fail issue creation.
+  // not configured) must never fail issue creation. The triage context is
+  // computed here in the DO — dispatchTriageLane RPCing this same object
+  // from inside a waitUntil task deadlocks the input gate (~40s → create
+  // INTERNAL_ERROR). ensureSearchIndex is an internal call here (no RPC
+  // boundary), so it may safely build off the request path; the batched
+  // build yields so it can't starve the isolate.
   private startTriageLane(issue: Issue, actorId?: string) {
     if (!hasWorkspaceNamespace(this.env)) return;
+    // Mirror dispatchTriageLane's bail conditions — building the context
+    // (index + labels) for a draft/canceled issue is wasted work.
+    if (issue.isDraft || issue.status === "done" || issue.status === "canceled")
+      return;
     const env = this.env;
     this.ctx.waitUntil(
-      dispatchTriageLane(env, this.organizationId, issue, actorId).catch(
-        (err: unknown) => {
+      this.buildTriageContext(issue)
+        .then((context) =>
+          dispatchTriageLane(env, this.organizationId, issue, actorId, context)
+        )
+        .catch((err: unknown) => {
           console.warn(
             `triage lane dispatch failed for ${issue.id}: ${err instanceof Error ? err.message : String(err)}`
           );
-        }
-      )
+        })
     );
+  }
+
+  private async buildTriageContext(issue: Issue): Promise<{
+    similar: Array<{ issue: Issue; score: number }>;
+    labelNames: string[];
+  }> {
+    const [index, labels] = await Promise.all([
+      this.ensureSearchIndex(),
+      listLabels(createD1(this.env.D1), this.organizationId),
+    ]);
+    const hits = await findSimilarIssues(index, issue, [issue.teamId], 8);
+    const matches = await Promise.all(
+      hits.map((hit) => this.getIssue(hit.issueId))
+    );
+    const similar = hits.flatMap((hit, i) =>
+      matches[i] ? [{ issue: matches[i] as Issue, score: hit.score }] : []
+    );
+    return {
+      similar,
+      labelNames: labels.filter((l) => l.kind === "issue").map((l) => l.name),
+    };
   }
 
   private async applyTriageReport(
