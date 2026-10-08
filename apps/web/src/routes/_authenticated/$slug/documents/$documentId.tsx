@@ -17,6 +17,12 @@ import { api, unwrap, unwrapEmpty } from "@/lib/api";
 import { documentText, formatRelative } from "@/lib/labels";
 import { toastError, toastSuccess } from "@/lib/toast";
 
+// Plain text and markdown round-trip through the markdown editor; block
+// documents would lose their structure, so they stay read-only here.
+function isEditable(format: string): boolean {
+  return format === "text" || format === "markdown";
+}
+
 export const Route = createFileRoute(
   "/_authenticated/$slug/documents/$documentId"
 )({
@@ -97,6 +103,7 @@ function DocumentDetail() {
   }
   const data = doc.data;
   const text = documentText(data.content);
+  const editable = isEditable(data.contentFormat);
 
   return (
     <Page
@@ -116,9 +123,11 @@ function DocumentDetail() {
       actions={
         editing ? null : (
           <>
-            <Button icon={<PencilSimple />} onClick={() => setEditing(true)}>
-              Edit
-            </Button>
+            {editable ? (
+              <Button icon={<PencilSimple />} onClick={() => setEditing(true)}>
+                Edit
+              </Button>
+            ) : null}
             <Button
               variant="secondary-destructive"
               icon={<Trash />}
@@ -136,7 +145,13 @@ function DocumentDetail() {
     >
       <LayerCard>
         <LayerCard.Primary className="p-6">
-          {editing ? (
+          {!editable ? (
+            <Text variant="secondary">
+              This document uses rich formatting. Edit it from the CLI so its
+              structure is kept.
+            </Text>
+          ) : null}
+          {editing && editable ? (
             <DocumentForm
               initial={{ title: data.title, content: text }}
               submitLabel="Save"

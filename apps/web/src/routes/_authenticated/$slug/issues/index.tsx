@@ -5,9 +5,9 @@ import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 import { Select } from "@cloudflare/kumo/components/select";
 import { Table } from "@cloudflare/kumo/components/table";
 import { ListChecks, Plus } from "@phosphor-icons/react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useDeferredValue } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 
 import { Page } from "@/components/page";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
@@ -25,6 +25,7 @@ import {
 } from "@/lib/labels";
 
 const ALL = "all";
+const PAGE_SIZE = 50;
 
 interface IssuesSearch {
   status?: IssueStatus;
@@ -47,22 +48,25 @@ function IssuesList() {
   const { status, q } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const search = useDeferredValue(q);
+  const [draft, setDraft] = useState(q ?? "");
+  useEffect(() => setDraft(q ?? ""), [q]);
 
-  const issues = useQuery({
+  const issues = useInfiniteQuery({
     queryKey: wsKey(workspace.id, "issues", { status, search }),
-    queryFn: async () =>
-      (
-        await unwrap(
-          api.GET("/workspaces/{organizationId}/issues", {
-            params: {
-              path: { organizationId: workspace.id },
-              query: { limit: 100, status, search },
-            },
-          })
-        )
-      ).issues,
+    queryFn: ({ pageParam }) =>
+      unwrap(
+        api.GET("/workspaces/{organizationId}/issues", {
+          params: {
+            path: { organizationId: workspace.id },
+            query: { limit: PAGE_SIZE, status, search, cursor: pageParam },
+          },
+        })
+      ),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
     placeholderData: keepPreviousData,
   });
+  const rows = issues.data?.pages.flatMap((page) => page.issues) ?? [];
 
   return (
     <Page
@@ -88,16 +92,17 @@ function IssuesList() {
           <Input
             aria-label="Search issues"
             placeholder="Search issues"
-            defaultValue={q ?? ""}
-            onChange={(event) =>
+            value={draft}
+            onChange={(event) => {
+              setDraft(event.target.value);
               void navigate({
                 search: (prev) => ({
                   ...prev,
                   q: event.target.value || undefined,
                 }),
                 replace: true,
-              })
-            }
+              });
+            }}
           />
         </div>
         <Select
@@ -131,7 +136,7 @@ function IssuesList() {
           error={issues.error}
           onRetry={() => void issues.refetch()}
         />
-      ) : issues.data.length === 0 ? (
+      ) : rows.length === 0 ? (
         <EmptyState
           icon={<ListChecks size={40} />}
           title={status || q ? "No matching issues" : "No issues yet"}
@@ -153,7 +158,7 @@ function IssuesList() {
               </Table.Row>
             </Table.Header>
             <Table.Body>
-              {issues.data.map((issue) => (
+              {rows.map((issue) => (
                 <Table.Row key={issue.id}>
                   <Table.Cell>
                     <Link
@@ -186,6 +191,16 @@ function IssuesList() {
           </Table>
         </LayerCard>
       )}
+      {issues.hasNextPage ? (
+        <div className="flex justify-center">
+          <Button
+            loading={issues.isFetchingNextPage}
+            onClick={() => void issues.fetchNextPage()}
+          >
+            Load more
+          </Button>
+        </div>
+      ) : null}
     </Page>
   );
 }

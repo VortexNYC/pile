@@ -38,11 +38,20 @@ const AppLink = forwardRef<HTMLAnchorElement, LinkComponentProps>(
       return <a ref={ref} href={raw} {...rest} />;
     }
     const url = new URL(target, "http://localhost");
-    const search: Record<string, string> = {};
-    url.searchParams.forEach((value, key) => {
-      search[key] = value;
-    });
-    return <Link ref={ref} to={url.pathname} search={search} {...rest} />;
+    const search: Record<string, string | string[]> = {};
+    for (const key of new Set(url.searchParams.keys())) {
+      const values = url.searchParams.getAll(key);
+      search[key] = values.length > 1 ? values : (values[0] ?? "");
+    }
+    return (
+      <Link
+        ref={ref}
+        to={url.pathname}
+        search={search}
+        hash={url.hash ? url.hash.slice(1) : undefined}
+        {...rest}
+      />
+    );
   }
 );
 AppLink.displayName = "AppLink";
