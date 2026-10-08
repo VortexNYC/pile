@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, gt } from "drizzle-orm";
 
 import { hmacSha256Hex, timingSafeEqualHex } from "./crypto.js";
 import type { D1Client } from "./db.js";
@@ -175,6 +175,32 @@ export async function findWidgetSessionByToken(
     .limit(1);
   if (!row || row.expiresAt <= new Date().toISOString()) return null;
   return row;
+}
+
+/**
+ * The newest live verified session for a signed-in user on this widget key,
+ * so a returning user (shared browser, missed logout) gets their thread back.
+ * Only call after the caller has verified identifierHash for externalId.
+ */
+export async function findVerifiedWidgetSession(
+  db: D1Client,
+  widgetKeyId: string,
+  externalId: string
+): Promise<SupportWidgetSession | null> {
+  const [row] = await db
+    .select()
+    .from(supportWidgetSessions)
+    .where(
+      and(
+        eq(supportWidgetSessions.widgetKeyId, widgetKeyId),
+        eq(supportWidgetSessions.externalId, externalId),
+        eq(supportWidgetSessions.identityVerified, true),
+        gt(supportWidgetSessions.expiresAt, new Date().toISOString())
+      )
+    )
+    .orderBy(desc(supportWidgetSessions.createdAt))
+    .limit(1);
+  return row ?? null;
 }
 
 export async function updateWidgetSession(
