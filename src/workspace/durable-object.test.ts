@@ -1662,4 +1662,64 @@ describe("WorkspaceDO", () => {
     );
     expect(missing).toBeUndefined();
   });
+
+  // PILE-331 — a cold DO used to rebuild the full search index inline on
+  // the first write; writes now leave the build to the first search.
+  it("keeps the search index lazy on writes and current once built", async () => {
+    const id = env.WORKSPACE_DURABLE_OBJECT.idFromName("pile-331-cold-index");
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(id);
+    const result = await withWorkspace(stub, async (instance) => {
+      const issue = await instance.createIssue({ title: "Quokka telemetry" });
+      await instance.updateIssue(issue.id, { title: "Wombat telemetry" });
+      const builtByWrite = Reflect.get(instance, "searchIndex") !== null;
+
+      const cold = await instance.searchAll("wombat", [issue.teamId]);
+      const stale = await instance.searchAll("quokka", [issue.teamId]);
+
+      // Index already built: writes apply directly.
+      await instance.updateIssue(issue.id, { title: "Numbat telemetry" });
+      const warm = await instance.searchAll("numbat", [issue.teamId]);
+      return { issueId: issue.id, builtByWrite, cold, stale, warm };
+    });
+    expect(result.builtByWrite).toBe(false);
+    expect(result.cold.issueIds).toContain(result.issueId);
+    expect(result.stale.issueIds).not.toContain(result.issueId);
+    expect(result.warm.issueIds).toContain(result.issueId);
+  });
+
+  it("applies a write that lands while the search index is building", async () => {
+    const id = env.WORKSPACE_DURABLE_OBJECT.idFromName("pile-331-racing-index");
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(id);
+    const result = await withWorkspace(stub, async (instance) => {
+      const issue = await instance.createIssue({ title: "Axolotl ingest" });
+      await Promise.all([
+        instance.searchAll("axolotl", [issue.teamId]),
+        instance.updateIssue(issue.id, { title: "Pangolin ingest" }),
+      ]);
+      const renamed = await instance.searchAll("pangolin", [issue.teamId]);
+      const stale = await instance.searchAll("axolotl", [issue.teamId]);
+      return { issueId: issue.id, renamed, stale };
+    });
+    expect(result.renamed.issueIds).toContain(result.issueId);
+    expect(result.stale.issueIds).not.toContain(result.issueId);
+  });
+
+  it("logs a phase breakdown only for slow issue updates", async () => {
+    const stub = getStub();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const issue = await withWorkspace(stub, (instance) =>
+        instance.createIssue({ title: "Fast update" })
+      );
+      await withWorkspace(stub, (instance) =>
+        instance.updateIssue(issue.id, { status: "in_progress" }, "user-1")
+      );
+      const slowLines = warn.mock.calls
+        .map(([line]) => String(line))
+        .filter((line) => line.includes("issue.update.slow"));
+      expect(slowLines).toHaveLength(0);
+    } finally {
+      warn.mockRestore();
+    }
+  });
 });
