@@ -251,3 +251,27 @@ export function createPileClient(options: PileClientOptions): PileClient {
     Request: options.Request,
   });
 }
+
+/**
+ * Server-side `identifierHash` for the support widget (`chat.js`): HMAC-SHA256
+ * of the signed-in user's `externalId` (or email) with the widget key's
+ * `hmacSecret`, hex-encoded. Compute it on your server; never ship the secret
+ * to the browser.
+ */
+export async function widgetIdentifierHash(
+  hmacSecret: string,
+  identifier: string
+): Promise<string> {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(hmacSecret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(identifier));
+  return [...new Uint8Array(sig)]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}

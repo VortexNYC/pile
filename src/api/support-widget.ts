@@ -594,10 +594,16 @@ export function registerSupportWidgetRoutes(app: OpenAPIHono<AppContext>) {
     const db = createD1(c.env.D1);
     const widgetKey = await requireWidgetKey(db, key, c.req.header("origin"));
 
-    // Resume: a stored session token is sufficient — no re-verification.
+    // Resume: a stored session token is sufficient — no re-verification —
+    // unless the host app now presents a different signed-in user (shared
+    // browser, sign-out/sign-in). Then the old thread stays with its owner and
+    // a fresh session starts below.
     if (body.sessionToken) {
       let session = await findWidgetSessionByToken(db, body.sessionToken);
-      if (session && session.widgetKeyId === widgetKey.id) {
+      const identityChanged =
+        session?.externalId != null &&
+        session.externalId !== (body.externalId ?? null);
+      if (session && session.widgetKeyId === widgetKey.id && !identityChanged) {
         // Late identity upgrade — an anonymous session that later supplies
         // email/externalId (+identifierHash) adopts that customer so votes
         // and ideas attribute correctly.
