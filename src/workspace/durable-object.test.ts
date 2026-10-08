@@ -1,4 +1,4 @@
-import { env, runInDurableObject } from "cloudflare:test";
+import { env, evictDurableObject, runInDurableObject } from "cloudflare:test";
 import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -1796,6 +1796,38 @@ describe("WorkspaceDO", () => {
     expect(warned.possibleDuplicates.map((hit) => hit.issue.id)).toContain(
       first.id
     );
+  });
+
+  it("skips a cold index build for warn dedupe and warms it in the background", async () => {
+    const stub = getStub();
+    const title = `Cold index probe ${crypto.randomUUID().slice(0, 8)} deploy receipts`;
+    // Seed, then evict — the next RPC lands on a fresh DO with no search
+    // index in memory, mirroring production post-deploy state.
+    const seeded = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title })
+    );
+    await evictDurableObject(stub);
+
+    const cold = await withWorkspace(stub, (instance) =>
+      instance.createIssueWithDuplicates({ title: `${title} v2` }, undefined, {
+        teamIds: [seeded.teamId],
+        block: false,
+      })
+    );
+    // Cold index → warn dedupe skipped, but the create itself succeeds —
+    // the 42s cold build used to sit on this path and 500 the request.
+    expect(cold.issue).not.toBeNull();
+    expect(cold.possibleDuplicates).toEqual([]);
+
+    // The skip kicks an off-path build — once it lands, dedupe works again.
+    await withWorkspace(stub, (instance) => instance.flushSearchIndex());
+    const warm = await withWorkspace(stub, (instance) =>
+      instance.createIssueWithDuplicates({ title: `${title} v3` }, undefined, {
+        teamIds: [seeded.teamId],
+        block: false,
+      })
+    );
+    expect(warm.possibleDuplicates.length).toBeGreaterThan(0);
   });
 
   it("re-anchors waiting dependents of a dead session onto its retry", async () => {

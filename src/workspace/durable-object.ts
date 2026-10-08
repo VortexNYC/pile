@@ -515,6 +515,11 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return this.searchIndexBuild;
   }
 
+  // Test seam — resolves once an in-flight background index build settles.
+  async flushSearchIndex(): Promise<void> {
+    await this.searchIndexBuild?.catch(() => undefined);
+  }
+
   // Write paths keep a built index current but never pay for the cold
   // build (seconds on a mature workspace) — the build reads current rows,
   // so it picks this write up on its own. A build already in flight may
@@ -3963,14 +3968,33 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       }
     }
 
-    const possibleDuplicates = dedupe
-      ? await this.findPossibleDuplicates(
-          input.title,
-          dedupe.teamIds,
-          5,
-          dedupe.viewer
-        )
-      : [];
+    // Warn-mode dedupe is best-effort — on a cold DO (post-deploy
+    // eviction) building the search index reads every issue/comment/doc
+    // in the workspace (~tens of seconds on mature orgs), which used to
+    // hang issue creation past the request budget. Skip the cold build
+    // and warm the index off the request path; dedupe=block keeps its
+    // guarantee by paying the build.
+    const dedupeIndex = dedupe
+      ? (this.searchIndex ??
+        (await this.searchIndexBuild?.catch(() => null)) ??
+        null)
+      : null;
+    if (dedupe && !dedupeIndex) {
+      if (dedupe.block) {
+        await this.ensureSearchIndex();
+      } else {
+        this.ctx.waitUntil(this.ensureSearchIndex().catch(() => undefined));
+      }
+    }
+    const possibleDuplicates =
+      dedupe && (dedupe.block || dedupeIndex)
+        ? await this.findPossibleDuplicates(
+            input.title,
+            dedupe.teamIds,
+            5,
+            dedupe.viewer
+          )
+        : [];
     if (dedupe?.block && possibleDuplicates.length > 0) {
       return { issue: null, possibleDuplicates };
     }

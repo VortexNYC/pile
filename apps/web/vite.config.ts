@@ -27,8 +27,16 @@ export default defineConfig({
     port: 5181,
     strictPort: true,
     proxy: {
-      "/api": { target: apiTarget, changeOrigin: false },
-      "/workspaces": { target: apiTarget, changeOrigin: false },
+      // Host rewrite only when pointing at a remote origin (PILE_API_URL)
+      // — wrangler dev on :8787 doesn't route by Host, pile.nyc does.
+      "/api": {
+        target: apiTarget,
+        changeOrigin: !apiTarget.includes("localhost"),
+      },
+      "/workspaces": {
+        target: apiTarget,
+        changeOrigin: !apiTarget.includes("localhost"),
+      },
     },
   },
   build: {
