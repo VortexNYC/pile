@@ -572,10 +572,10 @@ describePy("runner lane hooks (PILE-279)", () => {
 // The runner now diffs against ls-remote's answer, treats a missing remote
 // branch as a first push, and still counts an up-to-date remote tip as
 // shipped so finalize guarantees PR coverage.
-describe("runner push state (PILE-322)", () => {
-  const pushState = (remote: string) =>
-    runHooksHarness({}, "pushstate", { TEST_REMOTE: remote });
+const pushState = (remote: string) =>
+  runHooksHarness({}, "pushstate", { TEST_REMOTE: remote });
 
+describe("runner push state (PILE-322)", () => {
   it("first-pushes a lane whose branch never reached origin", () => {
     const res = pushState("absent");
     expect(res.error).toBeUndefined();
