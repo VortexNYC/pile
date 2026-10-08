@@ -1000,35 +1000,49 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       .get();
     if (!recipient?.email) return;
     const typeLabel = input.type.replace(/_/g, " ");
-    // issueId is the notification subject — document-scoped types
-    // carry a document id (metadata.documentId) instead, so resolve
-    // whichever record it points at rather than a guaranteed issue
-    // miss.
+    // metadata.documentId marks a document-scoped notification — for
+    // comments/mentions input.issueId holds the document id, for
+    // document_updated it holds a linked issue. Either way the email
+    // should name and link the document, not the related issue.
     const documentId =
       typeof input.metadata?.documentId === "string"
         ? input.metadata.documentId
         : null;
+    const doc = documentId === null ? null : await this.getDocument(documentId);
     let subject = `Pile: ${typeLabel}`;
     let text = `You have a new ${typeLabel} notification in workspace ${this.organizationId}.\n`;
-    if (documentId !== null && documentId === input.issueId) {
-      const doc = await this.getDocument(documentId);
-      if (doc) {
-        subject = `Pile: ${doc.title} ${typeLabel}`;
-        text = `${doc.title}\n\n${text}`;
-      }
+    // BETTER_AUTH_URL is the product origin — PUBLIC_API_URL is the
+    // agent-callback API origin and may not serve the UI.
+    const origin = this.env.BETTER_AUTH_URL;
+    if (doc) {
+      subject = `Pile: ${doc.title} ${typeLabel}`;
+      const link =
+        options?.linkIssue === false
+          ? ""
+          : `${origin}/${this.organizationId}/documents/${doc.id}\n`;
+      text = `${doc.title}\n\n${text}${link}`;
     } else {
       const issue = options?.issue ?? (await this.getIssue(input.issueId));
       if (issue) {
-        // BETTER_AUTH_URL is the product origin — PUBLIC_API_URL is
-        // the agent-callback API origin and may not serve the UI.
         const link =
           options?.linkIssue === false
             ? ""
-            : `${this.env.BETTER_AUTH_URL}/${this.organizationId}/issues/${issue.identifier ?? issue.id}\n`;
+            : `${origin}/${this.organizationId}/issues/${issue.identifier ?? issue.id}\n`;
         subject = issue.identifier
           ? `Pile: ${issue.identifier} ${typeLabel}`
           : subject;
-        text = `${issue.identifier ? `${issue.identifier}: ` : ""}${issue.title}\n\n${text}${link}`;
+        // A bulk assign emails only the first id's issue — say how many
+        // the batch moved so the recipient knows it's not just this one.
+        const batchSize =
+          input.type === "issue_assigned" &&
+          typeof input.metadata?.batchSize === "number"
+            ? input.metadata.batchSize
+            : 0;
+        const more =
+          batchSize > 1
+            ? `+${batchSize - 1} more issue${batchSize === 2 ? "" : "s"} assigned in this update\n`
+            : "";
+        text = `${issue.identifier ? `${issue.identifier}: ` : ""}${issue.title}\n\n${text}${more}${link}`;
       }
     }
     await sendEmail(
@@ -4620,8 +4634,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     // broadcast still runs. email:false skips only the directed
     // issue_assigned email — a multi-issue batch shouldn't ping the new
     // assignee once per id, while opted-in subscribers still get their
-    // per-issue broadcast mail.
-    options?: { notify?: boolean; email?: boolean }
+    // per-issue broadcast mail. batchSize marks the directed row as one
+    // of N so the single batch email can say how many issues moved.
+    options?: { notify?: boolean; email?: boolean; batchSize?: number }
   ): Promise<Issue | undefined> {
     await this.ready;
     const old = await this.getIssue(id);
@@ -4933,6 +4948,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           recipientType: "user",
           issueId: issue.id,
           type: "issue_assigned",
+          metadata:
+            options?.batchSize !== undefined
+              ? { batchSize: options.batchSize }
+              : undefined,
         },
         { email: options?.email, issue }
       );
@@ -5010,13 +5029,16 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   ): Promise<Issue[]> {
     if (index >= ids.length) return acc;
     // Only the first id may send the directed issue_assigned email — a
-    // bulk assign to the same member pings them once, not once per issue.
+    // bulk assign to the same member pings them once, not once per issue,
+    // and batchSize lets that one email say how many issues moved.
     // In-app rows and opted-in broadcast mail are unaffected.
     const issue = await this.updateIssue(
       ids[index],
       patch,
       actorId,
-      index === 0 ? undefined : { email: false }
+      index === 0
+        ? { batchSize: ids.length }
+        : { email: false, batchSize: ids.length }
     );
     if (!issue) {
       throw VortexError.fromCode("NOT_FOUND", `Issue not found: ${ids[index]}`);

@@ -413,10 +413,11 @@ describe("WorkspaceDO", () => {
     // One email for the whole batch, not one per issue…
     expect(sent).toHaveLength(1);
     expect(sent[0].to).toBe("user-2@test.local");
-    // …and it carries a link back to the issue.
-    expect(mimeBodyText(sent[0].raw ?? "")).toContain(
-      `/${WORKSPACE_ID}/issues/${first.identifier}`
-    );
+    // …and it carries a link back to the issue plus the batch size —
+    // one email covers the whole assignment, so it has to say so.
+    const body = mimeBodyText(sent[0].raw ?? "");
+    expect(body).toContain(`/${WORKSPACE_ID}/issues/${first.identifier}`);
+    expect(body).toContain("+1 more issue assigned in this update");
     // Every issue still writes its directed in-app row.
     const notes = await withWorkspace(stub, (instance) =>
       instance.listNotificationsForRecipient("user-2", "user")
@@ -506,6 +507,72 @@ describe("WorkspaceDO", () => {
     // The opted-in subscriber hears about every issue — the batch email
     // dedupe covers the directed assignee ping, not the broadcast.
     expect(sent.filter((m) => m.to === "user-3@test.local")).toHaveLength(2);
+  });
+
+  it("links the document in document-scoped notification emails", async () => {
+    const stub = getStub();
+    const db = createD1(env.D1);
+    await db
+      .insert(userTable)
+      .values({
+        id: "user-2",
+        name: "Other",
+        email: "user-2@test.local",
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .onConflictDoNothing();
+    await db
+      .insert(member)
+      .values({
+        id: crypto.randomUUID(),
+        organizationId: WORKSPACE_ID,
+        userId: "user-2",
+        role: "member",
+        createdAt: new Date(),
+      })
+      .onConflictDoNothing();
+    const doc = await withWorkspace(stub, async (instance) => {
+      // A linked issue — document_updated used to resolve and link the
+      // issue instead of the document.
+      const issue = await instance.createIssue({ title: "Spec host" });
+      const created = await instance.createDocument({
+        title: "Spec doc",
+        issueId: issue.id,
+        createdById: "user-1",
+      });
+      // document_updated is not an email-by-default type — opt in, and
+      // watch the doc so the watcher fan-out reaches user-2.
+      await instance.upsertNotificationPreferences("user-2", { email: true });
+      await instance.watchDocument(created.id, "user-2");
+      return created;
+    });
+    sent.length = 0;
+    await withWorkspace(stub, (instance) =>
+      withEmail(async () => {
+        await instance.updateDocument(
+          doc.id,
+          { title: "Spec doc v2" },
+          "user-1"
+        );
+        // mention is email-by-default — no pref needed.
+        await instance.createComment({
+          documentId: doc.id,
+          body: "Take a look @user-2",
+          mentions: ["user-2"],
+          authorId: "user-1",
+        });
+      })
+    );
+    await flushEmails();
+    const mails = sent.filter((m) => m.to === "user-2@test.local");
+    expect(mails).toHaveLength(2);
+    for (const mail of mails) {
+      const body = mimeBodyText(mail.raw ?? "");
+      expect(body).toContain(`/${WORKSPACE_ID}/documents/${doc.id}`);
+      expect(body).not.toContain("/issues/");
+    }
   });
 
   it("drops the issue link in issue_deleted emails", async () => {
