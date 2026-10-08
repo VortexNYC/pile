@@ -43,6 +43,7 @@ import { nudgeLane, type NudgeOptions, resolveLaneForIssue } from "./nudge.js";
 import {
   type AutomationEventTarget,
   automationEventTarget,
+  isTriggerLane,
   issueEventTarget,
 } from "./repo-triggers.js";
 import { reviewPromptWithContext } from "./review-context.js";
@@ -1112,7 +1113,10 @@ async function processPullRequestReview(
         workspaceRecord.organizationId,
         eventName,
         issueEventTarget(stub, session.issueId),
-        automationPrompt
+        automationPrompt,
+        undefined,
+        undefined,
+        { skipRepoTriggers: isTriggerLane(session) }
       );
     }
   }

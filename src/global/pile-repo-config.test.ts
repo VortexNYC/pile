@@ -78,3 +78,20 @@ describe("preview config (PILE-310)", () => {
     expect(parsePileRepoConfig({})).not.toBeNull();
   });
 });
+
+describe("repo triggers (PILE-272)", () => {
+  it("accepts review and conflict trigger events", () => {
+    const triggers = parsePileRepoConfig({
+      triggers: [
+        { on: "pr.review", agent: "devin", prompt: "Answer the review." },
+        { on: "pr.changes_requested", agent: "devin", prompt: "Address it." },
+        { on: "pr.conflict", agent: "devin", prompt: "Resolve conflicts." },
+      ],
+    })?.triggers;
+    expect(triggers?.map((t) => t.on)).toEqual([
+      "pr.review",
+      "pr.changes_requested",
+      "pr.conflict",
+    ]);
+  });
+});

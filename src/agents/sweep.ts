@@ -38,6 +38,7 @@ import {
   type AutomationEventFacts,
   type AutomationEventTarget,
   fireRepoTriggers,
+  isTriggerLane,
   issueEventTarget,
 } from "./repo-triggers.js";
 import { reviewPromptWithContext } from "./review-context.js";
@@ -1649,7 +1650,7 @@ export async function syncOpenPrSessions(
           // → another trigger lane is the self-feed loop. Workspace
           // automations still run; repo-trigger dispatching stands down and
           // the nudge path below owns the in-place fix.
-          { skipRepoTriggers: session.purpose?.startsWith("trigger:") === true }
+          { skipRepoTriggers: isTriggerLane(session) }
         );
       }
       // The nudge retries every sweep while CI is red — delivery dedupe
@@ -1733,7 +1734,10 @@ export async function syncOpenPrSessions(
               organizationId,
               "pr.conflict",
               issueEventTarget(stub, session.issueId),
-              `PR ${prUrl} has merge conflicts. Rebase or merge the base branch and resolve.`
+              `PR ${prUrl} has merge conflicts. Rebase or merge the base branch and resolve.`,
+              undefined,
+              undefined,
+              { skipRepoTriggers: isTriggerLane(session) }
             );
           }
           await nudgeLane(env, stub, organizationId, session, issue, prUrl, {
@@ -1906,7 +1910,10 @@ export async function syncOpenPrSessions(
                   organizationId,
                   eventName,
                   issueEventTarget(stub, session.issueId),
-                  await reviewPrompt()
+                  await reviewPrompt(),
+                  undefined,
+                  undefined,
+                  { skipRepoTriggers: isTriggerLane(session) }
                 );
               }
             }

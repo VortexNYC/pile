@@ -20,7 +20,15 @@ const DEFAULT_MENTION_HANDLE = "@pile";
 // Internal event names that surface under a different trigger name.
 const EVENT_ALIASES = new Map<string, PileRepoTriggerEvent>([
   ["pr.ci_failed", "ci.failed"],
+  ["pr.review_changes", "pr.changes_requested"],
 ]);
+
+/** A lane a repo trigger dispatched. Its own PR events (CI red, a review,
+ *  a conflict) must not fire repo triggers again — that's the self-feed
+ *  loop (PILE-304); the nudge path fixes the lane in place instead. */
+export function isTriggerLane(session: { purpose?: string | null }): boolean {
+  return session.purpose?.startsWith("trigger:") === true;
+}
 
 /** What an event fired against. `issue` resolves lazily (and once) so
  *  events on unmapped PRs only materialize an issue when something matches. */
