@@ -78,7 +78,9 @@ const pullRequestPayloadSchema = z.object({
     }),
     base: z.object({ ref: z.string() }).optional(),
   }),
-  sender: z.object({ type: z.string() }).optional(),
+  sender: z
+    .object({ type: z.string().optional(), login: z.string().optional() })
+    .optional(),
 });
 
 const REVIEW_TRIGGER_ACTIONS = new Set([
@@ -1398,7 +1400,11 @@ async function processPullRequest(
         ? `Label "${label?.name ?? ""}" was added to ${prUrl} (branch ${branch}).`
         : `PR ${prUrl} (branch ${branch}): ${pull_request.title}`,
       undefined,
-      { label: label?.name, pushedByBot: sender?.type === "Bot" }
+      {
+        label: label?.name,
+        pushedByBot:
+          sender?.type === "Bot" || sender?.login?.endsWith("[bot]") === true,
+      }
     );
   }
 
