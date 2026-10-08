@@ -68,11 +68,11 @@ function getStub() {
 
 async function withWorkspace<T>(
   stub: ReturnType<typeof getStub>,
-  callback: (instance: WorkspaceDO) => T | Promise<T>
+  callback: (instance: WorkspaceDO, ctx: DurableObjectState) => T | Promise<T>
 ): Promise<T> {
-  return runInDurableObject(stub, async (instance) => {
+  return runInDurableObject(stub, async (instance, ctx) => {
     await instance.setOrganizationId(WORKSPACE_ID);
-    return callback(instance);
+    return callback(instance, ctx);
   });
 }
 
@@ -414,6 +414,130 @@ describe("WorkspaceDO", () => {
         notes.filter((n) => n.type === "issue_assigned" && n.issueId === id)
       ).toHaveLength(1);
     }
+  });
+
+  it("still emails opted-in subscribers for every issue in a batch", async () => {
+    const stub = getStub();
+    const db = createD1(env.D1);
+    await db
+      .insert(userTable)
+      .values({
+        id: "user-3",
+        name: "Watcher",
+        email: "user-3@test.local",
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .onConflictDoNothing();
+    await db
+      .insert(userTable)
+      .values({
+        id: "user-2",
+        name: "Other",
+        email: "user-2@test.local",
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .onConflictDoNothing();
+    await db
+      .insert(member)
+      .values({
+        id: crypto.randomUUID(),
+        organizationId: WORKSPACE_ID,
+        userId: "user-2",
+        role: "member",
+        createdAt: new Date(),
+      })
+      .onConflictDoNothing();
+    const [first, second] = await withWorkspace(stub, async (instance, ctx) => {
+      const a = await instance.createIssue({ title: "Watch one" });
+      const b = await instance.createIssue({ title: "Watch two" });
+      // Subscriber fan-out resolves linear_ids → linear_users.email →
+      // global user. No DO method writes linear_users, so seed the row
+      // straight into DO storage.
+      ctx.storage.sql.exec(
+        "INSERT OR IGNORE INTO linear_users (id, organization_id, linear_id, name, email, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        "linrow-user-3",
+        WORKSPACE_ID,
+        "lin-user-3",
+        "Watcher",
+        "user-3@test.local",
+        new Date().toISOString()
+      );
+      for (const issueId of [a.id, b.id]) {
+        await instance.createIssueSubscriber({
+          issueId,
+          linearUserId: "lin-user-3",
+        });
+      }
+      // Explicit opt-in — issue_updated is not an email-by-default type.
+      await instance.upsertNotificationPreferences("user-3", {
+        email: true,
+      });
+      return [a, b];
+    });
+    sent.length = 0;
+    await withWorkspace(stub, (instance) =>
+      withEmail(() =>
+        instance.batchUpdateIssues(
+          [first.id, second.id],
+          { assigneeId: "user-2" },
+          "user-1"
+        )
+      )
+    );
+    // The new assignee still gets exactly one directed email.
+    expect(sent.filter((m) => m.to === "user-2@test.local")).toHaveLength(1);
+    // The opted-in subscriber hears about every issue — the batch email
+    // dedupe covers the directed assignee ping, not the broadcast.
+    expect(sent.filter((m) => m.to === "user-3@test.local")).toHaveLength(2);
+  });
+
+  it("drops the issue link in issue_deleted emails", async () => {
+    const stub = getStub();
+    const db = createD1(env.D1);
+    await db
+      .insert(userTable)
+      .values({
+        id: "user-2",
+        name: "Other",
+        email: "user-2@test.local",
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .onConflictDoNothing();
+    await db
+      .insert(member)
+      .values({
+        id: crypto.randomUUID(),
+        organizationId: WORKSPACE_ID,
+        userId: "user-2",
+        role: "member",
+        createdAt: new Date(),
+      })
+      .onConflictDoNothing();
+    const issue = await withWorkspace(stub, async (instance) => {
+      // issue_deleted isn't an email-by-default type — opt in explicitly.
+      await instance.upsertNotificationPreferences("user-2", { email: true });
+      return instance.createIssue(
+        { title: "Delete me", assigneeId: "user-2" },
+        "user-1"
+      );
+    });
+    sent.length = 0;
+    await withWorkspace(stub, (instance) =>
+      withEmail(() => instance.deleteIssue(issue.id, "user-1"))
+    );
+    expect(sent).toHaveLength(1);
+    expect(sent[0].to).toBe("user-2@test.local");
+    const body = mimeBodyText(sent[0].raw ?? "");
+    // The email keeps the title for context but no link — the issue is
+    // gone, so it would 404.
+    expect(body).toContain("Delete me");
+    expect(body).not.toContain("/issues/");
   });
 
   it("supports triage status and resolution semantics", async () => {

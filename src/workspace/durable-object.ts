@@ -925,10 +925,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   // Single notification path: preference-gated in-app row + email fanout.
   // `options.issue` lets callers that already loaded the subject pass it
   // through so the email path doesn't re-fetch; `options.email === false`
-  // suppresses only the email leg (batch updates still write in-app rows).
+  // suppresses only the email leg (batch updates still write in-app rows);
+  // `options.linkIssue === false` keeps the subject's title/identifier in
+  // the email but drops the link (issue_deleted — it would 404).
   private async deliverNotification(
     input: Omit<data.NotificationInput, "organizationId">,
-    options?: { email?: boolean; issue?: Issue }
+    options?: { email?: boolean; issue?: Issue; linkIssue?: boolean }
   ): Promise<void> {
     const prefs = data.getNotificationPreferences(
       this.db,
@@ -983,11 +985,16 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         } else {
           const issue = options?.issue ?? (await this.getIssue(input.issueId));
           if (issue) {
-            const link = `${this.env.PUBLIC_API_URL ?? this.env.BETTER_AUTH_URL}/${this.organizationId}/issues/${issue.identifier ?? issue.id}`;
+            // BETTER_AUTH_URL is the product origin — PUBLIC_API_URL is
+            // the agent-callback API origin and may not serve the UI.
+            const link =
+              options?.linkIssue === false
+                ? ""
+                : `${this.env.BETTER_AUTH_URL}/${this.organizationId}/issues/${issue.identifier ?? issue.id}\n`;
             subject = issue.identifier
               ? `Pile: ${issue.identifier} ${typeLabel}`
               : subject;
-            text = `${issue.identifier ? `${issue.identifier}: ` : ""}${issue.title}\n\n${text}${link}\n`;
+            text = `${issue.identifier ? `${issue.identifier}: ` : ""}${issue.title}\n\n${text}${link}`;
           }
         }
         await sendEmail(this.env, {
@@ -1007,7 +1014,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     type: data.NotificationType,
     actorId?: string,
     extraExcludeRecipientId?: string,
-    options?: { email?: boolean }
+    options?: { email?: boolean; linkIssue?: boolean }
   ): Promise<void> {
     const recipients = await this.resolveIssueRecipients(
       issue,
@@ -1023,7 +1030,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
             issueId: issue.id,
             type,
           },
-          { email: options?.email, issue }
+          { email: options?.email, issue, linkIssue: options?.linkIssue }
         );
       })
     );
@@ -4575,8 +4582,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     // notify:false suppresses the directed issue_assigned emit — bulk
     // importers run as member actors so the member check alone can't tell
     // a migration apart from a human assigning one issue. The generic
-    // broadcast still runs. email:false keeps every in-app row but skips
-    // the email leg — a multi-issue batch shouldn't send one email per id.
+    // broadcast still runs. email:false skips only the directed
+    // issue_assigned email — a multi-issue batch shouldn't ping the new
+    // assignee once per id, while opted-in subscribers still get their
+    // per-issue broadcast mail.
     options?: { notify?: boolean; email?: boolean }
   ): Promise<Issue | undefined> {
     await this.ready;
@@ -4873,12 +4882,14 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       newAssignee !== null &&
       !selfAssigned &&
       (await this.isMemberActor(actorId));
+    // options.email gates only the directed issue_assigned ping below —
+    // suppressing the broadcast too would silence subscribers who
+    // explicitly opted into email for every issue in a bulk edit.
     await this.notifyIssueEvent(
       issue,
       "issue_updated",
       actorId,
-      deliveredAssign ? (newAssignee ?? undefined) : undefined,
-      { email: options?.email }
+      deliveredAssign ? (newAssignee ?? undefined) : undefined
     );
     if (deliveredAssign && newAssignee) {
       await this.deliverNotification(
@@ -4963,9 +4974,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     acc: Issue[]
   ): Promise<Issue[]> {
     if (index >= ids.length) return acc;
-    // Only the first id may send notification email — a bulk assign to the
-    // same member pings them once, not once per issue. In-app rows and the
-    // broadcast are unaffected.
+    // Only the first id may send the directed issue_assigned email — a
+    // bulk assign to the same member pings them once, not once per issue.
+    // In-app rows and opted-in broadcast mail are unaffected.
     const issue = await this.updateIssue(
       ids[index],
       patch,
@@ -5082,7 +5093,11 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       organizationId: this.organizationId,
       issueId,
     });
-    await this.notifyIssueEvent(old, "issue_deleted", actorId);
+    // The subject is already gone — keep its title in the email but drop
+    // the issue link, which would 404.
+    await this.notifyIssueEvent(old, "issue_deleted", actorId, undefined, {
+      linkIssue: false,
+    });
     this.audit("issue.deleted", "issue", issueId, actorId, {
       title: { from: old.title, to: null },
     });
