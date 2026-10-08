@@ -189,6 +189,53 @@ describe("lane cache on follow-ups (PILE-306)", () => {
     );
   });
 
+  it("mounts for a live sandbox whose record lacks the org, using the caller's", async () => {
+    const live: ComputeSandbox = {
+      id: "sb-1",
+      name: "vortex-devin-sess1",
+      state: "started",
+    };
+    const backend = {
+      ...fakeBackend,
+      findSandbox: vi.fn(async () => live),
+      runnerBusy: vi.fn(async () => false),
+      mountCache: vi.fn(async () => "/mnt/pile-cache"),
+      startRunner: vi.fn(
+        async (
+          _s: ComputeSandbox,
+          _id: string,
+          _cmd: string,
+          _env?: Record<string, string>
+        ) => undefined
+      ),
+    };
+    const provider = new DevinCliAgentProvider(env());
+    const seam = provider as unknown as {
+      d: { compute: unknown };
+      followupPermissions: () => Promise<unknown>;
+      githubToken: () => Promise<unknown>;
+    };
+    seam.d.compute = backend;
+    vi.spyOn(seam, "followupPermissions").mockResolvedValue({
+      shell: "enabled",
+      push: "enabled",
+    });
+    vi.spyOn(seam, "githubToken").mockResolvedValue({ token: "ghs_test" });
+
+    await provider.sendPrompt("sess1", "again", followupIssue(), null, {
+      organizationId: "org-9",
+    });
+
+    expect(backend.mountCache).toHaveBeenCalledWith(live, {
+      organizationId: "org-9",
+      repo: "acme/widgets",
+      readOnly: false,
+    });
+    expect(backend.startRunner.mock.calls[0]?.[3]).toMatchObject({
+      PILE_CACHE_DIR: "/mnt/pile-cache",
+    });
+  });
+
   it("leaves PILE_CACHE_DIR unset when the mount is unavailable", async () => {
     const backend = {
       ...fakeBackend,

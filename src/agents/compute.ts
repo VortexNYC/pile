@@ -462,6 +462,7 @@ export type SandboxHandle = Pick<
   | "exec"
   | "tunnels"
   | "mountBucket"
+  | "unmountBucket"
 >;
 
 export const LANE_CACHE_MOUNT = "/mnt/pile-cache";
@@ -786,19 +787,32 @@ export class CloudflareBackend implements ComputeBackend {
       );
       // R2-binding mount: the Sandbox DO serves s3fs from the Worker binding,
       // so no bucket credential ever enters the container.
-      await ioTimeout(
-        handle.mountBucket("LANE_CACHE_BUCKET", LANE_CACHE_MOUNT, {
-          prefix: laneCachePrefix(opts.organizationId, opts.repo),
-          readOnly: opts.readOnly,
-        }),
-        "sandbox mountBucket"
-      );
+      const mount = () =>
+        ioTimeout(
+          handle.mountBucket("LANE_CACHE_BUCKET", LANE_CACHE_MOUNT, {
+            prefix: laneCachePrefix(opts.organizationId, opts.repo),
+            readOnly: opts.readOnly,
+          }),
+          "sandbox mountBucket"
+        );
+      try {
+        await mount();
+      } catch (err) {
+        if (!(err instanceof Error && err.message.includes("already in use"))) {
+          throw err;
+        }
+        // A live sandbox keeps its provision-time mount. Reuse it, but a lane
+        // whose permissions tightened since must not keep write access.
+        if (opts.readOnly) {
+          await ioTimeout(
+            handle.unmountBucket(LANE_CACHE_MOUNT),
+            "sandbox unmountBucket"
+          );
+          await mount();
+        }
+      }
       return LANE_CACHE_MOUNT;
     } catch (err) {
-      // A live sandbox keeps its provision-time mount; follow-ups reuse it.
-      if (err instanceof Error && err.message.includes("already in use")) {
-        return LANE_CACHE_MOUNT;
-      }
       console.warn("lane cache mount failed — using HTTP cache", err);
       return null;
     }
