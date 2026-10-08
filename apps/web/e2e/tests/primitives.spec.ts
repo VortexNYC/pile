@@ -42,10 +42,7 @@ test("customers: add, rename, delete", async ({ page, signedIn }) => {
   await expect(page.getByText("No customers yet")).toBeVisible();
 });
 
-test("support: open a ticket and add a note", async ({
-  page,
-  signedIn,
-}) => {
+test("support: open a ticket and add a note", async ({ page, signedIn }) => {
   await page.goto(`/app/${signedIn.slug}/tickets`);
   await page.getByRole("button", { name: "New ticket" }).click();
   await page

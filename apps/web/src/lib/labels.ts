@@ -127,6 +127,7 @@ const NOTIFICATION_LABELS: Record<string, string> = {
 
 export type NotificationTarget =
   | { kind: "issue"; id: string }
+  | { kind: "ticket"; id: string }
   | { kind: "document"; id: string };
 
 /**
@@ -146,6 +147,9 @@ export function notificationTarget(item: {
       : {};
   if (typeof meta.documentId === "string" && meta.documentId) {
     return { kind: "document", id: meta.documentId };
+  }
+  if (typeof meta.ticketId === "string" && meta.ticketId) {
+    return { kind: "ticket", id: meta.ticketId };
   }
   if (typeof meta.issueId === "string" && meta.issueId) {
     return { kind: "issue", id: meta.issueId };
