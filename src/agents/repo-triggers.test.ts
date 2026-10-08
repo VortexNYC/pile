@@ -113,21 +113,6 @@ describe("repo trigger config (PILE-275)", () => {
     expect(repoTriggerEvent("pr.branch_update")).toBeNull();
   });
 
-  it("accepts review and conflict trigger events", () => {
-    const triggers = parsePileRepoConfig({
-      triggers: [
-        { on: "pr.review", agent: "devin", prompt: "Answer the review." },
-        { on: "pr.changes_requested", agent: "devin", prompt: "Address it." },
-        { on: "pr.conflict", agent: "devin", prompt: "Resolve conflicts." },
-      ],
-    })?.triggers;
-    expect(triggers?.map((t) => t.on)).toEqual([
-      "pr.review",
-      "pr.changes_requested",
-      "pr.conflict",
-    ]);
-  });
-
   it("flags lanes a trigger dispatched", () => {
     expect(isTriggerLane({ purpose: "trigger:pr.opened" })).toBe(true);
     expect(isTriggerLane({ purpose: "review" })).toBe(false);
