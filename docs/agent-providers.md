@@ -662,14 +662,17 @@ triage, plan, mention, and future event-driven lanes:
 }
 ```
 
-| `on`             | fires when                                                                                                                                                                                                      |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `issue.created`  | A GitHub issue is opened in the repo (and mirrored into Pile).                                                                                                                                                  |
-| `pr.opened`      | A pull request is opened.                                                                                                                                                                                       |
-| `pr.synchronize` | New commits are pushed to a pull request.                                                                                                                                                                       |
-| `ci.failed`      | The sweep sees a lane PR's checks go red (`pr.ci_failed`).                                                                                                                                                      |
-| `mention`        | A comment on a mirrored issue or PR contains `handle` (default `@pile`). Only repo owners/members/collaborators and linked Pile users fire it; bots never do. Runs alongside the built-in `@pile` lane routing. |
-| `label.added`    | A label is added to a mirrored issue or a PR — only `label` when set, any label otherwise.                                                                                                                      |
+| `on`                   | fires when                                                                                                                                                                                                      |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `issue.created`        | A GitHub issue is opened in the repo (and mirrored into Pile).                                                                                                                                                  |
+| `pr.opened`            | A pull request is opened.                                                                                                                                                                                       |
+| `pr.synchronize`       | New commits are pushed to a pull request.                                                                                                                                                                       |
+| `ci.failed`            | The sweep sees a lane PR's checks go red (`pr.ci_failed`).                                                                                                                                                      |
+| `mention`              | A comment on a mirrored issue or PR contains `handle` (default `@pile`). Only repo owners/members/collaborators and linked Pile users fire it; bots never do. Runs alongside the built-in `@pile` lane routing. |
+| `label.added`          | A label is added to a mirrored issue or a PR — only `label` when set, any label otherwise.                                                                                                                      |
+| `pr.review`            | A review with a body (or a changes-requested verdict) lands on a lane PR.                                                                                                                                       |
+| `pr.changes_requested` | A review on a lane PR requests changes (`pr.review_changes`).                                                                                                                                                   |
+| `pr.conflict`          | The sweep sees a lane PR conflict with its base on non-generated files — once per conflicting head sha.                                                                                                         |
 
 Each matching trigger dispatches `agent` (subject to the `agents` allowlist)
 with `prompt` plus the event details as lane instructions; `model` falls back
@@ -681,6 +684,11 @@ processed by the same `fireEventAutomations` path as workspace event
 automations — which accept these event names as `triggerValue` too. Dispatch
 keeps the one-active-lane-per-issue guard, so an event on an issue whose lane
 is still running is skipped (logged).
+
+A lane a trigger dispatched never fires repo triggers from its own PR's
+`ci.failed`, `pr.review`, `pr.changes_requested` or `pr.conflict` — that
+would be a self-feed loop; the lane gets the fix prompt as a nudge instead.
+Workspace event automations still run.
 
 ### Lane lifecycle hooks
 

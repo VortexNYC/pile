@@ -17,6 +17,7 @@ import { registerAgentProvider } from "./index.js";
 import {
   automationEventTarget,
   fireRepoTriggers,
+  isTriggerLane,
   matchRepoTriggers,
   mentionsHandle,
   repoTriggerEvent,
@@ -106,7 +107,32 @@ describe("repo trigger config (PILE-275)", () => {
   it("maps internal event names onto trigger events", () => {
     expect(repoTriggerEvent("pr.ci_failed")).toBe("ci.failed");
     expect(repoTriggerEvent("pr.synchronize")).toBe("pr.synchronize");
-    expect(repoTriggerEvent("pr.conflict")).toBeNull();
+    expect(repoTriggerEvent("pr.review_changes")).toBe("pr.changes_requested");
+    expect(repoTriggerEvent("pr.review")).toBe("pr.review");
+    expect(repoTriggerEvent("pr.conflict")).toBe("pr.conflict");
+    expect(repoTriggerEvent("pr.branch_update")).toBeNull();
+  });
+
+  it("accepts review and conflict trigger events", () => {
+    const triggers = parsePileRepoConfig({
+      triggers: [
+        { on: "pr.review", agent: "devin", prompt: "Answer the review." },
+        { on: "pr.changes_requested", agent: "devin", prompt: "Address it." },
+        { on: "pr.conflict", agent: "devin", prompt: "Resolve conflicts." },
+      ],
+    })?.triggers;
+    expect(triggers?.map((t) => t.on)).toEqual([
+      "pr.review",
+      "pr.changes_requested",
+      "pr.conflict",
+    ]);
+  });
+
+  it("flags lanes a trigger dispatched", () => {
+    expect(isTriggerLane({ purpose: "trigger:pr.opened" })).toBe(true);
+    expect(isTriggerLane({ purpose: "review" })).toBe(false);
+    expect(isTriggerLane({ purpose: null })).toBe(false);
+    expect(isTriggerLane({})).toBe(false);
   });
 
   it("filters label and mention triggers on event facts", () => {
@@ -334,6 +360,67 @@ describe("fireRepoTriggers (PILE-275)", () => {
     expect(
       await stub().getIssue("repo:github:VortexNYC:pile-triggers:pr:77")
     ).toBeUndefined();
+  });
+});
+
+describe("review and conflict triggers (PILE-272)", () => {
+  const REVIEW_CONFIG: PileRepoConfig = {
+    triggers: [
+      {
+        on: "pr.changes_requested",
+        agent: "trigger-mock",
+        prompt: "Address the requested changes.",
+      },
+      { on: "pr.conflict", agent: "trigger-mock", prompt: "Resolve it." },
+    ],
+  };
+
+  it("routes pr.review_changes onto pr.changes_requested triggers", async () => {
+    const issue = await stub().createIssue({
+      title: "Changes requested",
+      repo: REPO,
+    });
+    await fireEventAutomations(
+      env as unknown as WorkerEnv,
+      stub(),
+      ORG,
+      "pr.review_changes",
+      automationEventTarget(async () => issue, REPO),
+      "reviewer requested changes",
+      undefined,
+      undefined,
+      { loadConfig: async () => REVIEW_CONFIG }
+    );
+    const sessions = await stub().listAgentSessions({ issueId: issue.id });
+    expect(sessions.map((s) => s.purpose)).toEqual([
+      "trigger:pr.changes_requested",
+    ]);
+  });
+
+  it("dispatches pr.conflict triggers unless the lane is trigger-spawned", async () => {
+    const issue = await stub().createIssue({
+      title: "Conflicting PR",
+      repo: REPO,
+    });
+    const fire = (skipRepoTriggers: boolean) =>
+      fireEventAutomations(
+        env as unknown as WorkerEnv,
+        stub(),
+        ORG,
+        "pr.conflict",
+        automationEventTarget(async () => issue, REPO),
+        "PR has merge conflicts",
+        undefined,
+        undefined,
+        { skipRepoTriggers, loadConfig: async () => REVIEW_CONFIG }
+      );
+    await fire(isTriggerLane({ purpose: "trigger:pr.opened" }));
+    expect(await stub().listAgentSessions({ issueId: issue.id })).toHaveLength(
+      0
+    );
+    await fire(isTriggerLane({ purpose: null }));
+    const sessions = await stub().listAgentSessions({ issueId: issue.id });
+    expect(sessions.map((s) => s.purpose)).toEqual(["trigger:pr.conflict"]);
   });
 });
 

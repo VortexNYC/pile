@@ -55,6 +55,9 @@ export const PILE_REPO_TRIGGER_EVENTS = [
   "ci.failed",
   "mention",
   "label.added",
+  "pr.review",
+  "pr.changes_requested",
+  "pr.conflict",
 ] as const;
 
 export type PileRepoTriggerEvent = (typeof PILE_REPO_TRIGGER_EVENTS)[number];
