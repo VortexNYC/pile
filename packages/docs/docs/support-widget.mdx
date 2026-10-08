@@ -1,0 +1,138 @@
+---
+title: Support widget
+description: Mount the Pile support widget in a platform product so signed-in users can open platform tickets without email.
+---
+
+# Support widget
+
+`chat.js` is the drop-in support widget: a launcher bubble and a chat panel (plus Ideas and News tabs) that a product mounts for its signed-in users. A message sent from it opens a **platform ticket** in the Pile workspace that owns the widget key. It is a report about the product itself; it is not attached to anything the user is doing with their own customers (documents, recipients, payments), and nobody outside the platform team sees it.
+
+The product never runs a support inbox, a `mailto:`, or its own embed. It needs three things: a widget key, one script tag, and a server-computed `identifierHash`.
+
+## 1. Mint a widget key
+
+Do this once per product and environment. The key belongs to the platform workspace, and `allowedOrigins` lists every origin the product is served from. Requests from any other browser origin are rejected with `401`.
+
+```bash
+pile support widget keys create \
+  --workspace org_vortex_main \
+  --name "Seal (production)" \
+  --allowed-origins '["https://seal.vortex.nyc"]' \
+  --greeting "Something broken in Seal? Tell us."
+```
+
+Or over HTTP:
+
+```bash
+curl -X POST "$PILE_BASE_URL/workspaces/$ORG/support/widget-keys" \
+  -H "Authorization: Bearer $PILE_API_KEY" -H "Content-Type: application/json" \
+  -d '{"name":"Seal (production)","allowedOrigins":["https://seal.vortex.nyc"]}'
+```
+
+The response contains:
+
+| field            | where it goes                                                                                        |
+| ---------------- | ---------------------------------------------------------------------------------------------------- |
+| `key` (`wgt_…`)  | Publishable. Put it in the page.                                                                     |
+| `hmacSecret`     | Server-only secret, e.g. `PILE_WIDGET_HMAC_SECRET`. Never send it to the browser.                    |
+| `allowedOrigins` | The origins the key works on. An empty list allows every origin, so always set it for a product key. |
+| `requireEmail`   | `false` by default. Signed-in users are identified by `externalId` and never asked for an email.     |
+
+To rotate or retire a key, list keys with `pile support widget keys list` and revoke one with `pile support widget keys delete --key-id …`. A revoked key returns `404` and the widget stays hidden.
+
+Keys are managed through the CLI, API, and MCP. There is no settings screen.
+
+## 2. Compute `identifierHash` on your server
+
+`identifierHash` is the hex HMAC-SHA256 of the signed-in user's stable id, keyed with `hmacSecret`. It proves that the product vouches for this user, so their tickets are attached to one verified contact on every browser and device.
+
+With the SDK:
+
+```ts
+import { widgetIdentifierHash } from "@vortex-api/pile";
+
+const identifierHash = await widgetIdentifierHash(
+  env.PILE_WIDGET_HMAC_SECRET,
+  user.id
+);
+```
+
+Without the SDK (Node):
+
+```ts
+import { createHmac } from "node:crypto";
+
+const identifierHash = createHmac(
+  "sha256",
+  process.env.PILE_WIDGET_HMAC_SECRET!
+)
+  .update(user.id)
+  .digest("hex");
+```
+
+Render `user.id` and `identifierHash` into the page (or return them from an authenticated endpoint). If a hash is wrong, the session still starts but is marked unverified.
+
+## 3. Mount it for signed-in users
+
+Render this only when a user is signed in:
+
+```html
+<script>
+  window.pileChatSettings = {
+    widget: "wgt_…",
+    externalId: "{{ user.id }}",
+    identifierHash: "{{ identifierHash }}",
+    name: "{{ user.name }}",
+  };
+</script>
+<script src="https://pile.nyc/chat.js" async></script>
+```
+
+You can also pass the same settings as `data-pile-*` attributes on the script tag (`data-pile-widget`, `data-pile-external-id`, `data-pile-identifier-hash`, `data-pile-name`, `data-pile-email`). When both are present, `window.pileChatSettings` wins.
+
+| setting                                                                         | meaning                                                            |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `widget`                                                                        | Required `wgt_` key.                                               |
+| `externalId` / `identifierHash`                                                 | Verified identity of the signed-in user.                           |
+| `name`, `email`                                                                 | Optional display details. Email is not required.                   |
+| `endpoint`                                                                      | Pile API origin. Defaults to the origin `chat.js` was loaded from. |
+| `greeting`, `brandColor`, `theme` (`light` \| `dark` \| `auto`), `hideLauncher` | Presentation.                                                      |
+
+### Single-page apps
+
+`window.PileChat(cmd, arg)` controls the widget after it loads. If your app calls it before the script finishes loading, define a queue stub first. Queued calls run once the widget boots:
+
+```html
+<script>
+  window.PileChat =
+    window.PileChat ||
+    function () {
+      (window.PileChat.q = window.PileChat.q || []).push(arguments);
+    };
+</script>
+```
+
+| command                     | use                                                                                                                                                                                                                                                                                            |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `open` / `close` / `toggle` | Show or hide the panel, e.g. from your own "Report a problem" menu item (pair with `hideLauncher: true`).                                                                                                                                                                                      |
+| `setUser`                   | `PileChat("setUser", { externalId, identifierHash, name })` after an in-app sign-in or account switch. Re-identifies the session. A different user gets a fresh thread, and nothing from the previous user (session, hash, name, email) carries over. Also re-shows the widget after `logout`. |
+| `logout`                    | Call on sign-out. Forgets the stored session, clears the thread, and hides the widget until the next `setUser`. No page reload needed.                                                                                                                                                         |
+| `destroy`                   | Removes the widget but keeps the stored session.                                                                                                                                                                                                                                               |
+
+The widget fires a `pile:chat-ready` event on `document` once its session is up.
+
+The server enforces the same rules if `logout` is missed. A stored session is never resumed for a different `externalId`, for a signed-out visitor, or (for email-only installs) for a different email, so one person can never see another person's thread on a shared browser. A returning verified user (valid `identifierHash`) gets their own earlier session and ticket back.
+
+### Content-Security-Policy
+
+If the product sends a CSP, allow the Pile origin:
+
+```
+script-src https://pile.nyc; connect-src https://pile.nyc
+```
+
+The inline `window.pileChatSettings` block is itself a script. Under a strict `script-src` it is blocked unless it carries your page's nonce (`<script nonce="…">`), and without it the widget silently does nothing because it never sees a key. To avoid inline script entirely, use the `data-pile-*` attributes on the `chat.js` tag instead; that form needs only the policy above.
+
+## Where tickets land
+
+The first message from a session creates a support ticket (`sourceChannel: "chat"`) in the key's workspace inbox, attached to the verified contact for `externalId`. Platform staff reply from the Pile inbox, CLI, or MCP. The widget polls for replies and shows an unread badge. Later messages in the same session append to the same ticket.

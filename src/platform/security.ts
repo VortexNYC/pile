@@ -101,7 +101,7 @@ export const corsMiddleware = createMiddleware<AppContext>(async (c, next) => {
     );
     c.header(
       "Access-Control-Allow-Headers",
-      "Authorization, Content-Type, X-Requested-With"
+      "Authorization, Content-Type, X-Requested-With, X-Pile-Widget-Session"
     );
     c.header("Access-Control-Allow-Credentials", "true");
     c.header("Access-Control-Max-Age", "86400");
@@ -138,7 +138,19 @@ export const csrfMiddleware = createMiddleware<AppContext>(async (c, next) => {
   await next();
 });
 
+// Embed bundles are loaded by <script> tags on customer origins, so they must
+// opt out of the same-origin CORP default that secureHeaders applies.
+const EMBED_SCRIPT_PATHS = new Set(["/chat.js", "/capture.js"]);
+
+const embedScriptMiddleware = createMiddleware<AppContext>(async (c, next) => {
+  await next();
+  if (EMBED_SCRIPT_PATHS.has(c.req.path)) {
+    c.res.headers.set("Cross-Origin-Resource-Policy", "cross-origin");
+  }
+});
+
 export const securityMiddleware = [
+  embedScriptMiddleware,
   secureHeaders(),
   corsMiddleware,
   csrfMiddleware,

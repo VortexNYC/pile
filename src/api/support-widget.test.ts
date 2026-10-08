@@ -564,4 +564,249 @@ describe("support widget", () => {
       .parse(await changelog.json());
     expect(changelogBody.entries.map((en) => en.title)).toContain("v1 shipped");
   });
+
+  it("serves chat.js loadable from other origins", async () => {
+    const res = await widgetFetch("/chat.js");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cross-origin-resource-policy")).toBe(
+      "cross-origin"
+    );
+    const api = await widgetFetch("/health");
+    expect(api.headers.get("cross-origin-resource-policy")).toBe("same-origin");
+  });
+
+  it("mounts on a platform product origin: signed-in user opens a ticket without email", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const seal = "https://seal.vortex.nyc";
+    const key = await createKey(organizationId, token, {
+      name: "Seal",
+      allowedOrigins: [seal],
+    });
+    expect(key.requireEmail).toBe(false);
+
+    // Browser preflight for the session-scoped calls carries the custom
+    // x-pile-widget-session header.
+    const preflight = await widgetFetch(`/support/widget/${key.key}/messages`, {
+      method: "OPTIONS",
+      headers: {
+        origin: seal,
+        "access-control-request-method": "POST",
+        "access-control-request-headers": "content-type,x-pile-widget-session",
+      },
+    });
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers.get("access-control-allow-origin")).toBe(seal);
+    expect(
+      preflight.headers.get("access-control-allow-headers")?.toLowerCase()
+    ).toContain("x-pile-widget-session");
+
+    const identifierHash = await hmacSha256Hex(key.hmacSecret, "seal_user_7");
+    const sessionRes = await widgetFetch(`/support/widget/${key.key}/session`, {
+      method: "POST",
+      headers: { origin: seal, "content-type": "application/json" },
+      body: JSON.stringify({ externalId: "seal_user_7", identifierHash }),
+    });
+    expect(sessionRes.status).toBe(200);
+    expect(sessionRes.headers.get("access-control-allow-origin")).toBe(seal);
+    const session = sessionSchema.parse(await sessionRes.json());
+    expect(session.identityVerified).toBe(true);
+
+    const sealHeaders = {
+      origin: seal,
+      "content-type": "application/json",
+      "x-pile-widget-session": session.sessionToken,
+    };
+    const sent = await widgetFetch(`/support/widget/${key.key}/messages`, {
+      method: "POST",
+      headers: sealHeaders,
+      body: JSON.stringify({ text: "Signing is stuck on the review step" }),
+    });
+    expect(sent.status).toBe(200);
+    const { ticketId } = z
+      .object({ ticketId: z.string() })
+      .parse(await sent.json());
+
+    const db = createD1(env.D1);
+    const [contact] = await db
+      .select()
+      .from(supportCustomers)
+      .where(eq(supportCustomers.externalId, "seal_user_7"));
+    expect(contact.email).toBe("widget-seal_user_7@widget.pile");
+
+    const thread = await widgetFetch(`/support/widget/${key.key}/messages`, {
+      headers: sealHeaders,
+    });
+    expect(thread.status).toBe(200);
+
+    const inbox = await widgetFetch(
+      `/workspaces/${organizationId}/support/tickets/${ticketId}`,
+      { headers: { authorization: `Bearer ${token}` } }
+    );
+    expect(inbox.status).toBe(200);
+
+    // Any other origin is refused.
+    const foreign = await widgetFetch(`/support/widget/${key.key}/session`, {
+      method: "POST",
+      headers: {
+        origin: "https://evil.example",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({}),
+    });
+    expect(foreign.status).toBe(401);
+  });
+
+  it("does not resume another signed-in user's session from a shared browser", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const key = await createKey(organizationId, token);
+    const hashA = await hmacSha256Hex(key.hmacSecret, "user_a");
+    const hashB = await hmacSha256Hex(key.hmacSecret, "user_b");
+
+    const { data: a } = await startSession(key.key, {
+      externalId: "user_a",
+      identifierHash: hashA,
+    });
+    const sent = await widgetFetch(`/support/widget/${key.key}/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-pile-widget-session": a!.sessionToken,
+      },
+      body: JSON.stringify({ text: "User A private thread" }),
+    });
+    expect(sent.status).toBe(200);
+
+    // Same user resumes the same session.
+    const { data: again } = await startSession(key.key, {
+      sessionToken: a!.sessionToken,
+      externalId: "user_a",
+      identifierHash: hashA,
+    });
+    expect(again!.sessionToken).toBe(a!.sessionToken);
+    expect(again!.ticketId).not.toBeNull();
+
+    // User B signs in on the same browser with A's stored token.
+    const { data: b } = await startSession(key.key, {
+      sessionToken: a!.sessionToken,
+      externalId: "user_b",
+      identifierHash: hashB,
+    });
+    expect(b!.sessionToken).not.toBe(a!.sessionToken);
+    expect(b!.ticketId).toBeNull();
+    expect(b!.identityVerified).toBe(true);
+
+    // Signed out: the stored token no longer opens A's thread either.
+    const { data: anon } = await startSession(key.key, {
+      sessionToken: a!.sessionToken,
+    });
+    expect(anon!.sessionToken).not.toBe(a!.sessionToken);
+    expect(anon!.ticketId).toBeNull();
+
+    // A signs back in on the browser that now stores B's token: A gets their
+    // own session and ticket back, and B's session is untouched.
+    const { data: aBack } = await startSession(key.key, {
+      sessionToken: b!.sessionToken,
+      externalId: "user_a",
+      identifierHash: hashA,
+    });
+    expect(aBack!.sessionToken).toBe(a!.sessionToken);
+    expect(aBack!.ticketId).toBe(again!.ticketId);
+
+    // Without a valid hash, claiming A's externalId does not recover A's thread.
+    const { data: forged } = await startSession(key.key, {
+      externalId: "user_a",
+      identifierHash: hashB,
+    });
+    expect(forged!.sessionToken).not.toBe(a!.sessionToken);
+    expect(forged!.ticketId).toBeNull();
+    expect(forged!.identityVerified).toBe(false);
+  });
+
+  it("does not resume an email-claimed session for a different person", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const key = await createKey(organizationId, token);
+
+    const { data: a } = await startSession(key.key, {
+      email: "ada@example.com",
+    });
+    const sent = await widgetFetch(`/support/widget/${key.key}/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-pile-widget-session": a!.sessionToken,
+      },
+      body: JSON.stringify({ text: "Ada's private thread" }),
+    });
+    expect(sent.status).toBe(200);
+
+    // Same email (any case) resumes.
+    const { data: again } = await startSession(key.key, {
+      sessionToken: a!.sessionToken,
+      email: "Ada@Example.com",
+    });
+    expect(again!.sessionToken).toBe(a!.sessionToken);
+    expect(again!.ticketId).not.toBeNull();
+
+    // A different email, or a signed-in user, gets a fresh session.
+    const { data: other } = await startSession(key.key, {
+      sessionToken: a!.sessionToken,
+      email: "bob@example.com",
+    });
+    expect(other!.sessionToken).not.toBe(a!.sessionToken);
+    expect(other!.ticketId).toBeNull();
+
+    const hash = await hmacSha256Hex(key.hmacSecret, "user_b");
+    const { data: signedIn } = await startSession(key.key, {
+      sessionToken: a!.sessionToken,
+      externalId: "user_b",
+      identifierHash: hash,
+    });
+    expect(signedIn!.sessionToken).not.toBe(a!.sessionToken);
+    expect(signedIn!.ticketId).toBeNull();
+  });
+
+  it("upgrades an anonymous session in place when the visitor signs in", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const key = await createKey(organizationId, token);
+    const { data: anon } = await startSession(key.key);
+    const sent = await widgetFetch(`/support/widget/${key.key}/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-pile-widget-session": anon!.sessionToken,
+      },
+      body: JSON.stringify({ text: "Before signing in" }),
+    });
+    expect(sent.status).toBe(200);
+    const hash = await hmacSha256Hex(key.hmacSecret, "user_late");
+    const { data: signedIn } = await startSession(key.key, {
+      sessionToken: anon!.sessionToken,
+      externalId: "user_late",
+      identifierHash: hash,
+    });
+    expect(signedIn!.sessionToken).toBe(anon!.sessionToken);
+    expect(signedIn!.ticketId).not.toBeNull();
+    expect(signedIn!.identityVerified).toBe(true);
+  });
+
+  it("still upgrades an anonymous session that later supplies an email", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const key = await createKey(organizationId, token);
+    const { data: anon } = await startSession(key.key);
+    const sent = await widgetFetch(`/support/widget/${key.key}/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-pile-widget-session": anon!.sessionToken,
+      },
+      body: JSON.stringify({ text: "Anonymous first" }),
+    });
+    expect(sent.status).toBe(200);
+    const { data: upgraded } = await startSession(key.key, {
+      sessionToken: anon!.sessionToken,
+      email: "late@example.com",
+    });
+    expect(upgraded!.sessionToken).toBe(anon!.sessionToken);
+    expect(upgraded!.ticketId).not.toBeNull();
+  });
 });

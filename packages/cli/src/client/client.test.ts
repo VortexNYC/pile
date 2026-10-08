@@ -6,6 +6,7 @@ import {
   PileRequestError,
   toPileError,
   unwrap,
+  widgetIdentifierHash,
 } from "./index.js";
 
 type FetchFn = (request: Request) => Promise<Response>;
@@ -284,5 +285,14 @@ describe("typed errors", () => {
     await expect(unwrap(client.GET("/workspaces", {}))).resolves.toEqual({
       workspaces: [],
     });
+  });
+
+  it("computes the widget identifierHash as hex HMAC-SHA256", async () => {
+    // RFC 4231 test case 2.
+    await expect(
+      widgetIdentifierHash("Jefe", "what do ya want for nothing?")
+    ).resolves.toBe(
+      "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843"
+    );
   });
 });

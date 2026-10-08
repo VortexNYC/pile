@@ -10,8 +10,11 @@
  *   greeting, brandColor, theme (light|dark|auto), hideLauncher
  *
  * window.PileChat(cmd, arg): 'open' | 'close' | 'toggle' | 'setUser' |
- * 'destroy'. If a stub queued calls on window.PileChat.q before the bundle
- * loaded, they are flushed after boot.
+ * 'logout' | 'destroy'. 'setUser' re-identifies the session (pass
+ * identifierHash for a verified user); 'logout' forgets the stored session
+ * and hides the widget until the next 'setUser'.
+ * If a stub queued calls on window.PileChat.q before the bundle loaded, they
+ * are flushed after boot.
  */
 
 type WidgetSettings = {
@@ -104,6 +107,11 @@ function boot(settings: WidgetSettings): void {
   let email = settings.email;
   let name = settings.name;
   let pollTimer = 0;
+  let destroyed = false;
+  let loggedOut = false;
+  // Bumped whenever the signed-in identity changes; responses that started
+  // under an older generation belong to the previous user and are dropped.
+  let generation = 0;
 
   const host = document.createElement("div");
   host.id = "pile-chat";
@@ -262,6 +270,7 @@ function boot(settings: WidgetSettings): void {
   }
 
   async function startSession(): Promise<void> {
+    const gen = generation;
     const data = (await api(`/support/widget/${key}/session`, {
       method: "POST",
       body: JSON.stringify({
@@ -272,6 +281,7 @@ function boot(settings: WidgetSettings): void {
         identifierHash: settings.identifierHash,
       }),
     })) as unknown as SessionResponse;
+    if (gen !== generation) return;
     sessionToken = data.sessionToken;
     localStorage.setItem(storageKey, sessionToken);
     requireEmail = data.config.requireEmail;
@@ -289,12 +299,22 @@ function boot(settings: WidgetSettings): void {
     if (requireEmail && !email) emailGate.style.display = "flex";
   }
 
-  async function poll(): Promise<void> {
-    if (!sessionToken) return;
+  // Each (re)start bumps pollChain; an older chain stops at its next step, so
+  // restarting never leaves two loops running.
+  let pollChain = 0;
+  function restartPoll(): void {
+    clearTimeout(pollTimer);
+    void poll(++pollChain);
+  }
+
+  async function poll(chain: number): Promise<void> {
+    if (!sessionToken || destroyed || chain !== pollChain) return;
+    const gen = generation;
     try {
       const data = (await api(
         `/support/widget/${key}/messages${lastSeen ? `?after=${encodeURIComponent(lastSeen)}` : ""}`
       )) as { messages: WidgetMessage[] };
+      if (gen !== generation || chain !== pollChain) return;
       let unread = 0;
       for (const m of data.messages) {
         if (m.createdAt > lastSeen) {
@@ -307,7 +327,11 @@ function boot(settings: WidgetSettings): void {
     } catch {
       // transient — next poll retries
     }
-    pollTimer = window.setTimeout(poll, open ? POLL_OPEN_MS : POLL_CLOSED_MS);
+    if (destroyed || gen !== generation || chain !== pollChain) return;
+    pollTimer = window.setTimeout(
+      () => void poll(chain),
+      open ? POLL_OPEN_MS : POLL_CLOSED_MS
+    );
   }
 
   async function send(): Promise<void> {
@@ -319,6 +343,7 @@ function boot(settings: WidgetSettings): void {
       return;
     }
     textInput.value = "";
+    const gen = generation;
     try {
       const sent = (await api(`/support/widget/${key}/messages`, {
         method: "POST",
@@ -329,6 +354,7 @@ function boot(settings: WidgetSettings): void {
           externalId: crypto.randomUUID(),
         }),
       })) as { createdAt?: string };
+      if (gen !== generation) return;
       addMsg("inbound", text);
       // Advance the poll cursor past the message we just rendered so the next
       // poll doesn't fetch (and re-render) our own send.
@@ -515,9 +541,26 @@ function boot(settings: WidgetSettings): void {
     textInput.focus();
   });
 
+  // Forget the current user's session: token, stored copy, thread, and any
+  // in-flight poll. The next startSession() begins a fresh one.
+  function resetSession(): void {
+    generation++;
+    clearTimeout(pollTimer);
+    sessionToken = undefined;
+    localStorage.removeItem(storageKey);
+    msgs.replaceChildren();
+    lastSeen = "";
+    identified = false;
+    ideasLoaded = false;
+    setBadge(0);
+  }
+
   const g = globalThis as { PileChat?: PileChatFn };
   const queued = g.PileChat?.q ?? [];
   g.PileChat = ((cmd: string, arg?: unknown) => {
+    // A destroyed widget is gone for good; ignore stray calls so nothing
+    // re-creates a session or writes localStorage.
+    if (destroyed) return;
     switch (cmd) {
       case "open":
         setOpen(true);
@@ -529,13 +572,63 @@ function boot(settings: WidgetSettings): void {
         setOpen(!open);
         break;
       case "setUser": {
-        const u = arg as { email?: string; name?: string; externalId?: string };
-        email = u?.email ?? email;
-        name = u?.name ?? name;
-        if (u?.externalId) settings.externalId = u.externalId;
+        const u = arg as {
+          email?: string;
+          name?: string;
+          externalId?: string;
+          identifierHash?: string;
+        };
+        const prevEmail = email?.toLowerCase();
+        const nextEmail = u?.email?.toLowerCase();
+        const switched =
+          loggedOut ||
+          (u?.externalId != null && u.externalId !== settings.externalId) ||
+          (u?.externalId == null &&
+            settings.externalId == null &&
+            prevEmail != null &&
+            nextEmail != null &&
+            nextEmail !== prevEmail);
+        // An anonymous visitor signing in keeps their token so the server
+        // upgrades that session (and its ticket) in place.
+        const wasBound = settings.externalId != null || email != null;
+        if (switched) {
+          // A different person: nothing from the previous identity —
+          // token, thread, hash, or contact details — carries over.
+          if (wasBound) resetSession();
+          settings.externalId = u?.externalId;
+          settings.identifierHash = u?.identifierHash;
+          email = u?.email;
+          name = u?.name;
+        } else {
+          email = u?.email ?? email;
+          name = u?.name ?? name;
+          if (u?.externalId) settings.externalId = u.externalId;
+          if (u?.identifierHash) settings.identifierHash = u.identifierHash;
+        }
+        if (loggedOut) {
+          loggedOut = false;
+          host.style.display = "";
+        }
+        void startSession()
+          .then(restartPoll)
+          .catch(() => {
+            // network — the next setUser or reload retries
+          });
         break;
       }
+      case "logout":
+        // Signed out: forget the session and hide until the next setUser.
+        resetSession();
+        settings.externalId = undefined;
+        settings.identifierHash = undefined;
+        email = undefined;
+        name = undefined;
+        setOpen(false);
+        host.style.display = "none";
+        loggedOut = true;
+        break;
       case "destroy":
+        destroyed = true;
         clearTimeout(pollTimer);
         host.remove();
         break;
@@ -544,7 +637,7 @@ function boot(settings: WidgetSettings): void {
 
   void startSession()
     .then(() => {
-      poll();
+      restartPoll();
       for (const call of queued) {
         const [cmd, arg] = call as [string, unknown?];
         g.PileChat?.(cmd, arg);

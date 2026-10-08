@@ -76,6 +76,7 @@ import { getWorkspaceMembership } from "../global/workspaces.js";
 import { getWorkspaceById } from "../global/workspaces.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkerEnv } from "../platform/middleware.js";
+import { createPhaseTimer, logSlowPhases } from "../platform/phase-timer.js";
 import { notifySlack } from "../slack/bot.js";
 import type { AppEnv } from "../types/env.js";
 import {
@@ -148,6 +149,9 @@ import { deliverWebhooks, retryWebhookDeliveries } from "./webhooks.js";
 type IssueKey = keyof Issue & keyof IssuePatch;
 
 const TERMINAL_STATUSES: ReadonlyArray<IssueStatus> = ["done", "canceled"];
+
+// PATCHes slower than this log a per-phase breakdown (issue.update.slow).
+const SLOW_ISSUE_UPDATE_MS = 500;
 
 /** Canonical prState → issue status mapping shared by every prState writer
  *  (webhooks, reconcile, PATCH). */
@@ -237,6 +241,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   private organizationId: string;
   private readonly ready: Promise<void>;
   private searchIndex: WorkspaceSearchIndex | null = null;
+  private searchIndexBuild: Promise<WorkspaceSearchIndex> | null = null;
   private readonly db = drizzle(this.ctx.storage, {
     schema: workspaceSchema,
   });
@@ -502,9 +507,30 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     await migrate(this.db, workspaceMigrations);
   }
 
-  private async ensureSearchIndex() {
+  private async ensureSearchIndex(): Promise<WorkspaceSearchIndex> {
     if (this.searchIndex) return this.searchIndex;
+    this.searchIndexBuild ??= this.buildSearchIndex().finally(() => {
+      this.searchIndexBuild = null;
+    });
+    return this.searchIndexBuild;
+  }
 
+  // Write paths keep a built index current but never pay for the cold
+  // build (seconds on a mature workspace) — the build reads current rows,
+  // so it picks this write up on its own. A build already in flight may
+  // have read the pre-write row, so that case waits and applies; if that
+  // build fails, the next one reads this write from storage.
+  private async syncSearchIndex(
+    apply: (index: WorkspaceSearchIndex) => Promise<void>
+  ): Promise<void> {
+    const index =
+      this.searchIndex ??
+      (await this.searchIndexBuild?.catch(() => null)) ??
+      null;
+    if (index) await apply(index);
+  }
+
+  private async buildSearchIndex(): Promise<WorkspaceSearchIndex> {
     const index = await createWorkspaceSearchIndex();
     const [issues, commentRows, documentRows] = await Promise.all([
       this.db.select().from(workspaceIssues).all(),
@@ -804,50 +830,24 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   // Recipients live partly in the registry (memberships, GitHub/user
   // mappings) and partly in workspace tables (subscribers, linear_users).
+  // `assigneeUserId` lets a caller that already resolved issue.assigneeId
+  // skip the repeat lookup.
   private async resolveIssueRecipients(
     issue: { id: string; assigneeId: string | null },
     excludeRecipientId?: string,
-    extraExcludeRecipientId?: string
+    extraExcludeRecipientId?: string,
+    assigneeUserId?: string | null
   ): Promise<string[]> {
-    const recipients = new Set<string>();
-    const d1 = createD1(this.env.D1);
-
-    const assigneeUserId = await this.resolveAssigneeUserId(issue.assigneeId);
-    if (assigneeUserId) {
-      recipients.add(assigneeUserId);
+    const [assignee, subscriberUserIds] = await Promise.all([
+      assigneeUserId !== undefined
+        ? assigneeUserId
+        : this.resolveAssigneeUserId(issue.assigneeId),
+      this.resolveSubscriberUserIds(issue.id),
+    ]);
+    const recipients = new Set<string>(subscriberUserIds);
+    if (assignee) {
+      recipients.add(assignee);
     }
-
-    const subscribers = await this.db
-      .select({ linearUserId: workspaceIssueSubscribers.linearUserId })
-      .from(workspaceIssueSubscribers)
-      .where(eq(workspaceIssueSubscribers.issueId, issue.id))
-      .all();
-
-    if (subscribers.length > 0) {
-      const linearIds = subscribers.map((sub) => sub.linearUserId);
-      const linearRows = await this.db
-        .select({ email: workspaceLinearUsers.email })
-        .from(workspaceLinearUsers)
-        .where(inArray(workspaceLinearUsers.linearId, linearIds))
-        .all();
-      const emails = linearRows
-        .map((row) => row.email)
-        .filter(
-          (email): email is string =>
-            typeof email === "string" && email.length > 0
-        );
-      if (emails.length > 0) {
-        const matchedUsers = await d1
-          .select({ id: globalUser.id })
-          .from(globalUser)
-          .where(inArray(globalUser.email, emails))
-          .all();
-        for (const matchedUser of matchedUsers) {
-          recipients.add(matchedUser.id);
-        }
-      }
-    }
-
     if (excludeRecipientId) {
       recipients.delete(excludeRecipientId);
     }
@@ -855,6 +855,34 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       recipients.delete(extraExcludeRecipientId);
     }
     return [...recipients];
+  }
+
+  private async resolveSubscriberUserIds(issueId: string): Promise<string[]> {
+    const subscribers = await this.db
+      .select({ linearUserId: workspaceIssueSubscribers.linearUserId })
+      .from(workspaceIssueSubscribers)
+      .where(eq(workspaceIssueSubscribers.issueId, issueId))
+      .all();
+    if (subscribers.length === 0) return [];
+    const linearIds = subscribers.map((sub) => sub.linearUserId);
+    const linearRows = await this.db
+      .select({ email: workspaceLinearUsers.email })
+      .from(workspaceLinearUsers)
+      .where(inArray(workspaceLinearUsers.linearId, linearIds))
+      .all();
+    const emails = linearRows
+      .map((row) => row.email)
+      .filter(
+        (email): email is string =>
+          typeof email === "string" && email.length > 0
+      );
+    if (emails.length === 0) return [];
+    const matchedUsers = await createD1(this.env.D1)
+      .select({ id: globalUser.id })
+      .from(globalUser)
+      .where(inArray(globalUser.email, emails))
+      .all();
+    return matchedUsers.map((matchedUser) => matchedUser.id);
   }
 
   // Webhook syncs write with machine actors ("gitlab"/"github"/
@@ -881,29 +909,33 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (!assigneeId) return null;
     const d1 = createD1(this.env.D1);
     const org = this.organizationId;
-    const membership = await getWorkspaceMembership(d1, org, assigneeId);
+    // The candidate lookups are independent — run them in one round trip
+    // and keep the original precedence (member → GitHub → Linear).
+    const [membership, github, linear] = await Promise.all([
+      getWorkspaceMembership(d1, org, assigneeId),
+      d1
+        .select({ userId: githubUsers.userId })
+        .from(githubUsers)
+        .where(
+          and(
+            eq(githubUsers.organizationId, org),
+            eq(githubUsers.githubLogin, assigneeId)
+          )
+        )
+        .get(),
+      this.db
+        .select({ email: workspaceLinearUsers.email })
+        .from(workspaceLinearUsers)
+        .where(
+          and(
+            eq(workspaceLinearUsers.organizationId, org),
+            eq(workspaceLinearUsers.linearId, assigneeId)
+          )
+        )
+        .get(),
+    ]);
     if (membership) return assigneeId;
-    const github = await d1
-      .select({ userId: githubUsers.userId })
-      .from(githubUsers)
-      .where(
-        and(
-          eq(githubUsers.organizationId, org),
-          eq(githubUsers.githubLogin, assigneeId)
-        )
-      )
-      .get();
     if (github) return github.userId;
-    const linear = await this.db
-      .select({ email: workspaceLinearUsers.email })
-      .from(workspaceLinearUsers)
-      .where(
-        and(
-          eq(workspaceLinearUsers.organizationId, org),
-          eq(workspaceLinearUsers.linearId, assigneeId)
-        )
-      )
-      .get();
     if (!linear?.email) return null;
     const matchedUser = await d1
       .select({ id: globalUser.id })
@@ -1062,12 +1094,14 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     type: data.NotificationType,
     actorId?: string,
     extraExcludeRecipientId?: string,
+    assigneeUserId?: string | null,
     options?: { email?: boolean; linkIssue?: boolean }
   ): Promise<void> {
     const recipients = await this.resolveIssueRecipients(
       issue,
       actorId,
-      extraExcludeRecipientId
+      extraExcludeRecipientId,
+      assigneeUserId
     );
     await Promise.all(
       recipients.map(async (recipientId) => {
@@ -3349,7 +3383,16 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           });
         }
         if (updatedIssue.status !== issue.status) {
-          await this.applyStatusAutomation(updatedIssue, issue, actorId);
+          await this.applyStatusAutomation(
+            updatedIssue,
+            issue,
+            await getTeamById(
+              createD1(this.env.D1),
+              updatedIssue.teamId,
+              this.organizationId
+            ),
+            actorId
+          );
         }
       }
 
@@ -3973,8 +4016,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       throw new Error("Failed to create issue");
     }
 
-    const index = await this.ensureSearchIndex();
-    await indexIssueDocument(index, issue);
+    await this.syncSearchIndex((index) => indexIssueDocument(index, issue));
 
     await this.emit({
       type: "issue.created",
@@ -4498,8 +4540,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   async indexComment(comment: CommentForSearch) {
     await this.ready;
-    const index = await this.ensureSearchIndex();
-    await indexCommentDocument(index, comment);
+    await this.syncSearchIndex((index) => indexCommentDocument(index, comment));
   }
 
   async listIssues(args: ListIssuesArgs = {}): Promise<Issue[]> {
@@ -4639,6 +4680,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     options?: { notify?: boolean; email?: boolean; batchSize?: number }
   ): Promise<Issue | undefined> {
     await this.ready;
+    const timer = createPhaseTimer();
     const old = await this.getIssue(id);
     if (!old) return undefined;
 
@@ -4847,6 +4889,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (Object.keys(set).length === 1 && "updatedAt" in set) {
       return old;
     }
+    timer.mark("validate");
 
     const issue = await this.db
       .update(workspaceIssues)
@@ -4890,9 +4933,18 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (historyEntries.length > 0) {
       await this.recordIssueHistory(issue.id, historyEntries, actorId);
     }
+    timer.mark("write");
 
-    const index = await this.ensureSearchIndex();
-    await indexIssueDocument(index, issue);
+    // Status automation needs the team row; start the D1 read now so it
+    // overlaps the notify fan-out instead of queueing behind it.
+    const statusChanged = issue.status !== old.status;
+    const automationTeam = statusChanged
+      ? getTeamById(createD1(this.env.D1), issue.teamId, this.organizationId)
+      : undefined;
+    void automationTeam?.catch(() => {});
+
+    await this.syncSearchIndex((index) => indexIssueDocument(index, issue));
+    timer.mark("search");
 
     await this.emit({
       type: "issue.updated",
@@ -4919,19 +4971,28 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     // actually fires: machine actors (webhook syncs) and notify:false
     // writes leave the assignee in the broadcast instead of silent.
     // lane:* assignees are agents.
+    // The assignee is resolved once and reused by the recipients fan-out;
+    // the actor's membership is only needed for a human assignee change,
+    // and is fetched alongside it rather than after.
+    timer.mark("emit");
     const assigneeChanged = issue.assigneeId !== old.assigneeId;
-    const newAssignee =
+    const humanAssigneeChanged =
       assigneeChanged &&
-      issue.assigneeId &&
-      !issue.assigneeId.startsWith("lane:")
-        ? await this.resolveAssigneeUserId(issue.assigneeId)
-        : null;
+      Boolean(issue.assigneeId) &&
+      !issue.assigneeId?.startsWith("lane:");
+    const [assigneeUserId, actorIsMember] = await Promise.all([
+      this.resolveAssigneeUserId(issue.assigneeId),
+      humanAssigneeChanged && options?.notify !== false
+        ? this.isMemberActor(actorId)
+        : false,
+    ]);
+    const newAssignee = humanAssigneeChanged ? assigneeUserId : null;
     const selfAssigned = newAssignee !== null && newAssignee === actorId;
     const deliveredAssign =
       options?.notify !== false &&
       newAssignee !== null &&
       !selfAssigned &&
-      (await this.isMemberActor(actorId));
+      actorIsMember;
     // options.email gates only the directed issue_assigned ping below —
     // suppressing the broadcast too would silence subscribers who
     // explicitly opted into email for every issue in a bulk edit.
@@ -4939,7 +5000,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       issue,
       "issue_updated",
       actorId,
-      deliveredAssign ? (newAssignee ?? undefined) : undefined
+      deliveredAssign ? (newAssignee ?? undefined) : undefined,
+      assigneeUserId
     );
     if (deliveredAssign && newAssignee) {
       await this.deliverNotification(
@@ -4956,9 +5018,16 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         { email: options?.email, issue }
       );
     }
+    timer.mark("notify");
 
-    if (issue.status !== old.status) {
-      await this.applyStatusAutomation(issue, old, actorId);
+    if (statusChanged && automationTeam) {
+      await this.applyStatusAutomation(
+        issue,
+        old,
+        await automationTeam,
+        actorId
+      );
+      timer.mark("automation");
     }
 
     const changes: Record<string, { from: unknown; to: unknown }> = {};
@@ -4968,16 +5037,21 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       }
     }
     this.audit("issue.updated", "issue", issue.id, actorId, changes);
+    timer.mark("audit");
+    logSlowPhases("issue.update.slow", timer, SLOW_ISSUE_UPDATE_MS, {
+      organizationId: this.organizationId,
+      issueId: issue.id,
+      identifier: issue.identifier,
+    });
     return issue;
   }
 
   private async applyStatusAutomation(
     issue: Issue,
     old: Issue,
+    team: Awaited<ReturnType<typeof getTeamById>>,
     actorId?: string
   ): Promise<void> {
-    const d1 = createD1(this.env.D1);
-    const team = await getTeamById(d1, issue.teamId, this.organizationId);
     if (!team) return;
 
     if (team.subIssueAutoClose && issue.status === "done") {
@@ -5136,8 +5210,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         .where(inArray(workspaceAgentSessions.id, sessionIds));
     }
 
-    const index = await this.ensureSearchIndex();
-    await removeIssueDocuments(index, issueId);
+    await this.syncSearchIndex((index) => removeIssueDocuments(index, issueId));
 
     if (old.isDraft) {
       await this.emit({
@@ -5153,9 +5226,14 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     });
     // The subject is already gone — keep its title in the email but drop
     // the issue link, which would 404.
-    await this.notifyIssueEvent(old, "issue_deleted", actorId, undefined, {
-      linkIssue: false,
-    });
+    await this.notifyIssueEvent(
+      old,
+      "issue_deleted",
+      actorId,
+      undefined,
+      undefined,
+      { linkIssue: false }
+    );
     this.audit("issue.deleted", "issue", issueId, actorId, {
       title: { from: old.title, to: null },
     });
