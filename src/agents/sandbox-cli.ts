@@ -146,6 +146,14 @@ export interface SandboxCliDescriptor {
   externalExecution?: boolean;
 }
 
+/**
+ * Only fully trusted lanes may write the repo's shared lane cache; the rest
+ * read it — a restricted lane must not poison its siblings' pnpm store.
+ */
+export function laneCacheReadOnly(permissions: LanePermissions): boolean {
+  return permissions.shell !== "enabled" || permissions.push !== "enabled";
+}
+
 function lanePermissionLines(permissions: LanePermissions): string[] {
   if (permissions.push === "enabled" && permissions.shell === "enabled") {
     return [];
@@ -716,16 +724,12 @@ export class SandboxCliAgentProvider implements AgentProvider {
             },
             { parentId: spanId }
           );
-          // Only fully trusted lanes may write the repo's shared cache; the
-          // rest read it — a restricted lane must not poison its siblings.
           const cacheDir =
             issue.repo && compute.mountCache
               ? await compute.mountCache(sandbox, {
                   organizationId,
                   repo: issue.repo,
-                  readOnly:
-                    permissions.shell !== "enabled" ||
-                    permissions.push !== "enabled",
+                  readOnly: laneCacheReadOnly(permissions),
                 })
               : null;
           if (cacheDir) {

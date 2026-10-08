@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppEnv } from "../platform/env.js";
 import type { ComputeSandbox } from "./compute.js";
 import { DevinCliAgentProvider } from "./devin-cli.js";
+import { laneCacheReadOnly } from "./sandbox-cli.js";
 
 const files = new Map<string, string>();
 const sandbox: ComputeSandbox = {
@@ -99,5 +100,22 @@ describe("truncation continuation (VOR-631)", () => {
     expect(polled.status).toBe("running");
     expect(fakeBackend.startRunner).not.toHaveBeenCalled();
     expect(files.has("/tmp/pile-continuations")).toBe(false);
+  });
+});
+
+describe("lane cache write policy (PILE-306)", () => {
+  it("lets only fully trusted lanes write the shared cache", () => {
+    expect(laneCacheReadOnly({ shell: "enabled", push: "enabled" })).toBe(
+      false
+    );
+    expect(laneCacheReadOnly({ shell: "restricted", push: "enabled" })).toBe(
+      true
+    );
+    expect(laneCacheReadOnly({ shell: "enabled", push: "disabled" })).toBe(
+      true
+    );
+    expect(laneCacheReadOnly({ shell: "disabled", push: "disabled" })).toBe(
+      true
+    );
   });
 });
