@@ -702,4 +702,68 @@ describe("support widget", () => {
     expect(anon!.sessionToken).not.toBe(a!.sessionToken);
     expect(anon!.ticketId).toBeNull();
   });
+
+  it("does not resume an email-claimed session for a different person", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const key = await createKey(organizationId, token);
+
+    const { data: a } = await startSession(key.key, {
+      email: "ada@example.com",
+    });
+    const sent = await widgetFetch(`/support/widget/${key.key}/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-pile-widget-session": a!.sessionToken,
+      },
+      body: JSON.stringify({ text: "Ada's private thread" }),
+    });
+    expect(sent.status).toBe(200);
+
+    // Same email (any case) resumes.
+    const { data: again } = await startSession(key.key, {
+      sessionToken: a!.sessionToken,
+      email: "Ada@Example.com",
+    });
+    expect(again!.sessionToken).toBe(a!.sessionToken);
+    expect(again!.ticketId).not.toBeNull();
+
+    // A different email, or a signed-in user, gets a fresh session.
+    const { data: other } = await startSession(key.key, {
+      sessionToken: a!.sessionToken,
+      email: "bob@example.com",
+    });
+    expect(other!.sessionToken).not.toBe(a!.sessionToken);
+    expect(other!.ticketId).toBeNull();
+
+    const hash = await hmacSha256Hex(key.hmacSecret, "user_b");
+    const { data: signedIn } = await startSession(key.key, {
+      sessionToken: a!.sessionToken,
+      externalId: "user_b",
+      identifierHash: hash,
+    });
+    expect(signedIn!.sessionToken).not.toBe(a!.sessionToken);
+    expect(signedIn!.ticketId).toBeNull();
+  });
+
+  it("still upgrades an anonymous session that later supplies an email", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const key = await createKey(organizationId, token);
+    const { data: anon } = await startSession(key.key);
+    const sent = await widgetFetch(`/support/widget/${key.key}/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-pile-widget-session": anon!.sessionToken,
+      },
+      body: JSON.stringify({ text: "Anonymous first" }),
+    });
+    expect(sent.status).toBe(200);
+    const { data: upgraded } = await startSession(key.key, {
+      sessionToken: anon!.sessionToken,
+      email: "late@example.com",
+    });
+    expect(upgraded!.sessionToken).toBe(anon!.sessionToken);
+    expect(upgraded!.ticketId).not.toBeNull();
+  });
 });

@@ -112,16 +112,16 @@ You can also pass the same settings as `data-pile-*` attributes on the script ta
 </script>
 ```
 
-| command                     | use                                                                                                                                                                     |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `open` / `close` / `toggle` | Show or hide the panel, e.g. from your own "Report a problem" menu item (pair with `hideLauncher: true`).                                                               |
-| `setUser`                   | `PileChat("setUser", { externalId, identifierHash, name })` after an in-app sign-in or account switch. Re-identifies the session. A different user gets a fresh thread. |
-| `logout`                    | Call on sign-out. Forgets the stored session and removes the widget.                                                                                                    |
-| `destroy`                   | Removes the widget but keeps the stored session.                                                                                                                        |
+| command                     | use                                                                                                                                                                                                                                                                                            |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `open` / `close` / `toggle` | Show or hide the panel, e.g. from your own "Report a problem" menu item (pair with `hideLauncher: true`).                                                                                                                                                                                      |
+| `setUser`                   | `PileChat("setUser", { externalId, identifierHash, name })` after an in-app sign-in or account switch. Re-identifies the session. A different user gets a fresh thread, and nothing from the previous user (session, hash, name, email) carries over. Also re-shows the widget after `logout`. |
+| `logout`                    | Call on sign-out. Forgets the stored session, clears the thread, and hides the widget until the next `setUser`. No page reload needed.                                                                                                                                                         |
+| `destroy`                   | Removes the widget but keeps the stored session.                                                                                                                                                                                                                                               |
 
 The widget fires a `pile:chat-ready` event on `document` once its session is up.
 
-The server enforces the same rules if `logout` is missed. A stored session is never resumed for a different `externalId`, or for a signed-out visitor, so one person can never see another person's thread on a shared browser.
+The server enforces the same rules if `logout` is missed. A stored session is never resumed for a different `externalId`, for a signed-out visitor, or (for email-only installs) for a different email, so one person can never see another person's thread on a shared browser.
 
 ### Content-Security-Policy
 

@@ -506,6 +506,38 @@ async function requirePublicTicket(
   return ticket;
 }
 
+/**
+ * Whether a resume request presents a different person than the one bound to
+ * the stored session. Sessions bound by externalId must match it exactly (a
+ * signed-out visitor counts as different). Sessions bound only by a soft-claimed
+ * email don't resume for a different email or for any signed-in externalId.
+ * Anonymous sessions (no customer, or a placeholder @widget.pile contact) can
+ * still be upgraded in place.
+ */
+async function widgetIdentityChanged(
+  db: ReturnType<typeof createD1>,
+  organizationId: string,
+  session: { externalId: string | null; customerId: string | null },
+  body: { externalId?: string; email?: string }
+): Promise<boolean> {
+  if (session.externalId != null) {
+    return session.externalId !== (body.externalId ?? null);
+  }
+  if (!session.customerId || !(body.externalId ?? body.email)) return false;
+  const customer = await getCustomerById(
+    db,
+    organizationId,
+    session.customerId
+  );
+  const boundEmail =
+    customer?.email && !customer.email.endsWith("@widget.pile")
+      ? customer.email.toLowerCase()
+      : null;
+  if (!boundEmail) return false;
+  if (body.externalId) return true;
+  return boundEmail !== body.email?.toLowerCase();
+}
+
 async function resolveWidgetCustomer(
   db: D1Client,
   widgetKey: SupportWidgetKey,
@@ -595,15 +627,21 @@ export function registerSupportWidgetRoutes(app: OpenAPIHono<AppContext>) {
     const widgetKey = await requireWidgetKey(db, key, c.req.header("origin"));
 
     // Resume: a stored session token is sufficient — no re-verification —
-    // unless the host app now presents a different signed-in user (shared
+    // unless the host app now presents a different person (shared
     // browser, sign-out/sign-in). Then the old thread stays with its owner and
     // a fresh session starts below.
     if (body.sessionToken) {
       let session = await findWidgetSessionByToken(db, body.sessionToken);
-      const identityChanged =
-        session?.externalId != null &&
-        session.externalId !== (body.externalId ?? null);
-      if (session && session.widgetKeyId === widgetKey.id && !identityChanged) {
+      if (
+        session &&
+        session.widgetKeyId === widgetKey.id &&
+        !(await widgetIdentityChanged(
+          db,
+          widgetKey.organizationId,
+          session,
+          body
+        ))
+      ) {
         // Late identity upgrade — an anonymous session that later supplies
         // email/externalId (+identifierHash) adopts that customer so votes
         // and ideas attribute correctly.

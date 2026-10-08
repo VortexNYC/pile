@@ -11,7 +11,8 @@
  *
  * window.PileChat(cmd, arg): 'open' | 'close' | 'toggle' | 'setUser' |
  * 'logout' | 'destroy'. 'setUser' re-identifies the session (pass
- * identifierHash for a verified user); 'logout' forgets the stored session.
+ * identifierHash for a verified user); 'logout' forgets the stored session
+ * and hides the widget until the next 'setUser'.
  * If a stub queued calls on window.PileChat.q before the bundle loaded, they
  * are flushed after boot.
  */
@@ -107,6 +108,10 @@ function boot(settings: WidgetSettings): void {
   let name = settings.name;
   let pollTimer = 0;
   let destroyed = false;
+  let loggedOut = false;
+  // Bumped whenever the signed-in identity changes; responses that started
+  // under an older generation belong to the previous user and are dropped.
+  let generation = 0;
 
   const host = document.createElement("div");
   host.id = "pile-chat";
@@ -265,6 +270,7 @@ function boot(settings: WidgetSettings): void {
   }
 
   async function startSession(): Promise<void> {
+    const gen = generation;
     const data = (await api(`/support/widget/${key}/session`, {
       method: "POST",
       body: JSON.stringify({
@@ -275,6 +281,7 @@ function boot(settings: WidgetSettings): void {
         identifierHash: settings.identifierHash,
       }),
     })) as unknown as SessionResponse;
+    if (gen !== generation) return;
     sessionToken = data.sessionToken;
     localStorage.setItem(storageKey, sessionToken);
     requireEmail = data.config.requireEmail;
@@ -294,10 +301,12 @@ function boot(settings: WidgetSettings): void {
 
   async function poll(): Promise<void> {
     if (!sessionToken || destroyed) return;
+    const gen = generation;
     try {
       const data = (await api(
         `/support/widget/${key}/messages${lastSeen ? `?after=${encodeURIComponent(lastSeen)}` : ""}`
       )) as { messages: WidgetMessage[] };
+      if (gen !== generation) return;
       let unread = 0;
       for (const m of data.messages) {
         if (m.createdAt > lastSeen) {
@@ -310,7 +319,7 @@ function boot(settings: WidgetSettings): void {
     } catch {
       // transient — next poll retries
     }
-    if (destroyed) return;
+    if (destroyed || gen !== generation) return;
     pollTimer = window.setTimeout(poll, open ? POLL_OPEN_MS : POLL_CLOSED_MS);
   }
 
@@ -323,6 +332,7 @@ function boot(settings: WidgetSettings): void {
       return;
     }
     textInput.value = "";
+    const gen = generation;
     try {
       const sent = (await api(`/support/widget/${key}/messages`, {
         method: "POST",
@@ -333,6 +343,7 @@ function boot(settings: WidgetSettings): void {
           externalId: crypto.randomUUID(),
         }),
       })) as { createdAt?: string };
+      if (gen !== generation) return;
       addMsg("inbound", text);
       // Advance the poll cursor past the message we just rendered so the next
       // poll doesn't fetch (and re-render) our own send.
@@ -519,6 +530,20 @@ function boot(settings: WidgetSettings): void {
     textInput.focus();
   });
 
+  // Forget the current user's session: token, stored copy, thread, and any
+  // in-flight poll. The next startSession() begins a fresh one.
+  function resetSession(): void {
+    generation++;
+    clearTimeout(pollTimer);
+    sessionToken = undefined;
+    localStorage.removeItem(storageKey);
+    msgs.replaceChildren();
+    lastSeen = "";
+    identified = false;
+    ideasLoaded = false;
+    setBadge(0);
+  }
+
   const g = globalThis as { PileChat?: PileChatFn };
   const queued = g.PileChat?.q ?? [];
   g.PileChat = ((cmd: string, arg?: unknown) => {
@@ -539,28 +564,46 @@ function boot(settings: WidgetSettings): void {
           externalId?: string;
           identifierHash?: string;
         };
-        if (u?.externalId && u.externalId !== settings.externalId) {
-          // A different signed-in user: drop the previous user's thread. The
-          // server hands back a fresh session for the new identity.
-          msgs.replaceChildren();
-          lastSeen = "";
-          identified = false;
-          ideasLoaded = false;
+        const switched =
+          loggedOut ||
+          (u?.externalId != null && u.externalId !== settings.externalId);
+        if (switched) {
+          // A different signed-in user: nothing from the previous user —
+          // token, thread, hash, or contact details — carries over.
+          resetSession();
+          settings.externalId = u?.externalId;
+          settings.identifierHash = u?.identifierHash;
+          email = u?.email;
+          name = u?.name;
+        } else {
+          email = u?.email ?? email;
+          name = u?.name ?? name;
+          if (u?.externalId) settings.externalId = u.externalId;
+          if (u?.identifierHash) settings.identifierHash = u.identifierHash;
         }
-        email = u?.email ?? email;
-        name = u?.name ?? name;
-        if (u?.externalId) settings.externalId = u.externalId;
-        if (u?.identifierHash) settings.identifierHash = u.identifierHash;
-        void startSession().catch(() => {
-          // network — the next setUser or reload retries
-        });
+        if (loggedOut) {
+          loggedOut = false;
+          host.style.display = "";
+        }
+        void startSession()
+          .then(() => {
+            if (switched) poll();
+          })
+          .catch(() => {
+            // network — the next setUser or reload retries
+          });
         break;
       }
       case "logout":
-        localStorage.removeItem(storageKey);
-        destroyed = true;
-        clearTimeout(pollTimer);
-        host.remove();
+        // Signed out: forget the session and hide until the next setUser.
+        resetSession();
+        settings.externalId = undefined;
+        settings.identifierHash = undefined;
+        email = undefined;
+        name = undefined;
+        setOpen(false);
+        host.style.display = "none";
+        loggedOut = true;
         break;
       case "destroy":
         destroyed = true;
