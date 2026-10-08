@@ -7,6 +7,7 @@ import { Tabs } from "@cloudflare/kumo/components/tabs";
 import { ChatCircleDots, Headset, Plus } from "@phosphor-icons/react";
 import {
   keepPreviousData,
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
@@ -66,23 +67,24 @@ function TicketsList() {
       ),
     staleTime: 60_000,
   });
-  const tickets = useQuery({
+  const tickets = useInfiniteQuery({
     queryKey: wsKey(workspace.id, "tickets", { status }),
-    queryFn: async () =>
-      (
-        await unwrap(
-          api.GET("/workspaces/{organizationId}/support/tickets", {
-            params: {
-              path: { organizationId: workspace.id },
-              query: { limit: 100, status },
-            },
-          })
-        )
-      ).tickets,
+    queryFn: ({ pageParam }) =>
+      unwrap(
+        api.GET("/workspaces/{organizationId}/support/tickets", {
+          params: {
+            path: { organizationId: workspace.id },
+            query: { limit: 50, status, cursor: pageParam },
+          },
+        })
+      ),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
     placeholderData: keepPreviousData,
   });
   const queryClient = useQueryClient();
-  const peek = usePeek<NonNullable<typeof tickets.data>[number]>();
+  type TicketRow = (typeof allTickets)[number];
+  const peek = usePeek<TicketRow>();
   const patch = useMutation({
     mutationFn: (args: { id: string; body: Record<string, string> }) =>
       unwrap(
@@ -100,7 +102,8 @@ function TicketsList() {
   });
 
   const me = session.data?.user.id;
-  const rows = (tickets.data ?? []).filter((ticket) => {
+  const allTickets = tickets.data?.pages.flatMap((page) => page.tickets) ?? [];
+  const rows = allTickets.filter((ticket) => {
     if (folder === "unassigned") return ticket.assignees.length === 0;
     if (folder === "mine")
       return (
@@ -349,6 +352,17 @@ function TicketsList() {
           </>
         ) : null}
       </peek.Drawer>
+
+      {tickets.hasNextPage ? (
+        <div className="mt-4 flex justify-center">
+          <Button
+            loading={tickets.isFetchingNextPage}
+            onClick={() => void tickets.fetchNextPage()}
+          >
+            Load more
+          </Button>
+        </div>
+      ) : null}
     </Page>
   );
 }

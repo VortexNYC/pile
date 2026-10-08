@@ -17,7 +17,7 @@ export const Route = createFileRoute("/_authenticated")({
 
 function AuthenticatedLayout() {
   const { data: session, isPending } = betterAuthClient.useSession();
-  const { pathname } = useLocation();
+  const { pathname, searchStr, hash } = useLocation();
 
   useEffect(() => {
     if (session?.user) {
@@ -34,7 +34,9 @@ function AuthenticatedLayout() {
     return (
       <Navigate
         to="/sign-in"
-        search={{ redirect: appHref(pathname) }}
+        search={{
+          redirect: `${appHref(pathname)}${searchStr}${hash ? `#${hash}` : ""}`,
+        }}
         replace
       />
     );

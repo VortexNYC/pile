@@ -13,7 +13,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { ListChecks, Plus, X } from "@phosphor-icons/react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useDeferredValue, useState } from "react";
@@ -129,22 +129,23 @@ function IssuesList() {
       return next;
     });
 
-  const issues = useQuery({
+  const issues = useInfiniteQuery({
     queryKey: wsKey(workspace.id, "issues", { search }),
-    queryFn: async () =>
-      (
-        await unwrap(
-          api.GET("/workspaces/{organizationId}/issues", {
-            params: {
-              path: { organizationId: workspace.id },
-              query: { limit: 100, search },
-            },
-          })
-        )
-      ).issues,
+    queryFn: ({ pageParam }) =>
+      unwrap(
+        api.GET("/workspaces/{organizationId}/issues", {
+          params: {
+            path: { organizationId: workspace.id },
+            query: { limit: 50, search, cursor: pageParam },
+          },
+        })
+      ),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
     placeholderData: keepPreviousData,
   });
-  const peeked = (issues.data ?? []).find((i) => i.id === peekedId) ?? null;
+  const allIssues = issues.data?.pages.flatMap((page) => page.issues) ?? [];
+  const peeked = allIssues.find((i) => i.id === peekedId) ?? null;
 
   return (
     <Page
@@ -197,7 +198,7 @@ function IssuesList() {
             error={issues.error}
             onRetry={() => void issues.refetch()}
           />
-        ) : issues.data.length === 0 ? (
+        ) : allIssues.length === 0 ? (
           <EmptyState
             icon={<ListChecks size={40} />}
             title={status || q ? "No matching issues" : "No issues yet"}
@@ -211,7 +212,7 @@ function IssuesList() {
           <DndContext sensors={sensors} onDragEnd={onDragEnd}>
             <div className="flex flex-col gap-5">
               {ISSUE_STATUSES.map((group) => {
-                const rows = issues.data
+                const rows = allIssues
                   .filter(
                     (issue) =>
                       issue.status === group &&
@@ -379,6 +380,16 @@ function IssuesList() {
               </Link>
             </div>
           </PeekDrawer>
+        ) : null}
+        {issues.hasNextPage ? (
+          <div className="mt-4 flex justify-center">
+            <Button
+              loading={issues.isFetchingNextPage}
+              onClick={() => void issues.fetchNextPage()}
+            >
+              Load more
+            </Button>
+          </div>
         ) : null}
         {selected.size > 0 ? (
           <div className="bg-kumo-canvas border-kumo-line fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-full border px-4 py-2 shadow-lg">

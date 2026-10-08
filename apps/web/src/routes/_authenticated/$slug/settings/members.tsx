@@ -10,6 +10,7 @@ import {
 import { useState } from "react";
 
 import { Page } from "@/components/page";
+import { ErrorState, LoadingState } from "@/components/states";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { betterAuthClient } from "@/lib/better-auth";
@@ -22,6 +23,19 @@ export const Route = createFileRoute("/_authenticated/$slug/settings/members")({
 function MembersSettings() {
   const workspace = useWorkspace();
   const canManage = usePermissions(workspace.id).isAdmin;
+  // better-auth-ui's member screens act on the session's *active* org —
+  // point it at this workspace before they mount, re-run per mount.
+  const active = useQuery({
+    queryKey: wsKey(workspace.id, "active-org"),
+    staleTime: 0,
+    gcTime: 0,
+    queryFn: async () => {
+      await betterAuthClient.organization.setActive({
+        organizationId: workspace.id,
+      });
+      return true;
+    },
+  });
   // Builtin role names plus every custom role on the org.
   const customRoles = useQuery({
     queryKey: wsKey(workspace.id, "org-roles"),
@@ -39,10 +53,19 @@ function MembersSettings() {
     ...(customRoles.data ?? []).map((r) => r.role),
   ];
 
+  if (active.isPending) return <LoadingState label="Loading members" />;
+  if (active.isError) {
+    return (
+      <Page title="Members">
+        <ErrorState error={active.error} onRetry={() => void active.refetch()} />
+      </Page>
+    );
+  }
+
   return (
     <AuthProvider client={getBetterAuthUiClient()}>
       <Page title="Members" description={`People in ${workspace.name}.`}>
-        <div className="flex flex-col gap-5">
+        <div key={workspace.id} className="flex flex-col gap-5">
           {canManage ? (
             <InviteMemberForm
               className="w-full max-w-none"
