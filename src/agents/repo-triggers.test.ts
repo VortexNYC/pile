@@ -431,6 +431,12 @@ describe("structural self-feed guard (PILE-272)", () => {
     triggers: [
       { on: "pr.synchronize", agent: "trigger-mock", prompt: "Re-check it." },
       { on: "pr.conflict", agent: "trigger-mock", prompt: "Resolve it." },
+      { on: "ci.failed", agent: "trigger-mock", prompt: "Fix CI." },
+      {
+        on: "pr.changes_requested",
+        agent: "trigger-mock",
+        prompt: "Address it.",
+      },
     ],
   };
 
@@ -457,6 +463,13 @@ describe("structural self-feed guard (PILE-272)", () => {
     await fire(issue, "pr.conflict");
     await fire(issue, "pr.synchronize", { pushedByBot: true });
     expect(await purposes(issue.id)).toEqual(["trigger:pr.synchronize"]);
+  });
+
+  it("applies the guard to internal event names after aliasing", async () => {
+    const issue = await issueWithLane("trigger:pr.opened");
+    await fire(issue, "pr.ci_failed");
+    await fire(issue, "pr.review_changes");
+    expect(await purposes(issue.id)).toEqual(["trigger:pr.opened"]);
   });
 
   it("still fires on a human push to a trigger lane's PR", async () => {
