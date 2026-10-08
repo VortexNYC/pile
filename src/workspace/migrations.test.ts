@@ -7,6 +7,10 @@ describe("workspaceMigrations", () => {
     const { entries } = workspaceMigrations.journal;
     const keys = Object.keys(workspaceMigrations.migrations);
     expect(keys).toHaveLength(entries.length);
+    // Tail checks: a future migration appended without a journal entry (or
+    // with the wrong tag) must fail here, not just mid-list.
+    expect(entries.at(-1)?.tag).toBe(`v${entries.length}`);
+    expect(keys.at(-1)).toBe(`m${String(entries.length - 1).padStart(4, "0")}`);
     const tags = new Set<string>();
     entries.forEach((entry, i) => {
       expect(entry.idx).toBe(i);

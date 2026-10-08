@@ -954,8 +954,14 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   ]);
 
   // Single notification path: preference-gated in-app row + email fanout.
+  // `options.issue` lets callers that already loaded the subject pass it
+  // through so the email path doesn't re-fetch; `options.email === false`
+  // suppresses only the email leg (batch updates still write in-app rows);
+  // `options.linkIssue === false` keeps the subject's title/identifier in
+  // the email but drops the link (issue_deleted — it would 404).
   private async deliverNotification(
-    input: Omit<data.NotificationInput, "organizationId">
+    input: Omit<data.NotificationInput, "organizationId">,
+    options?: { email?: boolean; issue?: Issue; linkIssue?: boolean }
   ): Promise<void> {
     const prefs = data.getNotificationPreferences(
       this.db,
@@ -975,9 +981,11 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     // never visits the prefs page still hears about the things that need
     // them. An explicit email pref always wins; a prefs row written
     // without touching email (emailExplicit false) keeps the default.
-    const wantsEmail = prefs?.emailExplicit
-      ? Boolean(prefs.email)
-      : WorkspaceDO.EMAIL_BY_DEFAULT_TYPES.has(input.type);
+    const wantsEmail =
+      options?.email !== false &&
+      (prefs?.emailExplicit
+        ? Boolean(prefs.email)
+        : WorkspaceDO.EMAIL_BY_DEFAULT_TYPES.has(input.type));
     const emailFrom = this.env.EMAIL_FROM;
     if (wantsEmail && this.env.EMAIL && emailFrom) {
       // PILE-330 — a stalled provider send used to sit on the mutation's
@@ -987,7 +995,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       const task = this.sendNotificationEmail(
         input,
         this.env.EMAIL,
-        emailFrom
+        emailFrom,
+        options
       ).catch((err: unknown) => {
         console.warn(
           `notification email failed: ${err instanceof Error ? err.message : String(err)}`
@@ -1012,7 +1021,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   private async sendNotificationEmail(
     input: Omit<data.NotificationInput, "organizationId">,
     emailBinding: SendEmail,
-    emailFrom: string
+    emailFrom: string,
+    options?: { issue?: Issue; linkIssue?: boolean }
   ): Promise<void> {
     const d1 = createD1(this.env.D1);
     const recipient = await d1
@@ -1021,16 +1031,52 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       .where(eq(globalUser.id, input.recipientId))
       .get();
     if (!recipient?.email) return;
-    // issueId is the notification subject — document-scoped types can
-    // carry a document id instead, so this may resolve to nothing.
-    const issue = await this.getIssue(input.issueId);
     const typeLabel = input.type.replace(/_/g, " ");
-    const subject = issue?.identifier
-      ? `Pile: ${issue.identifier} ${typeLabel}`
-      : `Pile: ${typeLabel}`;
-    const text = issue
-      ? `${issue.identifier ? `${issue.identifier}: ` : ""}${issue.title}\n\nYou have a new ${typeLabel} notification in workspace ${this.organizationId}.\n`
-      : `You have a new ${typeLabel} notification in workspace ${this.organizationId}.\n`;
+    // metadata.documentId marks a document-scoped notification — for
+    // comments/mentions input.issueId holds the document id, for
+    // document_updated it holds a linked issue. Either way the email
+    // should name and link the document, not the related issue.
+    const documentId =
+      typeof input.metadata?.documentId === "string"
+        ? input.metadata.documentId
+        : null;
+    const doc = documentId === null ? null : await this.getDocument(documentId);
+    let subject = `Pile: ${typeLabel}`;
+    let text = `You have a new ${typeLabel} notification in workspace ${this.organizationId}.\n`;
+    // BETTER_AUTH_URL is the product origin — PUBLIC_API_URL is the
+    // agent-callback API origin and may not serve the UI.
+    const origin = this.env.BETTER_AUTH_URL;
+    if (doc) {
+      subject = `Pile: ${doc.title} ${typeLabel}`;
+      const link =
+        options?.linkIssue === false
+          ? ""
+          : `${origin}/${this.organizationId}/documents/${doc.id}\n`;
+      text = `${doc.title}\n\n${text}${link}`;
+    } else {
+      const issue = options?.issue ?? (await this.getIssue(input.issueId));
+      if (issue) {
+        const link =
+          options?.linkIssue === false
+            ? ""
+            : `${origin}/${this.organizationId}/issues/${issue.identifier ?? issue.id}\n`;
+        subject = issue.identifier
+          ? `Pile: ${issue.identifier} ${typeLabel}`
+          : subject;
+        // A bulk assign emails only the first id's issue — say how many
+        // the batch moved so the recipient knows it's not just this one.
+        const batchSize =
+          input.type === "issue_assigned" &&
+          typeof input.metadata?.batchSize === "number"
+            ? input.metadata.batchSize
+            : 0;
+        const more =
+          batchSize > 1
+            ? `+${batchSize - 1} more issue${batchSize === 2 ? "" : "s"} assigned in this update\n`
+            : "";
+        text = `${issue.identifier ? `${issue.identifier}: ` : ""}${issue.title}\n\n${text}${more}${link}`;
+      }
+    }
     await sendEmail(
       this.env,
       {
@@ -1044,11 +1090,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   private async notifyIssueEvent(
-    issue: { id: string; assigneeId: string | null },
+    issue: Issue,
     type: data.NotificationType,
     actorId?: string,
     extraExcludeRecipientId?: string,
-    assigneeUserId?: string | null
+    assigneeUserId?: string | null,
+    options?: { email?: boolean; linkIssue?: boolean }
   ): Promise<void> {
     const recipients = await this.resolveIssueRecipients(
       issue,
@@ -1058,12 +1105,15 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     );
     await Promise.all(
       recipients.map(async (recipientId) => {
-        await this.deliverNotification({
-          recipientId,
-          recipientType: "user",
-          issueId: issue.id,
-          type,
-        });
+        await this.deliverNotification(
+          {
+            recipientId,
+            recipientType: "user",
+            issueId: issue.id,
+            type,
+          },
+          { email: options?.email, issue, linkIssue: options?.linkIssue }
+        );
       })
     );
   }
@@ -4007,12 +4057,15 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     );
     this.audit("issue.created", "issue", issue.id, actorId);
     if (deliveredCreateAssign && createdAssignee) {
-      await this.deliverNotification({
-        recipientId: createdAssignee,
-        recipientType: "user",
-        issueId: issue.id,
-        type: "issue_assigned",
-      });
+      await this.deliverNotification(
+        {
+          recipientId: createdAssignee,
+          recipientType: "user",
+          issueId: issue.id,
+          type: "issue_assigned",
+        },
+        { issue }
+      );
     }
     this.startTriageLane(issue, actorId);
     return { issue, possibleDuplicates };
@@ -4619,8 +4672,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     // notify:false suppresses the directed issue_assigned emit — bulk
     // importers run as member actors so the member check alone can't tell
     // a migration apart from a human assigning one issue. The generic
-    // broadcast still runs.
-    options?: { notify?: boolean }
+    // broadcast still runs. email:false skips only the directed
+    // issue_assigned email — a multi-issue batch shouldn't ping the new
+    // assignee once per id, while opted-in subscribers still get their
+    // per-issue broadcast mail. batchSize marks the directed row as one
+    // of N so the single batch email can say how many issues moved.
+    options?: { notify?: boolean; email?: boolean; batchSize?: number }
   ): Promise<Issue | undefined> {
     await this.ready;
     const timer = createPhaseTimer();
@@ -4936,6 +4993,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       newAssignee !== null &&
       !selfAssigned &&
       actorIsMember;
+    // options.email gates only the directed issue_assigned ping below —
+    // suppressing the broadcast too would silence subscribers who
+    // explicitly opted into email for every issue in a bulk edit.
     await this.notifyIssueEvent(
       issue,
       "issue_updated",
@@ -4944,12 +5004,19 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       assigneeUserId
     );
     if (deliveredAssign && newAssignee) {
-      await this.deliverNotification({
-        recipientId: newAssignee,
-        recipientType: "user",
-        issueId: issue.id,
-        type: "issue_assigned",
-      });
+      await this.deliverNotification(
+        {
+          recipientId: newAssignee,
+          recipientType: "user",
+          issueId: issue.id,
+          type: "issue_assigned",
+          metadata:
+            options?.batchSize !== undefined
+              ? { batchSize: options.batchSize }
+              : undefined,
+        },
+        { email: options?.email, issue }
+      );
     }
     timer.mark("notify");
 
@@ -5035,7 +5102,18 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     acc: Issue[]
   ): Promise<Issue[]> {
     if (index >= ids.length) return acc;
-    const issue = await this.updateIssue(ids[index], patch, actorId);
+    // Only the first id may send the directed issue_assigned email — a
+    // bulk assign to the same member pings them once, not once per issue,
+    // and batchSize lets that one email say how many issues moved.
+    // In-app rows and opted-in broadcast mail are unaffected.
+    const issue = await this.updateIssue(
+      ids[index],
+      patch,
+      actorId,
+      index === 0
+        ? { batchSize: ids.length }
+        : { email: false, batchSize: ids.length }
+    );
     if (!issue) {
       throw VortexError.fromCode("NOT_FOUND", `Issue not found: ${ids[index]}`);
     }
@@ -5146,7 +5224,16 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       organizationId: this.organizationId,
       issueId,
     });
-    await this.notifyIssueEvent(old, "issue_deleted", actorId);
+    // The subject is already gone — keep its title in the email but drop
+    // the issue link, which would 404.
+    await this.notifyIssueEvent(
+      old,
+      "issue_deleted",
+      actorId,
+      undefined,
+      undefined,
+      { linkIssue: false }
+    );
     this.audit("issue.deleted", "issue", issueId, actorId, {
       title: { from: old.title, to: null },
     });

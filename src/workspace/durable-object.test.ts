@@ -68,17 +68,72 @@ function getStub() {
 
 async function withWorkspace<T>(
   stub: ReturnType<typeof getStub>,
-  callback: (instance: WorkspaceDO) => T | Promise<T>
+  callback: (instance: WorkspaceDO, ctx: DurableObjectState) => T | Promise<T>
 ): Promise<T> {
-  return runInDurableObject(stub, async (instance) => {
+  return runInDurableObject(stub, async (instance, ctx) => {
     await instance.setOrganizationId(WORKSPACE_ID);
-    return callback(instance);
+    return callback(instance, ctx);
   });
+}
+
+// mimetext may base64-encode the body — decode it back to plain text so
+// assertions don't depend on the transfer encoding.
+function mimeBodyText(raw: string): string {
+  const body = raw
+    .split(/\r?\n\r?\n/)
+    .slice(1)
+    .join("\n\n");
+  const compact = body.replace(/\s+/g, "");
+  return compact.length > 0 && /^[A-Za-z0-9+/=]+$/.test(compact)
+    ? Buffer.from(compact, "base64").toString("utf8")
+    : body;
+}
+
+// Email sends ride ctx.waitUntil (PILE-330) — the RPC returns before
+// they run; flushNotificationEmails is the deterministic test seam.
+function flushEmails() {
+  return withWorkspace(getStub(), (instance) =>
+    instance.flushNotificationEmails()
+  );
 }
 
 describe("WorkspaceDO", () => {
   beforeAll(ensureWorkspace);
 
+  // Capturing EMAIL binding — the DO reads the same env object the test
+  // holds, so swapping env.EMAIL intercepts real sends. Restore after
+  // each leg.
+  const sent: Array<{ from: string; to: string; raw?: string }> = [];
+  const fakeEmail: SendEmail = {
+    send: async (message) => {
+      const msg = message as EmailMessage;
+      // workerd keeps the MIME payload under a hidden internal key.
+      const raw = (msg as unknown as Record<string, unknown>)[
+        "EmailMessage::raw"
+      ];
+      sent.push({
+        from: msg.from,
+        to: msg.to,
+        raw:
+          typeof raw === "string"
+            ? raw
+            : raw instanceof Uint8Array
+              ? new TextDecoder().decode(raw)
+              : undefined,
+      });
+      return { messageId: "" };
+    },
+  };
+  const withEmail = <T>(run: () => Promise<T>): Promise<T> => {
+    const prevEmail = env.EMAIL;
+    const prevFrom = env.EMAIL_FROM;
+    env.EMAIL = fakeEmail;
+    env.EMAIL_FROM = "notifications@example.com";
+    return run().finally(() => {
+      env.EMAIL = prevEmail;
+      env.EMAIL_FROM = prevFrom;
+    });
+  };
   it("creates and lists issues", async () => {
     const stub = getStub();
     const issue = await withWorkspace(stub, (instance) =>
@@ -241,44 +296,6 @@ describe("WorkspaceDO", () => {
 
   it("emails directed notifications by default and honors the email opt-out", async () => {
     const stub = getStub();
-    const sent: Array<{ from: string; to: string; raw?: string }> = [];
-    const fakeEmail: SendEmail = {
-      send: async (message) => {
-        const msg = message as EmailMessage;
-        // workerd keeps the MIME payload under a hidden internal key.
-        const raw = (msg as unknown as Record<string, unknown>)[
-          "EmailMessage::raw"
-        ];
-        sent.push({
-          from: msg.from,
-          to: msg.to,
-          raw:
-            typeof raw === "string"
-              ? raw
-              : raw instanceof Uint8Array
-                ? new TextDecoder().decode(raw)
-                : undefined,
-        });
-        return { messageId: "" };
-      },
-    };
-    // Swap in a capturing EMAIL binding — the DO reads the same env
-    // object the test holds. Restore after each leg.
-    const withEmail = <T>(run: () => Promise<T>): Promise<T> => {
-      const prevEmail = env.EMAIL;
-      const prevFrom = env.EMAIL_FROM;
-      env.EMAIL = fakeEmail;
-      env.EMAIL_FROM = "notifications@example.com";
-      return run().finally(() => {
-        env.EMAIL = prevEmail;
-        env.EMAIL_FROM = prevFrom;
-      });
-    };
-    // Email sends ride ctx.waitUntil (PILE-330) — the RPC returns before
-    // they run; flushNotificationEmails is the deterministic test seam.
-    const flushEmails = () =>
-      withWorkspace(stub, (instance) => instance.flushNotificationEmails());
-
     const issue = await withWorkspace(stub, (instance) =>
       instance.createIssue({ title: "Email me" })
     );
@@ -348,6 +365,260 @@ describe("WorkspaceDO", () => {
       notes.filter((n) => n.type === "issue_assigned" && n.issueId === issue.id)
         .length
     ).toBeGreaterThanOrEqual(2);
+  });
+
+  it("emails a batch assignee once and links the issue in the body", async () => {
+    const stub = getStub();
+    // user-2 needs a user + member row to receive mail — create them
+    // idempotently so this test also passes under a focused -t run.
+    const db = createD1(env.D1);
+    await db
+      .insert(userTable)
+      .values({
+        id: "user-2",
+        name: "Other",
+        email: "user-2@test.local",
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .onConflictDoNothing();
+    await db
+      .insert(member)
+      .values({
+        id: crypto.randomUUID(),
+        organizationId: WORKSPACE_ID,
+        userId: "user-2",
+        role: "member",
+        createdAt: new Date(),
+      })
+      .onConflictDoNothing();
+    const [first, second] = await withWorkspace(stub, async (instance) => {
+      const a = await instance.createIssue({ title: "Batch one" });
+      const b = await instance.createIssue({ title: "Batch two" });
+      return [a, b];
+    });
+    sent.length = 0;
+    const updated = await withWorkspace(stub, (instance) =>
+      withEmail(() =>
+        instance.batchUpdateIssues(
+          [first.id, second.id],
+          { assigneeId: "user-2" },
+          "user-1"
+        )
+      )
+    );
+    expect(updated).toHaveLength(2);
+    await flushEmails();
+    // One email for the whole batch, not one per issue…
+    expect(sent).toHaveLength(1);
+    expect(sent[0].to).toBe("user-2@test.local");
+    // …and it carries a link back to the issue plus the batch size —
+    // one email covers the whole assignment, so it has to say so.
+    const body = mimeBodyText(sent[0].raw ?? "");
+    expect(body).toContain(`/${WORKSPACE_ID}/issues/${first.identifier}`);
+    expect(body).toContain("+1 more issue assigned in this update");
+    // Every issue still writes its directed in-app row.
+    const notes = await withWorkspace(stub, (instance) =>
+      instance.listNotificationsForRecipient("user-2", "user")
+    );
+    for (const id of [first.id, second.id]) {
+      expect(
+        notes.filter((n) => n.type === "issue_assigned" && n.issueId === id)
+      ).toHaveLength(1);
+    }
+  });
+
+  it("still emails opted-in subscribers for every issue in a batch", async () => {
+    const stub = getStub();
+    const db = createD1(env.D1);
+    await db
+      .insert(userTable)
+      .values({
+        id: "user-3",
+        name: "Watcher",
+        email: "user-3@test.local",
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .onConflictDoNothing();
+    await db
+      .insert(userTable)
+      .values({
+        id: "user-2",
+        name: "Other",
+        email: "user-2@test.local",
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .onConflictDoNothing();
+    await db
+      .insert(member)
+      .values({
+        id: crypto.randomUUID(),
+        organizationId: WORKSPACE_ID,
+        userId: "user-2",
+        role: "member",
+        createdAt: new Date(),
+      })
+      .onConflictDoNothing();
+    const [first, second] = await withWorkspace(stub, async (instance, ctx) => {
+      const a = await instance.createIssue({ title: "Watch one" });
+      const b = await instance.createIssue({ title: "Watch two" });
+      // Subscriber fan-out resolves linear_ids → linear_users.email →
+      // global user. No DO method writes linear_users, so seed the row
+      // straight into DO storage.
+      ctx.storage.sql.exec(
+        "INSERT OR IGNORE INTO linear_users (id, organization_id, linear_id, name, email, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        "linrow-user-3",
+        WORKSPACE_ID,
+        "lin-user-3",
+        "Watcher",
+        "user-3@test.local",
+        new Date().toISOString()
+      );
+      for (const issueId of [a.id, b.id]) {
+        await instance.createIssueSubscriber({
+          issueId,
+          linearUserId: "lin-user-3",
+        });
+      }
+      // Explicit opt-in — issue_updated is not an email-by-default type.
+      await instance.upsertNotificationPreferences("user-3", {
+        email: true,
+      });
+      return [a, b];
+    });
+    sent.length = 0;
+    await withWorkspace(stub, (instance) =>
+      withEmail(() =>
+        instance.batchUpdateIssues(
+          [first.id, second.id],
+          { assigneeId: "user-2" },
+          "user-1"
+        )
+      )
+    );
+    await flushEmails();
+    // The new assignee still gets exactly one directed email.
+    expect(sent.filter((m) => m.to === "user-2@test.local")).toHaveLength(1);
+    // The opted-in subscriber hears about every issue — the batch email
+    // dedupe covers the directed assignee ping, not the broadcast.
+    expect(sent.filter((m) => m.to === "user-3@test.local")).toHaveLength(2);
+  });
+
+  it("links the document in document-scoped notification emails", async () => {
+    const stub = getStub();
+    const db = createD1(env.D1);
+    await db
+      .insert(userTable)
+      .values({
+        id: "user-2",
+        name: "Other",
+        email: "user-2@test.local",
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .onConflictDoNothing();
+    await db
+      .insert(member)
+      .values({
+        id: crypto.randomUUID(),
+        organizationId: WORKSPACE_ID,
+        userId: "user-2",
+        role: "member",
+        createdAt: new Date(),
+      })
+      .onConflictDoNothing();
+    const doc = await withWorkspace(stub, async (instance) => {
+      // A linked issue — document_updated used to resolve and link the
+      // issue instead of the document.
+      const issue = await instance.createIssue({ title: "Spec host" });
+      const created = await instance.createDocument({
+        title: "Spec doc",
+        issueId: issue.id,
+        createdById: "user-1",
+      });
+      // document_updated is not an email-by-default type — opt in, and
+      // watch the doc so the watcher fan-out reaches user-2.
+      await instance.upsertNotificationPreferences("user-2", { email: true });
+      await instance.watchDocument(created.id, "user-2");
+      return created;
+    });
+    sent.length = 0;
+    await withWorkspace(stub, (instance) =>
+      withEmail(async () => {
+        await instance.updateDocument(
+          doc.id,
+          { title: "Spec doc v2" },
+          "user-1"
+        );
+        // mention is email-by-default — no pref needed.
+        await instance.createComment({
+          documentId: doc.id,
+          body: "Take a look @user-2",
+          mentions: ["user-2"],
+          authorId: "user-1",
+        });
+      })
+    );
+    await flushEmails();
+    const mails = sent.filter((m) => m.to === "user-2@test.local");
+    expect(mails).toHaveLength(2);
+    for (const mail of mails) {
+      const body = mimeBodyText(mail.raw ?? "");
+      expect(body).toContain(`/${WORKSPACE_ID}/documents/${doc.id}`);
+      expect(body).not.toContain("/issues/");
+    }
+  });
+
+  it("drops the issue link in issue_deleted emails", async () => {
+    const stub = getStub();
+    const db = createD1(env.D1);
+    await db
+      .insert(userTable)
+      .values({
+        id: "user-2",
+        name: "Other",
+        email: "user-2@test.local",
+        emailVerified: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .onConflictDoNothing();
+    await db
+      .insert(member)
+      .values({
+        id: crypto.randomUUID(),
+        organizationId: WORKSPACE_ID,
+        userId: "user-2",
+        role: "member",
+        createdAt: new Date(),
+      })
+      .onConflictDoNothing();
+    const issue = await withWorkspace(stub, async (instance) => {
+      // issue_deleted isn't an email-by-default type — opt in explicitly.
+      await instance.upsertNotificationPreferences("user-2", { email: true });
+      return instance.createIssue(
+        { title: "Delete me", assigneeId: "user-2" },
+        "user-1"
+      );
+    });
+    sent.length = 0;
+    await withWorkspace(stub, (instance) =>
+      withEmail(() => instance.deleteIssue(issue.id, "user-1"))
+    );
+    await flushEmails();
+    expect(sent).toHaveLength(1);
+    expect(sent[0].to).toBe("user-2@test.local");
+    const body = mimeBodyText(sent[0].raw ?? "");
+    // The email keeps the title for context but no link — the issue is
+    // gone, so it would 404.
+    expect(body).toContain("Delete me");
+    expect(body).not.toContain("/issues/");
   });
 
   it("does not block or lose a write when the email send stalls (PILE-330)", async () => {

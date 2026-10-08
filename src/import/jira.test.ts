@@ -33,61 +33,68 @@ function jiraIssue(id: string, key: string, parentId?: string) {
 }
 
 describe("jira import", () => {
-  it("suppresses directed notifications on created and parent-linked issues", async () => {
-    const { ctx, issueWrites } = await seedImportContext("jira");
+  // Seeding a workspace + cold-starting the DO (54 migrations) plus a
+  // full importer pass takes ~8s on a loaded runner — well past the 5s
+  // default timeout.
+  it(
+    "suppresses directed notifications on created and parent-linked issues",
+    { timeout: 30_000 },
+    async () => {
+      const { ctx, issueWrites } = await seedImportContext("jira");
 
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = async (input, init) => {
-      const url =
-        typeof input === "string"
-          ? input
-          : input instanceof URL
-            ? input.toString()
-            : input.url;
-      if (!url.startsWith(JIRA_HOST)) return originalFetch(input, init);
-      const path = new URL(url).pathname;
-      const method = init?.method ?? "GET";
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = async (input, init) => {
+        const url =
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url;
+        if (!url.startsWith(JIRA_HOST)) return originalFetch(input, init);
+        const path = new URL(url).pathname;
+        const method = init?.method ?? "GET";
 
-      if (method === "GET" && path === "/rest/api/3/myself") {
-        return Response.json({
-          accountId: "jira-me",
-          emailAddress: "me@example.com",
-          displayName: "Me",
-        });
+        if (method === "GET" && path === "/rest/api/3/myself") {
+          return Response.json({
+            accountId: "jira-me",
+            emailAddress: "me@example.com",
+            displayName: "Me",
+          });
+        }
+
+        if (method === "POST" && path === "/rest/api/3/search/jql") {
+          return Response.json({
+            issues: [
+              jiraIssue("10000", "TEST-1"),
+              jiraIssue("10001", "TEST-2", "10000"),
+            ],
+          });
+        }
+
+        return new Response("Not Found", { status: 404 });
+      };
+
+      try {
+        const result = await jiraImportSource.run(
+          ctx,
+          {
+            host: JIRA_HOST,
+            email: "me@example.com",
+            token: "secret",
+          },
+          { projectKey: "TEST" }
+        );
+        expect(result.counts.issues).toBe(2);
+        expect(result.counts.parentLinks).toBe(1);
+
+        expect(issueWrites).toEqual([
+          { method: "createIssue", options: { notify: false } },
+          { method: "createIssue", options: { notify: false } },
+          { method: "updateIssue", options: { notify: false } },
+        ]);
+      } finally {
+        globalThis.fetch = originalFetch;
       }
-
-      if (method === "POST" && path === "/rest/api/3/search/jql") {
-        return Response.json({
-          issues: [
-            jiraIssue("10000", "TEST-1"),
-            jiraIssue("10001", "TEST-2", "10000"),
-          ],
-        });
-      }
-
-      return new Response("Not Found", { status: 404 });
-    };
-
-    try {
-      const result = await jiraImportSource.run(
-        ctx,
-        {
-          host: JIRA_HOST,
-          email: "me@example.com",
-          token: "secret",
-        },
-        { projectKey: "TEST" }
-      );
-      expect(result.counts.issues).toBe(2);
-      expect(result.counts.parentLinks).toBe(1);
-
-      expect(issueWrites).toEqual([
-        { method: "createIssue", options: { notify: false } },
-        { method: "createIssue", options: { notify: false } },
-        { method: "updateIssue", options: { notify: false } },
-      ]);
-    } finally {
-      globalThis.fetch = originalFetch;
     }
-  });
+  );
 });

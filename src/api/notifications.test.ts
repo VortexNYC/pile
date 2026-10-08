@@ -66,7 +66,7 @@ async function fetch(
 const prefsSchema = z.object({
   inApp: z.boolean(),
   webhook: z.boolean(),
-  email: z.boolean(),
+  email: z.boolean().nullable(),
   emailExplicit: z.boolean(),
   mutedTypes: z.array(z.string()).nullable(),
   updatedAt: z.string(),
@@ -89,7 +89,9 @@ describe("notification preferences API", () => {
     expect(res.status).toBe(200);
     const prefs = prefsSchema.parse(await res.json());
     expect(prefs.inApp).toBe(true);
-    expect(prefs.email).toBe(false);
+    // email is unset, not off — directed notifications still email by
+    // default, so the API reports null rather than a misleading false.
+    expect(prefs.email).toBeNull();
     expect(prefs.emailExplicit).toBe(false);
     expect(prefs.mutedTypes).toBeNull();
   });
