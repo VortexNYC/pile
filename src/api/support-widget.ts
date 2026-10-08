@@ -646,7 +646,21 @@ export function registerSupportWidgetRoutes(app: OpenAPIHono<AppContext>) {
         // Late identity upgrade — an anonymous session that later supplies
         // email/externalId (+identifierHash) adopts that customer so votes
         // and ideas attribute correctly.
-        if (!session.customerId && (body.email ?? body.externalId)) {
+        // A placeholder contact from an anonymous first message counts as
+        // no identity yet, so sign-in after chatting still upgrades in place.
+        const placeholder =
+          session.customerId != null &&
+          (
+            await getCustomerById(
+              db,
+              widgetKey.organizationId,
+              session.customerId
+            )
+          )?.email === `anonymous-${session.id}@widget.pile`;
+        if (
+          (!session.customerId || placeholder) &&
+          (body.email ?? body.externalId)
+        ) {
           let upgradedVerified = session.identityVerified;
           if (body.identifierHash) {
             const identifier = body.externalId ?? body.email;

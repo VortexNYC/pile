@@ -765,6 +765,30 @@ describe("support widget", () => {
     expect(signedIn!.ticketId).toBeNull();
   });
 
+  it("upgrades an anonymous session in place when the visitor signs in", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const key = await createKey(organizationId, token);
+    const { data: anon } = await startSession(key.key);
+    const sent = await widgetFetch(`/support/widget/${key.key}/messages`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-pile-widget-session": anon!.sessionToken,
+      },
+      body: JSON.stringify({ text: "Before signing in" }),
+    });
+    expect(sent.status).toBe(200);
+    const hash = await hmacSha256Hex(key.hmacSecret, "user_late");
+    const { data: signedIn } = await startSession(key.key, {
+      sessionToken: anon!.sessionToken,
+      externalId: "user_late",
+      identifierHash: hash,
+    });
+    expect(signedIn!.sessionToken).toBe(anon!.sessionToken);
+    expect(signedIn!.ticketId).not.toBeNull();
+    expect(signedIn!.identityVerified).toBe(true);
+  });
+
   it("still upgrades an anonymous session that later supplies an email", async () => {
     const { organizationId, token } = await seedWorkspace();
     const key = await createKey(organizationId, token);

@@ -299,14 +299,22 @@ function boot(settings: WidgetSettings): void {
     if (requireEmail && !email) emailGate.style.display = "flex";
   }
 
-  async function poll(): Promise<void> {
-    if (!sessionToken || destroyed) return;
+  // Each (re)start bumps pollChain; an older chain stops at its next step, so
+  // restarting never leaves two loops running.
+  let pollChain = 0;
+  function restartPoll(): void {
+    clearTimeout(pollTimer);
+    void poll(++pollChain);
+  }
+
+  async function poll(chain: number): Promise<void> {
+    if (!sessionToken || destroyed || chain !== pollChain) return;
     const gen = generation;
     try {
       const data = (await api(
         `/support/widget/${key}/messages${lastSeen ? `?after=${encodeURIComponent(lastSeen)}` : ""}`
       )) as { messages: WidgetMessage[] };
-      if (gen !== generation) return;
+      if (gen !== generation || chain !== pollChain) return;
       let unread = 0;
       for (const m of data.messages) {
         if (m.createdAt > lastSeen) {
@@ -319,8 +327,11 @@ function boot(settings: WidgetSettings): void {
     } catch {
       // transient — next poll retries
     }
-    if (destroyed || gen !== generation) return;
-    pollTimer = window.setTimeout(poll, open ? POLL_OPEN_MS : POLL_CLOSED_MS);
+    if (destroyed || gen !== generation || chain !== pollChain) return;
+    pollTimer = window.setTimeout(
+      () => void poll(chain),
+      open ? POLL_OPEN_MS : POLL_CLOSED_MS
+    );
   }
 
   async function send(): Promise<void> {
@@ -567,13 +578,23 @@ function boot(settings: WidgetSettings): void {
           externalId?: string;
           identifierHash?: string;
         };
+        const prevEmail = email?.toLowerCase();
+        const nextEmail = u?.email?.toLowerCase();
         const switched =
           loggedOut ||
-          (u?.externalId != null && u.externalId !== settings.externalId);
+          (u?.externalId != null && u.externalId !== settings.externalId) ||
+          (u?.externalId == null &&
+            settings.externalId == null &&
+            prevEmail != null &&
+            nextEmail != null &&
+            nextEmail !== prevEmail);
+        // An anonymous visitor signing in keeps their token so the server
+        // upgrades that session (and its ticket) in place.
+        const wasBound = settings.externalId != null || email != null;
         if (switched) {
-          // A different signed-in user: nothing from the previous user —
+          // A different person: nothing from the previous identity —
           // token, thread, hash, or contact details — carries over.
-          resetSession();
+          if (wasBound) resetSession();
           settings.externalId = u?.externalId;
           settings.identifierHash = u?.identifierHash;
           email = u?.email;
@@ -589,9 +610,7 @@ function boot(settings: WidgetSettings): void {
           host.style.display = "";
         }
         void startSession()
-          .then(() => {
-            if (switched) poll();
-          })
+          .then(restartPoll)
           .catch(() => {
             // network — the next setUser or reload retries
           });
@@ -618,7 +637,7 @@ function boot(settings: WidgetSettings): void {
 
   void startSession()
     .then(() => {
-      poll();
+      restartPoll();
       for (const call of queued) {
         const [cmd, arg] = call as [string, unknown?];
         g.PileChat?.(cmd, arg);
