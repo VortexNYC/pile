@@ -185,6 +185,17 @@ export function formatTriageComment(
 }
 
 /**
+ * Precomputed context for dispatchTriageLane — lets the caller supply the
+ * similar-issue hits and label list itself. Required when dispatching from
+ * inside the workspace DO's waitUntil: calling the DO stub back into the
+ * same object from a waitUntil task deadlocks the input gate (~40s hang).
+ */
+export interface TriageContext {
+  similar: Array<{ issue: Issue; score: number }>;
+  labelNames: string[];
+}
+
+/**
  * Starts the triage lane for a freshly created issue when its team has a
  * `triageAgentId`. Returns null when triage is not configured or not
  * applicable (drafts, closed issues).
@@ -193,7 +204,8 @@ export async function dispatchTriageLane(
   env: WorkerEnv,
   organizationId: string,
   issue: Issue,
-  actorId?: string
+  actorId?: string,
+  context?: TriageContext
 ): Promise<AgentSession | null> {
   if (issue.isDraft || issue.status === "done" || issue.status === "canceled")
     return null;
@@ -201,13 +213,22 @@ export async function dispatchTriageLane(
   const team = await getTeamById(d1, issue.teamId, organizationId);
   if (!team?.triageAgentId) return null;
 
-  const stub = env.WORKSPACE_DURABLE_OBJECT.get(
-    env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
-  );
-  const [similar, labels] = await Promise.all([
-    stub.findSimilarIssues(issue.id, [issue.teamId], SIMILAR_CANDIDATE_LIMIT),
-    listLabels(d1, organizationId),
-  ]);
+  let similar: TriageContext["similar"];
+  let labelNames: string[];
+  if (context) {
+    similar = context.similar;
+    labelNames = context.labelNames;
+  } else {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    const [hits, labels] = await Promise.all([
+      stub.findSimilarIssues(issue.id, [issue.teamId], SIMILAR_CANDIDATE_LIMIT),
+      listLabels(d1, organizationId),
+    ]);
+    similar = hits;
+    labelNames = labels.filter((l) => l.kind === "issue").map((l) => l.name);
+  }
   const candidates: TriageCandidate[] = similar
     .filter((hit) => hit.issue.identifier)
     .map((hit) => ({
@@ -215,9 +236,6 @@ export async function dispatchTriageLane(
       title: hit.issue.title,
       status: hit.issue.status,
     }));
-  const labelNames = labels
-    .filter((l) => l.kind === "issue")
-    .map((l) => l.name);
 
   const actor: WorkspaceIdentity = {
     id: actorId ?? team.ownerId,
