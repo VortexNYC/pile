@@ -371,6 +371,25 @@ describe("CloudflareBackend lane cache mount (PILE-306)", () => {
     expect(mountBucket).not.toHaveBeenCalled();
   });
 
+  it("reuses a live sandbox's existing mount on follow-ups", async () => {
+    const { handle } = mountHandle(() =>
+      Promise.reject(
+        new Error(`Mount path already in use: ${LANE_CACHE_MOUNT}`)
+      )
+    );
+    const backend = new CloudflareBackend(
+      () => Promise.resolve(handle),
+      cacheEnv()
+    );
+    expect(
+      await backend.mountCache(sandboxRecord, {
+        organizationId: "org-1",
+        repo: "acme/widgets",
+        readOnly: false,
+      })
+    ).toBe(LANE_CACHE_MOUNT);
+  });
+
   it("fails open when s3fs cannot mount", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const { handle } = mountHandle(() =>
