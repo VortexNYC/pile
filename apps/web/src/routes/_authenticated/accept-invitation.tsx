@@ -32,7 +32,9 @@ function AcceptInvitation() {
       return result.data?.member.organizationId ?? null;
     },
     onSuccess: async (organizationId) => {
-      await queryClient.invalidateQueries({ queryKey: workspacesQuery.queryKey });
+      await queryClient.invalidateQueries({
+        queryKey: workspacesQuery.queryKey,
+      });
       const workspaces = await queryClient.fetchQuery(workspacesQuery);
       const joined = workspaces.find((w) => w.id === organizationId);
       await (joined
