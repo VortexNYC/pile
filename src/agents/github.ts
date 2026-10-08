@@ -43,7 +43,6 @@ import { nudgeLane, type NudgeOptions, resolveLaneForIssue } from "./nudge.js";
 import {
   type AutomationEventTarget,
   automationEventTarget,
-  isTriggerLane,
   issueEventTarget,
 } from "./repo-triggers.js";
 import { reviewPromptWithContext } from "./review-context.js";
@@ -79,6 +78,7 @@ const pullRequestPayloadSchema = z.object({
     }),
     base: z.object({ ref: z.string() }).optional(),
   }),
+  sender: z.object({ type: z.string() }).optional(),
 });
 
 const REVIEW_TRIGGER_ACTIONS = new Set([
@@ -1113,10 +1113,7 @@ async function processPullRequestReview(
         workspaceRecord.organizationId,
         eventName,
         issueEventTarget(stub, session.issueId),
-        automationPrompt,
-        undefined,
-        undefined,
-        { skipRepoTriggers: isTriggerLane(session) }
+        automationPrompt
       );
     }
   }
@@ -1274,7 +1271,7 @@ async function processPullRequest(
     });
   }
 
-  const { action, label, pull_request } = payload.data;
+  const { action, label, pull_request, sender } = payload.data;
   const repo = pull_request.head.repo.full_name;
   const branch = pull_request.head.ref;
   const prUrl = pull_request.html_url;
@@ -1401,7 +1398,7 @@ async function processPullRequest(
         ? `Label "${label?.name ?? ""}" was added to ${prUrl} (branch ${branch}).`
         : `PR ${prUrl} (branch ${branch}): ${pull_request.title}`,
       undefined,
-      { label: label?.name }
+      { label: label?.name, pushedByBot: sender?.type === "Bot" }
     );
   }
 
