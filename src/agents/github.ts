@@ -1402,8 +1402,12 @@ async function processPullRequest(
       undefined,
       {
         label: label?.name,
+        // No sender counts as a bot so a stripped payload can't reopen the
+        // pr.synchronize self-feed loop.
         pushedByBot:
-          sender?.type === "Bot" || sender?.login?.endsWith("[bot]") === true,
+          !sender ||
+          sender.type === "Bot" ||
+          sender.login?.endsWith("[bot]") === true,
       }
     );
   }

@@ -432,6 +432,7 @@ describe("structural self-feed guard (PILE-272)", () => {
       { on: "pr.synchronize", agent: "trigger-mock", prompt: "Re-check it." },
       { on: "pr.conflict", agent: "trigger-mock", prompt: "Resolve it." },
       { on: "ci.failed", agent: "trigger-mock", prompt: "Fix CI." },
+      { on: "pr.review", agent: "trigger-mock", prompt: "Answer it." },
       {
         on: "pr.changes_requested",
         agent: "trigger-mock",
@@ -461,6 +462,8 @@ describe("structural self-feed guard (PILE-272)", () => {
   it("skips a trigger lane's own conflict and bot pushes without a call-site flag", async () => {
     const issue = await issueWithLane("trigger:pr.synchronize");
     await fire(issue, "pr.conflict");
+    await fire(issue, "ci.failed");
+    await fire(issue, "pr.review");
     await fire(issue, "pr.synchronize", { pushedByBot: true });
     expect(await purposes(issue.id)).toEqual(["trigger:pr.synchronize"]);
   });
