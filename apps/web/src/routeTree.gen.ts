@@ -17,6 +17,7 @@ import { Route as AuthResetPasswordRouteImport } from './routes/_auth/reset-pass
 import { Route as AuthSignInRouteImport } from './routes/_auth/sign-in'
 import { Route as AuthSignUpRouteImport } from './routes/_auth/sign-up'
 import { Route as AuthenticatedSlugRouteImport } from './routes/_authenticated/$slug'
+import { Route as AuthenticatedAcceptInvitationRouteImport } from './routes/_authenticated/accept-invitation'
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
 import { Route as AuthenticatedSlugIndexRouteImport } from './routes/_authenticated/$slug/index'
 import { Route as AuthenticatedSlugCustomersIndexRouteImport } from './routes/_authenticated/$slug/customers/index'
@@ -70,6 +71,12 @@ const AuthenticatedSlugRoute = AuthenticatedSlugRouteImport.update({
   path: '/$slug',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedAcceptInvitationRoute =
+  AuthenticatedAcceptInvitationRouteImport.update({
+    id: '/accept-invitation',
+    path: '/accept-invitation',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedOnboardingRoute = AuthenticatedOnboardingRouteImport.update({
   id: '/onboarding',
   path: '/onboarding',
@@ -160,6 +167,7 @@ export interface FileRoutesByFullPath {
   '/sign-in': typeof AuthSignInRoute
   '/sign-up': typeof AuthSignUpRoute
   '/$slug': typeof AuthenticatedSlugRouteWithChildren
+  '/accept-invitation': typeof AuthenticatedAcceptInvitationRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/$slug/': typeof AuthenticatedSlugIndexRoute
   '/$slug/customers/$customerId': typeof AuthenticatedSlugCustomersCustomerIdRoute
@@ -181,6 +189,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof AuthResetPasswordRoute
   '/sign-in': typeof AuthSignInRoute
   '/sign-up': typeof AuthSignUpRoute
+  '/accept-invitation': typeof AuthenticatedAcceptInvitationRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/$slug': typeof AuthenticatedSlugIndexRoute
   '/$slug/customers/$customerId': typeof AuthenticatedSlugCustomersCustomerIdRoute
@@ -206,6 +215,7 @@ export interface FileRoutesById {
   '/_auth/sign-in': typeof AuthSignInRoute
   '/_auth/sign-up': typeof AuthSignUpRoute
   '/_authenticated/$slug': typeof AuthenticatedSlugRouteWithChildren
+  '/_authenticated/accept-invitation': typeof AuthenticatedAcceptInvitationRoute
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
   '/_authenticated/$slug/': typeof AuthenticatedSlugIndexRoute
   '/_authenticated/$slug/customers/$customerId': typeof AuthenticatedSlugCustomersCustomerIdRoute
@@ -230,6 +240,7 @@ export interface FileRouteTypes {
     | '/sign-in'
     | '/sign-up'
     | '/$slug'
+    | '/accept-invitation'
     | '/onboarding'
     | '/$slug/'
     | '/$slug/customers/$customerId'
@@ -251,6 +262,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/sign-in'
     | '/sign-up'
+    | '/accept-invitation'
     | '/onboarding'
     | '/$slug'
     | '/$slug/customers/$customerId'
@@ -275,6 +287,7 @@ export interface FileRouteTypes {
     | '/_auth/sign-in'
     | '/_auth/sign-up'
     | '/_authenticated/$slug'
+    | '/_authenticated/accept-invitation'
     | '/_authenticated/onboarding'
     | '/_authenticated/$slug/'
     | '/_authenticated/$slug/customers/$customerId'
@@ -353,6 +366,13 @@ declare module '@tanstack/react-router' {
       path: '/$slug'
       fullPath: '/$slug'
       preLoaderRoute: typeof AuthenticatedSlugRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/accept-invitation': {
+      id: '/_authenticated/accept-invitation'
+      path: '/accept-invitation'
+      fullPath: '/accept-invitation'
+      preLoaderRoute: typeof AuthenticatedAcceptInvitationRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/onboarding': {
@@ -511,11 +531,13 @@ const AuthenticatedSlugRouteWithChildren =
 
 interface AuthenticatedRouteChildren {
   AuthenticatedSlugRoute: typeof AuthenticatedSlugRouteWithChildren
+  AuthenticatedAcceptInvitationRoute: typeof AuthenticatedAcceptInvitationRoute
   AuthenticatedOnboardingRoute: typeof AuthenticatedOnboardingRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedSlugRoute: AuthenticatedSlugRouteWithChildren,
+  AuthenticatedAcceptInvitationRoute: AuthenticatedAcceptInvitationRoute,
   AuthenticatedOnboardingRoute: AuthenticatedOnboardingRoute,
 }
 

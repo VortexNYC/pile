@@ -8,7 +8,7 @@ import { Headset, Plus } from "@phosphor-icons/react";
 import {
   keepPreviousData,
   useMutation,
-  useQuery,
+  useInfiniteQuery,
   useQueryClient,
 } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
@@ -46,21 +46,22 @@ function TicketsList() {
   const navigate = useNavigate({ from: Route.fullPath });
   const [adding, setAdding] = useState(false);
 
-  const tickets = useQuery({
+  const tickets = useInfiniteQuery({
     queryKey: wsKey(workspace.id, "tickets", { status }),
-    queryFn: async () =>
-      (
-        await unwrap(
-          api.GET("/workspaces/{organizationId}/support/tickets", {
-            params: {
-              path: { organizationId: workspace.id },
-              query: { limit: 100, status },
-            },
-          })
-        )
-      ).tickets,
+    queryFn: ({ pageParam }) =>
+      unwrap(
+        api.GET("/workspaces/{organizationId}/support/tickets", {
+          params: {
+            path: { organizationId: workspace.id },
+            query: { limit: 50, status, cursor: pageParam },
+          },
+        })
+      ),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
     placeholderData: keepPreviousData,
   });
+  const rows = tickets.data?.pages.flatMap((page) => page.tickets) ?? [];
 
   return (
     <Page
@@ -108,7 +109,7 @@ function TicketsList() {
           error={tickets.error}
           onRetry={() => void tickets.refetch()}
         />
-      ) : tickets.data.length === 0 ? (
+      ) : rows.length === 0 ? (
         <EmptyState
           icon={<Headset size={40} />}
           title="No tickets"
@@ -127,7 +128,7 @@ function TicketsList() {
               </Table.Row>
             </Table.Header>
             <Table.Body>
-              {tickets.data.map((ticket) => (
+              {rows.map((ticket) => (
                 <Table.Row key={ticket.id}>
                   <Table.Cell>
                     <Link
@@ -169,6 +170,16 @@ function TicketsList() {
           </Table>
         </LayerCard>
       )}
+      {tickets.hasNextPage ? (
+        <div className="flex justify-center">
+          <Button
+            loading={tickets.isFetchingNextPage}
+            onClick={() => void tickets.fetchNextPage()}
+          >
+            Load more
+          </Button>
+        </div>
+      ) : null}
     </Page>
   );
 }

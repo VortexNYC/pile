@@ -1,7 +1,8 @@
 # Copy to .dev.vars for `pnpm dev` (wrangler dev).
 # Values here override wrangler.toml [vars] during local dev only.
 BETTER_AUTH_URL=http://localhost:8787
-ALLOWED_ORIGINS=http://localhost:8787,http://127.0.0.1:8787
+# :5181 is the apps/web Vite dev server (and Playwright), which proxies to :8787.
+ALLOWED_ORIGINS=http://localhost:8787,http://127.0.0.1:8787,http://localhost:5181,http://127.0.0.1:5181
 # Only BETTER_AUTH_SECRET is required locally — it also backs credential
 # encryption (AGENT_SETTINGS_KEK / DISPATCH_SECRET fall back to it).
 BETTER_AUTH_SECRET=local-dev-secret-change-me

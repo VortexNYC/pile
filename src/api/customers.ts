@@ -37,7 +37,9 @@ const createCustomerSchema = z.object({
   ownerId: z.string().optional(),
 });
 
-const updateCustomerSchema = createCustomerSchema.partial();
+const updateCustomerSchema = createCustomerSchema.partial().extend({
+  url: z.string().nullable().optional(),
+});
 
 const tierSchema = z.object({
   id: z.string(),

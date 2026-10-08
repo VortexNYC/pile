@@ -69,7 +69,7 @@ function CustomerEditor({
           params: { path },
           body: {
             name: name.trim(),
-            ...(url.trim() ? { url: url.trim() } : {}),
+            url: url.trim() || null,
           },
         })
       ),

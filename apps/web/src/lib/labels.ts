@@ -104,7 +104,43 @@ const NOTIFICATION_LABELS: Record<string, string> = {
   comment_mentioned: "You were mentioned in a comment",
   issue_comment: "New comment on an issue",
   issue_status_changed: "Issue status changed",
+  issue_created: "New issue",
+  issue_updated: "Issue updated",
+  issue_deleted: "Issue deleted",
+  comment_created: "New comment on an issue",
+  document_commented: "New comment on a document",
+  document_updated: "Document updated",
+  mention: "You were mentioned",
+  lane_needs_input: "An issue needs your input",
 };
+
+export type NotificationTarget =
+  | { kind: "issue"; id: string }
+  | { kind: "document"; id: string };
+
+/**
+ * Where a notification should open. The server reuses `issueId` as the
+ * subject id, so document notifications carry the document id there and the
+ * real target lives in `metadata`. Deleted issues have nowhere to go.
+ */
+export function notificationTarget(item: {
+  type: string;
+  issueId: string;
+  metadata?: unknown;
+}): NotificationTarget | null {
+  if (item.type === "issue_deleted") return null;
+  const meta =
+    typeof item.metadata === "object" && item.metadata !== null
+      ? (item.metadata as Record<string, unknown>)
+      : {};
+  if (typeof meta.documentId === "string" && meta.documentId) {
+    return { kind: "document", id: meta.documentId };
+  }
+  if (typeof meta.issueId === "string" && meta.issueId) {
+    return { kind: "issue", id: meta.issueId };
+  }
+  return item.issueId ? { kind: "issue", id: item.issueId } : null;
+}
 
 export function notificationLabel(type: string): string {
   const known = NOTIFICATION_LABELS[type];

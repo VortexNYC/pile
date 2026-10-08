@@ -14568,7 +14568,7 @@ export interface paths {
                 content: {
                     "application/json": {
                         name?: string;
-                        url?: string;
+                        url?: string | null;
                         logoUrl?: string;
                         externalId?: string;
                         tierId?: string;

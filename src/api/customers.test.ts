@@ -99,6 +99,28 @@ describe("customers API", () => {
     token = seeded.token;
   });
 
+  it("sets and clears a customer's website", async () => {
+    const customer = await createCustomer(organizationId, token, "Web Co");
+    const path = `/workspaces/${organizationId}/customers/${customer.id}`;
+    const urlSchema = z.object({ url: z.string().nullable() });
+
+    const set = await fetch(
+      path,
+      { method: "PATCH", body: JSON.stringify({ url: "https://web.example" }) },
+      token
+    );
+    expect(set.status).toBe(200);
+    expect(urlSchema.parse(await set.json()).url).toBe("https://web.example");
+
+    const cleared = await fetch(
+      path,
+      { method: "PATCH", body: JSON.stringify({ url: null }) },
+      token
+    );
+    expect(cleared.status).toBe(200);
+    expect(urlSchema.parse(await cleared.json()).url).toBeNull();
+  });
+
   it("rejects attachment requests without auth", async () => {
     const res = await fetch(
       `/workspaces/${organizationId}/customers/some-id/attachments`

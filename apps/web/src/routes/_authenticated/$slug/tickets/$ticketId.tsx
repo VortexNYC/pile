@@ -73,24 +73,25 @@ function TicketDetail() {
     onSettled: invalidate,
   });
 
+  const channels = useQuery({
+    queryKey: wsKey(organizationId, "support-channels"),
+    queryFn: async () =>
+      (
+        await unwrap(
+          api.GET("/workspaces/{organizationId}/support-channels", {
+            params: { path: { organizationId } },
+          })
+        )
+      ).channels,
+  });
+
   const send = useMutation({
     mutationFn: async (input: {
       text: string;
       mode: "reply" | "note";
-      channel:
-        | "email"
-        | "slack"
-        | "msteams"
-        | "discord"
-        | "chat"
-        | "capture"
-        | "api"
-        | "intercom"
-        | "zendesk"
-        | "plain"
-        | "linear";
+      channelId: string | null;
     }) => {
-      if (input.mode === "note") {
+      if (input.mode === "note" || !input.channelId) {
         await unwrap(
           api.POST(
             "/workspaces/{organizationId}/support/tickets/{ticketId}/notes",
@@ -102,19 +103,24 @@ function TicketDetail() {
         );
         return;
       }
-      await unwrap(
+      const result = await unwrap(
         api.POST(
-          "/workspaces/{organizationId}/support/tickets/{ticketId}/messages",
+          "/workspaces/{organizationId}/support/channels/{channelId}/send",
           {
-            params: { path },
+            params: { path: { organizationId, channelId: input.channelId } },
             body: {
-              direction: "outbound",
+              ticketId,
               textContent: input.text,
-              channel: input.channel,
+              idempotencyKey: crypto.randomUUID(),
             },
           }
         )
       );
+      if (!result.sent) {
+        throw new Error(
+          "Your reply was saved, but it couldn't be delivered to the customer."
+        );
+      }
     },
     onSuccess: () => setReply(""),
     onError: (error) => toastError(error),
@@ -133,6 +139,12 @@ function TicketDetail() {
     );
   }
   const data = ticket.data;
+  const replyChannel =
+    channels.data?.find(
+      (channel) => channel.isActive && channel.type === data.sourceChannel
+    ) ?? null;
+  const canReply = replyChannel !== null;
+  const effectiveMode = canReply ? mode : "note";
   const events = data.events.filter((e) => e.message || e.note);
 
   return (
@@ -231,15 +243,20 @@ function TicketDetail() {
           event.preventDefault();
           const text = reply.trim();
           if (text && !send.isPending)
-            send.mutate({ text, mode, channel: data.sourceChannel });
+            send.mutate({
+              text,
+              mode: effectiveMode,
+              channelId: replyChannel?.id ?? null,
+            });
         }}
       >
         <div className="flex gap-2" role="group" aria-label="Message type">
           <Button
             type="button"
             size="sm"
-            variant={mode === "reply" ? "primary" : "ghost"}
-            aria-pressed={mode === "reply"}
+            variant={effectiveMode === "reply" ? "primary" : "ghost"}
+            aria-pressed={effectiveMode === "reply"}
+            disabled={!canReply}
             onClick={() => setMode("reply")}
           >
             Reply to customer
@@ -247,17 +264,25 @@ function TicketDetail() {
           <Button
             type="button"
             size="sm"
-            variant={mode === "note" ? "primary" : "ghost"}
-            aria-pressed={mode === "note"}
+            variant={effectiveMode === "note" ? "primary" : "ghost"}
+            aria-pressed={effectiveMode === "note"}
             onClick={() => setMode("note")}
           >
             Internal note
           </Button>
         </div>
+        {channels.isSuccess && !canReply ? (
+          <Text variant="secondary" size="sm">
+            This ticket came in through a channel that isn't connected for
+            replies, so you can only add internal notes here.
+          </Text>
+        ) : null}
         <InputArea
-          aria-label={mode === "note" ? "Internal note" : "Reply"}
+          aria-label={effectiveMode === "note" ? "Internal note" : "Reply"}
           placeholder={
-            mode === "note" ? "Only your team sees this…" : "Write a reply…"
+            effectiveMode === "note"
+              ? "Only your team sees this…"
+              : "Write a reply…"
           }
           value={reply}
           autoResize
@@ -271,7 +296,7 @@ function TicketDetail() {
             loading={send.isPending}
             disabled={!reply.trim()}
           >
-            {mode === "note" ? "Add note" : "Send reply"}
+            {effectiveMode === "note" ? "Add note" : "Send reply"}
           </Button>
         </div>
       </form>
