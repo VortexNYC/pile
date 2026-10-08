@@ -572,9 +572,7 @@ describe("support widget", () => {
       "cross-origin"
     );
     const api = await widgetFetch("/health");
-    expect(api.headers.get("cross-origin-resource-policy")).toBe(
-      "same-origin"
-    );
+    expect(api.headers.get("cross-origin-resource-policy")).toBe("same-origin");
   });
 
   it("mounts on a platform product origin: signed-in user opens a ticket without email", async () => {
