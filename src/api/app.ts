@@ -1,4 +1,4 @@
-import type { Hono } from "hono";
+import type { Context, Hono } from "hono";
 
 import type { AppContext } from "../platform/middleware.js";
 
@@ -218,6 +218,38 @@ boot();
 </body>
 </html>`;
 
+const CONSOLE_PREFIX = "/app";
+const ASSET_FILE = /\/[^/]+\.[a-z0-9]+$/i;
+
+/**
+ * The member console (apps/web) is a Vite SPA built into Workers Static
+ * Assets and served same-origin under /app, so Better Auth cookies apply
+ * with no CORS. Asset files resolve directly; every other /app path falls
+ * back to index.html for client-side routing.
+ */
+function serveConsole(c: Context<AppContext>): Response | Promise<Response> {
+  const assets = c.env.ASSETS;
+  if (!assets) {
+    return c.text(
+      "Member console is not built. Run `pnpm -C apps/web build`.",
+      503
+    );
+  }
+  const url = new URL(c.req.url);
+  const rest = url.pathname.slice(CONSOLE_PREFIX.length) || "/";
+  if (ASSET_FILE.test(rest)) {
+    return assets.fetch(new Request(new URL(rest, url.origin), c.req.raw));
+  }
+  return assets.fetch(new Request(new URL("/", url.origin))).then((res) => {
+    const headers = new Headers(res.headers);
+    headers.set("Cache-Control", "no-cache");
+    return new Response(res.body, { status: res.status, headers });
+  });
+}
+
 export function registerAppRoute(app: Hono<AppContext>) {
-  app.get("/app", (c) => c.html(PAGE));
+  // Operator dashboard for agent sessions (CLI-adjacent; not the member console).
+  app.get("/agents", (c) => c.html(PAGE));
+  app.get(CONSOLE_PREFIX, serveConsole);
+  app.get(`${CONSOLE_PREFIX}/*`, serveConsole);
 }

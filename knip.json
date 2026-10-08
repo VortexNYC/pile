@@ -3,6 +3,9 @@
   "workspaces": {
     ".": {
       "entry": ["scripts/consolidate-linear-import.ts"]
+    },
+    "apps/web": {
+      "entry": ["src/routes/**/*.tsx", "e2e/**/*.ts"]
     }
   },
   "ignore": [
