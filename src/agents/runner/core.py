@@ -1535,8 +1535,12 @@ def stop_log_ship():
 
 # pnpm store cache: the runner downloads a tarball of the pnpm store keyed
 # by the repo's lockfile hash before the agent starts, and uploads it back
-# after — turns cold monorepo installs into a single R2 fetch.
+# after — turns cold monorepo installs into a single R2 fetch. When the
+# backend mounts the repo's shared cache bucket (PILE_CACHE_DIR, PILE-306)
+# the tarball is read from / written to the mount; the HTTP cache remains
+# the fallback for a miss or a read-only mount.
 PILE_CACHE_URL = os.environ.get('PILE_CACHE_URL')
+PILE_CACHE_DIR = os.environ.get('PILE_CACHE_DIR')
 STORE_DIR = os.environ.get('npm_config_store_dir')
 
 
@@ -1553,11 +1557,52 @@ def _lockfile_hash():
     return hashlib.sha256(open(p, 'rb').read()).hexdigest()
 
 
+def _http_cache():
+    return bool(PILE_CACHE_URL and PILE_LOG_TOKEN)
+
+
+def _mounted_store(h):
+    if not (PILE_CACHE_DIR and os.path.isdir(PILE_CACHE_DIR)):
+        return None
+    return os.path.join(PILE_CACHE_DIR, 'pnpm-store', f'{h}.tar.gz')
+
+
+def _save_to_mount(h, tarball):
+    path = _mounted_store(h)
+    if not path:
+        return False
+    tmp = f'{path}.tmp-{os.urandom(6).hex()}'
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        shutil.copyfile(tarball, tmp)
+        os.replace(tmp, path)
+    except OSError as e:
+        print(f'[cache] mount save failed: {e}')
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        return False
+    print(f'[cache] pnpm store saved to mount {h[:12]}')
+    return True
+
+
 def warm_pnpm_store():
-    if not (PILE_CACHE_URL and PILE_LOG_TOKEN and STORE_DIR):
+    if not STORE_DIR:
         return
     h = _lockfile_hash()
     if not h:
+        return
+    mounted = _mounted_store(h)
+    if mounted and os.path.isfile(mounted):
+        try:
+            os.makedirs(STORE_DIR, exist_ok=True)
+            subprocess.run(['tar', '-xzf', mounted, '-C', STORE_DIR], check=True)
+            print(f'[cache] pnpm store warm hit {h[:12]} (mount)')
+            return
+        except Exception as e:
+            print(f'[cache] mount warm failed: {e}')
+    if not _http_cache():
         return
     try:
         resp = _cache_request('GET', f'{PILE_CACHE_URL}/{h}')
@@ -1574,13 +1619,22 @@ def warm_pnpm_store():
 
 
 def save_pnpm_store():
-    if not (PILE_CACHE_URL and PILE_LOG_TOKEN and STORE_DIR):
+    if not STORE_DIR:
         return
     h = _lockfile_hash()
     if not h or not os.path.isdir(STORE_DIR):
         return
+    mounted = _mounted_store(h)
+    if mounted and os.path.isfile(mounted):
+        # Same lockfile, same store — a sibling lane already shared it.
+        print(f'[cache] pnpm store already on mount {h[:12]}')
+        return
+    if not (mounted or _http_cache()):
+        return
     try:
         subprocess.run(['tar', '-czf', '/tmp/pnpm-store.tar.gz', '-C', STORE_DIR, '.'], check=True)
+        if _save_to_mount(h, '/tmp/pnpm-store.tar.gz') or not _http_cache():
+            return
         size = os.path.getsize('/tmp/pnpm-store.tar.gz')
         chunk = 64 * 1024 * 1024
         if size <= chunk:

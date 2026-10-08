@@ -37,6 +37,13 @@ name = "EMAIL"
 binding = "ATTACHMENTS_BUCKET"
 bucket_name = "pile-attachments"
 
+# Shared lane cache (PILE-306): mounted into each Cloudflare sandbox under a
+# per-workspace, per-repo prefix. Optional — omit it and lanes fall back to
+# the HTTP pnpm-store cache in ATTACHMENTS_BUCKET.
+[[r2_buckets]]
+binding = "LANE_CACHE_BUCKET"
+bucket_name = "pile-lane-cache"
+
 [[durable_objects.bindings]]
 name = "WORKSPACE_DURABLE_OBJECT"
 class_name = "WorkspaceDO"

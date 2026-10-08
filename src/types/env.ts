@@ -34,6 +34,12 @@ export interface AppEnv {
   SANDBOX_CURSOR?: DurableObjectNamespace<Sandbox>;
   SANDBOX_DEVIN?: DurableObjectNamespace<Sandbox>;
   SANDBOX_CODEX?: DurableObjectNamespace<Sandbox>;
+  /**
+   * Shared lane cache (PILE-306): mounted into Cloudflare sandboxes under a
+   * per-workspace, per-repo prefix so cold lanes warm their pnpm store from
+   * it. Optional — without it lanes use the HTTP pnpm-store cache.
+   */
+  LANE_CACHE_BUCKET?: R2Bucket;
   OPENAI_API_KEY?: string;
   AGENT_PROVIDER_TOKEN?: string;
   AGENT_PROVIDER_CONFIG?: string;

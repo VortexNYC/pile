@@ -117,6 +117,15 @@ export interface ComputeBackend {
   backupWorktree?(sandbox: ComputeSandbox): Promise<string | null>;
   /** Spawn a sandbox under `name` and restore a stored worktree backup. */
   restoreWorktree?(name: string, backupJson: string): Promise<ComputeSandbox>;
+  /**
+   * Mount the repo's shared lane cache (pnpm-store tarballs) into the
+   * sandbox. Returns the mount path, or null when the backend has no cache
+   * storage or the mount failed — lanes then fall back to the HTTP cache.
+   */
+  mountCache?(
+    sandbox: ComputeSandbox,
+    opts: { organizationId: string; repo: string; readOnly: boolean }
+  ): Promise<string | null>;
   /** Public URL for a port on the sandbox — quick tunnel, lives as long as the container. */
   previewUrl?(sandbox: ComputeSandbox, port: number): Promise<string | null>;
   health(): Promise<{ ok: boolean; message?: string }>;
@@ -452,7 +461,25 @@ export type SandboxHandle = Pick<
   | "restoreBackup"
   | "exec"
   | "tunnels"
+  | "mountBucket"
 >;
+
+export const LANE_CACHE_MOUNT = "/mnt/pile-cache";
+
+const cacheSegment = (value: string) => {
+  const safe = value.replace(/[^A-Za-z0-9._-]/g, "_");
+  return /^\.+$/.test(safe) ? "_" : safe;
+};
+
+/**
+ * Bucket prefix a lane's cache mount is scoped to: one per (workspace, repo),
+ * so lanes on the same repo share warm caches and nothing crosses tenants.
+ * The R2 egress handler enforces the prefix outside the container.
+ */
+export function laneCachePrefix(organizationId: string, repo: string): string {
+  const segments = repo.split("/").filter(Boolean).map(cacheSegment);
+  return `/${cacheSegment(organizationId)}/${segments.join("/")}/`;
+}
 
 export class CloudflareBackend implements ComputeBackend {
   readonly kind = "cloudflare" as const;
@@ -745,6 +772,32 @@ export class CloudflareBackend implements ComputeBackend {
       "sandbox restore copy"
     );
     return { id: name, name, state: "started" };
+  }
+
+  async mountCache(
+    sandbox: ComputeSandbox,
+    opts: { organizationId: string; repo: string; readOnly: boolean }
+  ): Promise<string | null> {
+    if (!this.env?.LANE_CACHE_BUCKET) return null;
+    try {
+      const handle = await ioTimeout(
+        this.sandbox(sandbox.name),
+        "sandbox handle"
+      );
+      // R2-binding mount: the Sandbox DO serves s3fs from the Worker binding,
+      // so no bucket credential ever enters the container.
+      await ioTimeout(
+        handle.mountBucket("LANE_CACHE_BUCKET", LANE_CACHE_MOUNT, {
+          prefix: laneCachePrefix(opts.organizationId, opts.repo),
+          readOnly: opts.readOnly,
+        }),
+        "sandbox mountBucket"
+      );
+      return LANE_CACHE_MOUNT;
+    } catch (err) {
+      console.warn("lane cache mount failed — using HTTP cache", err);
+      return null;
+    }
   }
 
   async previewUrl(

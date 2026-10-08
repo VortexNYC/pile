@@ -716,10 +716,35 @@ export class SandboxCliAgentProvider implements AgentProvider {
             },
             { parentId: spanId }
           );
+          // Only fully trusted lanes may write the repo's shared cache; the
+          // rest read it — a restricted lane must not poison its siblings.
+          const cacheDir =
+            issue.repo && compute.mountCache
+              ? await compute.mountCache(sandbox, {
+                  organizationId,
+                  repo: issue.repo,
+                  readOnly:
+                    permissions.shell !== "enabled" ||
+                    permissions.push !== "enabled",
+                })
+              : null;
+          if (cacheDir) {
+            await this.note(
+              organizationId,
+              sessionId,
+              "status",
+              `lane cache mounted at ${cacheDir}`,
+              { sandbox: sandbox.id, path: cacheDir },
+              { parentId: spanId }
+            );
+          }
           await compute.startRunner(
             sandbox,
             sessionId,
-            "printf '%s' \"$RUNNER_PY_B64\" | base64 -d > /tmp/run.py && python3 /tmp/run.py"
+            "printf '%s' \"$RUNNER_PY_B64\" | base64 -d > /tmp/run.py && python3 /tmp/run.py",
+            cacheDir
+              ? { ...sandbox.runnerEnv, PILE_CACHE_DIR: cacheDir }
+              : undefined
           );
           // Real readiness: the runner binds :8787 when it's alive, so the
           // 'runner started' marker means the process is actually up — not

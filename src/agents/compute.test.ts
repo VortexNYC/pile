@@ -2,7 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 
 import { VortexError } from "../platform/errors.js";
 import type { AppEnv } from "../types/env.js";
-import { CloudflareBackend, computeBackend } from "./compute.js";
+import {
+  CloudflareBackend,
+  LANE_CACHE_MOUNT,
+  computeBackend,
+  laneCachePrefix,
+} from "./compute.js";
 import type { ComputeSandbox, SandboxHandle } from "./compute.js";
 
 function baseEnv(): AppEnv {
@@ -304,5 +309,84 @@ describe("CloudflareBackend", () => {
     const backend = new CloudflareBackend(() => Promise.resolve(handle));
     await backend.deleteSandbox(sandboxRecord);
     expect(destroy).toHaveBeenCalledOnce();
+  });
+});
+
+const cacheEnv = () =>
+  ({
+    ...baseEnv(),
+    LANE_CACHE_BUCKET: {} as AppEnv["ATTACHMENTS_BUCKET"],
+  }) as AppEnv;
+
+function mountHandle(impl?: () => Promise<void>) {
+  const mountBucket = vi.fn(impl ?? (() => Promise.resolve()));
+  return {
+    handle: { mountBucket } as unknown as SandboxHandle,
+    mountBucket,
+  };
+}
+
+describe("CloudflareBackend lane cache mount (PILE-306)", () => {
+  it("scopes the prefix to workspace + repo and neutralizes traversal", () => {
+    expect(laneCachePrefix("org_vortex_main", "VortexNYC/pile")).toBe(
+      "/org_vortex_main/VortexNYC/pile/"
+    );
+    expect(laneCachePrefix("org-1", "../../etc/x y")).toBe(
+      "/org-1/_/_/etc/x_y/"
+    );
+  });
+
+  it("mounts the repo's prefix via the R2 binding and returns the path", async () => {
+    const { handle, mountBucket } = mountHandle();
+    const backend = new CloudflareBackend(
+      () => Promise.resolve(handle),
+      cacheEnv()
+    );
+    const dir = await backend.mountCache(sandboxRecord, {
+      organizationId: "org-1",
+      repo: "acme/widgets",
+      readOnly: true,
+    });
+    expect(dir).toBe(LANE_CACHE_MOUNT);
+    expect(mountBucket).toHaveBeenCalledWith(
+      "LANE_CACHE_BUCKET",
+      LANE_CACHE_MOUNT,
+      { prefix: "/org-1/acme/widgets/", readOnly: true }
+    );
+  });
+
+  it("skips the mount when no cache bucket is bound", async () => {
+    const { handle, mountBucket } = mountHandle();
+    const backend = new CloudflareBackend(
+      () => Promise.resolve(handle),
+      baseEnv()
+    );
+    expect(
+      await backend.mountCache(sandboxRecord, {
+        organizationId: "org-1",
+        repo: "acme/widgets",
+        readOnly: false,
+      })
+    ).toBeNull();
+    expect(mountBucket).not.toHaveBeenCalled();
+  });
+
+  it("fails open when s3fs cannot mount", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { handle } = mountHandle(() =>
+      Promise.reject(new Error("S3FSMountError"))
+    );
+    const backend = new CloudflareBackend(
+      () => Promise.resolve(handle),
+      cacheEnv()
+    );
+    expect(
+      await backend.mountCache(sandboxRecord, {
+        organizationId: "org-1",
+        repo: "acme/widgets",
+        readOnly: false,
+      })
+    ).toBeNull();
+    warn.mockRestore();
   });
 });
