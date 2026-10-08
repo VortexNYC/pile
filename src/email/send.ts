@@ -38,16 +38,16 @@ export function buildMime(input: OutboundEmail): string {
   return msg.asRaw();
 }
 
-/** Send a MIME email through the EMAIL binding. */
+/** Send a MIME email through the EMAIL binding (or a snapshot of it taken
+ *  earlier, e.g. for deferred delivery). */
 export async function sendEmail(
-  env: AppEnv,
-  input: OutboundEmail
+  env: Pick<AppEnv, "EMAIL">,
+  input: OutboundEmail,
+  binding: SendEmail | undefined = env.EMAIL
 ): Promise<void> {
-  if (!env.EMAIL) {
+  if (!binding) {
     throw new Error("EMAIL binding not configured");
   }
   const { EmailMessage } = await import("cloudflare:email");
-  await env.EMAIL.send(
-    new EmailMessage(input.from, input.to, buildMime(input))
-  );
+  await binding.send(new EmailMessage(input.from, input.to, buildMime(input)));
 }

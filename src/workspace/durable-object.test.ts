@@ -274,6 +274,10 @@ describe("WorkspaceDO", () => {
         env.EMAIL_FROM = prevFrom;
       });
     };
+    // Email sends ride ctx.waitUntil (PILE-330) — the RPC returns before
+    // they run; flushNotificationEmails is the deterministic test seam.
+    const flushEmails = () =>
+      withWorkspace(stub, (instance) => instance.flushNotificationEmails());
 
     const issue = await withWorkspace(stub, (instance) =>
       instance.createIssue({ title: "Email me" })
@@ -284,6 +288,7 @@ describe("WorkspaceDO", () => {
         instance.updateIssue(issue.id, { assigneeId: "gh-user-1" }, "user-2")
       )
     );
+    await flushEmails();
     expect(sent).toHaveLength(1);
     expect(sent[0].from).toBe("notifications@example.com");
     expect(sent[0].to).toBe("user-1@test.local");
@@ -316,6 +321,7 @@ describe("WorkspaceDO", () => {
         );
       })
     );
+    await flushEmails();
     expect(sent).toHaveLength(1);
 
     // An explicit email opt-out wins: no send, but the in-app row lands.
@@ -333,6 +339,7 @@ describe("WorkspaceDO", () => {
         );
       })
     );
+    await flushEmails();
     expect(sent).toHaveLength(0);
     const notes = await withWorkspace(stub, (instance) =>
       instance.listNotificationsForRecipient("user-1", "user")
@@ -341,6 +348,35 @@ describe("WorkspaceDO", () => {
       notes.filter((n) => n.type === "issue_assigned" && n.issueId === issue.id)
         .length
     ).toBeGreaterThanOrEqual(2);
+  });
+
+  it("does not block or lose a write when the email send stalls (PILE-330)", async () => {
+    const stub = getStub();
+    // issue_assigned defaults to email-on; a provider send that never
+    // resolves used to sit inline in updateIssue and hang the PATCH until
+    // the request aborted — rolling the write back with it.
+    const hangingEmail: SendEmail = {
+      send: () => new Promise(() => undefined),
+    };
+    const prevEmail = env.EMAIL;
+    const prevFrom = env.EMAIL_FROM;
+    env.EMAIL = hangingEmail;
+    env.EMAIL_FROM = "notifications@example.com";
+    try {
+      const issue = await withWorkspace(stub, (instance) =>
+        instance.createIssue({ title: "Stalled email write" })
+      );
+      await withWorkspace(stub, (instance) =>
+        instance.updateIssue(issue.id, { assigneeId: "gh-user-1" }, "user-2")
+      );
+      const updated = await withWorkspace(stub, (instance) =>
+        instance.getIssue(issue.id)
+      );
+      expect(updated?.assigneeId).toBe("gh-user-1");
+    } finally {
+      env.EMAIL = prevEmail;
+      env.EMAIL_FROM = prevFrom;
+    }
   });
 
   it("supports triage status and resolution semantics", async () => {
