@@ -12,6 +12,8 @@ import { loadProviderConfig } from "./credentials.js";
 import { resolveAgentEnv } from "./daytona.js";
 import { FLEET_UNHEALTHY_STREAK, fleetInfraStreak } from "./fleet-health.js";
 import { dispatchAgent } from "./index.js";
+import { resolveLaneForIssue } from "./nudge.js";
+import { REVIEW_PURPOSE } from "./review.js";
 
 type WorkspaceStub = DurableObjectStub<WorkspaceDO>;
 
@@ -24,10 +26,28 @@ const EVENT_ALIASES = new Map<string, PileRepoTriggerEvent>([
 ]);
 
 /** A lane a repo trigger dispatched. Its own PR events (CI red, a review,
- *  a conflict) must not fire repo triggers again — that's the self-feed
- *  loop (PILE-304); the nudge path fixes the lane in place instead. */
+ *  a conflict, its own push) must not fire repo triggers again — that's the
+ *  self-feed loop (PILE-304); the nudge path fixes the lane in place instead. */
 export function isTriggerLane(session: { purpose?: string | null }): boolean {
   return session.purpose?.startsWith("trigger:") === true;
+}
+
+// Events a lane's own PR produces as a side effect of the lane's work.
+const LANE_PR_EVENTS = new Set<PileRepoTriggerEvent>([
+  "ci.failed",
+  "pr.review",
+  "pr.changes_requested",
+  "pr.conflict",
+]);
+
+/** Whether `event` could be the issue's lane feeding itself. A push only
+ *  counts when a bot made it — a human pushing to the PR still fires. */
+function laneSelfEvent(
+  event: PileRepoTriggerEvent,
+  facts: AutomationEventFacts | undefined
+): boolean {
+  if (LANE_PR_EVENTS.has(event)) return true;
+  return event === "pr.synchronize" && facts?.pushedByBot === true;
 }
 
 /** What an event fired against. `issue` resolves lazily (and once) so
@@ -43,6 +63,8 @@ export interface AutomationEventTarget {
 export interface AutomationEventFacts {
   label?: string;
   body?: string;
+  /** `pr.synchronize`: the push came from a bot account (a lane). */
+  pushedByBot?: boolean;
 }
 
 export function automationEventTarget(
@@ -165,6 +187,20 @@ export async function fireRepoTriggers(
   if (triggers.length === 0) return 0;
   const issue = await target.issue();
   if (!issue) return 0;
+  // Enforced here rather than per emit site so a new emitter can't forget it.
+  if (laneSelfEvent(event, options.facts)) {
+    const lane = await resolveLaneForIssue(stub, issue.id, {
+      excludePurpose: REVIEW_PURPOSE,
+    });
+    if (lane && isTriggerLane(lane)) {
+      console.log("repo trigger skipped — trigger lane's own PR event", {
+        event,
+        issueId: issue.id,
+        sessionId: lane.id,
+      });
+      return 0;
+    }
+  }
   // PILE-321 — the event's repo is authoritative here (the trigger's config
   // was read from it), so a repo-less issue adopts it rather than the team
   // default. Persisted like the dispatch-time inheritance so redispatches
