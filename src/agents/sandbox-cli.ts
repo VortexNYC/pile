@@ -443,7 +443,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
       lane.organizationId,
       lane.sessionId,
       "status",
-      `lane cache mounted at ${dir}`,
+      `lane cache ready at ${dir}`,
       { sandbox: sandbox.id, path: dir },
       span
     );
@@ -1179,6 +1179,8 @@ export class SandboxCliAgentProvider implements AgentProvider {
       }
     }
     if (!sandbox || sandbox.state !== "started") return false;
+    // findSandbox doesn't know the org on every backend; callers do.
+    sandbox.organizationId ??= ctx?.organizationId;
     if ((await compute.runnerBusy?.(sandbox, trackerSessionId)) === true) {
       // Mid-run injection: the runner's watcher thread feeds files dropped in
       // /tmp/followups into the live agent process's stdin (and drains any

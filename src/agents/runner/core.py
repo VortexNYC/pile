@@ -1588,9 +1588,10 @@ def _save_to_mount(h, tarball):
         shutil.copyfile(tarball, path)
     except OSError as e:
         print(f'[cache] mount save failed: {e}')
+        # Drop whatever we may have torn. If that was a sibling's finished
+        # upload, the next lane to save just puts it back.
         try:
-            if not _mounted_hit(path) or os.path.getsize(path) != os.path.getsize(tarball):
-                os.remove(path)
+            os.remove(path)
         except OSError:
             pass
         return False
