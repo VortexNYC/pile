@@ -565,6 +565,18 @@ describe("support widget", () => {
     expect(changelogBody.entries.map((en) => en.title)).toContain("v1 shipped");
   });
 
+  it("serves chat.js loadable from other origins", async () => {
+    const res = await widgetFetch("/chat.js");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cross-origin-resource-policy")).toBe(
+      "cross-origin"
+    );
+    const api = await widgetFetch("/health");
+    expect(api.headers.get("cross-origin-resource-policy")).toBe(
+      "same-origin"
+    );
+  });
+
   it("mounts on a platform product origin: signed-in user opens a ticket without email", async () => {
     const { organizationId, token } = await seedWorkspace();
     const seal = "https://seal.vortex.nyc";
