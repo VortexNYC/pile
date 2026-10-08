@@ -10,8 +10,10 @@
  *   greeting, brandColor, theme (light|dark|auto), hideLauncher
  *
  * window.PileChat(cmd, arg): 'open' | 'close' | 'toggle' | 'setUser' |
- * 'destroy'. If a stub queued calls on window.PileChat.q before the bundle
- * loaded, they are flushed after boot.
+ * 'logout' | 'destroy'. 'setUser' re-identifies the session (pass
+ * identifierHash for a verified user); 'logout' forgets the stored session.
+ * If a stub queued calls on window.PileChat.q before the bundle loaded, they
+ * are flushed after boot.
  */
 
 type WidgetSettings = {
@@ -104,6 +106,7 @@ function boot(settings: WidgetSettings): void {
   let email = settings.email;
   let name = settings.name;
   let pollTimer = 0;
+  let destroyed = false;
 
   const host = document.createElement("div");
   host.id = "pile-chat";
@@ -290,7 +293,7 @@ function boot(settings: WidgetSettings): void {
   }
 
   async function poll(): Promise<void> {
-    if (!sessionToken) return;
+    if (!sessionToken || destroyed) return;
     try {
       const data = (await api(
         `/support/widget/${key}/messages${lastSeen ? `?after=${encodeURIComponent(lastSeen)}` : ""}`
@@ -307,6 +310,7 @@ function boot(settings: WidgetSettings): void {
     } catch {
       // transient — next poll retries
     }
+    if (destroyed) return;
     pollTimer = window.setTimeout(poll, open ? POLL_OPEN_MS : POLL_CLOSED_MS);
   }
 
@@ -529,13 +533,37 @@ function boot(settings: WidgetSettings): void {
         setOpen(!open);
         break;
       case "setUser": {
-        const u = arg as { email?: string; name?: string; externalId?: string };
+        const u = arg as {
+          email?: string;
+          name?: string;
+          externalId?: string;
+          identifierHash?: string;
+        };
+        if (u?.externalId && u.externalId !== settings.externalId) {
+          // A different signed-in user: drop the previous user's thread. The
+          // server hands back a fresh session for the new identity.
+          msgs.replaceChildren();
+          lastSeen = "";
+          identified = false;
+          ideasLoaded = false;
+        }
         email = u?.email ?? email;
         name = u?.name ?? name;
         if (u?.externalId) settings.externalId = u.externalId;
+        if (u?.identifierHash) settings.identifierHash = u.identifierHash;
+        void startSession().catch(() => {
+          // network — the next setUser or reload retries
+        });
         break;
       }
+      case "logout":
+        localStorage.removeItem(storageKey);
+        destroyed = true;
+        clearTimeout(pollTimer);
+        host.remove();
+        break;
       case "destroy":
+        destroyed = true;
         clearTimeout(pollTimer);
         host.remove();
         break;

@@ -101,7 +101,7 @@ export const corsMiddleware = createMiddleware<AppContext>(async (c, next) => {
     );
     c.header(
       "Access-Control-Allow-Headers",
-      "Authorization, Content-Type, X-Requested-With"
+      "Authorization, Content-Type, X-Requested-With, X-Pile-Widget-Session"
     );
     c.header("Access-Control-Allow-Credentials", "true");
     c.header("Access-Control-Max-Age", "86400");
