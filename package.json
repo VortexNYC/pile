@@ -30,7 +30,7 @@
     "cli": "pnpm -C packages/cli run cli",
     "contract:check": "tsx scripts/contract-check.ts",
     "diff-coverage": "tsx scripts/diff-coverage.ts",
-    "knip": "knip",
+    "knip": "KNIP_DISABLE_RAW_TRANSFER=1 knip",
     "lint": "vp lint",
     "lint:fix": "vp lint --fix && vp fmt",
     "format": "vp fmt",
