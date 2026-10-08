@@ -523,16 +523,23 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   // Write paths keep a built index current but never pay for the cold
   // build (seconds on a mature workspace) — the build reads current rows,
   // so it picks this write up on its own. A build already in flight may
-  // have read the pre-write row, so that case waits and applies; if that
-  // build fails, the next one reads this write from storage.
+  // have read the pre-write row, so that case queues the apply behind the
+  // build rather than awaiting it inline — writes must not hang on it.
   private async syncSearchIndex(
     apply: (index: WorkspaceSearchIndex) => Promise<void>
   ): Promise<void> {
-    const index =
-      this.searchIndex ??
-      (await this.searchIndexBuild?.catch(() => null)) ??
-      null;
-    if (index) await apply(index);
+    if (this.searchIndex) {
+      await apply(this.searchIndex);
+      return;
+    }
+    // Don't await an in-flight build on the write path — it's slow on
+    // mature workspaces and would hang the request. Queue the apply so the
+    // entry lands once the build completes (the build may have read rows
+    // pre-write, so skipping entirely could lose the write from the index).
+    const build = this.searchIndexBuild;
+    if (build) {
+      this.ctx.waitUntil(build.then(apply).catch(() => undefined));
+    }
   }
 
   private async buildSearchIndex(): Promise<WorkspaceSearchIndex> {
@@ -581,8 +588,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     for (const doc of documentRows) {
       docs.push(documentToSearchDocument(doc));
     }
-    if (docs.length > 0) {
-      await insertSearchDocs(index, docs);
+    // Index in batches and yield between them — a mature workspace's build
+    // is tens of seconds of tokenization; one synchronous insertMultiple
+    // starves the DO's event loop and every concurrent request hangs past
+    // the request budget (issue-create 500s, ~40s).
+    for (let i = 0; i < docs.length; i += 250) {
+      await insertSearchDocs(index, docs.slice(i, i + 250));
+      await new Promise((resolve) => setTimeout(resolve, 0));
     }
 
     this.searchIndex = index;
@@ -3971,14 +3983,11 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     // Warn-mode dedupe is best-effort — on a cold DO (post-deploy
     // eviction) building the search index reads every issue/comment/doc
     // in the workspace (~tens of seconds on mature orgs), which used to
-    // hang issue creation past the request budget. Skip the cold build
-    // and warm the index off the request path; dedupe=block keeps its
-    // guarantee by paying the build.
-    const dedupeIndex = dedupe
-      ? (this.searchIndex ??
-        (await this.searchIndexBuild?.catch(() => null)) ??
-        null)
-      : null;
+    // hang issue creation past the request budget. Use only an index that
+    // is already built — even an in-flight build can exceed the request
+    // budget, so never await it here. The skip warms the index off the
+    // request path; dedupe=block keeps its guarantee by paying the build.
+    const dedupeIndex = dedupe ? this.searchIndex : null;
     if (dedupe && !dedupeIndex) {
       if (dedupe.block) {
         await this.ensureSearchIndex();
