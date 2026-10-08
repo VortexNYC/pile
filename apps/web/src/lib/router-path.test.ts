@@ -13,6 +13,11 @@ describe("toRouterPath", () => {
     expect(toRouterPath("mailto:a@b.co")).toBeNull();
     expect(toRouterPath("//evil.com")).toBeNull();
   });
+  it("leaves same-page anchors and query-only hrefs alone", () => {
+    expect(toRouterPath("#members")).toBeNull();
+    expect(toRouterPath("?tab=2")).toBeNull();
+    expect(toRouterPath("")).toBeNull();
+  });
   it("keeps already-relative router paths", () => {
     expect(toRouterPath("/sign-in")).toBe("/sign-in");
     expect(toRouterPath("sign-up")).toBe("/sign-up");
