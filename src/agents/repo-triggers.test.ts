@@ -409,6 +409,88 @@ describe("review and conflict triggers (PILE-272)", () => {
   });
 });
 
+async function issueWithLane(purpose: string | null) {
+  const issue = await stub().createIssue({ title: "Lane PR", repo: REPO });
+  await stub().createAgentSession({
+    issueId: issue.id,
+    agentId: "trigger-mock",
+    provider: "trigger-mock",
+    actorId: "automation",
+    actorType: "user",
+    status: "completed",
+    purpose,
+  });
+  return issue;
+}
+
+const purposes = async (issueId: string) =>
+  (await stub().listAgentSessions({ issueId })).map((s) => s.purpose);
+
+describe("structural self-feed guard (PILE-272)", () => {
+  const SELF_FEED_CONFIG: PileRepoConfig = {
+    triggers: [
+      { on: "pr.synchronize", agent: "trigger-mock", prompt: "Re-check it." },
+      { on: "pr.conflict", agent: "trigger-mock", prompt: "Resolve it." },
+      { on: "ci.failed", agent: "trigger-mock", prompt: "Fix CI." },
+      { on: "pr.review", agent: "trigger-mock", prompt: "Answer it." },
+      {
+        on: "pr.changes_requested",
+        agent: "trigger-mock",
+        prompt: "Address it.",
+      },
+    ],
+  };
+
+  function fire(
+    issue: Awaited<ReturnType<typeof issueWithLane>>,
+    event: string,
+    facts?: { pushedByBot?: boolean }
+  ) {
+    return fireEventAutomations(
+      env as unknown as WorkerEnv,
+      stub(),
+      ORG,
+      event,
+      automationEventTarget(async () => issue, REPO),
+      undefined,
+      undefined,
+      facts,
+      { loadConfig: async () => SELF_FEED_CONFIG }
+    );
+  }
+
+  it("skips a trigger lane's own conflict and bot pushes without a call-site flag", async () => {
+    const issue = await issueWithLane("trigger:pr.synchronize");
+    await fire(issue, "pr.conflict");
+    await fire(issue, "ci.failed");
+    await fire(issue, "pr.review");
+    await fire(issue, "pr.synchronize", { pushedByBot: true });
+    expect(await purposes(issue.id)).toEqual(["trigger:pr.synchronize"]);
+  });
+
+  it("applies the guard to internal event names after aliasing", async () => {
+    const issue = await issueWithLane("trigger:pr.opened");
+    await fire(issue, "pr.ci_failed");
+    await fire(issue, "pr.review_changes");
+    expect(await purposes(issue.id)).toEqual(["trigger:pr.opened"]);
+  });
+
+  it("still fires on a human push to a trigger lane's PR", async () => {
+    const issue = await issueWithLane("trigger:pr.synchronize");
+    await fire(issue, "pr.synchronize", { pushedByBot: false });
+    expect(await purposes(issue.id)).toEqual([
+      "trigger:pr.synchronize",
+      "trigger:pr.synchronize",
+    ]);
+  });
+
+  it("fires for lanes no trigger dispatched", async () => {
+    const issue = await issueWithLane(null);
+    await fire(issue, "pr.synchronize", { pushedByBot: true });
+    expect(await purposes(issue.id)).toContain("trigger:pr.synchronize");
+  });
+});
+
 describe("ci.failed self-feed guard (PILE-304)", () => {
   it("skipRepoTriggers stands repo triggers down while automations still run", async () => {
     const issue = await stub().createIssue({
