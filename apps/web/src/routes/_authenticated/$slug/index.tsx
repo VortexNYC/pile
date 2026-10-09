@@ -51,7 +51,7 @@ function WorkspaceOverview() {
   const teamsWithIssues = (teams.data ?? [])
     .map((team) => ({ team, count: teamCount.get(team.id) ?? 0 }))
     .filter(({ count }) => count > 0)
-    .sort((a, b) => b.count - a.count);
+    .toSorted((a, b) => b.count - a.count);
 
   const isPending = byStatus.isPending || byTeam.isPending || teams.isPending;
   const error = byStatus.error ?? byTeam.error ?? teams.error;

@@ -1036,9 +1036,11 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   // Resolves once every in-flight notification email settles — the seam
   // tests use to assert deferred sends deterministically.
   async flushNotificationEmails(): Promise<void> {
-    while (this.pendingEmailTasks.size > 0) {
-      await Promise.allSettled(this.pendingEmailTasks);
-    }
+    const batch = [...this.pendingEmailTasks];
+    if (batch.length === 0) return;
+    await Promise.allSettled(batch);
+    // Sends can enqueue follow-ups; re-drain until the set is empty.
+    await this.flushNotificationEmails();
   }
 
   private async sendNotificationEmail(
