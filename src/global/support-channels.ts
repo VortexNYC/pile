@@ -6,7 +6,9 @@ import { sendPlainMessage } from "../channels/plain.js";
 import { sendSlackMessage } from "../channels/slack.js";
 import { sendZendeskMessage } from "../channels/zendesk.js";
 import { sendEmail } from "../email/send.js";
-import { renderTicketReply } from "../email/templates.js";
+// react-email (Prism grammars especially) costs ~100ms of worker startup
+// CPU — import it on first send, not at module load. Same pattern as the
+// lazy samlify import in src/platform/auth.ts.
 import { VortexError } from "../platform/errors.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { D1Client } from "./db.js";
@@ -299,6 +301,7 @@ export async function processOutgoingMessage(
           .limit(1);
         const inReplyTo = lastInbound?.externalId ?? null;
         const subject = (input.subject ?? ticket.title).replace(/^re:\s*/i, "");
+        const { renderTicketReply } = await import("../email/templates.js");
         const html = await renderTicketReply(input.textContent);
         await sendEmail(env, {
           from: channel.name,

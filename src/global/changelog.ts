@@ -1,7 +1,8 @@
 import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
 
 import { sendEmail } from "../email/send.js";
-import { renderChangelogShipped } from "../email/templates.js";
+// react-email is lazy-imported on first send to keep its ~100ms startup
+// cost out of deploy validation (see support-channels.ts).
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { D1Client } from "./db.js";
 import {
@@ -287,6 +288,7 @@ export async function notifyVotersOfChangelogEntry(
   const recipients = await changelogNotifyRecipients(db, organizationId, entry);
   const unsubscribeUrl = `${env.PUBLIC_API_URL ?? ""}/support/unsubscribe`;
   const text = `${entry.body}\n\n---\nYou asked for this. Unsubscribe: ${unsubscribeUrl}`;
+  const { renderChangelogShipped } = await import("../email/templates.js");
   const html = await renderChangelogShipped(entry.title, entry.body);
 
   const notified: string[] = [];

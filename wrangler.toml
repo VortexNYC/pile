@@ -236,3 +236,112 @@ max_retries = 3
 
 [[env.production.send_email]]
 name = "EMAIL"
+
+# Branch preview target — cloudflare-ci deploys non-main artifact pushes here
+# (`wrangler deploy -e staging`). Shares production data bindings (D1, R2,
+# DOs, containers) so previews see real data, but has no queue consumer and
+# no cron: a preview can never steal prod webhook batches or double-fire
+# scheduled work. EMAIL is also omitted so previews never send real mail.
+[env.staging]
+name = "pile-staging"
+
+routes = [{ pattern = "staging.pile.nyc", custom_domain = true }]
+
+[env.staging.vars]
+BETTER_AUTH_URL = "https://staging.pile.nyc"
+ALLOWED_ORIGINS = "https://staging.pile.nyc"
+SLACK_REDIRECT_URI = "https://staging.pile.nyc/slack/oauth"
+DAYTONA_SNAPSHOT = "vortex-cli-runner-v2"
+DAYTONA_VOLUME_ID = "0f79e741-e373-496b-a83f-7252cd5b9f12"
+DEVIN_MODEL = "swe-2"
+EMAIL_FROM = "notifications@pile.nyc"
+COMPUTE_PROVIDER = "cloudflare"
+PUBLIC_API_URL = "https://staging.pile.nyc"
+FEEDBACK_CHANNEL_ID = "cc2f808d-007e-48a1-870f-bd4c68ae0cd6"
+CF_ADMISSION_URL = "https://cloudflare-ci.shlomo-31b.workers.dev"
+
+[[env.staging.d1_databases]]
+binding = "D1"
+database_name = "pile-global"
+database_id = "c4f71628-3f93-4be1-ac11-48b5611f5934"
+migrations_dir = "migrations"
+
+[[env.staging.r2_buckets]]
+binding = "ATTACHMENTS_BUCKET"
+bucket_name = "pile-attachments"
+
+[[env.staging.r2_buckets]]
+binding = "LANE_CACHE_BUCKET"
+bucket_name = "pile-lane-cache"
+
+[[env.staging.durable_objects.bindings]]
+name = "WORKSPACE_DURABLE_OBJECT"
+class_name = "WorkspaceDO"
+# External binding -> prod worker's DO namespace, so previews see real data
+script_name = "pile"
+
+[[env.staging.durable_objects.bindings]]
+name = "SANDBOX"
+class_name = "Sandbox"
+
+
+[[env.staging.durable_objects.bindings]]
+name = "SANDBOX_CURSOR"
+class_name = "CursorSandbox"
+
+
+[[env.staging.durable_objects.bindings]]
+name = "SANDBOX_DEVIN"
+class_name = "DevinSandbox"
+
+
+[[env.staging.durable_objects.bindings]]
+name = "SANDBOX_CODEX"
+class_name = "CodexSandbox"
+
+
+[[env.staging.containers]]
+class_name = "Sandbox"
+image = "registry.cloudflare.com/31bfc2c14a28e0a39e8b9e3c556a18be/pile-sandbox-production@sha256:177e408e62062b025a6e9a75a659eb88bd271a4dcd0e4a8e8d40bdaaa5fae5b4"
+max_instances = 20
+instance_type = "standard-1"
+
+[[env.staging.containers]]
+class_name = "CursorSandbox"
+image = "registry.cloudflare.com/31bfc2c14a28e0a39e8b9e3c556a18be/pile-cursorsandbox-production@sha256:28a55370d583c03721d6dc9b52e7b908c27e148cf860ca5ba63000e99cc4a87c"
+max_instances = 20
+instance_type = "standard-1"
+
+[[env.staging.containers]]
+class_name = "DevinSandbox"
+image = "registry.cloudflare.com/31bfc2c14a28e0a39e8b9e3c556a18be/pile-devinsandbox-production@sha256:c9b3773bf482587377c71c8c84511aa7530de19745b7c7ca0ab83ff3a0e4cf73"
+max_instances = 20
+instance_type = "standard-1"
+
+[[env.staging.containers]]
+class_name = "CodexSandbox"
+image = "registry.cloudflare.com/31bfc2c14a28e0a39e8b9e3c556a18be/pile-codexsandbox-production@sha256:a88dcb498f92a2cdb53b7f9480a83cbd4be92966a05c0fb133bc63204596e4c6"
+max_instances = 20
+instance_type = "standard-1"
+
+[[env.staging.migrations]]
+tag = "v1"
+new_sqlite_classes = ["WorkspaceDO"]
+
+[[env.staging.migrations]]
+tag = "v2"
+new_sqlite_classes = ["Sandbox"]
+
+[[env.staging.migrations]]
+tag = "v3"
+new_sqlite_classes = ["CursorSandbox", "DevinSandbox", "CodexSandbox"]
+
+[[env.staging.queues.producers]]
+binding = "WEBHOOK_QUEUE"
+queue = "webhook-queue"
+
+# Top-level [triggers].crons is inherited by named envs — a staging deploy
+# would double-fire the 5-min sweep against shared prod data. Explicit empty
+# override keeps previews inert.
+[env.staging.triggers]
+crons = []
