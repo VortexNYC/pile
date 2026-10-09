@@ -237,12 +237,16 @@ function serveConsole(c: Context<AppContext>): Response | Promise<Response> {
   }
   const url = new URL(c.req.url);
   const rest = url.pathname.slice(CONSOLE_PREFIX.length) || "/";
-  if (ASSET_FILE.test(rest)) {
-    return assets.fetch(new Request(new URL(rest, url.origin), c.req.raw));
-  }
-  return assets.fetch(new Request(new URL("/", url.origin))).then((res) => {
+  const isAssetFile = ASSET_FILE.test(rest);
+  // Asset-binding responses carry immutable headers; secureHeaders and
+  // other middleware set headers on c.res, so every response needs a
+  // fresh mutable wrapper.
+  const assetReq = isAssetFile
+    ? new Request(new URL(rest, url.origin), c.req.raw)
+    : new Request(new URL("/", url.origin));
+  return assets.fetch(assetReq).then((res) => {
     const headers = new Headers(res.headers);
-    headers.set("Cache-Control", "no-cache");
+    if (!isAssetFile) headers.set("Cache-Control", "no-cache");
     return new Response(res.body, { status: res.status, headers });
   });
 }
