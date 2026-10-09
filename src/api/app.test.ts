@@ -60,6 +60,34 @@ describe("member console", () => {
     expect(missing.status).toBe(404);
   });
 
+  it("survives immutable asset-binding headers", async () => {
+    // The real ASSETS binding returns Responses with immutable headers —
+    // secureHeaders() mutating c.res used to throw INTERNAL_ERROR (500)
+    // on every asset file, blanking the console in production.
+    const immutableAsset = new Response("console.log(1)", {
+      headers: { "content-type": "text/javascript" },
+    });
+    Object.defineProperty(immutableAsset, "headers", {
+      value: new Proxy(immutableAsset.headers, {
+        get: (target, prop) => {
+          if (prop === "set" || prop === "append" || prop === "delete") {
+            return () => {
+              throw new TypeError("Can't modify immutable headers");
+            };
+          }
+          const value = Reflect.get(target, prop);
+          return typeof value === "function" ? value.bind(target) : value;
+        },
+      }),
+    });
+    const res = await app.fetch(
+      new Request("https://example.com/app/assets/index.js"),
+      { ...env, ASSETS: { fetch: async () => immutableAsset } }
+    );
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe("console.log(1)");
+  });
+
   it("reports an unbuilt console instead of crashing", async () => {
     const res = await app.fetch(new Request("https://example.com/app"), {
       ...env,
