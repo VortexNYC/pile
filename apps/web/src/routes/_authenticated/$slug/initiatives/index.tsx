@@ -29,7 +29,8 @@ function Initiatives() {
       ).initiatives,
   });
 
-  if (initiatives.isPending) return <LoadingState label="Loading initiatives" />;
+  if (initiatives.isPending)
+    return <LoadingState label="Loading initiatives" />;
   if (initiatives.isError) {
     return (
       <Page title="Initiatives">
@@ -44,10 +45,7 @@ function Initiatives() {
   const rows = initiatives.data ?? [];
 
   return (
-    <Page
-      title="Initiatives"
-      description="Cross-project bets and themes."
-    >
+    <Page title="Initiatives" description="Cross-project bets and themes.">
       {rows.length === 0 ? (
         <EmptyState
           title="No initiatives"

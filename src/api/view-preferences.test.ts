@@ -68,13 +68,10 @@ async function req(path: string, init: RequestInit = {}) {
 
 describe("view preferences", () => {
   it("round-trips hiddenSurfaces", async () => {
-    const put = await req(
-      `/workspaces/${organizationId}/me/view-preferences`,
-      {
-        method: "PUT",
-        body: JSON.stringify({ hiddenSurfaces: ["cycles", "roadmaps"] }),
-      }
-    );
+    const put = await req(`/workspaces/${organizationId}/me/view-preferences`, {
+      method: "PUT",
+      body: JSON.stringify({ hiddenSurfaces: ["cycles", "roadmaps"] }),
+    });
     expect(put.status).toBe(200);
     const putBody = prefsSchema.parse(await put.json());
     expect(putBody.hiddenSurfaces).toEqual(["cycles", "roadmaps"]);

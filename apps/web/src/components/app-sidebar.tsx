@@ -76,17 +76,17 @@ export function AppSidebar({
           <Sidebar.Menu>
             {NAV.filter((item) => !surfaces.hidden.has(item.path)).map(
               (item) => (
-              <Sidebar.MenuButton
-                key={item.path}
-                icon={item.icon}
-                active={
-                  "exact" in item && item.exact
-                    ? isOverviewActive
-                    : isActive(item.path)
-                }
-                href={appHref(`${base}/${item.path}`)}
-                tooltip={item.title}
-              >
+                <Sidebar.MenuButton
+                  key={item.path}
+                  icon={item.icon}
+                  active={
+                    "exact" in item && item.exact
+                      ? isOverviewActive
+                      : isActive(item.path)
+                  }
+                  href={appHref(`${base}/${item.path}`)}
+                  tooltip={item.title}
+                >
                   {item.title}
                 </Sidebar.MenuButton>
               )
@@ -109,10 +109,9 @@ export function AppSidebar({
                 href={appHref(`${base}/${item.path}`)}
                 tooltip={item.title}
               >
-                  {item.title}
-                </Sidebar.MenuButton>
-              )
-            )}
+                {item.title}
+              </Sidebar.MenuButton>
+            ))}
           </Sidebar.Menu>
         </Sidebar.Group>
         {workspaces.length > 1 ? (

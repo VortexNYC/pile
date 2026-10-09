@@ -7,11 +7,11 @@ import { ErrorState, LoadingState } from "@/components/states";
 import { useSurfaces } from "@/hooks/use-surfaces";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 
-export const Route = createFileRoute(
-  "/_authenticated/$slug/settings/surfaces"
-)({
-  component: Surfaces,
-});
+export const Route = createFileRoute("/_authenticated/$slug/settings/surfaces")(
+  {
+    component: Surfaces,
+  }
+);
 
 /** Every navigation surface — toggle off what you never read. Cycles,
  * initiatives and roadmaps start hidden and can be switched on. */

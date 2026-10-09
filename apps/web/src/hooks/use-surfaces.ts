@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api, unwrap } from "@/lib/api";
 import { wsKey } from "@/hooks/use-workspace";
+import { api, unwrap } from "@/lib/api";
 
 /** Sparse data types default off — the toggle in Settings → Surfaces
  * exposes them for people who want them. Everything else defaults on. */
@@ -43,5 +43,10 @@ export function useSurfaces(organizationId: string) {
     update.mutate(next);
   };
 
-  return { hidden, toggle, isPending: update.isPending, loaded: prefs.isSuccess };
+  return {
+    hidden,
+    toggle,
+    isPending: update.isPending,
+    loaded: prefs.isSuccess,
+  };
 }
