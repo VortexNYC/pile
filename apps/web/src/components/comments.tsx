@@ -4,6 +4,7 @@ import { Text } from "@cloudflare/kumo/components/text";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { Markdown } from "@/components/markdown";
 import { ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap, unwrapEmpty } from "@/lib/api";
@@ -179,7 +180,7 @@ export function IssueComments({ issueId }: { issueId: string }) {
                   </form>
                 ) : (
                   <Text>
-                    <span className="whitespace-pre-wrap">{comment.body}</span>
+                    <Markdown content={comment.body} />
                   </Text>
                 )}
               </li>

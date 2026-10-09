@@ -13,6 +13,7 @@ import { useState } from "react";
 
 import { Page } from "@/components/page";
 import { ErrorState, LoadingState } from "@/components/states";
+import { Markdown } from "@/components/markdown";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap, type paths } from "@/lib/api";
 import {
@@ -244,9 +245,9 @@ function SessionDetail() {
                     >
                       {event.type.startsWith("prompt.") ? "you" : event.type}
                     </Badge>
-                    <p className="flex-1 text-sm whitespace-pre-wrap">
-                      {promptText(event) ?? event.message}
-                    </p>
+                    <div className="flex-1 text-sm min-w-0">
+                      <Markdown content={promptText(event) ?? event.message} />
+                    </div>
                     <span className="text-xs text-kumo-subtle shrink-0">
                       {formatRelative(event.createdAt)}
                     </span>

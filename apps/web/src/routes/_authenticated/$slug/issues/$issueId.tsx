@@ -25,6 +25,7 @@ import { ErrorState, LoadingState } from "@/components/states";
 import { useTeams } from "@/hooks/use-teams";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap, unwrapEmpty } from "@/lib/api";
+import { betterAuthClient } from "@/lib/better-auth";
 import {
   derivedStatusVariant,
   formatRelative,
@@ -161,6 +162,78 @@ function IssueDetail() {
       ).subscribers,
   });
 
+  const labels = useQuery({
+    queryKey: wsKey(organizationId, "labels"),
+    queryFn: async () =>
+      (
+        await unwrap(
+          api.GET("/workspaces/{organizationId}/labels", {
+            params: { path: { organizationId } },
+          })
+        )
+      ).labels,
+  });
+
+  const projects = useQuery({
+    queryKey: wsKey(organizationId, "projects"),
+    queryFn: async () =>
+      (
+        await unwrap(
+          api.GET("/workspaces/{organizationId}/projects", {
+            params: { path: { organizationId } },
+          })
+        )
+      ).projects,
+  });
+
+  const cycles = useQuery({
+    queryKey: wsKey(organizationId, "cycles"),
+    queryFn: async () =>
+      (
+        await unwrap(
+          api.GET("/workspaces/{organizationId}/cycles", {
+            params: { path: { organizationId } },
+          })
+        )
+      ).cycles,
+  });
+
+  const parent = useQuery({
+    queryKey: wsKey(organizationId, "issues", "parent-of", issueId),
+    queryFn: () =>
+      unwrap(
+        api.GET("/workspaces/{organizationId}/issues/{id}", {
+          params: { path: { organizationId, id: data?.parentId ?? "" } },
+        })
+      ),
+    enabled: !!issue.data?.parentId,
+  });
+
+  const children = useQuery({
+    queryKey: wsKey(organizationId, "issues", "children-of", issueId),
+    queryFn: async () =>
+      (
+        await unwrap(
+          api.GET("/workspaces/{organizationId}/issues", {
+            params: {
+              path: { organizationId },
+              query: { parentId: issueId },
+            },
+          })
+        )
+      ).issues,
+  });
+
+  const members = useQuery({
+    queryKey: wsKey(organizationId, "members"),
+    queryFn: async () => {
+      const res = await betterAuthClient.organization.listMembers({
+        query: { organizationId },
+      });
+      return res.data?.members ?? [];
+    },
+  });
+
   const save = useMutation({
     mutationFn: (values: IssueFormValues) =>
       unwrap(
@@ -225,6 +298,26 @@ function IssueDetail() {
     ...(rels?.inverseRelations ?? []),
   ];
   const watchers = subscribers.data ?? [];
+  const issueLabels = (data.labelIds ?? "")
+    .split(",")
+    .filter((id) => id.length > 0)
+    .map((id) => labels.data?.find((l) => l.id === id))
+    .filter((l): l is NonNullable<typeof l> => !!l);
+  const project = data.projectId
+    ? projects.data?.find((p) => p.id === data.projectId)
+    : undefined;
+  const cycle = data.cycleId
+    ? cycles.data?.find((c) => c.id === data.cycleId)
+    : undefined;
+  const assignee = data.assigneeId
+    ? (members.data?.find(
+        (m) => m.user?.id === data.assigneeId || m.id === data.assigneeId
+      )?.user?.name ??
+      members.data?.find(
+        (m) => m.user?.id === data.assigneeId || m.id === data.assigneeId
+      )?.user?.email)
+    : undefined;
+  const subIssues = children.data ?? [];
 
   return (
     <Page
@@ -291,6 +384,20 @@ function IssueDetail() {
                   <Badge variant="neutral">
                     {team.key} — {team.name}
                   </Badge>
+                ) : null}
+                {issueLabels.map((label) => (
+                  <Badge key={label.id} variant="neutral">
+                    {label.name}
+                  </Badge>
+                ))}
+                {project ? (
+                  <Badge variant="blue">Project: {project.name}</Badge>
+                ) : null}
+                {cycle ? (
+                  <Badge variant="purple">Cycle: {cycle.name}</Badge>
+                ) : null}
+                {assignee ? (
+                  <Text variant="secondary">assigned to {assignee}</Text>
                 ) : null}
                 <Text variant="secondary">
                   created {formatRelative(data.createdAt)}
@@ -427,6 +534,49 @@ function IssueDetail() {
               </Badge>
             ))}
           </div>
+        </Section>
+      ) : null}
+
+      {parent.data ? (
+        <Section title="Parent issue" icon={<LinkIcon size={16} />}>
+          <Link
+            to="/$slug/issues/$issueId"
+            params={{ slug: workspace.slug, issueId: parent.data.id }}
+            className="text-kumo-link hover:underline"
+          >
+            {parent.data.identifier ? (
+              <span className="text-kumo-subtle mr-2">
+                {parent.data.identifier}
+              </span>
+            ) : null}
+            {parent.data.title}
+          </Link>
+        </Section>
+      ) : null}
+
+      {subIssues.length > 0 ? (
+        <Section title="Sub-issues" icon={<LinkIcon size={16} />}>
+          <ul className="flex flex-col gap-1.5">
+            {subIssues.map((sub) => (
+              <li key={sub.id} className="flex items-center gap-2">
+                <Badge variant={issueStatusVariant(sub.status)}>
+                  {sub.status}
+                </Badge>
+                <Link
+                  to="/$slug/issues/$issueId"
+                  params={{ slug: workspace.slug, issueId: sub.id }}
+                  className="text-kumo-link hover:underline"
+                >
+                  {sub.identifier ? (
+                    <span className="text-kumo-subtle mr-2">
+                      {sub.identifier}
+                    </span>
+                  ) : null}
+                  {sub.title}
+                </Link>
+              </li>
+            ))}
+          </ul>
         </Section>
       ) : null}
 
