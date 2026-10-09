@@ -48,9 +48,7 @@ export function Markdown({
   return (
     <Streamdown
       components={components}
-      remarkPlugins={
-        workspaceSlug ? [remarkIssueLinks({ workspaceSlug })] : []
-      }
+      remarkPlugins={workspaceSlug ? [remarkIssueLinks({ workspaceSlug })] : []}
     >
       {content}
     </Streamdown>

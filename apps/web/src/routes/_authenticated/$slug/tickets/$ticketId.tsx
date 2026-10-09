@@ -149,6 +149,18 @@ function TicketDetail() {
           </Link>{" "}
           · {data.customer.fullName ?? data.customer.email} · opened{" "}
           {formatRelative(data.createdAt)}
+          {data.issueId ? (
+            <>
+              {" · "}
+              <Link
+                to="/$slug/issues/$issueId"
+                params={{ slug: workspace.slug, issueId: data.issueId }}
+                className="text-kumo-link"
+              >
+                Linked issue
+              </Link>
+            </>
+          ) : null}
         </>
       }
     >

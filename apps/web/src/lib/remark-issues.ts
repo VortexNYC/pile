@@ -9,8 +9,7 @@ const IS_REF = /^[A-Z]{2,10}-\d+$/;
  * untouched — and code carries no text nodes, so backticked refs stay
  * literal. */
 export function remarkIssueLinks(options: { workspaceSlug: string }) {
-  const href = (ref: string) =>
-    `/app/${options.workspaceSlug}/issues/${ref}`;
+  const href = (ref: string) => `/app/${options.workspaceSlug}/issues/${ref}`;
   return (tree: Root) => {
     visit(tree, "text", (node: Text, index, parent) => {
       if (!parent || index === undefined) return;

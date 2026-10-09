@@ -10,11 +10,11 @@ import {
   DocumentForm,
   type DocumentFormValues,
 } from "@/components/document-form";
+import { Markdown } from "@/components/markdown";
 import { Page } from "@/components/page";
 import { ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap, unwrapEmpty } from "@/lib/api";
-import { Markdown } from "@/components/markdown";
 import { documentText, formatRelative } from "@/lib/labels";
 import { toastError, toastSuccess } from "@/lib/toast";
 
@@ -98,6 +98,35 @@ function DocumentDetail() {
   }
   const data = doc.data;
   const text = documentText(data.content);
+  const backlinks = useQuery({
+    queryKey: wsKey(organizationId, "documents", documentId, "backlinks"),
+    queryFn: async () =>
+      (
+        await unwrap(
+          api.GET("/workspaces/{organizationId}/documents/{id}/backlinks", {
+            params: { path: { organizationId, id: documentId } },
+          })
+        )
+      ).documents,
+  });
+  const allDocs = useQuery({
+    queryKey: wsKey(organizationId, "documents"),
+    queryFn: async () =>
+      (
+        await unwrap(
+          api.GET("/workspaces/{organizationId}/documents", {
+            params: { path: { organizationId } },
+          })
+        )
+      ).documents,
+    enabled: (backlinks.data?.length ?? 0) > 0,
+  });
+  const backlinkRows = (backlinks.data ?? []).map((id) => ({
+    id,
+    title:
+      allDocs.data?.find((d) => d.id === id)?.title ??
+      `Document ${id.slice(0, 8)}`,
+  }));
 
   return (
     <Page
@@ -152,6 +181,26 @@ function DocumentDetail() {
           )}
         </LayerCard.Primary>
       </LayerCard>
+      {backlinkRows.length > 0 ? (
+        <LayerCard>
+          <div className="border-b border-kumo-line px-4 py-3">
+            <Text variant="secondary">Linked from</Text>
+          </div>
+          <ul className="px-4 py-3 flex flex-col gap-1.5">
+            {backlinkRows.map((b) => (
+              <li key={b.id}>
+                <Link
+                  to="/$slug/documents/$documentId"
+                  params={{ slug: workspace.slug, documentId: b.id }}
+                  className="text-kumo-link hover:underline"
+                >
+                  {b.title}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </LayerCard>
+      ) : null}
     </Page>
   );
 }

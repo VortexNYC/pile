@@ -6,6 +6,7 @@ import { Text } from "@cloudflare/kumo/components/text";
 import {
   ArrowSquareOut,
   File,
+  CheckSquare,
   ClockCounterClockwise,
   FileText,
   Link as LinkIcon,
@@ -20,8 +21,8 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { IssueComments } from "@/components/comments";
-import { Markdown } from "@/components/markdown";
 import { IssueForm, type IssueFormValues } from "@/components/issue-form";
+import { Markdown } from "@/components/markdown";
 import { Page } from "@/components/page";
 import { ErrorState, LoadingState } from "@/components/states";
 import { useTeams } from "@/hooks/use-teams";
@@ -244,6 +245,18 @@ function IssueDetail() {
       ).tickets,
   });
 
+  const approvals = useQuery({
+    queryKey: wsKey(organizationId, "issues", issueId, "approvals"),
+    queryFn: async () =>
+      (
+        await unwrap(
+          api.GET("/workspaces/{organizationId}/issues/{issueId}/approvals", {
+            params: { path: { organizationId, issueId } },
+          })
+        )
+      ).approvals,
+  });
+
   const history = useQuery({
     queryKey: wsKey(organizationId, "issues", issueId, "history"),
     queryFn: async () =>
@@ -351,6 +364,7 @@ function IssueDetail() {
     : undefined;
   const subIssues = children.data ?? [];
   const linkedTickets = tickets.data ?? [];
+  const approvalRows = approvals.data ?? [];
   const historyRows = history.data ?? [];
 
   return (
@@ -438,7 +452,10 @@ function IssueDetail() {
                 </Text>
               </div>
               {data.description ? (
-                <Markdown workspaceSlug={workspace.slug} content={data.description} />
+                <Markdown
+                  workspaceSlug={workspace.slug}
+                  content={data.description}
+                />
               ) : (
                 <Text variant="secondary">No description.</Text>
               )}
@@ -499,6 +516,34 @@ function IssueDetail() {
                 >
                   {doc.title}
                 </Link>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      ) : null}
+
+      {approvalRows.length > 0 ? (
+        <Section title="Approvals" icon={<CheckSquare size={16} />}>
+          <ul className="flex flex-col gap-1.5">
+            {approvalRows.map((a) => (
+              <li key={a.id} className="flex items-baseline gap-2">
+                <Badge
+                  variant={
+                    a.status === "approved"
+                      ? "green"
+                      : a.status === "rejected"
+                        ? "red"
+                        : "orange"
+                  }
+                >
+                  {a.status}
+                </Badge>
+                <span className="text-sm">
+                  {a.comment ?? "approval requested"}
+                </span>
+                <span className="text-xs text-kumo-subtle">
+                  {formatRelative(a.createdAt)}
+                </span>
               </li>
             ))}
           </ul>
@@ -573,22 +618,32 @@ function IssueDetail() {
       {files.length > 0 ? (
         <Section title="Attachments" icon={<File size={16} />}>
           <ul className="flex flex-col gap-1.5">
-            {files.map((file) => (
-              <li key={file.id} className="text-sm">
-                {file.url ? (
-                  <a
-                    href={file.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-kumo-link hover:underline"
-                  >
-                    {file.title ?? file.url}
-                  </a>
-                ) : (
-                  (file.title ?? file.r2Key ?? file.id)
-                )}
-              </li>
-            ))}
+            {files.map((file) => {
+              const isImage = file.subtitle?.startsWith("image/");
+              return (
+                <li key={file.id} className="text-sm">
+                  {file.url ? (
+                    <a
+                      href={file.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-kumo-link hover:underline"
+                    >
+                      {file.title ?? file.url}
+                    </a>
+                  ) : (
+                    (file.title ?? file.r2Key ?? file.id)
+                  )}
+                  {isImage && file.url ? (
+                    <img
+                      src={file.url}
+                      alt={file.title ?? "Attachment"}
+                      className="mt-2 max-w-md rounded border border-kumo-line"
+                    />
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         </Section>
       ) : null}

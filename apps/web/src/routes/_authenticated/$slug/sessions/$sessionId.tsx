@@ -11,9 +11,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 
+import { Markdown } from "@/components/markdown";
 import { Page } from "@/components/page";
 import { ErrorState, LoadingState } from "@/components/states";
-import { Markdown } from "@/components/markdown";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap, type paths } from "@/lib/api";
 import {
@@ -246,7 +246,10 @@ function SessionDetail() {
                       {event.type.startsWith("prompt.") ? "you" : event.type}
                     </Badge>
                     <div className="flex-1 text-sm min-w-0">
-                      <Markdown workspaceSlug={workspace.slug} content={promptText(event) ?? event.message} />
+                      <Markdown
+                        workspaceSlug={workspace.slug}
+                        content={promptText(event) ?? event.message}
+                      />
                     </div>
                     <span className="text-xs text-kumo-subtle shrink-0">
                       {formatRelative(event.createdAt)}

@@ -349,9 +349,7 @@ describe("support ticket routes", () => {
       { title: "Linked issue for ticket filter" }
     );
     expect(issueRes.status).toBe(201);
-    const issueId = (
-      (await issueRes.json()) as { id: string }
-    ).id;
+    const issueId = ((await issueRes.json()) as { id: string }).id;
     const createRes = await request(
       "POST",
       `/workspaces/${organizationId}/support/tickets`,
@@ -364,7 +362,9 @@ describe("support ticket routes", () => {
     );
     expect(createRes.status).toBe(201);
     const createdTicket = (
-      (await createRes.json()) as { ticket: { id: string; issueId: string | null } }
+      (await createRes.json()) as {
+        ticket: { id: string; issueId: string | null };
+      }
     ).ticket;
     const ticketId = createdTicket.id;
     expect(createdTicket.issueId).toBe(issueId);
