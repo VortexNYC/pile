@@ -656,6 +656,36 @@ export async function setDefaultView(
   return getUserViewPreferences(db, organizationId, userId);
 }
 
+export async function setHiddenSurfaces(
+  db: WorkspaceDb,
+  organizationId: string,
+  userId: string,
+  hiddenSurfaces: string[] | null
+) {
+  const value = hiddenSurfaces ? JSON.stringify(hiddenSurfaces) : null;
+  const existing = await getUserViewPreferences(db, organizationId, userId);
+  const ts = new Date().toISOString();
+  if (existing) {
+    await db
+      .update(workspaceUserPreferences)
+      .set({ hiddenSurfaces: value, updatedAt: ts })
+      .where(
+        and(
+          eq(workspaceUserPreferences.organizationId, organizationId),
+          eq(workspaceUserPreferences.userId, userId)
+        )
+      );
+  } else {
+    await db.insert(workspaceUserPreferences).values({
+      organizationId,
+      userId,
+      hiddenSurfaces: value,
+      updatedAt: ts,
+    });
+  }
+  return getUserViewPreferences(db, organizationId, userId);
+}
+
 // ---- linear_users ----
 
 export function listLinearUsers(db: WorkspaceDb, organizationId: string) {

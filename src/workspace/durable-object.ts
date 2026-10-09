@@ -2458,6 +2458,15 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.listDocumentLinks(this.db, this.organizationId, args);
   }
 
+  setHiddenSurfaces(userId: string, hiddenSurfaces: string[] | null) {
+    return data.setHiddenSurfaces(
+      this.db,
+      this.organizationId,
+      userId,
+      hiddenSurfaces
+    );
+  }
+
   setDefaultView(userId: string, defaultViewId: string | null) {
     return data.setDefaultView(
       this.db,

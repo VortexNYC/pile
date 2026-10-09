@@ -23772,6 +23772,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             defaultViewId: string | null;
+                            hiddenSurfaces: string[] | null;
                         };
                     };
                 };
@@ -23790,7 +23791,8 @@ export interface paths {
             requestBody?: {
                 content: {
                     "application/json": {
-                        defaultViewId: string | null;
+                        defaultViewId?: string | null;
+                        hiddenSurfaces?: string[] | null;
                     };
                 };
             };
@@ -23803,6 +23805,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             defaultViewId: string | null;
+                            hiddenSurfaces: string[] | null;
                         };
                     };
                 };

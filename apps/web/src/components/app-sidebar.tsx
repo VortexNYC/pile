@@ -3,20 +3,25 @@ import { Text } from "@cloudflare/kumo/components/text";
 import {
   Buildings,
   FileText,
+  Flag,
   FolderOpen,
   Headset,
   House,
   Key,
+  Layout,
   ListChecks,
+  MapTrifold,
   Megaphone,
   Robot,
   SignOut,
+  Timer,
   UserCircle,
   UsersThree,
 } from "@phosphor-icons/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 
+import { useSurfaces } from "@/hooks/use-surfaces";
 import type { Workspace } from "@/hooks/use-workspace";
 import { betterAuthClient } from "@/lib/better-auth";
 import { appHref } from "@/lib/router-path";
@@ -30,11 +35,15 @@ const NAV = [
   { title: "Support", path: "tickets", icon: Headset },
   { title: "Customers", path: "customers", icon: Buildings },
   { title: "Changelog", path: "changelog", icon: Megaphone },
+  { title: "Cycles", path: "cycles", icon: Timer },
+  { title: "Initiatives", path: "initiatives", icon: Flag },
+  { title: "Roadmaps", path: "roadmaps", icon: MapTrifold },
 ] as const;
 
 const SETTINGS = [
   { title: "Workspace", path: "settings", icon: Buildings, exact: true },
   { title: "Members", path: "settings/members", icon: UsersThree },
+  { title: "Surfaces", path: "settings/surfaces", icon: Layout },
   { title: "Developer", path: "settings/developer", icon: Key },
   { title: "Account", path: "settings/account", icon: UserCircle },
 ] as const;
@@ -49,6 +58,7 @@ export function AppSidebar({
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const surfaces = useSurfaces(workspace.id);
   const base = `/${workspace.slug}`;
   const isActive = (path: string) =>
     pathname === `${base}/${path}` || pathname.startsWith(`${base}/${path}/`);
@@ -64,7 +74,8 @@ export function AppSidebar({
       <Sidebar.Content>
         <Sidebar.Group>
           <Sidebar.Menu>
-            {NAV.map((item) => (
+            {NAV.filter((item) => !surfaces.hidden.has(item.path)).map(
+              (item) => (
               <Sidebar.MenuButton
                 key={item.path}
                 icon={item.icon}
@@ -76,9 +87,10 @@ export function AppSidebar({
                 href={appHref(`${base}/${item.path}`)}
                 tooltip={item.title}
               >
-                {item.title}
-              </Sidebar.MenuButton>
-            ))}
+                  {item.title}
+                </Sidebar.MenuButton>
+              )
+            )}
           </Sidebar.Menu>
         </Sidebar.Group>
         <Sidebar.Group>
@@ -97,9 +109,10 @@ export function AppSidebar({
                 href={appHref(`${base}/${item.path}`)}
                 tooltip={item.title}
               >
-                {item.title}
-              </Sidebar.MenuButton>
-            ))}
+                  {item.title}
+                </Sidebar.MenuButton>
+              )
+            )}
           </Sidebar.Menu>
         </Sidebar.Group>
         {workspaces.length > 1 ? (

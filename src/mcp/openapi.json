@@ -48434,10 +48434,18 @@
                     "defaultViewId": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "hiddenSurfaces": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
-                    "defaultViewId"
+                    "defaultViewId",
+                    "hiddenSurfaces"
                   ]
                 }
               }
@@ -48469,11 +48477,15 @@
                   "defaultViewId": {
                     "type": "string",
                     "nullable": true
+                  },
+                  "hiddenSurfaces": {
+                    "type": "array",
+                    "nullable": true,
+                    "items": {
+                      "type": "string"
+                    }
                   }
-                },
-                "required": [
-                  "defaultViewId"
-                ]
+                }
               }
             }
           }
@@ -48489,10 +48501,18 @@
                     "defaultViewId": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "hiddenSurfaces": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
-                    "defaultViewId"
+                    "defaultViewId",
+                    "hiddenSurfaces"
                   ]
                 }
               }

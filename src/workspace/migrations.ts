@@ -867,6 +867,8 @@ CREATE INDEX IF NOT EXISTS customer_intake_items_customer_idx ON customer_intake
 // email_explicit when the caller actually passed `email`.
 const v54 = `ALTER TABLE notification_preferences ADD COLUMN email_explicit INTEGER NOT NULL DEFAULT 1`;
 
+const v55 = `ALTER TABLE user_workspace_preferences ADD COLUMN hidden_surfaces TEXT`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -924,6 +926,7 @@ export const workspaceMigrations = {
       { idx: 51, when: 51, tag: "v52", breakpoints: true },
       { idx: 52, when: 52, tag: "v53", breakpoints: true },
       { idx: 53, when: 53, tag: "v54", breakpoints: false },
+      { idx: 54, when: 54, tag: "v55", breakpoints: false },
     ],
   },
   migrations: {
@@ -981,5 +984,6 @@ export const workspaceMigrations = {
     m0051: v52,
     m0052: v53,
     m0053: v54,
+    m0054: v55,
   },
 } satisfies Parameters<typeof migrate>[1];
