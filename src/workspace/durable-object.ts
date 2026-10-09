@@ -162,6 +162,12 @@ const PR_STATE_TO_STATUS: Record<string, Issue["status"] | undefined> = {
   closed: "canceled",
 };
 
+function chunk<T>(arr: T[], size: number): T[][] {
+  return Array.from({ length: Math.ceil(arr.length / size) }, (_, i) =>
+    arr.slice(i * size, (i + 1) * size)
+  );
+}
+
 function isTerminalStatus(status: IssueStatus): boolean {
   return status === "done" || status === "canceled";
 }
@@ -2328,10 +2334,6 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     // One bounded query per target type per chunk. DO SQLite caps bound
     // variables per statement at ~100: docRefs bind 2 params each (slug +
     // id OR), issueKeys bind 1 — chunk to stay under.
-    const chunk = <T>(arr: T[], size: number): T[][] =>
-      Array.from({ length: Math.ceil(arr.length / size) }, (_, i) =>
-        arr.slice(i * size, (i + 1) * size)
-      );
     const docTargets = chunk(docRefs, 48).flatMap((refs) =>
       refs.length === 0
         ? []

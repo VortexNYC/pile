@@ -23,10 +23,12 @@ import {
   setIssuePermission,
   revokeIssuePermission,
   listAgentSessions,
+  listDocumentLinks,
   listEntityAttachments,
   listCustomerIntakeItems,
   listCustomers,
   reanchorQueuedDependents,
+  replaceDocumentLinks,
   resolveCustomerForEmail,
   updateAgentSession,
   upsertNotificationPreferences,
@@ -531,6 +533,23 @@ describe("issue permission grants", () => {
       expect(revokeIssuePermission(db, issueId, "user-a")).toBe(false);
       expect(hasIssueAccess(db, issueId, "user-x", [])).toBe(true);
       expect(hiddenIssueIds(db, "user-x", [])).toEqual([]);
+    });
+  });
+});
+
+describe("document links", () => {
+  it("replaceDocumentLinks chunks inserts past the ~100 variable cap", () => {
+    return withDb((db) => {
+      const documentId = crypto.randomUUID();
+      // 40 links × 6 params = 240 binds — a single insert throws over ~100.
+      const links = Array.from({ length: 40 }, (_, i) => ({
+        targetType: "issue",
+        targetId: `issue-${i}`,
+      }));
+      replaceDocumentLinks(db, WORKSPACE_ID, documentId, links);
+      expect(listDocumentLinks(db, WORKSPACE_ID, { documentId })).toHaveLength(
+        40
+      );
     });
   });
 });
