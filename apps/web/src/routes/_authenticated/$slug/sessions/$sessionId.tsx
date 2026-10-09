@@ -39,7 +39,10 @@ const LIVE_MS = 2500;
 
 // prompt.* events carry the human's actual text in the payload — the
 // event message is just bookkeeping ("queued (31 chars)").
-function promptText(event: { type: string; payload: unknown }): string | null {
+function promptText(event: {
+  type: string;
+  payload?: unknown;
+}): string | null {
   if (!event.type.startsWith("prompt.")) return null;
   const payload = event.payload;
   if (typeof payload !== "object" || payload === null) return null;
