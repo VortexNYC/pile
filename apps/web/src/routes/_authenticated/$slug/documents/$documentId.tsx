@@ -146,7 +146,7 @@ function DocumentDetail() {
               onCancel={() => setEditing(false)}
             />
           ) : text ? (
-            <Markdown content={text} />
+            <Markdown workspaceSlug={workspace.slug} content={text} />
           ) : (
             <Text variant="secondary">This document is empty.</Text>
           )}

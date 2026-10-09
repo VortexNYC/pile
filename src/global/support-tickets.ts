@@ -603,6 +603,7 @@ export type ListTicketsOptions = {
   assignedTo?: string;
   label?: string;
   q?: string;
+  issueId?: string;
 };
 
 export async function listTickets(
@@ -616,6 +617,9 @@ export async function listTickets(
 
   if (options.customerId) {
     conditions.push(eq(supportTickets.customerId, options.customerId));
+  }
+  if (options.issueId) {
+    conditions.push(eq(supportTickets.issueId, options.issueId));
   }
   if (options.status) {
     conditions.push(eq(supportTickets.status, options.status));

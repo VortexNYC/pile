@@ -16345,6 +16345,7 @@ export interface paths {
                     externalSource?: "intercom" | "zendesk" | "plain" | "email" | "slack" | "msteams" | "discord" | "chat" | "api" | "manual";
                     assignedTo?: string;
                     q?: string;
+                    issueId?: string;
                 };
                 header?: never;
                 path: {

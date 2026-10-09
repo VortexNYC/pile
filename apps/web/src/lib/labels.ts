@@ -66,6 +66,17 @@ export function issueStatusVariant(status: IssueStatus): BadgeVariant {
   }
 }
 
+export function ticketStatusVariant(status: TicketStatus): BadgeVariant {
+  switch (status) {
+    case "todo":
+      return "blue";
+    case "snoozed":
+      return "orange";
+    case "done":
+      return "green";
+  }
+}
+
 export function priorityVariant(priority: IssuePriority): BadgeVariant {
   switch (priority) {
     case "urgent":

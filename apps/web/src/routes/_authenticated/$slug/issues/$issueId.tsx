@@ -6,8 +6,10 @@ import { Text } from "@cloudflare/kumo/components/text";
 import {
   ArrowSquareOut,
   File,
+  ClockCounterClockwise,
   FileText,
   Link as LinkIcon,
+  Ticket as TicketIcon,
   PencilSimple,
   Robot,
   Trash,
@@ -29,11 +31,14 @@ import { betterAuthClient } from "@/lib/better-auth";
 import {
   derivedStatusVariant,
   formatRelative,
+  isTicketStatus,
   ISSUE_STATUS_LABELS,
   issueStatusVariant,
   PRIORITY_LABELS,
   priorityVariant,
   sessionStatusVariant,
+  TICKET_STATUS_LABELS,
+  ticketStatusVariant,
 } from "@/lib/labels";
 import { toastError, toastSuccess } from "@/lib/toast";
 
@@ -224,6 +229,33 @@ function IssueDetail() {
       ).issues,
   });
 
+  const tickets = useQuery({
+    queryKey: wsKey(organizationId, "tickets", "issue", issueId),
+    queryFn: async () =>
+      (
+        await unwrap(
+          api.GET("/workspaces/{organizationId}/support/tickets", {
+            params: {
+              path: { organizationId },
+              query: { issueId },
+            },
+          })
+        )
+      ).tickets,
+  });
+
+  const history = useQuery({
+    queryKey: wsKey(organizationId, "issues", issueId, "history"),
+    queryFn: async () =>
+      (
+        await unwrap(
+          api.GET("/workspaces/{organizationId}/issues/{issueId}/history", {
+            params: { path: { organizationId, issueId } },
+          })
+        )
+      ).history,
+  });
+
   const members = useQuery({
     queryKey: wsKey(organizationId, "members"),
     queryFn: async () => {
@@ -318,6 +350,8 @@ function IssueDetail() {
       )?.user?.email)
     : undefined;
   const subIssues = children.data ?? [];
+  const linkedTickets = tickets.data ?? [];
+  const historyRows = history.data ?? [];
 
   return (
     <Page
@@ -404,7 +438,7 @@ function IssueDetail() {
                 </Text>
               </div>
               {data.description ? (
-                <Markdown content={data.description} />
+                <Markdown workspaceSlug={workspace.slug} content={data.description} />
               ) : (
                 <Text variant="secondary">No description.</Text>
               )}
@@ -471,6 +505,29 @@ function IssueDetail() {
         </Section>
       ) : null}
 
+      {linkedTickets.length > 0 ? (
+        <Section title="Support tickets" icon={<TicketIcon size={16} />}>
+          <ul className="flex flex-col gap-1.5">
+            {linkedTickets.map((ticket) => (
+              <li key={ticket.id} className="flex items-center gap-2">
+                <Badge variant={ticketStatusVariant(ticket.status)}>
+                  {isTicketStatus(ticket.status)
+                    ? TICKET_STATUS_LABELS[ticket.status]
+                    : ticket.status}
+                </Badge>
+                <Link
+                  to="/$slug/tickets/$ticketId"
+                  params={{ slug: workspace.slug, ticketId: ticket.id }}
+                  className="text-kumo-link hover:underline"
+                >
+                  {ticket.title}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      ) : null}
+
       {allRelations.length > 0 ? (
         <Section title="Related issues" icon={<LinkIcon size={16} />}>
           <ul className="flex flex-col gap-1.5">
@@ -518,7 +575,18 @@ function IssueDetail() {
           <ul className="flex flex-col gap-1.5">
             {files.map((file) => (
               <li key={file.id} className="text-sm">
-                {file.title ?? file.url ?? file.r2Key ?? file.id}
+                {file.url ? (
+                  <a
+                    href={file.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-kumo-link hover:underline"
+                  >
+                    {file.title ?? file.url}
+                  </a>
+                ) : (
+                  (file.title ?? file.r2Key ?? file.id)
+                )}
               </li>
             ))}
           </ul>
@@ -574,6 +642,37 @@ function IssueDetail() {
                   ) : null}
                   {sub.title}
                 </Link>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      ) : null}
+
+      {historyRows.length > 0 ? (
+        <Section title="Activity" icon={<ClockCounterClockwise size={16} />}>
+          <ul className="flex flex-col gap-1.5">
+            {historyRows.map((row) => (
+              <li
+                key={row.id}
+                className="flex items-baseline gap-2 text-sm text-kumo-subtle"
+              >
+                <span>
+                  {row.field.replace(/_/g, " ")}
+                  {row.fromValue ? (
+                    <>
+                      {": "}
+                      {row.fromValue} → {row.toValue ?? "—"}
+                    </>
+                  ) : row.toValue ? (
+                    <>
+                      {": "}
+                      {row.toValue}
+                    </>
+                  ) : null}
+                </span>
+                <span className="shrink-0 text-xs">
+                  {formatRelative(row.createdAt)}
+                </span>
               </li>
             ))}
           </ul>

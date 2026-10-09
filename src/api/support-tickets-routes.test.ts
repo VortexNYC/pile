@@ -341,4 +341,48 @@ describe("support ticket routes", () => {
     );
     expect(res.status).toBe(400);
   });
+
+  it("filters tickets by linked issueId", async () => {
+    const issueRes = await request(
+      "POST",
+      `/workspaces/${organizationId}/issues`,
+      { title: "Linked issue for ticket filter" }
+    );
+    expect(issueRes.status).toBe(201);
+    const issueId = (
+      (await issueRes.json()) as { id: string }
+    ).id;
+    const createRes = await request(
+      "POST",
+      `/workspaces/${organizationId}/support/tickets`,
+      {
+        customerId,
+        title: "Issue-linked ticket",
+        sourceChannel: "chat",
+        issueId,
+      }
+    );
+    expect(createRes.status).toBe(201);
+    const createdTicket = (
+      (await createRes.json()) as { ticket: { id: string; issueId: string | null } }
+    ).ticket;
+    const ticketId = createdTicket.id;
+    expect(createdTicket.issueId).toBe(issueId);
+
+    const filtered = await request(
+      "GET",
+      `/workspaces/${organizationId}/support/tickets?issueId=${issueId}`
+    );
+    expect(filtered.status).toBe(200);
+    const body = listTicketsResponseSchema.parse(await filtered.json());
+    expect(body.tickets.length).toBe(1);
+    expect(body.tickets[0]?.id).toBe(ticketId);
+
+    const unfiltered = await request(
+      "GET",
+      `/workspaces/${organizationId}/support/tickets`
+    );
+    const all = listTicketsResponseSchema.parse(await unfiltered.json());
+    expect(all.tickets.some((t) => t.id === ticketId)).toBe(true);
+  });
 });

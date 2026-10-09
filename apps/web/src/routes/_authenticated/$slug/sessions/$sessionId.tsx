@@ -246,7 +246,7 @@ function SessionDetail() {
                       {event.type.startsWith("prompt.") ? "you" : event.type}
                     </Badge>
                     <div className="flex-1 text-sm min-w-0">
-                      <Markdown content={promptText(event) ?? event.message} />
+                      <Markdown workspaceSlug={workspace.slug} content={promptText(event) ?? event.message} />
                     </div>
                     <span className="text-xs text-kumo-subtle shrink-0">
                       {formatRelative(event.createdAt)}

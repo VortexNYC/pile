@@ -241,6 +241,7 @@ const listTicketsQuerySchema = z.object({
   externalSource: supportTicketSourceEnum.optional(),
   assignedTo: z.string().optional(),
   q: z.string().optional(),
+  issueId: z.string().optional(),
 });
 
 const listEventsQuerySchema = z.object({
@@ -860,6 +861,7 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
       externalSource: query.externalSource,
       assignedTo: query.assignedTo,
       q: query.q,
+      issueId: query.issueId,
     });
 
     const withRelations = await hydrateTicketRelations(

@@ -180,7 +180,7 @@ export function IssueComments({ issueId }: { issueId: string }) {
                   </form>
                 ) : (
                   <Text>
-                    <Markdown content={comment.body} />
+                    <Markdown workspaceSlug={workspace.slug} content={comment.body} />
                   </Text>
                 )}
               </li>

@@ -1,6 +1,8 @@
 import { Table } from "@cloudflare/kumo/components/table";
 import { Streamdown } from "streamdown";
 
+import { remarkIssueLinks } from "@/lib/remark-issues";
+
 import "streamdown/styles.css";
 
 const components = {
@@ -36,6 +38,21 @@ const components = {
   ),
 };
 
-export function Markdown({ content }: { content: string }) {
-  return <Streamdown components={components}>{content}</Streamdown>;
+export function Markdown({
+  content,
+  workspaceSlug,
+}: {
+  content: string;
+  workspaceSlug?: string;
+}) {
+  return (
+    <Streamdown
+      components={components}
+      remarkPlugins={
+        workspaceSlug ? [remarkIssueLinks({ workspaceSlug })] : []
+      }
+    >
+      {content}
+    </Streamdown>
+  );
 }
