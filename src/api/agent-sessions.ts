@@ -2707,7 +2707,10 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         identity.id
       );
       const queuedActivities = await stub.listAgentActivities(sessionId);
-      return c.json(toSessionResponse(queued ?? session, queuedActivities), 200);
+      return c.json(
+        toSessionResponse(queued ?? session, queuedActivities),
+        200
+      );
     }
 
     const providerConfig = await loadProviderConfig(

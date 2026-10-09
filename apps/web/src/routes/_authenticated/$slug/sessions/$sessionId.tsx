@@ -39,10 +39,7 @@ const LIVE_MS = 2500;
 
 // prompt.* events carry the human's actual text in the payload — the
 // event message is just bookkeeping ("queued (31 chars)").
-function promptText(event: {
-  type: string;
-  payload?: unknown;
-}): string | null {
+function promptText(event: { type: string; payload?: unknown }): string | null {
   if (!event.type.startsWith("prompt.")) return null;
   const payload = event.payload;
   if (typeof payload !== "object" || payload === null) return null;
@@ -218,8 +215,7 @@ function SessionDetail() {
                 // events, and prompt bookkeeping (followup_skipped etc.)
                 // are plumbing — the terminal has those.
                 const feed = (events.data ?? []).filter(
-                  (e) =>
-                    e.kind === "activity" || e.type === "prompt.followup"
+                  (e) => e.kind === "activity" || e.type === "prompt.followup"
                 );
                 if (feed.length === 0) {
                   return (
@@ -246,9 +242,7 @@ function SessionDetail() {
                                 : "neutral"
                       }
                     >
-                      {event.type.startsWith("prompt.")
-                        ? "you"
-                        : event.type}
+                      {event.type.startsWith("prompt.") ? "you" : event.type}
                     </Badge>
                     <p className="flex-1 text-sm whitespace-pre-wrap">
                       {promptText(event) ?? event.message}
