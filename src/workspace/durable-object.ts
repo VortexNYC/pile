@@ -162,6 +162,12 @@ const PR_STATE_TO_STATUS: Record<string, Issue["status"] | undefined> = {
   closed: "canceled",
 };
 
+function chunk<T>(arr: T[], size: number): T[][] {
+  return Array.from({ length: Math.ceil(arr.length / size) }, (_, i) =>
+    arr.slice(i * size, (i + 1) * size)
+  );
+}
+
 function isTerminalStatus(status: IssueStatus): boolean {
   return status === "done" || status === "canceled";
 }
@@ -2325,29 +2331,32 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         [...text.matchAll(/\b([A-Z][A-Z0-9]+-\d+)\b/g)].map((m) => m[1])
       ),
     ];
-    // One bounded query per target type. Fanning out one lookup per key via
-    // Promise.all exceeds the DO SQLite in-flight limit at ~17+ references.
-    const docTargets =
-      docRefs.length === 0
+    // One bounded query per target type per chunk. DO SQLite caps bound
+    // variables per statement at ~100: docRefs bind 2 params each (slug +
+    // id OR), issueKeys bind 1 — chunk to stay under.
+    const docTargets = chunk(docRefs, 48).flatMap((refs) =>
+      refs.length === 0
         ? []
         : this.db
             .select({ id: workspaceDocuments.id })
             .from(workspaceDocuments)
             .where(
               or(
-                inArray(workspaceDocuments.slug, docRefs),
-                inArray(workspaceDocuments.id, docRefs)
+                inArray(workspaceDocuments.slug, refs),
+                inArray(workspaceDocuments.id, refs)
               )
             )
-            .all();
-    const issueTargets =
-      issueKeys.length === 0
+            .all()
+    );
+    const issueTargets = chunk(issueKeys, 64).flatMap((keys) =>
+      keys.length === 0
         ? []
         : this.db
             .select({ id: workspaceIssues.id })
             .from(workspaceIssues)
-            .where(inArray(workspaceIssues.identifier, issueKeys))
-            .all();
+            .where(inArray(workspaceIssues.identifier, keys))
+            .all()
+    );
     const links: Array<{ targetType: string; targetId: string }> = [];
     for (const target of docTargets) {
       links.push({ targetType: "document", targetId: target.id });

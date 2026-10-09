@@ -4302,18 +4302,24 @@ export function replaceDocumentLinks(
     .where(eq(workspaceDocumentLinks.documentId, documentId))
     .run();
   if (links.length === 0) return;
-  db.insert(workspaceDocumentLinks)
-    .values(
-      links.map((link) => ({
-        id: crypto.randomUUID(),
-        organizationId,
-        documentId,
-        targetType: link.targetType,
-        targetId: link.targetId,
-        createdAt: new Date().toISOString(),
-      }))
-    )
-    .run();
+  // DO SQLite caps bound variables per statement at ~100 — 6 params per row
+  // means >16 rows throws inside the caller's transaction and 500s doc
+  // creates carrying many issue/doc references.
+  const ts = new Date().toISOString();
+  for (let i = 0; i < links.length; i += 16) {
+    db.insert(workspaceDocumentLinks)
+      .values(
+        links.slice(i, i + 16).map((link) => ({
+          id: crypto.randomUUID(),
+          organizationId,
+          documentId,
+          targetType: link.targetType,
+          targetId: link.targetId,
+          createdAt: ts,
+        }))
+      )
+      .run();
+  }
 }
 
 export function listDocumentLinks(
