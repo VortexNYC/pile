@@ -1,21 +1,8 @@
 import { Badge } from "@cloudflare/kumo/components/badge";
 import { Button } from "@cloudflare/kumo/components/button";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
-import { Table } from "@cloudflare/kumo/components/table";
 import { Text } from "@cloudflare/kumo/components/text";
-import {
-  ArrowSquareOut,
-  File,
-  CheckSquare,
-  ClockCounterClockwise,
-  FileText,
-  Link as LinkIcon,
-  Ticket as TicketIcon,
-  PencilSimple,
-  Robot,
-  Trash,
-  Users,
-} from "@phosphor-icons/react";
+import { PencilSimple, Trash } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
@@ -30,7 +17,6 @@ import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap, unwrapEmpty } from "@/lib/api";
 import { betterAuthClient } from "@/lib/better-auth";
 import {
-  derivedStatusVariant,
   formatRelative,
   isTicketStatus,
   ISSUE_STATUS_LABELS,
@@ -47,23 +33,38 @@ export const Route = createFileRoute("/_authenticated/$slug/issues/$issueId")({
   component: IssueDetail,
 });
 
-function Section({
+function RailSection({
   title,
-  icon,
   children,
 }: {
   title: string;
-  icon: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <LayerCard>
-      <div className="border-b border-kumo-line px-4 py-3 flex items-center gap-2">
-        {icon}
-        <Text variant="secondary">{title}</Text>
-      </div>
-      <div className="px-4 py-3">{children}</div>
-    </LayerCard>
+    <div>
+      <h3 className="text-xs font-medium text-kumo-subtle mb-2">{title}</h3>
+      <div className="flex flex-col gap-1.5">{children}</div>
+    </div>
+  );
+}
+
+function RailLink({
+  to,
+  params,
+  children,
+}: {
+  to: string;
+  params: Record<string, string>;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      to={to}
+      params={params}
+      className="text-sm text-kumo-link hover:underline truncate"
+    >
+      {children}
+    </Link>
   );
 }
 
@@ -355,17 +356,28 @@ function IssueDetail() {
     ? cycles.data?.find((c) => c.id === data.cycleId)
     : undefined;
   const assignee = data.assigneeId
-    ? (members.data?.find(
-        (m) => m.user?.id === data.assigneeId || m.id === data.assigneeId
-      )?.user?.name ??
-      members.data?.find(
-        (m) => m.user?.id === data.assigneeId || m.id === data.assigneeId
-      )?.user?.email)
+    ? data.assigneeId.startsWith("lane:")
+      ? "agent lane"
+      : (members.data?.find(
+          (m) => m.user?.id === data.assigneeId || m.id === data.assigneeId
+        )?.user?.name ??
+        members.data?.find(
+          (m) => m.user?.id === data.assigneeId || m.id === data.assigneeId
+        )?.user?.email)
     : undefined;
   const subIssues = children.data ?? [];
   const linkedTickets = tickets.data ?? [];
   const approvalRows = approvals.data ?? [];
   const historyRows = history.data ?? [];
+
+  const resolveActor = (id: string | null | undefined) =>
+    id
+      ? (members.data?.find((m) => m.user?.id === id || m.id === id)?.user
+          ?.name ??
+        members.data?.find((m) => m.user?.id === id || m.id === id)?.user
+          ?.email ??
+        undefined)
+      : undefined;
 
   return (
     <Page
@@ -404,337 +416,342 @@ function IssueDetail() {
         )
       }
     >
-      <LayerCard>
-        <LayerCard.Primary className="flex flex-col gap-4 p-6">
+      <div className="flex gap-8 min-w-0">
+        {/* center column: title context, description, sub-issues, activity */}
+        <div className="flex-1 min-w-0 flex flex-col gap-6">
           {editing ? (
-            <IssueForm
-              initial={{
-                title: data.title,
-                description: data.description ?? "",
-                status: data.status,
-                priority: data.priority,
-              }}
-              submitLabel="Save changes"
-              pending={save.isPending}
-              onSubmit={(values) => save.mutate(values)}
-              onCancel={() => setEditing(false)}
+            <LayerCard>
+              <LayerCard.Primary className="p-6">
+                <IssueForm
+                  initial={{
+                    title: data.title,
+                    description: data.description ?? "",
+                    status: data.status,
+                    priority: data.priority,
+                  }}
+                  submitLabel="Save changes"
+                  pending={save.isPending}
+                  onSubmit={(values) => save.mutate(values)}
+                  onCancel={() => setEditing(false)}
+                />
+              </LayerCard.Primary>
+            </LayerCard>
+          ) : data.description ? (
+            <Markdown
+              workspaceSlug={workspace.slug}
+              content={data.description}
             />
           ) : (
-            <>
-              <div className="flex flex-wrap items-center gap-2">
+            <Text variant="secondary">No description.</Text>
+          )}
+
+          {files.length > 0 ? (
+            <div className="flex flex-col gap-2">
+              <h3 className="text-xs font-medium text-kumo-subtle">
+                Attachments
+              </h3>
+              {files.map((file) => {
+                const isImage = file.subtitle?.startsWith("image/");
+                return (
+                  <div key={file.id} className="text-sm">
+                    {file.url ? (
+                      <a
+                        href={file.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-kumo-link hover:underline"
+                      >
+                        {file.title ?? file.url}
+                      </a>
+                    ) : (
+                      (file.title ?? file.r2Key ?? file.id)
+                    )}
+                    {isImage && file.url ? (
+                      <img
+                        src={file.url}
+                        alt={file.title ?? "Attachment"}
+                        className="mt-2 max-w-md rounded border border-kumo-line"
+                      />
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+
+          {subIssues.length > 0 ? (
+            <div className="flex flex-col gap-1">
+              <h3 className="text-xs font-medium text-kumo-subtle">
+                Sub-issues{" "}
+                <span>
+                  {subIssues.filter((s) => s.status === "done").length}/
+                  {subIssues.length}
+                </span>
+              </h3>
+              <ul className="flex flex-col border-t border-kumo-line">
+                {subIssues.map((sub) => (
+                  <li key={sub.id}>
+                    <Link
+                      to="/$slug/issues/$issueId"
+                      params={{ slug: workspace.slug, issueId: sub.id }}
+                      className="flex items-center gap-2.5 h-10 border-b border-kumo-line text-sm hover:bg-kumo-control min-w-0 px-1"
+                    >
+                      <Badge variant={issueStatusVariant(sub.status)}>
+                        {sub.status.replace("_", " ")}
+                      </Badge>
+                      {sub.identifier ? (
+                        <span className="text-kumo-subtle shrink-0 text-xs">
+                          {sub.identifier}
+                        </span>
+                      ) : null}
+                      <span className="truncate">{sub.title}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          <div className="border-t border-kumo-line" />
+
+          <IssueComments
+            issueId={issueId}
+            history={historyRows}
+            actorName={resolveActor}
+            resolveValue={(field, value) => {
+              switch (field) {
+                case "status":
+                  return ISSUE_STATUS_LABELS[
+                    value as keyof typeof ISSUE_STATUS_LABELS
+                  ];
+                case "priority":
+                  return PRIORITY_LABELS[value as keyof typeof PRIORITY_LABELS];
+                case "assignee_id":
+                  return resolveActor(value);
+                case "team_id":
+                  return teams.data?.find((tm) => tm.id === value)?.name;
+                case "project_id":
+                  return projects.data?.find((pr) => pr.id === value)?.name;
+                case "cycle_id":
+                  return cycles.data?.find((cy) => cy.id === value)?.name;
+                default:
+                  return undefined;
+              }
+            }}
+          />
+        </div>
+
+        {/* properties rail */}
+        <aside className="hidden lg:block w-72 shrink-0 border-l border-kumo-line pl-6">
+          <div className="flex flex-col gap-6">
+            <RailSection title="Properties">
+              <div className="flex items-center gap-2 text-sm">
                 <Badge variant={issueStatusVariant(data.status)}>
                   {ISSUE_STATUS_LABELS[data.status]}
                 </Badge>
                 <Badge variant={priorityVariant(data.priority)}>
-                  {PRIORITY_LABELS[data.priority]} priority
+                  {PRIORITY_LABELS[data.priority]}
                 </Badge>
-                {team ? (
-                  <Badge variant="neutral">
-                    {team.key} — {team.name}
-                  </Badge>
-                ) : null}
-                {issueLabels.map((label) => (
-                  <Badge key={label.id} variant="neutral">
-                    {label.name}
-                  </Badge>
-                ))}
-                {project ? (
-                  <Badge variant="blue">Project: {project.name}</Badge>
-                ) : null}
-                {cycle ? (
-                  <Badge variant="purple">Cycle: {cycle.name}</Badge>
-                ) : null}
-                {assignee ? (
-                  <Text variant="secondary">assigned to {assignee}</Text>
-                ) : null}
-                <Text variant="secondary">
-                  created {formatRelative(data.createdAt)}
-                </Text>
               </div>
-              {data.description ? (
-                <Markdown
-                  workspaceSlug={workspace.slug}
-                  content={data.description}
-                />
-              ) : (
-                <Text variant="secondary">No description.</Text>
-              )}
-            </>
-          )}
-        </LayerCard.Primary>
-      </LayerCard>
+              {assignee ? (
+                <div className="text-sm flex items-center gap-2">
+                  <span className="text-kumo-subtle">Assignee</span>
+                  <span>{assignee}</span>
+                </div>
+              ) : null}
+              {team ? (
+                <div className="text-sm flex items-center gap-2">
+                  <span className="text-kumo-subtle">Team</span>
+                  <span>
+                    {team.key} — {team.name}
+                  </span>
+                </div>
+              ) : null}
+              {project ? (
+                <div className="text-sm flex items-center gap-2">
+                  <span className="text-kumo-subtle">Project</span>
+                  <RailLink
+                    to="/$slug/projects/$projectId"
+                    params={{
+                      slug: workspace.slug,
+                      projectId: project.id,
+                    }}
+                  >
+                    {project.name}
+                  </RailLink>
+                </div>
+              ) : null}
+              {cycle ? (
+                <div className="text-sm flex items-center gap-2">
+                  <span className="text-kumo-subtle">Cycle</span>
+                  <span>{cycle.name}</span>
+                </div>
+              ) : null}
+            </RailSection>
 
-      {issueSessions.length > 0 ? (
-        <Section title="Agent sessions" icon={<Robot size={16} />}>
-          <Table aria-label="Agent sessions on this issue">
-            <Table.Body>
-              {issueSessions.map((s) => (
-                <Table.Row key={s.id}>
-                  <Table.Cell>
-                    <Link
+            {issueLabels.length > 0 ? (
+              <RailSection title="Labels">
+                <div className="flex flex-wrap gap-1.5">
+                  {issueLabels.map((label) => (
+                    <Badge key={label.id} variant="neutral">
+                      {label.name}
+                    </Badge>
+                  ))}
+                </div>
+              </RailSection>
+            ) : null}
+
+            {parent.data ? (
+              <RailSection title="Parent">
+                <RailLink
+                  to="/$slug/issues/$issueId"
+                  params={{
+                    slug: workspace.slug,
+                    issueId: parent.data.id,
+                  }}
+                >
+                  {parent.data.identifier
+                    ? `${parent.data.identifier} ${parent.data.title}`
+                    : parent.data.title}
+                </RailLink>
+              </RailSection>
+            ) : null}
+
+            {approvalRows.length > 0 ? (
+              <RailSection title="Approvals">
+                {approvalRows.map((a) => (
+                  <div key={a.id} className="flex items-center gap-2">
+                    <Badge
+                      variant={
+                        a.status === "approved"
+                          ? "green"
+                          : a.status === "rejected"
+                            ? "red"
+                            : "orange"
+                      }
+                    >
+                      {a.status}
+                    </Badge>
+                    <span className="text-xs text-kumo-subtle truncate">
+                      {a.comment ?? "requested"} · {formatRelative(a.createdAt)}
+                    </span>
+                  </div>
+                ))}
+              </RailSection>
+            ) : null}
+
+            {linkedTickets.length > 0 ? (
+              <RailSection title="Support tickets">
+                {linkedTickets.map((ticket) => (
+                  <div key={ticket.id} className="flex items-center gap-2">
+                    <Badge variant={ticketStatusVariant(ticket.status)}>
+                      {isTicketStatus(ticket.status)
+                        ? TICKET_STATUS_LABELS[ticket.status]
+                        : ticket.status}
+                    </Badge>
+                    <RailLink
+                      to="/$slug/tickets/$ticketId"
+                      params={{
+                        slug: workspace.slug,
+                        ticketId: ticket.id,
+                      }}
+                    >
+                      {ticket.title}
+                    </RailLink>
+                  </div>
+                ))}
+              </RailSection>
+            ) : null}
+
+            {allRelations.length > 0 ? (
+              <RailSection title="Related">
+                {allRelations.map((rel) => {
+                  const otherId =
+                    rel.fromIssueId === issueId
+                      ? rel.toIssueId
+                      : rel.fromIssueId;
+                  return (
+                    <div key={rel.id} className="flex items-center gap-2">
+                      <Badge variant="neutral">{rel.type}</Badge>
+                      <RailLink
+                        to="/$slug/issues/$issueId"
+                        params={{ slug: workspace.slug, issueId: otherId }}
+                      >
+                        View issue
+                      </RailLink>
+                    </div>
+                  );
+                })}
+              </RailSection>
+            ) : null}
+
+            {docs.length > 0 ? (
+              <RailSection title="Documents">
+                {docs.map((doc) => (
+                  <RailLink
+                    key={doc.id}
+                    to="/$slug/documents/$documentId"
+                    params={{ slug: workspace.slug, documentId: doc.id }}
+                  >
+                    {doc.title}
+                  </RailLink>
+                ))}
+              </RailSection>
+            ) : null}
+
+            {links.length > 0 ? (
+              <RailSection title="Links">
+                {links.map((link) => (
+                  <a
+                    key={link.id}
+                    href={link.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm text-kumo-link hover:underline truncate"
+                  >
+                    {link.label ?? link.url}
+                  </a>
+                ))}
+              </RailSection>
+            ) : null}
+
+            {issueSessions.length > 0 ? (
+              <RailSection title="Sessions">
+                {issueSessions.slice(0, 5).map((s) => (
+                  <div key={s.id} className="flex items-center gap-2">
+                    <Badge variant={sessionStatusVariant(s.status)}>
+                      {s.derivedStatus?.replace("_", " ") ?? s.status}
+                    </Badge>
+                    <RailLink
                       to="/$slug/sessions/$sessionId"
                       params={{ slug: workspace.slug, sessionId: s.id }}
-                      className="text-kumo-link hover:underline"
                     >
                       {s.label ?? s.id.slice(0, 8)}
-                    </Link>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Badge variant={sessionStatusVariant(s.status)}>
-                      {s.status}
-                    </Badge>
-                    {derivedStatusVariant(s.derivedStatus) ? (
-                      <Badge
-                        variant={
-                          derivedStatusVariant(s.derivedStatus) ?? "neutral"
-                        }
-                        className="ml-2"
-                      >
-                        {s.derivedStatus?.replace("_", " ")}
-                      </Badge>
-                    ) : null}
-                  </Table.Cell>
-                  <Table.Cell className="text-kumo-subtle text-sm">
-                    {formatRelative(s.updatedAt)}
-                  </Table.Cell>
-                </Table.Row>
-              ))}
-            </Table.Body>
-          </Table>
-        </Section>
-      ) : null}
-
-      {docs.length > 0 ? (
-        <Section title="Linked documents" icon={<FileText size={16} />}>
-          <ul className="flex flex-col gap-1.5">
-            {docs.map((doc) => (
-              <li key={doc.id}>
-                <Link
-                  to="/$slug/documents/$documentId"
-                  params={{ slug: workspace.slug, documentId: doc.id }}
-                  className="text-kumo-link hover:underline"
-                >
-                  {doc.title}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </Section>
-      ) : null}
-
-      {approvalRows.length > 0 ? (
-        <Section title="Approvals" icon={<CheckSquare size={16} />}>
-          <ul className="flex flex-col gap-1.5">
-            {approvalRows.map((a) => (
-              <li key={a.id} className="flex items-baseline gap-2">
-                <Badge
-                  variant={
-                    a.status === "approved"
-                      ? "green"
-                      : a.status === "rejected"
-                        ? "red"
-                        : "orange"
-                  }
-                >
-                  {a.status}
-                </Badge>
-                <span className="text-sm">
-                  {a.comment ?? "approval requested"}
-                </span>
-                <span className="text-xs text-kumo-subtle">
-                  {formatRelative(a.createdAt)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </Section>
-      ) : null}
-
-      {linkedTickets.length > 0 ? (
-        <Section title="Support tickets" icon={<TicketIcon size={16} />}>
-          <ul className="flex flex-col gap-1.5">
-            {linkedTickets.map((ticket) => (
-              <li key={ticket.id} className="flex items-center gap-2">
-                <Badge variant={ticketStatusVariant(ticket.status)}>
-                  {isTicketStatus(ticket.status)
-                    ? TICKET_STATUS_LABELS[ticket.status]
-                    : ticket.status}
-                </Badge>
-                <Link
-                  to="/$slug/tickets/$ticketId"
-                  params={{ slug: workspace.slug, ticketId: ticket.id }}
-                  className="text-kumo-link hover:underline"
-                >
-                  {ticket.title}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </Section>
-      ) : null}
-
-      {allRelations.length > 0 ? (
-        <Section title="Related issues" icon={<LinkIcon size={16} />}>
-          <ul className="flex flex-col gap-1.5">
-            {allRelations.map((rel) => {
-              const otherId =
-                rel.fromIssueId === issueId ? rel.toIssueId : rel.fromIssueId;
-              return (
-                <li key={rel.id} className="flex items-center gap-2">
-                  <Badge variant="neutral">{rel.type}</Badge>
-                  <Link
-                    to="/$slug/issues/$issueId"
-                    params={{ slug: workspace.slug, issueId: otherId }}
-                    className="text-kumo-link hover:underline"
-                  >
-                    View issue
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </Section>
-      ) : null}
-
-      {links.length > 0 ? (
-        <Section title="External links" icon={<ArrowSquareOut size={16} />}>
-          <ul className="flex flex-col gap-1.5">
-            {links.map((link) => (
-              <li key={link.id}>
-                <a
-                  href={link.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-kumo-link hover:underline"
-                >
-                  {link.label ?? link.url}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </Section>
-      ) : null}
-
-      {files.length > 0 ? (
-        <Section title="Attachments" icon={<File size={16} />}>
-          <ul className="flex flex-col gap-1.5">
-            {files.map((file) => {
-              const isImage = file.subtitle?.startsWith("image/");
-              return (
-                <li key={file.id} className="text-sm">
-                  {file.url ? (
-                    <a
-                      href={file.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-kumo-link hover:underline"
-                    >
-                      {file.title ?? file.url}
-                    </a>
-                  ) : (
-                    (file.title ?? file.r2Key ?? file.id)
-                  )}
-                  {isImage && file.url ? (
-                    <img
-                      src={file.url}
-                      alt={file.title ?? "Attachment"}
-                      className="mt-2 max-w-md rounded border border-kumo-line"
-                    />
-                  ) : null}
-                </li>
-              );
-            })}
-          </ul>
-        </Section>
-      ) : null}
-
-      {watchers.length > 0 ? (
-        <Section title="Subscribers" icon={<Users size={16} />}>
-          <div className="flex flex-wrap gap-2">
-            {watchers.map((w) => (
-              <Badge key={w.id} variant="neutral">
-                {w.linearUserId}
-              </Badge>
-            ))}
-          </div>
-        </Section>
-      ) : null}
-
-      {parent.data ? (
-        <Section title="Parent issue" icon={<LinkIcon size={16} />}>
-          <Link
-            to="/$slug/issues/$issueId"
-            params={{ slug: workspace.slug, issueId: parent.data.id }}
-            className="text-kumo-link hover:underline"
-          >
-            {parent.data.identifier ? (
-              <span className="text-kumo-subtle mr-2">
-                {parent.data.identifier}
-              </span>
+                    </RailLink>
+                  </div>
+                ))}
+                {issueSessions.length > 5 ? (
+                  <span className="text-xs text-kumo-subtle">
+                    +{issueSessions.length - 5} more
+                  </span>
+                ) : null}
+              </RailSection>
             ) : null}
-            {parent.data.title}
-          </Link>
-        </Section>
-      ) : null}
 
-      {subIssues.length > 0 ? (
-        <Section title="Sub-issues" icon={<LinkIcon size={16} />}>
-          <ul className="flex flex-col gap-1.5">
-            {subIssues.map((sub) => (
-              <li key={sub.id} className="flex items-center gap-2">
-                <Badge variant={issueStatusVariant(sub.status)}>
-                  {sub.status}
-                </Badge>
-                <Link
-                  to="/$slug/issues/$issueId"
-                  params={{ slug: workspace.slug, issueId: sub.id }}
-                  className="text-kumo-link hover:underline"
-                >
-                  {sub.identifier ? (
-                    <span className="text-kumo-subtle mr-2">
-                      {sub.identifier}
-                    </span>
-                  ) : null}
-                  {sub.title}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </Section>
-      ) : null}
-
-      {historyRows.length > 0 ? (
-        <Section title="Activity" icon={<ClockCounterClockwise size={16} />}>
-          <ul className="flex flex-col gap-1.5">
-            {historyRows.map((row) => (
-              <li
-                key={row.id}
-                className="flex items-baseline gap-2 text-sm text-kumo-subtle"
-              >
-                <span>
-                  {row.field.replace(/_/g, " ")}
-                  {row.fromValue ? (
-                    <>
-                      {": "}
-                      {row.fromValue} → {row.toValue ?? "—"}
-                    </>
-                  ) : row.toValue ? (
-                    <>
-                      {": "}
-                      {row.toValue}
-                    </>
-                  ) : null}
-                </span>
-                <span className="shrink-0 text-xs">
-                  {formatRelative(row.createdAt)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </Section>
-      ) : null}
-
-      <IssueComments issueId={issueId} />
+            {watchers.length > 0 ? (
+              <RailSection title="Subscribers">
+                <div className="flex flex-wrap gap-1.5">
+                  {watchers.map((w) => (
+                    <Badge key={w.id} variant="neutral">
+                      {w.linearUserId}
+                    </Badge>
+                  ))}
+                </div>
+              </RailSection>
+            ) : null}
+          </div>
+        </aside>
+      </div>
     </Page>
   );
 }

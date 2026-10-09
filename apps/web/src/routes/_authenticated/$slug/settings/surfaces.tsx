@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { Page } from "@/components/page";
-import { ErrorState, LoadingState } from "@/components/states";
+import { LoadingState } from "@/components/states";
 import { useSurfaces } from "@/hooks/use-surfaces";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 
