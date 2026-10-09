@@ -4,6 +4,7 @@ import {
   Buildings,
   FileText,
   Headset,
+  House,
   Key,
   ListChecks,
   SignOut,
@@ -18,6 +19,7 @@ import { betterAuthClient } from "@/lib/better-auth";
 import { appHref } from "@/lib/router-path";
 
 const NAV = [
+  { title: "Overview", path: "", icon: House, exact: true },
   { title: "Issues", path: "issues", icon: ListChecks },
   { title: "Documents", path: "documents", icon: FileText },
   { title: "Support", path: "tickets", icon: Headset },
@@ -44,6 +46,7 @@ export function AppSidebar({
   const base = `/${workspace.slug}`;
   const isActive = (path: string) =>
     pathname === `${base}/${path}` || pathname.startsWith(`${base}/${path}/`);
+  const isOverviewActive = pathname === base || pathname === `${base}/`;
 
   return (
     <Sidebar aria-label="Workspace navigation">
@@ -59,7 +62,11 @@ export function AppSidebar({
               <Sidebar.MenuButton
                 key={item.path}
                 icon={item.icon}
-                active={isActive(item.path)}
+                active={
+                  "exact" in item && item.exact
+                    ? isOverviewActive
+                    : isActive(item.path)
+                }
                 href={appHref(`${base}/${item.path}`)}
                 tooltip={item.title}
               >

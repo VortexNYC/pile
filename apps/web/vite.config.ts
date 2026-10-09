@@ -9,6 +9,11 @@ import { defineConfig } from "vitest/config";
 // Static Assets), so Better Auth session cookies need no CORS. In dev the
 // Vite server proxies API + auth calls to `wrangler dev` on :8787.
 const apiTarget = process.env.PILE_API_URL ?? "http://localhost:8787";
+const remoteTarget = !apiTarget.includes("localhost");
+// Remote targets enforce a CSRF origin allowlist and Better Auth checks
+// trusted origins, so spoof the SPA's production origin on the way out —
+// identical to the same-origin traffic prod serves at /app.
+const remoteHeaders = remoteTarget ? { headers: { origin: apiTarget } } : {};
 
 export default defineConfig({
   base: "/app/",
@@ -31,11 +36,13 @@ export default defineConfig({
       // — wrangler dev on :8787 doesn't route by Host, pile.nyc does.
       "/api": {
         target: apiTarget,
-        changeOrigin: !apiTarget.includes("localhost"),
+        changeOrigin: remoteTarget,
+        ...remoteHeaders,
       },
       "/workspaces": {
         target: apiTarget,
-        changeOrigin: !apiTarget.includes("localhost"),
+        changeOrigin: remoteTarget,
+        ...remoteHeaders,
       },
     },
   },

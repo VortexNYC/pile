@@ -125,6 +125,10 @@ new_sqlite_classes = ["CursorSandbox", "DevinSandbox", "CodexSandbox"]
 name = "pile"
 
 routes = [{ pattern = "pile.nyc", custom_domain = true }]
+# Required for `wrangler versions upload --preview-alias` branch previews
+# (<alias>-pile.shlomo-31b.workers.dev) — cloudflare-ci runs that on
+# non-main artifact pushes.
+workers_dev = true
 
 [env.production.vars]
 BETTER_AUTH_URL = "https://pile.nyc"
