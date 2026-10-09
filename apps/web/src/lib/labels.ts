@@ -184,3 +184,31 @@ export function derivedStatusVariant(
   if (derived === "needs_input") return "purple";
   return null;
 }
+
+export function projectStatusVariant(status: string): BadgeVariant {
+  switch (status) {
+    case "started":
+      return "blue";
+    case "completed":
+      return "green";
+    case "paused":
+      return "orange";
+    case "canceled":
+      return "neutral";
+    default:
+      return "neutral";
+  }
+}
+
+export function projectHealthVariant(health: string): BadgeVariant {
+  switch (health) {
+    case "on_track":
+      return "green";
+    case "at_risk":
+      return "orange";
+    case "off_track":
+      return "red";
+    default:
+      return "neutral";
+  }
+}

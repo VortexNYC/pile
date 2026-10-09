@@ -21,6 +21,7 @@ import { Route as AuthVerifyEmailRouteImport } from './routes/_auth/verify-email
 import { Route as AuthenticatedSlugRouteImport } from './routes/_authenticated/$slug'
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
 import { Route as AuthenticatedSlugIndexRouteImport } from './routes/_authenticated/$slug/index'
+import { Route as AuthenticatedSlugChangelogIndexRouteImport } from './routes/_authenticated/$slug/changelog/index'
 import { Route as AuthenticatedSlugCustomersIndexRouteImport } from './routes/_authenticated/$slug/customers/index'
 import { Route as AuthenticatedSlugCustomersCustomerIdRouteImport } from './routes/_authenticated/$slug/customers/$customerId'
 import { Route as AuthenticatedSlugDocumentsIndexRouteImport } from './routes/_authenticated/$slug/documents/index'
@@ -29,6 +30,8 @@ import { Route as AuthenticatedSlugDocumentsNewRouteImport } from './routes/_aut
 import { Route as AuthenticatedSlugIssuesIndexRouteImport } from './routes/_authenticated/$slug/issues/index'
 import { Route as AuthenticatedSlugIssuesIssueIdRouteImport } from './routes/_authenticated/$slug/issues/$issueId'
 import { Route as AuthenticatedSlugIssuesNewRouteImport } from './routes/_authenticated/$slug/issues/new'
+import { Route as AuthenticatedSlugProjectsIndexRouteImport } from './routes/_authenticated/$slug/projects/index'
+import { Route as AuthenticatedSlugProjectsProjectIdRouteImport } from './routes/_authenticated/$slug/projects/$projectId'
 import { Route as AuthenticatedSlugSessionsIndexRouteImport } from './routes/_authenticated/$slug/sessions/index'
 import { Route as AuthenticatedSlugSessionsSessionIdRouteImport } from './routes/_authenticated/$slug/sessions/$sessionId'
 import { Route as AuthenticatedSlugSettingsIndexRouteImport } from './routes/_authenticated/$slug/settings/index'
@@ -96,6 +99,12 @@ const AuthenticatedSlugIndexRoute = AuthenticatedSlugIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedSlugRoute,
 } as any)
+const AuthenticatedSlugChangelogIndexRoute =
+  AuthenticatedSlugChangelogIndexRouteImport.update({
+    id: '/changelog/',
+    path: '/changelog/',
+    getParentRoute: () => AuthenticatedSlugRoute,
+  } as any)
 const AuthenticatedSlugCustomersIndexRoute =
   AuthenticatedSlugCustomersIndexRouteImport.update({
     id: '/customers/',
@@ -142,6 +151,18 @@ const AuthenticatedSlugIssuesNewRoute =
   AuthenticatedSlugIssuesNewRouteImport.update({
     id: '/issues/new',
     path: '/issues/new',
+    getParentRoute: () => AuthenticatedSlugRoute,
+  } as any)
+const AuthenticatedSlugProjectsIndexRoute =
+  AuthenticatedSlugProjectsIndexRouteImport.update({
+    id: '/projects/',
+    path: '/projects/',
+    getParentRoute: () => AuthenticatedSlugRoute,
+  } as any)
+const AuthenticatedSlugProjectsProjectIdRoute =
+  AuthenticatedSlugProjectsProjectIdRouteImport.update({
+    id: '/projects/$projectId',
+    path: '/projects/$projectId',
     getParentRoute: () => AuthenticatedSlugRoute,
   } as any)
 const AuthenticatedSlugSessionsIndexRoute =
@@ -209,14 +230,17 @@ export interface FileRoutesByFullPath {
   '/$slug/documents/new': typeof AuthenticatedSlugDocumentsNewRoute
   '/$slug/issues/$issueId': typeof AuthenticatedSlugIssuesIssueIdRoute
   '/$slug/issues/new': typeof AuthenticatedSlugIssuesNewRoute
+  '/$slug/projects/$projectId': typeof AuthenticatedSlugProjectsProjectIdRoute
   '/$slug/sessions/$sessionId': typeof AuthenticatedSlugSessionsSessionIdRoute
   '/$slug/settings/account': typeof AuthenticatedSlugSettingsAccountRoute
   '/$slug/settings/developer': typeof AuthenticatedSlugSettingsDeveloperRoute
   '/$slug/settings/members': typeof AuthenticatedSlugSettingsMembersRoute
   '/$slug/tickets/$ticketId': typeof AuthenticatedSlugTicketsTicketIdRoute
+  '/$slug/changelog/': typeof AuthenticatedSlugChangelogIndexRoute
   '/$slug/customers/': typeof AuthenticatedSlugCustomersIndexRoute
   '/$slug/documents/': typeof AuthenticatedSlugDocumentsIndexRoute
   '/$slug/issues/': typeof AuthenticatedSlugIssuesIndexRoute
+  '/$slug/projects/': typeof AuthenticatedSlugProjectsIndexRoute
   '/$slug/sessions/': typeof AuthenticatedSlugSessionsIndexRoute
   '/$slug/settings/': typeof AuthenticatedSlugSettingsIndexRoute
   '/$slug/tickets/': typeof AuthenticatedSlugTicketsIndexRoute
@@ -236,14 +260,17 @@ export interface FileRoutesByTo {
   '/$slug/documents/new': typeof AuthenticatedSlugDocumentsNewRoute
   '/$slug/issues/$issueId': typeof AuthenticatedSlugIssuesIssueIdRoute
   '/$slug/issues/new': typeof AuthenticatedSlugIssuesNewRoute
+  '/$slug/projects/$projectId': typeof AuthenticatedSlugProjectsProjectIdRoute
   '/$slug/sessions/$sessionId': typeof AuthenticatedSlugSessionsSessionIdRoute
   '/$slug/settings/account': typeof AuthenticatedSlugSettingsAccountRoute
   '/$slug/settings/developer': typeof AuthenticatedSlugSettingsDeveloperRoute
   '/$slug/settings/members': typeof AuthenticatedSlugSettingsMembersRoute
   '/$slug/tickets/$ticketId': typeof AuthenticatedSlugTicketsTicketIdRoute
+  '/$slug/changelog': typeof AuthenticatedSlugChangelogIndexRoute
   '/$slug/customers': typeof AuthenticatedSlugCustomersIndexRoute
   '/$slug/documents': typeof AuthenticatedSlugDocumentsIndexRoute
   '/$slug/issues': typeof AuthenticatedSlugIssuesIndexRoute
+  '/$slug/projects': typeof AuthenticatedSlugProjectsIndexRoute
   '/$slug/sessions': typeof AuthenticatedSlugSessionsIndexRoute
   '/$slug/settings': typeof AuthenticatedSlugSettingsIndexRoute
   '/$slug/tickets': typeof AuthenticatedSlugTicketsIndexRoute
@@ -267,14 +294,17 @@ export interface FileRoutesById {
   '/_authenticated/$slug/documents/new': typeof AuthenticatedSlugDocumentsNewRoute
   '/_authenticated/$slug/issues/$issueId': typeof AuthenticatedSlugIssuesIssueIdRoute
   '/_authenticated/$slug/issues/new': typeof AuthenticatedSlugIssuesNewRoute
+  '/_authenticated/$slug/projects/$projectId': typeof AuthenticatedSlugProjectsProjectIdRoute
   '/_authenticated/$slug/sessions/$sessionId': typeof AuthenticatedSlugSessionsSessionIdRoute
   '/_authenticated/$slug/settings/account': typeof AuthenticatedSlugSettingsAccountRoute
   '/_authenticated/$slug/settings/developer': typeof AuthenticatedSlugSettingsDeveloperRoute
   '/_authenticated/$slug/settings/members': typeof AuthenticatedSlugSettingsMembersRoute
   '/_authenticated/$slug/tickets/$ticketId': typeof AuthenticatedSlugTicketsTicketIdRoute
+  '/_authenticated/$slug/changelog/': typeof AuthenticatedSlugChangelogIndexRoute
   '/_authenticated/$slug/customers/': typeof AuthenticatedSlugCustomersIndexRoute
   '/_authenticated/$slug/documents/': typeof AuthenticatedSlugDocumentsIndexRoute
   '/_authenticated/$slug/issues/': typeof AuthenticatedSlugIssuesIndexRoute
+  '/_authenticated/$slug/projects/': typeof AuthenticatedSlugProjectsIndexRoute
   '/_authenticated/$slug/sessions/': typeof AuthenticatedSlugSessionsIndexRoute
   '/_authenticated/$slug/settings/': typeof AuthenticatedSlugSettingsIndexRoute
   '/_authenticated/$slug/tickets/': typeof AuthenticatedSlugTicketsIndexRoute
@@ -297,14 +327,17 @@ export interface FileRouteTypes {
     | '/$slug/documents/new'
     | '/$slug/issues/$issueId'
     | '/$slug/issues/new'
+    | '/$slug/projects/$projectId'
     | '/$slug/sessions/$sessionId'
     | '/$slug/settings/account'
     | '/$slug/settings/developer'
     | '/$slug/settings/members'
     | '/$slug/tickets/$ticketId'
+    | '/$slug/changelog/'
     | '/$slug/customers/'
     | '/$slug/documents/'
     | '/$slug/issues/'
+    | '/$slug/projects/'
     | '/$slug/sessions/'
     | '/$slug/settings/'
     | '/$slug/tickets/'
@@ -324,14 +357,17 @@ export interface FileRouteTypes {
     | '/$slug/documents/new'
     | '/$slug/issues/$issueId'
     | '/$slug/issues/new'
+    | '/$slug/projects/$projectId'
     | '/$slug/sessions/$sessionId'
     | '/$slug/settings/account'
     | '/$slug/settings/developer'
     | '/$slug/settings/members'
     | '/$slug/tickets/$ticketId'
+    | '/$slug/changelog'
     | '/$slug/customers'
     | '/$slug/documents'
     | '/$slug/issues'
+    | '/$slug/projects'
     | '/$slug/sessions'
     | '/$slug/settings'
     | '/$slug/tickets'
@@ -354,14 +390,17 @@ export interface FileRouteTypes {
     | '/_authenticated/$slug/documents/new'
     | '/_authenticated/$slug/issues/$issueId'
     | '/_authenticated/$slug/issues/new'
+    | '/_authenticated/$slug/projects/$projectId'
     | '/_authenticated/$slug/sessions/$sessionId'
     | '/_authenticated/$slug/settings/account'
     | '/_authenticated/$slug/settings/developer'
     | '/_authenticated/$slug/settings/members'
     | '/_authenticated/$slug/tickets/$ticketId'
+    | '/_authenticated/$slug/changelog/'
     | '/_authenticated/$slug/customers/'
     | '/_authenticated/$slug/documents/'
     | '/_authenticated/$slug/issues/'
+    | '/_authenticated/$slug/projects/'
     | '/_authenticated/$slug/sessions/'
     | '/_authenticated/$slug/settings/'
     | '/_authenticated/$slug/tickets/'
@@ -459,6 +498,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSlugIndexRouteImport
       parentRoute: typeof AuthenticatedSlugRoute
     }
+    '/_authenticated/$slug/changelog/': {
+      id: '/_authenticated/$slug/changelog/'
+      path: '/changelog'
+      fullPath: '/$slug/changelog/'
+      preLoaderRoute: typeof AuthenticatedSlugChangelogIndexRouteImport
+      parentRoute: typeof AuthenticatedSlugRoute
+    }
     '/_authenticated/$slug/customers/': {
       id: '/_authenticated/$slug/customers/'
       path: '/customers'
@@ -513,6 +559,20 @@ declare module '@tanstack/react-router' {
       path: '/issues/new'
       fullPath: '/$slug/issues/new'
       preLoaderRoute: typeof AuthenticatedSlugIssuesNewRouteImport
+      parentRoute: typeof AuthenticatedSlugRoute
+    }
+    '/_authenticated/$slug/projects/': {
+      id: '/_authenticated/$slug/projects/'
+      path: '/projects'
+      fullPath: '/$slug/projects/'
+      preLoaderRoute: typeof AuthenticatedSlugProjectsIndexRouteImport
+      parentRoute: typeof AuthenticatedSlugRoute
+    }
+    '/_authenticated/$slug/projects/$projectId': {
+      id: '/_authenticated/$slug/projects/$projectId'
+      path: '/projects/$projectId'
+      fullPath: '/$slug/projects/$projectId'
+      preLoaderRoute: typeof AuthenticatedSlugProjectsProjectIdRouteImport
       parentRoute: typeof AuthenticatedSlugRoute
     }
     '/_authenticated/$slug/sessions/': {
@@ -601,14 +661,17 @@ interface AuthenticatedSlugRouteChildren {
   AuthenticatedSlugDocumentsNewRoute: typeof AuthenticatedSlugDocumentsNewRoute
   AuthenticatedSlugIssuesIssueIdRoute: typeof AuthenticatedSlugIssuesIssueIdRoute
   AuthenticatedSlugIssuesNewRoute: typeof AuthenticatedSlugIssuesNewRoute
+  AuthenticatedSlugProjectsProjectIdRoute: typeof AuthenticatedSlugProjectsProjectIdRoute
   AuthenticatedSlugSessionsSessionIdRoute: typeof AuthenticatedSlugSessionsSessionIdRoute
   AuthenticatedSlugSettingsAccountRoute: typeof AuthenticatedSlugSettingsAccountRoute
   AuthenticatedSlugSettingsDeveloperRoute: typeof AuthenticatedSlugSettingsDeveloperRoute
   AuthenticatedSlugSettingsMembersRoute: typeof AuthenticatedSlugSettingsMembersRoute
   AuthenticatedSlugTicketsTicketIdRoute: typeof AuthenticatedSlugTicketsTicketIdRoute
+  AuthenticatedSlugChangelogIndexRoute: typeof AuthenticatedSlugChangelogIndexRoute
   AuthenticatedSlugCustomersIndexRoute: typeof AuthenticatedSlugCustomersIndexRoute
   AuthenticatedSlugDocumentsIndexRoute: typeof AuthenticatedSlugDocumentsIndexRoute
   AuthenticatedSlugIssuesIndexRoute: typeof AuthenticatedSlugIssuesIndexRoute
+  AuthenticatedSlugProjectsIndexRoute: typeof AuthenticatedSlugProjectsIndexRoute
   AuthenticatedSlugSessionsIndexRoute: typeof AuthenticatedSlugSessionsIndexRoute
   AuthenticatedSlugSettingsIndexRoute: typeof AuthenticatedSlugSettingsIndexRoute
   AuthenticatedSlugTicketsIndexRoute: typeof AuthenticatedSlugTicketsIndexRoute
@@ -623,6 +686,8 @@ const AuthenticatedSlugRouteChildren: AuthenticatedSlugRouteChildren = {
   AuthenticatedSlugDocumentsNewRoute: AuthenticatedSlugDocumentsNewRoute,
   AuthenticatedSlugIssuesIssueIdRoute: AuthenticatedSlugIssuesIssueIdRoute,
   AuthenticatedSlugIssuesNewRoute: AuthenticatedSlugIssuesNewRoute,
+  AuthenticatedSlugProjectsProjectIdRoute:
+    AuthenticatedSlugProjectsProjectIdRoute,
   AuthenticatedSlugSessionsSessionIdRoute:
     AuthenticatedSlugSessionsSessionIdRoute,
   AuthenticatedSlugSettingsAccountRoute: AuthenticatedSlugSettingsAccountRoute,
@@ -630,9 +695,11 @@ const AuthenticatedSlugRouteChildren: AuthenticatedSlugRouteChildren = {
     AuthenticatedSlugSettingsDeveloperRoute,
   AuthenticatedSlugSettingsMembersRoute: AuthenticatedSlugSettingsMembersRoute,
   AuthenticatedSlugTicketsTicketIdRoute: AuthenticatedSlugTicketsTicketIdRoute,
+  AuthenticatedSlugChangelogIndexRoute: AuthenticatedSlugChangelogIndexRoute,
   AuthenticatedSlugCustomersIndexRoute: AuthenticatedSlugCustomersIndexRoute,
   AuthenticatedSlugDocumentsIndexRoute: AuthenticatedSlugDocumentsIndexRoute,
   AuthenticatedSlugIssuesIndexRoute: AuthenticatedSlugIssuesIndexRoute,
+  AuthenticatedSlugProjectsIndexRoute: AuthenticatedSlugProjectsIndexRoute,
   AuthenticatedSlugSessionsIndexRoute: AuthenticatedSlugSessionsIndexRoute,
   AuthenticatedSlugSettingsIndexRoute: AuthenticatedSlugSettingsIndexRoute,
   AuthenticatedSlugTicketsIndexRoute: AuthenticatedSlugTicketsIndexRoute,

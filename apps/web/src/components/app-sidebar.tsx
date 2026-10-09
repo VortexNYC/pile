@@ -3,10 +3,12 @@ import { Text } from "@cloudflare/kumo/components/text";
 import {
   Buildings,
   FileText,
+  FolderOpen,
   Headset,
   House,
   Key,
   ListChecks,
+  Megaphone,
   Robot,
   SignOut,
   UserCircle,
@@ -23,9 +25,11 @@ const NAV = [
   { title: "Overview", path: "", icon: House, exact: true },
   { title: "Issues", path: "issues", icon: ListChecks },
   { title: "Sessions", path: "sessions", icon: Robot },
+  { title: "Projects", path: "projects", icon: FolderOpen },
   { title: "Documents", path: "documents", icon: FileText },
   { title: "Support", path: "tickets", icon: Headset },
   { title: "Customers", path: "customers", icon: Buildings },
+  { title: "Changelog", path: "changelog", icon: Megaphone },
 ] as const;
 
 const SETTINGS = [
