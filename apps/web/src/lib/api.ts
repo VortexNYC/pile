@@ -4,9 +4,19 @@ import type { paths } from "../../../../packages/cli/src/client/types";
 
 export type { paths };
 
+// Local dev convenience: VITE_PILE_API_KEY (gitignored .env.local) sends the
+// workspace API key as a bearer so the SPA can preview against a real API
+// without going through sign-in.
+const devApiKey =
+  typeof import.meta.env.VITE_PILE_API_KEY === "string" &&
+  import.meta.env.VITE_PILE_API_KEY.length > 0
+    ? import.meta.env.VITE_PILE_API_KEY
+    : undefined;
+
 export const api = createClient<paths>({
   baseUrl: typeof window === "undefined" ? "" : window.location.origin,
   credentials: "include",
+  headers: devApiKey ? { Authorization: `Bearer ${devApiKey}` } : undefined,
 });
 
 export class ApiError extends Error {
