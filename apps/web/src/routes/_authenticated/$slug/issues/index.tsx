@@ -11,6 +11,7 @@ import { useDeferredValue } from "react";
 
 import { Page } from "@/components/page";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { useTeams } from "@/hooks/use-teams";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap } from "@/lib/api";
 import {
@@ -28,6 +29,7 @@ const ALL = "all";
 
 interface IssuesSearch {
   status?: IssueStatus;
+  team?: string;
   q?: string;
 }
 
@@ -35,6 +37,10 @@ export const Route = createFileRoute("/_authenticated/$slug/issues/")({
   component: IssuesList,
   validateSearch: (search: Record<string, unknown>): IssuesSearch => ({
     status: isIssueStatus(search.status) ? search.status : undefined,
+    team:
+      typeof search.team === "string" && search.team.length > 0
+        ? search.team
+        : undefined,
     q:
       typeof search.q === "string" && search.q.length > 0
         ? search.q
@@ -44,19 +50,20 @@ export const Route = createFileRoute("/_authenticated/$slug/issues/")({
 
 function IssuesList() {
   const workspace = useWorkspace();
-  const { status, q } = Route.useSearch();
+  const { status, team, q } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const search = useDeferredValue(q);
+  const teams = useTeams(workspace.id);
 
   const issues = useQuery({
-    queryKey: wsKey(workspace.id, "issues", { status, search }),
+    queryKey: wsKey(workspace.id, "issues", { status, team, search }),
     queryFn: async () =>
       (
         await unwrap(
           api.GET("/workspaces/{organizationId}/issues", {
             params: {
               path: { organizationId: workspace.id },
-              query: { limit: 100, status, search },
+              query: { limit: 100, status, teamId: team, search },
             },
           })
         )
@@ -120,6 +127,32 @@ function IssuesList() {
           {ISSUE_STATUSES.map((s) => (
             <Select.Option key={s} value={s}>
               {ISSUE_STATUS_LABELS[s]}
+            </Select.Option>
+          ))}
+        </Select>
+        <Select
+          aria-label="Filter by team"
+          value={team ?? ALL}
+          onValueChange={(value) =>
+            void navigate({
+              search: (prev) => ({
+                ...prev,
+                team:
+                  typeof value === "string" && value !== ALL
+                    ? value
+                    : undefined,
+              }),
+              replace: true,
+            })
+          }
+          renderValue={(v) =>
+            teams.data?.find((t) => t.id === v)?.name ?? "All teams"
+          }
+        >
+          <Select.Option value={ALL}>All teams</Select.Option>
+          {(teams.data ?? []).map((t) => (
+            <Select.Option key={t.id} value={t.id}>
+              {t.key} — {t.name}
             </Select.Option>
           ))}
         </Select>
