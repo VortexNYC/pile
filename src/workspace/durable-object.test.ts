@@ -1695,6 +1695,31 @@ describe("WorkspaceDO", () => {
     });
   });
 
+  it("links 17+ resolved issue references — insert rows chunk under the variable cap", async () => {
+    const stub = getStub();
+    // DO SQLite binds ~100 vars/statement; each link row binds 6, so >16
+    // resolved refs used to throw inside the create transaction and 500.
+    const issues = await withWorkspace(stub, async (instance) =>
+      Promise.all(
+        Array.from({ length: 20 }, (_, i) =>
+          instance.createIssue({ title: `link target ${i}` })
+        )
+      )
+    );
+    const doc = await withWorkspace(stub, (instance) =>
+      instance.createDocument({
+        title: "Doc with many resolved refs",
+        content: issues.map((i) => i.identifier).join(" "),
+        contentFormat: "markdown",
+        createdById: "user-1",
+      })
+    );
+    const links = await withWorkspace(stub, (instance) =>
+      instance.listDocumentLinks({ documentId: doc.id })
+    );
+    expect(links).toHaveLength(20);
+  });
+
   it("deduplicates repeated issue references into a single link", async () => {
     const stub = getStub();
     const issue = await withWorkspace(stub, (instance) =>
