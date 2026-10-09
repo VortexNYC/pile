@@ -83,7 +83,7 @@ function SessionDetail() {
           )
         )
       ).events,
-    refetchInterval: (query) => {
+    refetchInterval: () => {
       const status = session.data?.status;
       if (status && TERMINAL.has(status)) return false;
       return LIVE_MS;
