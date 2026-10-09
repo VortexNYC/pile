@@ -18,6 +18,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { IssueComments } from "@/components/comments";
+import { Markdown } from "@/components/markdown";
 import { IssueForm, type IssueFormValues } from "@/components/issue-form";
 import { Page } from "@/components/page";
 import { ErrorState, LoadingState } from "@/components/states";
@@ -296,11 +297,7 @@ function IssueDetail() {
                 </Text>
               </div>
               {data.description ? (
-                <Text>
-                  <span className="whitespace-pre-wrap">
-                    {data.description}
-                  </span>
-                </Text>
+                <Markdown content={data.description} />
               ) : (
                 <Text variant="secondary">No description.</Text>
               )}

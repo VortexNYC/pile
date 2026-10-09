@@ -14,6 +14,7 @@ import { Page } from "@/components/page";
 import { ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap, unwrapEmpty } from "@/lib/api";
+import { Markdown } from "@/components/markdown";
 import { documentText, formatRelative } from "@/lib/labels";
 import { toastError, toastSuccess } from "@/lib/toast";
 
@@ -145,9 +146,7 @@ function DocumentDetail() {
               onCancel={() => setEditing(false)}
             />
           ) : text ? (
-            <Text>
-              <span className="whitespace-pre-wrap">{text}</span>
-            </Text>
+            <Markdown content={text} />
           ) : (
             <Text variant="secondary">This document is empty.</Text>
           )}
