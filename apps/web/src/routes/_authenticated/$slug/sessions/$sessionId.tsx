@@ -37,6 +37,16 @@ const TERMINAL = new Set(["completed", "failed", "canceled"]);
 
 const LIVE_MS = 2500;
 
+// prompt.* events carry the human's actual text in the payload — the
+// event message is just bookkeeping ("queued (31 chars)").
+function promptText(event: { type: string; payload: unknown }): string | null {
+  if (!event.type.startsWith("prompt.")) return null;
+  const payload = event.payload;
+  if (typeof payload !== "object" || payload === null) return null;
+  const prompt = (payload as Record<string, unknown>).prompt;
+  return typeof prompt === "string" ? prompt : null;
+}
+
 function SessionDetail() {
   const workspace = useWorkspace();
   const { sessionId } = Route.useParams();
@@ -192,17 +202,30 @@ function SessionDetail() {
               <span className="text-kumo-subtle text-sm">{s.branch}</span>
             ) : null}
           </div>
-          {s.result ? (
+          {s.status === "completed" && s.result ? (
             <LayerCard>
               <p className="text-sm whitespace-pre-wrap">{s.result}</p>
             </LayerCard>
           ) : null}
           <LayerCard className="p-0">
             <div className="divide-y divide-kumo-line">
-              {(events.data ?? []).length === 0 ? (
-                <p className="p-4 text-sm text-kumo-subtle">No activity yet.</p>
-              ) : (
-                (events.data ?? []).map((event) => (
+              {(() => {
+                // Human-facing view: agent activities + the user's own
+                // prompts. session.* lifecycle rows, `activity` mirror
+                // events, and prompt bookkeeping (followup_skipped etc.)
+                // are plumbing — the terminal has those.
+                const feed = (events.data ?? []).filter(
+                  (e) =>
+                    e.kind === "activity" || e.type === "prompt.followup"
+                );
+                if (feed.length === 0) {
+                  return (
+                    <p className="p-4 text-sm text-kumo-subtle">
+                      No activity yet.
+                    </p>
+                  );
+                }
+                return feed.map((event) => (
                   <div
                     key={event.id}
                     className="flex items-baseline gap-3 px-4 py-2.5"
@@ -213,20 +236,26 @@ function SessionDetail() {
                           ? "red"
                           : event.type === "elicitation"
                             ? "purple"
-                            : "neutral"
+                            : event.type.startsWith("prompt.")
+                              ? "green"
+                              : event.type === "response"
+                                ? "blue"
+                                : "neutral"
                       }
                     >
-                      {event.type}
+                      {event.type.startsWith("prompt.")
+                        ? "you"
+                        : event.type}
                     </Badge>
                     <p className="flex-1 text-sm whitespace-pre-wrap">
-                      {event.message}
+                      {promptText(event) ?? event.message}
                     </p>
                     <span className="text-xs text-kumo-subtle shrink-0">
                       {formatRelative(event.createdAt)}
                     </span>
                   </div>
-                ))
-              )}
+                ));
+              })()}
             </div>
           </LayerCard>
           <form
