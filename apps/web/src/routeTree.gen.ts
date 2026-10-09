@@ -12,10 +12,12 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
+import { Route as AuthAcceptInviteRouteImport } from './routes/_auth/accept-invite'
 import { Route as AuthForgotPasswordRouteImport } from './routes/_auth/forgot-password'
 import { Route as AuthResetPasswordRouteImport } from './routes/_auth/reset-password'
 import { Route as AuthSignInRouteImport } from './routes/_auth/sign-in'
 import { Route as AuthSignUpRouteImport } from './routes/_auth/sign-up'
+import { Route as AuthVerifyEmailRouteImport } from './routes/_auth/verify-email'
 import { Route as AuthenticatedSlugRouteImport } from './routes/_authenticated/$slug'
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
 import { Route as AuthenticatedSlugIndexRouteImport } from './routes/_authenticated/$slug/index'
@@ -27,7 +29,9 @@ import { Route as AuthenticatedSlugDocumentsNewRouteImport } from './routes/_aut
 import { Route as AuthenticatedSlugIssuesIndexRouteImport } from './routes/_authenticated/$slug/issues/index'
 import { Route as AuthenticatedSlugIssuesIssueIdRouteImport } from './routes/_authenticated/$slug/issues/$issueId'
 import { Route as AuthenticatedSlugIssuesNewRouteImport } from './routes/_authenticated/$slug/issues/new'
+import { Route as AuthenticatedSlugSettingsIndexRouteImport } from './routes/_authenticated/$slug/settings/index'
 import { Route as AuthenticatedSlugSettingsAccountRouteImport } from './routes/_authenticated/$slug/settings/account'
+import { Route as AuthenticatedSlugSettingsDeveloperRouteImport } from './routes/_authenticated/$slug/settings/developer'
 import { Route as AuthenticatedSlugSettingsMembersRouteImport } from './routes/_authenticated/$slug/settings/members'
 import { Route as AuthenticatedSlugTicketsIndexRouteImport } from './routes/_authenticated/$slug/tickets/index'
 import { Route as AuthenticatedSlugTicketsTicketIdRouteImport } from './routes/_authenticated/$slug/tickets/$ticketId'
@@ -44,6 +48,11 @@ const AuthRoute = AuthRouteImport.update({
 const AuthenticatedRoute = AuthenticatedRouteImport.update({
   id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthAcceptInviteRoute = AuthAcceptInviteRouteImport.update({
+  id: '/accept-invite',
+  path: '/accept-invite',
+  getParentRoute: () => AuthRoute,
 } as any)
 const AuthForgotPasswordRoute = AuthForgotPasswordRouteImport.update({
   id: '/forgot-password',
@@ -63,6 +72,11 @@ const AuthSignInRoute = AuthSignInRouteImport.update({
 const AuthSignUpRoute = AuthSignUpRouteImport.update({
   id: '/sign-up',
   path: '/sign-up',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthVerifyEmailRoute = AuthVerifyEmailRouteImport.update({
+  id: '/verify-email',
+  path: '/verify-email',
   getParentRoute: () => AuthRoute,
 } as any)
 const AuthenticatedSlugRoute = AuthenticatedSlugRouteImport.update({
@@ -128,10 +142,22 @@ const AuthenticatedSlugIssuesNewRoute =
     path: '/issues/new',
     getParentRoute: () => AuthenticatedSlugRoute,
   } as any)
+const AuthenticatedSlugSettingsIndexRoute =
+  AuthenticatedSlugSettingsIndexRouteImport.update({
+    id: '/settings/',
+    path: '/settings/',
+    getParentRoute: () => AuthenticatedSlugRoute,
+  } as any)
 const AuthenticatedSlugSettingsAccountRoute =
   AuthenticatedSlugSettingsAccountRouteImport.update({
     id: '/settings/account',
     path: '/settings/account',
+    getParentRoute: () => AuthenticatedSlugRoute,
+  } as any)
+const AuthenticatedSlugSettingsDeveloperRoute =
+  AuthenticatedSlugSettingsDeveloperRouteImport.update({
+    id: '/settings/developer',
+    path: '/settings/developer',
     getParentRoute: () => AuthenticatedSlugRoute,
   } as any)
 const AuthenticatedSlugSettingsMembersRoute =
@@ -155,10 +181,12 @@ const AuthenticatedSlugTicketsTicketIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/accept-invite': typeof AuthAcceptInviteRoute
   '/forgot-password': typeof AuthForgotPasswordRoute
   '/reset-password': typeof AuthResetPasswordRoute
   '/sign-in': typeof AuthSignInRoute
   '/sign-up': typeof AuthSignUpRoute
+  '/verify-email': typeof AuthVerifyEmailRoute
   '/$slug': typeof AuthenticatedSlugRouteWithChildren
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/$slug/': typeof AuthenticatedSlugIndexRoute
@@ -168,19 +196,23 @@ export interface FileRoutesByFullPath {
   '/$slug/issues/$issueId': typeof AuthenticatedSlugIssuesIssueIdRoute
   '/$slug/issues/new': typeof AuthenticatedSlugIssuesNewRoute
   '/$slug/settings/account': typeof AuthenticatedSlugSettingsAccountRoute
+  '/$slug/settings/developer': typeof AuthenticatedSlugSettingsDeveloperRoute
   '/$slug/settings/members': typeof AuthenticatedSlugSettingsMembersRoute
   '/$slug/tickets/$ticketId': typeof AuthenticatedSlugTicketsTicketIdRoute
   '/$slug/customers/': typeof AuthenticatedSlugCustomersIndexRoute
   '/$slug/documents/': typeof AuthenticatedSlugDocumentsIndexRoute
   '/$slug/issues/': typeof AuthenticatedSlugIssuesIndexRoute
+  '/$slug/settings/': typeof AuthenticatedSlugSettingsIndexRoute
   '/$slug/tickets/': typeof AuthenticatedSlugTicketsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/accept-invite': typeof AuthAcceptInviteRoute
   '/forgot-password': typeof AuthForgotPasswordRoute
   '/reset-password': typeof AuthResetPasswordRoute
   '/sign-in': typeof AuthSignInRoute
   '/sign-up': typeof AuthSignUpRoute
+  '/verify-email': typeof AuthVerifyEmailRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
   '/$slug': typeof AuthenticatedSlugIndexRoute
   '/$slug/customers/$customerId': typeof AuthenticatedSlugCustomersCustomerIdRoute
@@ -189,11 +221,13 @@ export interface FileRoutesByTo {
   '/$slug/issues/$issueId': typeof AuthenticatedSlugIssuesIssueIdRoute
   '/$slug/issues/new': typeof AuthenticatedSlugIssuesNewRoute
   '/$slug/settings/account': typeof AuthenticatedSlugSettingsAccountRoute
+  '/$slug/settings/developer': typeof AuthenticatedSlugSettingsDeveloperRoute
   '/$slug/settings/members': typeof AuthenticatedSlugSettingsMembersRoute
   '/$slug/tickets/$ticketId': typeof AuthenticatedSlugTicketsTicketIdRoute
   '/$slug/customers': typeof AuthenticatedSlugCustomersIndexRoute
   '/$slug/documents': typeof AuthenticatedSlugDocumentsIndexRoute
   '/$slug/issues': typeof AuthenticatedSlugIssuesIndexRoute
+  '/$slug/settings': typeof AuthenticatedSlugSettingsIndexRoute
   '/$slug/tickets': typeof AuthenticatedSlugTicketsIndexRoute
 }
 export interface FileRoutesById {
@@ -201,10 +235,12 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_auth': typeof AuthRouteWithChildren
   '/_authenticated': typeof AuthenticatedRouteWithChildren
+  '/_auth/accept-invite': typeof AuthAcceptInviteRoute
   '/_auth/forgot-password': typeof AuthForgotPasswordRoute
   '/_auth/reset-password': typeof AuthResetPasswordRoute
   '/_auth/sign-in': typeof AuthSignInRoute
   '/_auth/sign-up': typeof AuthSignUpRoute
+  '/_auth/verify-email': typeof AuthVerifyEmailRoute
   '/_authenticated/$slug': typeof AuthenticatedSlugRouteWithChildren
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
   '/_authenticated/$slug/': typeof AuthenticatedSlugIndexRoute
@@ -214,21 +250,25 @@ export interface FileRoutesById {
   '/_authenticated/$slug/issues/$issueId': typeof AuthenticatedSlugIssuesIssueIdRoute
   '/_authenticated/$slug/issues/new': typeof AuthenticatedSlugIssuesNewRoute
   '/_authenticated/$slug/settings/account': typeof AuthenticatedSlugSettingsAccountRoute
+  '/_authenticated/$slug/settings/developer': typeof AuthenticatedSlugSettingsDeveloperRoute
   '/_authenticated/$slug/settings/members': typeof AuthenticatedSlugSettingsMembersRoute
   '/_authenticated/$slug/tickets/$ticketId': typeof AuthenticatedSlugTicketsTicketIdRoute
   '/_authenticated/$slug/customers/': typeof AuthenticatedSlugCustomersIndexRoute
   '/_authenticated/$slug/documents/': typeof AuthenticatedSlugDocumentsIndexRoute
   '/_authenticated/$slug/issues/': typeof AuthenticatedSlugIssuesIndexRoute
+  '/_authenticated/$slug/settings/': typeof AuthenticatedSlugSettingsIndexRoute
   '/_authenticated/$slug/tickets/': typeof AuthenticatedSlugTicketsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/accept-invite'
     | '/forgot-password'
     | '/reset-password'
     | '/sign-in'
     | '/sign-up'
+    | '/verify-email'
     | '/$slug'
     | '/onboarding'
     | '/$slug/'
@@ -238,19 +278,23 @@ export interface FileRouteTypes {
     | '/$slug/issues/$issueId'
     | '/$slug/issues/new'
     | '/$slug/settings/account'
+    | '/$slug/settings/developer'
     | '/$slug/settings/members'
     | '/$slug/tickets/$ticketId'
     | '/$slug/customers/'
     | '/$slug/documents/'
     | '/$slug/issues/'
+    | '/$slug/settings/'
     | '/$slug/tickets/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/accept-invite'
     | '/forgot-password'
     | '/reset-password'
     | '/sign-in'
     | '/sign-up'
+    | '/verify-email'
     | '/onboarding'
     | '/$slug'
     | '/$slug/customers/$customerId'
@@ -259,21 +303,25 @@ export interface FileRouteTypes {
     | '/$slug/issues/$issueId'
     | '/$slug/issues/new'
     | '/$slug/settings/account'
+    | '/$slug/settings/developer'
     | '/$slug/settings/members'
     | '/$slug/tickets/$ticketId'
     | '/$slug/customers'
     | '/$slug/documents'
     | '/$slug/issues'
+    | '/$slug/settings'
     | '/$slug/tickets'
   id:
     | '__root__'
     | '/'
     | '/_auth'
     | '/_authenticated'
+    | '/_auth/accept-invite'
     | '/_auth/forgot-password'
     | '/_auth/reset-password'
     | '/_auth/sign-in'
     | '/_auth/sign-up'
+    | '/_auth/verify-email'
     | '/_authenticated/$slug'
     | '/_authenticated/onboarding'
     | '/_authenticated/$slug/'
@@ -283,11 +331,13 @@ export interface FileRouteTypes {
     | '/_authenticated/$slug/issues/$issueId'
     | '/_authenticated/$slug/issues/new'
     | '/_authenticated/$slug/settings/account'
+    | '/_authenticated/$slug/settings/developer'
     | '/_authenticated/$slug/settings/members'
     | '/_authenticated/$slug/tickets/$ticketId'
     | '/_authenticated/$slug/customers/'
     | '/_authenticated/$slug/documents/'
     | '/_authenticated/$slug/issues/'
+    | '/_authenticated/$slug/settings/'
     | '/_authenticated/$slug/tickets/'
   fileRoutesById: FileRoutesById
 }
@@ -320,6 +370,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_auth/accept-invite': {
+      id: '/_auth/accept-invite'
+      path: '/accept-invite'
+      fullPath: '/accept-invite'
+      preLoaderRoute: typeof AuthAcceptInviteRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/forgot-password': {
       id: '/_auth/forgot-password'
       path: '/forgot-password'
@@ -346,6 +403,13 @@ declare module '@tanstack/react-router' {
       path: '/sign-up'
       fullPath: '/sign-up'
       preLoaderRoute: typeof AuthSignUpRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/verify-email': {
+      id: '/_auth/verify-email'
+      path: '/verify-email'
+      fullPath: '/verify-email'
+      preLoaderRoute: typeof AuthVerifyEmailRouteImport
       parentRoute: typeof AuthRoute
     }
     '/_authenticated/$slug': {
@@ -425,11 +489,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSlugIssuesNewRouteImport
       parentRoute: typeof AuthenticatedSlugRoute
     }
+    '/_authenticated/$slug/settings/': {
+      id: '/_authenticated/$slug/settings/'
+      path: '/settings'
+      fullPath: '/$slug/settings/'
+      preLoaderRoute: typeof AuthenticatedSlugSettingsIndexRouteImport
+      parentRoute: typeof AuthenticatedSlugRoute
+    }
     '/_authenticated/$slug/settings/account': {
       id: '/_authenticated/$slug/settings/account'
       path: '/settings/account'
       fullPath: '/$slug/settings/account'
       preLoaderRoute: typeof AuthenticatedSlugSettingsAccountRouteImport
+      parentRoute: typeof AuthenticatedSlugRoute
+    }
+    '/_authenticated/$slug/settings/developer': {
+      id: '/_authenticated/$slug/settings/developer'
+      path: '/settings/developer'
+      fullPath: '/$slug/settings/developer'
+      preLoaderRoute: typeof AuthenticatedSlugSettingsDeveloperRouteImport
       parentRoute: typeof AuthenticatedSlugRoute
     }
     '/_authenticated/$slug/settings/members': {
@@ -457,17 +535,21 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthRouteChildren {
+  AuthAcceptInviteRoute: typeof AuthAcceptInviteRoute
   AuthForgotPasswordRoute: typeof AuthForgotPasswordRoute
   AuthResetPasswordRoute: typeof AuthResetPasswordRoute
   AuthSignInRoute: typeof AuthSignInRoute
   AuthSignUpRoute: typeof AuthSignUpRoute
+  AuthVerifyEmailRoute: typeof AuthVerifyEmailRoute
 }
 
 const AuthRouteChildren: AuthRouteChildren = {
+  AuthAcceptInviteRoute: AuthAcceptInviteRoute,
   AuthForgotPasswordRoute: AuthForgotPasswordRoute,
   AuthResetPasswordRoute: AuthResetPasswordRoute,
   AuthSignInRoute: AuthSignInRoute,
   AuthSignUpRoute: AuthSignUpRoute,
+  AuthVerifyEmailRoute: AuthVerifyEmailRoute,
 }
 
 const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
@@ -480,11 +562,13 @@ interface AuthenticatedSlugRouteChildren {
   AuthenticatedSlugIssuesIssueIdRoute: typeof AuthenticatedSlugIssuesIssueIdRoute
   AuthenticatedSlugIssuesNewRoute: typeof AuthenticatedSlugIssuesNewRoute
   AuthenticatedSlugSettingsAccountRoute: typeof AuthenticatedSlugSettingsAccountRoute
+  AuthenticatedSlugSettingsDeveloperRoute: typeof AuthenticatedSlugSettingsDeveloperRoute
   AuthenticatedSlugSettingsMembersRoute: typeof AuthenticatedSlugSettingsMembersRoute
   AuthenticatedSlugTicketsTicketIdRoute: typeof AuthenticatedSlugTicketsTicketIdRoute
   AuthenticatedSlugCustomersIndexRoute: typeof AuthenticatedSlugCustomersIndexRoute
   AuthenticatedSlugDocumentsIndexRoute: typeof AuthenticatedSlugDocumentsIndexRoute
   AuthenticatedSlugIssuesIndexRoute: typeof AuthenticatedSlugIssuesIndexRoute
+  AuthenticatedSlugSettingsIndexRoute: typeof AuthenticatedSlugSettingsIndexRoute
   AuthenticatedSlugTicketsIndexRoute: typeof AuthenticatedSlugTicketsIndexRoute
 }
 
@@ -498,11 +582,14 @@ const AuthenticatedSlugRouteChildren: AuthenticatedSlugRouteChildren = {
   AuthenticatedSlugIssuesIssueIdRoute: AuthenticatedSlugIssuesIssueIdRoute,
   AuthenticatedSlugIssuesNewRoute: AuthenticatedSlugIssuesNewRoute,
   AuthenticatedSlugSettingsAccountRoute: AuthenticatedSlugSettingsAccountRoute,
+  AuthenticatedSlugSettingsDeveloperRoute:
+    AuthenticatedSlugSettingsDeveloperRoute,
   AuthenticatedSlugSettingsMembersRoute: AuthenticatedSlugSettingsMembersRoute,
   AuthenticatedSlugTicketsTicketIdRoute: AuthenticatedSlugTicketsTicketIdRoute,
   AuthenticatedSlugCustomersIndexRoute: AuthenticatedSlugCustomersIndexRoute,
   AuthenticatedSlugDocumentsIndexRoute: AuthenticatedSlugDocumentsIndexRoute,
   AuthenticatedSlugIssuesIndexRoute: AuthenticatedSlugIssuesIndexRoute,
+  AuthenticatedSlugSettingsIndexRoute: AuthenticatedSlugSettingsIndexRoute,
   AuthenticatedSlugTicketsIndexRoute: AuthenticatedSlugTicketsIndexRoute,
 }
 

@@ -4,6 +4,7 @@ import {
   Buildings,
   FileText,
   Headset,
+  Key,
   ListChecks,
   SignOut,
   UserCircle,
@@ -24,7 +25,9 @@ const NAV = [
 ] as const;
 
 const SETTINGS = [
+  { title: "Workspace", path: "settings", icon: Buildings, exact: true },
   { title: "Members", path: "settings/members", icon: UsersThree },
+  { title: "Developer", path: "settings/developer", icon: Key },
   { title: "Account", path: "settings/account", icon: UserCircle },
 ] as const;
 
@@ -72,7 +75,12 @@ export function AppSidebar({
               <Sidebar.MenuButton
                 key={item.path}
                 icon={item.icon}
-                active={isActive(item.path)}
+                active={
+                  "exact" in item && item.exact
+                    ? pathname === `${base}/${item.path}` ||
+                      pathname === `${base}/${item.path}/`
+                    : isActive(item.path)
+                }
                 href={appHref(`${base}/${item.path}`)}
                 tooltip={item.title}
               >
