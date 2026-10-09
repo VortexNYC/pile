@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  derivedStatusVariant,
   documentText,
   formatRelative,
   isIssueStatus,
   isTicketStatus,
   notificationLabel,
+  sessionStatusVariant,
   slugify,
 } from "./labels";
 
@@ -36,5 +38,25 @@ describe("labels", () => {
     const now = Date.parse("2026-01-02T00:00:00Z");
     expect(formatRelative("2026-01-01T00:00:00Z", now)).toBe("yesterday");
     expect(formatRelative("bad", now)).toBe("");
+  });
+});
+
+describe("sessionStatusVariant", () => {
+  it("maps live and terminal statuses", () => {
+    expect(sessionStatusVariant("running")).toBe("blue");
+    expect(sessionStatusVariant("waiting")).toBe("purple");
+    expect(sessionStatusVariant("completed")).toBe("green");
+    expect(sessionStatusVariant("failed")).toBe("red");
+    expect(sessionStatusVariant("created")).toBe("neutral");
+    expect(sessionStatusVariant("canceled")).toBe("neutral");
+  });
+});
+
+describe("derivedStatusVariant", () => {
+  it("maps derived statuses and passes through absence", () => {
+    expect(derivedStatusVariant("stalled")).toBe("orange");
+    expect(derivedStatusVariant("needs_input")).toBe("purple");
+    expect(derivedStatusVariant(null)).toBeNull();
+    expect(derivedStatusVariant(undefined)).toBeNull();
   });
 });

@@ -143,3 +143,33 @@ export function slugify(name: string): string {
     .replace(/^-+|-+$/g, "")
     .slice(0, 48);
 }
+
+type SessionResponse =
+  paths["/workspaces/{organizationId}/agent/sessions"]["get"]["responses"][200]["content"]["application/json"]["sessions"][number];
+export type SessionStatus = SessionResponse["status"];
+export type SessionDerivedStatus = NonNullable<
+  SessionResponse["derivedStatus"]
+>;
+
+export function sessionStatusVariant(status: SessionStatus): BadgeVariant {
+  switch (status) {
+    case "running":
+      return "blue";
+    case "waiting":
+      return "purple";
+    case "completed":
+      return "green";
+    case "failed":
+      return "red";
+    default:
+      return "neutral";
+  }
+}
+
+export function derivedStatusVariant(
+  derived: SessionDerivedStatus | null | undefined
+): BadgeVariant | null {
+  if (derived === "stalled") return "orange";
+  if (derived === "needs_input") return "purple";
+  return null;
+}

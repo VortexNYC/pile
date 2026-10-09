@@ -15,7 +15,10 @@ export const Route = createFileRoute("/_authenticated/$slug")({
 function WorkspaceLayout() {
   const { slug } = Route.useParams();
   const workspaces = useWorkspaces();
-  const workspace = workspaces.data?.find((w) => w.slug === slug) ?? null;
+  // Accept the org id too — CLI-side links (pile.nyc/app/<org>/...) carry
+  // the organizationId, not the slug.
+  const workspace =
+    workspaces.data?.find((w) => w.slug === slug || w.id === slug) ?? null;
   const workspaceId = workspace?.id;
 
   // better-auth-ui's member screens act on the session's active org.

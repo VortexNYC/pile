@@ -7,6 +7,7 @@ import {
   House,
   Key,
   ListChecks,
+  Robot,
   SignOut,
   UserCircle,
   UsersThree,
@@ -21,6 +22,7 @@ import { appHref } from "@/lib/router-path";
 const NAV = [
   { title: "Overview", path: "", icon: House, exact: true },
   { title: "Issues", path: "issues", icon: ListChecks },
+  { title: "Sessions", path: "sessions", icon: Robot },
   { title: "Documents", path: "documents", icon: FileText },
   { title: "Support", path: "tickets", icon: Headset },
   { title: "Customers", path: "customers", icon: Buildings },
