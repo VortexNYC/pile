@@ -1,8 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
   AuthProvider,
+  ChangeEmailForm,
   ChangePasswordForm,
+  ConnectedAccounts,
+  DeleteAccountForm,
   SessionList,
+  SetPasswordForm,
   SettingsStack,
   UserProfileForm,
 } from "@vortex-api/better-auth-ui";
@@ -17,11 +21,18 @@ export const Route = createFileRoute("/_authenticated/$slug/settings/account")({
 function AccountSettings() {
   return (
     <AuthProvider client={getBetterAuthUiClient()}>
-      <Page title="Account" description="Your profile, password, and devices.">
+      <Page
+        title="Account"
+        description="Your profile, credentials, and sessions."
+      >
         <SettingsStack>
           <UserProfileForm className="w-full max-w-none" />
+          <ChangeEmailForm className="w-full max-w-none" />
+          <ConnectedAccounts className="w-full max-w-none" />
+          <SetPasswordForm className="w-full max-w-none" />
           <ChangePasswordForm className="w-full max-w-none" />
-          <SessionList className="w-full max-w-none" />
+          <SessionList className="w-full max-w-none" showRevokeOthersAction />
+          <DeleteAccountForm className="w-full max-w-none" />
         </SettingsStack>
       </Page>
     </AuthProvider>

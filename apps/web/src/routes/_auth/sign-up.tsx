@@ -6,8 +6,14 @@ import { safeRedirect } from "@/lib/search";
 
 export const Route = createFileRoute("/_auth/sign-up")({
   component: SignUpPage,
-  validateSearch: (search: Record<string, unknown>): { redirect?: string } => ({
+  validateSearch: (
+    search: Record<string, unknown>
+  ): {
+    redirect?: string;
+    token?: string;
+  } => ({
     redirect: safeRedirect(search.redirect),
+    token: typeof search.token === "string" ? search.token : undefined,
   }),
 });
 
