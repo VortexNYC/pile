@@ -2689,6 +2689,27 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       return c.json({ message: "Issue not found" }, 404);
     }
 
+    // Externally-managed sessions (a local coding agent registered itself
+    // via /sessions/register; no providerSessionId, no kept sandbox) can't
+    // receive a live sendPrompt — the reply is queued as a readable event
+    // and the agent picks it up by polling /events or the SSE stream.
+    const externallyManaged = session.providerSessionId === null;
+    if (externallyManaged) {
+      await stub.addAgentSessionEvent({
+        sessionId,
+        type: "prompt.followup",
+        message: `Follow-up prompt queued (${prompt.length} chars)`,
+        payload: { prompt: prompt.slice(0, 2000), delivery: "queued" },
+      });
+      const queued = await stub.applyAgentSessionResult(
+        sessionId,
+        { status: "running", result: null },
+        identity.id
+      );
+      const queuedActivities = await stub.listAgentActivities(sessionId);
+      return c.json(toSessionResponse(queued ?? session, queuedActivities), 200);
+    }
+
     const providerConfig = await loadProviderConfig(
       c.env,
       stub,
