@@ -21,6 +21,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 
+import { usePermissions } from "@/hooks/use-permissions";
 import { useSurfaces } from "@/hooks/use-surfaces";
 import type { Workspace } from "@/hooks/use-workspace";
 import { betterAuthClient } from "@/lib/better-auth";
@@ -41,10 +42,21 @@ const NAV = [
 ] as const;
 
 const SETTINGS = [
-  { title: "Workspace", path: "settings", icon: Buildings, exact: true },
+  {
+    title: "Workspace",
+    path: "settings",
+    icon: Buildings,
+    exact: true,
+    admin: true,
+  },
   { title: "Members", path: "settings/members", icon: UsersThree },
   { title: "Surfaces", path: "settings/surfaces", icon: Layout },
-  { title: "Developer", path: "settings/developer", icon: Key },
+  {
+    title: "Developer",
+    path: "settings/developer",
+    icon: Key,
+    admin: true,
+  },
   { title: "Account", path: "settings/account", icon: UserCircle },
 ] as const;
 
@@ -59,6 +71,7 @@ export function AppSidebar({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const surfaces = useSurfaces(workspace.id);
+  const permissions = usePermissions(workspace.id);
   const base = `/${workspace.slug}`;
   const isActive = (path: string) =>
     pathname === `${base}/${path}` || pathname.startsWith(`${base}/${path}/`);
@@ -96,7 +109,9 @@ export function AppSidebar({
         <Sidebar.Group>
           <Sidebar.GroupLabel>Settings</Sidebar.GroupLabel>
           <Sidebar.Menu>
-            {SETTINGS.map((item) => (
+            {SETTINGS.filter(
+              (item) => !("admin" in item && item.admin) || permissions.isAdmin
+            ).map((item) => (
               <Sidebar.MenuButton
                 key={item.path}
                 icon={item.icon}

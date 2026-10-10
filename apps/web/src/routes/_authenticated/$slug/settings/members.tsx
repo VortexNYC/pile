@@ -1,15 +1,13 @@
-import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   AuthProvider,
   InviteMemberForm,
-  isOrganizationAdminRole,
   OrganizationMembers,
 } from "@vortex-api/better-auth-ui";
 
 import { Page } from "@/components/page";
-import { useWorkspace, wsKey } from "@/hooks/use-workspace";
-import { betterAuthClient } from "@/lib/better-auth";
+import { usePermissions } from "@/hooks/use-permissions";
+import { useWorkspace } from "@/hooks/use-workspace";
 import { getBetterAuthUiClient } from "@/lib/better-auth-ui-adapter";
 
 export const Route = createFileRoute("/_authenticated/$slug/settings/members")({
@@ -18,17 +16,7 @@ export const Route = createFileRoute("/_authenticated/$slug/settings/members")({
 
 function MembersSettings() {
   const workspace = useWorkspace();
-  const role = useQuery({
-    queryKey: wsKey(workspace.id, "member-role"),
-    queryFn: async () => {
-      await betterAuthClient.organization.setActive({
-        organizationId: workspace.id,
-      });
-      const result = await betterAuthClient.organization.getActiveMemberRole();
-      return result.data?.role ?? null;
-    },
-  });
-  const canManage = isOrganizationAdminRole(role.data ?? undefined);
+  const canManage = usePermissions(workspace.id).isAdmin;
 
   return (
     <AuthProvider client={getBetterAuthUiClient()}>
