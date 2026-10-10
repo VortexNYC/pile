@@ -869,6 +869,16 @@ const v54 = `ALTER TABLE notification_preferences ADD COLUMN email_explicit INTE
 
 const v55 = `ALTER TABLE user_workspace_preferences ADD COLUMN hidden_surfaces TEXT`;
 
+const v56 = `CREATE TABLE IF NOT EXISTS issue_shares (
+  token TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  issue_id TEXT NOT NULL,
+  created_by_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  expires_at TEXT
+);
+CREATE INDEX IF NOT EXISTS issue_shares_issue_idx ON issue_shares (organization_id, issue_id)`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -927,6 +937,7 @@ export const workspaceMigrations = {
       { idx: 52, when: 52, tag: "v53", breakpoints: true },
       { idx: 53, when: 53, tag: "v54", breakpoints: false },
       { idx: 54, when: 54, tag: "v55", breakpoints: false },
+      { idx: 55, when: 55, tag: "v56", breakpoints: false },
     ],
   },
   migrations: {
@@ -985,5 +996,6 @@ export const workspaceMigrations = {
     m0052: v53,
     m0053: v54,
     m0054: v55,
+    m0055: v56,
   },
 } satisfies Parameters<typeof migrate>[1];

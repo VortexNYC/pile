@@ -11,6 +11,7 @@ import {
   type DocumentFormValues,
 } from "@/components/document-form";
 import { Markdown } from "@/components/markdown";
+import { ShareButton } from "@/components/share-button";
 import { Page } from "@/components/page";
 import { ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
@@ -146,6 +147,11 @@ function DocumentDetail() {
       actions={
         editing ? null : (
           <>
+            <ShareButton
+              organizationId={workspace.id}
+              kind="document"
+              id={data.id}
+            />
             <Button icon={<PencilSimple />} onClick={() => setEditing(true)}>
               Edit
             </Button>

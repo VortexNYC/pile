@@ -9,6 +9,7 @@ import { useState } from "react";
 
 import { IssueComments } from "@/components/comments";
 import { IssueForm, type IssueFormValues } from "@/components/issue-form";
+import { ShareButton } from "@/components/share-button";
 import { Markdown } from "@/components/markdown";
 import { Page } from "@/components/page";
 import { ErrorState, LoadingState } from "@/components/states";
@@ -398,6 +399,11 @@ function IssueDetail() {
       actions={
         editing ? null : (
           <>
+            <ShareButton
+              organizationId={workspace.id}
+              kind="issue"
+              id={data.id}
+            />
             <Button icon={<PencilSimple />} onClick={() => setEditing(true)}>
               Edit
             </Button>

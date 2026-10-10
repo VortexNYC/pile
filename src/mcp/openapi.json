@@ -3072,6 +3072,212 @@
         "summary": "List issue similar"
       }
     },
+    "/workspaces/{organizationId}/issues/{id}/share": {
+      "post": {
+        "tags": [
+          "issues"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expiresAt": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Share link created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "issueId": {
+                      "type": "string"
+                    },
+                    "createdById": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "token",
+                    "organizationId",
+                    "issueId",
+                    "createdById",
+                    "createdAt",
+                    "expiresAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Issue not found"
+          }
+        },
+        "summary": "Create issue share"
+      }
+    },
+    "/workspaces/{organizationId}/issues/{id}/share/{token}": {
+      "delete": {
+        "tags": [
+          "issues"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "token",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Share revoked"
+          },
+          "404": {
+            "description": "Share not found"
+          }
+        },
+        "summary": "Delete issue share"
+      }
+    },
+    "/shared-issues/{organizationId}/{token}": {
+      "get": {
+        "tags": [
+          "issues"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "token",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Shared issue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "issue": {
+                      "type": "object",
+                      "properties": {
+                        "title": {
+                          "type": "string"
+                        },
+                        "identifier": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "priority": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "title",
+                        "identifier",
+                        "status",
+                        "priority",
+                        "description",
+                        "createdAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "issue"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Share not found or expired"
+          }
+        },
+        "summary": "GET /shared-issues/{organizationId}/{token}"
+      }
+    },
     "/workspaces/{organizationId}/issues/batch": {
       "post": {
         "tags": [

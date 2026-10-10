@@ -31,6 +31,7 @@ import {
   workspaceDocumentPermissions,
   workspaceDocuments,
   workspaceDocumentShares,
+  workspaceIssueShares,
   workspaceDocumentSpaces,
   workspaceDocumentWatchers,
   workspaceEntityAttachments,
@@ -3981,6 +3982,70 @@ export function deleteDocumentSpace(
       .returning()
       .all().length > 0
   );
+}
+
+export function createIssueShare(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: {
+    issueId: string;
+    createdById: string;
+    expiresAt?: string | null;
+  }
+) {
+  return db
+    .insert(workspaceIssueShares)
+    .values({
+      token: crypto.randomUUID().replace(/-/g, ""),
+      organizationId,
+      issueId: input.issueId,
+      createdById: input.createdById,
+      createdAt: new Date().toISOString(),
+      expiresAt: input.expiresAt ?? null,
+    })
+    .returning()
+    .get();
+}
+
+export function getIssueShare(
+  db: WorkspaceDb,
+  organizationId: string,
+  issueId: string
+) {
+  return db
+    .select()
+    .from(workspaceIssueShares)
+    .where(
+      and(
+        eq(workspaceIssueShares.issueId, issueId),
+        eq(workspaceIssueShares.organizationId, organizationId)
+      )
+    )
+    .get();
+}
+
+export function getIssueShareByToken(db: WorkspaceDb, token: string) {
+  return db
+    .select()
+    .from(workspaceIssueShares)
+    .where(eq(workspaceIssueShares.token, token))
+    .get();
+}
+
+export function deleteIssueShare(
+  db: WorkspaceDb,
+  organizationId: string,
+  token: string
+) {
+  return db
+    .delete(workspaceIssueShares)
+    .where(
+      and(
+        eq(workspaceIssueShares.token, token),
+        eq(workspaceIssueShares.organizationId, organizationId)
+      )
+    )
+    .run();
 }
 
 export function createDocumentShare(

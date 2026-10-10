@@ -21,6 +21,7 @@ import { Route as AuthVerifyEmailRouteImport } from './routes/_auth/verify-email
 import { Route as AuthenticatedSlugRouteImport } from './routes/_authenticated/$slug'
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
 import { Route as AuthenticatedSlugIndexRouteImport } from './routes/_authenticated/$slug/index'
+import { Route as ShareCaptureTicketIdRouteImport } from './routes/share/capture/$ticketId'
 import { Route as AuthenticatedSlugChangelogIndexRouteImport } from './routes/_authenticated/$slug/changelog/index'
 import { Route as AuthenticatedSlugCustomersIndexRouteImport } from './routes/_authenticated/$slug/customers/index'
 import { Route as AuthenticatedSlugCustomersCustomerIdRouteImport } from './routes/_authenticated/$slug/customers/$customerId'
@@ -44,6 +45,8 @@ import { Route as AuthenticatedSlugSettingsMembersRouteImport } from './routes/_
 import { Route as AuthenticatedSlugSettingsSurfacesRouteImport } from './routes/_authenticated/$slug/settings/surfaces'
 import { Route as AuthenticatedSlugTicketsIndexRouteImport } from './routes/_authenticated/$slug/tickets/index'
 import { Route as AuthenticatedSlugTicketsTicketIdRouteImport } from './routes/_authenticated/$slug/tickets/$ticketId'
+import { Route as ShareDocumentOrgIdTokenRouteImport } from './routes/share/document/$orgId/$token'
+import { Route as ShareIssueOrgIdTokenRouteImport } from './routes/share/issue/$orgId/$token'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -102,6 +105,11 @@ const AuthenticatedSlugIndexRoute = AuthenticatedSlugIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AuthenticatedSlugRoute,
+} as any)
+const ShareCaptureTicketIdRoute = ShareCaptureTicketIdRouteImport.update({
+  id: '/share/capture/$ticketId',
+  path: '/share/capture/$ticketId',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedSlugChangelogIndexRoute =
   AuthenticatedSlugChangelogIndexRouteImport.update({
@@ -241,6 +249,16 @@ const AuthenticatedSlugTicketsTicketIdRoute =
     path: '/tickets/$ticketId',
     getParentRoute: () => AuthenticatedSlugRoute,
   } as any)
+const ShareDocumentOrgIdTokenRoute = ShareDocumentOrgIdTokenRouteImport.update({
+  id: '/share/document/$orgId/$token',
+  path: '/share/document/$orgId/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShareIssueOrgIdTokenRoute = ShareIssueOrgIdTokenRouteImport.update({
+  id: '/share/issue/$orgId/$token',
+  path: '/share/issue/$orgId/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -252,6 +270,7 @@ export interface FileRoutesByFullPath {
   '/verify-email': typeof AuthVerifyEmailRoute
   '/$slug': typeof AuthenticatedSlugRouteWithChildren
   '/onboarding': typeof AuthenticatedOnboardingRoute
+  '/share/capture/$ticketId': typeof ShareCaptureTicketIdRoute
   '/$slug/': typeof AuthenticatedSlugIndexRoute
   '/$slug/customers/$customerId': typeof AuthenticatedSlugCustomersCustomerIdRoute
   '/$slug/documents/$documentId': typeof AuthenticatedSlugDocumentsDocumentIdRoute
@@ -265,6 +284,8 @@ export interface FileRoutesByFullPath {
   '/$slug/settings/members': typeof AuthenticatedSlugSettingsMembersRoute
   '/$slug/settings/surfaces': typeof AuthenticatedSlugSettingsSurfacesRoute
   '/$slug/tickets/$ticketId': typeof AuthenticatedSlugTicketsTicketIdRoute
+  '/share/document/$orgId/$token': typeof ShareDocumentOrgIdTokenRoute
+  '/share/issue/$orgId/$token': typeof ShareIssueOrgIdTokenRoute
   '/$slug/changelog/': typeof AuthenticatedSlugChangelogIndexRoute
   '/$slug/customers/': typeof AuthenticatedSlugCustomersIndexRoute
   '/$slug/cycles/': typeof AuthenticatedSlugCyclesIndexRoute
@@ -286,6 +307,7 @@ export interface FileRoutesByTo {
   '/sign-up': typeof AuthSignUpRoute
   '/verify-email': typeof AuthVerifyEmailRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
+  '/share/capture/$ticketId': typeof ShareCaptureTicketIdRoute
   '/$slug': typeof AuthenticatedSlugIndexRoute
   '/$slug/customers/$customerId': typeof AuthenticatedSlugCustomersCustomerIdRoute
   '/$slug/documents/$documentId': typeof AuthenticatedSlugDocumentsDocumentIdRoute
@@ -299,6 +321,8 @@ export interface FileRoutesByTo {
   '/$slug/settings/members': typeof AuthenticatedSlugSettingsMembersRoute
   '/$slug/settings/surfaces': typeof AuthenticatedSlugSettingsSurfacesRoute
   '/$slug/tickets/$ticketId': typeof AuthenticatedSlugTicketsTicketIdRoute
+  '/share/document/$orgId/$token': typeof ShareDocumentOrgIdTokenRoute
+  '/share/issue/$orgId/$token': typeof ShareIssueOrgIdTokenRoute
   '/$slug/changelog': typeof AuthenticatedSlugChangelogIndexRoute
   '/$slug/customers': typeof AuthenticatedSlugCustomersIndexRoute
   '/$slug/cycles': typeof AuthenticatedSlugCyclesIndexRoute
@@ -324,6 +348,7 @@ export interface FileRoutesById {
   '/_auth/verify-email': typeof AuthVerifyEmailRoute
   '/_authenticated/$slug': typeof AuthenticatedSlugRouteWithChildren
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
+  '/share/capture/$ticketId': typeof ShareCaptureTicketIdRoute
   '/_authenticated/$slug/': typeof AuthenticatedSlugIndexRoute
   '/_authenticated/$slug/customers/$customerId': typeof AuthenticatedSlugCustomersCustomerIdRoute
   '/_authenticated/$slug/documents/$documentId': typeof AuthenticatedSlugDocumentsDocumentIdRoute
@@ -337,6 +362,8 @@ export interface FileRoutesById {
   '/_authenticated/$slug/settings/members': typeof AuthenticatedSlugSettingsMembersRoute
   '/_authenticated/$slug/settings/surfaces': typeof AuthenticatedSlugSettingsSurfacesRoute
   '/_authenticated/$slug/tickets/$ticketId': typeof AuthenticatedSlugTicketsTicketIdRoute
+  '/share/document/$orgId/$token': typeof ShareDocumentOrgIdTokenRoute
+  '/share/issue/$orgId/$token': typeof ShareIssueOrgIdTokenRoute
   '/_authenticated/$slug/changelog/': typeof AuthenticatedSlugChangelogIndexRoute
   '/_authenticated/$slug/customers/': typeof AuthenticatedSlugCustomersIndexRoute
   '/_authenticated/$slug/cycles/': typeof AuthenticatedSlugCyclesIndexRoute
@@ -361,6 +388,7 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/$slug'
     | '/onboarding'
+    | '/share/capture/$ticketId'
     | '/$slug/'
     | '/$slug/customers/$customerId'
     | '/$slug/documents/$documentId'
@@ -374,6 +402,8 @@ export interface FileRouteTypes {
     | '/$slug/settings/members'
     | '/$slug/settings/surfaces'
     | '/$slug/tickets/$ticketId'
+    | '/share/document/$orgId/$token'
+    | '/share/issue/$orgId/$token'
     | '/$slug/changelog/'
     | '/$slug/customers/'
     | '/$slug/cycles/'
@@ -395,6 +425,7 @@ export interface FileRouteTypes {
     | '/sign-up'
     | '/verify-email'
     | '/onboarding'
+    | '/share/capture/$ticketId'
     | '/$slug'
     | '/$slug/customers/$customerId'
     | '/$slug/documents/$documentId'
@@ -408,6 +439,8 @@ export interface FileRouteTypes {
     | '/$slug/settings/members'
     | '/$slug/settings/surfaces'
     | '/$slug/tickets/$ticketId'
+    | '/share/document/$orgId/$token'
+    | '/share/issue/$orgId/$token'
     | '/$slug/changelog'
     | '/$slug/customers'
     | '/$slug/cycles'
@@ -432,6 +465,7 @@ export interface FileRouteTypes {
     | '/_auth/verify-email'
     | '/_authenticated/$slug'
     | '/_authenticated/onboarding'
+    | '/share/capture/$ticketId'
     | '/_authenticated/$slug/'
     | '/_authenticated/$slug/customers/$customerId'
     | '/_authenticated/$slug/documents/$documentId'
@@ -445,6 +479,8 @@ export interface FileRouteTypes {
     | '/_authenticated/$slug/settings/members'
     | '/_authenticated/$slug/settings/surfaces'
     | '/_authenticated/$slug/tickets/$ticketId'
+    | '/share/document/$orgId/$token'
+    | '/share/issue/$orgId/$token'
     | '/_authenticated/$slug/changelog/'
     | '/_authenticated/$slug/customers/'
     | '/_authenticated/$slug/cycles/'
@@ -462,6 +498,9 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRouteWithChildren
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
+  ShareCaptureTicketIdRoute: typeof ShareCaptureTicketIdRoute
+  ShareDocumentOrgIdTokenRoute: typeof ShareDocumentOrgIdTokenRoute
+  ShareIssueOrgIdTokenRoute: typeof ShareIssueOrgIdTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -549,6 +588,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/$slug/'
       preLoaderRoute: typeof AuthenticatedSlugIndexRouteImport
       parentRoute: typeof AuthenticatedSlugRoute
+    }
+    '/share/capture/$ticketId': {
+      id: '/share/capture/$ticketId'
+      path: '/share/capture/$ticketId'
+      fullPath: '/share/capture/$ticketId'
+      preLoaderRoute: typeof ShareCaptureTicketIdRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/$slug/changelog/': {
       id: '/_authenticated/$slug/changelog/'
@@ -711,6 +757,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSlugTicketsTicketIdRouteImport
       parentRoute: typeof AuthenticatedSlugRoute
     }
+    '/share/document/$orgId/$token': {
+      id: '/share/document/$orgId/$token'
+      path: '/share/document/$orgId/$token'
+      fullPath: '/share/document/$orgId/$token'
+      preLoaderRoute: typeof ShareDocumentOrgIdTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/share/issue/$orgId/$token': {
+      id: '/share/issue/$orgId/$token'
+      path: '/share/issue/$orgId/$token'
+      fullPath: '/share/issue/$orgId/$token'
+      preLoaderRoute: typeof ShareIssueOrgIdTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -816,6 +876,9 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRouteWithChildren,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
+  ShareCaptureTicketIdRoute: ShareCaptureTicketIdRoute,
+  ShareDocumentOrgIdTokenRoute: ShareDocumentOrgIdTokenRoute,
+  ShareIssueOrgIdTokenRoute: ShareIssueOrgIdTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -2172,6 +2172,26 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.deleteDocumentSpace(this.db, this.organizationId, id);
   }
 
+  createIssueShare(input: {
+    issueId: string;
+    createdById: string;
+    expiresAt?: string | null;
+  }) {
+    return data.createIssueShare(this.db, this.organizationId, input);
+  }
+
+  getIssueShare(issueId: string) {
+    return data.getIssueShare(this.db, this.organizationId, issueId);
+  }
+
+  getIssueShareByToken(token: string) {
+    return data.getIssueShareByToken(this.db, token);
+  }
+
+  deleteIssueShare(token: string) {
+    return data.deleteIssueShare(this.db, this.organizationId, token);
+  }
+
   createDocumentShare(input: {
     documentId: string;
     includeChildren?: boolean;

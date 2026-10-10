@@ -452,6 +452,24 @@ export const workspaceDocumentSpaces = sqliteTable(
 );
 
 // Public share links for documents (GitBook/Docmost "publish").
+export const workspaceIssueShares = sqliteTable(
+  "issue_shares" as string,
+  {
+    token: text("token" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    issueId: text("issue_id" as string).notNull(),
+    createdById: text("created_by_id" as string).notNull(),
+    createdAt: text("created_at" as string).notNull(),
+    expiresAt: text("expires_at" as string),
+  },
+  (table) => [
+    index("issue_shares_issue_idx" as string).on(
+      table.organizationId,
+      table.issueId
+    ),
+  ]
+);
+
 export const workspaceDocumentShares = sqliteTable(
   "document_shares" as string,
   {
