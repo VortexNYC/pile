@@ -91,6 +91,18 @@ describePy("runner pnpm-store cache via mounted bucket (PILE-306)", () => {
     expect(readFileSync(tarball, "utf8")).toBe("sibling");
   });
 
+  it("treats a zero-byte tarball (a sibling mid-upload) as a miss", () => {
+    const { store, mount, hash, run } = setup();
+    mkdirSync(join(mount, "pnpm-store"));
+    const tarball = join(mount, "pnpm-store", `${hash}.tar.gz`);
+    writeFileSync(tarball, "");
+    expect(run("warm_pnpm_store")).not.toContain("warm hit");
+    expect(run("save_pnpm_store")).toContain("saved to mount");
+    expect(readdirSync(join(mount, "pnpm-store"))).toEqual([`${hash}.tar.gz`]);
+    rmSync(store, { recursive: true });
+    expect(run("warm_pnpm_store")).toContain("warm hit");
+  });
+
   it("survives a read-only mount without leaving partial files", () => {
     const { mount, run } = setup();
     chmodSync(mount, 0o555);

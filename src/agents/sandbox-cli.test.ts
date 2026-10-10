@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AppEnv } from "../platform/env.js";
+import type { Issue } from "../types/workspace.js";
 import type { ComputeSandbox } from "./compute.js";
 import { DevinCliAgentProvider } from "./devin-cli.js";
 import { laneCacheReadOnly } from "./sandbox-cli.js";
@@ -117,5 +118,160 @@ describe("lane cache write policy (PILE-306)", () => {
     expect(laneCacheReadOnly({ shell: "disabled", push: "disabled" })).toBe(
       true
     );
+  });
+});
+
+function followupIssue(): Issue {
+  return {
+    id: "iss-1",
+    identifier: "PILE-306",
+    title: "Lane cache",
+    repo: "acme/widgets",
+  } as Issue;
+}
+
+describe("lane cache on follow-ups (PILE-306)", () => {
+  it("mounts the repo cache for a restored lane and hands the runner PILE_CACHE_DIR", async () => {
+    const restored: ComputeSandbox = {
+      ...sandbox,
+      runnerEnv: { ...sandbox.runnerEnv },
+    };
+    const backend = {
+      ...fakeBackend,
+      findSandbox: vi.fn(async () => null),
+      restoreWorktree: vi.fn(async () => restored),
+      runnerBusy: vi.fn(async () => false),
+      mountCache: vi.fn(async () => "/mnt/pile-cache"),
+      startRunner: vi.fn(
+        async (
+          _s: ComputeSandbox,
+          _id: string,
+          _cmd: string,
+          _env?: Record<string, string>
+        ) => undefined
+      ),
+    };
+    const provider = new DevinCliAgentProvider(env());
+    const seam = provider as unknown as {
+      d: { compute: unknown };
+      followupPermissions: () => Promise<unknown>;
+      githubToken: () => Promise<unknown>;
+    };
+    seam.d.compute = backend;
+    vi.spyOn(seam, "followupPermissions").mockResolvedValue({
+      shell: "restricted",
+      push: "enabled",
+    });
+    vi.spyOn(seam, "githubToken").mockResolvedValue({ token: "ghs_test" });
+
+    const sent = await provider.sendPrompt(
+      "sess1",
+      "keep going",
+      followupIssue(),
+      null,
+      { organizationId: "org-1", backupRef: "backup-1" }
+    );
+
+    expect(sent).toBe(true);
+    expect(backend.mountCache).toHaveBeenCalledWith(restored, {
+      organizationId: "org-1",
+      repo: "acme/widgets",
+      readOnly: true,
+    });
+    expect(backend.startRunner).toHaveBeenCalledWith(
+      restored,
+      expect.stringContaining("sess1-fu-"),
+      expect.any(String),
+      expect.objectContaining({
+        FOLLOWUP: "1",
+        PILE_CACHE_DIR: "/mnt/pile-cache",
+      })
+    );
+  });
+
+  it("mounts for a live sandbox whose record lacks the org, using the caller's", async () => {
+    const live: ComputeSandbox = {
+      id: "sb-1",
+      name: "vortex-devin-sess1",
+      state: "started",
+    };
+    const backend = {
+      ...fakeBackend,
+      findSandbox: vi.fn(async () => live),
+      runnerBusy: vi.fn(async () => false),
+      mountCache: vi.fn(async () => "/mnt/pile-cache"),
+      startRunner: vi.fn(
+        async (
+          _s: ComputeSandbox,
+          _id: string,
+          _cmd: string,
+          _env?: Record<string, string>
+        ) => undefined
+      ),
+    };
+    const provider = new DevinCliAgentProvider(env());
+    const seam = provider as unknown as {
+      d: { compute: unknown };
+      followupPermissions: () => Promise<unknown>;
+      githubToken: () => Promise<unknown>;
+    };
+    seam.d.compute = backend;
+    vi.spyOn(seam, "followupPermissions").mockResolvedValue({
+      shell: "enabled",
+      push: "enabled",
+    });
+    vi.spyOn(seam, "githubToken").mockResolvedValue({ token: "ghs_test" });
+
+    await provider.sendPrompt("sess1", "again", followupIssue(), null, {
+      organizationId: "org-9",
+    });
+
+    expect(backend.mountCache).toHaveBeenCalledWith(live, {
+      organizationId: "org-9",
+      repo: "acme/widgets",
+      readOnly: false,
+    });
+    expect(backend.startRunner.mock.calls[0]?.[3]).toMatchObject({
+      PILE_CACHE_DIR: "/mnt/pile-cache",
+    });
+  });
+
+  it("leaves PILE_CACHE_DIR unset when the mount is unavailable", async () => {
+    const backend = {
+      ...fakeBackend,
+      findSandbox: vi.fn(async () => sandbox),
+      runnerBusy: vi.fn(async () => false),
+      mountCache: vi.fn(async () => null),
+      startRunner: vi.fn(
+        async (
+          _s: ComputeSandbox,
+          _id: string,
+          _cmd: string,
+          _env?: Record<string, string>
+        ) => undefined
+      ),
+    };
+    const provider = new DevinCliAgentProvider(env());
+    const seam = provider as unknown as {
+      d: { compute: unknown };
+      followupPermissions: () => Promise<unknown>;
+      githubToken: () => Promise<unknown>;
+    };
+    seam.d.compute = backend;
+    vi.spyOn(seam, "followupPermissions").mockResolvedValue({
+      shell: "enabled",
+      push: "enabled",
+    });
+    vi.spyOn(seam, "githubToken").mockResolvedValue({ token: "ghs_test" });
+
+    await provider.sendPrompt("sess1", "again", followupIssue());
+
+    expect(backend.mountCache).toHaveBeenCalledWith(
+      sandbox,
+      expect.objectContaining({ readOnly: false })
+    );
+    const runnerEnv = backend.startRunner.mock.calls[0]?.[3];
+    expect(runnerEnv).toBeDefined();
+    expect(runnerEnv).not.toHaveProperty("PILE_CACHE_DIR");
   });
 });

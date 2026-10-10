@@ -1567,19 +1567,31 @@ def _mounted_store(h):
     return os.path.join(PILE_CACHE_DIR, 'pnpm-store', f'{h}.tar.gz')
 
 
+def _mounted_hit(path):
+    # s3fs creates the object empty on open, so a sibling mid-upload shows
+    # up as a zero-byte file — not a hit.
+    try:
+        return bool(path) and os.path.getsize(path) > 0
+    except OSError:
+        return False
+
+
 def _save_to_mount(h, tarball):
     path = _mounted_store(h)
     if not path:
         return False
-    tmp = f'{path}.tmp-{os.urandom(6).hex()}'
+    # Write the final key directly: on s3fs a rename is a full server-side
+    # copy, doubling egress. A torn object only fails a sibling's extract,
+    # which then falls back to the HTTP cache.
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        shutil.copyfile(tarball, tmp)
-        os.replace(tmp, path)
+        shutil.copyfile(tarball, path)
     except OSError as e:
         print(f'[cache] mount save failed: {e}')
+        # Drop whatever we may have torn. If that was a sibling's finished
+        # upload, the next lane to save just puts it back.
         try:
-            os.remove(tmp)
+            os.remove(path)
         except OSError:
             pass
         return False
@@ -1594,7 +1606,7 @@ def warm_pnpm_store():
     if not h:
         return
     mounted = _mounted_store(h)
-    if mounted and os.path.isfile(mounted):
+    if _mounted_hit(mounted):
         try:
             os.makedirs(STORE_DIR, exist_ok=True)
             subprocess.run(['tar', '-xzf', mounted, '-C', STORE_DIR], check=True)
@@ -1625,7 +1637,7 @@ def save_pnpm_store():
     if not h or not os.path.isdir(STORE_DIR):
         return
     mounted = _mounted_store(h)
-    if mounted and os.path.isfile(mounted):
+    if _mounted_hit(mounted):
         # Same lockfile, same store — a sibling lane already shared it.
         print(f'[cache] pnpm store already on mount {h[:12]}')
         return
@@ -1633,6 +1645,9 @@ def save_pnpm_store():
         return
     try:
         subprocess.run(['tar', '-czf', '/tmp/pnpm-store.tar.gz', '-C', STORE_DIR, '.'], check=True)
+        # The mount and HTTP caches are deliberately independent: a mount save
+        # skips the HTTP upload, so HTTP-only (Daytona) lanes don't see stores
+        # CF lanes put on the mount, and vice versa.
         if _save_to_mount(h, '/tmp/pnpm-store.tar.gz') or not _http_cache():
             return
         size = os.path.getsize('/tmp/pnpm-store.tar.gz')
