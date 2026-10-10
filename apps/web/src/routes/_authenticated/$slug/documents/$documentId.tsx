@@ -11,8 +11,8 @@ import {
   type DocumentFormValues,
 } from "@/components/document-form";
 import { Markdown } from "@/components/markdown";
-import { ShareButton } from "@/components/share-button";
 import { Page } from "@/components/page";
+import { ShareButton } from "@/components/share-button";
 import { ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap, unwrapEmpty } from "@/lib/api";

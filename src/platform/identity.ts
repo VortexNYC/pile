@@ -76,8 +76,7 @@ const roleMap = {
 } as const;
 
 export function rolePermissionsFor(role: string): readonly string[] {
-  const roleObject =
-    roleMap[role as keyof typeof roleMap] ?? roleMap.member;
+  const roleObject = roleMap[role as keyof typeof roleMap] ?? roleMap.member;
   return [...(roleObject.statements.workspace ?? [])];
 }
 

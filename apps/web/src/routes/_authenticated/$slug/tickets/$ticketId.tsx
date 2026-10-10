@@ -163,6 +163,19 @@ function TicketDetail() {
           ) : null}
         </>
       }
+      actions={
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() =>
+            navigator.clipboard.writeText(
+              `${window.location.origin}/app/share/capture/${ticketId}`
+            )
+          }
+        >
+          Copy capture link
+        </Button>
+      }
     >
       <div className="flex flex-wrap gap-4">
         <Select

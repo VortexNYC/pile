@@ -9,9 +9,9 @@ import { useState } from "react";
 
 import { IssueComments } from "@/components/comments";
 import { IssueForm, type IssueFormValues } from "@/components/issue-form";
-import { ShareButton } from "@/components/share-button";
 import { Markdown } from "@/components/markdown";
 import { Page } from "@/components/page";
+import { ShareButton } from "@/components/share-button";
 import { ErrorState, LoadingState } from "@/components/states";
 import { useTeams } from "@/hooks/use-teams";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";

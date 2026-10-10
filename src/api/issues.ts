@@ -617,7 +617,6 @@ const getIssueRoute = createRoute({
   },
 });
 
-
 const issueShareSchema = z.object({
   token: z.string(),
   organizationId: z.string(),

@@ -1208,13 +1208,17 @@ describe("issues API", () => {
   });
 
   it("creates, reads publicly, and revokes an issue share", async () => {
-    const createRes = await fetch(`/workspaces/${organizationId}/issues`, {
-      method: "POST",
-      body: JSON.stringify({
-        title: "Shareable issue",
-        description: "shared body",
-      }),
-    }, token);
+    const createRes = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          title: "Shareable issue",
+          description: "shared body",
+        }),
+      },
+      token
+    );
     expect(createRes.status).toBe(201);
     const issueId = ((await createRes.json()) as { id: string }).id;
 

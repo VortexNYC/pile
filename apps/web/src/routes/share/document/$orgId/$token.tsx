@@ -2,9 +2,9 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { Markdown } from "@/components/markdown";
-import { documentText } from "@/lib/labels";
 import { ShareShell } from "@/components/share-view";
 import { api, unwrap } from "@/lib/api";
+import { documentText } from "@/lib/labels";
 
 export const Route = createFileRoute("/share/document/$orgId/$token")({
   component: SharedDocument,

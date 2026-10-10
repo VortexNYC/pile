@@ -23,22 +23,16 @@ export function ShareButton({
       const res =
         kind === "issue"
           ? await unwrap(
-              api.POST(
-                "/workspaces/{organizationId}/issues/{id}/share",
-                {
-                  params: { path: { organizationId, id } },
-                  body: {},
-                }
-              )
+              api.POST("/workspaces/{organizationId}/issues/{id}/share", {
+                params: { path: { organizationId, id } },
+                body: {},
+              })
             )
           : await unwrap(
-              api.POST(
-                "/workspaces/{organizationId}/documents/{id}/share",
-                {
-                  params: { path: { organizationId, id } },
-                  body: {},
-                }
-              )
+              api.POST("/workspaces/{organizationId}/documents/{id}/share", {
+                params: { path: { organizationId, id } },
+                body: {},
+              })
             );
       return res;
     },
