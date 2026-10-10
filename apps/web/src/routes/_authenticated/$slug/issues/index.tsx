@@ -3,7 +3,6 @@ import { Button } from "@cloudflare/kumo/components/button";
 import { Input } from "@cloudflare/kumo/components/input";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 import { Select } from "@cloudflare/kumo/components/select";
-import { Table } from "@cloudflare/kumo/components/table";
 import { ListChecks, Plus } from "@phosphor-icons/react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
@@ -175,49 +174,54 @@ function IssuesList() {
           }
         />
       ) : (
-        <LayerCard className="p-0">
-          <Table aria-label="Issues">
-            <Table.Header>
-              <Table.Row>
-                <Table.Head>Issue</Table.Head>
-                <Table.Head>Status</Table.Head>
-                <Table.Head>Priority</Table.Head>
-                <Table.Head>Updated</Table.Head>
-              </Table.Row>
-            </Table.Header>
-            <Table.Body>
-              {issues.data.map((issue) => (
-                <Table.Row key={issue.id}>
-                  <Table.Cell>
-                    <Link
-                      to="/$slug/issues/$issueId"
-                      params={{ slug: workspace.slug, issueId: issue.id }}
-                      className="text-kumo-link hover:underline"
-                    >
-                      {issue.identifier ? (
-                        <span className="text-kumo-subtle mr-2">
-                          {issue.identifier}
+        <div className="flex flex-col gap-5">
+          {ISSUE_STATUSES.map((group) => {
+            const rows = issues.data.filter((issue) => issue.status === group);
+            if (rows.length === 0) return null;
+            return (
+              <div key={group} className="flex flex-col">
+                <div className="flex items-center gap-2 px-1 pb-1.5">
+                  <Badge variant={issueStatusVariant(group)}>
+                    {ISSUE_STATUS_LABELS[group]}
+                  </Badge>
+                  <span className="text-xs text-kumo-subtle">
+                    {rows.length}
+                  </span>
+                </div>
+                <LayerCard className="p-0">
+                  <div className="divide-y divide-kumo-line">
+                    {rows.map((issue) => (
+                      <Link
+                        key={issue.id}
+                        to="/$slug/issues/$issueId"
+                        params={{
+                          slug: workspace.slug,
+                          issueId: issue.id,
+                        }}
+                        className="flex h-11 items-center gap-3 px-4 hover:bg-kumo-tint"
+                      >
+                        {issue.identifier ? (
+                          <span className="w-16 shrink-0 truncate text-sm font-medium text-kumo-subtle">
+                            {issue.identifier}
+                          </span>
+                        ) : null}
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-kumo-default">
+                          {issue.title}
                         </span>
-                      ) : null}
-                      {issue.title}
-                    </Link>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Badge variant={issueStatusVariant(issue.status)}>
-                      {ISSUE_STATUS_LABELS[issue.status]}
-                    </Badge>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Badge variant={priorityVariant(issue.priority)}>
-                      {PRIORITY_LABELS[issue.priority]}
-                    </Badge>
-                  </Table.Cell>
-                  <Table.Cell>{formatRelative(issue.updatedAt)}</Table.Cell>
-                </Table.Row>
-              ))}
-            </Table.Body>
-          </Table>
-        </LayerCard>
+                        <Badge variant={priorityVariant(issue.priority)}>
+                          {PRIORITY_LABELS[issue.priority]}
+                        </Badge>
+                        <span className="w-16 shrink-0 text-right text-xs text-kumo-subtle">
+                          {formatRelative(issue.updatedAt)}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                </LayerCard>
+              </div>
+            );
+          })}
+        </div>
       )}
     </Page>
   );

@@ -89,16 +89,6 @@ function DocumentDetail() {
     onError: (error) => toastError(error),
   });
 
-  if (doc.isPending) return <LoadingState label="Loading document" />;
-  if (doc.isError) {
-    return (
-      <Page title="Document">
-        <ErrorState error={doc.error} onRetry={() => void doc.refetch()} />
-      </Page>
-    );
-  }
-  const data = doc.data;
-  const text = documentText(data.content);
   const backlinks = useQuery({
     queryKey: wsKey(organizationId, "documents", documentId, "backlinks"),
     queryFn: async () =>
@@ -106,6 +96,20 @@ function DocumentDetail() {
         await unwrap(
           api.GET("/workspaces/{organizationId}/documents/{id}/backlinks", {
             params: { path: { organizationId, id: documentId } },
+          })
+        )
+      ).documents,
+  });
+  const children = useQuery({
+    queryKey: wsKey(organizationId, "documents", documentId, "children"),
+    queryFn: async () =>
+      (
+        await unwrap(
+          api.GET("/workspaces/{organizationId}/documents", {
+            params: {
+              path: { organizationId },
+              query: { parentDocumentId: documentId },
+            },
           })
         )
       ).documents,
@@ -122,6 +126,18 @@ function DocumentDetail() {
       ).documents,
     enabled: (backlinks.data?.length ?? 0) > 0,
   });
+
+  if (doc.isPending) return <LoadingState label="Loading document" />;
+  if (doc.isError) {
+    return (
+      <Page title="Document">
+        <ErrorState error={doc.error} onRetry={() => void doc.refetch()} />
+      </Page>
+    );
+  }
+  const data = doc.data;
+  const text = documentText(data.content);
+  const subPages = children.data ?? [];
   const backlinkRows = (backlinks.data ?? []).map((id) => ({
     id,
     title:
@@ -131,7 +147,7 @@ function DocumentDetail() {
 
   return (
     <Page
-      title={data.title}
+      title={`${data.icon ? `${data.icon} ` : ""}${data.title}`}
       description={
         <>
           <Link
@@ -172,6 +188,23 @@ function DocumentDetail() {
     >
       <LayerCard>
         <LayerCard.Primary className="p-6">
+          {subPages.length > 0 ? (
+            <div className="flex flex-col gap-1 mb-5">
+              {subPages.map((sub) => (
+                <Link
+                  key={sub.id}
+                  to="/$slug/documents/$documentId"
+                  params={{ slug: workspace.slug, documentId: sub.id }}
+                  className="text-sm text-kumo-link hover:underline flex items-center gap-2"
+                >
+                  <Text as="span" variant="secondary">
+                    {sub.icon ?? "📄"}
+                  </Text>
+                  {sub.title}
+                </Link>
+              ))}
+            </div>
+          ) : null}
           {editing ? (
             <DocumentForm
               initial={{ title: data.title, content: text }}
