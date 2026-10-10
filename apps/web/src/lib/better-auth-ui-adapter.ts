@@ -53,6 +53,31 @@ export function getBetterAuthUiClient(): AnyAuthClient {
     listAccounts: () => c.listAccounts(),
     linkSocial: (args) => c.linkSocial(args),
     unlinkAccount: (args) => c.unlinkAccount(args),
+    ...(c.twoFactor !== undefined
+      ? {
+          twoFactor: {
+            enable: async (args) => {
+              const response = await c.twoFactor.enable(args);
+              const data = response.data;
+              return {
+                data:
+                  data && "totpURI" in data
+                    ? {
+                        totpURI: data.totpURI,
+                        backupCodes: data.backupCodes,
+                      }
+                    : null,
+                error: response.error,
+              };
+            },
+            verifyTotp: (args) => c.twoFactor.verifyTotp(args),
+            verifyBackupCode: (args) => c.twoFactor.verifyBackupCode(args),
+            disable: (args) => c.twoFactor.disable(args),
+            generateBackupCodes: (args) =>
+              c.twoFactor.generateBackupCodes(args),
+          },
+        }
+      : {}),
     organization: {
       list: () => c.organization.list(),
       create: (args) =>

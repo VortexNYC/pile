@@ -1133,6 +1133,9 @@ export const user = sqliteTable("user" as string, {
   role: text("role" as string)
     .notNull()
     .default("admin"),
+  twoFactorEnabled: integer("two_factor_enabled" as string, {
+    mode: "boolean",
+  }).default(false),
   banned: integer("banned" as string, { mode: "boolean" }).default(false),
   banReason: text("ban_reason" as string),
   banExpires: integer("ban_expires" as string, { mode: "timestamp_ms" }),
@@ -1144,6 +1147,27 @@ export const user = sqliteTable("user" as string, {
     .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
     .$onUpdate(() => new Date()),
 });
+
+export const twoFactor = sqliteTable(
+  "two_factor" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    secret: text("secret" as string).notNull(),
+    backupCodes: text("backup_codes" as string).notNull(),
+    userId: text("user_id" as string)
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    verified: integer("verified" as string, { mode: "boolean" }).default(true),
+    failedVerificationCount: integer(
+      "failed_verification_count" as string
+    ).default(0),
+    lockedUntil: integer("locked_until" as string, { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    index("two_factor_user_id_idx" as string).on(table.userId),
+    index("two_factor_secret_idx" as string).on(table.secret),
+  ]
+);
 
 export const session = sqliteTable(
   "session" as string,
