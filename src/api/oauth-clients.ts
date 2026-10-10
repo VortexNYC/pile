@@ -207,6 +207,12 @@ export function registerOAuthClientRoutes(app: OpenAPIHono<AppContext>) {
           redirectUris: input.redirectUris,
           scopes: input.scopes,
         },
+        permissions: {
+          workspace: input.permissions
+            .split(",")
+            .map((p: string) => p.trim())
+            .filter(Boolean),
+        },
       },
     });
 

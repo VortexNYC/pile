@@ -222,6 +222,7 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
         name: input.name,
         rateLimitEnabled: false,
         metadata: { organizationId, permissions, actorType },
+        permissions: { workspace: [...requested] },
       },
     });
 

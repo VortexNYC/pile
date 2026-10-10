@@ -17,21 +17,27 @@ import { safeJSON, teamMetadataString } from "../global/team-metadata.js";
 export const ac = createAccessControl({
   ...defaultStatements,
   document: ["view", "edit"],
+  // Flat workspace actions consumed by `rls` — members get read+write,
+  // admins get admin. Evaluated through the role's `authorize`.
+  workspace: ["read", "write", "admin"],
 } as const);
 
 export const ownerRole = ac.newRole({
   ...ownerAc.statements,
   document: ["view", "edit"],
+  workspace: ["read", "write", "admin"],
 });
 
 export const adminRole = ac.newRole({
   ...adminAc.statements,
   document: ["view", "edit"],
+  workspace: ["read", "write", "admin"],
 });
 
 export const memberRole = ac.newRole({
   ...memberAc.statements,
   document: ["view", "edit"],
+  workspace: ["read", "write"],
 });
 
 const workspaceMetadataSchema = z
