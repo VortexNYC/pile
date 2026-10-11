@@ -4,6 +4,7 @@ import { Text } from "@cloudflare/kumo/components/text";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { Composer } from "@/components/composer";
 import { Markdown } from "@/components/markdown";
 import { ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
@@ -80,7 +81,6 @@ export function IssueComments({
   const organizationId = workspace.id;
   const queryClient = useQueryClient();
   const { data: session } = betterAuthClient.useSession();
-  const [draft, setDraft] = useState("");
   const [editing, setEditing] = useState<{ id: string; body: string } | null>(
     null
   );
@@ -109,7 +109,6 @@ export function IssueComments({
           body: { body },
         })
       ),
-    onSuccess: () => setDraft(""),
     onError: (error) => toastError(error),
     onSettled: invalidate,
   });
@@ -288,33 +287,13 @@ export function IssueComments({
           })}
         </ul>
       )}
-      <form
-        className="flex flex-col gap-2"
-        onSubmit={(event) => {
-          event.preventDefault();
-          const body = draft.trim();
-          if (body && !add.isPending) add.mutate(body);
-        }}
-      >
-        <InputArea
-          aria-label="Add a comment"
-          placeholder="Add a comment…"
-          value={draft}
-          autoResize
-          minRows={3}
-          onValueChange={setDraft}
-        />
-        <div>
-          <Button
-            type="submit"
-            variant="primary"
-            loading={add.isPending}
-            disabled={draft.trim().length === 0}
-          >
-            Comment
-          </Button>
-        </div>
-      </form>
+      <Composer
+        aria-label="Add a comment"
+        placeholder="Add a comment…"
+        submitLabel="Comment"
+        loading={add.isPending}
+        onSubmit={(body) => add.mutate(body)}
+      />
     </section>
   );
 }

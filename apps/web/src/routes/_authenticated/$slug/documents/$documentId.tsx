@@ -8,7 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 
-import { EntityPage, RailSection } from "@/components/entity-page";
+import { EntityPage, RailLink, RailSection } from "@/components/entity-page";
 import { Markdown } from "@/components/markdown";
 import { Page } from "@/components/page";
 import { ShareButton } from "@/components/share-button";
@@ -329,23 +329,51 @@ function DocumentDetail() {
         </>
       }
       rail={
-        headings.length >= 3 ? (
-          <RailSection title="On this page">
-            <TableOfContents>
-              <TableOfContents.List>
-                {headings.map((h) => (
-                  <TableOfContents.Item
-                    key={h.slug}
-                    href={`#${h.slug}`}
-                    className={h.depth > 1 ? "pl-4" : undefined}
-                  >
-                    {h.text}
-                  </TableOfContents.Item>
-                ))}
-              </TableOfContents.List>
-            </TableOfContents>
-          </RailSection>
-        ) : undefined
+        <>
+          {data.parentDocumentId && ancestors.length > 0 ? (
+            <RailSection title="Parent">
+              <RailLink
+                to="/$slug/documents/$documentId"
+                params={{
+                  slug: workspace.slug,
+                  documentId: ancestors[ancestors.length - 1]!.id,
+                }}
+              >
+                {ancestors[ancestors.length - 1]!.icon
+                  ? `${ancestors[ancestors.length - 1]!.icon} `
+                  : ""}
+                {ancestors[ancestors.length - 1]!.title}
+              </RailLink>
+            </RailSection>
+          ) : null}
+          {data.issueId ? (
+            <RailSection title="Linked issue">
+              <RailLink
+                to="/$slug/issues/$issueId"
+                params={{ slug: workspace.slug, issueId: data.issueId }}
+              >
+                View issue
+              </RailLink>
+            </RailSection>
+          ) : null}
+          {headings.length >= 3 ? (
+            <RailSection title="On this page">
+              <TableOfContents>
+                <TableOfContents.List>
+                  {headings.map((h) => (
+                    <TableOfContents.Item
+                      key={h.slug}
+                      href={`#${h.slug}`}
+                      className={h.depth > 1 ? "pl-4" : undefined}
+                    >
+                      {h.text}
+                    </TableOfContents.Item>
+                  ))}
+                </TableOfContents.List>
+              </TableOfContents>
+            </RailSection>
+          ) : null}
+        </>
       }
     />
   );

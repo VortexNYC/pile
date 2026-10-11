@@ -13,6 +13,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { EntityPage, RailSection } from "@/components/entity-page";
+import { Feed } from "@/components/feed";
 import { Markdown } from "@/components/markdown";
 import { Page } from "@/components/page";
 import { ErrorState, LoadingState } from "@/components/states";
@@ -186,54 +187,41 @@ function SessionDetail() {
                   <p className="text-sm whitespace-pre-wrap">{s.result}</p>
                 </LayerCard>
               ) : null}
-              <LayerCard className="p-0">
-                <div className="divide-y divide-kumo-line">
-                  {(() => {
-                    // Human-facing view: agent activities + the user's own
-                    // prompts. session.* lifecycle rows, `activity` mirror
-                    // events, and prompt bookkeeping (followup_skipped etc.)
-                    // are plumbing — the terminal has those.
-                    const feed = (events.data ?? []).filter(
-                      (e) =>
-                        e.kind === "activity" || e.type === "prompt.followup"
+              <Feed>
+                {(() => {
+                  // Human-facing view: agent activities + the user's own
+                  // prompts. session.* lifecycle rows, `activity` mirror
+                  // events, and prompt bookkeeping (followup_skipped etc.)
+                  // are plumbing — the terminal has those.
+                  const feed = (events.data ?? []).filter(
+                    (e) => e.kind === "activity" || e.type === "prompt.followup"
+                  );
+                  if (feed.length === 0) {
+                    return (
+                      <p className="p-4 text-sm text-kumo-subtle">
+                        No activity yet.
+                      </p>
                     );
-                    if (feed.length === 0) {
+                  }
+                  return feed.map((event) => {
+                    // `action` rows are tool/progress traces — compact,
+                    // quieter chrome, like axiom's "used X" rows.
+                    if (event.type === "action") {
                       return (
-                        <p className="p-4 text-sm text-kumo-subtle">
-                          No activity yet.
-                        </p>
+                        <Feed.Row
+                          key={event.id}
+                          compact
+                          marker={<Wrench size={13} />}
+                          body={event.message}
+                          timestamp={event.createdAt}
+                          workspaceSlug={workspace.slug}
+                        />
                       );
                     }
-                    return feed.map((event) => {
-                      // `action` rows are tool/progress traces — compact,
-                      // quieter chrome, like axiom's "used X" rows.
-                      if (event.type === "action") {
-                        return (
-                          <div
-                            key={event.id}
-                            className="flex items-baseline gap-3 px-4 py-1.5 text-kumo-subtle"
-                          >
-                            <Wrench
-                              size={13}
-                              className="shrink-0 self-center"
-                            />
-                            <div className="flex-1 text-xs min-w-0">
-                              <Markdown
-                                workspaceSlug={workspace.slug}
-                                content={event.message}
-                              />
-                            </div>
-                            <span className="text-xs shrink-0">
-                              {formatRelative(event.createdAt)}
-                            </span>
-                          </div>
-                        );
-                      }
-                      return (
-                        <div
-                          key={event.id}
-                          className="flex items-baseline gap-3 px-4 py-2.5"
-                        >
+                    return (
+                      <Feed.Row
+                        key={event.id}
+                        marker={
                           <Badge
                             variant={
                               event.type === "error"
@@ -251,21 +239,15 @@ function SessionDetail() {
                               ? "you"
                               : event.type}
                           </Badge>
-                          <div className="flex-1 text-sm min-w-0">
-                            <Markdown
-                              workspaceSlug={workspace.slug}
-                              content={promptText(event) ?? event.message}
-                            />
-                          </div>
-                          <span className="text-xs text-kumo-subtle shrink-0">
-                            {formatRelative(event.createdAt)}
-                          </span>
-                        </div>
-                      );
-                    });
-                  })()}
-                </div>
-              </LayerCard>
+                        }
+                        body={promptText(event) ?? event.message}
+                        timestamp={event.createdAt}
+                        workspaceSlug={workspace.slug}
+                      />
+                    );
+                  });
+                })()}
+              </Feed>
               <form
                 className="flex gap-2"
                 onSubmit={(e) => {

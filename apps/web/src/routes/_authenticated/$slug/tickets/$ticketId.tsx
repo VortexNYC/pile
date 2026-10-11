@@ -8,7 +8,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 
-import { EntityPage, RailSection } from "@/components/entity-page";
+import { Composer } from "@/components/composer";
+import { EntityPage, RailLink, RailSection } from "@/components/entity-page";
+import { Feed } from "@/components/feed";
 import { Page } from "@/components/page";
 import { ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
@@ -75,7 +77,6 @@ function TicketDetail() {
     },
     onError: (error) => toastError(error),
   });
-  const [mode, setMode] = useState<"reply" | "note">("reply");
   const key = wsKey(organizationId, "tickets", ticketId);
   const path = { organizationId, ticketId };
 
@@ -204,18 +205,6 @@ function TicketDetail() {
           </Link>{" "}
           · {data.customer.fullName ?? data.customer.email} · opened{" "}
           {formatRelative(data.createdAt)}
-          {data.issueId ? (
-            <>
-              {" · "}
-              <Link
-                to="/$slug/issues/$issueId"
-                params={{ slug: workspace.slug, issueId: data.issueId }}
-                className="text-kumo-link"
-              >
-                Linked issue
-              </Link>
-            </>
-          ) : null}
         </>
       }
       actions={
@@ -292,19 +281,20 @@ function TicketDetail() {
               ))}
             </Select>
           </div>
-          <section aria-label="Conversation" className="flex flex-col gap-3">
+          <section aria-label="Conversation">
             {events.length === 0 ? (
               <Text variant="secondary" size="sm">
                 No messages yet.
               </Text>
             ) : (
-              events.map((event) => {
-                const isNote = !!event.note;
-                const inbound = event.message?.direction === "inbound";
-                return (
-                  <LayerCard key={event.id} data-testid="ticket-event">
-                    <LayerCard.Primary className="flex flex-col gap-1 p-4">
-                      <div className="flex items-center gap-2">
+              <Feed>
+                {events.map((event) => {
+                  const isNote = !!event.note;
+                  const inbound = event.message?.direction === "inbound";
+                  return (
+                    <Feed.Row
+                      key={event.id}
+                      marker={
                         <Badge
                           variant={
                             isNote ? "orange" : inbound ? "neutral" : "blue"
@@ -316,71 +306,44 @@ function TicketDetail() {
                               ? "Customer"
                               : "Reply"}
                         </Badge>
-                        <Text variant="secondary" size="xs">
-                          {formatRelative(event.createdAt)}
-                        </Text>
-                      </div>
-                      <Text>
+                      }
+                      body={
                         <span className="whitespace-pre-wrap">
                           {event.note?.body ?? event.message?.textContent}
                         </span>
-                      </Text>
-                    </LayerCard.Primary>
-                  </LayerCard>
-                );
-              })
+                      }
+                      timestamp={event.createdAt}
+                    />
+                  );
+                })}
+              </Feed>
             )}
           </section>
-          <form
-            className="flex flex-col gap-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const text = reply.trim();
-              if (text && !send.isPending)
-                send.mutate({ text, mode, channel: data.sourceChannel });
-            }}
-          >
-            <div className="flex gap-2" role="group" aria-label="Message type">
-              <Button
-                type="button"
-                size="sm"
-                variant={mode === "reply" ? "primary" : "ghost"}
-                aria-pressed={mode === "reply"}
-                onClick={() => setMode("reply")}
-              >
-                Reply to customer
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={mode === "note" ? "primary" : "ghost"}
-                aria-pressed={mode === "note"}
-                onClick={() => setMode("note")}
-              >
-                Internal note
-              </Button>
-            </div>
-            <InputArea
-              aria-label={mode === "note" ? "Internal note" : "Reply"}
-              placeholder={
-                mode === "note" ? "Only your team sees this…" : "Write a reply…"
-              }
-              value={reply}
-              autoResize
-              minRows={3}
-              onValueChange={setReply}
-            />
-            <div>
-              <Button
-                type="submit"
-                variant="primary"
-                loading={send.isPending}
-                disabled={!reply.trim()}
-              >
-                {mode === "note" ? "Add note" : "Send reply"}
-              </Button>
-            </div>
-          </form>
+          <Composer
+            aria-label="Ticket reply"
+            loading={send.isPending}
+            modes={[
+              {
+                id: "reply",
+                label: "Reply to customer",
+                placeholder: "Write a reply…",
+                submitLabel: "Send reply",
+              },
+              {
+                id: "note",
+                label: "Internal note",
+                placeholder: "Only your team sees this…",
+                submitLabel: "Add note",
+              },
+            ]}
+            onSubmit={(text, m) =>
+              send.mutate({
+                text,
+                mode: (m as "reply" | "note") ?? "reply",
+                channel: data.sourceChannel,
+              })
+            }
+          />
         </>
       }
       rail={

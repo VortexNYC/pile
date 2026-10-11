@@ -5,6 +5,7 @@ import { Text } from "@cloudflare/kumo/components/text";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 
+import { EntityPage, RailSection } from "@/components/entity-page";
 import { Markdown } from "@/components/markdown";
 import { Page } from "@/components/page";
 import { ErrorState, LoadingState } from "@/components/states";
@@ -102,7 +103,7 @@ function ProjectDetail() {
   const projectIssues = issues.data ?? [];
 
   return (
-    <Page
+    <EntityPage
       title={data.name}
       description={
         <>
@@ -117,9 +118,103 @@ function ProjectDetail() {
           {formatRelative(data.updatedAt)}
         </>
       }
-    >
-      <LayerCard>
-        <LayerCard.Primary className="flex flex-col gap-4 p-6">
+      center={
+        <>
+          <LayerCard>
+            <LayerCard.Primary className="flex flex-col gap-4 p-6">
+              {data.description ? (
+                <Markdown
+                  workspaceSlug={workspace.slug}
+                  content={data.description}
+                />
+              ) : (
+                <Text variant="secondary">No description.</Text>
+              )}
+            </LayerCard.Primary>
+          </LayerCard>
+
+          {projectIssues.length > 0 ? (
+            <LayerCard className="p-0">
+              <div className="border-b border-kumo-line px-4 py-3">
+                <Text variant="secondary">Issues</Text>
+              </div>
+              <Table aria-label="Issues in this project">
+                <Table.Body>
+                  {projectIssues.map((issue) => (
+                    <Table.Row key={issue.id}>
+                      <Table.Cell>
+                        <Link
+                          to="/$slug/issues/$issueId"
+                          params={{ slug: workspace.slug, issueId: issue.id }}
+                          className="text-kumo-link hover:underline"
+                        >
+                          {issue.identifier ? (
+                            <span className="text-kumo-subtle mr-2">
+                              {issue.identifier}
+                            </span>
+                          ) : null}
+                          {issue.title}
+                        </Link>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Badge variant={issueStatusVariant(issue.status)}>
+                          {ISSUE_STATUS_LABELS[issue.status]}
+                        </Badge>
+                      </Table.Cell>
+                      <Table.Cell className="text-kumo-subtle text-sm">
+                        {formatRelative(issue.updatedAt)}
+                      </Table.Cell>
+                    </Table.Row>
+                  ))}
+                </Table.Body>
+              </Table>
+            </LayerCard>
+          ) : null}
+
+          {(milestones.data?.length ?? 0) > 0 ? (
+            <LayerCard>
+              <div className="border-b border-kumo-line px-4 py-3">
+                <Text variant="secondary">Milestones</Text>
+              </div>
+              <ul className="px-4 py-3 flex flex-col gap-1.5">
+                {milestones.data?.map((m) => (
+                  <li key={m.id} className="flex items-center gap-2 text-sm">
+                    <span>{m.name}</span>
+                    <span className="text-xs text-kumo-subtle">
+                      {m.targetDate?.slice(0, 10) ?? ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </LayerCard>
+          ) : null}
+
+          {(updates.data?.length ?? 0) > 0 ? (
+            <LayerCard>
+              <div className="border-b border-kumo-line px-4 py-3">
+                <Text variant="secondary">Updates</Text>
+              </div>
+              <div className="px-4 py-3 flex flex-col gap-3">
+                {updates.data?.map((u) => (
+                  <div key={u.id} className="flex flex-col gap-1">
+                    <Text variant="secondary" size="sm">
+                      {formatRelative(u.createdAt)}
+                    </Text>
+                    {u.content ? (
+                      <Markdown
+                        workspaceSlug={workspace.slug}
+                        content={u.content}
+                      />
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </LayerCard>
+          ) : null}
+        </>
+      }
+      rail={
+        <RailSection title="Properties">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant={projectStatusVariant(data.status)}>
               {data.status}
@@ -127,102 +222,15 @@ function ProjectDetail() {
             <Badge variant={projectHealthVariant(data.health)}>
               {data.health.replace("_", " ")}
             </Badge>
-            {data.startDate ? (
-              <Text variant="secondary">
-                {data.startDate.slice(0, 10)} →{" "}
-                {data.endDate?.slice(0, 10) ?? "—"}
-              </Text>
-            ) : null}
           </div>
-          {data.description ? (
-            <Markdown
-              workspaceSlug={workspace.slug}
-              content={data.description}
-            />
-          ) : (
-            <Text variant="secondary">No description.</Text>
-          )}
-        </LayerCard.Primary>
-      </LayerCard>
-
-      {projectIssues.length > 0 ? (
-        <LayerCard className="p-0">
-          <div className="border-b border-kumo-line px-4 py-3">
-            <Text variant="secondary">Issues</Text>
-          </div>
-          <Table aria-label="Issues in this project">
-            <Table.Body>
-              {projectIssues.map((issue) => (
-                <Table.Row key={issue.id}>
-                  <Table.Cell>
-                    <Link
-                      to="/$slug/issues/$issueId"
-                      params={{ slug: workspace.slug, issueId: issue.id }}
-                      className="text-kumo-link hover:underline"
-                    >
-                      {issue.identifier ? (
-                        <span className="text-kumo-subtle mr-2">
-                          {issue.identifier}
-                        </span>
-                      ) : null}
-                      {issue.title}
-                    </Link>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Badge variant={issueStatusVariant(issue.status)}>
-                      {ISSUE_STATUS_LABELS[issue.status]}
-                    </Badge>
-                  </Table.Cell>
-                  <Table.Cell className="text-kumo-subtle text-sm">
-                    {formatRelative(issue.updatedAt)}
-                  </Table.Cell>
-                </Table.Row>
-              ))}
-            </Table.Body>
-          </Table>
-        </LayerCard>
-      ) : null}
-
-      {(milestones.data?.length ?? 0) > 0 ? (
-        <LayerCard>
-          <div className="border-b border-kumo-line px-4 py-3">
-            <Text variant="secondary">Milestones</Text>
-          </div>
-          <ul className="px-4 py-3 flex flex-col gap-1.5">
-            {milestones.data?.map((m) => (
-              <li key={m.id} className="flex items-center gap-2 text-sm">
-                <span>{m.name}</span>
-                <span className="text-xs text-kumo-subtle">
-                  {m.targetDate?.slice(0, 10) ?? ""}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </LayerCard>
-      ) : null}
-
-      {(updates.data?.length ?? 0) > 0 ? (
-        <LayerCard>
-          <div className="border-b border-kumo-line px-4 py-3">
-            <Text variant="secondary">Updates</Text>
-          </div>
-          <div className="px-4 py-3 flex flex-col gap-3">
-            {updates.data?.map((u) => (
-              <div key={u.id} className="flex flex-col gap-1">
-                <Text variant="secondary" size="sm">
-                  {formatRelative(u.createdAt)}
-                </Text>
-                {u.content ? (
-                  <Markdown
-                    workspaceSlug={workspace.slug}
-                    content={u.content}
-                  />
-                ) : null}
-              </div>
-            ))}
-          </div>
-        </LayerCard>
-      ) : null}
-    </Page>
+          {data.startDate ? (
+            <div className="text-sm text-kumo-subtle">
+              {data.startDate.slice(0, 10)} →{" "}
+              {data.endDate?.slice(0, 10) ?? "—"}
+            </div>
+          ) : null}
+        </RailSection>
+      }
+    />
   );
 }
