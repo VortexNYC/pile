@@ -405,7 +405,7 @@ describe("support ticket routes", () => {
       id: eventId,
       organizationId,
       ticketId: ticket.id,
-      type: "capture",
+      type: "custom_entry",
       actorType: "customer",
       createdAt: new Date().toISOString(),
     });

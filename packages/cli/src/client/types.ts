@@ -1529,7 +1529,37 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List issue share */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The active share for this issue, if any. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            token: string;
+                            organizationId: string;
+                            issueId: string;
+                            createdById: string;
+                            createdAt: string;
+                            expiresAt: string | null;
+                        } | null;
+                    };
+                };
+            };
+        };
         put?: never;
         /** Create issue share */
         post: {
@@ -13476,7 +13506,36 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List document share */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The active share for this document, if any. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            token: string;
+                            documentId: string;
+                            includeChildren: boolean;
+                            createdAt: string;
+                            expiresAt: string | null;
+                        } | null;
+                    };
+                };
+            };
+        };
         put?: never;
         /** Create document share */
         post: {

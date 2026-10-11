@@ -650,6 +650,26 @@ const shareIssueRoute = createRoute({
   },
 });
 
+const getIssueShareRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/issues/{id}/share",
+  tags: ["issues"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "The active share for this issue, if any.",
+      content: {
+        "application/json": {
+          schema: issueShareSchema.nullable(),
+        },
+      },
+    },
+  },
+});
+
 const deleteIssueShareRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/issues/{id}/share/{token}",
@@ -1666,6 +1686,12 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         visibleTeamIds.includes(hit.issue.teamId)
       ),
     });
+  });
+
+  app.openapi(getIssueShareRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const stub = await getStub(c.env, organizationId);
+    return c.json((await stub.getIssueShare(id)) ?? null);
   });
 
   app.openapi(shareIssueRoute, async (c) => {

@@ -552,6 +552,24 @@ const createShareRoute = createRoute({
   },
 });
 
+const getShareRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/documents/{id}/share",
+  tags: ["documents"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "The active share for this document, if any.",
+      content: {
+        "application/json": { schema: shareSchema.nullable() },
+      },
+    },
+  },
+});
+
 const deleteShareRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/documents/{id}/share/{token}",
@@ -987,6 +1005,12 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
     const comment = await stub.unresolveComment(commentId);
     if (!comment) return notFound();
     return c.json(comment);
+  });
+
+  app.openapi(getShareRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    return c.json((await stub.getDocumentShare(id)) ?? null);
   });
 
   app.openapi(createShareRoute, async (c) => {

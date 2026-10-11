@@ -1,13 +1,15 @@
 import { Button } from "@cloudflare/kumo/components/button";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
-import { Share, X } from "@phosphor-icons/react";
-import { useMutation } from "@tanstack/react-query";
+import { Share, Trash, X } from "@phosphor-icons/react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { api, unwrap } from "@/lib/api";
+import { api, unwrap, unwrapEmpty } from "@/lib/api";
+import { toastSuccess } from "@/lib/toast";
 
-/** Create a public share link for an entity and surface the URL to
- * copy. Renders `/app/share/{kind}/...` public viewers (unauthenticated). */
+/** Share management — shows the entity's active public link with
+ * copy/revoke, or a Share button to mint one. The token is the
+ * capability; revoking kills the link. */
 export function ShareButton({
   organizationId,
   kind,
@@ -17,33 +19,57 @@ export function ShareButton({
   kind: "issue" | "document";
   id: string;
 }) {
-  const [url, setUrl] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const [dismissed, setDismissed] = useState(false);
+  const key = ["share", kind, organizationId, id];
+  const getPath =
+    kind === "issue"
+      ? "/workspaces/{organizationId}/issues/{id}/share"
+      : "/workspaces/{organizationId}/documents/{id}/share";
+
+  const existing = useQuery({
+    queryKey: key,
+    queryFn: async () =>
+      unwrap(
+        api.GET(getPath, {
+          params: { path: { organizationId, id } },
+        })
+      ),
+  });
+
   const share = useMutation({
-    mutationFn: async () => {
-      const res =
-        kind === "issue"
-          ? await unwrap(
-              api.POST("/workspaces/{organizationId}/issues/{id}/share", {
-                params: { path: { organizationId, id } },
-                body: {},
-              })
-            )
-          : await unwrap(
-              api.POST("/workspaces/{organizationId}/documents/{id}/share", {
-                params: { path: { organizationId, id } },
-                body: {},
-              })
-            );
-      return res;
-    },
-    onSuccess: (data) => {
-      setUrl(
-        `${window.location.origin}/app/share/${kind}/${organizationId}/${data.token}`
-      );
+    mutationFn: async () =>
+      unwrap(
+        api.POST(getPath, {
+          params: { path: { organizationId, id } },
+          body: {},
+        })
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: key }),
+  });
+
+  const revoke = useMutation({
+    mutationFn: async (token: string) =>
+      unwrapEmpty(
+        api.DELETE(
+          kind === "issue"
+            ? "/workspaces/{organizationId}/issues/{id}/share/{token}"
+            : "/workspaces/{organizationId}/documents/{id}/share/{token}",
+          { params: { path: { organizationId, id, token } } }
+        )
+      ),
+    onSuccess: () => {
+      toastSuccess("Share revoked");
+      void queryClient.invalidateQueries({ queryKey: key });
     },
   });
 
-  if (url) {
+  const active = existing.data;
+  const url = active
+    ? `${window.location.origin}/app/share/${kind}/${organizationId}/${active.token}`
+    : null;
+
+  if (url && !dismissed) {
     return (
       <LayerCard className="flex items-center gap-2 p-2 pl-3 max-w-md">
         <code className="flex-1 truncate text-xs text-kumo-default">{url}</code>
@@ -57,8 +83,21 @@ export function ShareButton({
         <Button
           size="sm"
           variant="ghost"
+          aria-label="Revoke share"
+          loading={revoke.isPending}
+          onClick={() => {
+            if (window.confirm("Revoke this share link?")) {
+              revoke.mutate(active!.token);
+            }
+          }}
+        >
+          <Trash />
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
           aria-label="Dismiss"
-          onClick={() => setUrl(null)}
+          onClick={() => setDismissed(true)}
         >
           <X />
         </Button>
@@ -71,7 +110,10 @@ export function ShareButton({
       variant="ghost"
       size="sm"
       loading={share.isPending}
-      onClick={() => share.mutate()}
+      onClick={() => {
+        setDismissed(false);
+        share.mutate();
+      }}
     >
       <Share /> Share
     </Button>

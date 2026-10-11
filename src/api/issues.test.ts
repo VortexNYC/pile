@@ -1230,6 +1230,15 @@ describe("issues API", () => {
     expect(shareRes.status).toBe(201);
     const shareToken = ((await shareRes.json()) as { token: string }).token;
 
+    const getRes = await fetch(
+      `/workspaces/${organizationId}/issues/${issueId}/share`,
+      {},
+      token
+    );
+    expect(getRes.status).toBe(200);
+    const active = (await getRes.json()) as { token: string } | null;
+    expect(active?.token).toBe(shareToken);
+
     const pub = await app.fetch(
       new Request(
         `https://example.com/shared-issues/${organizationId}/${shareToken}`
@@ -1252,6 +1261,13 @@ describe("issues API", () => {
       env
     );
     expect(gone.status).toBe(404);
+
+    const afterRevoke = await fetch(
+      `/workspaces/${organizationId}/issues/${issueId}/share`,
+      {},
+      token
+    );
+    expect((await afterRevoke.json()) as unknown).toBeNull();
   });
 });
 
