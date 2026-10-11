@@ -92,14 +92,14 @@ function IssuesList() {
     });
 
   const issues = useQuery({
-    queryKey: wsKey(workspace.id, "issues", { status, team, search }),
+    queryKey: wsKey(workspace.id, "issues", { search }),
     queryFn: async () =>
       (
         await unwrap(
           api.GET("/workspaces/{organizationId}/issues", {
             params: {
               path: { organizationId: workspace.id },
-              query: { limit: 100, status, teamId: team, search },
+              query: { limit: 100, search },
             },
           })
         )
@@ -144,60 +144,11 @@ function IssuesList() {
             }
           />
         </div>
-        <Select
-          aria-label="Filter by status"
-          value={status ?? ALL}
-          onValueChange={(value) =>
-            void navigate({
-              search: (prev) => ({
-                ...prev,
-                status: isIssueStatus(value) ? value : undefined,
-              }),
-              replace: true,
-            })
-          }
-          renderValue={(v) =>
-            isIssueStatus(v) ? ISSUE_STATUS_LABELS[v] : "All statuses"
-          }
-        >
-          <Select.Option value={ALL}>All statuses</Select.Option>
-          {ISSUE_STATUSES.map((s) => (
-            <Select.Option key={s} value={s}>
-              {ISSUE_STATUS_LABELS[s]}
-            </Select.Option>
-          ))}
-        </Select>
         <IssueFilter
           organizationId={workspace.id}
           value={filter}
           onChange={setFilter}
         />
-        <Select
-          aria-label="Filter by team"
-          value={team ?? ALL}
-          onValueChange={(value) =>
-            void navigate({
-              search: (prev) => ({
-                ...prev,
-                team:
-                  typeof value === "string" && value !== ALL
-                    ? value
-                    : undefined,
-              }),
-              replace: true,
-            })
-          }
-          renderValue={(v) =>
-            teams.data?.find((t) => t.id === v)?.name ?? "All teams"
-          }
-        >
-          <Select.Option value={ALL}>All teams</Select.Option>
-          {(teams.data ?? []).map((t) => (
-            <Select.Option key={t.id} value={t.id}>
-              {t.key} — {t.name}
-            </Select.Option>
-          ))}
-        </Select>
       </div>
       {issues.isPending ? (
         <LoadingState label="Loading issues" />
@@ -222,12 +173,16 @@ function IssuesList() {
             const rows = issues.data.filter(
               (issue) =>
                 issue.status === group &&
+                (filter.statuses.length === 0 ||
+                  filter.statuses.includes(issue.status)) &&
                 (filter.priorities.length === 0 ||
                   filter.priorities.includes(issue.priority)) &&
                 (filter.assignees.length === 0 ||
                   filter.assignees.includes(issue.assigneeId ?? "")) &&
                 (filter.projects.length === 0 ||
-                  filter.projects.includes(issue.projectId ?? ""))
+                  filter.projects.includes(issue.projectId ?? "")) &&
+                (filter.teams.length === 0 ||
+                  filter.teams.includes(issue.teamId))
             );
             if (rows.length === 0) return null;
             return (
@@ -259,7 +214,7 @@ function IssuesList() {
                               e.preventDefault();
                               setPeekedId(issue.id);
                             }}
-                            className={`flex h-11 items-center gap-3 px-4 hover:bg-kumo-tint ${
+                            className={`group flex h-11 items-center gap-3 px-4 hover:bg-kumo-tint ${
                               selected.has(issue.id) ? "bg-kumo-tint" : ""
                             }`}
                           >
@@ -273,7 +228,11 @@ function IssuesList() {
                                 toggleSelected(issue.id);
                               }}
                               onChange={() => undefined}
-                              className="accent-kumo-brand size-4 shrink-0"
+                              className={`accent-kumo-brand size-4 shrink-0 ${
+                                selected.size === 0
+                                  ? "opacity-0 transition-opacity group-hover:opacity-100"
+                                  : ""
+                              }`}
                             />
                             <IssueStatusIcon status={issue.status} />
                             {issue.identifier ? (

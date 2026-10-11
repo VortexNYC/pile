@@ -4,20 +4,30 @@ import { Popover } from "@cloudflare/kumo/components/popover";
 import { Funnel } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 
+import { useTeams } from "@/hooks/use-teams";
 import { api, unwrap } from "@/lib/api";
 import { betterAuthClient } from "@/lib/better-auth";
-import { PRIORITIES, PRIORITY_LABELS } from "@/lib/labels";
+import {
+  ISSUE_STATUS_LABELS,
+  ISSUE_STATUSES,
+  PRIORITIES,
+  PRIORITY_LABELS,
+} from "@/lib/labels";
 
 export interface IssueFilterState {
+  statuses: string[];
   priorities: string[];
   assignees: string[];
   projects: string[];
+  teams: string[];
 }
 
 export const EMPTY_FILTER: IssueFilterState = {
+  statuses: [],
   priorities: [],
   assignees: [],
   projects: [],
+  teams: [],
 };
 
 /** Linear's filter — one popover composing priority, assignee, and
@@ -53,8 +63,13 @@ export function IssueFilter({
       ).projects,
   });
 
+  const teams = useTeams(organizationId);
   const active =
-    value.priorities.length + value.assignees.length + value.projects.length;
+    value.statuses.length +
+    value.priorities.length +
+    value.assignees.length +
+    value.projects.length +
+    value.teams.length;
 
   return (
     <Popover>
@@ -72,6 +87,15 @@ export function IssueFilter({
       />
       <Popover.Content className="w-64 max-h-96 overflow-auto p-3">
         <div className="flex flex-col gap-4">
+          <Checkbox.Group
+            legend="Status"
+            value={value.statuses}
+            onValueChange={(v) => onChange({ ...value, statuses: v })}
+          >
+            {ISSUE_STATUSES.map((s) => (
+              <Checkbox.Item key={s} value={s} label={ISSUE_STATUS_LABELS[s]} />
+            ))}
+          </Checkbox.Group>
           <Checkbox.Group
             legend="Priority"
             value={value.priorities}
@@ -92,6 +116,21 @@ export function IssueFilter({
                   key={m.userId}
                   value={m.userId}
                   label={m.user?.name ?? m.user?.email ?? m.userId.slice(0, 8)}
+                />
+              ))}
+            </Checkbox.Group>
+          ) : null}
+          {(teams.data ?? []).length > 0 ? (
+            <Checkbox.Group
+              legend="Team"
+              value={value.teams}
+              onValueChange={(v) => onChange({ ...value, teams: v })}
+            >
+              {(teams.data ?? []).map((team) => (
+                <Checkbox.Item
+                  key={team.id}
+                  value={team.id}
+                  label={team.name}
                 />
               ))}
             </Checkbox.Group>
