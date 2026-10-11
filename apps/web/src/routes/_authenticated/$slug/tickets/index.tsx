@@ -4,6 +4,7 @@ import { Input, InputArea } from "@cloudflare/kumo/components/input";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 import { Select } from "@cloudflare/kumo/components/select";
 import { Table } from "@cloudflare/kumo/components/table";
+import { Tabs } from "@cloudflare/kumo/components/tabs";
 import { Headset, Plus } from "@phosphor-icons/react";
 import {
   keepPreviousData,
@@ -18,6 +19,7 @@ import { Page } from "@/components/page";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap } from "@/lib/api";
+import { betterAuthClient } from "@/lib/better-auth";
 import {
   formatRelative,
   isTicketStatus,
@@ -45,6 +47,8 @@ function TicketsList() {
   const { status } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const [adding, setAdding] = useState(false);
+  const session = betterAuthClient.useSession();
+  const [folder, setFolder] = useState<"all" | "mine" | "unassigned">("all");
 
   const tickets = useQuery({
     queryKey: wsKey(workspace.id, "tickets", { status }),
@@ -60,6 +64,17 @@ function TicketsList() {
         )
       ).tickets,
     placeholderData: keepPreviousData,
+  });
+
+  const me = session.data?.user.id;
+  const rows = (tickets.data ?? []).filter((ticket) => {
+    if (folder === "unassigned") return ticket.assignees.length === 0;
+    if (folder === "mine")
+      return (
+        me != null &&
+        ticket.assignees.some((a) => a.type === "user" && a.assigneeId === me)
+      );
+    return true;
   });
 
   return (
@@ -79,7 +94,16 @@ function TicketsList() {
       }
     >
       {adding ? <NewTicketForm onDone={() => setAdding(false)} /> : null}
-      <div>
+      <div className="flex items-center gap-3">
+        <Tabs
+          tabs={[
+            { value: "all", label: "All" },
+            { value: "mine", label: "Mine" },
+            { value: "unassigned", label: "Unassigned" },
+          ]}
+          value={folder}
+          onValueChange={(v) => setFolder(v as "all" | "mine" | "unassigned")}
+        />
         <Select
           aria-label="Filter by status"
           value={status ?? ALL}
@@ -108,7 +132,7 @@ function TicketsList() {
           error={tickets.error}
           onRetry={() => void tickets.refetch()}
         />
-      ) : tickets.data.length === 0 ? (
+      ) : rows.length === 0 ? (
         <EmptyState
           icon={<Headset size={40} />}
           title="No tickets"
@@ -127,7 +151,7 @@ function TicketsList() {
               </Table.Row>
             </Table.Header>
             <Table.Body>
-              {tickets.data.map((ticket) => (
+              {rows.map((ticket) => (
                 <Table.Row key={ticket.id}>
                   <Table.Cell>
                     <Link
