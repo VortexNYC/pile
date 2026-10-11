@@ -1,3 +1,4 @@
+import { DropdownMenu } from "@cloudflare/kumo/components/dropdown";
 import {
   Sidebar,
   SidebarCollapsible,
@@ -7,6 +8,10 @@ import {
 import { Text } from "@cloudflare/kumo/components/text";
 import {
   BellRinging,
+  CaretUpDown,
+  GearSix,
+  MagnifyingGlass,
+  Plus,
   Buildings,
   FileText,
   Star,
@@ -107,27 +112,97 @@ export function AppSidebar({
 
   return (
     <Sidebar aria-label="Workspace navigation">
-      <Sidebar.Header className="px-3 py-3 flex items-center justify-between">
-        <Text variant="heading" as="span" truncate>
-          {workspace.name}
-        </Text>
-        <button
-          type="button"
-          aria-label="Inbox"
-          onClick={() => setInboxOpen(true)}
-          className="relative rounded-md p-1.5 text-kumo-subtle hover:bg-kumo-tint"
-        >
-          <BellRinging size={18} />
-          {(unread.data ?? 0) > 0 ? (
-            <span className="bg-kumo-brand text-kumo-contrast absolute -right-0.5 -top-0.5 rounded-full px-1 text-[10px] font-medium">
-              {unread.data}
-            </span>
-          ) : null}
-        </button>
+      <Sidebar.Header className="px-3 py-3 flex items-center justify-between gap-2">
+        <DropdownMenu>
+          <DropdownMenu.Trigger
+            render={
+              <button
+                type="button"
+                className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-0.5 text-left hover:bg-kumo-tint"
+              >
+                <span className="bg-kumo-brand text-kumo-contrast flex size-6 shrink-0 items-center justify-center rounded text-xs font-semibold">
+                  {workspace.name.slice(0, 1).toUpperCase()}
+                </span>
+                <Text variant="heading" as="span" truncate>
+                  {workspace.name}
+                </Text>
+                <CaretUpDown className="shrink-0 text-kumo-subtle" size={14} />
+              </button>
+            }
+          />
+          <DropdownMenu.Content className="min-w-48">
+            {workspaces.map((w) => (
+              <DropdownMenu.Item
+                key={w.id}
+                onClick={() =>
+                  void navigate({
+                    to: "/$slug/issues",
+                    params: { slug: w.slug },
+                  })
+                }
+              >
+                {w.name}
+                {w.id === workspace.id ? " ✓" : ""}
+              </DropdownMenu.Item>
+            ))}
+            <DropdownMenu.Separator />
+            <DropdownMenu.Item
+              icon={<GearSix />}
+              onClick={() =>
+                void navigate({
+                  to: "/$slug/settings",
+                  params: { slug: workspace.slug },
+                })
+              }
+            >
+              Workspace settings
+            </DropdownMenu.Item>
+          </DropdownMenu.Content>
+        </DropdownMenu>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <button
+            type="button"
+            aria-label="New issue"
+            onClick={() =>
+              void navigate({
+                to: "/$slug/issues/new",
+                params: { slug: workspace.slug },
+              })
+            }
+            className="rounded-md p-1.5 text-kumo-subtle hover:bg-kumo-tint"
+          >
+            <Plus size={18} />
+          </button>
+          <button
+            type="button"
+            aria-label="Inbox"
+            onClick={() => setInboxOpen(true)}
+            className="relative rounded-md p-1.5 text-kumo-subtle hover:bg-kumo-tint"
+          >
+            <BellRinging size={18} />
+            {(unread.data ?? 0) > 0 ? (
+              <span className="bg-kumo-brand text-kumo-contrast absolute -right-0.5 -top-0.5 rounded-full px-1 text-[10px] font-medium">
+                {unread.data}
+              </span>
+            ) : null}
+          </button>
+        </div>
       </Sidebar.Header>
       <Sidebar.Content>
         <Sidebar.Group>
           <Sidebar.Menu>
+            <Sidebar.MenuButton
+              icon={MagnifyingGlass}
+              onClick={() =>
+                window.dispatchEvent(new CustomEvent("pile:command-menu"))
+              }
+              tooltip="Search"
+            >
+              Search
+              <span className="ml-auto text-[10px] text-kumo-subtle font-mono">
+                ⌘K
+              </span>
+            </Sidebar.MenuButton>
             {NAV.filter((item) => !surfaces.hidden.has(item.path)).map(
               (item) => (
                 <Sidebar.MenuButton
@@ -190,22 +265,6 @@ export function AppSidebar({
             ))}
           </Sidebar.Menu>
         </Sidebar.Group>
-        {workspaces.length > 1 ? (
-          <Sidebar.Group>
-            <Sidebar.GroupLabel>Workspaces</Sidebar.GroupLabel>
-            <Sidebar.Menu>
-              {workspaces.map((w) => (
-                <Sidebar.MenuButton
-                  key={w.id}
-                  active={w.id === workspace.id}
-                  href={appHref(`/${w.slug}/issues`)}
-                >
-                  {w.name}
-                </Sidebar.MenuButton>
-              ))}
-            </Sidebar.Menu>
-          </Sidebar.Group>
-        ) : null}
       </Sidebar.Content>
       <Sidebar.Footer>
         <Sidebar.Menu>

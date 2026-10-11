@@ -36,8 +36,13 @@ export function CommandMenu() {
         setOpen((v) => !v);
       }
     };
+    const onOpen = () => setOpen(true);
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("pile:command-menu", onOpen);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("pile:command-menu", onOpen);
+    };
   }, []);
 
   const issues = useQuery({
