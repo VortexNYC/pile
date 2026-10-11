@@ -1,4 +1,5 @@
 import { Table } from "@cloudflare/kumo/components/table";
+import rehypeSlug from "rehype-slug";
 import { Streamdown } from "streamdown";
 
 import { remarkIssueLinks } from "@/lib/remark-issues";
@@ -49,6 +50,7 @@ export function Markdown({
     <Streamdown
       components={components}
       remarkPlugins={workspaceSlug ? [remarkIssueLinks({ workspaceSlug })] : []}
+      rehypePlugins={[rehypeSlug]}
     >
       {content}
     </Streamdown>

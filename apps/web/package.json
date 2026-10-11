@@ -24,6 +24,7 @@
     "openapi-fetch": "0.17.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "rehype-slug": "^6.0.0",
     "remark": "^15.0.1",
     "streamdown": "^2.7.0",
     "unist-util-visit": "^5.1.0",
