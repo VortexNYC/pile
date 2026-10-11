@@ -1,5 +1,6 @@
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 import { useQueries } from "@tanstack/react-query";
+import { Fragment } from "react";
 
 /** The Jam move: a capture isn't the video, it's the story under it —
  * console logs, network requests, environment. Fetches the capture's
@@ -102,20 +103,22 @@ export function TechnicalPanel({ attachments }: { attachments: Attachment[] }) {
     if (att.type === "network") {
       return (
         <Section key={att.type} title="Network requests">
-          {entries.map((e, j) =>
-            row({
-              method: s(e.method) ?? s(e.httpMethod),
-              url: s(e.url) ?? s(e.requestUrl) ?? s(e.name),
-              status:
-                s(e.status) ??
-                s(e.statusCode) ??
-                (typeof e.status === "number" ? String(e.status) : undefined),
-              duration:
-                typeof e.duration === "number"
-                  ? `${e.duration}ms`
-                  : s(e.duration),
-            })
-          )}
+          {entries.map((e, j) => (
+            <Fragment key={j}>
+              {row({
+                method: s(e.method) ?? s(e.httpMethod),
+                url: s(e.url) ?? s(e.requestUrl) ?? s(e.name),
+                status:
+                  s(e.status) ??
+                  s(e.statusCode) ??
+                  (typeof e.status === "number" ? String(e.status) : undefined),
+                duration:
+                  typeof e.duration === "number"
+                    ? `${e.duration}ms`
+                    : s(e.duration),
+              })}
+            </Fragment>
+          ))}
         </Section>
       );
     }
@@ -125,30 +128,34 @@ export function TechnicalPanel({ attachments }: { attachments: Attachment[] }) {
           key={att.type}
           title={att.type === "log" ? "Console" : "Debug context"}
         >
-          {entries.map((e, j) =>
-            row({
-              level: s(e.level) ?? s(e.severity) ?? s(e.type),
-              message: s(e.message) ?? s(e.text) ?? s(e.msg) ?? s(e.value),
-              time: s(e.timestamp) ?? s(e.time),
-            })
-          )}
+          {entries.map((e, j) => (
+            <Fragment key={j}>
+              {row({
+                level: s(e.level) ?? s(e.severity) ?? s(e.type),
+                message: s(e.message) ?? s(e.text) ?? s(e.msg) ?? s(e.value),
+                time: s(e.timestamp) ?? s(e.time),
+              })}
+            </Fragment>
+          ))}
         </Section>
       );
     }
     return (
       <Section key={att.type} title={att.type}>
-        {entries.map((e, j) =>
-          row(
-            Object.fromEntries(
-              Object.entries(e)
-                .filter(
-                  ([, v]) => typeof v === "string" || typeof v === "number"
-                )
-                .slice(0, 6)
-                .map(([k, v]) => [k, String(v)])
-            )
-          )
-        )}
+        {entries.map((e, j) => (
+          <Fragment key={j}>
+            {row(
+              Object.fromEntries(
+                Object.entries(e)
+                  .filter(
+                    ([, v]) => typeof v === "string" || typeof v === "number"
+                  )
+                  .slice(0, 6)
+                  .map(([k, v]) => [k, String(v)])
+              )
+            )}
+          </Fragment>
+        ))}
       </Section>
     );
   });
