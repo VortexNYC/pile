@@ -9,6 +9,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 
+import { CanvasEditor } from "@/components/canvas-editor";
 import { EntityPage, RailLink, RailSection } from "@/components/entity-page";
 import { Markdown } from "@/components/markdown";
 import { Page } from "@/components/page";
@@ -37,6 +38,7 @@ function DocumentDetail() {
   const [editingContent, setEditingContent] = useState(false);
   const [draft, setDraft] = useState({ title: "", content: "" });
   const contentRef = useRef<HTMLTextAreaElement>(null);
+  const canvasSave = useRef<number | null>(null);
   const key = wsKey(organizationId, "documents", documentId);
   const path = { organizationId, id: documentId };
 
@@ -283,7 +285,21 @@ function DocumentDetail() {
                   ))}
                 </div>
               ) : null}
-              {editingContent ? (
+              {(data.contentFormat as string) === "canvas" ? (
+                <CanvasEditor
+                  sceneJson={
+                    typeof data.content === "string" ? data.content : "{}"
+                  }
+                  onChange={(json) => {
+                    if (canvasSave.current !== null)
+                      window.clearTimeout(canvasSave.current);
+                    canvasSave.current = window.setTimeout(
+                      () => save.mutate({ content: json }),
+                      800
+                    );
+                  }}
+                />
+              ) : editingContent ? (
                 <div className="flex flex-col gap-2">
                   <InputArea
                     ref={contentRef}

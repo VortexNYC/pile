@@ -6098,7 +6098,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdCustomersId",
-    "description": "Update customer (PATCH /workspaces/{organizationId}/customers/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, url, logoUrl, externalId, tierId, statusId, ownerId.",
+    "description": "Update customer (PATCH /workspaces/{organizationId}/customers/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, url, bookingUrl, logoUrl, externalId, tierId, statusId, ownerId.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/customers/{id}",
     "inputSchema": {
@@ -6119,6 +6119,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "url": {
               "type": "string"
+            },
+            "bookingUrl": {
+              "type": "string",
+              "nullable": true
             },
             "logoUrl": {
               "type": "string"
@@ -6317,7 +6321,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string",
               "enum": [
                 "blocks",
-                "markdown"
+                "markdown",
+                "canvas"
               ]
             },
             "slug": {
@@ -10215,7 +10220,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdCustomers",
-    "description": "Create customer (POST /workspaces/{organizationId}/customers) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, url, logoUrl, externalId, tierId, statusId, ownerId (* = required).",
+    "description": "Create customer (POST /workspaces/{organizationId}/customers) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, url, bookingUrl, logoUrl, externalId, tierId, statusId, ownerId (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/customers",
     "inputSchema": {
@@ -10233,6 +10238,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "url": {
               "type": "string"
+            },
+            "bookingUrl": {
+              "type": "string",
+              "nullable": true
             },
             "logoUrl": {
               "type": "string"
@@ -10576,7 +10585,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string",
               "enum": [
                 "blocks",
-                "markdown"
+                "markdown",
+                "canvas"
               ]
             },
             "slug": {

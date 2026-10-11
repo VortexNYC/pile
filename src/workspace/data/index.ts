@@ -2184,7 +2184,7 @@ export interface DocumentInput {
   title: string;
   icon?: string | null;
   content?: unknown[] | string; // BlockNote blocks or markdown
-  contentFormat?: "blocks" | "markdown";
+  contentFormat?: "blocks" | "markdown" | "canvas";
   slug?: string | null;
   projectId?: string | null;
   issueId?: string | null;
@@ -2314,7 +2314,7 @@ export interface DocumentUpdate {
   title?: string;
   icon?: string | null;
   content?: unknown[] | string;
-  contentFormat?: "blocks" | "markdown";
+  contentFormat?: "blocks" | "markdown" | "canvas";
   slug?: string | null;
   projectId?: string | null;
   issueId?: string | null;
@@ -2355,7 +2355,7 @@ export function updateDocument(
       typeof update.content === "string"
         ? update.content
         : JSON.stringify(update.content);
-    const resolvedFormat: "blocks" | "markdown" =
+    const resolvedFormat: "blocks" | "markdown" | "canvas" =
       update.contentFormat ??
       (typeof update.content === "string" ? "markdown" : "blocks");
     patch.contentFormat = resolvedFormat;
@@ -2624,6 +2624,7 @@ export interface CustomerInput {
   name: string;
   url?: string | null;
   logoUrl?: string | null;
+  bookingUrl?: string | null;
   externalId?: string | null;
   tierId?: string | null;
   statusId?: string | null;
@@ -2641,6 +2642,7 @@ export function createCustomer(db: WorkspaceDb, input: CustomerInput) {
       name: input.name,
       url: input.url ?? null,
       logoUrl: input.logoUrl ?? null,
+      bookingUrl: input.bookingUrl ?? null,
       externalId: input.externalId ?? null,
       tierId: input.tierId ?? null,
       statusId: input.statusId ?? null,
@@ -2690,6 +2692,7 @@ export function updateCustomer(
     "name",
     "url",
     "logoUrl",
+    "bookingUrl",
     "externalId",
     "tierId",
     "statusId",

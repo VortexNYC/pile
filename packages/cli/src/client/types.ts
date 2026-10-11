@@ -12717,7 +12717,7 @@ export interface paths {
                                     [key: string]: unknown;
                                 }[] | string;
                                 /** @enum {string} */
-                                contentFormat: "blocks" | "markdown";
+                                contentFormat: "blocks" | "markdown" | "canvas";
                                 slug: string | null;
                                 projectId: string | null;
                                 issueId: string | null;
@@ -12756,7 +12756,7 @@ export interface paths {
                             [key: string]: unknown;
                         }[] | string;
                         /** @enum {string} */
-                        contentFormat?: "blocks" | "markdown";
+                        contentFormat?: "blocks" | "markdown" | "canvas";
                         slug?: string;
                         projectId?: string;
                         issueId?: string;
@@ -12783,7 +12783,7 @@ export interface paths {
                                 [key: string]: unknown;
                             }[] | string;
                             /** @enum {string} */
-                            contentFormat: "blocks" | "markdown";
+                            contentFormat: "blocks" | "markdown" | "canvas";
                             slug: string | null;
                             projectId: string | null;
                             issueId: string | null;
@@ -12842,7 +12842,7 @@ export interface paths {
                                 [key: string]: unknown;
                             }[] | string;
                             /** @enum {string} */
-                            contentFormat: "blocks" | "markdown";
+                            contentFormat: "blocks" | "markdown" | "canvas";
                             slug: string | null;
                             projectId: string | null;
                             issueId: string | null;
@@ -12920,7 +12920,7 @@ export interface paths {
                             [key: string]: unknown;
                         }[] | string;
                         /** @enum {string} */
-                        contentFormat?: "blocks" | "markdown";
+                        contentFormat?: "blocks" | "markdown" | "canvas";
                         slug?: string | null;
                         projectId?: string | null;
                         issueId?: string | null;
@@ -12947,7 +12947,7 @@ export interface paths {
                                 [key: string]: unknown;
                             }[] | string;
                             /** @enum {string} */
-                            contentFormat: "blocks" | "markdown";
+                            contentFormat: "blocks" | "markdown" | "canvas";
                             slug: string | null;
                             projectId: string | null;
                             issueId: string | null;
@@ -13011,7 +13011,7 @@ export interface paths {
                                 [key: string]: unknown;
                             }[] | string;
                             /** @enum {string} */
-                            contentFormat: "blocks" | "markdown";
+                            contentFormat: "blocks" | "markdown" | "canvas";
                             slug: string | null;
                             projectId: string | null;
                             issueId: string | null;
@@ -13668,7 +13668,7 @@ export interface paths {
                                     [key: string]: unknown;
                                 }[] | string;
                                 /** @enum {string} */
-                                contentFormat: "blocks" | "markdown";
+                                contentFormat: "blocks" | "markdown" | "canvas";
                                 slug: string | null;
                                 projectId: string | null;
                                 issueId: string | null;
@@ -13691,7 +13691,7 @@ export interface paths {
                                     [key: string]: unknown;
                                 }[] | string;
                                 /** @enum {string} */
-                                contentFormat: "blocks" | "markdown";
+                                contentFormat: "blocks" | "markdown" | "canvas";
                                 slug: string | null;
                                 projectId: string | null;
                                 issueId: string | null;
@@ -13827,7 +13827,7 @@ export interface paths {
                                     [key: string]: unknown;
                                 }[] | string;
                                 /** @enum {string} */
-                                contentFormat: "blocks" | "markdown";
+                                contentFormat: "blocks" | "markdown" | "canvas";
                                 slug: string | null;
                                 projectId: string | null;
                                 issueId: string | null;
@@ -14067,7 +14067,7 @@ export interface paths {
                                     [key: string]: unknown;
                                 }[] | string;
                                 /** @enum {string} */
-                                contentFormat: "blocks" | "markdown";
+                                contentFormat: "blocks" | "markdown" | "canvas";
                                 slug: string | null;
                                 projectId: string | null;
                                 issueId: string | null;
@@ -14132,7 +14132,7 @@ export interface paths {
                                 [key: string]: unknown;
                             }[] | string;
                             /** @enum {string} */
-                            contentFormat: "blocks" | "markdown";
+                            contentFormat: "blocks" | "markdown" | "canvas";
                             slug: string | null;
                             projectId: string | null;
                             issueId: string | null;
@@ -14621,6 +14621,7 @@ export interface paths {
                                 organizationId: string;
                                 name: string;
                                 url: string | null;
+                                bookingUrl: string | null;
                                 logoUrl: string | null;
                                 externalId: string | null;
                                 tierId: string | null;
@@ -14650,6 +14651,7 @@ export interface paths {
                     "application/json": {
                         name: string;
                         url?: string;
+                        bookingUrl?: string | null;
                         logoUrl?: string;
                         externalId?: string;
                         tierId?: string;
@@ -14670,6 +14672,7 @@ export interface paths {
                             organizationId: string;
                             name: string;
                             url: string | null;
+                            bookingUrl: string | null;
                             logoUrl: string | null;
                             externalId: string | null;
                             tierId: string | null;
@@ -14719,6 +14722,7 @@ export interface paths {
                             organizationId: string;
                             name: string;
                             url: string | null;
+                            bookingUrl: string | null;
                             logoUrl: string | null;
                             externalId: string | null;
                             tierId: string | null;
@@ -14787,6 +14791,7 @@ export interface paths {
                     "application/json": {
                         name?: string;
                         url?: string;
+                        bookingUrl?: string | null;
                         logoUrl?: string;
                         externalId?: string;
                         tierId?: string;
@@ -14807,6 +14812,7 @@ export interface paths {
                             organizationId: string;
                             name: string;
                             url: string | null;
+                            bookingUrl: string | null;
                             logoUrl: string | null;
                             externalId: string | null;
                             tierId: string | null;
@@ -14864,6 +14870,7 @@ export interface paths {
                                 size: number;
                                 r2Key: string;
                                 url: string;
+                                bookingUrl?: string | null;
                                 createdById: string | null;
                                 createdAt: string;
                             }[];
@@ -14916,6 +14923,7 @@ export interface paths {
                             size: number;
                             r2Key: string;
                             url: string;
+                            bookingUrl?: string | null;
                             createdById: string | null;
                             createdAt: string;
                         };
@@ -14979,6 +14987,7 @@ export interface paths {
                             size: number;
                             r2Key: string;
                             url: string;
+                            bookingUrl?: string | null;
                             createdById: string | null;
                             createdAt: string;
                         };

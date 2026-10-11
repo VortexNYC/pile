@@ -55,7 +55,12 @@ function CustomerDetail() {
 function CustomerEditor({
   customer,
 }: {
-  customer: { id: string; name: string; url: string | null };
+  customer: {
+    id: string;
+    name: string;
+    url: string | null;
+    bookingUrl: string | null;
+  };
 }) {
   const workspace = useWorkspace();
   const queryClient = useQueryClient();
@@ -76,6 +81,7 @@ function CustomerEditor({
   });
   const [name, setName] = useState(customer.name);
   const [url, setUrl] = useState(customer.url ?? "");
+  const [bookingUrl, setBookingUrl] = useState(customer.bookingUrl ?? "");
   const listKey = wsKey(workspace.id, "customers");
   const path = { organizationId: workspace.id, id: customer.id };
 
@@ -86,7 +92,8 @@ function CustomerEditor({
           params: { path },
           body: {
             name: name.trim(),
-            ...(url.trim() ? { url: url.trim() } : {}),
+            url: url.trim() || undefined,
+            bookingUrl: bookingUrl.trim() || undefined,
           },
         })
       ),
@@ -217,6 +224,16 @@ function CustomerEditor({
         <>
           <RailSection title="Contact">
             <div className="flex flex-col gap-1.5 text-sm">
+              {customer.bookingUrl ? (
+                <a
+                  href={customer.bookingUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-kumo-link hover:underline font-medium"
+                >
+                  Book a call →
+                </a>
+              ) : null}
               {customer.url ? (
                 <a
                   href={customer.url}

@@ -2,7 +2,7 @@ import { Button } from "@cloudflare/kumo/components/button";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 import { Table } from "@cloudflare/kumo/components/table";
 import { FileText, Plus } from "@phosphor-icons/react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 
 import { Page } from "@/components/page";
@@ -29,6 +29,26 @@ function DocumentsList() {
         )
       ).documents.filter((d) => !d.isTemplate),
   });
+  const createCanvas = useMutation({
+    mutationFn: async () =>
+      unwrap(
+        api.POST("/workspaces/{organizationId}/documents", {
+          params: { path: { organizationId: workspace.id } },
+          body: {
+            title: "Untitled canvas",
+            icon: "🎨",
+            contentFormat: "canvas",
+            content: "{}",
+          },
+        })
+      ),
+    onSuccess: (doc) => {
+      void navigate({
+        to: "/$slug/documents/$documentId",
+        params: { slug: workspace.slug, documentId: doc.id },
+      });
+    },
+  });
   const create = () =>
     void navigate({
       to: "/$slug/documents/new",
@@ -40,9 +60,19 @@ function DocumentsList() {
       title="Documents"
       description="Notes, specs, and playbooks your team shares."
       actions={
-        <Button variant="primary" icon={<Plus />} onClick={create}>
-          New document
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="ghost"
+            icon={<Plus />}
+            loading={createCanvas.isPending}
+            onClick={() => createCanvas.mutate()}
+          >
+            New canvas
+          </Button>
+          <Button variant="primary" icon={<Plus />} onClick={create}>
+            New document
+          </Button>
+        </div>
       }
     >
       {documents.isPending ? (

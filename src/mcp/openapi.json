@@ -24745,7 +24745,8 @@
                             "type": "string",
                             "enum": [
                               "blocks",
-                              "markdown"
+                              "markdown",
+                              "canvas"
                             ]
                           },
                           "slug": {
@@ -24873,7 +24874,8 @@
                     "type": "string",
                     "enum": [
                       "blocks",
-                      "markdown"
+                      "markdown",
+                      "canvas"
                     ]
                   },
                   "slug": {
@@ -24946,7 +24948,8 @@
                       "type": "string",
                       "enum": [
                         "blocks",
-                        "markdown"
+                        "markdown",
+                        "canvas"
                       ]
                     },
                     "slug": {
@@ -25086,7 +25089,8 @@
                       "type": "string",
                       "enum": [
                         "blocks",
-                        "markdown"
+                        "markdown",
+                        "canvas"
                       ]
                     },
                     "slug": {
@@ -25220,7 +25224,8 @@
                     "type": "string",
                     "enum": [
                       "blocks",
-                      "markdown"
+                      "markdown",
+                      "canvas"
                     ]
                   },
                   "slug": {
@@ -25296,7 +25301,8 @@
                       "type": "string",
                       "enum": [
                         "blocks",
-                        "markdown"
+                        "markdown",
+                        "canvas"
                       ]
                     },
                     "slug": {
@@ -25471,7 +25477,8 @@
                       "type": "string",
                       "enum": [
                         "blocks",
-                        "markdown"
+                        "markdown",
+                        "canvas"
                       ]
                     },
                     "slug": {
@@ -26589,7 +26596,8 @@
                           "type": "string",
                           "enum": [
                             "blocks",
-                            "markdown"
+                            "markdown",
+                            "canvas"
                           ]
                         },
                         "slug": {
@@ -26696,7 +26704,8 @@
                             "type": "string",
                             "enum": [
                               "blocks",
-                              "markdown"
+                              "markdown",
+                              "canvas"
                             ]
                           },
                           "slug": {
@@ -26914,7 +26923,8 @@
                             "type": "string",
                             "enum": [
                               "blocks",
-                              "markdown"
+                              "markdown",
+                              "canvas"
                             ]
                           },
                           "slug": {
@@ -27281,7 +27291,8 @@
                             "type": "string",
                             "enum": [
                               "blocks",
-                              "markdown"
+                              "markdown",
+                              "canvas"
                             ]
                           },
                           "slug": {
@@ -27435,7 +27446,8 @@
                       "type": "string",
                       "enum": [
                         "blocks",
-                        "markdown"
+                        "markdown",
+                        "canvas"
                       ]
                     },
                     "slug": {
@@ -28233,6 +28245,10 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "bookingUrl": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "logoUrl": {
                             "type": "string",
                             "nullable": true
@@ -28265,6 +28281,7 @@
                           "organizationId",
                           "name",
                           "url",
+                          "bookingUrl",
                           "logoUrl",
                           "externalId",
                           "tierId",
@@ -28313,6 +28330,10 @@
                   "url": {
                     "type": "string"
                   },
+                  "bookingUrl": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "logoUrl": {
                     "type": "string"
                   },
@@ -28357,6 +28378,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "bookingUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "logoUrl": {
                       "type": "string",
                       "nullable": true
@@ -28389,6 +28414,7 @@
                     "organizationId",
                     "name",
                     "url",
+                    "bookingUrl",
                     "logoUrl",
                     "externalId",
                     "tierId",
@@ -28449,6 +28475,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "bookingUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "logoUrl": {
                       "type": "string",
                       "nullable": true
@@ -28481,6 +28511,7 @@
                     "organizationId",
                     "name",
                     "url",
+                    "bookingUrl",
                     "logoUrl",
                     "externalId",
                     "tierId",
@@ -28534,6 +28565,10 @@
                   "url": {
                     "type": "string"
                   },
+                  "bookingUrl": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "logoUrl": {
                     "type": "string"
                   },
@@ -28575,6 +28610,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "bookingUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "logoUrl": {
                       "type": "string",
                       "nullable": true
@@ -28607,6 +28646,7 @@
                     "organizationId",
                     "name",
                     "url",
+                    "bookingUrl",
                     "logoUrl",
                     "externalId",
                     "tierId",
@@ -28717,6 +28757,10 @@
                           },
                           "url": {
                             "type": "string"
+                          },
+                          "bookingUrl": {
+                            "type": "string",
+                            "nullable": true
                           },
                           "createdById": {
                             "type": "string",
@@ -28834,6 +28878,10 @@
                     "url": {
                       "type": "string"
                     },
+                    "bookingUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "createdById": {
                       "type": "string",
                       "nullable": true
@@ -28930,6 +28978,10 @@
                     },
                     "url": {
                       "type": "string"
+                    },
+                    "bookingUrl": {
+                      "type": "string",
+                      "nullable": true
                     },
                     "createdById": {
                       "type": "string",

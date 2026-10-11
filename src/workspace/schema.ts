@@ -389,7 +389,7 @@ export const workspaceDocuments = sqliteTable(
     icon: text("icon" as string),
     // "blocks" = BlockNote JSON; "markdown" = raw markdown (agent-native).
     contentFormat: text("content_format" as string, {
-      enum: ["blocks", "markdown"],
+      enum: ["blocks", "markdown", "canvas"],
     })
       .notNull()
       .default("blocks"),
@@ -569,7 +569,7 @@ export const workspaceDocumentHistory = sqliteTable(
     documentId: text("document_id" as string).notNull(),
     content: text("content" as string).notNull(),
     contentFormat: text("content_format" as string, {
-      enum: ["blocks", "markdown"],
+      enum: ["blocks", "markdown", "canvas"],
     })
       .notNull()
       .default("blocks"),
@@ -658,6 +658,7 @@ export const workspaceCustomers = sqliteTable(
     name: text("name" as string).notNull(),
     url: text("url" as string),
     logoUrl: text("logo_url" as string),
+    bookingUrl: text("booking_url" as string),
     externalId: text("external_id" as string),
     tierId: text("tier_id" as string),
     statusId: text("status_id" as string),

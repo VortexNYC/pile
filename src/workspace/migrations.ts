@@ -869,6 +869,7 @@ const v54 = `ALTER TABLE notification_preferences ADD COLUMN email_explicit INTE
 
 const v55 = `ALTER TABLE user_workspace_preferences ADD COLUMN hidden_surfaces TEXT`;
 const v57 = `ALTER TABLE user_workspace_preferences ADD COLUMN favorites TEXT`;
+const v58 = `ALTER TABLE customers ADD COLUMN booking_url TEXT`;
 
 const v56 = `CREATE TABLE IF NOT EXISTS issue_shares (
   token TEXT PRIMARY KEY,
@@ -940,6 +941,7 @@ export const workspaceMigrations = {
       { idx: 54, when: 54, tag: "v55", breakpoints: false },
       { idx: 55, when: 55, tag: "v56", breakpoints: false },
       { idx: 56, when: 56, tag: "v57", breakpoints: false },
+      { idx: 57, when: 57, tag: "v58", breakpoints: false },
     ],
   },
   migrations: {
@@ -1000,5 +1002,6 @@ export const workspaceMigrations = {
     m0054: v55,
     m0055: v56,
     m0056: v57,
+    m0057: v58,
   },
 } satisfies Parameters<typeof migrate>[1];

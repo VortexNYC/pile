@@ -2,3 +2,11 @@ packages:
   - "."
   - "apps/*"
   - "packages/*"
+
+# Excalidraw's internals carry React 16-18 peer ranges on vendored Radix
+# primitives — safe on React 19 (the component ships its own UI). Declare
+# the mismatch so pnpm stops warning on every install.
+peerDependencyRules:
+  allowedUnmetPeers:
+    - "react"
+    - "react-dom"
