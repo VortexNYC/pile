@@ -1,10 +1,5 @@
 import { DropdownMenu } from "@cloudflare/kumo/components/dropdown";
-import {
-  Sidebar,
-  SidebarCollapsible,
-  SidebarCollapsibleContent,
-  SidebarCollapsibleTrigger,
-} from "@cloudflare/kumo/components/sidebar";
+import { Sidebar } from "@cloudflare/kumo/components/sidebar";
 import { Text } from "@cloudflare/kumo/components/text";
 import {
   BellRinging,
@@ -16,16 +11,12 @@ import {
   FileText,
   Star,
   Flag,
-  FolderOpen,
   Headset,
   House,
-  ImageSquare,
   Key,
   Layout,
   ListChecks,
   MapTrifold,
-  Megaphone,
-  Robot,
   SignOut,
   Timer,
   UserCircle,

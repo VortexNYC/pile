@@ -1,12 +1,9 @@
-import { Badge } from "@cloudflare/kumo/components/badge";
-import { ImageSquare } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
-import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap } from "@/lib/api";
-import { formatRelative } from "@/lib/labels";
 
 /** Media gallery across all tickets — reused by the captures route
  * and the Support tab. */

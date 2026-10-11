@@ -205,6 +205,14 @@ function CustomerEditor({
                   required={false}
                   onChange={(e) => setUrl(e.target.value)}
                 />
+                <Input
+                  label="Booking link"
+                  type="url"
+                  placeholder="https://cal.com/…"
+                  value={bookingUrl}
+                  required={false}
+                  onChange={(e) => setBookingUrl(e.target.value)}
+                />
                 <div>
                   <Button
                     type="submit"

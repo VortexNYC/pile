@@ -3,7 +3,15 @@ import { Button } from "@cloudflare/kumo/components/button";
 import { Input } from "@cloudflare/kumo/components/input";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 import { Select } from "@cloudflare/kumo/components/select";
-import { Tabs } from "@cloudflare/kumo/components/tabs";
+import {
+  DndContext,
+  PointerSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
 import { ListChecks, Plus, X } from "@phosphor-icons/react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -26,7 +34,6 @@ import { ProjectsList } from "@/components/projects-list";
 import { SessionsList } from "@/components/sessions-list";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { IssueStatusIcon } from "@/components/status-icon";
-import { useTeams } from "@/hooks/use-teams";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap } from "@/lib/api";
 import {
@@ -40,8 +47,6 @@ import {
   PRIORITY_LABELS,
   priorityVariant,
 } from "@/lib/labels";
-
-const ALL = "all";
 
 interface IssuesSearch {
   status?: IssueStatus;
@@ -67,10 +72,9 @@ export const Route = createFileRoute("/_authenticated/$slug/issues/")({
 
 function IssuesList() {
   const workspace = useWorkspace();
-  const { status, team, q, tab } = Route.useSearch();
+  const { status, q } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const search = useDeferredValue(q);
-  const teams = useTeams(workspace.id);
 
   const [filter, setFilter] = useState(EMPTY_FILTER);
   const [display, setDisplay] = useState(DEFAULT_DISPLAY);
@@ -92,6 +96,29 @@ function IssuesList() {
       });
     },
   });
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
+  );
+  const moveStatus = useMutation({
+    mutationFn: (args: { id: string; status: string }) =>
+      unwrap(
+        api.PATCH("/workspaces/{organizationId}/issues/{id}", {
+          params: { path: { organizationId: workspace.id, id: args.id } },
+          body: { status: args.status } as never,
+        })
+      ),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({
+        queryKey: wsKey(workspace.id, "issues"),
+      }),
+  });
+  const onDragEnd = (event: DragEndEvent) => {
+    const issueId = String(event.active.id);
+    const status = event.over ? String(event.over.id) : null;
+    if (status && isIssueStatus(status)) {
+      moveStatus.mutate({ id: issueId, status });
+    }
+  };
   const toggleSelected = (id: string) =>
     setSelected((prev) => {
       const next = new Set(prev);
@@ -136,71 +163,50 @@ function IssuesList() {
         </Button>
       }
     >
-      <Tabs
-        tabs={[
-          { value: "issues", label: "Issues" },
-          { value: "projects", label: "Projects" },
-          { value: "sessions", label: "Sessions" },
-        ]}
-        value={tab}
-        onValueChange={(v) =>
-          void navigate({
-            search: (prev) => ({
-              ...prev,
-              tab: (v === "projects" || v === "sessions" ? v : undefined) as
-                | "projects"
-                | "sessions"
-                | undefined,
-            }),
-            replace: true,
-          })
-        }
-      />
-      {tab === "projects" ? <ProjectsList /> : null}
-      {tab === "sessions" ? <SessionsList /> : null}
-      {tab === "issues" ? (
-        <>
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="min-w-60 flex-1">
-              <Input
-                aria-label="Search issues"
-                placeholder="Search issues"
-                defaultValue={q ?? ""}
-                onChange={(event) =>
-                  void navigate({
-                    search: (prev) => ({
-                      ...prev,
-                      q: event.target.value || undefined,
-                    }),
-                    replace: true,
-                  })
-                }
-              />
-            </div>
-            <IssueFilter
-              organizationId={workspace.id}
-              value={filter}
-              onChange={setFilter}
-            />
-          </div>
-          {issues.isPending ? (
-            <LoadingState label="Loading issues" />
-          ) : issues.isError ? (
-            <ErrorState
-              error={issues.error}
-              onRetry={() => void issues.refetch()}
-            />
-          ) : issues.data.length === 0 ? (
-            <EmptyState
-              icon={<ListChecks size={40} />}
-              title={status || q ? "No matching issues" : "No issues yet"}
-              description={
-                status || q
-                  ? "Try a different search or status."
-                  : "Create the first issue to start tracking work."
+      <>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="min-w-60 flex-1">
+            <Input
+              aria-label="Search issues"
+              placeholder="Search issues"
+              defaultValue={q ?? ""}
+              onChange={(event) =>
+                void navigate({
+                  search: (prev) => ({
+                    ...prev,
+                    q: event.target.value || undefined,
+                  }),
+                  replace: true,
+                })
               }
             />
-          ) : (
+          </div>
+          <IssueFilter
+            organizationId={workspace.id}
+            value={filter}
+            onChange={setFilter}
+          />
+          <IssueDisplayMenu value={display} onChange={setDisplay} />
+        </div>
+        {issues.isPending ? (
+          <LoadingState label="Loading issues" />
+        ) : issues.isError ? (
+          <ErrorState
+            error={issues.error}
+            onRetry={() => void issues.refetch()}
+          />
+        ) : issues.data.length === 0 ? (
+          <EmptyState
+            icon={<ListChecks size={40} />}
+            title={status || q ? "No matching issues" : "No issues yet"}
+            description={
+              status || q
+                ? "Try a different search or status."
+                : "Create the first issue to start tracking work."
+            }
+          />
+        ) : (
+          <DndContext sensors={sensors} onDragEnd={onDragEnd}>
             <div className="flex flex-col gap-5">
               {ISSUE_STATUSES.map((group) => {
                 const rows = issues.data.filter(
@@ -309,93 +315,144 @@ function IssuesList() {
                 );
               })}
             </div>
-          )}
-          {peeked ? (
-            <PeekDrawer
-              open={!!peeked}
-              onOpenChange={(o) => !o && setPeekedId(null)}
-            >
-              <div className="flex flex-col gap-4">
-                <div className="flex items-center gap-2">
-                  {peeked.identifier ? (
-                    <span className="text-xs font-medium text-kumo-subtle">
-                      {peeked.identifier}
-                    </span>
-                  ) : null}
-                  <IssueStatusIcon status={peeked.status} />
-                  <Badge variant={priorityVariant(peeked.priority)}>
-                    {PRIORITY_LABELS[peeked.priority]}
-                  </Badge>
-                  <PrChip issue={peeked} />
-                </div>
-                <h2 className="text-xl font-semibold text-kumo-default">
-                  {peeked.title}
-                </h2>
-                {peeked.description ? (
-                  <Markdown
-                    workspaceSlug={workspace.slug}
-                    content={peeked.description}
-                  />
-                ) : (
-                  <p className="text-sm text-kumo-subtle">No description.</p>
-                )}
-                <Link
-                  to="/$slug/issues/$issueId"
-                  params={{ slug: workspace.slug, issueId: peeked.id }}
-                  className="text-sm text-kumo-link hover:underline"
-                >
-                  Open full issue →
-                </Link>
+          </DndContext>
+        )}
+        {peeked ? (
+          <PeekDrawer
+            open={!!peeked}
+            onOpenChange={(o) => !o && setPeekedId(null)}
+          >
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center gap-2">
+                {peeked.identifier ? (
+                  <span className="text-xs font-medium text-kumo-subtle">
+                    {peeked.identifier}
+                  </span>
+                ) : null}
+                <IssueStatusIcon status={peeked.status} />
+                <Badge variant={priorityVariant(peeked.priority)}>
+                  {PRIORITY_LABELS[peeked.priority]}
+                </Badge>
+                <PrChip issue={peeked} />
               </div>
-            </PeekDrawer>
-          ) : null}
-          {selected.size > 0 ? (
-            <div className="bg-kumo-canvas border-kumo-line fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-full border px-4 py-2 shadow-lg">
-              <span className="text-sm text-kumo-default">
-                {selected.size} selected
-              </span>
-              <Select
-                aria-label="Set status"
-                value=""
-                disabled={bulk.isPending}
-                onValueChange={(v) => {
-                  if (isIssueStatus(v)) bulk.mutate({ status: v });
-                }}
-                renderValue={() => "Set status"}
+              <h2 className="text-xl font-semibold text-kumo-default">
+                {peeked.title}
+              </h2>
+              {peeked.description ? (
+                <Markdown
+                  workspaceSlug={workspace.slug}
+                  content={peeked.description}
+                />
+              ) : (
+                <p className="text-sm text-kumo-subtle">No description.</p>
+              )}
+              <Link
+                to="/$slug/issues/$issueId"
+                params={{ slug: workspace.slug, issueId: peeked.id }}
+                className="text-sm text-kumo-link hover:underline"
               >
-                {ISSUE_STATUSES.map((s) => (
-                  <Select.Option key={s} value={s}>
-                    {ISSUE_STATUS_LABELS[s]}
-                  </Select.Option>
-                ))}
-              </Select>
-              <Select
-                aria-label="Set priority"
-                value=""
-                disabled={bulk.isPending}
-                onValueChange={(v) => {
-                  if (isPriority(v)) bulk.mutate({ priority: v });
-                }}
-                renderValue={() => "Set priority"}
-              >
-                {PRIORITIES.map((p) => (
-                  <Select.Option key={p} value={p}>
-                    {PRIORITY_LABELS[p]}
-                  </Select.Option>
-                ))}
-              </Select>
-              <Button
-                variant="ghost"
-                size="sm"
-                icon={<X />}
-                onClick={() => setSelected(new Set())}
-              >
-                Clear
-              </Button>
+                Open full issue →
+              </Link>
             </div>
-          ) : null}
-        </>
-      ) : null}
+          </PeekDrawer>
+        ) : null}
+        {selected.size > 0 ? (
+          <div className="bg-kumo-canvas border-kumo-line fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-full border px-4 py-2 shadow-lg">
+            <span className="text-sm text-kumo-default">
+              {selected.size} selected
+            </span>
+            <Select
+              aria-label="Set status"
+              value=""
+              disabled={bulk.isPending}
+              onValueChange={(v) => {
+                if (isIssueStatus(v)) bulk.mutate({ status: v });
+              }}
+              renderValue={() => "Set status"}
+            >
+              {ISSUE_STATUSES.map((s) => (
+                <Select.Option key={s} value={s}>
+                  {ISSUE_STATUS_LABELS[s]}
+                </Select.Option>
+              ))}
+            </Select>
+            <Select
+              aria-label="Set priority"
+              value=""
+              disabled={bulk.isPending}
+              onValueChange={(v) => {
+                if (isPriority(v)) bulk.mutate({ priority: v });
+              }}
+              renderValue={() => "Set priority"}
+            >
+              {PRIORITIES.map((p) => (
+                <Select.Option key={p} value={p}>
+                  {PRIORITY_LABELS[p]}
+                </Select.Option>
+              ))}
+            </Select>
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<X />}
+              onClick={() => setSelected(new Set())}
+            >
+              Clear
+            </Button>
+          </div>
+        ) : null}
+      </>
+
+      <div className="mt-8 flex flex-col gap-2 border-t border-kumo-line pt-4">
+        <h2 className="text-sm font-medium text-kumo-subtle px-1">Projects</h2>
+        <ProjectsList />
+      </div>
+      <div className="flex flex-col gap-2">
+        <h2 className="text-sm font-medium text-kumo-subtle px-1">Sessions</h2>
+        <SessionsList />
+      </div>
     </Page>
+  );
+}
+
+function DroppableGroup({
+  id,
+  children,
+}: {
+  id: string;
+  children: React.ReactNode;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      className={
+        isOver ? "rounded-lg bg-kumo-tint/60 ring-1 ring-kumo-brand" : undefined
+      }
+    >
+      {children}
+    </div>
+  );
+}
+
+function DraggableRow({
+  id,
+  children,
+}: {
+  id: string;
+  children: React.ReactNode;
+}) {
+  const { setNodeRef, listeners, attributes, isDragging } = useDraggable({
+    id,
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      className={isDragging ? "opacity-40" : undefined}
+    >
+      {children}
+    </div>
   );
 }

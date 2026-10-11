@@ -2,16 +2,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   bounds,
-  emptyScene,
   hitTest,
   parseScene,
-  sceneToScreen,
   screenToScene,
   serializeScene,
   type CanvasElement,
   type ElementType,
   type Scene,
-  type Viewport,
 } from "./scene";
 
 export type Tool = ElementType | "select" | "pan";
