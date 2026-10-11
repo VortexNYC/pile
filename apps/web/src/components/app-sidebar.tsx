@@ -38,6 +38,7 @@ import { appHref } from "@/lib/router-path";
 
 const NAV = [
   { title: "Overview", path: "", icon: House, exact: true },
+  { title: "Inbox", path: "inbox", icon: BellRinging },
   { title: "Issues", path: "issues", icon: ListChecks },
   { title: "Sessions", path: "sessions", icon: Robot },
   { title: "Projects", path: "projects", icon: FolderOpen },
