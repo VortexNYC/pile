@@ -6,6 +6,7 @@ import {
   ArrowSquareOut,
   PaperPlaneRight,
   StopCircle,
+  Wrench,
 } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -225,37 +226,60 @@ function SessionDetail() {
                     </p>
                   );
                 }
-                return feed.map((event) => (
-                  <div
-                    key={event.id}
-                    className="flex items-baseline gap-3 px-4 py-2.5"
-                  >
-                    <Badge
-                      variant={
-                        event.type === "error"
-                          ? "red"
-                          : event.type === "elicitation"
-                            ? "purple"
-                            : event.type.startsWith("prompt.")
-                              ? "green"
-                              : event.type === "response"
-                                ? "blue"
-                                : "neutral"
-                      }
+                return feed.map((event) => {
+                  // `action` rows are tool/progress traces — compact,
+                  // quieter chrome, like axiom's "used X" rows.
+                  if (event.type === "action") {
+                    return (
+                      <div
+                        key={event.id}
+                        className="flex items-baseline gap-3 px-4 py-1.5 text-kumo-subtle"
+                      >
+                        <Wrench size={13} className="shrink-0 self-center" />
+                        <div className="flex-1 text-xs min-w-0">
+                          <Markdown
+                            workspaceSlug={workspace.slug}
+                            content={event.message}
+                          />
+                        </div>
+                        <span className="text-xs shrink-0">
+                          {formatRelative(event.createdAt)}
+                        </span>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div
+                      key={event.id}
+                      className="flex items-baseline gap-3 px-4 py-2.5"
                     >
-                      {event.type.startsWith("prompt.") ? "you" : event.type}
-                    </Badge>
-                    <div className="flex-1 text-sm min-w-0">
-                      <Markdown
-                        workspaceSlug={workspace.slug}
-                        content={promptText(event) ?? event.message}
-                      />
+                      <Badge
+                        variant={
+                          event.type === "error"
+                            ? "red"
+                            : event.type === "elicitation"
+                              ? "purple"
+                              : event.type.startsWith("prompt.")
+                                ? "green"
+                                : event.type === "response"
+                                  ? "blue"
+                                  : "neutral"
+                        }
+                      >
+                        {event.type.startsWith("prompt.") ? "you" : event.type}
+                      </Badge>
+                      <div className="flex-1 text-sm min-w-0">
+                        <Markdown
+                          workspaceSlug={workspace.slug}
+                          content={promptText(event) ?? event.message}
+                        />
+                      </div>
+                      <span className="text-xs text-kumo-subtle shrink-0">
+                        {formatRelative(event.createdAt)}
+                      </span>
                     </div>
-                    <span className="text-xs text-kumo-subtle shrink-0">
-                      {formatRelative(event.createdAt)}
-                    </span>
-                  </div>
-                ));
+                  );
+                });
               })()}
             </div>
           </LayerCard>

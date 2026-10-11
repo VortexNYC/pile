@@ -1,6 +1,5 @@
 import { Badge } from "@cloudflare/kumo/components/badge";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
-import { Table } from "@cloudflare/kumo/components/table";
 import { Robot } from "@phosphor-icons/react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -16,6 +15,8 @@ import {
 } from "@/lib/labels";
 
 const TERMINAL = new Set(["completed", "failed", "canceled"]);
+const DAY_MS = 24 * 60 * 60 * 1000;
+const WEEK_MS = 7 * DAY_MS;
 
 export const Route = createFileRoute("/_authenticated/$slug/sessions/")({
   component: SessionsList,
@@ -66,54 +67,89 @@ function SessionsList() {
           description="Dispatch an agent from the CLI or an issue to see it here."
         />
       ) : (
-        <LayerCard className="p-0">
-          <Table aria-label="Agent sessions">
-            <Table.Header>
-              <Table.Row>
-                <Table.Head>Session</Table.Head>
-                <Table.Head>Status</Table.Head>
-                <Table.Head>Provider</Table.Head>
-                <Table.Head>Updated</Table.Head>
-              </Table.Row>
-            </Table.Header>
-            <Table.Body>
-              {ordered.map((session) => (
-                <Table.Row key={session.id}>
-                  <Table.Cell>
-                    <Link
-                      to="/$slug/sessions/$sessionId"
-                      params={{
-                        slug: workspace.slug,
-                        sessionId: session.id,
-                      }}
-                      className="text-kumo-link hover:underline"
-                    >
-                      {session.label ?? session.id.slice(0, 8)}
-                    </Link>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Badge variant={sessionStatusVariant(session.status)}>
-                      {session.status}
-                    </Badge>
-                    {derivedStatusVariant(session.derivedStatus) ? (
-                      <Badge
-                        variant={
-                          derivedStatusVariant(session.derivedStatus) ??
-                          "neutral"
-                        }
-                        className="ml-2"
+        <div className="flex flex-col gap-5">
+          {(
+            [
+              ["Live", ordered.filter((s) => !TERMINAL.has(s.status))],
+              [
+                "Today",
+                ordered.filter(
+                  (s) =>
+                    TERMINAL.has(s.status) &&
+                    Date.now() - Date.parse(s.updatedAt) < DAY_MS
+                ),
+              ],
+              [
+                "This week",
+                ordered.filter(
+                  (s) =>
+                    TERMINAL.has(s.status) &&
+                    Date.now() - Date.parse(s.updatedAt) >= DAY_MS &&
+                    Date.now() - Date.parse(s.updatedAt) < WEEK_MS
+                ),
+              ],
+              [
+                "Older",
+                ordered.filter(
+                  (s) =>
+                    TERMINAL.has(s.status) &&
+                    Date.now() - Date.parse(s.updatedAt) >= WEEK_MS
+                ),
+              ],
+            ] as const
+          ).map(([group, rows]) =>
+            rows.length === 0 ? null : (
+              <div key={group} className="flex flex-col">
+                <div className="flex items-center gap-2 px-1 pb-1.5">
+                  <span className="text-xs font-medium text-kumo-subtle uppercase">
+                    {group}
+                  </span>
+                  <span className="text-xs text-kumo-subtle">
+                    {rows.length}
+                  </span>
+                </div>
+                <LayerCard className="p-0">
+                  <div className="divide-y divide-kumo-line">
+                    {rows.map((session) => (
+                      <Link
+                        key={session.id}
+                        to="/$slug/sessions/$sessionId"
+                        params={{
+                          slug: workspace.slug,
+                          sessionId: session.id,
+                        }}
+                        className="flex h-11 items-center gap-3 px-4 hover:bg-kumo-tint"
                       >
-                        {session.derivedStatus?.replace("_", " ")}
-                      </Badge>
-                    ) : null}
-                  </Table.Cell>
-                  <Table.Cell>{session.provider}</Table.Cell>
-                  <Table.Cell>{formatRelative(session.updatedAt)}</Table.Cell>
-                </Table.Row>
-              ))}
-            </Table.Body>
-          </Table>
-        </LayerCard>
+                        <Badge variant={sessionStatusVariant(session.status)}>
+                          {session.status}
+                        </Badge>
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-kumo-default">
+                          {session.label ?? session.id.slice(0, 8)}
+                        </span>
+                        {derivedStatusVariant(session.derivedStatus) ? (
+                          <Badge
+                            variant={
+                              derivedStatusVariant(session.derivedStatus) ??
+                              "neutral"
+                            }
+                          >
+                            {session.derivedStatus?.replace("_", " ")}
+                          </Badge>
+                        ) : null}
+                        <span className="text-xs text-kumo-subtle">
+                          {session.provider}
+                        </span>
+                        <span className="w-16 shrink-0 text-right text-xs text-kumo-subtle">
+                          {formatRelative(session.updatedAt)}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                </LayerCard>
+              </div>
+            )
+          )}
+        </div>
       )}
     </Page>
   );
