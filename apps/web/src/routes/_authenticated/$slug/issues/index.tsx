@@ -8,6 +8,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useDeferredValue } from "react";
 
+import { IssueContextMenu } from "@/components/issue-context-menu";
 import { Page } from "@/components/page";
 import { PrChip } from "@/components/pr-chip";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
@@ -192,18 +193,22 @@ function IssuesList() {
                 <LayerCard className="p-0">
                   <div className="divide-y divide-kumo-line">
                     {rows.map((issue) => (
-                      <Link
-                        key={issue.id}
-                        to="/$slug/issues/$issueId"
-                        params={{
-                          slug: workspace.slug,
-                          issueId: issue.id,
-                        }}
-                        className="flex h-11 items-center gap-3 px-4 hover:bg-kumo-tint"
-                      >
-                        {issue.identifier ? (
-                          <span className="w-16 shrink-0 truncate text-sm font-medium text-kumo-subtle">
-                            {issue.identifier}
+                      <IssueContextMenu key={issue.id} issue={issue}>
+                        <Link
+                          to="/$slug/issues/$issueId"
+                          params={{
+                            slug: workspace.slug,
+                            issueId: issue.id,
+                          }}
+                          className="flex h-11 items-center gap-3 px-4 hover:bg-kumo-tint"
+                        >
+                          {issue.identifier ? (
+                            <span className="w-16 shrink-0 truncate text-sm font-medium text-kumo-subtle">
+                              {issue.identifier}
+                            </span>
+                          ) : null}
+                          <span className="min-w-0 flex-1 truncate text-sm font-medium text-kumo-default">
+                            {issue.title}
                           </span>
                         ) : null}
                         <span className="min-w-0 flex-1 truncate text-sm font-medium text-kumo-default">
@@ -217,6 +222,7 @@ function IssuesList() {
                           {formatRelative(issue.updatedAt)}
                         </span>
                       </Link>
+                    </IssueContextMenu>
                     ))}
                   </div>
                 </LayerCard>
