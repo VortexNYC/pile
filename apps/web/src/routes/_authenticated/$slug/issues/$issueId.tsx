@@ -8,6 +8,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { IssueComments } from "@/components/comments";
+import { IssueFieldMenu } from "@/components/issue-field-menu";
 import { IssueForm, type IssueFormValues } from "@/components/issue-form";
 import { Markdown } from "@/components/markdown";
 import { Page } from "@/components/page";
@@ -21,8 +22,10 @@ import { betterAuthClient } from "@/lib/better-auth";
 import {
   formatRelative,
   isTicketStatus,
+  ISSUE_STATUSES,
   ISSUE_STATUS_LABELS,
   issueStatusVariant,
+  PRIORITIES,
   PRIORITY_LABELS,
   priorityVariant,
   sessionStatusVariant,
@@ -560,12 +563,30 @@ function IssueDetail() {
           <div className="flex flex-col gap-6">
             <RailSection title="Properties">
               <div className="flex items-center gap-2 text-sm">
-                <Badge variant={issueStatusVariant(data.status)}>
-                  {ISSUE_STATUS_LABELS[data.status]}
-                </Badge>
-                <Badge variant={priorityVariant(data.priority)}>
-                  {PRIORITY_LABELS[data.priority]}
-                </Badge>
+                <IssueFieldMenu
+                  issue={data}
+                  field="status"
+                  options={ISSUE_STATUSES}
+                  labels={ISSUE_STATUS_LABELS}
+                >
+                  <button type="button" className="cursor-pointer">
+                    <Badge variant={issueStatusVariant(data.status)}>
+                      {ISSUE_STATUS_LABELS[data.status]}
+                    </Badge>
+                  </button>
+                </IssueFieldMenu>
+                <IssueFieldMenu
+                  issue={data}
+                  field="priority"
+                  options={PRIORITIES}
+                  labels={PRIORITY_LABELS}
+                >
+                  <button type="button" className="cursor-pointer">
+                    <Badge variant={priorityVariant(data.priority)}>
+                      {PRIORITY_LABELS[data.priority]}
+                    </Badge>
+                  </button>
+                </IssueFieldMenu>
               </div>
               {assignee ? (
                 <div className="text-sm flex items-center gap-2">

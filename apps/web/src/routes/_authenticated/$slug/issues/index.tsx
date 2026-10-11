@@ -9,6 +9,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useDeferredValue } from "react";
 
 import { IssueContextMenu } from "@/components/issue-context-menu";
+import { IssueFieldMenu } from "@/components/issue-field-menu";
 import { Page } from "@/components/page";
 import { IssuePeek } from "@/components/peek";
 import { PrChip } from "@/components/pr-chip";
@@ -23,6 +24,7 @@ import {
   isIssueStatus,
   type IssueStatus,
   issueStatusVariant,
+  PRIORITIES,
   PRIORITY_LABELS,
   priorityVariant,
 } from "@/lib/labels";
