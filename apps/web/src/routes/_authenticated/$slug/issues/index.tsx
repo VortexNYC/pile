@@ -11,6 +11,10 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useDeferredValue, useState } from "react";
 
 import { IssueContextMenu } from "@/components/issue-context-menu";
+import {
+  DEFAULT_DISPLAY,
+  IssueDisplayMenu,
+} from "@/components/issue-display-menu";
 import { IssueFieldMenu } from "@/components/issue-field-menu";
 import { EMPTY_FILTER, IssueFilter } from "@/components/issue-filter";
 import { Markdown } from "@/components/markdown";
@@ -69,6 +73,7 @@ function IssuesList() {
   const teams = useTeams(workspace.id);
 
   const [filter, setFilter] = useState(EMPTY_FILTER);
+  const [display, setDisplay] = useState(DEFAULT_DISPLAY);
   const [peekedId, setPeekedId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();

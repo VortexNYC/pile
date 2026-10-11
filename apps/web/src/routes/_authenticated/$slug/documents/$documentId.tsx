@@ -11,6 +11,7 @@ import { useRef, useState } from "react";
 
 import { CanvasEditor } from "@/components/canvas-editor";
 import { EntityPage, RailLink, RailSection } from "@/components/entity-page";
+import { IconPicker } from "@/components/icon-picker";
 import { Markdown } from "@/components/markdown";
 import { Page } from "@/components/page";
 import { ShareButton } from "@/components/share-button";
@@ -53,12 +54,17 @@ function DocumentDetail() {
   });
 
   const save = useMutation({
-    mutationFn: (patch: { title?: string; content?: string }) =>
+    mutationFn: (patch: {
+      title?: string;
+      content?: string;
+      icon?: string | null;
+    }) =>
       unwrap(
         api.PATCH("/workspaces/{organizationId}/documents/{id}", {
           params: { path },
           body: {
             ...(patch.title !== undefined ? { title: patch.title } : {}),
+            ...(patch.icon !== undefined ? { icon: patch.icon } : {}),
             ...(patch.content !== undefined
               ? { content: patch.content, contentFormat: "markdown" as const }
               : {}),
@@ -237,11 +243,18 @@ function DocumentDetail() {
           <LayerCard className="min-w-0">
             <LayerCard.Primary className="p-6">
               <div className="flex items-start gap-3 mb-4">
-                {data.icon ? (
-                  <span className="text-2xl leading-none mt-1">
-                    {data.icon}
-                  </span>
-                ) : null}
+                <IconPicker
+                  onSelect={(icon) => save.mutate({ icon })}
+                  onRemove={() => save.mutate({ icon: null })}
+                >
+                  <button
+                    type="button"
+                    aria-label="Change icon"
+                    className="hover:bg-kumo-tint mt-1 rounded-md p-0.5 text-2xl leading-none"
+                  >
+                    {data.icon ?? "📄"}
+                  </button>
+                </IconPicker>
                 <input
                   aria-label="Document title"
                   defaultValue={data.title}
