@@ -28,7 +28,6 @@ function DocumentDetail() {
   const organizationId = workspace.id;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const [editingTitle, setEditingTitle] = useState(false);
   const [editingContent, setEditingContent] = useState(false);
   const [draft, setDraft] = useState({ title: "", content: "" });
   const contentRef = useRef<HTMLTextAreaElement>(null);
@@ -63,7 +62,6 @@ function DocumentDetail() {
       void queryClient.invalidateQueries({
         queryKey: wsKey(organizationId, "documents"),
       });
-      setEditingTitle(false);
       setEditingContent(false);
       toastSuccess("Document saved");
     },

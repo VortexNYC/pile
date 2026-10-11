@@ -1,6 +1,5 @@
 import { ContextMenu } from "@base-ui/react/context-menu";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap, unwrapEmpty } from "@/lib/api";
