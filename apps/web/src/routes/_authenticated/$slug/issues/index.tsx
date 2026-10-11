@@ -24,7 +24,6 @@ import {
   ISSUE_STATUSES,
   isIssueStatus,
   type IssueStatus,
-  issueStatusVariant,
   PRIORITIES,
   PRIORITY_LABELS,
   priorityVariant,
