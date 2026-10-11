@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 
+import { EntityPage, RailSection } from "@/components/entity-page";
 import { Page } from "@/components/page";
 import { ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
@@ -190,7 +191,7 @@ function TicketDetail() {
   );
 
   return (
-    <Page
+    <EntityPage
       title={`#${data.number} ${data.title}`}
       description={
         <>
@@ -253,9 +254,8 @@ function TicketDetail() {
           </Button>
         </div>
       }
-    >
-      <div className="flex gap-8">
-        <div className="flex-1 min-w-0 flex flex-col gap-4">
+      center={
+        <>
           <div className="flex flex-wrap gap-4">
             <Select
               label="Status"
@@ -381,13 +381,12 @@ function TicketDetail() {
               </Button>
             </div>
           </form>
-        </div>
-        <aside className="hidden lg:block w-64 shrink-0 border-l border-kumo-line pl-6">
-          <div className="flex flex-col gap-6">
+        </>
+      }
+      rail={
+        <>
+          <RailSection title="Customer">
             <div>
-              <h4 className="text-xs font-medium text-kumo-subtle uppercase mb-2">
-                Customer
-              </h4>
               <div className="flex flex-col gap-1 text-sm">
                 <span className="text-kumo-default">
                   {data.customer.fullName ?? "—"}
@@ -400,32 +399,29 @@ function TicketDetail() {
                 ) : null}
               </div>
             </div>
-            {otherTickets.length > 0 ? (
-              <div>
-                <h4 className="text-xs font-medium text-kumo-subtle uppercase mb-2">
-                  Other tickets from them
-                </h4>
-                <ul className="flex flex-col gap-1">
-                  {otherTickets.slice(0, 5).map((tt) => (
-                    <li key={tt.id}>
-                      <Link
-                        to="/$slug/tickets/$ticketId"
-                        params={{
-                          slug: workspace.slug,
-                          ticketId: tt.id,
-                        }}
-                        className="text-sm text-kumo-link hover:underline"
-                      >
-                        #{tt.number} {tt.title}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-          </div>
-        </aside>
-      </div>
-    </Page>
+          </RailSection>
+          {otherTickets.length > 0 ? (
+            <RailSection title="Other tickets from them">
+              <ul className="flex flex-col gap-1">
+                {otherTickets.slice(0, 5).map((tt) => (
+                  <li key={tt.id}>
+                    <Link
+                      to="/$slug/tickets/$ticketId"
+                      params={{
+                        slug: workspace.slug,
+                        ticketId: tt.id,
+                      }}
+                      className="text-sm text-kumo-link hover:underline"
+                    >
+                      #{tt.number} {tt.title}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </RailSection>
+          ) : null}
+        </>
+      }
+    />
   );
 }

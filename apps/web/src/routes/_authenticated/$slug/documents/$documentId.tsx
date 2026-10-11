@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 
+import { EntityPage, RailSection } from "@/components/entity-page";
 import { Markdown } from "@/components/markdown";
 import { Page } from "@/components/page";
 import { ShareButton } from "@/components/share-button";
@@ -161,7 +162,7 @@ function DocumentDetail() {
   }));
 
   return (
-    <Page
+    <EntityPage
       title={data.title}
       description={
         <>
@@ -195,118 +196,142 @@ function DocumentDetail() {
           </Button>
         </>
       }
-    >
-      <div className="flex gap-8">
-        <LayerCard className="flex-1 min-w-0">
-          <LayerCard.Primary className="p-6">
-            <div className="flex items-start gap-3 mb-4">
-              {data.icon ? (
-                <span className="text-2xl leading-none mt-1">{data.icon}</span>
-              ) : null}
-              <input
-                aria-label="Document title"
-                defaultValue={data.title}
-                key={`${data.id}-${data.title}`}
-                className="w-full bg-transparent text-2xl font-semibold text-kumo-default outline-none placeholder:text-kumo-subtle focus:border-b focus:border-kumo-line"
-                placeholder="Untitled"
-                onBlur={(e: React.FocusEvent<HTMLInputElement>) => {
-                  const value = e.target.value.trim();
-                  if (value && value !== data.title) {
-                    save.mutate({ title: value });
-                  } else {
-                    e.target.value = data.title;
-                  }
-                }}
-                onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    e.currentTarget.blur();
-                  }
-                  if (e.key === "Escape") {
-                    e.currentTarget.value = data.title;
-                    e.currentTarget.blur();
-                  }
-                }}
-              />
-            </div>
-            {subPages.length > 0 ? (
-              <div className="flex flex-col gap-1 mb-5">
-                {subPages.map((sub) => (
-                  <Link
-                    key={sub.id}
-                    to="/$slug/documents/$documentId"
-                    params={{ slug: workspace.slug, documentId: sub.id }}
-                    className="text-sm text-kumo-link hover:underline flex items-center gap-2"
-                  >
-                    <Text as="span" variant="secondary">
-                      {sub.icon ?? "📄"}
-                    </Text>
-                    {sub.title}
-                  </Link>
-                ))}
-              </div>
-            ) : null}
-            {editingContent ? (
-              <div className="flex flex-col gap-2">
-                <InputArea
-                  ref={contentRef}
-                  autoFocus
-                  value={draft.content}
-                  onChange={(e) =>
-                    setDraft((d) => ({ ...d, content: e.target.value }))
-                  }
-                  className="min-h-96 font-mono text-sm w-full"
-                  onKeyDown={(e) => {
-                    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                      e.preventDefault();
-                      save.mutate({ content: draft.content });
+      center={
+        <>
+          <LayerCard className="min-w-0">
+            <LayerCard.Primary className="p-6">
+              <div className="flex items-start gap-3 mb-4">
+                {data.icon ? (
+                  <span className="text-2xl leading-none mt-1">
+                    {data.icon}
+                  </span>
+                ) : null}
+                <input
+                  aria-label="Document title"
+                  defaultValue={data.title}
+                  key={`${data.id}-${data.title}`}
+                  className="w-full bg-transparent text-2xl font-semibold text-kumo-default outline-none placeholder:text-kumo-subtle focus:border-b focus:border-kumo-line"
+                  placeholder="Untitled"
+                  onBlur={(e: React.FocusEvent<HTMLInputElement>) => {
+                    const value = e.target.value.trim();
+                    if (value && value !== data.title) {
+                      save.mutate({ title: value });
+                    } else {
+                      e.target.value = data.title;
                     }
-                    if (e.key === "Escape") setEditingContent(false);
+                  }}
+                  onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      e.currentTarget.blur();
+                    }
+                    if (e.key === "Escape") {
+                      e.currentTarget.value = data.title;
+                      e.currentTarget.blur();
+                    }
                   }}
                 />
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    loading={save.isPending}
-                    onClick={() => save.mutate({ content: draft.content })}
-                  >
-                    Save
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setEditingContent(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <span className="text-xs text-kumo-subtle">
-                    ⌘↵ to save · Esc to cancel
-                  </span>
-                </div>
               </div>
-            ) : (
-              <button
-                type="button"
-                className="block w-full cursor-text text-left"
-                onClick={() => {
-                  setDraft((d) => ({ ...d, content: text }));
-                  setEditingContent(true);
-                }}
-              >
-                {text ? (
-                  <Markdown workspaceSlug={workspace.slug} content={text} />
-                ) : (
-                  <Text variant="secondary">Click to start writing…</Text>
-                )}
-              </button>
-            )}
-          </LayerCard.Primary>
-        </LayerCard>
-        {headings.length >= 3 ? (
-          <nav className="sticky top-6 hidden w-56 shrink-0 self-start lg:block">
+              {subPages.length > 0 ? (
+                <div className="flex flex-col gap-1 mb-5">
+                  {subPages.map((sub) => (
+                    <Link
+                      key={sub.id}
+                      to="/$slug/documents/$documentId"
+                      params={{ slug: workspace.slug, documentId: sub.id }}
+                      className="text-sm text-kumo-link hover:underline flex items-center gap-2"
+                    >
+                      <Text as="span" variant="secondary">
+                        {sub.icon ?? "📄"}
+                      </Text>
+                      {sub.title}
+                    </Link>
+                  ))}
+                </div>
+              ) : null}
+              {editingContent ? (
+                <div className="flex flex-col gap-2">
+                  <InputArea
+                    ref={contentRef}
+                    autoFocus
+                    value={draft.content}
+                    onChange={(e) =>
+                      setDraft((d) => ({ ...d, content: e.target.value }))
+                    }
+                    className="min-h-96 font-mono text-sm w-full"
+                    onKeyDown={(e) => {
+                      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                        e.preventDefault();
+                        save.mutate({ content: draft.content });
+                      }
+                      if (e.key === "Escape") setEditingContent(false);
+                    }}
+                  />
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      loading={save.isPending}
+                      onClick={() => save.mutate({ content: draft.content })}
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setEditingContent(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <span className="text-xs text-kumo-subtle">
+                      ⌘↵ to save · Esc to cancel
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="block w-full cursor-text text-left"
+                  onClick={() => {
+                    setDraft((d) => ({ ...d, content: text }));
+                    setEditingContent(true);
+                  }}
+                >
+                  {text ? (
+                    <Markdown workspaceSlug={workspace.slug} content={text} />
+                  ) : (
+                    <Text variant="secondary">Click to start writing…</Text>
+                  )}
+                </button>
+              )}
+            </LayerCard.Primary>
+          </LayerCard>
+          {backlinkRows.length > 0 ? (
+            <LayerCard>
+              <div className="border-b border-kumo-line px-4 py-3">
+                <Text variant="secondary">Linked from</Text>
+              </div>
+              <ul className="px-4 py-3 flex flex-col gap-1.5">
+                {backlinkRows.map((b) => (
+                  <li key={b.id}>
+                    <Link
+                      to="/$slug/documents/$documentId"
+                      params={{ slug: workspace.slug, documentId: b.id }}
+                      className="text-kumo-link hover:underline"
+                    >
+                      {b.title}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </LayerCard>
+          ) : null}
+        </>
+      }
+      rail={
+        headings.length >= 3 ? (
+          <RailSection title="On this page">
             <TableOfContents>
-              <TableOfContents.Title>On this page</TableOfContents.Title>
               <TableOfContents.List>
                 {headings.map((h) => (
                   <TableOfContents.Item
@@ -319,29 +344,9 @@ function DocumentDetail() {
                 ))}
               </TableOfContents.List>
             </TableOfContents>
-          </nav>
-        ) : null}
-      </div>
-      {backlinkRows.length > 0 ? (
-        <LayerCard>
-          <div className="border-b border-kumo-line px-4 py-3">
-            <Text variant="secondary">Linked from</Text>
-          </div>
-          <ul className="px-4 py-3 flex flex-col gap-1.5">
-            {backlinkRows.map((b) => (
-              <li key={b.id}>
-                <Link
-                  to="/$slug/documents/$documentId"
-                  params={{ slug: workspace.slug, documentId: b.id }}
-                  className="text-kumo-link hover:underline"
-                >
-                  {b.title}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </LayerCard>
-      ) : null}
-    </Page>
+          </RailSection>
+        ) : undefined
+      }
+    />
   );
 }
