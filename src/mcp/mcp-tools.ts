@@ -741,6 +741,31 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdIssuesIdShareToken",
+    "description": "Delete issue share (DELETE /workspaces/{organizationId}/issues/{id}/share/{token}) Path params (top-level, required): organizationId, id, token.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/issues/{id}/share/{token}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "token": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId",
+        "token"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdIssuesIssueIdAttachmentsId",
     "description": "Delete issue attachment (DELETE /workspaces/{organizationId}/issues/{issueId}/attachments/{id}) Path params (top-level, required): organizationId, issueId, id.",
     "method": "DELETE",
@@ -1561,6 +1586,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "GET /shared-documents/{organizationId}/{token} (GET /shared-documents/{organizationId}/{token}) Path params (top-level, required): organizationId, token.",
     "method": "GET",
     "path": "/shared-documents/{organizationId}/{token}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "token": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "token"
+      ]
+    }
+  },
+  {
+    "name": "getSharedissuesOrganizationIdToken",
+    "description": "GET /shared-issues/{organizationId}/{token} (GET /shared-issues/{organizationId}/{token}) Path params (top-level, required): organizationId, token.",
+    "method": "GET",
+    "path": "/shared-issues/{organizationId}/{token}",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4519,6 +4565,32 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdSupportCaptures",
+    "description": "List support captures (GET /workspaces/{organizationId}/support/captures) Path params (top-level, required): organizationId. Query params (top-level, optional): type, limit.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/captures",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "default": 100
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdSupportCapturesTicketIdConsole",
     "description": "List support capture console (GET /workspaces/{organizationId}/support/captures/{ticketId}/console) Path params (top-level, required): organizationId, ticketId. Query params (top-level, optional): level, isError.",
     "method": "GET",
@@ -5048,7 +5120,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdSupportTickets",
-    "description": "List support tickets (GET /workspaces/{organizationId}/support/tickets) Path params (top-level, required): organizationId. Query params (top-level, optional): limit, cursor, customerId, status, priority, sourceChannel, externalSource, assignedTo, q.",
+    "description": "List support tickets (GET /workspaces/{organizationId}/support/tickets) Path params (top-level, required): organizationId. Query params (top-level, optional): limit, cursor, customerId, status, priority, sourceChannel, externalSource, assignedTo, q, issueId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/support/tickets",
     "inputSchema": {
@@ -5121,6 +5193,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "type": "string"
         },
         "q": {
+          "type": "string"
+        },
+        "issueId": {
           "type": "string"
         }
       },
@@ -12041,6 +12116,36 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdIssuesIdShare",
+    "description": "Create issue share (POST /workspaces/{organizationId}/issues/{id}/share) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: expiresAt.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/issues/{id}/share",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "expiresAt": {
+              "type": "string",
+              "nullable": true
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdIssuesIssueIdApprovals",
     "description": "Create issue approval (POST /workspaces/{organizationId}/issues/{issueId}/approvals) Path params (top-level, required): organizationId, issueId. Request body goes in the \"body\" object; fields: approverId*, comment (* = required).",
     "method": "POST",
@@ -15929,7 +16034,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "putWorkspacesOrganizationIdMeViewpreferences",
-    "description": "Update me view preferences (PUT /workspaces/{organizationId}/me/view-preferences) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: defaultViewId* (* = required).",
+    "description": "Update me view preferences (PUT /workspaces/{organizationId}/me/view-preferences) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: defaultViewId, hiddenSurfaces.",
     "method": "PUT",
     "path": "/workspaces/{organizationId}/me/view-preferences",
     "inputSchema": {
@@ -15944,11 +16049,15 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "defaultViewId": {
               "type": "string",
               "nullable": true
+            },
+            "hiddenSurfaces": {
+              "type": "array",
+              "nullable": true,
+              "items": {
+                "type": "string"
+              }
             }
-          },
-          "required": [
-            "defaultViewId"
-          ]
+          }
         }
       },
       "required": [
