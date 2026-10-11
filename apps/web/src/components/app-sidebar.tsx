@@ -28,8 +28,10 @@ import {
 } from "@phosphor-icons/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useState } from "react";
 
+import { InboxList } from "@/components/inbox-list";
+import { PeekDrawer } from "@/components/peek-drawer";
 import { useFavorites } from "@/hooks/use-favorites";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useSurfaces } from "@/hooks/use-surfaces";
@@ -41,15 +43,10 @@ import { appHref } from "@/lib/router-path";
 
 const NAV = [
   { title: "Overview", path: "", icon: House, exact: true },
-  { title: "Inbox", path: "inbox", icon: BellRinging },
   { title: "Issues", path: "issues", icon: ListChecks },
-  { title: "Sessions", path: "sessions", icon: Robot },
-  { title: "Projects", path: "projects", icon: FolderOpen },
-  { title: "Documents", path: "documents", icon: FileText },
   { title: "Support", path: "tickets", icon: Headset },
-  { title: "Captures", path: "captures", icon: ImageSquare },
-  { title: "Customers", path: "customers", icon: Buildings },
-  { title: "Changelog", path: "changelog", icon: Megaphone },
+  { title: "Documents", path: "documents", icon: FileText },
+  // opt-in surfaces — hidden unless enabled in settings
   { title: "Cycles", path: "cycles", icon: Timer },
   { title: "Initiatives", path: "initiatives", icon: Flag },
   { title: "Roadmaps", path: "roadmaps", icon: MapTrifold },
@@ -87,26 +84,22 @@ export function AppSidebar({
   const surfaces = useSurfaces(workspace.id);
   const favs = useFavorites(workspace.id);
   const permissions = usePermissions(workspace.id);
-  const documents = useQuery({
-    queryKey: wsKey(workspace.id, "documents"),
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const unread = useQuery({
+    queryKey: wsKey(workspace.id, "notifications", "unread-count"),
     queryFn: async () =>
       (
         await unwrap(
-          api.GET("/workspaces/{organizationId}/documents", {
-            params: { path: { organizationId: workspace.id } },
+          api.GET("/workspaces/{organizationId}/notifications", {
+            params: {
+              path: { organizationId: workspace.id },
+              query: { limit: "100" },
+            },
           })
         )
-      ).documents,
+      ).notifications.filter((n) => !n.read).length,
+    refetchInterval: 30_000,
   });
-  const docTree = useMemo(() => {
-    const docs = documents.data ?? [];
-    const children = new Map<string | null, typeof docs>();
-    for (const doc of docs) {
-      const key = doc.parentDocumentId ?? null;
-      children.set(key, [...(children.get(key) ?? []), doc]);
-    }
-    return children;
-  }, [documents.data]);
   const base = `/${workspace.slug}`;
   const isActive = (path: string) =>
     pathname === `${base}/${path}` || pathname.startsWith(`${base}/${path}/`);
@@ -114,10 +107,23 @@ export function AppSidebar({
 
   return (
     <Sidebar aria-label="Workspace navigation">
-      <Sidebar.Header className="px-3 py-3">
+      <Sidebar.Header className="px-3 py-3 flex items-center justify-between">
         <Text variant="heading" as="span" truncate>
           {workspace.name}
         </Text>
+        <button
+          type="button"
+          aria-label="Inbox"
+          onClick={() => setInboxOpen(true)}
+          className="relative rounded-md p-1.5 text-kumo-subtle hover:bg-kumo-tint"
+        >
+          <BellRinging size={18} />
+          {(unread.data ?? 0) > 0 ? (
+            <span className="bg-kumo-brand text-kumo-contrast absolute -right-0.5 -top-0.5 rounded-full px-1 text-[10px] font-medium">
+              {unread.data}
+            </span>
+          ) : null}
+        </button>
       </Sidebar.Header>
       <Sidebar.Content>
         <Sidebar.Group>
@@ -158,63 +164,6 @@ export function AppSidebar({
                   {f.title}
                 </Sidebar.MenuButton>
               ))}
-            </Sidebar.Menu>
-          </Sidebar.Group>
-        ) : null}
-        {(docTree.get(null)?.length ?? 0) > 0 ? (
-          <Sidebar.Group>
-            <Sidebar.GroupLabel>Documents</Sidebar.GroupLabel>
-            <Sidebar.Menu>
-              {(docTree.get(null) ?? []).slice(0, 20).map((doc) => {
-                const kids = docTree.get(doc.id) ?? [];
-                const href = appHref(`${base}/documents/${doc.id}`);
-                if (kids.length === 0) {
-                  return (
-                    <Sidebar.MenuButton
-                      key={doc.id}
-                      icon={FileText}
-                      active={isActive(`documents/${doc.id}`)}
-                      href={href}
-                      tooltip={doc.title}
-                    >
-                      {doc.icon ? `${doc.icon} ` : ""}
-                      {doc.title}
-                    </Sidebar.MenuButton>
-                  );
-                }
-                return (
-                  <SidebarCollapsible key={doc.id}>
-                    <SidebarCollapsibleTrigger
-                      render={
-                        <Sidebar.MenuButton
-                          icon={FileText}
-                          active={isActive(`documents/${doc.id}`)}
-                          href={href}
-                          tooltip={doc.title}
-                        >
-                          {doc.icon ? `${doc.icon} ` : ""}
-                          {doc.title}
-                          <Sidebar.MenuChevron />
-                        </Sidebar.MenuButton>
-                      }
-                    />
-                    <SidebarCollapsibleContent>
-                      <Sidebar.MenuSub>
-                        {kids.map((kid) => (
-                          <Sidebar.MenuSubItem key={kid.id}>
-                            <Sidebar.MenuSubButton
-                              href={appHref(`${base}/documents/${kid.id}`)}
-                            >
-                              {kid.icon ? `${kid.icon} ` : ""}
-                              {kid.title}
-                            </Sidebar.MenuSubButton>
-                          </Sidebar.MenuSubItem>
-                        ))}
-                      </Sidebar.MenuSub>
-                    </SidebarCollapsibleContent>
-                  </SidebarCollapsible>
-                );
-              })}
             </Sidebar.Menu>
           </Sidebar.Group>
         ) : null}
@@ -272,6 +221,16 @@ export function AppSidebar({
           </Sidebar.MenuButton>
         </Sidebar.Menu>
       </Sidebar.Footer>
+      <PeekDrawer open={inboxOpen} onOpenChange={setInboxOpen}>
+        <div className="mb-2 text-lg font-semibold text-kumo-default">
+          Inbox
+        </div>
+        <InboxList
+          organizationId={workspace.id}
+          slug={workspace.slug}
+          onNavigate={() => setInboxOpen(false)}
+        />
+      </PeekDrawer>
     </Sidebar>
   );
 }

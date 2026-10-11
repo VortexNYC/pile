@@ -15,6 +15,8 @@ import {
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
+import { CapturesGrid } from "@/components/captures-grid";
+import { CustomersList } from "@/components/customers-list";
 import { Page } from "@/components/page";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
@@ -37,14 +39,18 @@ export const Route = createFileRoute("/_authenticated/$slug/tickets/")({
   component: TicketsList,
   validateSearch: (
     search: Record<string, unknown>
-  ): { status?: TicketStatus } => ({
+  ): { status?: TicketStatus; tab?: "tickets" | "customers" | "captures" } => ({
     status: isTicketStatus(search.status) ? search.status : undefined,
+    tab:
+      search.tab === "customers" || search.tab === "captures"
+        ? search.tab
+        : "tickets",
   }),
 });
 
 function TicketsList() {
   const workspace = useWorkspace();
-  const { status } = Route.useSearch();
+  const { status, tab } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const [adding, setAdding] = useState(false);
   const session = betterAuthClient.useSession();
@@ -82,7 +88,7 @@ function TicketsList() {
       title="Support"
       description="Customer conversations that need a response."
       actions={
-        adding ? null : (
+        adding || tab !== "tickets" ? null : (
           <Button
             variant="primary"
             icon={<Plus />}
@@ -93,106 +99,136 @@ function TicketsList() {
         )
       }
     >
-      {adding ? <NewTicketForm onDone={() => setAdding(false)} /> : null}
-      <div className="flex items-center gap-3">
-        <Tabs
-          tabs={[
-            { value: "all", label: "All" },
-            { value: "mine", label: "Mine" },
-            { value: "unassigned", label: "Unassigned" },
-          ]}
-          value={folder}
-          onValueChange={(v) => setFolder(v as "all" | "mine" | "unassigned")}
-        />
-        <Select
-          aria-label="Filter by status"
-          value={status ?? ALL}
-          onValueChange={(value) =>
-            void navigate({
-              search: { status: isTicketStatus(value) ? value : undefined },
-              replace: true,
-            })
-          }
-          renderValue={(v) =>
-            isTicketStatus(v) ? TICKET_STATUS_LABELS[v] : "All tickets"
-          }
-        >
-          <Select.Option value={ALL}>All tickets</Select.Option>
-          {TICKET_STATUSES.map((s) => (
-            <Select.Option key={s} value={s}>
-              {TICKET_STATUS_LABELS[s]}
-            </Select.Option>
-          ))}
-        </Select>
-      </div>
-      {tickets.isPending ? (
-        <LoadingState label="Loading tickets" />
-      ) : tickets.isError ? (
-        <ErrorState
-          error={tickets.error}
-          onRetry={() => void tickets.refetch()}
-        />
-      ) : rows.length === 0 ? (
-        <EmptyState
-          icon={<Headset size={40} />}
-          title="No tickets"
-          description="Nothing waiting on you."
-        />
-      ) : (
-        <LayerCard className="p-0">
-          <Table aria-label="Support tickets">
-            <Table.Header>
-              <Table.Row>
-                <Table.Head>Ticket</Table.Head>
-                <Table.Head>Customer</Table.Head>
-                <Table.Head>Status</Table.Head>
-                <Table.Head>Priority</Table.Head>
-                <Table.Head>Updated</Table.Head>
-              </Table.Row>
-            </Table.Header>
-            <Table.Body>
-              {rows.map((ticket) => (
-                <Table.Row key={ticket.id}>
-                  <Table.Cell>
-                    <Link
-                      to="/$slug/tickets/$ticketId"
-                      params={{ slug: workspace.slug, ticketId: ticket.id }}
-                      className="text-kumo-link hover:underline"
-                    >
-                      <span className="text-kumo-subtle mr-2">
-                        #{ticket.number}
-                      </span>
-                      {ticket.title}
-                    </Link>
-                  </Table.Cell>
-                  <Table.Cell>
-                    {ticket.customer.fullName ?? ticket.customer.email}
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Badge
-                      variant={
-                        ticket.status === "done"
-                          ? "green"
-                          : ticket.status === "snoozed"
-                            ? "neutral"
-                            : "blue"
-                      }
-                    >
-                      {TICKET_STATUS_LABELS[ticket.status]}
-                    </Badge>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Badge variant={priorityVariant(ticket.priority)}>
-                      {PRIORITY_LABELS[ticket.priority]}
-                    </Badge>
-                  </Table.Cell>
-                  <Table.Cell>{formatRelative(ticket.updatedAt)}</Table.Cell>
-                </Table.Row>
+      <Tabs
+        tabs={[
+          { value: "tickets", label: "Tickets" },
+          { value: "customers", label: "Customers" },
+          { value: "captures", label: "Captures" },
+        ]}
+        value={tab}
+        onValueChange={(v) =>
+          void navigate({
+            search: (prev) => ({
+              ...prev,
+              tab: (v === "customers" || v === "captures" ? v : undefined) as
+                | "customers"
+                | "captures"
+                | undefined,
+            }),
+            replace: true,
+          })
+        }
+      />
+      {tab === "customers" ? <CustomersList /> : null}
+      {tab === "captures" ? <CapturesGrid /> : null}
+      {tab === "tickets" ? (
+        <>
+          {adding ? <NewTicketForm onDone={() => setAdding(false)} /> : null}
+          <div className="flex items-center gap-3">
+            <Tabs
+              tabs={[
+                { value: "all", label: "All" },
+                { value: "mine", label: "Mine" },
+                { value: "unassigned", label: "Unassigned" },
+              ]}
+              value={folder}
+              onValueChange={(v) =>
+                setFolder(v as "all" | "mine" | "unassigned")
+              }
+            />
+            <Select
+              aria-label="Filter by status"
+              value={status ?? ALL}
+              onValueChange={(value) =>
+                void navigate({
+                  search: { status: isTicketStatus(value) ? value : undefined },
+                  replace: true,
+                })
+              }
+              renderValue={(v) =>
+                isTicketStatus(v) ? TICKET_STATUS_LABELS[v] : "All tickets"
+              }
+            >
+              <Select.Option value={ALL}>All tickets</Select.Option>
+              {TICKET_STATUSES.map((s) => (
+                <Select.Option key={s} value={s}>
+                  {TICKET_STATUS_LABELS[s]}
+                </Select.Option>
               ))}
-            </Table.Body>
-          </Table>
-        </LayerCard>
-      )}
+            </Select>
+          </div>
+          {tickets.isPending ? (
+            <LoadingState label="Loading tickets" />
+          ) : tickets.isError ? (
+            <ErrorState
+              error={tickets.error}
+              onRetry={() => void tickets.refetch()}
+            />
+          ) : rows.length === 0 ? (
+            <EmptyState
+              icon={<Headset size={40} />}
+              title="No tickets"
+              description="Nothing waiting on you."
+            />
+          ) : (
+            <LayerCard className="p-0">
+              <Table aria-label="Support tickets">
+                <Table.Header>
+                  <Table.Row>
+                    <Table.Head>Ticket</Table.Head>
+                    <Table.Head>Customer</Table.Head>
+                    <Table.Head>Status</Table.Head>
+                    <Table.Head>Priority</Table.Head>
+                    <Table.Head>Updated</Table.Head>
+                  </Table.Row>
+                </Table.Header>
+                <Table.Body>
+                  {rows.map((ticket) => (
+                    <Table.Row key={ticket.id}>
+                      <Table.Cell>
+                        <Link
+                          to="/$slug/tickets/$ticketId"
+                          params={{ slug: workspace.slug, ticketId: ticket.id }}
+                          className="text-kumo-link hover:underline"
+                        >
+                          <span className="text-kumo-subtle mr-2">
+                            #{ticket.number}
+                          </span>
+                          {ticket.title}
+                        </Link>
+                      </Table.Cell>
+                      <Table.Cell>
+                        {ticket.customer.fullName ?? ticket.customer.email}
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Badge
+                          variant={
+                            ticket.status === "done"
+                              ? "green"
+                              : ticket.status === "snoozed"
+                                ? "neutral"
+                                : "blue"
+                          }
+                        >
+                          {TICKET_STATUS_LABELS[ticket.status]}
+                        </Badge>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Badge variant={priorityVariant(ticket.priority)}>
+                          {PRIORITY_LABELS[ticket.priority]}
+                        </Badge>
+                      </Table.Cell>
+                      <Table.Cell>
+                        {formatRelative(ticket.updatedAt)}
+                      </Table.Cell>
+                    </Table.Row>
+                  ))}
+                </Table.Body>
+              </Table>
+            </LayerCard>
+          )}
+        </>
+      ) : null}
     </Page>
   );
 }
