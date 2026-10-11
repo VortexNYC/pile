@@ -187,9 +187,10 @@ function IssuesList() {
             return (
               <div key={group} className="flex flex-col">
                 <div className="flex items-center gap-2 px-1 pb-1.5">
-                  <Badge variant={issueStatusVariant(group)}>
+                  <IssueStatusIcon status={group} />
+                  <span className="text-sm font-medium text-kumo-default">
                     {ISSUE_STATUS_LABELS[group]}
-                  </Badge>
+                  </span>
                   <span className="text-xs text-kumo-subtle">
                     {rows.length}
                   </span>
@@ -207,6 +208,7 @@ function IssuesList() {
                             }}
                             className="flex h-11 items-center gap-3 px-4 hover:bg-kumo-tint"
                           >
+                            <IssueStatusIcon status={issue.status} />
                             {issue.identifier ? (
                               <span className="w-16 shrink-0 truncate text-sm font-medium text-kumo-subtle">
                                 {issue.identifier}
@@ -216,9 +218,24 @@ function IssuesList() {
                               {issue.title}
                             </span>
                             <PrChip issue={issue} />
-                            <Badge variant={priorityVariant(issue.priority)}>
-                              {PRIORITY_LABELS[issue.priority]}
-                            </Badge>
+                            <IssueFieldMenu
+                              issue={issue}
+                              field="priority"
+                              options={PRIORITIES}
+                              labels={PRIORITY_LABELS}
+                            >
+                              <button
+                                type="button"
+                                onClick={(e) => e.preventDefault()}
+                                className="cursor-pointer"
+                              >
+                                <Badge
+                                  variant={priorityVariant(issue.priority)}
+                                >
+                                  {PRIORITY_LABELS[issue.priority]}
+                                </Badge>
+                              </button>
+                            </IssueFieldMenu>
                             <span className="w-16 shrink-0 text-right text-xs text-kumo-subtle">
                               {formatRelative(issue.updatedAt)}
                             </span>
