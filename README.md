@@ -29,11 +29,10 @@ minimal — sections render only when they have data, and anything
 you never read can be switched off per-user (Settings → Surfaces).
 
 **What we're deliberately *not* doing:** chat, email, and the
-generic-workspace kitchen sink. Macro goes after Slack — we think
-channels are the wrong target. The things that interconnect
-*cleanly* are the graph; channels are where it goes to die. Email
-may come later, but only when it can be part of the graph and not
-just a window onto a channel.
+generic-workspace kitchen sink. The things that interconnect
+*cleanly* are the graph; channels are where context goes to die.
+Email may come later, but only when it can be part of the graph —
+not a window onto a channel.
 
 ## Stack
 
