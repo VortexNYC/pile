@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
+import { EntityHover } from "@/components/entity-hover";
 import { PeekHeader, usePeek } from "@/components/entity-peek";
 import { FieldMenu } from "@/components/field-menu";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
@@ -93,17 +94,32 @@ export function ProjectsList() {
           {rows.map((project) => (
             <Table.Row key={project.id}>
               <Table.Cell>
-                <Link
-                  to="/$slug/projects/$projectId"
-                  params={{
-                    slug: workspace.slug,
-                    projectId: project.id,
-                  }}
-                  onClick={peek.peekOnClick(project)}
-                  className="text-kumo-link hover:underline"
+                <EntityHover
+                  meta={
+                    <>
+                      <Badge variant={projectStatusVariant(project.status)}>
+                        {project.status}
+                      </Badge>
+                      <Badge variant={projectHealthVariant(project.health)}>
+                        {project.health.replace("_", " ")}
+                      </Badge>
+                    </>
+                  }
+                  title={project.name}
+                  description={project.description}
                 >
-                  {project.name}
-                </Link>
+                  <Link
+                    to="/$slug/projects/$projectId"
+                    params={{
+                      slug: workspace.slug,
+                      projectId: project.id,
+                    }}
+                    onClick={peek.peekOnClick(project)}
+                    className="text-kumo-link hover:underline"
+                  >
+                    {project.name}
+                  </Link>
+                </EntityHover>
               </Table.Cell>
               <Table.Cell>
                 <FieldMenu

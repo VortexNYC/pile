@@ -5,6 +5,7 @@ import { FileText, Plus } from "@phosphor-icons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 
+import { EntityHover } from "@/components/entity-hover";
 import { PeekHeader, usePeek } from "@/components/entity-peek";
 import { Page } from "@/components/page";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
@@ -103,14 +104,21 @@ function DocumentsList() {
               {documents.data.map((doc) => (
                 <Table.Row key={doc.id}>
                   <Table.Cell>
-                    <Link
-                      to="/$slug/documents/$documentId"
-                      params={{ slug: workspace.slug, documentId: doc.id }}
-                      className="text-kumo-link hover:underline"
+                    <EntityHover
+                      meta={doc.icon ? <span>{doc.icon}</span> : null}
+                      title={doc.title}
+                      description={`Updated ${formatRelative(doc.updatedAt)}`}
                     >
-                      {doc.icon ? `${doc.icon} ` : ""}
-                      {doc.title}
-                    </Link>
+                      <Link
+                        to="/$slug/documents/$documentId"
+                        params={{ slug: workspace.slug, documentId: doc.id }}
+                        onClick={peek.peekOnClick(doc)}
+                        className="text-kumo-link hover:underline"
+                      >
+                        {doc.icon ? `${doc.icon} ` : ""}
+                        {doc.title}
+                      </Link>
+                    </EntityHover>
                   </Table.Cell>
                   <Table.Cell>{formatRelative(doc.updatedAt)}</Table.Cell>
                 </Table.Row>

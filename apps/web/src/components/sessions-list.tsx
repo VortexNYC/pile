@@ -4,6 +4,7 @@ import { Robot } from "@phosphor-icons/react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
+import { EntityHover } from "@/components/entity-hover";
 import { PeekHeader, usePeek } from "@/components/entity-peek";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
@@ -111,39 +112,53 @@ export function SessionsList() {
             <LayerCard className="p-0">
               <div className="divide-y divide-kumo-line">
                 {rows.map((session) => (
-                  <Link
-                    key={session.id}
-                    to="/$slug/sessions/$sessionId"
-                    params={{
-                      slug: workspace.slug,
-                      sessionId: session.id,
-                    }}
-                    onClick={peek.peekOnClick(session)}
-                    className="flex h-11 items-center gap-3 px-4 hover:bg-kumo-tint"
+                  <EntityHover
+                    meta={
+                      <>
+                        <Badge variant={sessionStatusVariant(session.status)}>
+                          {session.status}
+                        </Badge>
+                        <span className="text-xs text-kumo-subtle">
+                          {session.provider}
+                        </span>
+                      </>
+                    }
+                    title={session.label ?? session.id.slice(0, 8)}
                   >
-                    <Badge variant={sessionStatusVariant(session.status)}>
-                      {session.status}
-                    </Badge>
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-kumo-default">
-                      {session.label ?? session.id.slice(0, 8)}
-                    </span>
-                    {derivedStatusVariant(session.derivedStatus) ? (
-                      <Badge
-                        variant={
-                          derivedStatusVariant(session.derivedStatus) ??
-                          "neutral"
-                        }
-                      >
-                        {session.derivedStatus?.replace("_", " ")}
+                    <Link
+                      key={session.id}
+                      to="/$slug/sessions/$sessionId"
+                      params={{
+                        slug: workspace.slug,
+                        sessionId: session.id,
+                      }}
+                      onClick={peek.peekOnClick(session)}
+                      className="flex h-11 items-center gap-3 px-4 hover:bg-kumo-tint"
+                    >
+                      <Badge variant={sessionStatusVariant(session.status)}>
+                        {session.status}
                       </Badge>
-                    ) : null}
-                    <span className="text-xs text-kumo-subtle">
-                      {session.provider}
-                    </span>
-                    <span className="w-16 shrink-0 text-right text-xs text-kumo-subtle">
-                      {formatRelative(session.updatedAt)}
-                    </span>
-                  </Link>
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium text-kumo-default">
+                        {session.label ?? session.id.slice(0, 8)}
+                      </span>
+                      {derivedStatusVariant(session.derivedStatus) ? (
+                        <Badge
+                          variant={
+                            derivedStatusVariant(session.derivedStatus) ??
+                            "neutral"
+                          }
+                        >
+                          {session.derivedStatus?.replace("_", " ")}
+                        </Badge>
+                      ) : null}
+                      <span className="text-xs text-kumo-subtle">
+                        {session.provider}
+                      </span>
+                      <span className="w-16 shrink-0 text-right text-xs text-kumo-subtle">
+                        {formatRelative(session.updatedAt)}
+                      </span>
+                    </Link>
+                  </EntityHover>
                 ))}
               </div>
             </LayerCard>

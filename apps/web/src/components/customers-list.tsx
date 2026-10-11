@@ -5,6 +5,7 @@ import { Buildings, Plus } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
+import { EntityHover } from "@/components/entity-hover";
 import { PeekHeader, usePeek } from "@/components/entity-peek";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
@@ -71,14 +72,22 @@ export function CustomersList() {
               {customers.data.map((customer) => (
                 <Table.Row key={customer.id}>
                   <Table.Cell>
-                    <Link
-                      to="/$slug/customers/$customerId"
-                      params={{ slug: workspace.slug, customerId: customer.id }}
-                      onClick={peek.peekOnClick(customer)}
-                      className="text-kumo-link hover:underline"
+                    <EntityHover
+                      title={customer.name}
+                      description={customer.url}
                     >
-                      {customer.name}
-                    </Link>
+                      <Link
+                        to="/$slug/customers/$customerId"
+                        params={{
+                          slug: workspace.slug,
+                          customerId: customer.id,
+                        }}
+                        onClick={peek.peekOnClick(customer)}
+                        className="text-kumo-link hover:underline"
+                      >
+                        {customer.name}
+                      </Link>
+                    </EntityHover>
                   </Table.Cell>
                   <Table.Cell>{customer.url ?? "—"}</Table.Cell>
                   <Table.Cell>{formatRelative(customer.createdAt)}</Table.Cell>

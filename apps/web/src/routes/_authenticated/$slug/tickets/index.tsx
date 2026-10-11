@@ -16,6 +16,7 @@ import { useState } from "react";
 
 import { CapturesGrid } from "@/components/captures-grid";
 import { CustomersList } from "@/components/customers-list";
+import { EntityHover } from "@/components/entity-hover";
 import { PeekHeader, usePeek } from "@/components/entity-peek";
 import { FieldMenu } from "@/components/field-menu";
 import { Page } from "@/components/page";
@@ -172,17 +173,42 @@ function TicketsList() {
                 {rows.map((ticket) => (
                   <Table.Row key={ticket.id}>
                     <Table.Cell>
-                      <Link
-                        to="/$slug/tickets/$ticketId"
-                        params={{ slug: workspace.slug, ticketId: ticket.id }}
-                        onClick={peek.peekOnClick(ticket)}
-                        className="text-kumo-link hover:underline"
+                      <EntityHover
+                        meta={
+                          <>
+                            <Badge
+                              variant={
+                                ticket.status === "done"
+                                  ? "green"
+                                  : ticket.status === "snoozed"
+                                    ? "neutral"
+                                    : "blue"
+                              }
+                            >
+                              {TICKET_STATUS_LABELS[ticket.status]}
+                            </Badge>
+                            <Badge variant={priorityVariant(ticket.priority)}>
+                              {PRIORITY_LABELS[ticket.priority]}
+                            </Badge>
+                          </>
+                        }
+                        title={`#${ticket.number} ${ticket.title}`}
+                        description={
+                          ticket.customer.fullName ?? ticket.customer.email
+                        }
                       >
-                        <span className="text-kumo-subtle mr-2">
-                          #{ticket.number}
-                        </span>
-                        {ticket.title}
-                      </Link>
+                        <Link
+                          to="/$slug/tickets/$ticketId"
+                          params={{ slug: workspace.slug, ticketId: ticket.id }}
+                          onClick={peek.peekOnClick(ticket)}
+                          className="text-kumo-link hover:underline"
+                        >
+                          <span className="text-kumo-subtle mr-2">
+                            #{ticket.number}
+                          </span>
+                          {ticket.title}
+                        </Link>
+                      </EntityHover>
                     </Table.Cell>
                     <Table.Cell>
                       {ticket.customer.fullName ?? ticket.customer.email}
