@@ -21,6 +21,7 @@ import { Route as AuthVerifyEmailRouteImport } from './routes/_auth/verify-email
 import { Route as AuthenticatedSlugRouteImport } from './routes/_authenticated/$slug'
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
 import { Route as AuthenticatedSlugIndexRouteImport } from './routes/_authenticated/$slug/index'
+import { Route as AuthenticatedSlugInboxRouteImport } from './routes/_authenticated/$slug/inbox'
 import { Route as ShareCaptureTicketIdRouteImport } from './routes/share/capture/$ticketId'
 import { Route as AuthenticatedSlugChangelogIndexRouteImport } from './routes/_authenticated/$slug/changelog/index'
 import { Route as AuthenticatedSlugCustomersIndexRouteImport } from './routes/_authenticated/$slug/customers/index'
@@ -104,6 +105,11 @@ const AuthenticatedOnboardingRoute = AuthenticatedOnboardingRouteImport.update({
 const AuthenticatedSlugIndexRoute = AuthenticatedSlugIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AuthenticatedSlugRoute,
+} as any)
+const AuthenticatedSlugInboxRoute = AuthenticatedSlugInboxRouteImport.update({
+  id: '/inbox',
+  path: '/inbox',
   getParentRoute: () => AuthenticatedSlugRoute,
 } as any)
 const ShareCaptureTicketIdRoute = ShareCaptureTicketIdRouteImport.update({
@@ -270,6 +276,7 @@ export interface FileRoutesByFullPath {
   '/verify-email': typeof AuthVerifyEmailRoute
   '/$slug': typeof AuthenticatedSlugRouteWithChildren
   '/onboarding': typeof AuthenticatedOnboardingRoute
+  '/$slug/inbox': typeof AuthenticatedSlugInboxRoute
   '/share/capture/$ticketId': typeof ShareCaptureTicketIdRoute
   '/$slug/': typeof AuthenticatedSlugIndexRoute
   '/$slug/customers/$customerId': typeof AuthenticatedSlugCustomersCustomerIdRoute
@@ -307,6 +314,7 @@ export interface FileRoutesByTo {
   '/sign-up': typeof AuthSignUpRoute
   '/verify-email': typeof AuthVerifyEmailRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
+  '/$slug/inbox': typeof AuthenticatedSlugInboxRoute
   '/share/capture/$ticketId': typeof ShareCaptureTicketIdRoute
   '/$slug': typeof AuthenticatedSlugIndexRoute
   '/$slug/customers/$customerId': typeof AuthenticatedSlugCustomersCustomerIdRoute
@@ -348,6 +356,7 @@ export interface FileRoutesById {
   '/_auth/verify-email': typeof AuthVerifyEmailRoute
   '/_authenticated/$slug': typeof AuthenticatedSlugRouteWithChildren
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
+  '/_authenticated/$slug/inbox': typeof AuthenticatedSlugInboxRoute
   '/share/capture/$ticketId': typeof ShareCaptureTicketIdRoute
   '/_authenticated/$slug/': typeof AuthenticatedSlugIndexRoute
   '/_authenticated/$slug/customers/$customerId': typeof AuthenticatedSlugCustomersCustomerIdRoute
@@ -388,6 +397,7 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/$slug'
     | '/onboarding'
+    | '/$slug/inbox'
     | '/share/capture/$ticketId'
     | '/$slug/'
     | '/$slug/customers/$customerId'
@@ -425,6 +435,7 @@ export interface FileRouteTypes {
     | '/sign-up'
     | '/verify-email'
     | '/onboarding'
+    | '/$slug/inbox'
     | '/share/capture/$ticketId'
     | '/$slug'
     | '/$slug/customers/$customerId'
@@ -465,6 +476,7 @@ export interface FileRouteTypes {
     | '/_auth/verify-email'
     | '/_authenticated/$slug'
     | '/_authenticated/onboarding'
+    | '/_authenticated/$slug/inbox'
     | '/share/capture/$ticketId'
     | '/_authenticated/$slug/'
     | '/_authenticated/$slug/customers/$customerId'
@@ -587,6 +599,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/$slug/'
       preLoaderRoute: typeof AuthenticatedSlugIndexRouteImport
+      parentRoute: typeof AuthenticatedSlugRoute
+    }
+    '/_authenticated/$slug/inbox': {
+      id: '/_authenticated/$slug/inbox'
+      path: '/inbox'
+      fullPath: '/$slug/inbox'
+      preLoaderRoute: typeof AuthenticatedSlugInboxRouteImport
       parentRoute: typeof AuthenticatedSlugRoute
     }
     '/share/capture/$ticketId': {
@@ -795,6 +814,7 @@ const AuthRouteChildren: AuthRouteChildren = {
 const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
 
 interface AuthenticatedSlugRouteChildren {
+  AuthenticatedSlugInboxRoute: typeof AuthenticatedSlugInboxRoute
   AuthenticatedSlugIndexRoute: typeof AuthenticatedSlugIndexRoute
   AuthenticatedSlugCustomersCustomerIdRoute: typeof AuthenticatedSlugCustomersCustomerIdRoute
   AuthenticatedSlugDocumentsDocumentIdRoute: typeof AuthenticatedSlugDocumentsDocumentIdRoute
@@ -822,6 +842,7 @@ interface AuthenticatedSlugRouteChildren {
 }
 
 const AuthenticatedSlugRouteChildren: AuthenticatedSlugRouteChildren = {
+  AuthenticatedSlugInboxRoute: AuthenticatedSlugInboxRoute,
   AuthenticatedSlugIndexRoute: AuthenticatedSlugIndexRoute,
   AuthenticatedSlugCustomersCustomerIdRoute:
     AuthenticatedSlugCustomersCustomerIdRoute,

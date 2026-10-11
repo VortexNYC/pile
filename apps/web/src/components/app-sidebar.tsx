@@ -6,6 +6,7 @@ import {
 } from "@cloudflare/kumo/components/sidebar";
 import { Text } from "@cloudflare/kumo/components/text";
 import {
+  BellRinging,
   Buildings,
   FileText,
   Flag,
