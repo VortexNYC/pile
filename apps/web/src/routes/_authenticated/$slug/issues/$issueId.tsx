@@ -1,8 +1,9 @@
 import { Badge } from "@cloudflare/kumo/components/badge";
 import { Button } from "@cloudflare/kumo/components/button";
+import { DropdownMenu } from "@cloudflare/kumo/components/dropdown";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 import { Text } from "@cloudflare/kumo/components/text";
-import { PencilSimple, Trash } from "@phosphor-icons/react";
+import { LinkSimple, PencilSimple, Star, Trash } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
@@ -16,6 +17,7 @@ import { Page } from "@/components/page";
 import { PrChip } from "@/components/pr-chip";
 import { ShareButton } from "@/components/share-button";
 import { ErrorState, LoadingState } from "@/components/states";
+import { useFavorites } from "@/hooks/use-favorites";
 import { useTeams } from "@/hooks/use-teams";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap, unwrapEmpty } from "@/lib/api";
@@ -43,6 +45,7 @@ export const Route = createFileRoute("/_authenticated/$slug/issues/$issueId")({
 function IssueDetail() {
   const { issueId } = Route.useParams();
   const workspace = useWorkspace();
+  const favs = useFavorites(workspace.id);
   const organizationId = workspace.id;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -378,19 +381,49 @@ function IssueDetail() {
             <Button icon={<PencilSimple />} onClick={() => setEditing(true)}>
               Edit
             </Button>
-            <Button
-              variant="secondary-destructive"
-              icon={<Trash />}
-              loading={remove.isPending}
-              onClick={() => {
-                if (window.confirm("Delete this issue? This can't be undone."))
-                  remove.mutate();
-              }}
-            >
-              Delete
-            </Button>
           </>
         )
+      }
+      menu={
+        <>
+          <DropdownMenu.Item
+            icon={
+              <Star
+                weight={favs.isFavorite("issue", data.id) ? "fill" : "regular"}
+              />
+            }
+            onClick={() =>
+              favs.toggle({
+                type: "issue",
+                id: data.id,
+                title: data.title,
+                identifier: data.identifier,
+              })
+            }
+          >
+            {favs.isFavorite("issue", data.id) ? "Unstar" : "Star"}
+          </DropdownMenu.Item>
+          <DropdownMenu.Item
+            icon={<LinkSimple />}
+            onClick={() => {
+              navigator.clipboard.writeText(window.location.href);
+              toastSuccess("Link copied");
+            }}
+          >
+            Copy link
+          </DropdownMenu.Item>
+          <DropdownMenu.Separator />
+          <DropdownMenu.Item
+            variant="danger"
+            icon={<Trash />}
+            onClick={() => {
+              if (window.confirm("Delete this issue? This can't be undone."))
+                remove.mutate();
+            }}
+          >
+            Delete issue
+          </DropdownMenu.Item>
+        </>
       }
       center={
         <>

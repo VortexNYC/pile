@@ -370,6 +370,7 @@ export const workspaceUserPreferences = sqliteTable(
     userId: text("user_id" as string).notNull(),
     defaultViewId: text("default_view_id" as string),
     hiddenSurfaces: text("hidden_surfaces" as string),
+    favorites: text("favorites" as string),
     updatedAt: text("updated_at" as string).notNull(),
   },
   (table) => [primaryKey({ columns: [table.organizationId, table.userId] })]

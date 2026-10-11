@@ -1,3 +1,5 @@
+import { DropdownMenu } from "@cloudflare/kumo/components/dropdown";
+import { DotsThree } from "@phosphor-icons/react";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
@@ -11,17 +13,47 @@ export function EntityPage({
   title,
   description,
   actions,
+  menu,
   center,
   rail,
 }: {
   title: string | ReactNode;
   description?: ReactNode;
   actions?: ReactNode;
+  /** Kebab menu items — every detail page gets the same ··· overflow
+   * (copy link, favorite, delete…) instead of scattering buttons. */
+  menu?: ReactNode;
   center: ReactNode;
   rail?: ReactNode;
 }) {
   return (
-    <Page title={title} description={description} actions={actions}>
+    <Page
+      title={title}
+      description={description}
+      actions={
+        menu ? (
+          <>
+            {actions}
+            <DropdownMenu>
+              <DropdownMenu.Trigger
+                render={
+                  <button
+                    type="button"
+                    aria-label="More actions"
+                    className="hover:bg-kumo-tint rounded-md p-2 text-kumo-subtle"
+                  >
+                    <DotsThree size={18} weight="bold" />
+                  </button>
+                }
+              />
+              <DropdownMenu.Content>{menu}</DropdownMenu.Content>
+            </DropdownMenu>
+          </>
+        ) : (
+          actions
+        )
+      }
+    >
       <div className="flex gap-8 min-w-0">
         <div className="flex-1 min-w-0 flex flex-col gap-6">{center}</div>
         {rail ? (

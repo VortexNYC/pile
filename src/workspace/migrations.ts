@@ -868,6 +868,7 @@ CREATE INDEX IF NOT EXISTS customer_intake_items_customer_idx ON customer_intake
 const v54 = `ALTER TABLE notification_preferences ADD COLUMN email_explicit INTEGER NOT NULL DEFAULT 1`;
 
 const v55 = `ALTER TABLE user_workspace_preferences ADD COLUMN hidden_surfaces TEXT`;
+const v57 = `ALTER TABLE user_workspace_preferences ADD COLUMN favorites TEXT`;
 
 const v56 = `CREATE TABLE IF NOT EXISTS issue_shares (
   token TEXT PRIMARY KEY,
@@ -938,6 +939,7 @@ export const workspaceMigrations = {
       { idx: 53, when: 53, tag: "v54", breakpoints: false },
       { idx: 54, when: 54, tag: "v55", breakpoints: false },
       { idx: 55, when: 55, tag: "v56", breakpoints: false },
+      { idx: 56, when: 56, tag: "v57", breakpoints: false },
     ],
   },
   migrations: {
@@ -997,5 +999,6 @@ export const workspaceMigrations = {
     m0053: v54,
     m0054: v55,
     m0055: v56,
+    m0056: v57,
   },
 } satisfies Parameters<typeof migrate>[1];

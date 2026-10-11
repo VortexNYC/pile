@@ -24047,6 +24047,14 @@ export interface paths {
                         "application/json": {
                             defaultViewId: string | null;
                             hiddenSurfaces: string[] | null;
+                            favorites: {
+                                /** @enum {string} */
+                                type: "issue" | "document";
+                                id: string;
+                                title: string;
+                                identifier?: string | null;
+                                addedAt: string;
+                            }[] | null;
                         };
                     };
                 };
@@ -24067,6 +24075,14 @@ export interface paths {
                     "application/json": {
                         defaultViewId?: string | null;
                         hiddenSurfaces?: string[] | null;
+                        favorites?: {
+                            /** @enum {string} */
+                            type: "issue" | "document";
+                            id: string;
+                            title: string;
+                            identifier?: string | null;
+                            addedAt: string;
+                        }[] | null;
                     };
                 };
             };

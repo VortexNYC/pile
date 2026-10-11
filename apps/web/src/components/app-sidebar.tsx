@@ -9,6 +9,7 @@ import {
   BellRinging,
   Buildings,
   FileText,
+  Star,
   Flag,
   FolderOpen,
   Headset,
@@ -29,6 +30,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
 
+import { useFavorites } from "@/hooks/use-favorites";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useSurfaces } from "@/hooks/use-surfaces";
 import { wsKey } from "@/hooks/use-workspace";
@@ -83,6 +85,7 @@ export function AppSidebar({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const surfaces = useSurfaces(workspace.id);
+  const favs = useFavorites(workspace.id);
   const permissions = usePermissions(workspace.id);
   const documents = useQuery({
     queryKey: wsKey(workspace.id, "documents"),
@@ -138,6 +141,26 @@ export function AppSidebar({
             )}
           </Sidebar.Menu>
         </Sidebar.Group>
+        {favs.favorites.length > 0 ? (
+          <Sidebar.Group>
+            <Sidebar.GroupLabel>Starred</Sidebar.GroupLabel>
+            <Sidebar.Menu>
+              {favs.favorites.map((f) => (
+                <Sidebar.MenuButton
+                  key={`${f.type}:${f.id}`}
+                  icon={f.type === "document" ? FileText : Star}
+                  href={appHref(
+                    `${base}/${f.type === "document" ? "documents" : "issues"}/${f.id}`
+                  )}
+                  tooltip={f.title}
+                >
+                  {f.identifier ? `${f.identifier} — ` : ""}
+                  {f.title}
+                </Sidebar.MenuButton>
+              ))}
+            </Sidebar.Menu>
+          </Sidebar.Group>
+        ) : null}
         {(docTree.get(null)?.length ?? 0) > 0 ? (
           <Sidebar.Group>
             <Sidebar.GroupLabel>Documents</Sidebar.GroupLabel>

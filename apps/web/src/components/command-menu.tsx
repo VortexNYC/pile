@@ -56,6 +56,50 @@ export function CommandMenu() {
     enabled: open,
     placeholderData: keepPreviousData,
   });
+  const documents = useQuery({
+    queryKey: wsKey(workspace.id, "palette-documents", { search: query }),
+    queryFn: async () =>
+      (
+        await unwrap(
+          api.GET("/workspaces/{organizationId}/documents", {
+            params: {
+              path: { organizationId: workspace.id },
+            },
+          })
+        )
+      ).documents,
+    enabled: open,
+    placeholderData: keepPreviousData,
+  });
+  const tickets = useQuery({
+    queryKey: wsKey(workspace.id, "palette-tickets", { search: query }),
+    queryFn: async () =>
+      (
+        await unwrap(
+          api.GET("/workspaces/{organizationId}/support/tickets", {
+            params: {
+              path: { organizationId: workspace.id },
+              query: { limit: 6, q: query || undefined },
+            },
+          })
+        )
+      ).tickets,
+    enabled: open,
+    placeholderData: keepPreviousData,
+  });
+  const customers = useQuery({
+    queryKey: wsKey(workspace.id, "palette-customers", { search: query }),
+    queryFn: async () =>
+      (
+        await unwrap(
+          api.GET("/workspaces/{organizationId}/customers", {
+            params: { path: { organizationId: workspace.id } },
+          })
+        )
+      ).customers,
+    enabled: open,
+    placeholderData: keepPreviousData,
+  });
 
   const staticItems: CommandItem[] = useMemo(
     () => [
@@ -81,13 +125,54 @@ export function CommandMenu() {
       hint: issue.identifier ?? issue.status,
       href: `/issues/${issue.identifier ?? issue.id}`,
     }));
+    const docItems = (documents.data ?? [])
+      .filter(
+        (d) => !query || d.title.toLowerCase().includes(query.toLowerCase())
+      )
+      .slice(0, 6)
+      .map((d) => ({
+        key: `doc-${d.id}`,
+        label: d.title,
+        hint: "document",
+        href: `/documents/${d.id}`,
+      }));
+    const ticketItems = (tickets.data ?? []).map((tk) => ({
+      key: `ticket-${tk.id}`,
+      label: `#${tk.number} ${tk.title}`,
+      hint: tk.status,
+      href: `/tickets/${tk.id}`,
+    }));
+    const customerItems = (customers.data ?? [])
+      .filter(
+        (c) => !query || c.name.toLowerCase().includes(query.toLowerCase())
+      )
+      .slice(0, 6)
+      .map((c) => ({
+        key: `customer-${c.id}`,
+        label: c.name,
+        hint: "customer",
+        href: `/customers/${c.id}`,
+      }));
     const filtered = query
       ? staticItems.filter((item) =>
           item.label.toLowerCase().includes(query.toLowerCase())
         )
       : staticItems;
-    return [...issueItems, ...filtered];
-  }, [issues.data, query, staticItems]);
+    return [
+      ...issueItems,
+      ...docItems,
+      ...ticketItems,
+      ...customerItems,
+      ...filtered,
+    ];
+  }, [
+    issues.data,
+    documents.data,
+    tickets.data,
+    customers.data,
+    query,
+    staticItems,
+  ]);
 
   const go = (item: CommandItem) => {
     window.location.assign(`/app/${workspace.slug}${item.href}`);

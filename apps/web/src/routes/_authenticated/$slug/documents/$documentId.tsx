@@ -1,9 +1,10 @@
 import { Button } from "@cloudflare/kumo/components/button";
+import { DropdownMenu } from "@cloudflare/kumo/components/dropdown";
 import { InputArea } from "@cloudflare/kumo/components/input";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 import { TableOfContents } from "@cloudflare/kumo/components/table-of-contents";
 import { Text } from "@cloudflare/kumo/components/text";
-import { Trash } from "@phosphor-icons/react";
+import { LinkSimple, Star, Trash } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useRef, useState } from "react";
@@ -13,6 +14,7 @@ import { Markdown } from "@/components/markdown";
 import { Page } from "@/components/page";
 import { ShareButton } from "@/components/share-button";
 import { ErrorState, LoadingState } from "@/components/states";
+import { useFavorites } from "@/hooks/use-favorites";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap, unwrapEmpty } from "@/lib/api";
 import { markdownHeadings } from "@/lib/headings";
@@ -28,6 +30,7 @@ export const Route = createFileRoute(
 function DocumentDetail() {
   const { documentId } = Route.useParams();
   const workspace = useWorkspace();
+  const favs = useFavorites(workspace.id);
   const organizationId = workspace.id;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -183,17 +186,48 @@ function DocumentDetail() {
             kind="document"
             id={data.id}
           />
-          <Button
-            variant="secondary-destructive"
+        </>
+      }
+      menu={
+        <>
+          <DropdownMenu.Item
+            icon={
+              <Star
+                weight={
+                  favs.isFavorite("document", data.id) ? "fill" : "regular"
+                }
+              />
+            }
+            onClick={() =>
+              favs.toggle({
+                type: "document",
+                id: data.id,
+                title: data.title,
+              })
+            }
+          >
+            {favs.isFavorite("document", data.id) ? "Unstar" : "Star"}
+          </DropdownMenu.Item>
+          <DropdownMenu.Item
+            icon={<LinkSimple />}
+            onClick={() => {
+              navigator.clipboard.writeText(window.location.href);
+              toastSuccess("Link copied");
+            }}
+          >
+            Copy link
+          </DropdownMenu.Item>
+          <DropdownMenu.Separator />
+          <DropdownMenu.Item
+            variant="danger"
             icon={<Trash />}
-            loading={remove.isPending}
             onClick={() => {
               if (window.confirm("Move this document to trash?"))
                 remove.mutate();
             }}
           >
-            Delete
-          </Button>
+            Delete document
+          </DropdownMenu.Item>
         </>
       }
       center={

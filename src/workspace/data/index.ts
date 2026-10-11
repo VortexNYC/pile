@@ -687,6 +687,44 @@ export async function setHiddenSurfaces(
   return getUserViewPreferences(db, organizationId, userId);
 }
 
+export interface EntityFavorite {
+  type: "issue" | "document";
+  id: string;
+  title: string;
+  identifier?: string | null;
+  addedAt: string;
+}
+
+export async function setFavorites(
+  db: WorkspaceDb,
+  organizationId: string,
+  userId: string,
+  favorites: EntityFavorite[] | null
+) {
+  const value = favorites ? JSON.stringify(favorites) : null;
+  const existing = await getUserViewPreferences(db, organizationId, userId);
+  const ts = new Date().toISOString();
+  if (existing) {
+    await db
+      .update(workspaceUserPreferences)
+      .set({ favorites: value, updatedAt: ts })
+      .where(
+        and(
+          eq(workspaceUserPreferences.organizationId, organizationId),
+          eq(workspaceUserPreferences.userId, userId)
+        )
+      );
+  } else {
+    await db.insert(workspaceUserPreferences).values({
+      organizationId,
+      userId,
+      favorites: value,
+      updatedAt: ts,
+    });
+  }
+  return getUserViewPreferences(db, organizationId, userId);
+}
+
 // ---- linear_users ----
 
 export function listLinearUsers(db: WorkspaceDb, organizationId: string) {

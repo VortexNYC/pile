@@ -16076,7 +16076,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "putWorkspacesOrganizationIdMeViewpreferences",
-    "description": "Update me view preferences (PUT /workspaces/{organizationId}/me/view-preferences) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: defaultViewId, hiddenSurfaces.",
+    "description": "Update me view preferences (PUT /workspaces/{organizationId}/me/view-preferences) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: defaultViewId, hiddenSurfaces, favorites.",
     "method": "PUT",
     "path": "/workspaces/{organizationId}/me/view-preferences",
     "inputSchema": {
@@ -16097,6 +16097,41 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "nullable": true,
               "items": {
                 "type": "string"
+              }
+            },
+            "favorites": {
+              "type": "array",
+              "nullable": true,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "issue",
+                      "document"
+                    ]
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "identifier": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "addedAt": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "id",
+                  "title",
+                  "addedAt"
+                ]
               }
             }
           }

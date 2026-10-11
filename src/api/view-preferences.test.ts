@@ -15,6 +15,17 @@ let token: string;
 const prefsSchema = z.object({
   defaultViewId: z.string().nullable(),
   hiddenSurfaces: z.array(z.string()).nullable(),
+  favorites: z
+    .array(
+      z.object({
+        type: z.enum(["issue", "document"]),
+        id: z.string(),
+        title: z.string(),
+        identifier: z.string().nullable().optional(),
+        addedAt: z.string(),
+      })
+    )
+    .nullable(),
 });
 
 beforeAll(async () => {
@@ -90,6 +101,27 @@ describe("view preferences", () => {
     const get = await req(`/workspaces/${organizationId}/me/view-preferences`);
     const body = prefsSchema.parse(await get.json());
     expect(body.hiddenSurfaces).toEqual([]);
+  });
+
+  it("round-trips favorites", async () => {
+    const fav = {
+      type: "issue" as const,
+      id: "issue-1",
+      title: "Fix the thing",
+      identifier: "ISS-1",
+      addedAt: new Date().toISOString(),
+    };
+    const put = await req(`/workspaces/${organizationId}/me/view-preferences`, {
+      method: "PUT",
+      body: JSON.stringify({ favorites: [fav] }),
+    });
+    expect(put.status).toBe(200);
+    const putBody = prefsSchema.parse(await put.json());
+    expect(putBody.favorites).toEqual([fav]);
+
+    const get = await req(`/workspaces/${organizationId}/me/view-preferences`);
+    const getBody = prefsSchema.parse(await get.json());
+    expect(getBody.favorites).toEqual([fav]);
   });
 
   it("leaves hiddenSurfaces alone when the PUT omits it", async () => {
