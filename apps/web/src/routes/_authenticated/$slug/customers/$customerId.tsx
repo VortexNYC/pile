@@ -1,3 +1,4 @@
+import { Badge } from "@cloudflare/kumo/components/badge";
 import { Button } from "@cloudflare/kumo/components/button";
 import { Input } from "@cloudflare/kumo/components/input";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
@@ -10,6 +11,7 @@ import { Page } from "@/components/page";
 import { ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap, unwrapEmpty } from "@/lib/api";
+import { formatRelative } from "@/lib/labels";
 import { toastError, toastSuccess } from "@/lib/toast";
 
 export const Route = createFileRoute(
@@ -57,6 +59,20 @@ function CustomerEditor({
   const workspace = useWorkspace();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const tickets = useQuery({
+    queryKey: wsKey(workspace.id, "customer-tickets", customer.id),
+    queryFn: async () =>
+      (
+        await unwrap(
+          api.GET("/workspaces/{organizationId}/support/tickets", {
+            params: {
+              path: { organizationId: workspace.id },
+              query: { customerId: customer.id, limit: 50 },
+            },
+          })
+        )
+      ).tickets,
+  });
   const [name, setName] = useState(customer.name);
   const [url, setUrl] = useState(customer.url ?? "");
   const listKey = wsKey(workspace.id, "customers");
@@ -124,6 +140,40 @@ function CustomerEditor({
         </Button>
       }
     >
+      {(tickets.data?.length ?? 0) > 0 ? (
+        <LayerCard className="mb-4 p-0">
+          <div className="border-b border-kumo-line px-4 py-3">
+            <span className="text-sm font-medium text-kumo-default">
+              Tickets from {customer.name}
+            </span>
+          </div>
+          <ul className="divide-y divide-kumo-line">
+            {tickets.data?.map((ticket) => (
+              <li key={ticket.id}>
+                <Link
+                  to="/$slug/tickets/$ticketId"
+                  params={{
+                    slug: workspace.slug,
+                    ticketId: ticket.id,
+                  }}
+                  className="flex items-center gap-3 px-4 py-2.5 hover:bg-kumo-tint"
+                >
+                  <span className="w-14 shrink-0 text-xs font-medium text-kumo-subtle">
+                    #{ticket.number}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-sm text-kumo-default">
+                    {ticket.title}
+                  </span>
+                  <Badge variant="secondary">{ticket.status}</Badge>
+                  <span className="text-xs text-kumo-subtle">
+                    {formatRelative(ticket.createdAt)}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </LayerCard>
+      ) : null}
       <LayerCard>
         <LayerCard.Primary className="p-6">
           <form

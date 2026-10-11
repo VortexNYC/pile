@@ -396,9 +396,8 @@ describe("support ticket routes", () => {
       `/workspaces/${organizationId}/support/tickets`,
       { customerId, title: "Captured ticket", sourceChannel: "capture" }
     );
-    const ticket = (
-      (await createRes.json()) as { ticket: { id: string } }
-    ).ticket;
+    const ticket = ((await createRes.json()) as { ticket: { id: string } })
+      .ticket;
 
     const db = createD1(env.D1);
     const eventId = `evt_${crypto.randomUUID()}`;
