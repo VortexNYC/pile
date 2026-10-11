@@ -14,6 +14,7 @@ import { Page } from "@/components/page";
 import { IssuePeek } from "@/components/peek";
 import { PrChip } from "@/components/pr-chip";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { IssueStatusIcon } from "@/components/status-icon";
 import { useTeams } from "@/hooks/use-teams";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap } from "@/lib/api";
