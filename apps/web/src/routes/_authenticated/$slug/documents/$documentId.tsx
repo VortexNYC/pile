@@ -1,15 +1,12 @@
 import { Button } from "@cloudflare/kumo/components/button";
+import { InputArea } from "@cloudflare/kumo/components/input";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 import { Text } from "@cloudflare/kumo/components/text";
-import { PencilSimple, Trash } from "@phosphor-icons/react";
+import { Trash } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
-import {
-  DocumentForm,
-  type DocumentFormValues,
-} from "@/components/document-form";
 import { Markdown } from "@/components/markdown";
 import { Page } from "@/components/page";
 import { ShareButton } from "@/components/share-button";
@@ -31,7 +28,10 @@ function DocumentDetail() {
   const organizationId = workspace.id;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const [editing, setEditing] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [editingContent, setEditingContent] = useState(false);
+  const [draft, setDraft] = useState({ title: "", content: "" });
+  const contentRef = useRef<HTMLTextAreaElement>(null);
   const key = wsKey(organizationId, "documents", documentId);
   const path = { organizationId, id: documentId };
 
@@ -46,14 +46,15 @@ function DocumentDetail() {
   });
 
   const save = useMutation({
-    mutationFn: (values: DocumentFormValues) =>
+    mutationFn: (patch: { title?: string; content?: string }) =>
       unwrap(
         api.PATCH("/workspaces/{organizationId}/documents/{id}", {
           params: { path },
           body: {
-            title: values.title,
-            content: values.content,
-            contentFormat: "markdown",
+            ...(patch.title !== undefined ? { title: patch.title } : {}),
+            ...(patch.content !== undefined
+              ? { content: patch.content, contentFormat: "markdown" as const }
+              : {}),
           },
         })
       ),
@@ -62,7 +63,8 @@ function DocumentDetail() {
       void queryClient.invalidateQueries({
         queryKey: wsKey(organizationId, "documents"),
       });
-      setEditing(false);
+      setEditingTitle(false);
+      setEditingContent(false);
       toastSuccess("Document saved");
     },
     onError: (error) => toastError(error),
@@ -147,7 +149,7 @@ function DocumentDetail() {
 
   return (
     <Page
-      title={`${data.icon ? `${data.icon} ` : ""}${data.title}`}
+      title={data.title}
       description={
         <>
           <Link
@@ -161,33 +163,58 @@ function DocumentDetail() {
         </>
       }
       actions={
-        editing ? null : (
-          <>
-            <ShareButton
-              organizationId={workspace.id}
-              kind="document"
-              id={data.id}
-            />
-            <Button icon={<PencilSimple />} onClick={() => setEditing(true)}>
-              Edit
-            </Button>
-            <Button
-              variant="secondary-destructive"
-              icon={<Trash />}
-              loading={remove.isPending}
-              onClick={() => {
-                if (window.confirm("Move this document to trash?"))
-                  remove.mutate();
-              }}
-            >
-              Delete
-            </Button>
-          </>
-        )
+        <>
+          <ShareButton
+            organizationId={workspace.id}
+            kind="document"
+            id={data.id}
+          />
+          <Button
+            variant="secondary-destructive"
+            icon={<Trash />}
+            loading={remove.isPending}
+            onClick={() => {
+              if (window.confirm("Move this document to trash?"))
+                remove.mutate();
+            }}
+          >
+            Delete
+          </Button>
+        </>
       }
     >
       <LayerCard>
         <LayerCard.Primary className="p-6">
+          <div className="flex items-start gap-3 mb-4">
+            {data.icon ? (
+              <span className="text-2xl leading-none mt-1">{data.icon}</span>
+            ) : null}
+            <input
+              aria-label="Document title"
+              defaultValue={data.title}
+              key={`${data.id}-${data.title}`}
+              className="w-full bg-transparent text-2xl font-semibold text-kumo-default outline-none placeholder:text-kumo-subtle focus:border-b focus:border-kumo-line"
+              placeholder="Untitled"
+              onBlur={(e: React.FocusEvent<HTMLInputElement>) => {
+                const value = e.target.value.trim();
+                if (value && value !== data.title) {
+                  save.mutate({ title: value });
+                } else {
+                  e.target.value = data.title;
+                }
+              }}
+              onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  e.currentTarget.blur();
+                }
+                if (e.key === "Escape") {
+                  e.currentTarget.value = data.title;
+                  e.currentTarget.blur();
+                }
+              }}
+            />
+          </div>
           {subPages.length > 0 ? (
             <div className="flex flex-col gap-1 mb-5">
               {subPages.map((sub) => (
@@ -205,18 +232,60 @@ function DocumentDetail() {
               ))}
             </div>
           ) : null}
-          {editing ? (
-            <DocumentForm
-              initial={{ title: data.title, content: text }}
-              submitLabel="Save"
-              pending={save.isPending}
-              onSubmit={(values) => save.mutate(values)}
-              onCancel={() => setEditing(false)}
-            />
-          ) : text ? (
-            <Markdown workspaceSlug={workspace.slug} content={text} />
+          {editingContent ? (
+            <div className="flex flex-col gap-2">
+              <InputArea
+                ref={contentRef}
+                autoFocus
+                value={draft.content}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, content: e.target.value }))
+                }
+                className="min-h-96 font-mono text-sm w-full"
+                onKeyDown={(e) => {
+                  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                    e.preventDefault();
+                    save.mutate({ content: draft.content });
+                  }
+                  if (e.key === "Escape") setEditingContent(false);
+                }}
+              />
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  loading={save.isPending}
+                  onClick={() => save.mutate({ content: draft.content })}
+                >
+                  Save
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setEditingContent(false)}
+                >
+                  Cancel
+                </Button>
+                <span className="text-xs text-kumo-subtle">
+                  ⌘↵ to save · Esc to cancel
+                </span>
+              </div>
+            </div>
           ) : (
-            <Text variant="secondary">This document is empty.</Text>
+            <button
+              type="button"
+              className="block w-full cursor-text text-left"
+              onClick={() => {
+                setDraft((d) => ({ ...d, content: text }));
+                setEditingContent(true);
+              }}
+            >
+              {text ? (
+                <Markdown workspaceSlug={workspace.slug} content={text} />
+              ) : (
+                <Text variant="secondary">Click to start writing…</Text>
+              )}
+            </button>
           )}
         </LayerCard.Primary>
       </LayerCard>
