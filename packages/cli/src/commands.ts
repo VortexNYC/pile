@@ -924,6 +924,63 @@ export const COMMANDS: Record<string, CommandDef> = {
     ],
     body: [],
   },
+  "issues share create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/issues/{id}/share",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "expiresAt",
+        flag: "expires-at",
+      },
+    ],
+  },
+  "issues share delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/issues/{id}/share/{token}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+      {
+        name: "token",
+        flag: "token",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "shared issues get": {
+    method: "GET",
+    path: "/shared-issues/{organizationId}/{token}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "token",
+        flag: "token",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "issues batch": {
     method: "POST",
     path: "/workspaces/{organizationId}/issues/batch",
@@ -6765,6 +6822,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "q",
         flag: "q",
       },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
     ],
     body: [],
   },
@@ -6816,6 +6877,27 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "message",
       },
     ],
+  },
+  "support captures list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/captures",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "type",
+        flag: "type",
+      },
+      {
+        name: "limit",
+        flag: "limit",
+      },
+    ],
+    body: [],
   },
   "support tickets get": {
     method: "GET",
@@ -9445,6 +9527,10 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "defaultViewId",
         flag: "default-view-id",
+      },
+      {
+        name: "hiddenSurfaces",
+        flag: "hidden-surfaces",
       },
     ],
   },

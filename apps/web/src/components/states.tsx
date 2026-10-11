@@ -16,6 +16,14 @@ export function LoadingState({ label = "Loading" }: { label?: string }) {
   );
 }
 
+function errorStatus(error: unknown): number | null {
+  if (error && typeof error === "object" && "status" in error) {
+    const s = (error as { status: unknown }).status;
+    return typeof s === "number" ? s : null;
+  }
+  return null;
+}
+
 export function ErrorState({
   error,
   onRetry,
@@ -23,16 +31,23 @@ export function ErrorState({
   error: unknown;
   onRetry?: () => void;
 }) {
-  const message =
-    error instanceof Error ? error.message : "Something went wrong.";
+  const status = errorStatus(error);
+  const forbidden = status === 401 || status === 403;
+  const message = forbidden
+    ? "You don't have access to this — ask a workspace admin."
+    : error instanceof Error
+      ? error.message
+      : "Something went wrong.";
   return (
     <div role="alert">
       <Empty
         icon={<WarningCircle size={40} />}
-        title="Couldn't load this"
+        title={forbidden ? "Access restricted" : "Couldn't load this"}
         description={message}
         contents={
-          onRetry ? <Button onClick={onRetry}>Try again</Button> : undefined
+          onRetry && !forbidden ? (
+            <Button onClick={onRetry}>Try again</Button>
+          ) : undefined
         }
       />
     </div>

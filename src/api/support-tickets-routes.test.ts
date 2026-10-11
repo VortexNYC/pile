@@ -3,6 +3,10 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { createD1 } from "../global/db.js";
+import {
+  supportTicketAttachments,
+  supportTicketEvents,
+} from "../global/schema.js";
 import { user as userTable } from "../global/schema.js";
 import { createCustomer } from "../global/support-contacts.js";
 import { createWorkspace } from "../global/workspaces.js";
@@ -340,5 +344,98 @@ describe("support ticket routes", () => {
       }
     );
     expect(res.status).toBe(400);
+  });
+
+  it("filters tickets by linked issueId", async () => {
+    const issueRes = await request(
+      "POST",
+      `/workspaces/${organizationId}/issues`,
+      { title: "Linked issue for ticket filter" }
+    );
+    expect(issueRes.status).toBe(201);
+    const issueId = ((await issueRes.json()) as { id: string }).id;
+    const createRes = await request(
+      "POST",
+      `/workspaces/${organizationId}/support/tickets`,
+      {
+        customerId,
+        title: "Issue-linked ticket",
+        sourceChannel: "chat",
+        issueId,
+      }
+    );
+    expect(createRes.status).toBe(201);
+    const createdTicket = (
+      (await createRes.json()) as {
+        ticket: { id: string; issueId: string | null };
+      }
+    ).ticket;
+    const ticketId = createdTicket.id;
+    expect(createdTicket.issueId).toBe(issueId);
+
+    const filtered = await request(
+      "GET",
+      `/workspaces/${organizationId}/support/tickets?issueId=${issueId}`
+    );
+    expect(filtered.status).toBe(200);
+    const body = listTicketsResponseSchema.parse(await filtered.json());
+    expect(body.tickets.length).toBe(1);
+    expect(body.tickets[0]?.id).toBe(ticketId);
+
+    const unfiltered = await request(
+      "GET",
+      `/workspaces/${organizationId}/support/tickets`
+    );
+    const all = listTicketsResponseSchema.parse(await unfiltered.json());
+    expect(all.tickets.some((t) => t.id === ticketId)).toBe(true);
+  });
+
+  it("lists captures across tickets for the gallery", async () => {
+    const createRes = await request(
+      "POST",
+      `/workspaces/${organizationId}/support/tickets`,
+      { customerId, title: "Captured ticket", sourceChannel: "capture" }
+    );
+    const ticket = ((await createRes.json()) as { ticket: { id: string } })
+      .ticket;
+
+    const db = createD1(env.D1);
+    const eventId = `evt_${crypto.randomUUID()}`;
+    await db.insert(supportTicketEvents).values({
+      id: eventId,
+      ticketId: ticket.id,
+      type: "custom_entry",
+      actorType: "customer",
+      createdAt: new Date().toISOString(),
+    });
+    await db.insert(supportTicketAttachments).values({
+      id: `att_${crypto.randomUUID()}`,
+      organizationId,
+      ticketId: ticket.id,
+      eventId,
+      type: "screenshot",
+      url: "https://example.com/shot.png",
+      fileName: "shot.png",
+      contentType: "image/png",
+      createdAt: new Date().toISOString(),
+    });
+
+    const res = await request(
+      "GET",
+      `/workspaces/${organizationId}/support/captures`
+    );
+    expect(res.status).toBe(200);
+    const body = z
+      .object({
+        captures: z.array(
+          z.object({
+            type: z.string(),
+            ticket: z.object({ id: z.string(), number: z.number() }),
+          })
+        ),
+      })
+      .parse(await res.json());
+    const hit = body.captures.find((c) => c.ticket.id === ticket.id);
+    expect(hit?.type).toBe("screenshot");
   });
 });

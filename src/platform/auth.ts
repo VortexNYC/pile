@@ -1,7 +1,7 @@
 import { apiKey } from "@better-auth/api-key";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { betterAuth } from "better-auth/minimal";
-import { admin, organization } from "better-auth/plugins";
+import { admin, organization, twoFactor } from "better-auth/plugins";
 
 import { sendEmail } from "../email/send.js";
 import { createD1 } from "../global/db.js";
@@ -251,6 +251,7 @@ export async function createAuth(env: AppEnv) {
           },
         },
       }),
+      twoFactor({ issuer: "Pile" }),
       organization({
         ...organizationOptions,
         schema: {

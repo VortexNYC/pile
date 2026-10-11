@@ -1522,6 +1522,195 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/issues/{id}/share": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List issue share */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The active share for this issue, if any. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            token: string;
+                            organizationId: string;
+                            issueId: string;
+                            createdById: string;
+                            createdAt: string;
+                            expiresAt: string | null;
+                        } | null;
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create issue share */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        expiresAt?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Share link created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            token: string;
+                            organizationId: string;
+                            issueId: string;
+                            createdById: string;
+                            createdAt: string;
+                            expiresAt: string | null;
+                        };
+                    };
+                };
+                /** @description Issue not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/issues/{id}/share/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete issue share */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Share revoked */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Share not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/shared-issues/{organizationId}/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /shared-issues/{organizationId}/{token} */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Shared issue */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            issue: {
+                                title: string;
+                                identifier: string | null;
+                                status: string;
+                                priority: string;
+                                description: string | null;
+                                createdAt: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Share not found or expired */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/issues/batch": {
         parameters: {
             query?: never;
@@ -12528,7 +12717,7 @@ export interface paths {
                                     [key: string]: unknown;
                                 }[] | string;
                                 /** @enum {string} */
-                                contentFormat: "blocks" | "markdown";
+                                contentFormat: "blocks" | "markdown" | "canvas";
                                 slug: string | null;
                                 projectId: string | null;
                                 issueId: string | null;
@@ -12567,7 +12756,7 @@ export interface paths {
                             [key: string]: unknown;
                         }[] | string;
                         /** @enum {string} */
-                        contentFormat?: "blocks" | "markdown";
+                        contentFormat?: "blocks" | "markdown" | "canvas";
                         slug?: string;
                         projectId?: string;
                         issueId?: string;
@@ -12594,7 +12783,7 @@ export interface paths {
                                 [key: string]: unknown;
                             }[] | string;
                             /** @enum {string} */
-                            contentFormat: "blocks" | "markdown";
+                            contentFormat: "blocks" | "markdown" | "canvas";
                             slug: string | null;
                             projectId: string | null;
                             issueId: string | null;
@@ -12653,7 +12842,7 @@ export interface paths {
                                 [key: string]: unknown;
                             }[] | string;
                             /** @enum {string} */
-                            contentFormat: "blocks" | "markdown";
+                            contentFormat: "blocks" | "markdown" | "canvas";
                             slug: string | null;
                             projectId: string | null;
                             issueId: string | null;
@@ -12731,7 +12920,7 @@ export interface paths {
                             [key: string]: unknown;
                         }[] | string;
                         /** @enum {string} */
-                        contentFormat?: "blocks" | "markdown";
+                        contentFormat?: "blocks" | "markdown" | "canvas";
                         slug?: string | null;
                         projectId?: string | null;
                         issueId?: string | null;
@@ -12758,7 +12947,7 @@ export interface paths {
                                 [key: string]: unknown;
                             }[] | string;
                             /** @enum {string} */
-                            contentFormat: "blocks" | "markdown";
+                            contentFormat: "blocks" | "markdown" | "canvas";
                             slug: string | null;
                             projectId: string | null;
                             issueId: string | null;
@@ -12822,7 +13011,7 @@ export interface paths {
                                 [key: string]: unknown;
                             }[] | string;
                             /** @enum {string} */
-                            contentFormat: "blocks" | "markdown";
+                            contentFormat: "blocks" | "markdown" | "canvas";
                             slug: string | null;
                             projectId: string | null;
                             issueId: string | null;
@@ -13317,7 +13506,36 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List document share */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The active share for this document, if any. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            token: string;
+                            documentId: string;
+                            includeChildren: boolean;
+                            createdAt: string;
+                            expiresAt: string | null;
+                        } | null;
+                    };
+                };
+            };
+        };
         put?: never;
         /** Create document share */
         post: {
@@ -13450,7 +13668,7 @@ export interface paths {
                                     [key: string]: unknown;
                                 }[] | string;
                                 /** @enum {string} */
-                                contentFormat: "blocks" | "markdown";
+                                contentFormat: "blocks" | "markdown" | "canvas";
                                 slug: string | null;
                                 projectId: string | null;
                                 issueId: string | null;
@@ -13473,7 +13691,7 @@ export interface paths {
                                     [key: string]: unknown;
                                 }[] | string;
                                 /** @enum {string} */
-                                contentFormat: "blocks" | "markdown";
+                                contentFormat: "blocks" | "markdown" | "canvas";
                                 slug: string | null;
                                 projectId: string | null;
                                 issueId: string | null;
@@ -13609,7 +13827,7 @@ export interface paths {
                                     [key: string]: unknown;
                                 }[] | string;
                                 /** @enum {string} */
-                                contentFormat: "blocks" | "markdown";
+                                contentFormat: "blocks" | "markdown" | "canvas";
                                 slug: string | null;
                                 projectId: string | null;
                                 issueId: string | null;
@@ -13849,7 +14067,7 @@ export interface paths {
                                     [key: string]: unknown;
                                 }[] | string;
                                 /** @enum {string} */
-                                contentFormat: "blocks" | "markdown";
+                                contentFormat: "blocks" | "markdown" | "canvas";
                                 slug: string | null;
                                 projectId: string | null;
                                 issueId: string | null;
@@ -13914,7 +14132,7 @@ export interface paths {
                                 [key: string]: unknown;
                             }[] | string;
                             /** @enum {string} */
-                            contentFormat: "blocks" | "markdown";
+                            contentFormat: "blocks" | "markdown" | "canvas";
                             slug: string | null;
                             projectId: string | null;
                             issueId: string | null;
@@ -14403,6 +14621,7 @@ export interface paths {
                                 organizationId: string;
                                 name: string;
                                 url: string | null;
+                                bookingUrl: string | null;
                                 logoUrl: string | null;
                                 externalId: string | null;
                                 tierId: string | null;
@@ -14432,6 +14651,7 @@ export interface paths {
                     "application/json": {
                         name: string;
                         url?: string;
+                        bookingUrl?: string | null;
                         logoUrl?: string;
                         externalId?: string;
                         tierId?: string;
@@ -14452,6 +14672,7 @@ export interface paths {
                             organizationId: string;
                             name: string;
                             url: string | null;
+                            bookingUrl: string | null;
                             logoUrl: string | null;
                             externalId: string | null;
                             tierId: string | null;
@@ -14501,6 +14722,7 @@ export interface paths {
                             organizationId: string;
                             name: string;
                             url: string | null;
+                            bookingUrl: string | null;
                             logoUrl: string | null;
                             externalId: string | null;
                             tierId: string | null;
@@ -14569,6 +14791,7 @@ export interface paths {
                     "application/json": {
                         name?: string;
                         url?: string;
+                        bookingUrl?: string | null;
                         logoUrl?: string;
                         externalId?: string;
                         tierId?: string;
@@ -14589,6 +14812,7 @@ export interface paths {
                             organizationId: string;
                             name: string;
                             url: string | null;
+                            bookingUrl: string | null;
                             logoUrl: string | null;
                             externalId: string | null;
                             tierId: string | null;
@@ -14646,6 +14870,7 @@ export interface paths {
                                 size: number;
                                 r2Key: string;
                                 url: string;
+                                bookingUrl?: string | null;
                                 createdById: string | null;
                                 createdAt: string;
                             }[];
@@ -14698,6 +14923,7 @@ export interface paths {
                             size: number;
                             r2Key: string;
                             url: string;
+                            bookingUrl?: string | null;
                             createdById: string | null;
                             createdAt: string;
                         };
@@ -14761,6 +14987,7 @@ export interface paths {
                             size: number;
                             r2Key: string;
                             url: string;
+                            bookingUrl?: string | null;
                             createdById: string | null;
                             createdAt: string;
                         };
@@ -16345,6 +16572,7 @@ export interface paths {
                     externalSource?: "intercom" | "zendesk" | "plain" | "email" | "slack" | "msteams" | "discord" | "chat" | "api" | "manual";
                     assignedTo?: string;
                     q?: string;
+                    issueId?: string;
                 };
                 header?: never;
                 path: {
@@ -16591,6 +16819,62 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/captures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List support captures */
+        get: {
+            parameters: {
+                query?: {
+                    type?: string;
+                    limit?: number;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description All capture media across support tickets — the jams gallery: every screenshot, video, log, and artifact joined to its ticket. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            captures: {
+                                id: string;
+                                type: string;
+                                fileName: string | null;
+                                contentType: string | null;
+                                url: string | null;
+                                size: number | null;
+                                createdAt: string;
+                                ticket: {
+                                    id: string;
+                                    number: number;
+                                    title: string;
+                                };
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -23771,6 +24055,15 @@ export interface paths {
                     content: {
                         "application/json": {
                             defaultViewId: string | null;
+                            hiddenSurfaces: string[] | null;
+                            favorites: {
+                                /** @enum {string} */
+                                type: "issue" | "document";
+                                id: string;
+                                title: string;
+                                identifier?: string | null;
+                                addedAt: string;
+                            }[] | null;
                         };
                     };
                 };
@@ -23789,7 +24082,16 @@ export interface paths {
             requestBody?: {
                 content: {
                     "application/json": {
-                        defaultViewId: string | null;
+                        defaultViewId?: string | null;
+                        hiddenSurfaces?: string[] | null;
+                        favorites?: {
+                            /** @enum {string} */
+                            type: "issue" | "document";
+                            id: string;
+                            title: string;
+                            identifier?: string | null;
+                            addedAt: string;
+                        }[] | null;
                     };
                 };
             };
@@ -23802,6 +24104,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             defaultViewId: string | null;
+                            hiddenSurfaces: string[] | null;
                         };
                     };
                 };

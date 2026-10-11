@@ -3072,6 +3072,278 @@
         "summary": "List issue similar"
       }
     },
+    "/workspaces/{organizationId}/issues/{id}/share": {
+      "get": {
+        "tags": [
+          "issues"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The active share for this issue, if any.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "nullable": true,
+                  "properties": {
+                    "token": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "issueId": {
+                      "type": "string"
+                    },
+                    "createdById": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "token",
+                    "organizationId",
+                    "issueId",
+                    "createdById",
+                    "createdAt",
+                    "expiresAt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List issue share"
+      },
+      "post": {
+        "tags": [
+          "issues"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expiresAt": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Share link created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "issueId": {
+                      "type": "string"
+                    },
+                    "createdById": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "token",
+                    "organizationId",
+                    "issueId",
+                    "createdById",
+                    "createdAt",
+                    "expiresAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Issue not found"
+          }
+        },
+        "summary": "Create issue share"
+      }
+    },
+    "/workspaces/{organizationId}/issues/{id}/share/{token}": {
+      "delete": {
+        "tags": [
+          "issues"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "token",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Share revoked"
+          },
+          "404": {
+            "description": "Share not found"
+          }
+        },
+        "summary": "Delete issue share"
+      }
+    },
+    "/shared-issues/{organizationId}/{token}": {
+      "get": {
+        "tags": [
+          "issues"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "token",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Shared issue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "issue": {
+                      "type": "object",
+                      "properties": {
+                        "title": {
+                          "type": "string"
+                        },
+                        "identifier": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "priority": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "title",
+                        "identifier",
+                        "status",
+                        "priority",
+                        "description",
+                        "createdAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "issue"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Share not found or expired"
+          }
+        },
+        "summary": "GET /shared-issues/{organizationId}/{token}"
+      }
+    },
     "/workspaces/{organizationId}/issues/batch": {
       "post": {
         "tags": [
@@ -24473,7 +24745,8 @@
                             "type": "string",
                             "enum": [
                               "blocks",
-                              "markdown"
+                              "markdown",
+                              "canvas"
                             ]
                           },
                           "slug": {
@@ -24601,7 +24874,8 @@
                     "type": "string",
                     "enum": [
                       "blocks",
-                      "markdown"
+                      "markdown",
+                      "canvas"
                     ]
                   },
                   "slug": {
@@ -24674,7 +24948,8 @@
                       "type": "string",
                       "enum": [
                         "blocks",
-                        "markdown"
+                        "markdown",
+                        "canvas"
                       ]
                     },
                     "slug": {
@@ -24814,7 +25089,8 @@
                       "type": "string",
                       "enum": [
                         "blocks",
-                        "markdown"
+                        "markdown",
+                        "canvas"
                       ]
                     },
                     "slug": {
@@ -24948,7 +25224,8 @@
                     "type": "string",
                     "enum": [
                       "blocks",
-                      "markdown"
+                      "markdown",
+                      "canvas"
                     ]
                   },
                   "slug": {
@@ -25024,7 +25301,8 @@
                       "type": "string",
                       "enum": [
                         "blocks",
-                        "markdown"
+                        "markdown",
+                        "canvas"
                       ]
                     },
                     "slug": {
@@ -25199,7 +25477,8 @@
                       "type": "string",
                       "enum": [
                         "blocks",
-                        "markdown"
+                        "markdown",
+                        "canvas"
                       ]
                     },
                     "slug": {
@@ -26064,6 +26343,68 @@
       }
     },
     "/workspaces/{organizationId}/documents/{id}/share": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The active share for this document, if any.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "nullable": true,
+                  "properties": {
+                    "token": {
+                      "type": "string"
+                    },
+                    "documentId": {
+                      "type": "string"
+                    },
+                    "includeChildren": {
+                      "type": "boolean"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "token",
+                    "documentId",
+                    "includeChildren",
+                    "createdAt",
+                    "expiresAt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List document share"
+      },
       "post": {
         "tags": [
           "documents"
@@ -26255,7 +26596,8 @@
                           "type": "string",
                           "enum": [
                             "blocks",
-                            "markdown"
+                            "markdown",
+                            "canvas"
                           ]
                         },
                         "slug": {
@@ -26362,7 +26704,8 @@
                             "type": "string",
                             "enum": [
                               "blocks",
-                              "markdown"
+                              "markdown",
+                              "canvas"
                             ]
                           },
                           "slug": {
@@ -26580,7 +26923,8 @@
                             "type": "string",
                             "enum": [
                               "blocks",
-                              "markdown"
+                              "markdown",
+                              "canvas"
                             ]
                           },
                           "slug": {
@@ -26947,7 +27291,8 @@
                             "type": "string",
                             "enum": [
                               "blocks",
-                              "markdown"
+                              "markdown",
+                              "canvas"
                             ]
                           },
                           "slug": {
@@ -27101,7 +27446,8 @@
                       "type": "string",
                       "enum": [
                         "blocks",
-                        "markdown"
+                        "markdown",
+                        "canvas"
                       ]
                     },
                     "slug": {
@@ -27899,6 +28245,10 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "bookingUrl": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "logoUrl": {
                             "type": "string",
                             "nullable": true
@@ -27931,6 +28281,7 @@
                           "organizationId",
                           "name",
                           "url",
+                          "bookingUrl",
                           "logoUrl",
                           "externalId",
                           "tierId",
@@ -27979,6 +28330,10 @@
                   "url": {
                     "type": "string"
                   },
+                  "bookingUrl": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "logoUrl": {
                     "type": "string"
                   },
@@ -28023,6 +28378,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "bookingUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "logoUrl": {
                       "type": "string",
                       "nullable": true
@@ -28055,6 +28414,7 @@
                     "organizationId",
                     "name",
                     "url",
+                    "bookingUrl",
                     "logoUrl",
                     "externalId",
                     "tierId",
@@ -28115,6 +28475,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "bookingUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "logoUrl": {
                       "type": "string",
                       "nullable": true
@@ -28147,6 +28511,7 @@
                     "organizationId",
                     "name",
                     "url",
+                    "bookingUrl",
                     "logoUrl",
                     "externalId",
                     "tierId",
@@ -28200,6 +28565,10 @@
                   "url": {
                     "type": "string"
                   },
+                  "bookingUrl": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "logoUrl": {
                     "type": "string"
                   },
@@ -28241,6 +28610,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "bookingUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "logoUrl": {
                       "type": "string",
                       "nullable": true
@@ -28273,6 +28646,7 @@
                     "organizationId",
                     "name",
                     "url",
+                    "bookingUrl",
                     "logoUrl",
                     "externalId",
                     "tierId",
@@ -28383,6 +28757,10 @@
                           },
                           "url": {
                             "type": "string"
+                          },
+                          "bookingUrl": {
+                            "type": "string",
+                            "nullable": true
                           },
                           "createdById": {
                             "type": "string",
@@ -28500,6 +28878,10 @@
                     "url": {
                       "type": "string"
                     },
+                    "bookingUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "createdById": {
                       "type": "string",
                       "nullable": true
@@ -28596,6 +28978,10 @@
                     },
                     "url": {
                       "type": "string"
+                    },
+                    "bookingUrl": {
+                      "type": "string",
+                      "nullable": true
                     },
                     "createdById": {
                       "type": "string",
@@ -32493,6 +32879,14 @@
             "required": false,
             "name": "q",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "issueId",
+            "in": "query"
           }
         ],
         "responses": {
@@ -32907,6 +33301,122 @@
           }
         },
         "summary": "List support tickets"
+      }
+    },
+    "/workspaces/{organizationId}/support/captures": {
+      "get": {
+        "tags": [
+          "support-tickets"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "type",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 100
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "All capture media across support tickets — the jams gallery: every screenshot, video, log, and artifact joined to its ticket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "captures": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "fileName": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "contentType": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "url": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "size": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "ticket": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "number": {
+                                "type": "number"
+                              },
+                              "title": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "number",
+                              "title"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "fileName",
+                          "contentType",
+                          "url",
+                          "size",
+                          "createdAt",
+                          "ticket"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "captures"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List support captures"
       }
     },
     "/workspaces/{organizationId}/support/tickets/{ticketId}": {
@@ -48426,10 +48936,54 @@
                     "defaultViewId": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "hiddenSurfaces": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "favorites": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "issue",
+                              "document"
+                            ]
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "identifier": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "addedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "id",
+                          "title",
+                          "addedAt"
+                        ]
+                      }
                     }
                   },
                   "required": [
-                    "defaultViewId"
+                    "defaultViewId",
+                    "hiddenSurfaces",
+                    "favorites"
                   ]
                 }
               }
@@ -48461,11 +49015,50 @@
                   "defaultViewId": {
                     "type": "string",
                     "nullable": true
+                  },
+                  "hiddenSurfaces": {
+                    "type": "array",
+                    "nullable": true,
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "favorites": {
+                    "type": "array",
+                    "nullable": true,
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "issue",
+                            "document"
+                          ]
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "identifier": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "addedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "id",
+                        "title",
+                        "addedAt"
+                      ]
+                    }
                   }
-                },
-                "required": [
-                  "defaultViewId"
-                ]
+                }
               }
             }
           }
@@ -48481,10 +49074,18 @@
                     "defaultViewId": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "hiddenSurfaces": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
-                    "defaultViewId"
+                    "defaultViewId",
+                    "hiddenSurfaces"
                   ]
                 }
               }

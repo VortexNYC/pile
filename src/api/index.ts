@@ -386,6 +386,9 @@ app.all("/api/auth/*", async (c) => {
 });
 
 app.get("/", (c) => {
+  if (new URL(c.req.url).hostname === "staging.pile.nyc") {
+    return c.redirect("/app");
+  }
   const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -409,6 +412,7 @@ support ticket and the engineering issue are the same object.</p>
 pile auth login
 pile issues create --title "…"</pre>
 <p>
+<a href="/app">app</a> ·
 <a href="/openapi.json">openapi.json</a> ·
 <a href="/llms.txt">llms.txt</a> ·
 <a href="/llms-full.txt">llms-full.txt</a> ·

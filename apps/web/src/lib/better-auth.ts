@@ -1,5 +1,8 @@
 import { apiKeyClient } from "@better-auth/api-key/client";
-import { organizationClient } from "better-auth/client/plugins";
+import {
+  organizationClient,
+  twoFactorClient,
+} from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 
 // Same-origin: the Worker serves this SPA at /app and Better Auth at
@@ -9,5 +12,5 @@ import { createAuthClient } from "better-auth/react";
 export const betterAuthClient = createAuthClient({
   baseURL: typeof window === "undefined" ? undefined : window.location.origin,
   fetchOptions: { credentials: "include" },
-  plugins: [organizationClient(), apiKeyClient()],
+  plugins: [organizationClient(), apiKeyClient(), twoFactorClient()],
 });

@@ -369,6 +369,8 @@ export const workspaceUserPreferences = sqliteTable(
     organizationId: text("organization_id" as string).notNull(),
     userId: text("user_id" as string).notNull(),
     defaultViewId: text("default_view_id" as string),
+    hiddenSurfaces: text("hidden_surfaces" as string),
+    favorites: text("favorites" as string),
     updatedAt: text("updated_at" as string).notNull(),
   },
   (table) => [primaryKey({ columns: [table.organizationId, table.userId] })]
@@ -387,7 +389,7 @@ export const workspaceDocuments = sqliteTable(
     icon: text("icon" as string),
     // "blocks" = BlockNote JSON; "markdown" = raw markdown (agent-native).
     contentFormat: text("content_format" as string, {
-      enum: ["blocks", "markdown"],
+      enum: ["blocks", "markdown", "canvas"],
     })
       .notNull()
       .default("blocks"),
@@ -451,6 +453,24 @@ export const workspaceDocumentSpaces = sqliteTable(
 );
 
 // Public share links for documents (GitBook/Docmost "publish").
+export const workspaceIssueShares = sqliteTable(
+  "issue_shares" as string,
+  {
+    token: text("token" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    issueId: text("issue_id" as string).notNull(),
+    createdById: text("created_by_id" as string).notNull(),
+    createdAt: text("created_at" as string).notNull(),
+    expiresAt: text("expires_at" as string),
+  },
+  (table) => [
+    index("issue_shares_issue_idx" as string).on(
+      table.organizationId,
+      table.issueId
+    ),
+  ]
+);
+
 export const workspaceDocumentShares = sqliteTable(
   "document_shares" as string,
   {
@@ -549,7 +569,7 @@ export const workspaceDocumentHistory = sqliteTable(
     documentId: text("document_id" as string).notNull(),
     content: text("content" as string).notNull(),
     contentFormat: text("content_format" as string, {
-      enum: ["blocks", "markdown"],
+      enum: ["blocks", "markdown", "canvas"],
     })
       .notNull()
       .default("blocks"),
@@ -638,6 +658,7 @@ export const workspaceCustomers = sqliteTable(
     name: text("name" as string).notNull(),
     url: text("url" as string),
     logoUrl: text("logo_url" as string),
+    bookingUrl: text("booking_url" as string),
     externalId: text("external_id" as string),
     tierId: text("tier_id" as string),
     statusId: text("status_id" as string),

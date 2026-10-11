@@ -1,10 +1,10 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 import { consumeUsage } from "../global/billing.js";
 import { createD1 } from "../global/db.js";
-import { supportTicketAttachments } from "../global/schema.js";
+import { supportTicketAttachments, supportTickets } from "../global/schema.js";
 import { getCustomerById } from "../global/support-contacts.js";
 import { maybeEscalate } from "../global/support-escalation.js";
 import {
@@ -241,6 +241,7 @@ const listTicketsQuerySchema = z.object({
   externalSource: supportTicketSourceEnum.optional(),
   assignedTo: z.string().optional(),
   q: z.string().optional(),
+  issueId: z.string().optional(),
 });
 
 const listEventsQuerySchema = z.object({
@@ -406,6 +407,48 @@ const listTicketArtifactsRoute = createRoute({
       },
     },
     404: { description: "Ticket not found" },
+  },
+});
+
+const listCapturesRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/support/captures",
+  tags: ["support-tickets"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    query: z.object({
+      type: z.string().optional(),
+      limit: z.coerce.number().int().min(1).max(200).default(100),
+    }),
+  },
+  responses: {
+    200: {
+      description:
+        "All capture media across support tickets — the jams gallery: every screenshot, video, log, and artifact joined to its ticket.",
+      content: {
+        "application/json": {
+          schema: z.object({
+            captures: z.array(
+              z.object({
+                id: z.string(),
+                type: z.string(),
+                fileName: z.string().nullable(),
+                contentType: z.string().nullable(),
+                url: z.string().nullable(),
+                size: z.number().nullable(),
+                createdAt: z.string(),
+                ticket: z.object({
+                  id: z.string(),
+                  number: z.number(),
+                  title: z.string(),
+                }),
+              })
+            ),
+          }),
+        },
+      },
+    },
   },
 });
 
@@ -860,6 +903,7 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
       externalSource: query.externalSource,
       assignedTo: query.assignedTo,
       q: query.q,
+      issueId: query.issueId,
     });
 
     const withRelations = await hydrateTicketRelations(
@@ -869,6 +913,57 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
     );
 
     return c.json({ tickets: withRelations, nextCursor });
+  });
+
+  app.openapi(listCapturesRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const { type, limit } = c.req.valid("query");
+    const db = createD1(c.env.D1);
+    const rows = await db
+      .select({
+        id: supportTicketAttachments.id,
+        type: supportTicketAttachments.type,
+        fileName: supportTicketAttachments.fileName,
+        contentType: supportTicketAttachments.contentType,
+        url: supportTicketAttachments.url,
+        size: supportTicketAttachments.size,
+        createdAt: supportTicketAttachments.createdAt,
+        ticketId: supportTickets.id,
+        ticketNumber: supportTickets.number,
+        ticketTitle: supportTickets.title,
+      })
+      .from(supportTicketAttachments)
+      .innerJoin(
+        supportTickets,
+        and(
+          eq(supportTicketAttachments.ticketId, supportTickets.id),
+          eq(supportTicketAttachments.organizationId, organizationId)
+        )
+      )
+      .where(
+        and(
+          eq(supportTicketAttachments.organizationId, organizationId),
+          type ? eq(supportTicketAttachments.type, type as never) : undefined
+        )
+      )
+      .orderBy(desc(supportTicketAttachments.createdAt))
+      .limit(limit);
+    return c.json({
+      captures: rows.map((row) => ({
+        id: row.id,
+        type: row.type,
+        fileName: row.fileName,
+        contentType: row.contentType,
+        url: row.url,
+        size: row.size,
+        createdAt: row.createdAt,
+        ticket: {
+          id: row.ticketId,
+          number: row.ticketNumber,
+          title: row.ticketTitle,
+        },
+      })),
+    });
   });
 
   app.openapi(getTicketRoute, async (c) => {

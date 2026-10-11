@@ -3,6 +3,8 @@ import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { useEffect } from "react";
 
 import { AppSidebar } from "@/components/app-sidebar";
+import { CommandMenu } from "@/components/command-menu";
+import { CreateIssueDialog } from "@/components/create-issue-dialog";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { useWorkspaces, WorkspaceContext } from "@/hooks/use-workspace";
@@ -15,7 +17,10 @@ export const Route = createFileRoute("/_authenticated/$slug")({
 function WorkspaceLayout() {
   const { slug } = Route.useParams();
   const workspaces = useWorkspaces();
-  const workspace = workspaces.data?.find((w) => w.slug === slug) ?? null;
+  // Accept the org id too — CLI-side links (pile.nyc/app/<org>/...) carry
+  // the organizationId, not the slug.
+  const workspace =
+    workspaces.data?.find((w) => w.slug === slug || w.id === slug) ?? null;
   const workspaceId = workspace?.id;
 
   // better-auth-ui's member screens act on the session's active org.
@@ -54,6 +59,8 @@ function WorkspaceLayout() {
   return (
     <WorkspaceContext.Provider value={workspace}>
       <Sidebar.Provider className="bg-kumo-canvas h-dvh min-h-0">
+        <CommandMenu />
+        <CreateIssueDialog />
         <AppSidebar workspace={workspace} workspaces={workspaces.data} />
         <div className="flex h-dvh min-h-0 min-w-0 flex-1 flex-col">
           <header className="border-kumo-hairline flex h-14 shrink-0 items-center justify-between gap-2 border-b px-4">

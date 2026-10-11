@@ -5,6 +5,9 @@ import {
   ChangePasswordForm,
   ConnectedAccounts,
   DeleteAccountForm,
+  DisableTwoFactorForm,
+  EnableTwoFactorForm,
+  GenerateBackupCodesForm,
   SessionList,
   SetPasswordForm,
   SettingsStack,
@@ -32,6 +35,9 @@ function AccountSettings() {
           <SetPasswordForm className="w-full max-w-none" />
           <ChangePasswordForm className="w-full max-w-none" />
           <SessionList className="w-full max-w-none" showRevokeOthersAction />
+          <EnableTwoFactorForm className="w-full max-w-none" />
+          <DisableTwoFactorForm className="w-full max-w-none" />
+          <GenerateBackupCodesForm className="w-full max-w-none" />
           <DeleteAccountForm className="w-full max-w-none" />
         </SettingsStack>
       </Page>

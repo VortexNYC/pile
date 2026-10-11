@@ -66,6 +66,17 @@ export function issueStatusVariant(status: IssueStatus): BadgeVariant {
   }
 }
 
+export function ticketStatusVariant(status: TicketStatus): BadgeVariant {
+  switch (status) {
+    case "todo":
+      return "blue";
+    case "snoozed":
+      return "orange";
+    case "done":
+      return "green";
+  }
+}
+
 export function priorityVariant(priority: IssuePriority): BadgeVariant {
   switch (priority) {
     case "urgent":
@@ -142,4 +153,62 @@ export function slugify(name: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 48);
+}
+
+type SessionResponse =
+  paths["/workspaces/{organizationId}/agent/sessions"]["get"]["responses"][200]["content"]["application/json"]["sessions"][number];
+export type SessionStatus = SessionResponse["status"];
+export type SessionDerivedStatus = NonNullable<
+  SessionResponse["derivedStatus"]
+>;
+
+export function sessionStatusVariant(status: SessionStatus): BadgeVariant {
+  switch (status) {
+    case "running":
+      return "blue";
+    case "waiting":
+      return "purple";
+    case "completed":
+      return "green";
+    case "failed":
+      return "red";
+    default:
+      return "neutral";
+  }
+}
+
+export function derivedStatusVariant(
+  derived: SessionDerivedStatus | null | undefined
+): BadgeVariant | null {
+  if (derived === "stalled") return "orange";
+  if (derived === "needs_input") return "purple";
+  return null;
+}
+
+export function projectStatusVariant(status: string): BadgeVariant {
+  switch (status) {
+    case "started":
+      return "blue";
+    case "completed":
+      return "green";
+    case "paused":
+      return "orange";
+    case "canceled":
+      return "neutral";
+    default:
+      return "neutral";
+  }
+}
+
+export function projectHealthVariant(health: string): BadgeVariant {
+  switch (health) {
+    case "on_track":
+      return "green";
+    case "at_risk":
+      return "orange";
+    case "off_track":
+      return "red";
+    default:
+      return "neutral";
+  }
 }

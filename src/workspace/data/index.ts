@@ -31,6 +31,7 @@ import {
   workspaceDocumentPermissions,
   workspaceDocuments,
   workspaceDocumentShares,
+  workspaceIssueShares,
   workspaceDocumentSpaces,
   workspaceDocumentWatchers,
   workspaceEntityAttachments,
@@ -650,6 +651,74 @@ export async function setDefaultView(
       organizationId,
       userId,
       defaultViewId,
+      updatedAt: ts,
+    });
+  }
+  return getUserViewPreferences(db, organizationId, userId);
+}
+
+export async function setHiddenSurfaces(
+  db: WorkspaceDb,
+  organizationId: string,
+  userId: string,
+  hiddenSurfaces: string[] | null
+) {
+  const value = hiddenSurfaces ? JSON.stringify(hiddenSurfaces) : null;
+  const existing = await getUserViewPreferences(db, organizationId, userId);
+  const ts = new Date().toISOString();
+  if (existing) {
+    await db
+      .update(workspaceUserPreferences)
+      .set({ hiddenSurfaces: value, updatedAt: ts })
+      .where(
+        and(
+          eq(workspaceUserPreferences.organizationId, organizationId),
+          eq(workspaceUserPreferences.userId, userId)
+        )
+      );
+  } else {
+    await db.insert(workspaceUserPreferences).values({
+      organizationId,
+      userId,
+      hiddenSurfaces: value,
+      updatedAt: ts,
+    });
+  }
+  return getUserViewPreferences(db, organizationId, userId);
+}
+
+export interface EntityFavorite {
+  type: "issue" | "document";
+  id: string;
+  title: string;
+  identifier?: string | null;
+  addedAt: string;
+}
+
+export async function setFavorites(
+  db: WorkspaceDb,
+  organizationId: string,
+  userId: string,
+  favorites: EntityFavorite[] | null
+) {
+  const value = favorites ? JSON.stringify(favorites) : null;
+  const existing = await getUserViewPreferences(db, organizationId, userId);
+  const ts = new Date().toISOString();
+  if (existing) {
+    await db
+      .update(workspaceUserPreferences)
+      .set({ favorites: value, updatedAt: ts })
+      .where(
+        and(
+          eq(workspaceUserPreferences.organizationId, organizationId),
+          eq(workspaceUserPreferences.userId, userId)
+        )
+      );
+  } else {
+    await db.insert(workspaceUserPreferences).values({
+      organizationId,
+      userId,
+      favorites: value,
       updatedAt: ts,
     });
   }
@@ -2115,7 +2184,7 @@ export interface DocumentInput {
   title: string;
   icon?: string | null;
   content?: unknown[] | string; // BlockNote blocks or markdown
-  contentFormat?: "blocks" | "markdown";
+  contentFormat?: "blocks" | "markdown" | "canvas";
   slug?: string | null;
   projectId?: string | null;
   issueId?: string | null;
@@ -2245,7 +2314,7 @@ export interface DocumentUpdate {
   title?: string;
   icon?: string | null;
   content?: unknown[] | string;
-  contentFormat?: "blocks" | "markdown";
+  contentFormat?: "blocks" | "markdown" | "canvas";
   slug?: string | null;
   projectId?: string | null;
   issueId?: string | null;
@@ -2286,7 +2355,7 @@ export function updateDocument(
       typeof update.content === "string"
         ? update.content
         : JSON.stringify(update.content);
-    const resolvedFormat: "blocks" | "markdown" =
+    const resolvedFormat: "blocks" | "markdown" | "canvas" =
       update.contentFormat ??
       (typeof update.content === "string" ? "markdown" : "blocks");
     patch.contentFormat = resolvedFormat;
@@ -2555,6 +2624,7 @@ export interface CustomerInput {
   name: string;
   url?: string | null;
   logoUrl?: string | null;
+  bookingUrl?: string | null;
   externalId?: string | null;
   tierId?: string | null;
   statusId?: string | null;
@@ -2572,6 +2642,7 @@ export function createCustomer(db: WorkspaceDb, input: CustomerInput) {
       name: input.name,
       url: input.url ?? null,
       logoUrl: input.logoUrl ?? null,
+      bookingUrl: input.bookingUrl ?? null,
       externalId: input.externalId ?? null,
       tierId: input.tierId ?? null,
       statusId: input.statusId ?? null,
@@ -2621,6 +2692,7 @@ export function updateCustomer(
     "name",
     "url",
     "logoUrl",
+    "bookingUrl",
     "externalId",
     "tierId",
     "statusId",
@@ -3951,6 +4023,70 @@ export function deleteDocumentSpace(
       .returning()
       .all().length > 0
   );
+}
+
+export function createIssueShare(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: {
+    issueId: string;
+    createdById: string;
+    expiresAt?: string | null;
+  }
+) {
+  return db
+    .insert(workspaceIssueShares)
+    .values({
+      token: crypto.randomUUID().replace(/-/g, ""),
+      organizationId,
+      issueId: input.issueId,
+      createdById: input.createdById,
+      createdAt: new Date().toISOString(),
+      expiresAt: input.expiresAt ?? null,
+    })
+    .returning()
+    .get();
+}
+
+export function getIssueShare(
+  db: WorkspaceDb,
+  organizationId: string,
+  issueId: string
+) {
+  return db
+    .select()
+    .from(workspaceIssueShares)
+    .where(
+      and(
+        eq(workspaceIssueShares.issueId, issueId),
+        eq(workspaceIssueShares.organizationId, organizationId)
+      )
+    )
+    .get();
+}
+
+export function getIssueShareByToken(db: WorkspaceDb, token: string) {
+  return db
+    .select()
+    .from(workspaceIssueShares)
+    .where(eq(workspaceIssueShares.token, token))
+    .get();
+}
+
+export function deleteIssueShare(
+  db: WorkspaceDb,
+  organizationId: string,
+  token: string
+) {
+  return db
+    .delete(workspaceIssueShares)
+    .where(
+      and(
+        eq(workspaceIssueShares.token, token),
+        eq(workspaceIssueShares.organizationId, organizationId)
+      )
+    )
+    .run();
 }
 
 export function createDocumentShare(

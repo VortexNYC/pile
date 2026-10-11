@@ -21,20 +21,34 @@ import { Route as AuthVerifyEmailRouteImport } from './routes/_auth/verify-email
 import { Route as AuthenticatedSlugRouteImport } from './routes/_authenticated/$slug'
 import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authenticated/onboarding'
 import { Route as AuthenticatedSlugIndexRouteImport } from './routes/_authenticated/$slug/index'
+import { Route as AuthenticatedSlugInboxRouteImport } from './routes/_authenticated/$slug/inbox'
+import { Route as ShareCaptureTicketIdRouteImport } from './routes/share/capture/$ticketId'
+import { Route as AuthenticatedSlugCapturesIndexRouteImport } from './routes/_authenticated/$slug/captures/index'
+import { Route as AuthenticatedSlugChangelogIndexRouteImport } from './routes/_authenticated/$slug/changelog/index'
 import { Route as AuthenticatedSlugCustomersIndexRouteImport } from './routes/_authenticated/$slug/customers/index'
 import { Route as AuthenticatedSlugCustomersCustomerIdRouteImport } from './routes/_authenticated/$slug/customers/$customerId'
+import { Route as AuthenticatedSlugCyclesIndexRouteImport } from './routes/_authenticated/$slug/cycles/index'
 import { Route as AuthenticatedSlugDocumentsIndexRouteImport } from './routes/_authenticated/$slug/documents/index'
 import { Route as AuthenticatedSlugDocumentsDocumentIdRouteImport } from './routes/_authenticated/$slug/documents/$documentId'
 import { Route as AuthenticatedSlugDocumentsNewRouteImport } from './routes/_authenticated/$slug/documents/new'
+import { Route as AuthenticatedSlugInitiativesIndexRouteImport } from './routes/_authenticated/$slug/initiatives/index'
 import { Route as AuthenticatedSlugIssuesIndexRouteImport } from './routes/_authenticated/$slug/issues/index'
 import { Route as AuthenticatedSlugIssuesIssueIdRouteImport } from './routes/_authenticated/$slug/issues/$issueId'
 import { Route as AuthenticatedSlugIssuesNewRouteImport } from './routes/_authenticated/$slug/issues/new'
+import { Route as AuthenticatedSlugProjectsIndexRouteImport } from './routes/_authenticated/$slug/projects/index'
+import { Route as AuthenticatedSlugProjectsProjectIdRouteImport } from './routes/_authenticated/$slug/projects/$projectId'
+import { Route as AuthenticatedSlugRoadmapsIndexRouteImport } from './routes/_authenticated/$slug/roadmaps/index'
+import { Route as AuthenticatedSlugSessionsIndexRouteImport } from './routes/_authenticated/$slug/sessions/index'
+import { Route as AuthenticatedSlugSessionsSessionIdRouteImport } from './routes/_authenticated/$slug/sessions/$sessionId'
 import { Route as AuthenticatedSlugSettingsIndexRouteImport } from './routes/_authenticated/$slug/settings/index'
 import { Route as AuthenticatedSlugSettingsAccountRouteImport } from './routes/_authenticated/$slug/settings/account'
 import { Route as AuthenticatedSlugSettingsDeveloperRouteImport } from './routes/_authenticated/$slug/settings/developer'
 import { Route as AuthenticatedSlugSettingsMembersRouteImport } from './routes/_authenticated/$slug/settings/members'
+import { Route as AuthenticatedSlugSettingsSurfacesRouteImport } from './routes/_authenticated/$slug/settings/surfaces'
 import { Route as AuthenticatedSlugTicketsIndexRouteImport } from './routes/_authenticated/$slug/tickets/index'
 import { Route as AuthenticatedSlugTicketsTicketIdRouteImport } from './routes/_authenticated/$slug/tickets/$ticketId'
+import { Route as ShareDocumentOrgIdTokenRouteImport } from './routes/share/document/$orgId/$token'
+import { Route as ShareIssueOrgIdTokenRouteImport } from './routes/share/issue/$orgId/$token'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -94,6 +108,28 @@ const AuthenticatedSlugIndexRoute = AuthenticatedSlugIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedSlugRoute,
 } as any)
+const AuthenticatedSlugInboxRoute = AuthenticatedSlugInboxRouteImport.update({
+  id: '/inbox',
+  path: '/inbox',
+  getParentRoute: () => AuthenticatedSlugRoute,
+} as any)
+const ShareCaptureTicketIdRoute = ShareCaptureTicketIdRouteImport.update({
+  id: '/share/capture/$ticketId',
+  path: '/share/capture/$ticketId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedSlugCapturesIndexRoute =
+  AuthenticatedSlugCapturesIndexRouteImport.update({
+    id: '/captures/',
+    path: '/captures/',
+    getParentRoute: () => AuthenticatedSlugRoute,
+  } as any)
+const AuthenticatedSlugChangelogIndexRoute =
+  AuthenticatedSlugChangelogIndexRouteImport.update({
+    id: '/changelog/',
+    path: '/changelog/',
+    getParentRoute: () => AuthenticatedSlugRoute,
+  } as any)
 const AuthenticatedSlugCustomersIndexRoute =
   AuthenticatedSlugCustomersIndexRouteImport.update({
     id: '/customers/',
@@ -104,6 +140,12 @@ const AuthenticatedSlugCustomersCustomerIdRoute =
   AuthenticatedSlugCustomersCustomerIdRouteImport.update({
     id: '/customers/$customerId',
     path: '/customers/$customerId',
+    getParentRoute: () => AuthenticatedSlugRoute,
+  } as any)
+const AuthenticatedSlugCyclesIndexRoute =
+  AuthenticatedSlugCyclesIndexRouteImport.update({
+    id: '/cycles/',
+    path: '/cycles/',
     getParentRoute: () => AuthenticatedSlugRoute,
   } as any)
 const AuthenticatedSlugDocumentsIndexRoute =
@@ -124,6 +166,12 @@ const AuthenticatedSlugDocumentsNewRoute =
     path: '/documents/new',
     getParentRoute: () => AuthenticatedSlugRoute,
   } as any)
+const AuthenticatedSlugInitiativesIndexRoute =
+  AuthenticatedSlugInitiativesIndexRouteImport.update({
+    id: '/initiatives/',
+    path: '/initiatives/',
+    getParentRoute: () => AuthenticatedSlugRoute,
+  } as any)
 const AuthenticatedSlugIssuesIndexRoute =
   AuthenticatedSlugIssuesIndexRouteImport.update({
     id: '/issues/',
@@ -140,6 +188,36 @@ const AuthenticatedSlugIssuesNewRoute =
   AuthenticatedSlugIssuesNewRouteImport.update({
     id: '/issues/new',
     path: '/issues/new',
+    getParentRoute: () => AuthenticatedSlugRoute,
+  } as any)
+const AuthenticatedSlugProjectsIndexRoute =
+  AuthenticatedSlugProjectsIndexRouteImport.update({
+    id: '/projects/',
+    path: '/projects/',
+    getParentRoute: () => AuthenticatedSlugRoute,
+  } as any)
+const AuthenticatedSlugProjectsProjectIdRoute =
+  AuthenticatedSlugProjectsProjectIdRouteImport.update({
+    id: '/projects/$projectId',
+    path: '/projects/$projectId',
+    getParentRoute: () => AuthenticatedSlugRoute,
+  } as any)
+const AuthenticatedSlugRoadmapsIndexRoute =
+  AuthenticatedSlugRoadmapsIndexRouteImport.update({
+    id: '/roadmaps/',
+    path: '/roadmaps/',
+    getParentRoute: () => AuthenticatedSlugRoute,
+  } as any)
+const AuthenticatedSlugSessionsIndexRoute =
+  AuthenticatedSlugSessionsIndexRouteImport.update({
+    id: '/sessions/',
+    path: '/sessions/',
+    getParentRoute: () => AuthenticatedSlugRoute,
+  } as any)
+const AuthenticatedSlugSessionsSessionIdRoute =
+  AuthenticatedSlugSessionsSessionIdRouteImport.update({
+    id: '/sessions/$sessionId',
+    path: '/sessions/$sessionId',
     getParentRoute: () => AuthenticatedSlugRoute,
   } as any)
 const AuthenticatedSlugSettingsIndexRoute =
@@ -166,6 +244,12 @@ const AuthenticatedSlugSettingsMembersRoute =
     path: '/settings/members',
     getParentRoute: () => AuthenticatedSlugRoute,
   } as any)
+const AuthenticatedSlugSettingsSurfacesRoute =
+  AuthenticatedSlugSettingsSurfacesRouteImport.update({
+    id: '/settings/surfaces',
+    path: '/settings/surfaces',
+    getParentRoute: () => AuthenticatedSlugRoute,
+  } as any)
 const AuthenticatedSlugTicketsIndexRoute =
   AuthenticatedSlugTicketsIndexRouteImport.update({
     id: '/tickets/',
@@ -178,6 +262,16 @@ const AuthenticatedSlugTicketsTicketIdRoute =
     path: '/tickets/$ticketId',
     getParentRoute: () => AuthenticatedSlugRoute,
   } as any)
+const ShareDocumentOrgIdTokenRoute = ShareDocumentOrgIdTokenRouteImport.update({
+  id: '/share/document/$orgId/$token',
+  path: '/share/document/$orgId/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShareIssueOrgIdTokenRoute = ShareIssueOrgIdTokenRouteImport.update({
+  id: '/share/issue/$orgId/$token',
+  path: '/share/issue/$orgId/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -189,19 +283,33 @@ export interface FileRoutesByFullPath {
   '/verify-email': typeof AuthVerifyEmailRoute
   '/$slug': typeof AuthenticatedSlugRouteWithChildren
   '/onboarding': typeof AuthenticatedOnboardingRoute
+  '/$slug/inbox': typeof AuthenticatedSlugInboxRoute
+  '/share/capture/$ticketId': typeof ShareCaptureTicketIdRoute
   '/$slug/': typeof AuthenticatedSlugIndexRoute
   '/$slug/customers/$customerId': typeof AuthenticatedSlugCustomersCustomerIdRoute
   '/$slug/documents/$documentId': typeof AuthenticatedSlugDocumentsDocumentIdRoute
   '/$slug/documents/new': typeof AuthenticatedSlugDocumentsNewRoute
   '/$slug/issues/$issueId': typeof AuthenticatedSlugIssuesIssueIdRoute
   '/$slug/issues/new': typeof AuthenticatedSlugIssuesNewRoute
+  '/$slug/projects/$projectId': typeof AuthenticatedSlugProjectsProjectIdRoute
+  '/$slug/sessions/$sessionId': typeof AuthenticatedSlugSessionsSessionIdRoute
   '/$slug/settings/account': typeof AuthenticatedSlugSettingsAccountRoute
   '/$slug/settings/developer': typeof AuthenticatedSlugSettingsDeveloperRoute
   '/$slug/settings/members': typeof AuthenticatedSlugSettingsMembersRoute
+  '/$slug/settings/surfaces': typeof AuthenticatedSlugSettingsSurfacesRoute
   '/$slug/tickets/$ticketId': typeof AuthenticatedSlugTicketsTicketIdRoute
+  '/share/document/$orgId/$token': typeof ShareDocumentOrgIdTokenRoute
+  '/share/issue/$orgId/$token': typeof ShareIssueOrgIdTokenRoute
+  '/$slug/captures/': typeof AuthenticatedSlugCapturesIndexRoute
+  '/$slug/changelog/': typeof AuthenticatedSlugChangelogIndexRoute
   '/$slug/customers/': typeof AuthenticatedSlugCustomersIndexRoute
+  '/$slug/cycles/': typeof AuthenticatedSlugCyclesIndexRoute
   '/$slug/documents/': typeof AuthenticatedSlugDocumentsIndexRoute
+  '/$slug/initiatives/': typeof AuthenticatedSlugInitiativesIndexRoute
   '/$slug/issues/': typeof AuthenticatedSlugIssuesIndexRoute
+  '/$slug/projects/': typeof AuthenticatedSlugProjectsIndexRoute
+  '/$slug/roadmaps/': typeof AuthenticatedSlugRoadmapsIndexRoute
+  '/$slug/sessions/': typeof AuthenticatedSlugSessionsIndexRoute
   '/$slug/settings/': typeof AuthenticatedSlugSettingsIndexRoute
   '/$slug/tickets/': typeof AuthenticatedSlugTicketsIndexRoute
 }
@@ -214,19 +322,33 @@ export interface FileRoutesByTo {
   '/sign-up': typeof AuthSignUpRoute
   '/verify-email': typeof AuthVerifyEmailRoute
   '/onboarding': typeof AuthenticatedOnboardingRoute
+  '/$slug/inbox': typeof AuthenticatedSlugInboxRoute
+  '/share/capture/$ticketId': typeof ShareCaptureTicketIdRoute
   '/$slug': typeof AuthenticatedSlugIndexRoute
   '/$slug/customers/$customerId': typeof AuthenticatedSlugCustomersCustomerIdRoute
   '/$slug/documents/$documentId': typeof AuthenticatedSlugDocumentsDocumentIdRoute
   '/$slug/documents/new': typeof AuthenticatedSlugDocumentsNewRoute
   '/$slug/issues/$issueId': typeof AuthenticatedSlugIssuesIssueIdRoute
   '/$slug/issues/new': typeof AuthenticatedSlugIssuesNewRoute
+  '/$slug/projects/$projectId': typeof AuthenticatedSlugProjectsProjectIdRoute
+  '/$slug/sessions/$sessionId': typeof AuthenticatedSlugSessionsSessionIdRoute
   '/$slug/settings/account': typeof AuthenticatedSlugSettingsAccountRoute
   '/$slug/settings/developer': typeof AuthenticatedSlugSettingsDeveloperRoute
   '/$slug/settings/members': typeof AuthenticatedSlugSettingsMembersRoute
+  '/$slug/settings/surfaces': typeof AuthenticatedSlugSettingsSurfacesRoute
   '/$slug/tickets/$ticketId': typeof AuthenticatedSlugTicketsTicketIdRoute
+  '/share/document/$orgId/$token': typeof ShareDocumentOrgIdTokenRoute
+  '/share/issue/$orgId/$token': typeof ShareIssueOrgIdTokenRoute
+  '/$slug/captures': typeof AuthenticatedSlugCapturesIndexRoute
+  '/$slug/changelog': typeof AuthenticatedSlugChangelogIndexRoute
   '/$slug/customers': typeof AuthenticatedSlugCustomersIndexRoute
+  '/$slug/cycles': typeof AuthenticatedSlugCyclesIndexRoute
   '/$slug/documents': typeof AuthenticatedSlugDocumentsIndexRoute
+  '/$slug/initiatives': typeof AuthenticatedSlugInitiativesIndexRoute
   '/$slug/issues': typeof AuthenticatedSlugIssuesIndexRoute
+  '/$slug/projects': typeof AuthenticatedSlugProjectsIndexRoute
+  '/$slug/roadmaps': typeof AuthenticatedSlugRoadmapsIndexRoute
+  '/$slug/sessions': typeof AuthenticatedSlugSessionsIndexRoute
   '/$slug/settings': typeof AuthenticatedSlugSettingsIndexRoute
   '/$slug/tickets': typeof AuthenticatedSlugTicketsIndexRoute
 }
@@ -243,19 +365,33 @@ export interface FileRoutesById {
   '/_auth/verify-email': typeof AuthVerifyEmailRoute
   '/_authenticated/$slug': typeof AuthenticatedSlugRouteWithChildren
   '/_authenticated/onboarding': typeof AuthenticatedOnboardingRoute
+  '/_authenticated/$slug/inbox': typeof AuthenticatedSlugInboxRoute
+  '/share/capture/$ticketId': typeof ShareCaptureTicketIdRoute
   '/_authenticated/$slug/': typeof AuthenticatedSlugIndexRoute
   '/_authenticated/$slug/customers/$customerId': typeof AuthenticatedSlugCustomersCustomerIdRoute
   '/_authenticated/$slug/documents/$documentId': typeof AuthenticatedSlugDocumentsDocumentIdRoute
   '/_authenticated/$slug/documents/new': typeof AuthenticatedSlugDocumentsNewRoute
   '/_authenticated/$slug/issues/$issueId': typeof AuthenticatedSlugIssuesIssueIdRoute
   '/_authenticated/$slug/issues/new': typeof AuthenticatedSlugIssuesNewRoute
+  '/_authenticated/$slug/projects/$projectId': typeof AuthenticatedSlugProjectsProjectIdRoute
+  '/_authenticated/$slug/sessions/$sessionId': typeof AuthenticatedSlugSessionsSessionIdRoute
   '/_authenticated/$slug/settings/account': typeof AuthenticatedSlugSettingsAccountRoute
   '/_authenticated/$slug/settings/developer': typeof AuthenticatedSlugSettingsDeveloperRoute
   '/_authenticated/$slug/settings/members': typeof AuthenticatedSlugSettingsMembersRoute
+  '/_authenticated/$slug/settings/surfaces': typeof AuthenticatedSlugSettingsSurfacesRoute
   '/_authenticated/$slug/tickets/$ticketId': typeof AuthenticatedSlugTicketsTicketIdRoute
+  '/share/document/$orgId/$token': typeof ShareDocumentOrgIdTokenRoute
+  '/share/issue/$orgId/$token': typeof ShareIssueOrgIdTokenRoute
+  '/_authenticated/$slug/captures/': typeof AuthenticatedSlugCapturesIndexRoute
+  '/_authenticated/$slug/changelog/': typeof AuthenticatedSlugChangelogIndexRoute
   '/_authenticated/$slug/customers/': typeof AuthenticatedSlugCustomersIndexRoute
+  '/_authenticated/$slug/cycles/': typeof AuthenticatedSlugCyclesIndexRoute
   '/_authenticated/$slug/documents/': typeof AuthenticatedSlugDocumentsIndexRoute
+  '/_authenticated/$slug/initiatives/': typeof AuthenticatedSlugInitiativesIndexRoute
   '/_authenticated/$slug/issues/': typeof AuthenticatedSlugIssuesIndexRoute
+  '/_authenticated/$slug/projects/': typeof AuthenticatedSlugProjectsIndexRoute
+  '/_authenticated/$slug/roadmaps/': typeof AuthenticatedSlugRoadmapsIndexRoute
+  '/_authenticated/$slug/sessions/': typeof AuthenticatedSlugSessionsIndexRoute
   '/_authenticated/$slug/settings/': typeof AuthenticatedSlugSettingsIndexRoute
   '/_authenticated/$slug/tickets/': typeof AuthenticatedSlugTicketsIndexRoute
 }
@@ -271,19 +407,33 @@ export interface FileRouteTypes {
     | '/verify-email'
     | '/$slug'
     | '/onboarding'
+    | '/$slug/inbox'
+    | '/share/capture/$ticketId'
     | '/$slug/'
     | '/$slug/customers/$customerId'
     | '/$slug/documents/$documentId'
     | '/$slug/documents/new'
     | '/$slug/issues/$issueId'
     | '/$slug/issues/new'
+    | '/$slug/projects/$projectId'
+    | '/$slug/sessions/$sessionId'
     | '/$slug/settings/account'
     | '/$slug/settings/developer'
     | '/$slug/settings/members'
+    | '/$slug/settings/surfaces'
     | '/$slug/tickets/$ticketId'
+    | '/share/document/$orgId/$token'
+    | '/share/issue/$orgId/$token'
+    | '/$slug/captures/'
+    | '/$slug/changelog/'
     | '/$slug/customers/'
+    | '/$slug/cycles/'
     | '/$slug/documents/'
+    | '/$slug/initiatives/'
     | '/$slug/issues/'
+    | '/$slug/projects/'
+    | '/$slug/roadmaps/'
+    | '/$slug/sessions/'
     | '/$slug/settings/'
     | '/$slug/tickets/'
   fileRoutesByTo: FileRoutesByTo
@@ -296,19 +446,33 @@ export interface FileRouteTypes {
     | '/sign-up'
     | '/verify-email'
     | '/onboarding'
+    | '/$slug/inbox'
+    | '/share/capture/$ticketId'
     | '/$slug'
     | '/$slug/customers/$customerId'
     | '/$slug/documents/$documentId'
     | '/$slug/documents/new'
     | '/$slug/issues/$issueId'
     | '/$slug/issues/new'
+    | '/$slug/projects/$projectId'
+    | '/$slug/sessions/$sessionId'
     | '/$slug/settings/account'
     | '/$slug/settings/developer'
     | '/$slug/settings/members'
+    | '/$slug/settings/surfaces'
     | '/$slug/tickets/$ticketId'
+    | '/share/document/$orgId/$token'
+    | '/share/issue/$orgId/$token'
+    | '/$slug/captures'
+    | '/$slug/changelog'
     | '/$slug/customers'
+    | '/$slug/cycles'
     | '/$slug/documents'
+    | '/$slug/initiatives'
     | '/$slug/issues'
+    | '/$slug/projects'
+    | '/$slug/roadmaps'
+    | '/$slug/sessions'
     | '/$slug/settings'
     | '/$slug/tickets'
   id:
@@ -324,19 +488,33 @@ export interface FileRouteTypes {
     | '/_auth/verify-email'
     | '/_authenticated/$slug'
     | '/_authenticated/onboarding'
+    | '/_authenticated/$slug/inbox'
+    | '/share/capture/$ticketId'
     | '/_authenticated/$slug/'
     | '/_authenticated/$slug/customers/$customerId'
     | '/_authenticated/$slug/documents/$documentId'
     | '/_authenticated/$slug/documents/new'
     | '/_authenticated/$slug/issues/$issueId'
     | '/_authenticated/$slug/issues/new'
+    | '/_authenticated/$slug/projects/$projectId'
+    | '/_authenticated/$slug/sessions/$sessionId'
     | '/_authenticated/$slug/settings/account'
     | '/_authenticated/$slug/settings/developer'
     | '/_authenticated/$slug/settings/members'
+    | '/_authenticated/$slug/settings/surfaces'
     | '/_authenticated/$slug/tickets/$ticketId'
+    | '/share/document/$orgId/$token'
+    | '/share/issue/$orgId/$token'
+    | '/_authenticated/$slug/captures/'
+    | '/_authenticated/$slug/changelog/'
     | '/_authenticated/$slug/customers/'
+    | '/_authenticated/$slug/cycles/'
     | '/_authenticated/$slug/documents/'
+    | '/_authenticated/$slug/initiatives/'
     | '/_authenticated/$slug/issues/'
+    | '/_authenticated/$slug/projects/'
+    | '/_authenticated/$slug/roadmaps/'
+    | '/_authenticated/$slug/sessions/'
     | '/_authenticated/$slug/settings/'
     | '/_authenticated/$slug/tickets/'
   fileRoutesById: FileRoutesById
@@ -345,6 +523,9 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRouteWithChildren
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
+  ShareCaptureTicketIdRoute: typeof ShareCaptureTicketIdRoute
+  ShareDocumentOrgIdTokenRoute: typeof ShareDocumentOrgIdTokenRoute
+  ShareIssueOrgIdTokenRoute: typeof ShareIssueOrgIdTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -433,6 +614,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSlugIndexRouteImport
       parentRoute: typeof AuthenticatedSlugRoute
     }
+    '/_authenticated/$slug/inbox': {
+      id: '/_authenticated/$slug/inbox'
+      path: '/inbox'
+      fullPath: '/$slug/inbox'
+      preLoaderRoute: typeof AuthenticatedSlugInboxRouteImport
+      parentRoute: typeof AuthenticatedSlugRoute
+    }
+    '/share/capture/$ticketId': {
+      id: '/share/capture/$ticketId'
+      path: '/share/capture/$ticketId'
+      fullPath: '/share/capture/$ticketId'
+      preLoaderRoute: typeof ShareCaptureTicketIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/$slug/captures/': {
+      id: '/_authenticated/$slug/captures/'
+      path: '/captures'
+      fullPath: '/$slug/captures/'
+      preLoaderRoute: typeof AuthenticatedSlugCapturesIndexRouteImport
+      parentRoute: typeof AuthenticatedSlugRoute
+    }
+    '/_authenticated/$slug/changelog/': {
+      id: '/_authenticated/$slug/changelog/'
+      path: '/changelog'
+      fullPath: '/$slug/changelog/'
+      preLoaderRoute: typeof AuthenticatedSlugChangelogIndexRouteImport
+      parentRoute: typeof AuthenticatedSlugRoute
+    }
     '/_authenticated/$slug/customers/': {
       id: '/_authenticated/$slug/customers/'
       path: '/customers'
@@ -445,6 +654,13 @@ declare module '@tanstack/react-router' {
       path: '/customers/$customerId'
       fullPath: '/$slug/customers/$customerId'
       preLoaderRoute: typeof AuthenticatedSlugCustomersCustomerIdRouteImport
+      parentRoute: typeof AuthenticatedSlugRoute
+    }
+    '/_authenticated/$slug/cycles/': {
+      id: '/_authenticated/$slug/cycles/'
+      path: '/cycles'
+      fullPath: '/$slug/cycles/'
+      preLoaderRoute: typeof AuthenticatedSlugCyclesIndexRouteImport
       parentRoute: typeof AuthenticatedSlugRoute
     }
     '/_authenticated/$slug/documents/': {
@@ -468,6 +684,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSlugDocumentsNewRouteImport
       parentRoute: typeof AuthenticatedSlugRoute
     }
+    '/_authenticated/$slug/initiatives/': {
+      id: '/_authenticated/$slug/initiatives/'
+      path: '/initiatives'
+      fullPath: '/$slug/initiatives/'
+      preLoaderRoute: typeof AuthenticatedSlugInitiativesIndexRouteImport
+      parentRoute: typeof AuthenticatedSlugRoute
+    }
     '/_authenticated/$slug/issues/': {
       id: '/_authenticated/$slug/issues/'
       path: '/issues'
@@ -487,6 +710,41 @@ declare module '@tanstack/react-router' {
       path: '/issues/new'
       fullPath: '/$slug/issues/new'
       preLoaderRoute: typeof AuthenticatedSlugIssuesNewRouteImport
+      parentRoute: typeof AuthenticatedSlugRoute
+    }
+    '/_authenticated/$slug/projects/': {
+      id: '/_authenticated/$slug/projects/'
+      path: '/projects'
+      fullPath: '/$slug/projects/'
+      preLoaderRoute: typeof AuthenticatedSlugProjectsIndexRouteImport
+      parentRoute: typeof AuthenticatedSlugRoute
+    }
+    '/_authenticated/$slug/projects/$projectId': {
+      id: '/_authenticated/$slug/projects/$projectId'
+      path: '/projects/$projectId'
+      fullPath: '/$slug/projects/$projectId'
+      preLoaderRoute: typeof AuthenticatedSlugProjectsProjectIdRouteImport
+      parentRoute: typeof AuthenticatedSlugRoute
+    }
+    '/_authenticated/$slug/roadmaps/': {
+      id: '/_authenticated/$slug/roadmaps/'
+      path: '/roadmaps'
+      fullPath: '/$slug/roadmaps/'
+      preLoaderRoute: typeof AuthenticatedSlugRoadmapsIndexRouteImport
+      parentRoute: typeof AuthenticatedSlugRoute
+    }
+    '/_authenticated/$slug/sessions/': {
+      id: '/_authenticated/$slug/sessions/'
+      path: '/sessions'
+      fullPath: '/$slug/sessions/'
+      preLoaderRoute: typeof AuthenticatedSlugSessionsIndexRouteImport
+      parentRoute: typeof AuthenticatedSlugRoute
+    }
+    '/_authenticated/$slug/sessions/$sessionId': {
+      id: '/_authenticated/$slug/sessions/$sessionId'
+      path: '/sessions/$sessionId'
+      fullPath: '/$slug/sessions/$sessionId'
+      preLoaderRoute: typeof AuthenticatedSlugSessionsSessionIdRouteImport
       parentRoute: typeof AuthenticatedSlugRoute
     }
     '/_authenticated/$slug/settings/': {
@@ -517,6 +775,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSlugSettingsMembersRouteImport
       parentRoute: typeof AuthenticatedSlugRoute
     }
+    '/_authenticated/$slug/settings/surfaces': {
+      id: '/_authenticated/$slug/settings/surfaces'
+      path: '/settings/surfaces'
+      fullPath: '/$slug/settings/surfaces'
+      preLoaderRoute: typeof AuthenticatedSlugSettingsSurfacesRouteImport
+      parentRoute: typeof AuthenticatedSlugRoute
+    }
     '/_authenticated/$slug/tickets/': {
       id: '/_authenticated/$slug/tickets/'
       path: '/tickets'
@@ -530,6 +795,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/$slug/tickets/$ticketId'
       preLoaderRoute: typeof AuthenticatedSlugTicketsTicketIdRouteImport
       parentRoute: typeof AuthenticatedSlugRoute
+    }
+    '/share/document/$orgId/$token': {
+      id: '/share/document/$orgId/$token'
+      path: '/share/document/$orgId/$token'
+      fullPath: '/share/document/$orgId/$token'
+      preLoaderRoute: typeof ShareDocumentOrgIdTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/share/issue/$orgId/$token': {
+      id: '/share/issue/$orgId/$token'
+      path: '/share/issue/$orgId/$token'
+      fullPath: '/share/issue/$orgId/$token'
+      preLoaderRoute: typeof ShareIssueOrgIdTokenRouteImport
+      parentRoute: typeof rootRouteImport
     }
   }
 }
@@ -555,24 +834,36 @@ const AuthRouteChildren: AuthRouteChildren = {
 const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
 
 interface AuthenticatedSlugRouteChildren {
+  AuthenticatedSlugInboxRoute: typeof AuthenticatedSlugInboxRoute
   AuthenticatedSlugIndexRoute: typeof AuthenticatedSlugIndexRoute
   AuthenticatedSlugCustomersCustomerIdRoute: typeof AuthenticatedSlugCustomersCustomerIdRoute
   AuthenticatedSlugDocumentsDocumentIdRoute: typeof AuthenticatedSlugDocumentsDocumentIdRoute
   AuthenticatedSlugDocumentsNewRoute: typeof AuthenticatedSlugDocumentsNewRoute
   AuthenticatedSlugIssuesIssueIdRoute: typeof AuthenticatedSlugIssuesIssueIdRoute
   AuthenticatedSlugIssuesNewRoute: typeof AuthenticatedSlugIssuesNewRoute
+  AuthenticatedSlugProjectsProjectIdRoute: typeof AuthenticatedSlugProjectsProjectIdRoute
+  AuthenticatedSlugSessionsSessionIdRoute: typeof AuthenticatedSlugSessionsSessionIdRoute
   AuthenticatedSlugSettingsAccountRoute: typeof AuthenticatedSlugSettingsAccountRoute
   AuthenticatedSlugSettingsDeveloperRoute: typeof AuthenticatedSlugSettingsDeveloperRoute
   AuthenticatedSlugSettingsMembersRoute: typeof AuthenticatedSlugSettingsMembersRoute
+  AuthenticatedSlugSettingsSurfacesRoute: typeof AuthenticatedSlugSettingsSurfacesRoute
   AuthenticatedSlugTicketsTicketIdRoute: typeof AuthenticatedSlugTicketsTicketIdRoute
+  AuthenticatedSlugCapturesIndexRoute: typeof AuthenticatedSlugCapturesIndexRoute
+  AuthenticatedSlugChangelogIndexRoute: typeof AuthenticatedSlugChangelogIndexRoute
   AuthenticatedSlugCustomersIndexRoute: typeof AuthenticatedSlugCustomersIndexRoute
+  AuthenticatedSlugCyclesIndexRoute: typeof AuthenticatedSlugCyclesIndexRoute
   AuthenticatedSlugDocumentsIndexRoute: typeof AuthenticatedSlugDocumentsIndexRoute
+  AuthenticatedSlugInitiativesIndexRoute: typeof AuthenticatedSlugInitiativesIndexRoute
   AuthenticatedSlugIssuesIndexRoute: typeof AuthenticatedSlugIssuesIndexRoute
+  AuthenticatedSlugProjectsIndexRoute: typeof AuthenticatedSlugProjectsIndexRoute
+  AuthenticatedSlugRoadmapsIndexRoute: typeof AuthenticatedSlugRoadmapsIndexRoute
+  AuthenticatedSlugSessionsIndexRoute: typeof AuthenticatedSlugSessionsIndexRoute
   AuthenticatedSlugSettingsIndexRoute: typeof AuthenticatedSlugSettingsIndexRoute
   AuthenticatedSlugTicketsIndexRoute: typeof AuthenticatedSlugTicketsIndexRoute
 }
 
 const AuthenticatedSlugRouteChildren: AuthenticatedSlugRouteChildren = {
+  AuthenticatedSlugInboxRoute: AuthenticatedSlugInboxRoute,
   AuthenticatedSlugIndexRoute: AuthenticatedSlugIndexRoute,
   AuthenticatedSlugCustomersCustomerIdRoute:
     AuthenticatedSlugCustomersCustomerIdRoute,
@@ -581,14 +872,28 @@ const AuthenticatedSlugRouteChildren: AuthenticatedSlugRouteChildren = {
   AuthenticatedSlugDocumentsNewRoute: AuthenticatedSlugDocumentsNewRoute,
   AuthenticatedSlugIssuesIssueIdRoute: AuthenticatedSlugIssuesIssueIdRoute,
   AuthenticatedSlugIssuesNewRoute: AuthenticatedSlugIssuesNewRoute,
+  AuthenticatedSlugProjectsProjectIdRoute:
+    AuthenticatedSlugProjectsProjectIdRoute,
+  AuthenticatedSlugSessionsSessionIdRoute:
+    AuthenticatedSlugSessionsSessionIdRoute,
   AuthenticatedSlugSettingsAccountRoute: AuthenticatedSlugSettingsAccountRoute,
   AuthenticatedSlugSettingsDeveloperRoute:
     AuthenticatedSlugSettingsDeveloperRoute,
   AuthenticatedSlugSettingsMembersRoute: AuthenticatedSlugSettingsMembersRoute,
+  AuthenticatedSlugSettingsSurfacesRoute:
+    AuthenticatedSlugSettingsSurfacesRoute,
   AuthenticatedSlugTicketsTicketIdRoute: AuthenticatedSlugTicketsTicketIdRoute,
+  AuthenticatedSlugCapturesIndexRoute: AuthenticatedSlugCapturesIndexRoute,
+  AuthenticatedSlugChangelogIndexRoute: AuthenticatedSlugChangelogIndexRoute,
   AuthenticatedSlugCustomersIndexRoute: AuthenticatedSlugCustomersIndexRoute,
+  AuthenticatedSlugCyclesIndexRoute: AuthenticatedSlugCyclesIndexRoute,
   AuthenticatedSlugDocumentsIndexRoute: AuthenticatedSlugDocumentsIndexRoute,
+  AuthenticatedSlugInitiativesIndexRoute:
+    AuthenticatedSlugInitiativesIndexRoute,
   AuthenticatedSlugIssuesIndexRoute: AuthenticatedSlugIssuesIndexRoute,
+  AuthenticatedSlugProjectsIndexRoute: AuthenticatedSlugProjectsIndexRoute,
+  AuthenticatedSlugRoadmapsIndexRoute: AuthenticatedSlugRoadmapsIndexRoute,
+  AuthenticatedSlugSessionsIndexRoute: AuthenticatedSlugSessionsIndexRoute,
   AuthenticatedSlugSettingsIndexRoute: AuthenticatedSlugSettingsIndexRoute,
   AuthenticatedSlugTicketsIndexRoute: AuthenticatedSlugTicketsIndexRoute,
 }
@@ -614,6 +919,9 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRouteWithChildren,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
+  ShareCaptureTicketIdRoute: ShareCaptureTicketIdRoute,
+  ShareDocumentOrgIdTokenRoute: ShareDocumentOrgIdTokenRoute,
+  ShareIssueOrgIdTokenRoute: ShareIssueOrgIdTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -414,6 +414,15 @@ async function dispatchFollowCommand(
   if (sessionId === undefined) {
     throw new Error("Dispatch response did not include a session id");
   }
+  // Stable console link — the console resolves workspace id-or-slug.
+  const watchWorkspace =
+    flagString(flags, "workspace") ?? flagString(flags, "workspace-id");
+  if (watchWorkspace !== undefined) {
+    const baseUrl = resolveConfig().baseUrl.replace(/\/$/u, "");
+    console.log(
+      `console: ${baseUrl}/app/${watchWorkspace}/sessions/${sessionId}`
+    );
+  }
   return await sessionWatchCommand(sessionId, flags, deps, { untilPr: true });
 }
 

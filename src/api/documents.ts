@@ -26,7 +26,7 @@ const documentSchema = z.object({
   title: z.string(),
   icon: z.string().nullable(),
   content: contentInputSchema,
-  contentFormat: z.enum(["blocks", "markdown"]),
+  contentFormat: z.enum(["blocks", "markdown", "canvas"]),
   slug: z.string().nullable(),
   projectId: z.string().nullable(),
   issueId: z.string().nullable(),
@@ -45,7 +45,7 @@ const createDocumentSchema = z.object({
   title: z.string().min(1),
   icon: z.string().optional(),
   content: contentInputSchema.optional(),
-  contentFormat: z.enum(["blocks", "markdown"]).optional(),
+  contentFormat: z.enum(["blocks", "markdown", "canvas"]).optional(),
   slug: z.string().optional(),
   projectId: z.string().optional(),
   issueId: z.string().optional(),
@@ -59,7 +59,7 @@ const updateDocumentSchema = z.object({
   title: z.string().min(1).optional(),
   icon: z.string().nullable().optional(),
   content: contentInputSchema.optional(),
-  contentFormat: z.enum(["blocks", "markdown"]).optional(),
+  contentFormat: z.enum(["blocks", "markdown", "canvas"]).optional(),
   slug: z.string().nullable().optional(),
   projectId: z.string().nullable().optional(),
   issueId: z.string().nullable().optional(),
@@ -89,7 +89,7 @@ function toResponse(row: {
   parentDocumentId: string | null;
   spaceId: string | null;
   isTemplate: boolean;
-  contentFormat: "blocks" | "markdown";
+  contentFormat: "blocks" | "markdown" | "canvas";
   slug: string | null;
   createdById: string;
   updatedById: string | null;
@@ -552,6 +552,24 @@ const createShareRoute = createRoute({
   },
 });
 
+const getShareRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/documents/{id}/share",
+  tags: ["documents"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "The active share for this document, if any.",
+      content: {
+        "application/json": { schema: shareSchema.nullable() },
+      },
+    },
+  },
+});
+
 const deleteShareRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/documents/{id}/share/{token}",
@@ -987,6 +1005,12 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
     const comment = await stub.unresolveComment(commentId);
     if (!comment) return notFound();
     return c.json(comment);
+  });
+
+  app.openapi(getShareRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    return c.json((await stub.getDocumentShare(id)) ?? null);
   });
 
   app.openapi(createShareRoute, async (c) => {

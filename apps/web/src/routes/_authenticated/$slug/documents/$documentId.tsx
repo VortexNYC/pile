@@ -1,19 +1,24 @@
 import { Button } from "@cloudflare/kumo/components/button";
+import { DropdownMenu } from "@cloudflare/kumo/components/dropdown";
+import { InputArea } from "@cloudflare/kumo/components/input";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
+import { TableOfContents } from "@cloudflare/kumo/components/table-of-contents";
 import { Text } from "@cloudflare/kumo/components/text";
-import { PencilSimple, Trash } from "@phosphor-icons/react";
+import { LinkSimple, Star, Trash } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
-import {
-  DocumentForm,
-  type DocumentFormValues,
-} from "@/components/document-form";
+import { CanvasEditor } from "@/components/canvas-editor";
+import { EntityPage, RailLink, RailSection } from "@/components/entity-page";
+import { Markdown } from "@/components/markdown";
 import { Page } from "@/components/page";
+import { ShareButton } from "@/components/share-button";
 import { ErrorState, LoadingState } from "@/components/states";
+import { useFavorites } from "@/hooks/use-favorites";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap, unwrapEmpty } from "@/lib/api";
+import { markdownHeadings } from "@/lib/headings";
 import { documentText, formatRelative } from "@/lib/labels";
 import { toastError, toastSuccess } from "@/lib/toast";
 
@@ -26,10 +31,14 @@ export const Route = createFileRoute(
 function DocumentDetail() {
   const { documentId } = Route.useParams();
   const workspace = useWorkspace();
+  const favs = useFavorites(workspace.id);
   const organizationId = workspace.id;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const [editing, setEditing] = useState(false);
+  const [editingContent, setEditingContent] = useState(false);
+  const [draft, setDraft] = useState({ title: "", content: "" });
+  const contentRef = useRef<HTMLTextAreaElement>(null);
+  const canvasSave = useRef<number | null>(null);
   const key = wsKey(organizationId, "documents", documentId);
   const path = { organizationId, id: documentId };
 
@@ -44,14 +53,15 @@ function DocumentDetail() {
   });
 
   const save = useMutation({
-    mutationFn: (values: DocumentFormValues) =>
+    mutationFn: (patch: { title?: string; content?: string }) =>
       unwrap(
         api.PATCH("/workspaces/{organizationId}/documents/{id}", {
           params: { path },
           body: {
-            title: values.title,
-            content: values.content,
-            contentFormat: "markdown",
+            ...(patch.title !== undefined ? { title: patch.title } : {}),
+            ...(patch.content !== undefined
+              ? { content: patch.content, contentFormat: "markdown" as const }
+              : {}),
           },
         })
       ),
@@ -60,7 +70,7 @@ function DocumentDetail() {
       void queryClient.invalidateQueries({
         queryKey: wsKey(organizationId, "documents"),
       });
-      setEditing(false);
+      setEditingContent(false);
       toastSuccess("Document saved");
     },
     onError: (error) => toastError(error),
@@ -87,6 +97,43 @@ function DocumentDetail() {
     onError: (error) => toastError(error),
   });
 
+  const backlinks = useQuery({
+    queryKey: wsKey(organizationId, "documents", documentId, "backlinks"),
+    queryFn: async () =>
+      (
+        await unwrap(
+          api.GET("/workspaces/{organizationId}/documents/{id}/backlinks", {
+            params: { path: { organizationId, id: documentId } },
+          })
+        )
+      ).documents,
+  });
+  const children = useQuery({
+    queryKey: wsKey(organizationId, "documents", documentId, "children"),
+    queryFn: async () =>
+      (
+        await unwrap(
+          api.GET("/workspaces/{organizationId}/documents", {
+            params: {
+              path: { organizationId },
+              query: { parentDocumentId: documentId },
+            },
+          })
+        )
+      ).documents,
+  });
+  const allDocs = useQuery({
+    queryKey: wsKey(organizationId, "documents"),
+    queryFn: async () =>
+      (
+        await unwrap(
+          api.GET("/workspaces/{organizationId}/documents", {
+            params: { path: { organizationId } },
+          })
+        )
+      ).documents,
+  });
+
   if (doc.isPending) return <LoadingState label="Loading document" />;
   if (doc.isError) {
     return (
@@ -97,9 +144,30 @@ function DocumentDetail() {
   }
   const data = doc.data;
   const text = documentText(data.content);
+  const subPages = children.data ?? [];
+  const headings = markdownHeadings(text);
+  const byId = new Map((allDocs.data ?? []).map((d) => [d.id, d]));
+  const ancestors: typeof subPages = [];
+  {
+    let cursor = data.parentDocumentId;
+    let hops = 0;
+    while (cursor && hops < 6) {
+      const parent = byId.get(cursor);
+      if (!parent) break;
+      ancestors.unshift(parent);
+      cursor = parent.parentDocumentId;
+      hops += 1;
+    }
+  }
+  const backlinkRows = (backlinks.data ?? []).map((id) => ({
+    id,
+    title:
+      allDocs.data?.find((d) => d.id === id)?.title ??
+      `Document ${id.slice(0, 8)}`,
+  }));
 
   return (
-    <Page
+    <EntityPage
       title={data.title}
       description={
         <>
@@ -114,45 +182,249 @@ function DocumentDetail() {
         </>
       }
       actions={
-        editing ? null : (
-          <>
-            <Button icon={<PencilSimple />} onClick={() => setEditing(true)}>
-              Edit
-            </Button>
-            <Button
-              variant="secondary-destructive"
-              icon={<Trash />}
-              loading={remove.isPending}
-              onClick={() => {
-                if (window.confirm("Move this document to trash?"))
-                  remove.mutate();
-              }}
-            >
-              Delete
-            </Button>
-          </>
-        )
+        <>
+          <ShareButton
+            organizationId={workspace.id}
+            kind="document"
+            id={data.id}
+          />
+        </>
       }
-    >
-      <LayerCard>
-        <LayerCard.Primary className="p-6">
-          {editing ? (
-            <DocumentForm
-              initial={{ title: data.title, content: text }}
-              submitLabel="Save"
-              pending={save.isPending}
-              onSubmit={(values) => save.mutate(values)}
-              onCancel={() => setEditing(false)}
-            />
-          ) : text ? (
-            <Text>
-              <span className="whitespace-pre-wrap">{text}</span>
-            </Text>
-          ) : (
-            <Text variant="secondary">This document is empty.</Text>
-          )}
-        </LayerCard.Primary>
-      </LayerCard>
-    </Page>
+      menu={
+        <>
+          <DropdownMenu.Item
+            icon={
+              <Star
+                weight={
+                  favs.isFavorite("document", data.id) ? "fill" : "regular"
+                }
+              />
+            }
+            onClick={() =>
+              favs.toggle({
+                type: "document",
+                id: data.id,
+                title: data.title,
+              })
+            }
+          >
+            {favs.isFavorite("document", data.id) ? "Unstar" : "Star"}
+          </DropdownMenu.Item>
+          <DropdownMenu.Item
+            icon={<LinkSimple />}
+            onClick={() => {
+              navigator.clipboard.writeText(window.location.href);
+              toastSuccess("Link copied");
+            }}
+          >
+            Copy link
+          </DropdownMenu.Item>
+          <DropdownMenu.Separator />
+          <DropdownMenu.Item
+            variant="danger"
+            icon={<Trash />}
+            onClick={() => {
+              if (window.confirm("Move this document to trash?"))
+                remove.mutate();
+            }}
+          >
+            Delete document
+          </DropdownMenu.Item>
+        </>
+      }
+      center={
+        <>
+          <LayerCard className="min-w-0">
+            <LayerCard.Primary className="p-6">
+              <div className="flex items-start gap-3 mb-4">
+                {data.icon ? (
+                  <span className="text-2xl leading-none mt-1">
+                    {data.icon}
+                  </span>
+                ) : null}
+                <input
+                  aria-label="Document title"
+                  defaultValue={data.title}
+                  key={`${data.id}-${data.title}`}
+                  className="w-full bg-transparent text-2xl font-semibold text-kumo-default outline-none placeholder:text-kumo-subtle focus:border-b focus:border-kumo-line"
+                  placeholder="Untitled"
+                  onBlur={(e: React.FocusEvent<HTMLInputElement>) => {
+                    const value = e.target.value.trim();
+                    if (value && value !== data.title) {
+                      save.mutate({ title: value });
+                    } else {
+                      e.target.value = data.title;
+                    }
+                  }}
+                  onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      e.currentTarget.blur();
+                    }
+                    if (e.key === "Escape") {
+                      e.currentTarget.value = data.title;
+                      e.currentTarget.blur();
+                    }
+                  }}
+                />
+              </div>
+              {subPages.length > 0 ? (
+                <div className="flex flex-col gap-1 mb-5">
+                  {subPages.map((sub) => (
+                    <Link
+                      key={sub.id}
+                      to="/$slug/documents/$documentId"
+                      params={{ slug: workspace.slug, documentId: sub.id }}
+                      className="text-sm text-kumo-link hover:underline flex items-center gap-2"
+                    >
+                      <Text as="span" variant="secondary">
+                        {sub.icon ?? "📄"}
+                      </Text>
+                      {sub.title}
+                    </Link>
+                  ))}
+                </div>
+              ) : null}
+              {(data.contentFormat as string) === "canvas" ? (
+                <CanvasEditor
+                  sceneJson={
+                    typeof data.content === "string" ? data.content : "{}"
+                  }
+                  onChange={(json) => {
+                    if (canvasSave.current !== null)
+                      window.clearTimeout(canvasSave.current);
+                    canvasSave.current = window.setTimeout(
+                      () => save.mutate({ content: json }),
+                      800
+                    );
+                  }}
+                />
+              ) : editingContent ? (
+                <div className="flex flex-col gap-2">
+                  <InputArea
+                    ref={contentRef}
+                    autoFocus
+                    value={draft.content}
+                    onChange={(e) =>
+                      setDraft((d) => ({ ...d, content: e.target.value }))
+                    }
+                    className="min-h-96 font-mono text-sm w-full"
+                    onKeyDown={(e) => {
+                      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                        e.preventDefault();
+                        save.mutate({ content: draft.content });
+                      }
+                      if (e.key === "Escape") setEditingContent(false);
+                    }}
+                  />
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      loading={save.isPending}
+                      onClick={() => save.mutate({ content: draft.content })}
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setEditingContent(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <span className="text-xs text-kumo-subtle">
+                      ⌘↵ to save · Esc to cancel
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="block w-full cursor-text text-left"
+                  onClick={() => {
+                    setDraft((d) => ({ ...d, content: text }));
+                    setEditingContent(true);
+                  }}
+                >
+                  {text ? (
+                    <Markdown workspaceSlug={workspace.slug} content={text} />
+                  ) : (
+                    <Text variant="secondary">Click to start writing…</Text>
+                  )}
+                </button>
+              )}
+            </LayerCard.Primary>
+          </LayerCard>
+          {backlinkRows.length > 0 ? (
+            <LayerCard>
+              <div className="border-b border-kumo-line px-4 py-3">
+                <Text variant="secondary">Linked from</Text>
+              </div>
+              <ul className="px-4 py-3 flex flex-col gap-1.5">
+                {backlinkRows.map((b) => (
+                  <li key={b.id}>
+                    <Link
+                      to="/$slug/documents/$documentId"
+                      params={{ slug: workspace.slug, documentId: b.id }}
+                      className="text-kumo-link hover:underline"
+                    >
+                      {b.title}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </LayerCard>
+          ) : null}
+        </>
+      }
+      rail={
+        <>
+          {data.parentDocumentId && ancestors.length > 0 ? (
+            <RailSection title="Parent">
+              <RailLink
+                to="/$slug/documents/$documentId"
+                params={{
+                  slug: workspace.slug,
+                  documentId: ancestors[ancestors.length - 1]!.id,
+                }}
+              >
+                {ancestors[ancestors.length - 1]!.icon
+                  ? `${ancestors[ancestors.length - 1]!.icon} `
+                  : ""}
+                {ancestors[ancestors.length - 1]!.title}
+              </RailLink>
+            </RailSection>
+          ) : null}
+          {data.issueId ? (
+            <RailSection title="Linked issue">
+              <RailLink
+                to="/$slug/issues/$issueId"
+                params={{ slug: workspace.slug, issueId: data.issueId }}
+              >
+                View issue
+              </RailLink>
+            </RailSection>
+          ) : null}
+          {headings.length >= 3 ? (
+            <RailSection title="On this page">
+              <TableOfContents>
+                <TableOfContents.List>
+                  {headings.map((h) => (
+                    <TableOfContents.Item
+                      key={h.slug}
+                      href={`#${h.slug}`}
+                      className={h.depth > 1 ? "pl-4" : undefined}
+                    >
+                      {h.text}
+                    </TableOfContents.Item>
+                  ))}
+                </TableOfContents.List>
+              </TableOfContents>
+            </RailSection>
+          ) : null}
+        </>
+      }
+    />
   );
 }

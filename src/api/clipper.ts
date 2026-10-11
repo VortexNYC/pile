@@ -111,6 +111,7 @@ export function registerClipperRoutes(app: OpenAPIHono<AppContext>) {
           permissions: "write",
           actorType: "user",
         },
+        permissions: { workspace: ["write"] },
       },
     });
     const key = createdKeySchema.parse(result);

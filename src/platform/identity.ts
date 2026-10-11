@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { adminRole, memberRole, ownerRole } from "./access.js";
 import { VortexError } from "./errors.js";
 import { parsePermissionSet } from "./permissions.js";
 
@@ -24,6 +25,9 @@ const apiKeyResultSchema = z.object({
   id: z.string(),
   referenceId: z.string(),
   metadata: z.unknown(),
+  // Better Auth apiKey plugin's native permissions field — the
+  // canonical home for key grants (resource → actions).
+  permissions: z.record(z.string(), z.array(z.string())).nullish(),
 });
 
 function parseApiKeyMetadata(metadata: unknown) {
@@ -49,26 +53,31 @@ export function toApiKeyWorkspaceIdentity(input: unknown): WorkspaceIdentity {
   }
   const key = keyResult.data;
   const parsed = parseApiKeyMetadata(key.metadata);
+  // Prefer the plugin's native permissions field; metadata.permissions
+  // (legacy CSV) is the fallback so existing keys keep working.
+  const granted = key.permissions?.workspace
+    ? key.permissions.workspace
+    : Array.from(parsePermissionSet(parsed.permissions));
   return workspaceIdentitySchema.parse({
     id: key.referenceId,
     organizationId: parsed.organizationId,
     type: parsed.actorType ?? "user",
-    permissions: Array.from(parsePermissionSet(parsed.permissions)),
+    permissions: granted,
   });
 }
 
-const rolePermissionsMap = {
-  owner: ["read", "write", "admin"],
-  admin: ["read", "write", "admin"],
-  member: ["read", "write"],
+// Better Auth `ac` roles are the single source of truth — a workspace
+// identity's permissions are the `workspace` statements its member role
+// authorizes. Unknown/future roles degrade to member, never wider.
+const roleMap = {
+  owner: ownerRole,
+  admin: adminRole,
+  member: memberRole,
 } as const;
 
-// Unknown/future roles degrade to the narrowest set, never wider.
 export function rolePermissionsFor(role: string): readonly string[] {
-  return (
-    rolePermissionsMap[role as keyof typeof rolePermissionsMap] ??
-    rolePermissionsMap.member
-  );
+  const roleObject = roleMap[role as keyof typeof roleMap] ?? roleMap.member;
+  return [...(roleObject.statements.workspace ?? [])];
 }
 
 export const workspaceRoleSchema = z.enum(["owner", "admin", "member"]);
@@ -84,6 +93,6 @@ export function toUserWorkspaceIdentity(
     organizationId,
     type: "user",
     role: parsedRole,
-    permissions: [...rolePermissionsMap[parsedRole]],
+    permissions: [...rolePermissionsFor(parsedRole)],
   });
 }

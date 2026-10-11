@@ -2172,6 +2172,26 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.deleteDocumentSpace(this.db, this.organizationId, id);
   }
 
+  createIssueShare(input: {
+    issueId: string;
+    createdById: string;
+    expiresAt?: string | null;
+  }) {
+    return data.createIssueShare(this.db, this.organizationId, input);
+  }
+
+  getIssueShare(issueId: string) {
+    return data.getIssueShare(this.db, this.organizationId, issueId);
+  }
+
+  getIssueShareByToken(token: string) {
+    return data.getIssueShareByToken(this.db, token);
+  }
+
+  deleteIssueShare(token: string) {
+    return data.deleteIssueShare(this.db, this.organizationId, token);
+  }
+
   createDocumentShare(input: {
     documentId: string;
     includeChildren?: boolean;
@@ -2456,6 +2476,19 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     args: { documentId?: string; targetType?: string; targetId?: string } = {}
   ) {
     return data.listDocumentLinks(this.db, this.organizationId, args);
+  }
+
+  setHiddenSurfaces(userId: string, hiddenSurfaces: string[] | null) {
+    return data.setHiddenSurfaces(
+      this.db,
+      this.organizationId,
+      userId,
+      hiddenSurfaces
+    );
+  }
+
+  setFavorites(userId: string, favorites: data.EntityFavorite[] | null) {
+    return data.setFavorites(this.db, this.organizationId, userId, favorites);
   }
 
   setDefaultView(userId: string, defaultViewId: string | null) {
