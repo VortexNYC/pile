@@ -66,6 +66,7 @@ function isPublicPath(pathname: string): boolean {
     pathname.startsWith("/support/capture/") ||
     pathname.startsWith("/support/widget/") ||
     pathname.startsWith("/webhooks/agent/") ||
+    pathname.startsWith("/webhooks/comms/") ||
     (pathname.startsWith("/workspaces/") && pathname.endsWith("/board")) ||
     (pathname.startsWith("/workspaces/") && pathname.endsWith("/changelog")) ||
     (pathname.startsWith("/workspaces/") && pathname.endsWith("/changelog.rss"))

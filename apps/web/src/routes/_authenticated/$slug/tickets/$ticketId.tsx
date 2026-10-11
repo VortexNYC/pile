@@ -190,6 +190,26 @@ function TicketDetail() {
   const otherTickets = (tickets.data ?? []).filter(
     (tt) => tt.customer.id === data.customer.id && tt.id !== data.id
   );
+  const comms = useQuery({
+    queryKey: wsKey(workspace.id, "comms", { customerId: data.customer.id }),
+    queryFn: async () =>
+      (
+        await unwrap(
+          api.GET(
+            "/workspaces/{organizationId}/support/customers/{customerId}/events",
+            {
+              params: {
+                path: {
+                  organizationId: workspace.id,
+                  customerId: data.customer.id,
+                },
+                query: { limit: 5 },
+              },
+            }
+          )
+        )
+      ).events,
+  });
 
   return (
     <EntityPage
@@ -378,6 +398,20 @@ function TicketDetail() {
                     >
                       #{tt.number} {tt.title}
                     </Link>
+                  </li>
+                ))}
+              </ul>
+            </RailSection>
+          ) : null}
+          {(comms.data?.length ?? 0) > 0 ? (
+            <RailSection title="Recent activity">
+              <ul className="flex flex-col gap-1.5">
+                {(comms.data ?? []).map((event) => (
+                  <li key={event.id} className="text-sm">
+                    <div className="text-kumo-default">{event.summary}</div>
+                    <div className="text-xs text-kumo-subtle">
+                      {event.source} · {event.occurredAt.slice(0, 10)}
+                    </div>
                   </li>
                 ))}
               </ul>

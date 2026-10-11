@@ -2011,6 +2011,44 @@ export const supportCustomers = sqliteTable(
   ]
 );
 
+// Comms ledger — events streamed IN from external systems (cal.com
+// bookings, calendar meetings, inbound email later). Pile stores the
+// event; it never owns the channel.
+export const supportCustomerEvents = sqliteTable(
+  "support_customer_events" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    supportCustomerId: text("support_customer_id" as string)
+      .notNull()
+      .references(() => supportCustomers.id, { onDelete: "cascade" }),
+    type: text("type" as string).notNull(),
+    source: text("source" as string)
+      .notNull()
+      .default("manual"),
+    externalId: text("external_id" as string),
+    summary: text("summary" as string).notNull(),
+    payload: text("payload" as string),
+    occurredAt: text("occurred_at" as string).notNull(),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("support_customer_events_customer_idx" as string).on(
+      table.supportCustomerId,
+      table.occurredAt
+    ),
+    uniqueIndex("support_customer_events_external_idx" as string).on(
+      table.organizationId,
+      table.source,
+      table.externalId
+    ),
+  ]
+);
+
 export const supportCompanies = sqliteTable(
   "support_companies" as string,
   {
@@ -3277,3 +3315,34 @@ export const scimGroupMember = sqliteTable("scimGroupMember" as string, {
     mode: "timestamp_ms",
   }).notNull(),
 });
+
+// Inbound comms integrations — cal.com bookings now, calendar/email
+// later. Each source holds its own webhook secret + config; Pile
+// stores the resulting comms events on support customers.
+export const commsIntegrations = sqliteTable(
+  "comms_integrations" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    source: text("source" as string).notNull(),
+    webhookSecret: text("webhook_secret" as string),
+    config: text("config" as string),
+    isActive: integer("is_active" as string, { mode: "boolean" })
+      .notNull()
+      .default(true),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("comms_integrations_org_source_idx" as string).on(
+      table.organizationId,
+      table.source
+    ),
+  ]
+);

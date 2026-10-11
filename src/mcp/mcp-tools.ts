@@ -4884,6 +4884,32 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdSupportCustomersCustomerIdEvents",
+    "description": "List support customer events (GET /workspaces/{organizationId}/support/customers/{customerId}/events) Path params (top-level, required): organizationId, customerId. Query params (top-level, optional): limit.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/customers/{customerId}/events",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "customerId": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "number",
+          "nullable": true,
+          "default": 20
+        }
+      },
+      "required": [
+        "customerId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdSupportEscalationrules",
     "description": "List support escalation rules (GET /workspaces/{organizationId}/support/escalation-rules) Path params (top-level, required): organizationId.",
     "method": "GET",
@@ -9121,6 +9147,33 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "key"
+      ]
+    }
+  },
+  {
+    "name": "postWebhooksCommsOrganizationIdSource",
+    "description": "POST /webhooks/comms/{organizationId}/{source} (POST /webhooks/comms/{organizationId}/{source}) Path params (top-level, required): organizationId, source. Request body goes in the \"body\" object.",
+    "method": "POST",
+    "path": "/webhooks/comms/{organizationId}/{source}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "additionalProperties": {
+            "nullable": true
+          }
+        }
+      },
+      "required": [
+        "organizationId",
+        "source"
       ]
     }
   },
@@ -13853,6 +13906,60 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdSupportCustomersCustomerIdEvents",
+    "description": "Create support customer event (POST /workspaces/{organizationId}/support/customers/{customerId}/events) Path params (top-level, required): organizationId, customerId. Request body goes in the \"body\" object; fields: type*, summary*, externalId, payload, occurredAt (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/customers/{customerId}/events",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "customerId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "booking",
+                "call",
+                "meeting",
+                "email",
+                "note",
+                "custom"
+              ]
+            },
+            "summary": {
+              "type": "string",
+              "minLength": 1
+            },
+            "externalId": {
+              "type": "string"
+            },
+            "payload": {
+              "type": "string"
+            },
+            "occurredAt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "summary"
+          ]
+        }
+      },
+      "required": [
+        "customerId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdSupportEscalationrules",
     "description": "Create support escalation rule (POST /workspaces/{organizationId}/support/escalation-rules) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, isActive, sortOrder, conditions*, action* (* = required).",
     "method": "POST",
@@ -15992,6 +16099,47 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "agentId",
         "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "putWorkspacesOrganizationIdCommsIntegrationsSource",
+    "description": "Update comm integration (PUT /workspaces/{organizationId}/comms/integrations/{source}) Path params (top-level, required): organizationId, source. Request body goes in the \"body\" object; fields: webhookSecret*, config (* = required).",
+    "method": "PUT",
+    "path": "/workspaces/{organizationId}/comms/integrations/{source}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "calcom",
+            "gcal",
+            "email"
+          ]
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "webhookSecret": {
+              "type": "string",
+              "minLength": 1
+            },
+            "config": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "webhookSecret"
+          ]
+        }
+      },
+      "required": [
+        "organizationId",
+        "source"
       ]
     }
   },
