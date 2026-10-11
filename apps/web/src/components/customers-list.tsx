@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 
+import { PeekHeader, usePeek } from "@/components/entity-peek";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap } from "@/lib/api";
@@ -18,6 +19,7 @@ import { toastError, toastSuccess } from "@/lib/toast";
 export function CustomersList() {
   const workspace = useWorkspace();
   const queryClient = useQueryClient();
+  const peek = usePeek<NonNullable<typeof customers.data>[number]>();
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
@@ -142,6 +144,7 @@ export function CustomersList() {
                     <Link
                       to="/$slug/customers/$customerId"
                       params={{ slug: workspace.slug, customerId: customer.id }}
+                      onClick={peek.peekOnClick(customer)}
                       className="text-kumo-link hover:underline"
                     >
                       {customer.name}
@@ -155,6 +158,20 @@ export function CustomersList() {
           </Table>
         </LayerCard>
       )}
+      <peek.Drawer>
+        {peek.peeked ? (
+          <>
+            <PeekHeader
+              title={peek.peeked.name}
+              href={`/${workspace.slug}/customers/${peek.peeked.id}`}
+            />
+            <div className="mt-4 flex flex-col gap-2 text-sm text-kumo-subtle">
+              {peek.peeked.url ? <div>{peek.peeked.url}</div> : null}
+              <div>Added {formatRelative(peek.peeked.createdAt)}</div>
+            </div>
+          </>
+        ) : null}
+      </peek.Drawer>
     </div>
   );
 }

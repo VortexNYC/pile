@@ -1,7 +1,5 @@
 import { Badge } from "@cloudflare/kumo/components/badge";
 import { Button } from "@cloudflare/kumo/components/button";
-import { InputArea } from "@cloudflare/kumo/components/input";
-import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 import { Select } from "@cloudflare/kumo/components/select";
 import { Text } from "@cloudflare/kumo/components/text";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -9,7 +7,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { Composer } from "@/components/composer";
-import { EntityPage, RailLink, RailSection } from "@/components/entity-page";
+import { EntityPage, RailSection } from "@/components/entity-page";
 import { Feed } from "@/components/feed";
 import { Page } from "@/components/page";
 import { ErrorState, LoadingState } from "@/components/states";
@@ -39,7 +37,6 @@ function TicketDetail() {
   const workspace = useWorkspace();
   const organizationId = workspace.id;
   const queryClient = useQueryClient();
-  const [reply, setReply] = useState("");
 
   // Jam's trick — hand the customer a link; they record the bug, a
   // capture ticket lands back in the workspace. Reuse or mint the

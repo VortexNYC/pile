@@ -5,6 +5,7 @@ import { FileText, Plus } from "@phosphor-icons/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 
+import { PeekHeader, usePeek } from "@/components/entity-peek";
 import { Page } from "@/components/page";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
@@ -49,6 +50,7 @@ function DocumentsList() {
       });
     },
   });
+  const peek = usePeek<NonNullable<typeof documents.data>[number]>();
   const create = () =>
     void navigate({
       to: "/$slug/documents/new",
@@ -117,6 +119,15 @@ function DocumentsList() {
           </Table>
         </LayerCard>
       )}
+      <peek.Drawer>
+        {peek.peeked ? (
+          <PeekHeader
+            meta={peek.peeked.icon ? <span>{peek.peeked.icon}</span> : null}
+            title={peek.peeked.title}
+            href={`/${workspace.slug}/documents/${peek.peeked.id}`}
+          />
+        ) : null}
+      </peek.Drawer>
     </Page>
   );
 }

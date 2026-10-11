@@ -17,6 +17,8 @@ import { useState } from "react";
 
 import { CapturesGrid } from "@/components/captures-grid";
 import { CustomersList } from "@/components/customers-list";
+import { PeekHeader, usePeek } from "@/components/entity-peek";
+import { FieldMenu } from "@/components/field-menu";
 import { Page } from "@/components/page";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
@@ -25,6 +27,7 @@ import { betterAuthClient } from "@/lib/better-auth";
 import {
   formatRelative,
   isTicketStatus,
+  PRIORITIES,
   PRIORITY_LABELS,
   priorityVariant,
   TICKET_STATUS_LABELS,
@@ -55,7 +58,6 @@ function TicketsList() {
   const [adding, setAdding] = useState(false);
   const session = betterAuthClient.useSession();
   const [folder, setFolder] = useState<"all" | "mine" | "unassigned">("all");
-
   const tickets = useQuery({
     queryKey: wsKey(workspace.id, "tickets", { status }),
     queryFn: async () =>
@@ -70,6 +72,23 @@ function TicketsList() {
         )
       ).tickets,
     placeholderData: keepPreviousData,
+  });
+  const queryClient = useQueryClient();
+  const peek = usePeek<NonNullable<typeof tickets.data>[number]>();
+  const patch = useMutation({
+    mutationFn: (args: { id: string; body: Record<string, string> }) =>
+      unwrap(
+        api.PATCH("/workspaces/{organizationId}/support/tickets/{ticketId}", {
+          params: {
+            path: { organizationId: workspace.id, ticketId: args.id },
+          },
+          body: args.body as never,
+        })
+      ),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({
+        queryKey: wsKey(workspace.id, "tickets"),
+      }),
   });
 
   const me = session.data?.user.id;
@@ -164,6 +183,7 @@ function TicketsList() {
                       <Link
                         to="/$slug/tickets/$ticketId"
                         params={{ slug: workspace.slug, ticketId: ticket.id }}
+                        onClick={peek.peekOnClick(ticket)}
                         className="text-kumo-link hover:underline"
                       >
                         <span className="text-kumo-subtle mr-2">
@@ -176,22 +196,44 @@ function TicketsList() {
                       {ticket.customer.fullName ?? ticket.customer.email}
                     </Table.Cell>
                     <Table.Cell>
-                      <Badge
-                        variant={
-                          ticket.status === "done"
-                            ? "green"
-                            : ticket.status === "snoozed"
-                              ? "neutral"
-                              : "blue"
+                      <FieldMenu
+                        title="Status"
+                        options={TICKET_STATUSES}
+                        labels={TICKET_STATUS_LABELS}
+                        onSelect={(v) =>
+                          patch.mutate({ id: ticket.id, body: { status: v } })
                         }
                       >
-                        {TICKET_STATUS_LABELS[ticket.status]}
-                      </Badge>
+                        <button type="button" className="cursor-pointer">
+                          <Badge
+                            variant={
+                              ticket.status === "done"
+                                ? "green"
+                                : ticket.status === "snoozed"
+                                  ? "neutral"
+                                  : "blue"
+                            }
+                          >
+                            {TICKET_STATUS_LABELS[ticket.status]}
+                          </Badge>
+                        </button>
+                      </FieldMenu>
                     </Table.Cell>
                     <Table.Cell>
-                      <Badge variant={priorityVariant(ticket.priority)}>
-                        {PRIORITY_LABELS[ticket.priority]}
-                      </Badge>
+                      <FieldMenu
+                        title="Priority"
+                        options={PRIORITIES}
+                        labels={PRIORITY_LABELS}
+                        onSelect={(v) =>
+                          patch.mutate({ id: ticket.id, body: { priority: v } })
+                        }
+                      >
+                        <button type="button" className="cursor-pointer">
+                          <Badge variant={priorityVariant(ticket.priority)}>
+                            {PRIORITY_LABELS[ticket.priority]}
+                          </Badge>
+                        </button>
+                      </FieldMenu>
                     </Table.Cell>
                     <Table.Cell>{formatRelative(ticket.updatedAt)}</Table.Cell>
                   </Table.Row>
@@ -210,6 +252,37 @@ function TicketsList() {
         <h2 className="text-sm font-medium text-kumo-subtle px-1">Captures</h2>
         <CapturesGrid />
       </div>
+
+      <peek.Drawer>
+        {peek.peeked ? (
+          <>
+            <PeekHeader
+              meta={
+                <Badge
+                  variant={
+                    peek.peeked.status === "done"
+                      ? "green"
+                      : peek.peeked.status === "snoozed"
+                        ? "neutral"
+                        : "blue"
+                  }
+                >
+                  {TICKET_STATUS_LABELS[peek.peeked.status]}
+                </Badge>
+              }
+              title={`#${peek.peeked.number} ${peek.peeked.title}`}
+              href={`/${workspace.slug}/tickets/${peek.peeked.id}`}
+            />
+            <div className="mt-4 flex flex-col gap-2 text-sm text-kumo-subtle">
+              <div>
+                Customer:{" "}
+                {peek.peeked.customer.fullName ?? peek.peeked.customer.email}
+              </div>
+              <div>Updated {formatRelative(peek.peeked.updatedAt)}</div>
+            </div>
+          </>
+        ) : null}
+      </peek.Drawer>
     </Page>
   );
 }

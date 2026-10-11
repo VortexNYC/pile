@@ -4,6 +4,7 @@ import { Robot } from "@phosphor-icons/react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
+import { PeekHeader, usePeek } from "@/components/entity-peek";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap } from "@/lib/api";
@@ -21,6 +22,7 @@ const WEEK_MS = 7 * DAY_MS;
  * sessions route and the Issues tab. */
 export function SessionsList() {
   const workspace = useWorkspace();
+  const peek = usePeek<NonNullable<typeof sessions.data>[number]>();
   const sessions = useQuery({
     queryKey: wsKey(workspace.id, "sessions"),
     queryFn: async () =>
@@ -116,6 +118,7 @@ export function SessionsList() {
                       slug: workspace.slug,
                       sessionId: session.id,
                     }}
+                    onClick={peek.peekOnClick(session)}
                     className="flex h-11 items-center gap-3 px-4 hover:bg-kumo-tint"
                   >
                     <Badge variant={sessionStatusVariant(session.status)}>
@@ -147,6 +150,25 @@ export function SessionsList() {
           </div>
         )
       )}
+      <peek.Drawer>
+        {peek.peeked ? (
+          <>
+            <PeekHeader
+              meta={
+                <Badge variant={sessionStatusVariant(peek.peeked.status)}>
+                  {peek.peeked.status}
+                </Badge>
+              }
+              title={peek.peeked.label ?? peek.peeked.id.slice(0, 8)}
+              href={`/${workspace.slug}/sessions/${peek.peeked.id}`}
+            />
+            <div className="mt-4 flex flex-col gap-2 text-sm text-kumo-subtle">
+              <div>Provider: {peek.peeked.provider}</div>
+              <div>Updated {formatRelative(peek.peeked.updatedAt)}</div>
+            </div>
+          </>
+        ) : null}
+      </peek.Drawer>
     </div>
   );
 }

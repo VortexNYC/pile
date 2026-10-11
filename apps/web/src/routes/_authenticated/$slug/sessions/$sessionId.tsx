@@ -14,16 +14,11 @@ import { useState } from "react";
 
 import { EntityPage, RailSection } from "@/components/entity-page";
 import { Feed } from "@/components/feed";
-import { Markdown } from "@/components/markdown";
 import { Page } from "@/components/page";
 import { ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap, type paths } from "@/lib/api";
-import {
-  derivedStatusVariant,
-  formatRelative,
-  sessionStatusVariant,
-} from "@/lib/labels";
+import { derivedStatusVariant, sessionStatusVariant } from "@/lib/labels";
 
 type SessionDetailResponse =
   paths["/workspaces/{organizationId}/agent/sessions/{sessionId}"]["get"]["responses"][200]["content"]["application/json"];
