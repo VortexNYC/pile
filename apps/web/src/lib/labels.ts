@@ -9,15 +9,6 @@ type TicketResponse =
   paths["/workspaces/{organizationId}/support/tickets/{ticketId}"]["get"]["responses"][200]["content"]["application/json"]["ticket"];
 export type TicketStatus = TicketResponse["status"];
 
-export const ISSUE_STATUS_ICONS = {
-  triage: "WarningCircle",
-  backlog: "CircleDashed",
-  todo: "Circle",
-  in_progress: "CircleHalf",
-  done: "CheckCircle",
-  canceled: "XCircle",
-} as const;
-
 export const ISSUE_STATUS_LABELS: Record<IssueStatus, string> = {
   triage: "Needs review",
   backlog: "Backlog",

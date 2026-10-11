@@ -126,7 +126,6 @@ function DocumentDetail() {
           })
         )
       ).documents,
-    enabled: (backlinks.data?.length ?? 0) > 0,
   });
 
   if (doc.isPending) return <LoadingState label="Loading document" />;
@@ -141,6 +140,19 @@ function DocumentDetail() {
   const text = documentText(data.content);
   const subPages = children.data ?? [];
   const headings = markdownHeadings(text);
+  const byId = new Map((allDocs.data ?? []).map((d) => [d.id, d]));
+  const ancestors: typeof subPages = [];
+  {
+    let cursor = data.parentDocumentId;
+    let hops = 0;
+    while (cursor && hops < 6) {
+      const parent = byId.get(cursor);
+      if (!parent) break;
+      ancestors.unshift(parent);
+      cursor = parent.parentDocumentId;
+      hops += 1;
+    }
+  }
   const backlinkRows = (backlinks.data ?? []).map((id) => ({
     id,
     title:

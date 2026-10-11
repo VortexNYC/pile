@@ -23,7 +23,7 @@ import {
   type IssuePriority,
   type TicketStatus,
 } from "@/lib/labels";
-import { toastError } from "@/lib/toast";
+import { toastError, toastSuccess } from "@/lib/toast";
 
 export const Route = createFileRoute("/_authenticated/$slug/tickets/$ticketId")(
   {
@@ -37,6 +37,43 @@ function TicketDetail() {
   const organizationId = workspace.id;
   const queryClient = useQueryClient();
   const [reply, setReply] = useState("");
+
+  // Jam's trick — hand the customer a link; they record the bug, a
+  // capture ticket lands back in the workspace. Reuse or mint the
+  // workspace's public key, then create the link.
+  const captureLink = useMutation({
+    mutationFn: async () => {
+      const keys = (
+        await unwrap(
+          api.GET("/workspaces/{organizationId}/support/capture/public-keys", {
+            params: { path: { organizationId: workspace.id } },
+          })
+        )
+      ).publicKeys;
+      const key =
+        keys[0] ??
+        (await unwrap(
+          api.POST("/workspaces/{organizationId}/support/capture/public-keys", {
+            params: { path: { organizationId: workspace.id } },
+            body: { name: "Ticket capture links" },
+          })
+        ));
+      return unwrap(
+        api.POST("/workspaces/{organizationId}/support/capture-links", {
+          params: { path: { organizationId: workspace.id } },
+          body: {
+            publicKeyId: key.id,
+            name: `Ticket ${data.number} — send me the bug`,
+          },
+        })
+      );
+    },
+    onSuccess: (link) => {
+      navigator.clipboard.writeText(link.url);
+      toastSuccess("Capture link copied — send it to the customer");
+    },
+    onError: (error) => toastError(error),
+  });
   const [mode, setMode] = useState<"reply" | "note">("reply");
   const key = wsKey(organizationId, "tickets", ticketId);
   const path = { organizationId, ticketId };
@@ -181,17 +218,40 @@ function TicketDetail() {
         </>
       }
       actions={
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() =>
-            navigator.clipboard.writeText(
-              `${window.location.origin}/app/share/capture/${ticketId}`
-            )
-          }
-        >
-          Copy capture link
-        </Button>
+        <div className="flex items-center gap-2">
+          {captureLink.data ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                navigator.clipboard.writeText(captureLink.data!.url);
+                toastSuccess("Capture link copied");
+              }}
+            >
+              Send capture link
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              loading={captureLink.isPending}
+              onClick={() => captureLink.mutate()}
+            >
+              Send capture link
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() =>
+              navigator.clipboard.writeText(
+                `${window.location.origin}/app/share/capture/${ticketId}`
+              )
+            }
+          >
+            Copy capture link
+          </Button>
+        </div>
       }
     >
       <div className="flex gap-8">

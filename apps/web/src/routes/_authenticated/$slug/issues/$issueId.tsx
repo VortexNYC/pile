@@ -498,13 +498,38 @@ function IssueDetail() {
 
           {subIssues.length > 0 ? (
             <div className="flex flex-col gap-1">
-              <h3 className="text-xs font-medium text-kumo-subtle">
-                Sub-issues{" "}
-                <span>
-                  {subIssues.filter((s) => s.status === "done").length}/
-                  {subIssues.length}
-                </span>
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-medium text-kumo-subtle">
+                  Sub-issues{" "}
+                  <span>
+                    {subIssues.filter((s) => s.status === "done").length}/
+                    {subIssues.length}
+                  </span>
+                </h3>
+                <div
+                  role="progressbar"
+                  aria-label="Sub-issue progress"
+                  aria-valuenow={Math.round(
+                    (subIssues.filter((s) => s.status === "done").length /
+                      subIssues.length) *
+                      100
+                  )}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  className="h-1.5 w-24 overflow-hidden rounded-full bg-kumo-tint"
+                >
+                  <div
+                    className="h-full rounded-full bg-green-500 transition-all"
+                    style={{
+                      width: `${Math.round(
+                        (subIssues.filter((s) => s.status === "done").length /
+                          subIssues.length) *
+                          100
+                      )}%`,
+                    }}
+                  />
+                </div>
+              </div>
               <ul className="flex flex-col border-t border-kumo-line">
                 {subIssues.map((sub) => (
                   <li key={sub.id}>
