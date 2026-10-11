@@ -1,4 +1,9 @@
-import { Sidebar } from "@cloudflare/kumo/components/sidebar";
+import {
+  Sidebar,
+  SidebarCollapsible,
+  SidebarCollapsibleContent,
+  SidebarCollapsibleTrigger,
+} from "@cloudflare/kumo/components/sidebar";
 import { Text } from "@cloudflare/kumo/components/text";
 import {
   Buildings,
@@ -18,12 +23,15 @@ import {
   UserCircle,
   UsersThree,
 } from "@phosphor-icons/react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "@tanstack/react-router";
+import { useMemo } from "react";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { useSurfaces } from "@/hooks/use-surfaces";
+import { wsKey } from "@/hooks/use-workspace";
 import type { Workspace } from "@/hooks/use-workspace";
+import { api, unwrap } from "@/lib/api";
 import { betterAuthClient } from "@/lib/better-auth";
 import { appHref } from "@/lib/router-path";
 
@@ -72,6 +80,26 @@ export function AppSidebar({
   const queryClient = useQueryClient();
   const surfaces = useSurfaces(workspace.id);
   const permissions = usePermissions(workspace.id);
+  const documents = useQuery({
+    queryKey: wsKey(workspace.id, "documents"),
+    queryFn: async () =>
+      (
+        await unwrap(
+          api.GET("/workspaces/{organizationId}/documents", {
+            params: { path: { organizationId: workspace.id } },
+          })
+        )
+      ).documents,
+  });
+  const docTree = useMemo(() => {
+    const docs = documents.data ?? [];
+    const children = new Map<string | null, typeof docs>();
+    for (const doc of docs) {
+      const key = doc.parentDocumentId ?? null;
+      children.set(key, [...(children.get(key) ?? []), doc]);
+    }
+    return children;
+  }, [documents.data]);
   const base = `/${workspace.slug}`;
   const isActive = (path: string) =>
     pathname === `${base}/${path}` || pathname.startsWith(`${base}/${path}/`);
@@ -106,6 +134,63 @@ export function AppSidebar({
             )}
           </Sidebar.Menu>
         </Sidebar.Group>
+        {(docTree.get(null)?.length ?? 0) > 0 ? (
+          <Sidebar.Group>
+            <Sidebar.GroupLabel>Documents</Sidebar.GroupLabel>
+            <Sidebar.Menu>
+              {(docTree.get(null) ?? []).slice(0, 20).map((doc) => {
+                const kids = docTree.get(doc.id) ?? [];
+                const href = appHref(`${base}/documents/${doc.id}`);
+                if (kids.length === 0) {
+                  return (
+                    <Sidebar.MenuButton
+                      key={doc.id}
+                      icon={FileText}
+                      active={isActive(`documents/${doc.id}`)}
+                      href={href}
+                      tooltip={doc.title}
+                    >
+                      {doc.icon ? `${doc.icon} ` : ""}
+                      {doc.title}
+                    </Sidebar.MenuButton>
+                  );
+                }
+                return (
+                  <SidebarCollapsible key={doc.id}>
+                    <SidebarCollapsibleTrigger
+                      render={
+                        <Sidebar.MenuButton
+                          icon={FileText}
+                          active={isActive(`documents/${doc.id}`)}
+                          href={href}
+                          tooltip={doc.title}
+                        >
+                          {doc.icon ? `${doc.icon} ` : ""}
+                          {doc.title}
+                          <Sidebar.MenuChevron />
+                        </Sidebar.MenuButton>
+                      }
+                    />
+                    <SidebarCollapsibleContent>
+                      <Sidebar.MenuSub>
+                        {kids.map((kid) => (
+                          <Sidebar.MenuSubItem key={kid.id}>
+                            <Sidebar.MenuSubButton
+                              href={appHref(`${base}/documents/${kid.id}`)}
+                            >
+                              {kid.icon ? `${kid.icon} ` : ""}
+                              {kid.title}
+                            </Sidebar.MenuSubButton>
+                          </Sidebar.MenuSubItem>
+                        ))}
+                      </Sidebar.MenuSub>
+                    </SidebarCollapsibleContent>
+                  </SidebarCollapsible>
+                );
+              })}
+            </Sidebar.Menu>
+          </Sidebar.Group>
+        ) : null}
         <Sidebar.Group>
           <Sidebar.GroupLabel>Settings</Sidebar.GroupLabel>
           <Sidebar.Menu>

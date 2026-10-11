@@ -210,19 +210,15 @@ function IssuesList() {
                           <span className="min-w-0 flex-1 truncate text-sm font-medium text-kumo-default">
                             {issue.title}
                           </span>
-                        ) : null}
-                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-kumo-default">
-                          {issue.title}
-                        </span>
-                        <PrChip issue={issue} />
-                        <Badge variant={priorityVariant(issue.priority)}>
-                          {PRIORITY_LABELS[issue.priority]}
-                        </Badge>
-                        <span className="w-16 shrink-0 text-right text-xs text-kumo-subtle">
-                          {formatRelative(issue.updatedAt)}
-                        </span>
-                      </Link>
-                    </IssueContextMenu>
+                          <PrChip issue={issue} />
+                          <Badge variant={priorityVariant(issue.priority)}>
+                            {PRIORITY_LABELS[issue.priority]}
+                          </Badge>
+                          <span className="w-16 shrink-0 text-right text-xs text-kumo-subtle">
+                            {formatRelative(issue.updatedAt)}
+                          </span>
+                        </Link>
+                      </IssueContextMenu>
                     ))}
                   </div>
                 </LayerCard>
