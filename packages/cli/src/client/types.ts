@@ -16757,6 +16757,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/support/captures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List support captures */
+        get: {
+            parameters: {
+                query?: {
+                    type?: string;
+                    limit?: number;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description All capture media across support tickets — the jams gallery: every screenshot, video, log, and artifact joined to its ticket. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            captures: {
+                                id: string;
+                                type: string;
+                                fileName: string | null;
+                                contentType: string | null;
+                                url: string | null;
+                                size: number | null;
+                                createdAt: string;
+                                ticket: {
+                                    id: string;
+                                    number: number;
+                                    title: string;
+                                };
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/support/tickets/{ticketId}": {
         parameters: {
             query?: never;

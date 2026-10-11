@@ -33123,6 +33123,122 @@
         "summary": "List support tickets"
       }
     },
+    "/workspaces/{organizationId}/support/captures": {
+      "get": {
+        "tags": [
+          "support-tickets"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "type",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 100
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "All capture media across support tickets — the jams gallery: every screenshot, video, log, and artifact joined to its ticket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "captures": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "fileName": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "contentType": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "url": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "size": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "ticket": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "number": {
+                                "type": "number"
+                              },
+                              "title": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "number",
+                              "title"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "fileName",
+                          "contentType",
+                          "url",
+                          "size",
+                          "createdAt",
+                          "ticket"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "captures"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List support captures"
+      }
+    },
     "/workspaces/{organizationId}/support/tickets/{ticketId}": {
       "get": {
         "tags": [

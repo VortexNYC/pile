@@ -23,6 +23,7 @@ import { Route as AuthenticatedOnboardingRouteImport } from './routes/_authentic
 import { Route as AuthenticatedSlugIndexRouteImport } from './routes/_authenticated/$slug/index'
 import { Route as AuthenticatedSlugInboxRouteImport } from './routes/_authenticated/$slug/inbox'
 import { Route as ShareCaptureTicketIdRouteImport } from './routes/share/capture/$ticketId'
+import { Route as AuthenticatedSlugCapturesIndexRouteImport } from './routes/_authenticated/$slug/captures/index'
 import { Route as AuthenticatedSlugChangelogIndexRouteImport } from './routes/_authenticated/$slug/changelog/index'
 import { Route as AuthenticatedSlugCustomersIndexRouteImport } from './routes/_authenticated/$slug/customers/index'
 import { Route as AuthenticatedSlugCustomersCustomerIdRouteImport } from './routes/_authenticated/$slug/customers/$customerId'
@@ -117,6 +118,12 @@ const ShareCaptureTicketIdRoute = ShareCaptureTicketIdRouteImport.update({
   path: '/share/capture/$ticketId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedSlugCapturesIndexRoute =
+  AuthenticatedSlugCapturesIndexRouteImport.update({
+    id: '/captures/',
+    path: '/captures/',
+    getParentRoute: () => AuthenticatedSlugRoute,
+  } as any)
 const AuthenticatedSlugChangelogIndexRoute =
   AuthenticatedSlugChangelogIndexRouteImport.update({
     id: '/changelog/',
@@ -293,6 +300,7 @@ export interface FileRoutesByFullPath {
   '/$slug/tickets/$ticketId': typeof AuthenticatedSlugTicketsTicketIdRoute
   '/share/document/$orgId/$token': typeof ShareDocumentOrgIdTokenRoute
   '/share/issue/$orgId/$token': typeof ShareIssueOrgIdTokenRoute
+  '/$slug/captures/': typeof AuthenticatedSlugCapturesIndexRoute
   '/$slug/changelog/': typeof AuthenticatedSlugChangelogIndexRoute
   '/$slug/customers/': typeof AuthenticatedSlugCustomersIndexRoute
   '/$slug/cycles/': typeof AuthenticatedSlugCyclesIndexRoute
@@ -331,6 +339,7 @@ export interface FileRoutesByTo {
   '/$slug/tickets/$ticketId': typeof AuthenticatedSlugTicketsTicketIdRoute
   '/share/document/$orgId/$token': typeof ShareDocumentOrgIdTokenRoute
   '/share/issue/$orgId/$token': typeof ShareIssueOrgIdTokenRoute
+  '/$slug/captures': typeof AuthenticatedSlugCapturesIndexRoute
   '/$slug/changelog': typeof AuthenticatedSlugChangelogIndexRoute
   '/$slug/customers': typeof AuthenticatedSlugCustomersIndexRoute
   '/$slug/cycles': typeof AuthenticatedSlugCyclesIndexRoute
@@ -373,6 +382,7 @@ export interface FileRoutesById {
   '/_authenticated/$slug/tickets/$ticketId': typeof AuthenticatedSlugTicketsTicketIdRoute
   '/share/document/$orgId/$token': typeof ShareDocumentOrgIdTokenRoute
   '/share/issue/$orgId/$token': typeof ShareIssueOrgIdTokenRoute
+  '/_authenticated/$slug/captures/': typeof AuthenticatedSlugCapturesIndexRoute
   '/_authenticated/$slug/changelog/': typeof AuthenticatedSlugChangelogIndexRoute
   '/_authenticated/$slug/customers/': typeof AuthenticatedSlugCustomersIndexRoute
   '/_authenticated/$slug/cycles/': typeof AuthenticatedSlugCyclesIndexRoute
@@ -414,6 +424,7 @@ export interface FileRouteTypes {
     | '/$slug/tickets/$ticketId'
     | '/share/document/$orgId/$token'
     | '/share/issue/$orgId/$token'
+    | '/$slug/captures/'
     | '/$slug/changelog/'
     | '/$slug/customers/'
     | '/$slug/cycles/'
@@ -452,6 +463,7 @@ export interface FileRouteTypes {
     | '/$slug/tickets/$ticketId'
     | '/share/document/$orgId/$token'
     | '/share/issue/$orgId/$token'
+    | '/$slug/captures'
     | '/$slug/changelog'
     | '/$slug/customers'
     | '/$slug/cycles'
@@ -493,6 +505,7 @@ export interface FileRouteTypes {
     | '/_authenticated/$slug/tickets/$ticketId'
     | '/share/document/$orgId/$token'
     | '/share/issue/$orgId/$token'
+    | '/_authenticated/$slug/captures/'
     | '/_authenticated/$slug/changelog/'
     | '/_authenticated/$slug/customers/'
     | '/_authenticated/$slug/cycles/'
@@ -614,6 +627,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/share/capture/$ticketId'
       preLoaderRoute: typeof ShareCaptureTicketIdRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/$slug/captures/': {
+      id: '/_authenticated/$slug/captures/'
+      path: '/captures'
+      fullPath: '/$slug/captures/'
+      preLoaderRoute: typeof AuthenticatedSlugCapturesIndexRouteImport
+      parentRoute: typeof AuthenticatedSlugRoute
     }
     '/_authenticated/$slug/changelog/': {
       id: '/_authenticated/$slug/changelog/'
@@ -828,6 +848,7 @@ interface AuthenticatedSlugRouteChildren {
   AuthenticatedSlugSettingsMembersRoute: typeof AuthenticatedSlugSettingsMembersRoute
   AuthenticatedSlugSettingsSurfacesRoute: typeof AuthenticatedSlugSettingsSurfacesRoute
   AuthenticatedSlugTicketsTicketIdRoute: typeof AuthenticatedSlugTicketsTicketIdRoute
+  AuthenticatedSlugCapturesIndexRoute: typeof AuthenticatedSlugCapturesIndexRoute
   AuthenticatedSlugChangelogIndexRoute: typeof AuthenticatedSlugChangelogIndexRoute
   AuthenticatedSlugCustomersIndexRoute: typeof AuthenticatedSlugCustomersIndexRoute
   AuthenticatedSlugCyclesIndexRoute: typeof AuthenticatedSlugCyclesIndexRoute
@@ -862,6 +883,7 @@ const AuthenticatedSlugRouteChildren: AuthenticatedSlugRouteChildren = {
   AuthenticatedSlugSettingsSurfacesRoute:
     AuthenticatedSlugSettingsSurfacesRoute,
   AuthenticatedSlugTicketsTicketIdRoute: AuthenticatedSlugTicketsTicketIdRoute,
+  AuthenticatedSlugCapturesIndexRoute: AuthenticatedSlugCapturesIndexRoute,
   AuthenticatedSlugChangelogIndexRoute: AuthenticatedSlugChangelogIndexRoute,
   AuthenticatedSlugCustomersIndexRoute: AuthenticatedSlugCustomersIndexRoute,
   AuthenticatedSlugCyclesIndexRoute: AuthenticatedSlugCyclesIndexRoute,
