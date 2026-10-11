@@ -1,14 +1,13 @@
 import { createHmac } from "node:crypto";
 
 import { env } from "cloudflare:test";
-import { eq, and } from "drizzle-orm";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 env.WEBHOOK_QUEUE = null as unknown as typeof env.WEBHOOK_QUEUE;
 
 import { createD1 } from "../global/db.js";
-import { supportCustomers, user as userTable } from "../global/schema.js";
+import { user as userTable } from "../global/schema.js";
 import { findOrCreateCustomerByEmail } from "../global/support-contacts.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";

@@ -355,35 +355,36 @@ export function registerCommsRoutes(app: OpenAPIHono<AppContext>) {
       return c.json({ recorded: 0 });
     }
 
-    let recorded = 0;
-    for (const event of events) {
-      const customer = await db
-        .select({ id: supportCustomers.id })
-        .from(supportCustomers)
-        .where(
-          and(
-            eq(supportCustomers.organizationId, organizationId),
-            eq(supportCustomers.email, event.email)
+    const results = await Promise.all(
+      events.map(async (event) => {
+        const customer = await db
+          .select({ id: supportCustomers.id })
+          .from(supportCustomers)
+          .where(
+            and(
+              eq(supportCustomers.organizationId, organizationId),
+              eq(supportCustomers.email, event.email)
+            )
           )
-        )
-        .get();
-      if (!customer) continue;
-      await db
-        .insert(supportCustomerEvents)
-        .values({
-          id: crypto.randomUUID(),
-          organizationId,
-          supportCustomerId: customer.id,
-          type: event.type,
-          source,
-          externalId: event.externalId ?? null,
-          summary: event.summary,
-          payload: raw,
-          occurredAt: event.occurredAt,
-        })
-        .onConflictDoNothing();
-      recorded += 1;
-    }
-    return c.json({ recorded });
+          .get();
+        if (!customer) return false;
+        await db
+          .insert(supportCustomerEvents)
+          .values({
+            id: crypto.randomUUID(),
+            organizationId,
+            supportCustomerId: customer.id,
+            type: event.type,
+            source,
+            externalId: event.externalId ?? null,
+            summary: event.summary,
+            payload: raw,
+            occurredAt: event.occurredAt,
+          })
+          .onConflictDoNothing();
+        return true;
+      })
+    );
+    return c.json({ recorded: results.filter(Boolean).length });
   });
 }
