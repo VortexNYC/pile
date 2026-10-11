@@ -1,28 +1,21 @@
 import { Button } from "@cloudflare/kumo/components/button";
-import { Input } from "@cloudflare/kumo/components/input";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 import { Table } from "@cloudflare/kumo/components/table";
 import { Buildings, Plus } from "@phosphor-icons/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
 
 import { PeekHeader, usePeek } from "@/components/entity-peek";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap } from "@/lib/api";
 import { formatRelative } from "@/lib/labels";
-import { toastError, toastSuccess } from "@/lib/toast";
 
 /** Customer list + inline add — reused by the customers route and
  * the Support tab. */
 export function CustomersList() {
   const workspace = useWorkspace();
-  const queryClient = useQueryClient();
   const peek = usePeek<NonNullable<typeof customers.data>[number]>();
-  const [adding, setAdding] = useState(false);
-  const [name, setName] = useState("");
-  const [url, setUrl] = useState("");
   const key = wsKey(workspace.id, "customers");
 
   const customers = useQuery({
@@ -37,83 +30,20 @@ export function CustomersList() {
       ).customers,
   });
 
-  const create = useMutation({
-    mutationFn: () =>
-      unwrap(
-        api.POST("/workspaces/{organizationId}/customers", {
-          params: { path: { organizationId: workspace.id } },
-          body: { name: name.trim(), url: url.trim() || undefined },
-        })
-      ),
-    onSuccess: () => {
-      setName("");
-      setUrl("");
-      setAdding(false);
-      toastSuccess("Customer added");
-    },
-    onError: (error) => toastError(error),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: key }),
-  });
-
   return (
     <div className="flex flex-col gap-4">
-      {!adding ? (
-        <div className="flex justify-end">
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={<Plus />}
-            onClick={() => setAdding(true)}
-          >
-            Add customer
-          </Button>
-        </div>
-      ) : (
-        <LayerCard>
-          <LayerCard.Primary className="p-4">
-            <form
-              aria-label="Add customer"
-              className="flex items-end gap-3"
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (name.trim() && !create.isPending) create.mutate();
-              }}
-            >
-              <Input
-                label="Company name"
-                value={name}
-                required
-                onChange={(e) => setName(e.target.value)}
-              />
-              <Input
-                label="Website"
-                type="url"
-                placeholder="https://example.com"
-                value={url}
-                required={false}
-                onChange={(e) => setUrl(e.target.value)}
-              />
-              <div className="flex gap-2">
-                <Button
-                  type="submit"
-                  variant="primary"
-                  loading={create.isPending}
-                  disabled={!name.trim()}
-                >
-                  Save
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setAdding(false)}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          </LayerCard.Primary>
-        </LayerCard>
-      )}
+      <div className="flex justify-end">
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={<Plus />}
+          onClick={() =>
+            window.dispatchEvent(new CustomEvent("pile:create-customer"))
+          }
+        >
+          Add customer
+        </Button>
+      </div>
       {customers.isPending ? (
         <LoadingState label="Loading customers" />
       ) : customers.isError ? (

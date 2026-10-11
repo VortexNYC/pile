@@ -10,6 +10,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 
 import { CanvasEditor } from "@/components/canvas-editor";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EntityPage, RailLink, RailSection } from "@/components/entity-page";
 import { IconPicker } from "@/components/icon-picker";
 import { Markdown } from "@/components/markdown";
@@ -38,6 +39,7 @@ function DocumentDetail() {
   const navigate = useNavigate();
   const [editingContent, setEditingContent] = useState(false);
   const [draft, setDraft] = useState({ title: "", content: "" });
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const canvasSave = useRef<number | null>(null);
   const key = wsKey(organizationId, "documents", documentId);
@@ -173,271 +175,280 @@ function DocumentDetail() {
   }));
 
   return (
-    <EntityPage
-      title={data.title}
-      description={
-        <>
-          <Link
-            to="/$slug/documents"
-            params={{ slug: workspace.slug }}
-            className="text-kumo-link"
-          >
-            Documents
-          </Link>{" "}
-          · updated {formatRelative(data.updatedAt)}
-        </>
-      }
-      actions={
-        <>
-          <ShareButton
-            organizationId={workspace.id}
-            kind="document"
-            id={data.id}
-          />
-        </>
-      }
-      menu={
-        <>
-          <DropdownMenu.Item
-            icon={
-              <Star
-                weight={
-                  favs.isFavorite("document", data.id) ? "fill" : "regular"
-                }
-              />
-            }
-            onClick={() =>
-              favs.toggle({
-                type: "document",
-                id: data.id,
-                title: data.title,
-              })
-            }
-          >
-            {favs.isFavorite("document", data.id) ? "Unstar" : "Star"}
-          </DropdownMenu.Item>
-          <DropdownMenu.Item
-            icon={<LinkSimple />}
-            onClick={() => {
-              navigator.clipboard.writeText(window.location.href);
-              toastSuccess("Link copied");
-            }}
-          >
-            Copy link
-          </DropdownMenu.Item>
-          <DropdownMenu.Separator />
-          <DropdownMenu.Item
-            variant="danger"
-            icon={<Trash />}
-            onClick={() => {
-              if (window.confirm("Move this document to trash?"))
-                remove.mutate();
-            }}
-          >
-            Delete document
-          </DropdownMenu.Item>
-        </>
-      }
-      center={
-        <>
-          <LayerCard className="min-w-0">
-            <LayerCard.Primary className="p-6">
-              <div className="flex items-start gap-3 mb-4">
-                <IconPicker
-                  onSelect={(icon) => save.mutate({ icon })}
-                  onRemove={() => save.mutate({ icon: null })}
-                >
-                  <button
-                    type="button"
-                    aria-label="Change icon"
-                    className="hover:bg-kumo-tint mt-1 rounded-md p-0.5 text-2xl leading-none"
-                  >
-                    {data.icon ?? "📄"}
-                  </button>
-                </IconPicker>
-                <input
-                  aria-label="Document title"
-                  defaultValue={data.title}
-                  key={`${data.id}-${data.title}`}
-                  className="w-full bg-transparent text-2xl font-semibold text-kumo-default outline-none placeholder:text-kumo-subtle focus:border-b focus:border-kumo-line"
-                  placeholder="Untitled"
-                  onBlur={(e: React.FocusEvent<HTMLInputElement>) => {
-                    const value = e.target.value.trim();
-                    if (value && value !== data.title) {
-                      save.mutate({ title: value });
-                    } else {
-                      e.target.value = data.title;
-                    }
-                  }}
-                  onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      e.currentTarget.blur();
-                    }
-                    if (e.key === "Escape") {
-                      e.currentTarget.value = data.title;
-                      e.currentTarget.blur();
-                    }
-                  }}
-                />
-              </div>
-              {subPages.length > 0 ? (
-                <div className="flex flex-col gap-1 mb-5">
-                  {subPages.map((sub) => (
-                    <Link
-                      key={sub.id}
-                      to="/$slug/documents/$documentId"
-                      params={{ slug: workspace.slug, documentId: sub.id }}
-                      className="text-sm text-kumo-link hover:underline flex items-center gap-2"
-                    >
-                      <Text as="span" variant="secondary">
-                        {sub.icon ?? "📄"}
-                      </Text>
-                      {sub.title}
-                    </Link>
-                  ))}
-                </div>
-              ) : null}
-              {(data.contentFormat as string) === "canvas" ? (
-                <CanvasEditor
-                  sceneJson={
-                    typeof data.content === "string" ? data.content : "{}"
+    <>
+      <EntityPage
+        title={data.title}
+        description={
+          <>
+            <Link
+              to="/$slug/documents"
+              params={{ slug: workspace.slug }}
+              className="text-kumo-link"
+            >
+              Documents
+            </Link>{" "}
+            · updated {formatRelative(data.updatedAt)}
+          </>
+        }
+        actions={
+          <>
+            <ShareButton
+              organizationId={workspace.id}
+              kind="document"
+              id={data.id}
+            />
+          </>
+        }
+        menu={
+          <>
+            <DropdownMenu.Item
+              icon={
+                <Star
+                  weight={
+                    favs.isFavorite("document", data.id) ? "fill" : "regular"
                   }
-                  onChange={(json) => {
-                    if (canvasSave.current !== null)
-                      window.clearTimeout(canvasSave.current);
-                    canvasSave.current = window.setTimeout(
-                      () => save.mutate({ content: json }),
-                      800
-                    );
-                  }}
                 />
-              ) : editingContent ? (
-                <div className="flex flex-col gap-2">
-                  <InputArea
-                    ref={contentRef}
-                    autoFocus
-                    value={draft.content}
-                    onChange={(e) =>
-                      setDraft((d) => ({ ...d, content: e.target.value }))
-                    }
-                    className="min-h-96 font-mono text-sm w-full"
-                    onKeyDown={(e) => {
-                      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                        e.preventDefault();
-                        save.mutate({ content: draft.content });
+              }
+              onClick={() =>
+                favs.toggle({
+                  type: "document",
+                  id: data.id,
+                  title: data.title,
+                })
+              }
+            >
+              {favs.isFavorite("document", data.id) ? "Unstar" : "Star"}
+            </DropdownMenu.Item>
+            <DropdownMenu.Item
+              icon={<LinkSimple />}
+              onClick={() => {
+                navigator.clipboard.writeText(window.location.href);
+                toastSuccess("Link copied");
+              }}
+            >
+              Copy link
+            </DropdownMenu.Item>
+            <DropdownMenu.Separator />
+            <DropdownMenu.Item
+              variant="danger"
+              icon={<Trash />}
+              onClick={() => setConfirmDelete(true)}
+            >
+              Delete document
+            </DropdownMenu.Item>
+          </>
+        }
+        center={
+          <>
+            <LayerCard className="min-w-0">
+              <LayerCard.Primary className="p-6">
+                <div className="flex items-start gap-3 mb-4">
+                  <IconPicker
+                    onSelect={(icon) => save.mutate({ icon })}
+                    onRemove={() => save.mutate({ icon: null })}
+                  >
+                    <button
+                      type="button"
+                      aria-label="Change icon"
+                      className="hover:bg-kumo-tint mt-1 rounded-md p-0.5 text-2xl leading-none"
+                    >
+                      {data.icon ?? "📄"}
+                    </button>
+                  </IconPicker>
+                  <input
+                    aria-label="Document title"
+                    defaultValue={data.title}
+                    key={`${data.id}-${data.title}`}
+                    className="w-full bg-transparent text-2xl font-semibold text-kumo-default outline-none placeholder:text-kumo-subtle focus:border-b focus:border-kumo-line"
+                    placeholder="Untitled"
+                    onBlur={(e: React.FocusEvent<HTMLInputElement>) => {
+                      const value = e.target.value.trim();
+                      if (value && value !== data.title) {
+                        save.mutate({ title: value });
+                      } else {
+                        e.target.value = data.title;
                       }
-                      if (e.key === "Escape") setEditingContent(false);
+                    }}
+                    onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        e.currentTarget.blur();
+                      }
+                      if (e.key === "Escape") {
+                        e.currentTarget.value = data.title;
+                        e.currentTarget.blur();
+                      }
                     }}
                   />
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      loading={save.isPending}
-                      onClick={() => save.mutate({ content: draft.content })}
-                    >
-                      Save
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setEditingContent(false)}
-                    >
-                      Cancel
-                    </Button>
-                    <span className="text-xs text-kumo-subtle">
-                      ⌘↵ to save · Esc to cancel
-                    </span>
-                  </div>
                 </div>
-              ) : (
-                <button
-                  type="button"
-                  className="block w-full cursor-text text-left"
-                  onClick={() => {
-                    setDraft((d) => ({ ...d, content: text }));
-                    setEditingContent(true);
+                {subPages.length > 0 ? (
+                  <div className="flex flex-col gap-1 mb-5">
+                    {subPages.map((sub) => (
+                      <Link
+                        key={sub.id}
+                        to="/$slug/documents/$documentId"
+                        params={{ slug: workspace.slug, documentId: sub.id }}
+                        className="text-sm text-kumo-link hover:underline flex items-center gap-2"
+                      >
+                        <Text as="span" variant="secondary">
+                          {sub.icon ?? "📄"}
+                        </Text>
+                        {sub.title}
+                      </Link>
+                    ))}
+                  </div>
+                ) : null}
+                {(data.contentFormat as string) === "canvas" ? (
+                  <CanvasEditor
+                    sceneJson={
+                      typeof data.content === "string" ? data.content : "{}"
+                    }
+                    onChange={(json) => {
+                      if (canvasSave.current !== null)
+                        window.clearTimeout(canvasSave.current);
+                      canvasSave.current = window.setTimeout(
+                        () => save.mutate({ content: json }),
+                        800
+                      );
+                    }}
+                  />
+                ) : editingContent ? (
+                  <div className="flex flex-col gap-2">
+                    <InputArea
+                      ref={contentRef}
+                      autoFocus
+                      value={draft.content}
+                      onChange={(e) =>
+                        setDraft((d) => ({ ...d, content: e.target.value }))
+                      }
+                      className="min-h-96 font-mono text-sm w-full"
+                      onKeyDown={(e) => {
+                        if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                          e.preventDefault();
+                          save.mutate({ content: draft.content });
+                        }
+                        if (e.key === "Escape") setEditingContent(false);
+                      }}
+                    />
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        loading={save.isPending}
+                        onClick={() => save.mutate({ content: draft.content })}
+                      >
+                        Save
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setEditingContent(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <span className="text-xs text-kumo-subtle">
+                        ⌘↵ to save · Esc to cancel
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="block w-full cursor-text text-left"
+                    onClick={() => {
+                      setDraft((d) => ({ ...d, content: text }));
+                      setEditingContent(true);
+                    }}
+                  >
+                    {text ? (
+                      <Markdown workspaceSlug={workspace.slug} content={text} />
+                    ) : (
+                      <Text variant="secondary">Click to start writing…</Text>
+                    )}
+                  </button>
+                )}
+              </LayerCard.Primary>
+            </LayerCard>
+            {backlinkRows.length > 0 ? (
+              <LayerCard>
+                <div className="border-b border-kumo-line px-4 py-3">
+                  <Text variant="secondary">Linked from</Text>
+                </div>
+                <ul className="px-4 py-3 flex flex-col gap-1.5">
+                  {backlinkRows.map((b) => (
+                    <li key={b.id}>
+                      <Link
+                        to="/$slug/documents/$documentId"
+                        params={{ slug: workspace.slug, documentId: b.id }}
+                        className="text-kumo-link hover:underline"
+                      >
+                        {b.title}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </LayerCard>
+            ) : null}
+          </>
+        }
+        rail={
+          <>
+            {data.parentDocumentId && ancestors.length > 0 ? (
+              <RailSection title="Parent">
+                <RailLink
+                  to="/$slug/documents/$documentId"
+                  params={{
+                    slug: workspace.slug,
+                    documentId: ancestors[ancestors.length - 1]!.id,
                   }}
                 >
-                  {text ? (
-                    <Markdown workspaceSlug={workspace.slug} content={text} />
-                  ) : (
-                    <Text variant="secondary">Click to start writing…</Text>
-                  )}
-                </button>
-              )}
-            </LayerCard.Primary>
-          </LayerCard>
-          {backlinkRows.length > 0 ? (
-            <LayerCard>
-              <div className="border-b border-kumo-line px-4 py-3">
-                <Text variant="secondary">Linked from</Text>
-              </div>
-              <ul className="px-4 py-3 flex flex-col gap-1.5">
-                {backlinkRows.map((b) => (
-                  <li key={b.id}>
-                    <Link
-                      to="/$slug/documents/$documentId"
-                      params={{ slug: workspace.slug, documentId: b.id }}
-                      className="text-kumo-link hover:underline"
-                    >
-                      {b.title}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </LayerCard>
-          ) : null}
-        </>
-      }
-      rail={
-        <>
-          {data.parentDocumentId && ancestors.length > 0 ? (
-            <RailSection title="Parent">
-              <RailLink
-                to="/$slug/documents/$documentId"
-                params={{
-                  slug: workspace.slug,
-                  documentId: ancestors[ancestors.length - 1]!.id,
-                }}
-              >
-                {ancestors[ancestors.length - 1]!.icon
-                  ? `${ancestors[ancestors.length - 1]!.icon} `
-                  : ""}
-                {ancestors[ancestors.length - 1]!.title}
-              </RailLink>
-            </RailSection>
-          ) : null}
-          {data.issueId ? (
-            <RailSection title="Linked issue">
-              <RailLink
-                to="/$slug/issues/$issueId"
-                params={{ slug: workspace.slug, issueId: data.issueId }}
-              >
-                View issue
-              </RailLink>
-            </RailSection>
-          ) : null}
-          {headings.length >= 3 ? (
-            <RailSection title="On this page">
-              <TableOfContents>
-                <TableOfContents.List>
-                  {headings.map((h) => (
-                    <TableOfContents.Item
-                      key={h.slug}
-                      href={`#${h.slug}`}
-                      className={h.depth > 1 ? "pl-4" : undefined}
-                    >
-                      {h.text}
-                    </TableOfContents.Item>
-                  ))}
-                </TableOfContents.List>
-              </TableOfContents>
-            </RailSection>
-          ) : null}
-        </>
-      }
-    />
+                  {ancestors[ancestors.length - 1]!.icon
+                    ? `${ancestors[ancestors.length - 1]!.icon} `
+                    : ""}
+                  {ancestors[ancestors.length - 1]!.title}
+                </RailLink>
+              </RailSection>
+            ) : null}
+            {data.issueId ? (
+              <RailSection title="Linked issue">
+                <RailLink
+                  to="/$slug/issues/$issueId"
+                  params={{ slug: workspace.slug, issueId: data.issueId }}
+                >
+                  View issue
+                </RailLink>
+              </RailSection>
+            ) : null}
+            {headings.length >= 3 ? (
+              <RailSection title="On this page">
+                <TableOfContents>
+                  <TableOfContents.List>
+                    {headings.map((h) => (
+                      <TableOfContents.Item
+                        key={h.slug}
+                        href={`#${h.slug}`}
+                        className={h.depth > 1 ? "pl-4" : undefined}
+                      >
+                        {h.text}
+                      </TableOfContents.Item>
+                    ))}
+                  </TableOfContents.List>
+                </TableOfContents>
+              </RailSection>
+            ) : null}
+          </>
+        }
+      />
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title="Move this document to trash?"
+        loading={remove.isPending}
+        onConfirm={() => {
+          setConfirmDelete(false);
+          remove.mutate();
+        }}
+      />
+    </>
   );
 }

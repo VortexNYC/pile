@@ -4,6 +4,7 @@ import { Share, Trash, X } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { api, unwrap, unwrapEmpty } from "@/lib/api";
 import { toastSuccess } from "@/lib/toast";
 
@@ -21,6 +22,7 @@ export function ShareButton({
 }) {
   const queryClient = useQueryClient();
   const [dismissed, setDismissed] = useState(false);
+  const [confirmRevoke, setConfirmRevoke] = useState(false);
   const key = ["share", kind, organizationId, id];
   const getPath =
     kind === "issue"
@@ -85,14 +87,22 @@ export function ShareButton({
           variant="ghost"
           aria-label="Revoke share"
           loading={revoke.isPending}
-          onClick={() => {
-            if (window.confirm("Revoke this share link?")) {
-              revoke.mutate(active!.token);
-            }
-          }}
+          onClick={() => setConfirmRevoke(true)}
         >
           <Trash />
         </Button>
+        <ConfirmDialog
+          open={confirmRevoke}
+          onOpenChange={setConfirmRevoke}
+          title="Revoke share link"
+          description="Anyone with this link loses access."
+          confirmLabel="Revoke"
+          loading={revoke.isPending}
+          onConfirm={() => {
+            setConfirmRevoke(false);
+            revoke.mutate(active!.token);
+          }}
+        />
         <Button
           size="sm"
           variant="ghost"

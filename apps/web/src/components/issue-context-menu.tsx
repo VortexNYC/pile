@@ -1,6 +1,8 @@
 import { ContextMenu } from "@base-ui/react/context-menu";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap, unwrapEmpty } from "@/lib/api";
 import { ISSUE_STATUS_LABELS, ISSUE_STATUSES } from "@/lib/labels";
@@ -42,6 +44,7 @@ export function IssueContextMenu({
     onSuccess: invalidate,
   });
 
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const remove = useMutation({
     mutationFn: () =>
       unwrapEmpty(
@@ -100,15 +103,24 @@ export function IssueContextMenu({
             <ContextMenu.Separator className="bg-kumo-line mx-1 my-1 h-px" />
             <ContextMenu.Item
               className={`${itemClass} text-kumo-danger`}
-              onClick={() => {
-                if (window.confirm("Delete this issue?")) remove.mutate();
-              }}
+              onClick={() => setConfirmDelete(true)}
             >
               Delete
             </ContextMenu.Item>
           </ContextMenu.Popup>
         </ContextMenu.Positioner>
       </ContextMenu.Portal>
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title="Delete this issue"
+        description="This can't be undone."
+        loading={remove.isPending}
+        onConfirm={() => {
+          setConfirmDelete(false);
+          remove.mutate();
+        }}
+      />
     </ContextMenu.Root>
   );
 }

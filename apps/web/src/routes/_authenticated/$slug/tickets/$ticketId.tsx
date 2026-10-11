@@ -166,7 +166,6 @@ function TicketDetail() {
         )
       );
     },
-    onSuccess: () => setReply(""),
     onError: (error) => toastError(error),
     onSettled: invalidate,
   });

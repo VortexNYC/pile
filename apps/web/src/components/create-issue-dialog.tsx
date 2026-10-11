@@ -28,8 +28,13 @@ export function CreateIssueDialog() {
         setOpen(true);
       }
     };
+    const onOpen = () => setOpen(true);
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("pile:create-issue", onOpen);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("pile:create-issue", onOpen);
+    };
   }, []);
 
   const create = useMutation({

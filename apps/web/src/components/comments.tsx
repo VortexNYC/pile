@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { Composer } from "@/components/composer";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Markdown } from "@/components/markdown";
 import { ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
@@ -84,6 +85,7 @@ export function IssueComments({
   const [editing, setEditing] = useState<{ id: string; body: string } | null>(
     null
   );
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const key = wsKey(organizationId, "issues", issueId, "comments");
   const path = { organizationId, issueId };
 
@@ -223,13 +225,7 @@ export function IssueComments({
                       <Button
                         size="xs"
                         variant="secondary-destructive"
-                        loading={
-                          remove.isPending && remove.variables === comment.id
-                        }
-                        onClick={() => {
-                          if (window.confirm("Delete this comment?"))
-                            remove.mutate(comment.id);
-                        }}
+                        onClick={() => setConfirmDelete(comment.id)}
                       >
                         Delete
                       </Button>
@@ -293,6 +289,17 @@ export function IssueComments({
         submitLabel="Comment"
         loading={add.isPending}
         onSubmit={(body) => add.mutate(body)}
+      />
+      <ConfirmDialog
+        open={confirmDelete !== null}
+        onOpenChange={(o) => !o && setConfirmDelete(null)}
+        title="Delete comment"
+        description="This can't be undone."
+        loading={remove.isPending}
+        onConfirm={() => {
+          if (confirmDelete) remove.mutate(confirmDelete);
+          setConfirmDelete(null);
+        }}
       />
     </section>
   );

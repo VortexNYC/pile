@@ -151,19 +151,56 @@ export function AppSidebar({
           </DropdownMenu.Content>
         </DropdownMenu>
         <div className="flex shrink-0 items-center gap-0.5">
-          <button
-            type="button"
-            aria-label="New issue"
-            onClick={() =>
-              void navigate({
-                to: "/$slug/issues/new",
-                params: { slug: workspace.slug },
-              })
-            }
-            className="rounded-md p-1.5 text-kumo-subtle hover:bg-kumo-tint"
-          >
-            <Plus size={18} />
-          </button>
+          <DropdownMenu>
+            <DropdownMenu.Trigger
+              render={
+                <button
+                  type="button"
+                  aria-label="Create"
+                  className="rounded-md p-1.5 text-kumo-subtle hover:bg-kumo-tint"
+                >
+                  <Plus size={18} />
+                </button>
+              }
+            />
+            <DropdownMenu.Content className="min-w-40">
+              <DropdownMenu.Item
+                icon={<ListChecks />}
+                onClick={() =>
+                  window.dispatchEvent(new CustomEvent("pile:create-issue"))
+                }
+              >
+                New issue
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                icon={<Headset />}
+                onClick={() =>
+                  window.dispatchEvent(new CustomEvent("pile:create-ticket"))
+                }
+              >
+                New ticket
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                icon={<FileText />}
+                onClick={() =>
+                  void navigate({
+                    to: "/$slug/documents/new",
+                    params: { slug: workspace.slug },
+                  })
+                }
+              >
+                New document
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                icon={<Buildings />}
+                onClick={() =>
+                  window.dispatchEvent(new CustomEvent("pile:create-customer"))
+                }
+              >
+                New customer
+              </DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu>
           <button
             type="button"
             aria-label="Inbox"

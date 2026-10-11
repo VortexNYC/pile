@@ -4,7 +4,9 @@ import { useEffect } from "react";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { CommandMenu } from "@/components/command-menu";
+import { CreateCustomerDialog } from "@/components/create-customer-dialog";
 import { CreateIssueDialog } from "@/components/create-issue-dialog";
+import { CreateTicketDialog } from "@/components/create-ticket-dialog";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { useWorkspaces, WorkspaceContext } from "@/hooks/use-workspace";
@@ -61,6 +63,8 @@ function WorkspaceLayout() {
       <Sidebar.Provider className="bg-kumo-canvas h-dvh min-h-0">
         <CommandMenu />
         <CreateIssueDialog />
+        <CreateTicketDialog />
+        <CreateCustomerDialog />
         <AppSidebar workspace={workspace} workspaces={workspaces.data} />
         <div className="flex h-dvh min-h-0 min-w-0 flex-1 flex-col">
           <header className="border-kumo-hairline flex h-14 shrink-0 items-center justify-between gap-2 border-b px-4">
