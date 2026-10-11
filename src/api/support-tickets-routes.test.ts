@@ -403,7 +403,6 @@ describe("support ticket routes", () => {
     const eventId = `evt_${crypto.randomUUID()}`;
     await db.insert(supportTicketEvents).values({
       id: eventId,
-      organizationId,
       ticketId: ticket.id,
       type: "custom_entry",
       actorType: "customer",

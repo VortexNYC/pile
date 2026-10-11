@@ -2721,6 +2721,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdDocumentsIdShare",
+    "description": "List document share (GET /workspaces/{organizationId}/documents/{id}/share) Path params (top-level, required): organizationId, id.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/documents/{id}/share",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdDocumentspaces",
     "description": "List document spaces (GET /workspaces/{organizationId}/document-spaces) Path params (top-level, required): organizationId.",
     "method": "GET",
@@ -3418,6 +3439,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "List issue reactions (GET /workspaces/{organizationId}/issues/{id}/reactions) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues/{id}/reactions",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdIssuesIdShare",
+    "description": "List issue share (GET /workspaces/{organizationId}/issues/{id}/share) Path params (top-level, required): organizationId, id.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/issues/{id}/share",
     "inputSchema": {
       "type": "object",
       "properties": {
