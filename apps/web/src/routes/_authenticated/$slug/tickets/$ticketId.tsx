@@ -41,6 +41,20 @@ function TicketDetail() {
   const key = wsKey(organizationId, "tickets", ticketId);
   const path = { organizationId, ticketId };
 
+  const tickets = useQuery({
+    queryKey: wsKey(workspace.id, "tickets"),
+    queryFn: async () =>
+      (
+        await unwrap(
+          api.GET("/workspaces/{organizationId}/support/tickets", {
+            params: {
+              path: { organizationId: workspace.id },
+              query: { limit: 100 },
+            },
+          })
+        )
+      ).tickets,
+  });
   const ticket = useQuery({
     queryKey: key,
     queryFn: async () =>
@@ -134,6 +148,9 @@ function TicketDetail() {
   }
   const data = ticket.data;
   const events = data.events.filter((e) => e.message || e.note);
+  const otherTickets = (tickets.data ?? []).filter(
+    (tt) => tt.customer.id === data.customer.id && tt.id !== data.id
+  );
 
   return (
     <Page
@@ -177,129 +194,178 @@ function TicketDetail() {
         </Button>
       }
     >
-      <div className="flex flex-wrap gap-4">
-        <Select
-          label="Status"
-          value={data.status}
-          disabled={update.isPending}
-          onValueChange={(status) => {
-            if (isTicketStatus(status) && status !== data.status)
-              update.mutate({ status });
-          }}
-          renderValue={(v) =>
-            isTicketStatus(v) ? TICKET_STATUS_LABELS[v] : ""
-          }
-        >
-          {TICKET_STATUSES.map((s) => (
-            <Select.Option key={s} value={s}>
-              {TICKET_STATUS_LABELS[s]}
-            </Select.Option>
-          ))}
-        </Select>
-        <Select
-          label="Priority"
-          value={data.priority}
-          disabled={update.isPending}
-          onValueChange={(priority) => {
-            if (isPriority(priority) && priority !== data.priority)
-              update.mutate({ priority });
-          }}
-          renderValue={(v) => (isPriority(v) ? PRIORITY_LABELS[v] : "")}
-        >
-          {PRIORITIES.map((p) => (
-            <Select.Option key={p} value={p}>
-              {PRIORITY_LABELS[p]}
-            </Select.Option>
-          ))}
-        </Select>
+      <div className="flex gap-8">
+        <div className="flex-1 min-w-0 flex flex-col gap-4">
+          <div className="flex flex-wrap gap-4">
+            <Select
+              label="Status"
+              value={data.status}
+              disabled={update.isPending}
+              onValueChange={(status) => {
+                if (isTicketStatus(status) && status !== data.status)
+                  update.mutate({ status });
+              }}
+              renderValue={(v) =>
+                isTicketStatus(v) ? TICKET_STATUS_LABELS[v] : ""
+              }
+            >
+              {TICKET_STATUSES.map((s) => (
+                <Select.Option key={s} value={s}>
+                  {TICKET_STATUS_LABELS[s]}
+                </Select.Option>
+              ))}
+            </Select>
+            <Select
+              label="Priority"
+              value={data.priority}
+              disabled={update.isPending}
+              onValueChange={(priority) => {
+                if (isPriority(priority) && priority !== data.priority)
+                  update.mutate({ priority });
+              }}
+              renderValue={(v) => (isPriority(v) ? PRIORITY_LABELS[v] : "")}
+            >
+              {PRIORITIES.map((p) => (
+                <Select.Option key={p} value={p}>
+                  {PRIORITY_LABELS[p]}
+                </Select.Option>
+              ))}
+            </Select>
+          </div>
+          <section aria-label="Conversation" className="flex flex-col gap-3">
+            {events.length === 0 ? (
+              <Text variant="secondary" size="sm">
+                No messages yet.
+              </Text>
+            ) : (
+              events.map((event) => {
+                const isNote = !!event.note;
+                const inbound = event.message?.direction === "inbound";
+                return (
+                  <LayerCard key={event.id} data-testid="ticket-event">
+                    <LayerCard.Primary className="flex flex-col gap-1 p-4">
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          variant={
+                            isNote ? "orange" : inbound ? "neutral" : "blue"
+                          }
+                        >
+                          {isNote
+                            ? "Internal note"
+                            : inbound
+                              ? "Customer"
+                              : "Reply"}
+                        </Badge>
+                        <Text variant="secondary" size="xs">
+                          {formatRelative(event.createdAt)}
+                        </Text>
+                      </div>
+                      <Text>
+                        <span className="whitespace-pre-wrap">
+                          {event.note?.body ?? event.message?.textContent}
+                        </span>
+                      </Text>
+                    </LayerCard.Primary>
+                  </LayerCard>
+                );
+              })
+            )}
+          </section>
+          <form
+            className="flex flex-col gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const text = reply.trim();
+              if (text && !send.isPending)
+                send.mutate({ text, mode, channel: data.sourceChannel });
+            }}
+          >
+            <div className="flex gap-2" role="group" aria-label="Message type">
+              <Button
+                type="button"
+                size="sm"
+                variant={mode === "reply" ? "primary" : "ghost"}
+                aria-pressed={mode === "reply"}
+                onClick={() => setMode("reply")}
+              >
+                Reply to customer
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={mode === "note" ? "primary" : "ghost"}
+                aria-pressed={mode === "note"}
+                onClick={() => setMode("note")}
+              >
+                Internal note
+              </Button>
+            </div>
+            <InputArea
+              aria-label={mode === "note" ? "Internal note" : "Reply"}
+              placeholder={
+                mode === "note" ? "Only your team sees this…" : "Write a reply…"
+              }
+              value={reply}
+              autoResize
+              minRows={3}
+              onValueChange={setReply}
+            />
+            <div>
+              <Button
+                type="submit"
+                variant="primary"
+                loading={send.isPending}
+                disabled={!reply.trim()}
+              >
+                {mode === "note" ? "Add note" : "Send reply"}
+              </Button>
+            </div>
+          </form>
+        </div>
+        <aside className="hidden lg:block w-64 shrink-0 border-l border-kumo-line pl-6">
+          <div className="flex flex-col gap-6">
+            <div>
+              <h4 className="text-xs font-medium text-kumo-subtle uppercase mb-2">
+                Customer
+              </h4>
+              <div className="flex flex-col gap-1 text-sm">
+                <span className="text-kumo-default">
+                  {data.customer.fullName ?? "—"}
+                </span>
+                <span className="text-kumo-subtle">{data.customer.email}</span>
+                {data.customer.phone ? (
+                  <span className="text-kumo-subtle">
+                    {data.customer.phone}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+            {otherTickets.length > 0 ? (
+              <div>
+                <h4 className="text-xs font-medium text-kumo-subtle uppercase mb-2">
+                  Other tickets from them
+                </h4>
+                <ul className="flex flex-col gap-1">
+                  {otherTickets.slice(0, 5).map((tt) => (
+                    <li key={tt.id}>
+                      <Link
+                        to="/$slug/tickets/$ticketId"
+                        params={{
+                          slug: workspace.slug,
+                          ticketId: tt.id,
+                        }}
+                        className="text-sm text-kumo-link hover:underline"
+                      >
+                        #{tt.number} {tt.title}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        </aside>
       </div>
-      <section aria-label="Conversation" className="flex flex-col gap-3">
-        {events.length === 0 ? (
-          <Text variant="secondary" size="sm">
-            No messages yet.
-          </Text>
-        ) : (
-          events.map((event) => {
-            const isNote = !!event.note;
-            const inbound = event.message?.direction === "inbound";
-            return (
-              <LayerCard key={event.id} data-testid="ticket-event">
-                <LayerCard.Primary className="flex flex-col gap-1 p-4">
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      variant={isNote ? "orange" : inbound ? "neutral" : "blue"}
-                    >
-                      {isNote
-                        ? "Internal note"
-                        : inbound
-                          ? "Customer"
-                          : "Reply"}
-                    </Badge>
-                    <Text variant="secondary" size="xs">
-                      {formatRelative(event.createdAt)}
-                    </Text>
-                  </div>
-                  <Text>
-                    <span className="whitespace-pre-wrap">
-                      {event.note?.body ?? event.message?.textContent}
-                    </span>
-                  </Text>
-                </LayerCard.Primary>
-              </LayerCard>
-            );
-          })
-        )}
-      </section>
-      <form
-        className="flex flex-col gap-2"
-        onSubmit={(event) => {
-          event.preventDefault();
-          const text = reply.trim();
-          if (text && !send.isPending)
-            send.mutate({ text, mode, channel: data.sourceChannel });
-        }}
-      >
-        <div className="flex gap-2" role="group" aria-label="Message type">
-          <Button
-            type="button"
-            size="sm"
-            variant={mode === "reply" ? "primary" : "ghost"}
-            aria-pressed={mode === "reply"}
-            onClick={() => setMode("reply")}
-          >
-            Reply to customer
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={mode === "note" ? "primary" : "ghost"}
-            aria-pressed={mode === "note"}
-            onClick={() => setMode("note")}
-          >
-            Internal note
-          </Button>
-        </div>
-        <InputArea
-          aria-label={mode === "note" ? "Internal note" : "Reply"}
-          placeholder={
-            mode === "note" ? "Only your team sees this…" : "Write a reply…"
-          }
-          value={reply}
-          autoResize
-          minRows={3}
-          onValueChange={setReply}
-        />
-        <div>
-          <Button
-            type="submit"
-            variant="primary"
-            loading={send.isPending}
-            disabled={!reply.trim()}
-          >
-            {mode === "note" ? "Add note" : "Send reply"}
-          </Button>
-        </div>
-      </form>
     </Page>
   );
 }
