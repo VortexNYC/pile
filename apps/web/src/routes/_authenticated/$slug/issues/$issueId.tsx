@@ -11,6 +11,7 @@ import { IssueComments } from "@/components/comments";
 import { IssueForm, type IssueFormValues } from "@/components/issue-form";
 import { Markdown } from "@/components/markdown";
 import { Page } from "@/components/page";
+import { PrChip } from "@/components/pr-chip";
 import { ShareButton } from "@/components/share-button";
 import { ErrorState, LoadingState } from "@/components/states";
 import { useTeams } from "@/hooks/use-teams";
@@ -28,6 +29,7 @@ import {
   TICKET_STATUS_LABELS,
   ticketStatusVariant,
 } from "@/lib/labels";
+import { prChip } from "@/lib/pull-request";
 import { toastError, toastSuccess } from "@/lib/toast";
 
 export const Route = createFileRoute("/_authenticated/$slug/issues/$issueId")({
@@ -425,6 +427,12 @@ function IssueDetail() {
       <div className="flex gap-8 min-w-0">
         {/* center column: title context, description, sub-issues, activity */}
         <div className="flex-1 min-w-0 flex flex-col gap-6">
+          {/* the rail is lg-only; keep the PR chip visible below that */}
+          {prChip(data) ? (
+            <div className="lg:hidden">
+              <PrChip issue={data} link />
+            </div>
+          ) : null}
           {editing ? (
             <LayerCard>
               <LayerCard.Primary className="p-6">
@@ -594,6 +602,12 @@ function IssueDetail() {
                 </div>
               ) : null}
             </RailSection>
+
+            {prChip(data) ? (
+              <RailSection title="Pull request">
+                <PrChip issue={data} link />
+              </RailSection>
+            ) : null}
 
             {issueLabels.length > 0 ? (
               <RailSection title="Labels">

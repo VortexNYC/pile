@@ -10,6 +10,7 @@ import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap, unwrapEmpty } from "@/lib/api";
 import { betterAuthClient } from "@/lib/better-auth";
 import { formatRelative } from "@/lib/labels";
+import { isPrHistoryField } from "@/lib/pull-request";
 import { toastError } from "@/lib/toast";
 
 export type IssueHistoryRow = {
@@ -32,9 +33,6 @@ const FIELD_LABELS: Record<string, string> = {
   project_id: "moved to project",
   cycle_id: "moved to cycle",
   parent_id: "reparented",
-  pr_url: "linked pull request",
-  pr_state: "pull request",
-  pr_check_state: "CI",
 };
 
 function humanizeValue(
@@ -59,12 +57,6 @@ function historyText(
   switch (row.field) {
     case "created":
       return "created the issue";
-    case "pr_url":
-      return `linked ${to}`;
-    case "pr_state":
-      return `pull request ${to}`;
-    case "pr_check_state":
-      return `CI ${to}`;
     default: {
       const label =
         FIELD_LABELS[row.field] ?? `updated ${row.field.replace(/_/g, " ")}`;
@@ -152,10 +144,7 @@ export function IssueComments({
     onSettled: invalidate,
   });
 
-  const lastCi = history.filter((h) => h.field === "pr_check_state").at(-1);
-  const events = history.filter(
-    (h) => h.field !== "pr_check_state" || h === lastCi
-  );
+  const events = history.filter((h) => !isPrHistoryField(h.field));
   const feed = [
     ...(comments.data ?? []).map((c) => ({
       kind: "comment" as const,

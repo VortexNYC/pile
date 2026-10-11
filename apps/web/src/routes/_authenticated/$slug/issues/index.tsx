@@ -9,6 +9,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useDeferredValue } from "react";
 
 import { Page } from "@/components/page";
+import { PrChip } from "@/components/pr-chip";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { useTeams } from "@/hooks/use-teams";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
@@ -208,6 +209,7 @@ function IssuesList() {
                         <span className="min-w-0 flex-1 truncate text-sm font-medium text-kumo-default">
                           {issue.title}
                         </span>
+                        <PrChip issue={issue} />
                         <Badge variant={priorityVariant(issue.priority)}>
                           {PRIORITY_LABELS[issue.priority]}
                         </Badge>
