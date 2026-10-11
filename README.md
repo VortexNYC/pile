@@ -11,13 +11,13 @@ issue linked to a support ticket linked to a capture linked to a
 customer linked to a doc. Pile holds them as one connected workspace
 instead of five products joined by integrations.
 
-| Dumps | For |
-|---|---|
-| Linear / Jira | Issues, projects, cycles, triage, PR + CI state |
-| Notion | Documents — nested pages, backlinks, share links, ToC |
-| Jam | Screen/context captures — video, console, network, env |
-| Intercom / Plain | Support tickets, customers, reply/note threads |
-| LaunchNotes | The changelog as a first-class surface |
+| Dumps            | For                                                    |
+| ---------------- | ------------------------------------------------------ |
+| Linear / Jira    | Issues, projects, cycles, triage, PR + CI state        |
+| Notion           | Documents — nested pages, backlinks, share links, ToC  |
+| Jam              | Screen/context captures — video, console, network, env |
+| Intercom / Plain | Support tickets, customers, reply/note threads         |
+| LaunchNotes      | The changelog as a first-class surface                 |
 
 ### The philosophy
 
@@ -28,9 +28,9 @@ shipped it, the agent that did the work. Default surfaces stay
 minimal — sections render only when they have data, and anything
 you never read can be switched off per-user (Settings → Surfaces).
 
-**What we're deliberately *not* doing:** chat, email, and the
+**What we're deliberately _not_ doing:** chat, email, and the
 generic-workspace kitchen sink. The things that interconnect
-*cleanly* are the graph; channels are where context goes to die.
+_cleanly_ are the graph; channels are where context goes to die.
 Email may come later, but only when it can be part of the graph —
 not a window onto a channel.
 

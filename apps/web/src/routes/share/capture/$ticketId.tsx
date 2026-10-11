@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { ShareShell } from "@/components/share-view";
+import { TechnicalPanel } from "@/components/technical-panel";
 import { api, unwrap } from "@/lib/api";
 
 export const Route = createFileRoute("/share/capture/$ticketId")({
@@ -30,6 +31,7 @@ function SharedCapture() {
       error={capture.error}
     >
       <div className="flex flex-col gap-4">
+        <TechnicalPanel attachments={data?.attachments ?? []} />
         {data?.attachments.map((attachment) => {
           if (attachment.type === "video" && attachment.url) {
             return (
