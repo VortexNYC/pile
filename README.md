@@ -4,6 +4,37 @@ An open-source, agent-native issue tracker, built on Cloudflare Workers, D1, and
 
 Hosted instance: [pile.nyc](https://pile.nyc) · Docs: [docs.pile.nyc](https://docs.pile.nyc)
 
+## The bet
+
+The work tools you're paying for separately are the same graph — an
+issue linked to a support ticket linked to a capture linked to a
+customer linked to a doc. Pile holds them as one connected workspace
+instead of five products joined by integrations.
+
+| Dumps | For |
+|---|---|
+| Linear / Jira | Issues, projects, cycles, triage, PR + CI state |
+| Notion | Documents — nested pages, backlinks, share links, ToC |
+| Jam | Screen/context captures — video, console, network, env |
+| Intercom / Plain | Support tickets, customers, reply/note threads |
+| LaunchNotes | The changelog as a first-class surface |
+
+### The philosophy
+
+Every data point is linked to other data points — nothing floats.
+An issue tells the whole story: the bug a customer reported, the
+jam they recorded, the doc that specced the fix, the PR that
+shipped it, the agent that did the work. Default surfaces stay
+minimal — sections render only when they have data, and anything
+you never read can be switched off per-user (Settings → Surfaces).
+
+**What we're deliberately *not* doing:** chat, email, and the
+generic-workspace kitchen sink. Macro goes after Slack — we think
+channels are the wrong target. The things that interconnect
+*cleanly* are the graph; channels are where it goes to die. Email
+may come later, but only when it can be part of the graph and not
+just a window onto a channel.
+
 ## Stack
 
 - Cloudflare Workers
