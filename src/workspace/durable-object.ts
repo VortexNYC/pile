@@ -620,7 +620,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     // the request budget (issue-create 500s, ~40s).
     for (let i = 0; i < docs.length; i += 250) {
       await insertSearchDocs(index, docs.slice(i, i + 250));
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      // yield to the event loop between batches
+      await Promise.resolve();
     }
 
     this.searchIndex = index;

@@ -193,7 +193,7 @@ export function CanvasSurface({
     }
     if (tool === "select") {
       const hit = [...sceneRef.current.elements]
-        .reverse()
+        .toReversed()
         .find((el) => hitTest(el, x, y));
       setSelectedId(hit?.id ?? null);
       if (hit) {
