@@ -1294,19 +1294,6 @@ export const workspaceDeals = sqliteTable(
   ]
 );
 
-export const workspaceDealContacts = sqliteTable(
-  "deal_contacts" as string,
-  {
-    dealId: text("deal_id" as string).notNull(),
-    contactId: text("contact_id" as string).notNull(),
-    createdAt: text("created_at" as string).notNull(),
-  },
-  (table) => [
-    primaryKey({ columns: [table.dealId, table.contactId] }),
-    index("deal_contacts_contact_idx" as string).on(table.contactId),
-  ]
-);
-
 // Custom fields: field definitions scoped to entity types + their values
 // per entity — the "make it yours" layer on issues, customers, deals.
 export const workspaceFieldDefinitions = sqliteTable(
@@ -1355,22 +1342,6 @@ export const workspaceFieldValues = sqliteTable(
   ]
 );
 
-export const workspaceDealIssueLinks = sqliteTable(
-  "deal_issue_links" as string,
-  {
-    dealId: text("deal_id" as string).notNull(),
-    issueId: text("issue_id" as string).notNull(),
-    createdAt: text("created_at" as string).notNull(),
-  },
-  (table) => [
-    primaryKey({ columns: [table.dealId, table.issueId] }),
-    index("deal_issue_links_issue_idx" as string).on(table.issueId),
-  ]
-);
-
-// The graph: any entity links to any entity. The edges table is the
-// product — issues↔deals↔contacts↔documents↔tickets are all nodes,
-// the edges are the story.
 export const workspaceEntityLinks = sqliteTable(
   "entity_links" as string,
   {

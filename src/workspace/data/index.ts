@@ -44,8 +44,6 @@ import {
   workspaceCustomerIntakeItems,
   workspaceCustomerNeeds,
   workspaceCustomers,
-  workspaceDealContacts,
-  workspaceDealIssueLinks,
   workspaceDeals,
   workspaceFieldDefinitions,
   workspaceFieldValues,
@@ -2814,7 +2812,7 @@ export function createDeal(db: WorkspaceDb, input: DealInput) {
     .returning()
     .get();
   if (input.contactIds?.length) {
-    setDealContacts(db, deal.id, input.contactIds);
+    setDealContacts(db, input.organizationId, deal.id, input.contactIds);
   }
   return {
     ...deal,
@@ -2906,7 +2904,7 @@ export function updateDeal(
     .returning()
     .get();
   if (patch.contactIds !== undefined) {
-    setDealContacts(db, id, patch.contactIds);
+    setDealContacts(db, organizationId, id, patch.contactIds);
   }
   if (!deal) return undefined;
   return {
@@ -2921,8 +2919,22 @@ export function deleteDeal(
   organizationId: string,
   id: string
 ) {
-  db.delete(workspaceDealContacts)
-    .where(eq(workspaceDealContacts.dealId, id))
+  db.delete(workspaceEntityLinks)
+    .where(
+      and(
+        eq(workspaceEntityLinks.organizationId, organizationId),
+        or(
+          and(
+            eq(workspaceEntityLinks.fromType, "deal"),
+            eq(workspaceEntityLinks.fromId, id)
+          ),
+          and(
+            eq(workspaceEntityLinks.toType, "deal"),
+            eq(workspaceEntityLinks.toId, id)
+          )
+        )
+      )
+    )
     .run();
   return (
     db
@@ -2940,38 +2952,64 @@ export function deleteDeal(
 
 function listDealContactIds(db: WorkspaceDb, dealId: string) {
   return db
-    .select({ contactId: workspaceDealContacts.contactId })
-    .from(workspaceDealContacts)
-    .where(eq(workspaceDealContacts.dealId, dealId))
+    .select({ contactId: workspaceEntityLinks.toId })
+    .from(workspaceEntityLinks)
+    .where(
+      and(
+        eq(workspaceEntityLinks.fromType, "deal"),
+        eq(workspaceEntityLinks.fromId, dealId),
+        eq(workspaceEntityLinks.toType, "contact")
+      )
+    )
     .all()
     .map((r) => r.contactId);
 }
 
 export function setDealContacts(
   db: WorkspaceDb,
+  organizationId: string,
   dealId: string,
   contactIds: string[]
 ) {
-  const now = new Date().toISOString();
-  db.delete(workspaceDealContacts)
-    .where(eq(workspaceDealContacts.dealId, dealId))
+  db.delete(workspaceEntityLinks)
+    .where(
+      and(
+        eq(workspaceEntityLinks.fromType, "deal"),
+        eq(workspaceEntityLinks.fromId, dealId),
+        eq(workspaceEntityLinks.toType, "contact")
+      )
+    )
     .run();
   for (const contactId of contactIds) {
-    db.insert(workspaceDealContacts)
-      .values({ dealId, contactId, createdAt: now })
+    db.insert(workspaceEntityLinks)
+      .values({
+        id: crypto.randomUUID(),
+        organizationId: organizationId,
+        fromType: "deal",
+        fromId: dealId,
+        toType: "contact",
+        toId: contactId,
+        kind: "contact",
+        createdAt: new Date().toISOString(),
+      })
       .run();
   }
 }
 
 export function linkDealIssue(
   db: WorkspaceDb,
+  organizationId: string,
   dealId: string,
   issueId: string
 ) {
-  db.insert(workspaceDealIssueLinks)
-    .values({ dealId, issueId, createdAt: new Date().toISOString() })
-    .onConflictDoNothing()
-    .run();
+  linkEntities(db, {
+    organizationId,
+    fromType: "deal",
+    fromId: dealId,
+    toType: "issue",
+    toId: issueId,
+    kind: "relates",
+  });
 }
 
 export function unlinkDealIssue(
@@ -2979,11 +3017,13 @@ export function unlinkDealIssue(
   dealId: string,
   issueId: string
 ) {
-  db.delete(workspaceDealIssueLinks)
+  db.delete(workspaceEntityLinks)
     .where(
       and(
-        eq(workspaceDealIssueLinks.dealId, dealId),
-        eq(workspaceDealIssueLinks.issueId, issueId)
+        eq(workspaceEntityLinks.fromType, "deal"),
+        eq(workspaceEntityLinks.fromId, dealId),
+        eq(workspaceEntityLinks.toType, "issue"),
+        eq(workspaceEntityLinks.toId, issueId)
       )
     )
     .run();
@@ -2991,28 +3031,39 @@ export function unlinkDealIssue(
 
 export function listDealIssueIds(db: WorkspaceDb, dealId: string) {
   return db
-    .select({ issueId: workspaceDealIssueLinks.issueId })
-    .from(workspaceDealIssueLinks)
-    .where(eq(workspaceDealIssueLinks.dealId, dealId))
+    .select({ issueId: workspaceEntityLinks.toId })
+    .from(workspaceEntityLinks)
+    .where(
+      and(
+        eq(workspaceEntityLinks.fromType, "deal"),
+        eq(workspaceEntityLinks.fromId, dealId),
+        eq(workspaceEntityLinks.toType, "issue")
+      )
+    )
     .all()
     .map((r) => r.issueId);
 }
 
-export function listDealsForIssue(db: WorkspaceDb, issueId: string) {
-  return db
-    .select({ deal: workspaceDeals })
-    .from(workspaceDeals)
-    .innerJoin(
-      workspaceDealIssueLinks,
-      eq(workspaceDealIssueLinks.dealId, workspaceDeals.id)
+export function listDealsForIssue(
+  db: WorkspaceDb,
+  organizationId: string,
+  issueId: string
+) {
+  const links = db
+    .select({ dealId: workspaceEntityLinks.fromId })
+    .from(workspaceEntityLinks)
+    .where(
+      and(
+        eq(workspaceEntityLinks.organizationId, organizationId),
+        eq(workspaceEntityLinks.fromType, "deal"),
+        eq(workspaceEntityLinks.toType, "issue"),
+        eq(workspaceEntityLinks.toId, issueId)
+      )
     )
-    .where(eq(workspaceDealIssueLinks.issueId, issueId))
-    .all()
-    .map((r) => ({
-      ...r.deal,
-      stage: r.deal.stage as DealStage,
-      contactIds: listDealContactIds(db, r.deal.id),
-    }));
+    .all();
+  return links
+    .map((l) => getDeal(db, organizationId, l.dealId))
+    .filter((d): d is NonNullable<typeof d> => d !== undefined);
 }
 
 // ---- entity links — the graph ----

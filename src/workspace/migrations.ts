@@ -898,6 +898,18 @@ CREATE TABLE IF NOT EXISTS field_values (
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS field_values_entity_idx ON field_values (organization_id, entity_id)`;
 
+const v64 = `INSERT INTO entity_links (id, organization_id, from_type, from_id, to_type, to_id, kind, created_at)
+  SELECT lower(hex(randomblob(16))), d.organization_id, 'deal', d.id, 'contact', dc.contact_id, 'contact', dc.created_at
+  FROM deal_contacts dc JOIN deals d ON d.id = dc.deal_id
+--> statement-breakpoint
+INSERT INTO entity_links (id, organization_id, from_type, from_id, to_type, to_id, kind, created_at)
+  SELECT lower(hex(randomblob(16))), d.organization_id, 'deal', d.id, 'issue', dil.issue_id, 'relates', dil.created_at
+  FROM deal_issue_links dil JOIN deals d ON d.id = dil.deal_id
+--> statement-breakpoint
+DROP TABLE deal_contacts
+--> statement-breakpoint
+DROP TABLE deal_issue_links`;
+
 const v63 = `CREATE TABLE IF NOT EXISTS entity_links (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -1032,6 +1044,7 @@ export const workspaceMigrations = {
       { idx: 60, when: 60, tag: "v61", breakpoints: false },
       { idx: 61, when: 61, tag: "v62", breakpoints: false },
       { idx: 62, when: 62, tag: "v63", breakpoints: false },
+      { idx: 63, when: 63, tag: "v64", breakpoints: false },
     ],
   },
   migrations: {
@@ -1098,5 +1111,6 @@ export const workspaceMigrations = {
     m0060: v61,
     m0061: v62,
     m0062: v63,
+    m0063: v64,
   },
 } satisfies Parameters<typeof migrate>[1];

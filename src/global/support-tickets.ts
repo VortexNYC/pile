@@ -315,6 +315,18 @@ export async function createTicket(
     updatedAt,
   };
 
+  if (resolvedIssueId && env) {
+    const stub = getWorkspaceStub(env, input.organizationId);
+    await stub.setOrganizationId(input.organizationId);
+    await stub.linkEntities({
+      fromType: "ticket",
+      fromId: id,
+      toType: "issue",
+      toId: resolvedIssueId,
+      kind: "about",
+    });
+  }
+
   let inserted: SupportTicket | undefined;
   if (input.externalId) {
     const row = await db
@@ -776,6 +788,30 @@ export async function updateTicket(
 
   if (input.title !== undefined) updates.title = input.title;
   if (input.isPublic !== undefined) updates.isPublic = input.isPublic;
+
+  if (resolvedIssueId !== undefined && env) {
+    const stub = getWorkspaceStub(env, organizationId);
+    await stub.setOrganizationId(organizationId);
+    if (resolvedIssueId === null) {
+      // clear all ticket→issue edges for this ticket
+      const links = await stub.listEntityLinks("ticket", ticketId);
+      for (const l of links.filter(
+        (x) =>
+          (x.fromType === "ticket" && x.toType === "issue") ||
+          (x.fromType === "issue" && x.toType === "ticket")
+      )) {
+        await stub.unlinkEntities(l.id);
+      }
+    } else {
+      await stub.linkEntities({
+        fromType: "ticket",
+        fromId: ticketId,
+        toType: "issue",
+        toId: resolvedIssueId,
+        kind: "about",
+      });
+    }
+  }
 
   const eventsToCreate: (typeof supportTicketEvents.$inferInsert)[] = [];
 

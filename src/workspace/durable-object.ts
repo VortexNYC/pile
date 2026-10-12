@@ -1442,7 +1442,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   linkDealIssue(dealId: string, issueId: string) {
-    data.linkDealIssue(this.db, dealId, issueId);
+    data.linkDealIssue(this.db, this.organizationId, dealId, issueId);
     return { ok: true };
   }
 
@@ -1456,7 +1456,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   listDealsForIssue(issueId: string) {
-    return data.listDealsForIssue(this.db, issueId);
+    return data.listDealsForIssue(this.db, this.organizationId, issueId);
   }
 
   deleteDeal(id: string, actorId?: string) {
