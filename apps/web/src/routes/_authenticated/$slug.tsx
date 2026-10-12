@@ -129,6 +129,14 @@ function GuestGate({
     const match = SURFACE_RESOURCES.find(([prefix]) => rel.startsWith(prefix));
     // Account settings are always allowed; other settings need the role.
     if (rel.startsWith("/settings/account")) return;
+    // Scoped roles (custom account types) land on their accessible
+    // surface — the overview reads surfaces they can't reach.
+    if (rel === "" || rel === "/") {
+      if (permissions.role !== "member" && home !== `/${workspace.slug}`) {
+        void navigate({ to: home });
+      }
+      return;
+    }
     if (match && !permissions.can(match[1], "view")) {
       void navigate({ to: home });
     }
