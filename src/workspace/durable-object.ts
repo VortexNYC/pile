@@ -2567,9 +2567,25 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   documentAccessLevel(
     documentId: string,
     actorId: string,
-    teamIds: string[] = []
+    teamIds: string[] = [],
+    defaultDenied = false
   ) {
-    return data.documentAccessLevel(this.db, documentId, actorId, teamIds);
+    return data.documentAccessLevel(
+      this.db,
+      documentId,
+      actorId,
+      teamIds,
+      defaultDenied
+    );
+  }
+
+  listDocumentsForActor(actorId: string, args: data.ListDocumentsArgs = {}) {
+    return data.listDocumentsForActor(
+      this.db,
+      this.organizationId,
+      actorId,
+      args
+    );
   }
 
   // ---- issue permissions (PILE-328) ----

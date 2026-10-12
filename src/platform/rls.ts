@@ -58,9 +58,22 @@ function expandProjectRoles(allowed: string[]): Set<string> {
   return roles;
 }
 
+// Guests are members locked to the documents surface. Any
+// workspace path outside documents/comments rejects them before
+// the permission check.
+const GUEST_PATH =
+  /^\/workspaces\/[^/]+\/(documents|comments|states|members|shared|links|entities\/)\b/;
+
 export function rls(...allowed: string[]) {
   return createMiddleware<AppContext>(async (c, next) => {
     const identity = c.var.workspaceIdentity;
+    if (identity.role === "guest" && !GUEST_PATH.test(c.req.path)) {
+      throw new VortexError({
+        code: "FORBIDDEN",
+        status: 403,
+        message: "Guests may only access documents",
+      });
+    }
     if (canAccess(identity.permissions, "admin")) {
       await next();
       return;

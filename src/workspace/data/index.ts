@@ -2344,6 +2344,31 @@ export function listDocuments(
     .all();
 }
 
+/** Guest-scope: docs visible iff the actor holds an explicit grant —
+ * default-deny, matching "shared with me" semantics. */
+export function listDocumentsForActor(
+  db: WorkspaceDb,
+  organizationId: string,
+  actorId: string,
+  args: ListDocumentsArgs = {}
+) {
+  const all = listDocuments(db, organizationId, args);
+  const grants = db
+    .select({
+      documentId: workspaceDocumentPermissions.documentId,
+      actorId: workspaceDocumentPermissions.actorId,
+      actorType: workspaceDocumentPermissions.actorType,
+    })
+    .from(workspaceDocumentPermissions)
+    .where(eq(workspaceDocumentPermissions.organizationId, organizationId))
+    .all();
+  const visible = new Set(
+    grants.filter((g) => g.actorId === actorId).map((g) => g.documentId)
+  );
+  // Team grants resolve caller-side (the API layer supplies teamIds).
+  return all.filter((d) => visible.has(d.id));
+}
+
 export function getDocument(
   db: WorkspaceDb,
   organizationId: string,
@@ -4994,10 +5019,13 @@ export function documentAccessLevel(
   db: WorkspaceDb,
   documentId: string,
   actorId: string,
-  teamIds: string[] = []
+  teamIds: string[] = [],
+  defaultDenied = false
 ): "view" | "edit" | null {
   const grants = listDocumentPermissions(db, documentId);
-  if (grants.length === 0) return "edit";
+  // Members: no grants = open doc. Guests: no grants = invisible doc —
+  // they see only what a permission row explicitly gives them.
+  if (grants.length === 0) return defaultDenied ? null : "edit";
   let level: "view" | "edit" | null = null;
   for (const grant of grants) {
     const covered =

@@ -102,6 +102,8 @@ export function AppSidebar({
   const isActive = (path: string) =>
     pathname === `${base}/${path}` || pathname.startsWith(`${base}/${path}/`);
   const isOverviewActive = pathname === base || pathname === `${base}/`;
+  const isGuest = permissions.isGuest;
+  const nav = isGuest ? NAV.filter((item) => item.path === "documents") : NAV;
 
   return (
     <Sidebar aria-label="Workspace navigation">
@@ -241,8 +243,9 @@ export function AppSidebar({
                 ⌘K
               </span>
             </Sidebar.MenuButton>
-            {NAV.filter((item) => !surfaces.hidden.has(item.path)).map(
-              (item) => (
+            {nav
+              .filter((item) => !surfaces.hidden.has(item.path))
+              .map((item) => (
                 <Sidebar.MenuButton
                   key={item.path}
                   icon={item.icon}
@@ -256,8 +259,7 @@ export function AppSidebar({
                 >
                   {item.title}
                 </Sidebar.MenuButton>
-              )
-            )}
+              ))}
           </Sidebar.Menu>
         </Sidebar.Group>
         {favs.favorites.length > 0 ? (
@@ -284,7 +286,9 @@ export function AppSidebar({
           <Sidebar.GroupLabel>Settings</Sidebar.GroupLabel>
           <Sidebar.Menu>
             {SETTINGS.filter(
-              (item) => !("admin" in item && item.admin) || permissions.isAdmin
+              (item) =>
+                (!isGuest || item.path === "settings/account") &&
+                (!("admin" in item && item.admin) || permissions.isAdmin)
             ).map((item) => (
               <Sidebar.MenuButton
                 key={item.path}

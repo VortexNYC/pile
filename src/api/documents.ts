@@ -130,7 +130,8 @@ async function assertDocAccess(
     documentAccessLevel(
       documentId: string,
       actorId: string,
-      teamIds: string[]
+      teamIds: string[],
+      defaultDenied?: boolean
     ): Promise<"view" | "edit" | null>;
   },
   documentId: string,
@@ -172,7 +173,8 @@ async function assertDocAccess(
   const level = await stub.documentAccessLevel(
     documentId,
     identity.id,
-    teamIds
+    teamIds,
+    identity.role === "guest"
   );
   if (level === null || (required === "edit" && level === "view")) {
     if (level === null) return notFound();
@@ -811,7 +813,8 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
       );
       issueId = issue.id;
     }
-    const rows = await stub.listDocuments({
+    const identity = c.get("workspaceIdentity");
+    const args = {
       projectId: query.projectId,
       issueId,
       initiativeId: query.initiativeId,
@@ -819,7 +822,11 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
       spaceId: query.spaceId,
       isTemplate: query.isTemplate,
       includeTrashed: query.includeTrashed,
-    });
+    };
+    const rows =
+      identity.role === "guest"
+        ? await stub.listDocumentsForActor(identity.id, args)
+        : await stub.listDocuments(args);
     return c.json({ documents: rows.map(toResponse) });
   });
 

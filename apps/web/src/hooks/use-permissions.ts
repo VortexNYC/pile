@@ -16,10 +16,16 @@ export function usePermissions(organizationId: string) {
     },
     staleTime: 60_000,
   });
-  const value = role.data ?? null;
+  const value = (role.data ?? null) as
+    | "owner"
+    | "admin"
+    | "member"
+    | "guest"
+    | null;
   return {
     role: value,
     isAdmin: value === "owner" || value === "admin",
+    isGuest: value === "guest",
     isLoaded: role.isSuccess,
   };
 }

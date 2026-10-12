@@ -40,6 +40,14 @@ export const memberRole = ac.newRole({
   workspace: ["read", "write"],
 });
 
+// Guests are org members whose reach stops at the documents
+// surface — they read/write docs (subject to per-doc grants)
+// and nothing else. `rls` path-gates them on top.
+export const guestRole = ac.newRole({
+  document: ["view", "edit"],
+  workspace: ["read", "write"],
+});
+
 const workspaceMetadataSchema = z
   .object({
     key: z.string().nullable().optional(),
@@ -145,6 +153,7 @@ export const organizationOptions = {
     owner: ownerRole,
     admin: adminRole,
     member: memberRole,
+    guest: guestRole,
   },
   dynamicAccessControl: { enabled: true },
 } satisfies OrganizationOptions;

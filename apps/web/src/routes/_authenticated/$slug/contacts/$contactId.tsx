@@ -2,7 +2,6 @@ import { Badge } from "@cloudflare/kumo/components/badge";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 
-import { EntityHover } from "@/components/entity-hover";
 import { EntityLinksRail } from "@/components/entity-links";
 import { EntityPage, RailLink, RailSection } from "@/components/entity-page";
 import { ErrorState, LoadingState } from "@/components/states";

@@ -1,5 +1,10 @@
 import { Sidebar } from "@cloudflare/kumo/components/sidebar";
-import { createFileRoute, Outlet } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Outlet,
+  useLocation,
+  useNavigate,
+} from "@tanstack/react-router";
 import { useEffect } from "react";
 
 import { AppSidebar } from "@/components/app-sidebar";
@@ -10,6 +15,7 @@ import { CreateIssueDialog } from "@/components/create-issue-dialog";
 import { CreateTicketDialog } from "@/components/create-ticket-dialog";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useWorkspaces, WorkspaceContext } from "@/hooks/use-workspace";
 import { betterAuthClient } from "@/lib/better-auth";
 
@@ -74,10 +80,37 @@ function WorkspaceLayout() {
             <NotificationsBell />
           </header>
           <main className="min-h-0 flex-1 overflow-y-auto">
-            <Outlet key={workspace.id} />
+            <GuestGate workspace={workspace}>
+              <Outlet key={workspace.id} />
+            </GuestGate>
           </main>
         </div>
       </Sidebar.Provider>
     </WorkspaceContext.Provider>
   );
+}
+
+/** Guests are docs-only — any off-surface path routes to /documents. */
+function GuestGate({
+  workspace,
+  children,
+}: {
+  workspace: { id: string; slug: string };
+  children: React.ReactNode;
+}) {
+  const { pathname } = useLocation();
+  const permissions = usePermissions(workspace.id);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!permissions.isGuest) return;
+    const allowed =
+      pathname.startsWith(`/${workspace.slug}/documents`) ||
+      pathname.startsWith(`/${workspace.slug}/settings/account`);
+    if (!allowed) {
+      void navigate({ to: `/${workspace.slug}/documents` });
+    }
+  }, [pathname, permissions.isGuest, workspace.slug, navigate]);
+
+  return <>{children}</>;
 }

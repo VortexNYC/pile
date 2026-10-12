@@ -409,7 +409,7 @@ export async function deleteState(
 
 // Memberships
 
-const membershipRoleSchema = z.enum(["owner", "admin", "member"]);
+const membershipRoleSchema = z.enum(["owner", "admin", "member", "guest"]);
 
 function mapMember(row: typeof member.$inferSelect) {
   return {

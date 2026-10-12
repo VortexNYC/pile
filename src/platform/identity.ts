@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { adminRole, memberRole, ownerRole } from "./access.js";
+import { adminRole, guestRole, memberRole, ownerRole } from "./access.js";
 import { VortexError } from "./errors.js";
 import { parsePermissionSet } from "./permissions.js";
 
@@ -73,6 +73,7 @@ const roleMap = {
   owner: ownerRole,
   admin: adminRole,
   member: memberRole,
+  guest: guestRole,
 } as const;
 
 export function rolePermissionsFor(role: string): readonly string[] {
@@ -80,7 +81,12 @@ export function rolePermissionsFor(role: string): readonly string[] {
   return [...(roleObject.statements.workspace ?? [])];
 }
 
-export const workspaceRoleSchema = z.enum(["owner", "admin", "member"]);
+export const workspaceRoleSchema = z.enum([
+  "owner",
+  "admin",
+  "member",
+  "guest",
+]);
 
 export function toUserWorkspaceIdentity(
   userId: string,
