@@ -2078,3 +2078,33 @@ describe("listDocumentsVisibleTo", () => {
     });
   });
 });
+
+describe("grantedOnly issue visibility", () => {
+  beforeAll(ensureWorkspace);
+  it("hides ungranted issues from default-deny viewers", async () => {
+    await withWorkspace(getStub(), async (instance) => {
+      const open = await instance.createIssue({ title: "open-issue" });
+      const mine = await instance.createIssue({ title: "mine" });
+      await instance.setIssuePermission(mine.id, "c-1", "user");
+
+      const viewer = {
+        actorId: "c-1",
+        teamIds: [],
+        grantedOnly: true,
+      };
+      const hidden = new Set(await instance.hiddenIssueIdsFor(viewer));
+      expect(hidden.has(open.id)).toBe(true);
+      expect(hidden.has(mine.id)).toBe(false);
+
+      // Direct access mirrors it.
+      expect(
+        await instance.issueVisibleTo(open.id, "c-1", [], true)
+      ).toBe(false);
+      expect(
+        await instance.issueVisibleTo(mine.id, "c-1", [], true)
+      ).toBe(true);
+      // Without the flag, open issues stay open.
+      expect(await instance.issueVisibleTo(open.id, "c-1", [])).toBe(true);
+    });
+  });
+});

@@ -5,6 +5,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { WorkerEnv } from "../../platform/middleware.js";
 import type { WorkspaceDO } from "../durable-object.js";
 import { workspaceSchema } from "../schema-map.js";
+import { workspaceIssues } from "../schema.js";
 import {
   type AgentSessionInput,
   createAgentSession,
@@ -589,6 +590,66 @@ describe("listDocumentsVisibleTo", () => {
       setDocumentPermission(db, org, restricted.id, "member-1", "user", "view");
       const granted = listDocumentsVisibleTo(db, org, "member-1", []);
       expect(granted.map((d) => d.title)).toContain("restricted");
+    });
+  });
+});
+
+describe("grantedOnly issue visibility", () => {
+  it("hides ungranted issues from default-deny actors", async () => {
+    await withDb(async (db) => {
+      const org = `go-${crypto.randomUUID()}`;
+      const mk = (title: string) => {
+        const id = crypto.randomUUID();
+        db.insert(workspaceIssues)
+          .values({
+            id,
+            organizationId: org,
+            teamId: "team-1",
+            title,
+            status: "triage",
+            priority: "medium",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          })
+          .run();
+        return { id };
+      };
+      const open = mk("open issue");
+      const restricted = mk("restricted issue");
+      setIssuePermission(
+        db,
+        org,
+        restricted.id,
+        "someone-else",
+        "user"
+      );
+      const mine = mk("my issue");
+      setIssuePermission(db, org, mine.id, "contractor-1", "user");
+
+      // grantedOnly: only `mine` is visible — open issues are hidden too.
+      const hidden = new Set(
+        hiddenIssueIds(db, "contractor-1", [], true)
+      );
+      expect(hidden.has(open.id)).toBe(true);
+      expect(hidden.has(restricted.id)).toBe(true);
+      expect(hidden.has(mine.id)).toBe(false);
+
+      // non-grantedOnly (normal member): only the restricted one is hidden.
+      const memberHidden = new Set(
+        hiddenIssueIds(db, "member-1", [])
+      );
+      expect(memberHidden.has(restricted.id)).toBe(true);
+      expect(memberHidden.has(open.id)).toBe(false);
+
+      // direct access — unrestricted issue stays open for members but
+      // not for default-deny actors.
+      expect(hasIssueAccess(db, open.id, "member-1")).toBe(true);
+      expect(hasIssueAccess(db, open.id, "contractor-1", [], true)).toBe(
+        false
+      );
+      expect(hasIssueAccess(db, mine.id, "contractor-1", [], true)).toBe(
+        true
+      );
     });
   });
 });

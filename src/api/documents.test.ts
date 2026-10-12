@@ -448,3 +448,65 @@ describe("member document visibility", () => {
     expect(detail.status).toBe(404);
   });
 });
+
+describe("default-deny creator grants", () => {
+  it("a scoped creator keeps sight of their own document", async () => {
+    const db = createD1(env.D1);
+    const now = new Date();
+    await db
+      .insert(userTable)
+      .values({
+        id: "user-docs-scoped",
+        name: "Scoped",
+        email: "docs-scoped@example.com",
+        emailVerified: false,
+        image: null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({ target: [userTable.email] });
+    const { organizationId } = await seedWorkspace();
+    await createMembership(
+      db,
+      env,
+      organizationId,
+      "user-docs-scoped",
+      "member"
+    );
+
+    const auth = await createAuth(env);
+    const keyRes = await auth.api.createApiKey({
+      body: {
+        userId: "user-docs-scoped",
+        name: "scoped-doc",
+        rateLimitEnabled: false,
+        metadata: {
+          organizationId,
+          permissions: "document:view,document:create,document:edit",
+        },
+      },
+    });
+    const scoped = z.object({ key: z.string() }).parse(keyRes).key;
+
+    const created = await fetch(
+      `/workspaces/${organizationId}/documents`,
+      { method: "POST", body: JSON.stringify({ title: "mine" }) },
+      scoped
+    );
+    expect(created.status).toBe(201);
+    const doc = z.object({ id: z.string() }).parse(await created.json());
+
+    // The auto-grant row makes the doc visible in the grant-only list.
+    const list = await fetch(
+      `/workspaces/${organizationId}/documents`,
+      {},
+      scoped
+    );
+    expect(list.status).toBe(200);
+    const ids = z
+      .object({ documents: z.array(z.object({ id: z.string() })) })
+      .parse(await list.json())
+      .documents.map((d) => d.id);
+    expect(ids).toContain(doc.id);
+  });
+});
