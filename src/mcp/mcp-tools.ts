@@ -12259,7 +12259,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "enum": [
                 "owner",
                 "admin",
-                "member"
+                "member",
+                "guest"
               ]
             },
             "teamId": {
@@ -13249,7 +13250,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "enum": [
                 "owner",
                 "admin",
-                "member"
+                "member",
+                "guest"
               ]
             }
           },

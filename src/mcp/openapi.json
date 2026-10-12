@@ -12436,7 +12436,8 @@
                             "enum": [
                               "owner",
                               "admin",
-                              "member"
+                              "member",
+                              "guest"
                             ]
                           },
                           "createdAt": {
@@ -12492,7 +12493,8 @@
                     "enum": [
                       "owner",
                       "admin",
-                      "member"
+                      "member",
+                      "guest"
                     ]
                   }
                 },
@@ -12525,7 +12527,8 @@
                       "enum": [
                         "owner",
                         "admin",
-                        "member"
+                        "member",
+                        "guest"
                       ]
                     },
                     "createdAt": {
@@ -21266,7 +21269,8 @@
                     "enum": [
                       "owner",
                       "admin",
-                      "member"
+                      "member",
+                      "guest"
                     ]
                   },
                   "teamId": {
