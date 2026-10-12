@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+
 import {
   createFileRoute,
   Navigate,
@@ -7,6 +9,7 @@ import {
 
 import { LoadingState } from "@/components/states";
 import { betterAuthClient } from "@/lib/better-auth";
+import { identifyPosthog, resetPosthog } from "@/lib/observability";
 import { appHref } from "@/lib/router-path";
 
 export const Route = createFileRoute("/_authenticated")({
@@ -16,6 +19,14 @@ export const Route = createFileRoute("/_authenticated")({
 function AuthenticatedLayout() {
   const { data: session, isPending } = betterAuthClient.useSession();
   const { pathname } = useLocation();
+
+  useEffect(() => {
+    if (session?.user) {
+      identifyPosthog(session.user);
+    } else {
+      resetPosthog();
+    }
+  }, [session]);
 
   if (isPending) {
     return <LoadingState label="Checking your session" />;

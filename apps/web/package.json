@@ -23,6 +23,7 @@
     "@vortex-api/better-auth-ui": "0.2.15",
     "better-auth": "^1.7.7",
     "openapi-fetch": "0.17.0",
+    "posthog-js": "^1.438.9",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "rehype-slug": "^6.0.0",

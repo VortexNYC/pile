@@ -5,11 +5,14 @@ import { forwardRef } from "react";
 import ReactDOM from "react-dom/client";
 
 import { LoadingState } from "@/components/states";
+import { initPosthog } from "@/lib/observability";
 import { APP_BASE, toRouterPath } from "@/lib/router-path";
 
 import { routeTree } from "./routeTree.gen";
 
 import "./styles.css";
+
+initPosthog();
 
 const queryClient = new QueryClient({
   defaultOptions: {
