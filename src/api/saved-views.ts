@@ -4,7 +4,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { isAdminIdentity } from "../platform/permissions.js";
-import { rls } from "../platform/rls.js";
+import { rls, selfService } from "../platform/rls.js";
 import type { SavedViewRecord } from "../workspace/data/index.js";
 import {
   filterConditionSchema,
@@ -245,7 +245,7 @@ const viewPreferencesRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/me/view-preferences",
   tags: ["saved-views"],
-  middleware: [rls("read")],
+  middleware: [selfService],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -269,7 +269,7 @@ const updateViewPreferencesRoute = createRoute({
   method: "put",
   path: "/workspaces/{organizationId}/me/view-preferences",
   tags: ["saved-views"],
-  middleware: [rls("write")],
+  middleware: [selfService],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
