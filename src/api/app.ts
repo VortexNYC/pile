@@ -236,7 +236,12 @@ function serveConsole(c: Context<AppContext>): Response | Promise<Response> {
     );
   }
   const url = new URL(c.req.url);
-  const rest = url.pathname.slice(CONSOLE_PREFIX.length) || "/";
+  // On app.pile.nyc the path has no /app prefix — pass it through as-is.
+  const rest = url.pathname.startsWith(`${CONSOLE_PREFIX}/`)
+    ? url.pathname.slice(CONSOLE_PREFIX.length)
+    : url.pathname === CONSOLE_PREFIX
+      ? "/"
+      : url.pathname;
   const isAssetFile = ASSET_FILE.test(rest);
   // Asset-binding responses carry immutable headers; secureHeaders and
   // other middleware set headers on c.res, so every response needs a
@@ -256,4 +261,13 @@ export function registerAppRoute(app: Hono<AppContext>) {
   app.get("/agents", (c) => c.html(PAGE));
   app.get(CONSOLE_PREFIX, serveConsole);
   app.get(`${CONSOLE_PREFIX}/*`, serveConsole);
+}
+
+/** app.pile.nyc serves the member console at the root — every GET that
+ * isn't an API/auth path falls back to the SPA. Register last. */
+export function registerAppSubdomain(app: Hono<AppContext>) {
+  app.get("*", (c) => {
+    if (new URL(c.req.url).hostname !== "app.pile.nyc") return c.notFound();
+    return serveConsole(c);
+  });
 }

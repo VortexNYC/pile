@@ -8,6 +8,7 @@ import { createD1 } from "../global/db.js";
 import * as schema from "../global/schema.js";
 import { organizationOptions } from "./access.js";
 import type { AppEnv } from "./env.js";
+import { allowedOrigins } from "./security.js";
 
 // Auth emails (verify, password reset) are user-blocking — a missing EMAIL
 // binding used to log a warning and let the request succeed silently, which
@@ -57,6 +58,7 @@ export async function createAuth(env: AppEnv) {
     },
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL,
+    trustedOrigins: [...allowedOrigins(env)],
     account: {
       encryptOAuthTokens: true,
     },
