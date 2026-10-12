@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  filterMentionTargets,
-  mentionQuery,
-  mentionTargets,
-} from "./mentions";
+import { filterMentionTargets, mentionQuery, mentionTargets } from "./mentions";
 
 describe("mentionTargets", () => {
   it("maps member rows to mention targets via user", () => {

@@ -14,7 +14,6 @@ export type MentionTarget = {
 // against name (spaces stripped) and the email local part, the same
 // handles the API's resolveMentions uses.
 
-
 export type ComposerMode = {
   id: string;
   /** Toggle button label (e.g. "Reply to customer"). */
@@ -50,7 +49,8 @@ export function Composer({
   const [mode, setMode] = useState(modes?.[0]?.id);
   const q = mentionQuery(text);
   const suggestions = useMemo(
-    () => (q === null || !members?.length ? [] : filterMentionTargets(members, q)),
+    () =>
+      q === null || !members?.length ? [] : filterMentionTargets(members, q),
     [q, members]
   );
 
