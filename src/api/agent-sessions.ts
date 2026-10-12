@@ -588,7 +588,13 @@ const createArtifactBodySchema = z
     content: z.string().optional(),
     data: z.string().optional(),
     mimeType: z.string().optional(),
-    url: z.string().optional(),
+    url: z
+      .string()
+      .refine(
+        (v) => /^https?:\/\//i.test(v),
+        "URL must start with http:// or https://"
+      )
+      .optional(),
   })
   .refine(
     (value) =>
@@ -633,7 +639,13 @@ const patchSessionRoute = createRoute({
           schema: z.object({
             status: agentSessionStatusSchema.optional(),
             result: z.string().optional(),
-            url: z.string().optional(),
+            url: z
+              .string()
+              .refine(
+                (v) => /^https?:\/\//i.test(v),
+                "URL must start with http:// or https://"
+              )
+              .optional(),
             prUrl: z.string().optional(),
             prState: z.string().optional(),
             branch: z.string().optional(),
@@ -796,7 +808,13 @@ const registerSessionRoute = createRoute({
               provider: z.string().min(1),
               providerSessionId: z.string().optional(),
               status: agentSessionStatusSchema.optional(),
-              url: z.string().optional(),
+              url: z
+                .string()
+                .refine(
+                  (v) => /^https?:\/\//i.test(v),
+                  "URL must start with http:// or https://"
+                )
+                .optional(),
               branch: z.string().optional(),
               prUrl: z.string().optional(),
             })

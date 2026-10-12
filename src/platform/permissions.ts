@@ -1,5 +1,7 @@
 import { role } from "better-auth/plugins/access";
 
+const ALL_ACTIONS = ["read", "write", "admin"] as const;
+
 export function parsePermissionSet(
   permissions: string | string[]
 ): Set<string> {
@@ -9,6 +11,11 @@ export function parsePermissionSet(
         .split(",")
         .map((p) => p.trim().toLowerCase())
         .filter(Boolean);
+  // The `*` grant is the admin wildcard — expand at parse so every
+  // downstream check (canAccess + permissions.includes) sees it.
+  if (list.includes("*")) {
+    return new Set([...list.filter((p) => p !== "*"), ...ALL_ACTIONS]);
+  }
   return new Set(list);
 }
 
