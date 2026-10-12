@@ -45176,6 +45176,49 @@
         "summary": "Create support sm inbound"
       }
     },
+    "/workspaces/{organizationId}/support/sms/status": {
+      "get": {
+        "tags": [
+          "support-sms"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SMS intake status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "number": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "enabled",
+                    "number"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List support sm status"
+      }
+    },
     "/workspaces/{organizationId}/support/sms/threads/{threadId}/reply": {
       "post": {
         "tags": [

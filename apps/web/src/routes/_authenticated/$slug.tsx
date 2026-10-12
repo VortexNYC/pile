@@ -145,7 +145,6 @@ function GuestGate({
   return <>{children}</>;
 }
 
-
 /** Shown while an admin views as another member — BA's admin plugin marks
  * the session with `impersonatedBy`. One click returns to their own
  * session. */
@@ -159,8 +158,8 @@ function ImpersonationBanner() {
     <div className="border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
       <div className="flex items-center justify-between gap-3">
         <span>
-          Viewing as {session?.user?.email ?? "another member"} — actions
-          count as theirs.
+          Viewing as {session?.user?.email ?? "another member"} — actions count
+          as theirs.
         </span>
         <Button
           variant="secondary"

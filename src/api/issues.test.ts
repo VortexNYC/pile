@@ -1568,9 +1568,7 @@ describe("grant-only issue visibility (scoped keys)", () => {
       token
     );
     expect(openRes.status).toBe(201);
-    const open = z
-      .object({ id: z.string() })
-      .parse(await openRes.json());
+    const open = z.object({ id: z.string() }).parse(await openRes.json());
     const otherRes = await fetch(
       `/workspaces/${organizationId}/issues`,
       { method: "POST", body: JSON.stringify({ title: "hidden" }) },

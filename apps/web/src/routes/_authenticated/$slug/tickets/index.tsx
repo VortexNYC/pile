@@ -4,7 +4,7 @@ import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 import { Select } from "@cloudflare/kumo/components/select";
 import { Table } from "@cloudflare/kumo/components/table";
 import { Tabs } from "@cloudflare/kumo/components/tabs";
-import { Headset, Plus } from "@phosphor-icons/react";
+import { ChatCircleDots, Headset, Plus } from "@phosphor-icons/react";
 import {
   keepPreviousData,
   useMutation,
@@ -18,12 +18,12 @@ import { CapturesGrid } from "@/components/captures-grid";
 import { ContactsList } from "@/components/contacts-list";
 import { CustomersList } from "@/components/customers-list";
 import { DealsList } from "@/components/deals-list";
-import { usePermissions } from "@/hooks/use-permissions";
 import { EntityHover } from "@/components/entity-hover";
 import { PeekHeader, usePeek } from "@/components/entity-peek";
 import { FieldMenu } from "@/components/field-menu";
 import { Page } from "@/components/page";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap } from "@/lib/api";
 import { betterAuthClient } from "@/lib/better-auth";
@@ -56,6 +56,16 @@ function TicketsList() {
   const navigate = useNavigate({ from: Route.fullPath });
   const session = betterAuthClient.useSession();
   const [folder, setFolder] = useState<"all" | "mine" | "unassigned">("all");
+  const smsStatus = useQuery({
+    queryKey: wsKey(workspace.id, "sms-status"),
+    queryFn: async () =>
+      unwrap(
+        api.GET("/workspaces/{organizationId}/support/sms/status", {
+          params: { path: { organizationId: workspace.id } },
+        })
+      ),
+    staleTime: 60_000,
+  });
   const tickets = useQuery({
     queryKey: wsKey(workspace.id, "tickets", { status }),
     queryFn: async () =>
@@ -117,6 +127,20 @@ function TicketsList() {
       }
     >
       <>
+        {smsStatus.data?.enabled && smsStatus.data.number ? (
+          <div className="mb-3 flex items-center gap-2 text-sm text-kumo-subtle">
+            <ChatCircleDots size={16} />
+            <span>
+              Text the Pile agent —{" "}
+              <a
+                href={`sms:${smsStatus.data.number}`}
+                className="font-medium text-kumo-default hover:underline"
+              >
+                {smsStatus.data.number}
+              </a>
+            </span>
+          </div>
+        ) : null}
         <div className="flex items-center gap-3">
           <Tabs
             tabs={[
@@ -280,7 +304,9 @@ function TicketsList() {
             key={res}
             className={`flex flex-col gap-2${i === 0 ? " mt-8 border-t border-kumo-line pt-4" : ""}`}
           >
-            <h2 className="text-sm font-medium text-kumo-subtle px-1">{title}</h2>
+            <h2 className="text-sm font-medium text-kumo-subtle px-1">
+              {title}
+            </h2>
             {res === "deal" ? (
               <DealsList />
             ) : res === "customer" ? (
