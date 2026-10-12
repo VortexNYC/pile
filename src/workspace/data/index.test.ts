@@ -562,7 +562,7 @@ describe("listDocumentsVisibleTo", () => {
   it("returns open docs plus docs the actor is granted on", async () => {
     await withDb(async (db) => {
       const org = `vis-${crypto.randomUUID()}`;
-      const open = createDocument(db, {
+      createDocument(db, {
         organizationId: org,
         title: "open",
         createdById: "owner-1",
