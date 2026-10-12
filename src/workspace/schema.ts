@@ -1367,3 +1367,42 @@ export const workspaceDealIssueLinks = sqliteTable(
     index("deal_issue_links_issue_idx" as string).on(table.issueId),
   ]
 );
+
+// The graph: any entity links to any entity. The edges table is the
+// product — issues↔deals↔contacts↔documents↔tickets are all nodes,
+// the edges are the story.
+export const workspaceEntityLinks = sqliteTable(
+  "entity_links" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    fromType: text("from_type" as string).notNull(),
+    fromId: text("from_id" as string).notNull(),
+    toType: text("to_type" as string).notNull(),
+    toId: text("to_id" as string).notNull(),
+    kind: text("kind" as string)
+      .notNull()
+      .default("relates"),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    index("entity_links_from_idx" as string).on(
+      table.organizationId,
+      table.fromType,
+      table.fromId
+    ),
+    index("entity_links_to_idx" as string).on(
+      table.organizationId,
+      table.toType,
+      table.toId
+    ),
+    uniqueIndex("entity_links_unique_idx" as string).on(
+      table.organizationId,
+      table.fromType,
+      table.fromId,
+      table.toType,
+      table.toId,
+      table.kind
+    ),
+  ]
+);

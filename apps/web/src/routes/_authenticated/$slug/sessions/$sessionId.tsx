@@ -12,6 +12,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 
+import { EntityLinksRail } from "@/components/entity-links";
 import { EntityPage, RailSection } from "@/components/entity-page";
 import { Feed } from "@/components/feed";
 import { Page } from "@/components/page";
@@ -281,6 +282,7 @@ function SessionDetail() {
                   a cold session.
                 </p>
               ) : null}
+              <EntityLinksRail entityType="session" entityId={sessionId} />
             </>
           }
           rail={

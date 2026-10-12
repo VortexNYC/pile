@@ -4,9 +4,9 @@ import { Select } from "@cloudflare/kumo/components/select";
 import { Text } from "@cloudflare/kumo/components/text";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
 
 import { Composer } from "@/components/composer";
+import { EntityLinksRail } from "@/components/entity-links";
 import { EntityPage, RailSection } from "@/components/entity-page";
 import { Feed } from "@/components/feed";
 import { Page } from "@/components/page";
@@ -413,6 +413,7 @@ function TicketDetail() {
               </ul>
             </RailSection>
           ) : null}
+          <EntityLinksRail entityType="ticket" entityId={data.id} />
         </>
       }
     />

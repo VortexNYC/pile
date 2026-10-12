@@ -1465,6 +1465,22 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return ok;
   }
 
+  // ---- entity links — the graph ----
+  linkEntities(input: Omit<data.EntityLinkInput, "organizationId">) {
+    return data.linkEntities(this.db, {
+      ...input,
+      organizationId: this.organizationId,
+    });
+  }
+
+  unlinkEntities(id: string) {
+    return data.unlinkEntities(this.db, this.organizationId, id);
+  }
+
+  listEntityLinks(type: string, id: string) {
+    return data.listEntityLinks(this.db, this.organizationId, type, id);
+  }
+
   // ---- custom fields ----
   createFieldDefinition(
     input: Omit<data.FieldDefinitionInput, "organizationId">

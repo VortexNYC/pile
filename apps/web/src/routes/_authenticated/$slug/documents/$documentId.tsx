@@ -11,6 +11,7 @@ import { useRef, useState } from "react";
 
 import { CanvasEditor } from "@/components/canvas-editor";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { EntityLinksRail } from "@/components/entity-links";
 import { EntityPage, RailLink, RailSection } from "@/components/entity-page";
 import { IconPicker } from "@/components/icon-picker";
 import { Markdown } from "@/components/markdown";
@@ -436,6 +437,7 @@ function DocumentDetail() {
                 </TableOfContents>
               </RailSection>
             ) : null}
+            <EntityLinksRail entityType="document" entityId={data.id} />
           </>
         }
       />

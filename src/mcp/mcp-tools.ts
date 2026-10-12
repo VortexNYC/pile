@@ -954,6 +954,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdLinksLinkId",
+    "description": "Delete link (DELETE /workspaces/{organizationId}/links/{linkId}) Path params (top-level, required): organizationId, linkId.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/links/{linkId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "linkId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "linkId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdMcpServersId",
     "description": "Delete mcp server (DELETE /workspaces/{organizationId}/mcp/servers/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
@@ -2966,6 +2987,31 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdEntitiesEntityTypeEntityIdLinks",
+    "description": "List entity {entityType} links (GET /workspaces/{organizationId}/entities/{entityType}/{entityId}/links) Path params (top-level, required): organizationId, entityType, entityId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/entities/{entityType}/{entityId}/links",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "entityType": {
+          "type": "string"
+        },
+        "entityId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "entityId",
+        "entityType",
         "organizationId"
       ]
     }
@@ -11346,6 +11392,52 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdEntitiesEntityTypeEntityIdLinks",
+    "description": "Create entity {entityType} link (POST /workspaces/{organizationId}/entities/{entityType}/{entityId}/links) Path params (top-level, required): organizationId, entityType, entityId. Request body goes in the \"body\" object; fields: toType*, toId*, kind (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/entities/{entityType}/{entityId}/links",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "entityType": {
+          "type": "string"
+        },
+        "entityId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "toType": {
+              "type": "string",
+              "minLength": 1
+            },
+            "toId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "kind": {
+              "type": "string",
+              "default": "relates"
+            }
+          },
+          "required": [
+            "toType",
+            "toId"
+          ]
+        }
+      },
+      "required": [
+        "entityId",
+        "entityType",
         "organizationId"
       ]
     }

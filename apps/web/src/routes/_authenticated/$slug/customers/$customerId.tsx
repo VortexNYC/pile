@@ -8,6 +8,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { EntityLinksRail } from "@/components/entity-links";
 import { EntityPage, RailLink, RailSection } from "@/components/entity-page";
 import { Page } from "@/components/page";
 import { ErrorState, LoadingState } from "@/components/states";
@@ -374,6 +375,7 @@ function CustomerEditor({
                 </div>
               </RailSection>
             ) : null}
+            <EntityLinksRail entityType="customer" entityId={customer.id} />
           </>
         }
       />

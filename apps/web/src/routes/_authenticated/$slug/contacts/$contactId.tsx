@@ -2,6 +2,7 @@ import { Badge } from "@cloudflare/kumo/components/badge";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 
+import { EntityLinksRail } from "@/components/entity-links";
 import { EntityPage, RailLink, RailSection } from "@/components/entity-page";
 import { ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
@@ -198,6 +199,7 @@ function ContactDetail() {
               </div>
             </RailSection>
           ) : null}
+          <EntityLinksRail entityType="contact" entityId={c.id} />
         </>
       }
     />

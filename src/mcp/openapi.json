@@ -32156,6 +32156,260 @@
         "summary": "Create public lead"
       }
     },
+    "/workspaces/{organizationId}/entities/{entityType}/{entityId}/links": {
+      "get": {
+        "tags": [
+          "links"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "entityType",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "entityId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Edges for a node — both directions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "links": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "fromType": {
+                            "type": "string"
+                          },
+                          "fromId": {
+                            "type": "string"
+                          },
+                          "toType": {
+                            "type": "string"
+                          },
+                          "toId": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "fromType",
+                          "fromId",
+                          "toType",
+                          "toId",
+                          "kind",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "links"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List entity {entityType} links"
+      },
+      "post": {
+        "tags": [
+          "links"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "entityType",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "entityId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "toType": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "toId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "kind": {
+                    "type": "string",
+                    "default": "relates"
+                  }
+                },
+                "required": [
+                  "toType",
+                  "toId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Linked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "link": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "fromType": {
+                          "type": "string"
+                        },
+                        "fromId": {
+                          "type": "string"
+                        },
+                        "toType": {
+                          "type": "string"
+                        },
+                        "toId": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "fromType",
+                        "fromId",
+                        "toType",
+                        "toId",
+                        "kind",
+                        "createdAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "link"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create entity {entityType} link"
+      }
+    },
+    "/workspaces/{organizationId}/links/{linkId}": {
+      "delete": {
+        "tags": [
+          "links"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "linkId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unlinked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete link"
+      }
+    },
     "/support/unsubscribe": {
       "post": {
         "tags": [

@@ -35,6 +35,7 @@ import {
   workspaceDocumentSpaces,
   workspaceDocumentWatchers,
   workspaceEntityAttachments,
+  workspaceEntityLinks,
   workspaceAgentProviderConfigs,
   workspaceAgentSessions,
   workspaceAgentEnvironmentFiles,
@@ -3012,6 +3013,84 @@ export function listDealsForIssue(db: WorkspaceDb, issueId: string) {
       stage: r.deal.stage as DealStage,
       contactIds: listDealContactIds(db, r.deal.id),
     }));
+}
+
+// ---- entity links — the graph ----
+// Edges between any two nodes. Issues↔deals↔contacts↔documents↔
+// tickets↔customers are all the same kind of fact.
+
+export interface EntityLinkInput {
+  organizationId: string;
+  fromType: string;
+  fromId: string;
+  toType: string;
+  toId: string;
+  kind?: string;
+}
+
+export function linkEntities(db: WorkspaceDb, input: EntityLinkInput) {
+  return db
+    .insert(workspaceEntityLinks)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId: input.organizationId,
+      fromType: input.fromType,
+      fromId: input.fromId,
+      toType: input.toType,
+      toId: input.toId,
+      kind: input.kind ?? "relates",
+      createdAt: new Date().toISOString(),
+    })
+    .onConflictDoNothing()
+    .returning()
+    .get();
+}
+
+export function unlinkEntities(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return (
+    db
+      .delete(workspaceEntityLinks)
+      .where(
+        and(
+          eq(workspaceEntityLinks.id, id),
+          eq(workspaceEntityLinks.organizationId, organizationId)
+        )
+      )
+      .returning()
+      .all().length > 0
+  );
+}
+
+// Both directions — a link reads the same from either node.
+export function listEntityLinks(
+  db: WorkspaceDb,
+  organizationId: string,
+  type: string,
+  id: string
+) {
+  return db
+    .select()
+    .from(workspaceEntityLinks)
+    .where(
+      and(
+        eq(workspaceEntityLinks.organizationId, organizationId),
+        or(
+          and(
+            eq(workspaceEntityLinks.fromType, type),
+            eq(workspaceEntityLinks.fromId, id)
+          ),
+          and(
+            eq(workspaceEntityLinks.toType, type),
+            eq(workspaceEntityLinks.toId, id)
+          )
+        )
+      )
+    )
+    .all();
 }
 
 // ---- custom fields ----

@@ -11,6 +11,7 @@ import { useState } from "react";
 import { IssueComments } from "@/components/comments";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CustomFieldsRail } from "@/components/custom-fields-rail";
+import { EntityLinksRail } from "@/components/entity-links";
 import { EntityPage, RailLink, RailSection } from "@/components/entity-page";
 import { IssueFieldMenu } from "@/components/issue-field-menu";
 import { IssueForm, type IssueFormValues } from "@/components/issue-form";
@@ -844,6 +845,7 @@ function IssueDetail() {
                 </div>
               </RailSection>
             ) : null}
+            <EntityLinksRail entityType="issue" entityId={data.id} />
             <CustomFieldsRail entityType="issue" entityId={data.id} />
           </>
         }
