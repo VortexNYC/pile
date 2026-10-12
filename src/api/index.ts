@@ -123,7 +123,8 @@ const app = new OpenAPIHono<AppContext>({
   },
 });
 
-app.onError((err) => {
+app.onError((err, c) => {
+  console.error("unhandled route error", c.req.path, err);
   return toErrorResponse(err);
 });
 
