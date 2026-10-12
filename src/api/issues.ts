@@ -188,14 +188,23 @@ async function assertTeamAccess(
     });
   }
   const allowed = await canAccessTeam(db, resolvedTeamId, identity);
-  if (!allowed) {
-    throw new VortexError({
-      code: "FORBIDDEN",
-      status: 403,
-      message: "Cannot create issue in this team",
-    });
+  if (allowed) return resolvedTeamId;
+  // The default team is the workspace's intake — a role holding
+  // issue:create can file into it without team membership (scoped
+  // members/contractors aren't on teams but still file work).
+  const defaultTeam = await getDefaultTeam(db, organizationId);
+  if (
+    defaultTeam &&
+    resolvedTeamId === defaultTeam.id &&
+    canAccess(identity.permissions, "issue:create")
+  ) {
+    return resolvedTeamId;
   }
-  return resolvedTeamId;
+  throw new VortexError({
+    code: "FORBIDDEN",
+    status: 403,
+    message: "Cannot create issue in this team",
+  });
 }
 
 const TERMINAL_STATUSES: ReadonlyArray<IssueStatus> = ["done", "canceled"];
