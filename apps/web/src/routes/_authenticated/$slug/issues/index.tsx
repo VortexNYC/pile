@@ -27,6 +27,7 @@ import { IssueFieldMenu } from "@/components/issue-field-menu";
 import { EMPTY_FILTER, IssueFilter } from "@/components/issue-filter";
 import { Markdown } from "@/components/markdown";
 import { Page } from "@/components/page";
+import { usePermissions } from "@/hooks/use-permissions";
 import { IssuePeek } from "@/components/peek";
 import { PeekDrawer } from "@/components/peek-drawer";
 import { PrChip } from "@/components/pr-chip";
@@ -72,6 +73,7 @@ export const Route = createFileRoute("/_authenticated/$slug/issues/")({
 
 function IssuesList() {
   const workspace = useWorkspace();
+  const permissions = usePermissions(workspace.id);
   const { status, q } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const search = useDeferredValue(q);
@@ -425,14 +427,18 @@ function IssuesList() {
         ) : null}
       </>
 
-      <div className="mt-8 flex flex-col gap-2 border-t border-kumo-line pt-4">
-        <h2 className="text-sm font-medium text-kumo-subtle px-1">Projects</h2>
-        <ProjectsList />
-      </div>
-      <div className="flex flex-col gap-2">
-        <h2 className="text-sm font-medium text-kumo-subtle px-1">Sessions</h2>
-        <SessionsList />
-      </div>
+      {permissions.can("project", "view") ? (
+        <div className="mt-8 flex flex-col gap-2 border-t border-kumo-line pt-4">
+          <h2 className="text-sm font-medium text-kumo-subtle px-1">Projects</h2>
+          <ProjectsList />
+        </div>
+      ) : null}
+      {permissions.can("session", "view") ? (
+        <div className="flex flex-col gap-2">
+          <h2 className="text-sm font-medium text-kumo-subtle px-1">Sessions</h2>
+          <SessionsList />
+        </div>
+      ) : null}
     </Page>
   );
 }
