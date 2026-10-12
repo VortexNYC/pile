@@ -44,6 +44,7 @@ function DocumentDetail() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const permissions = usePermissions(workspace.id);
   const canDelete = permissions.can("document", "delete");
+  const canEdit = permissions.can("document", "edit");
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const canvasSave = useRef<number | null>(null);
   const key = wsKey(organizationId, "documents", documentId);
@@ -233,13 +234,15 @@ function DocumentDetail() {
               Copy link
             </DropdownMenu.Item>
             <DropdownMenu.Separator />
-            <DropdownMenu.Item
-              variant="danger"
-              icon={<Trash />}
-              onClick={() => setConfirmDelete(true)}
-            >
-              Delete document
-            </DropdownMenu.Item>
+            {canDelete ? (
+              <DropdownMenu.Item
+                variant="danger"
+                icon={<Trash />}
+                onClick={() => setConfirmDelete(true)}
+              >
+                Delete document
+              </DropdownMenu.Item>
+            ) : null}
           </>
         }
         center={
@@ -360,6 +363,7 @@ function DocumentDetail() {
                     type="button"
                     className="block w-full cursor-text text-left"
                     onClick={() => {
+                      if (!canEdit) return;
                       setDraft((d) => ({ ...d, content: text }));
                       setEditingContent(true);
                     }}

@@ -51,6 +51,7 @@ function MembersSettings() {
           <OrganizationMembers
             className="w-full max-w-none"
             canManageMembers={canManage}
+            roleOptions={roleOptions}
           />
         </div>
       </Page>

@@ -53,6 +53,7 @@ function Roles() {
   const permissions = usePermissions(workspace.id);
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [grants, setGrants] = useState<Set<string>>(new Set());
 
   const roles = useQuery({
@@ -65,21 +66,27 @@ function Roles() {
     },
   });
 
-  const create = useMutation({
+  const permissionPayload = (): Record<string, string[]> => {
+    const permission: Record<string, string[]> = {};
+    for (const grant of grants) {
+      const [resource, action] = grant.split(":") as [string, string];
+      permission[resource] = [...(permission[resource] ?? []), action];
+    }
+    return permission;
+  };
+
+  const save = useMutation({
     mutationFn: async () => {
-      const permission: Record<string, string[]> = {};
-      for (const grant of grants) {
-        const [resource, action] = grant.split(":") as [string, string];
-        permission[resource] = [...(permission[resource] ?? []), action];
-      }
+      const permission = permissionPayload();
       const result = await betterAuthClient.$fetch(
-        "/organization/create-role",
+        editingId ? "/organization/update-role" : "/organization/create-role",
         {
           method: "POST",
           body: {
             organizationId: workspace.id,
             role: name.trim(),
             permission,
+            ...(editingId ? { roleId: editingId } : {}),
           },
         }
       );
@@ -87,8 +94,29 @@ function Roles() {
     },
     onSuccess: async () => {
       setName("");
+      setEditingId(null);
       setGrants(new Set());
-      toastSuccess("Role created");
+      toastSuccess(editingId ? "Role updated" : "Role created");
+      await queryClient.invalidateQueries({
+        queryKey: wsKey(workspace.id, "org-roles"),
+      });
+    },
+    onError: (err: Error) => toastError(err.message),
+  });
+
+  const remove = useMutation({
+    mutationFn: async (role: OrgRole) => {
+      const result = await betterAuthClient.$fetch(
+        "/organization/delete-role",
+        {
+          method: "POST",
+          body: { organizationId: workspace.id, roleId: role.id },
+        }
+      );
+      if (result.error) throw new Error(result.error.message ?? "Failed");
+    },
+    onSuccess: async () => {
+      toastSuccess("Role deleted");
       await queryClient.invalidateQueries({
         queryKey: wsKey(workspace.id, "org-roles"),
       });
@@ -151,6 +179,41 @@ function Roles() {
                       .map(([res, actions]) => `${res}: ${actions.join(", ")}`)
                       .join(" · ")}
                   </Table.Cell>
+                  {canManage ? (
+                    <Table.Cell>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setEditingId(r.id);
+                            setName(r.role);
+                            const next = new Set<string>();
+                            const parsed = JSON.parse(r.permission) as Record<
+                              string,
+                              string[]
+                            >;
+                            for (const [res, actions] of Object.entries(
+                              parsed
+                            )) {
+                              for (const a of actions) next.add(`${res}:${a}`);
+                            }
+                            setGrants(next);
+                          }}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => remove.mutate(r)}
+                          disabled={remove.isPending}
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </Table.Cell>
+                  ) : null}
                 </Table.Row>
               ))}
               {roles.data?.length === 0 && roles.isSuccess ? (
@@ -200,14 +263,28 @@ function Roles() {
                 ))}
               </Table.Body>
             </Table>
-            <Button
-              onClick={() => create.mutate()}
-              disabled={
-                create.isPending || name.trim() === "" || grants.size === 0
-              }
-            >
-              Create role
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => save.mutate()}
+                disabled={
+                  save.isPending || name.trim() === "" || grants.size === 0
+                }
+              >
+                {editingId ? "Update role" : "Create role"}
+              </Button>
+              {editingId ? (
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setEditingId(null);
+                    setName("");
+                    setGrants(new Set());
+                  }}
+                >
+                  Cancel
+                </Button>
+              ) : null}
+            </div>
           </LayerCard>
         ) : null}
       </div>

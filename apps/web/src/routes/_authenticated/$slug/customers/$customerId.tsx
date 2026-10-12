@@ -87,6 +87,7 @@ function CustomerEditor({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const permissions = usePermissions(workspace.id);
   const canDelete = permissions.can("customer", "delete");
+  const canEdit = permissions.can("customer", "edit");
   const [url, setUrl] = useState(customer.url ?? "");
   const [bookingUrl, setBookingUrl] = useState(customer.bookingUrl ?? "");
   const [notes, setNotes] = useState(customer.notes ?? "");
@@ -197,14 +198,16 @@ function CustomerEditor({
           </Link>
         }
         actions={
-          <Button
-            variant="secondary-destructive"
-            icon={<Trash />}
-            loading={remove.isPending}
-            onClick={() => setConfirmDelete(true)}
-          >
-            Delete
-          </Button>
+          canDelete ? (
+            <Button
+              variant="secondary-destructive"
+              icon={<Trash />}
+              loading={remove.isPending}
+              onClick={() => setConfirmDelete(true)}
+            >
+              Delete
+            </Button>
+          ) : undefined
         }
         center={
           <>
@@ -248,6 +251,7 @@ function CustomerEditor({
                   className="flex flex-col gap-4"
                   onSubmit={(event) => {
                     event.preventDefault();
+                    if (!canEdit) return;
                     if (name.trim() && !save.isPending) save.mutate();
                   }}
                 >

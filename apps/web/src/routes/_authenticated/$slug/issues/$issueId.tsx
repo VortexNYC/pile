@@ -57,6 +57,7 @@ function IssueDetail() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const permissions = usePermissions(workspace.id);
   const canDelete = permissions.can("issue", "delete");
+  const canEdit = permissions.can("issue", "edit");
   const key = wsKey(organizationId, "issues", issueId);
   const path = { organizationId, id: issueId };
   const teams = useTeams(organizationId);
@@ -398,9 +399,14 @@ function IssueDetail() {
                 kind="issue"
                 id={data.id}
               />
-              <Button icon={<PencilSimple />} onClick={() => setEditing(true)}>
-                Edit
-              </Button>
+              {canEdit ? (
+                <Button
+                  icon={<PencilSimple />}
+                  onClick={() => setEditing(true)}
+                >
+                  Edit
+                </Button>
+              ) : null}
             </>
           )
         }
@@ -435,13 +441,15 @@ function IssueDetail() {
               Copy link
             </DropdownMenu.Item>
             <DropdownMenu.Separator />
-            <DropdownMenu.Item
-              variant="danger"
-              icon={<Trash />}
-              onClick={() => setConfirmDelete(true)}
-            >
-              Delete issue
-            </DropdownMenu.Item>
+            {canDelete ? (
+              <DropdownMenu.Item
+                variant="danger"
+                icon={<Trash />}
+                onClick={() => setConfirmDelete(true)}
+              >
+                Delete issue
+              </DropdownMenu.Item>
+            ) : null}
           </>
         }
         center={

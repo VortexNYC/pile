@@ -58,6 +58,7 @@ function DealDetail() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const permissions = usePermissions(workspace.id);
   const canDelete = permissions.can("deal", "delete");
+  const canEdit = permissions.can("deal", "edit");
   const [editingDesc, setEditingDesc] = useState(false);
   const [desc, setDesc] = useState("");
   const key = wsKey(workspace.id, "deals", dealId);
@@ -257,13 +258,15 @@ function DealDetail() {
         }
         menu={
           <>
-            <DropdownMenu.Item
-              variant="danger"
-              icon={<Trash />}
-              onClick={() => setConfirmDelete(true)}
-            >
-              Delete deal
-            </DropdownMenu.Item>
+            {canDelete ? (
+              <DropdownMenu.Item
+                variant="danger"
+                icon={<Trash />}
+                onClick={() => setConfirmDelete(true)}
+              >
+                Delete deal
+              </DropdownMenu.Item>
+            ) : null}
           </>
         }
         center={
@@ -301,6 +304,7 @@ function DealDetail() {
                 type="button"
                 className="w-full text-left"
                 onClick={() => {
+                  if (!canEdit) return;
                   setDesc(data.description ?? "");
                   setEditingDesc(true);
                 }}

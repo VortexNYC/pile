@@ -1,5 +1,3 @@
-import { role } from "better-auth/plugins/access";
-
 const ALL_WORKSPACE_ACTIONS = ["read", "write", "admin"] as const;
 
 export function parsePermissionSet(
