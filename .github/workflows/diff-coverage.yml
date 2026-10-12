@@ -5,6 +5,7 @@ name: Diff Coverage
 on:
   pull_request:
     types: [opened, reopened, synchronize, edited]
+  merge_group:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
