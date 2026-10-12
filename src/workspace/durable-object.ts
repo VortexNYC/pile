@@ -109,6 +109,7 @@ import {
   workspaceGitIdentities,
   workspaceIssueApprovals,
   workspaceIssueHistory,
+  workspaceEntityLinks,
   workspaceIssueRelations,
   workspaceIssues,
   workspaceIssueSubscribers,
@@ -5380,6 +5381,20 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         or(
           eq(workspaceIssueRelations.fromIssueId, issueId),
           eq(workspaceIssueRelations.toIssueId, issueId)
+        )
+      );
+    await this.db
+      .delete(workspaceEntityLinks)
+      .where(
+        or(
+          and(
+            eq(workspaceEntityLinks.fromType, "issue"),
+            eq(workspaceEntityLinks.fromId, issueId)
+          ),
+          and(
+            eq(workspaceEntityLinks.toType, "issue"),
+            eq(workspaceEntityLinks.toId, issueId)
+          )
         )
       );
     await this.db
