@@ -2051,3 +2051,30 @@ describe("WorkspaceDO", () => {
     }
   });
 });
+
+describe("listDocumentsVisibleTo", () => {
+  it("excludes restricted docs for ungranted actors", async () => {
+    await withWorkspace(getStub(), async (instance) => {
+      await instance.createDocument({
+        title: "open-doc",
+        createdById: "owner",
+      });
+      const restricted = await instance.createDocument({
+        title: "restricted-doc",
+        createdById: "owner",
+      });
+      await instance.setDocumentPermission(
+        restricted.id,
+        "someone-else",
+        "user",
+        "edit"
+      );
+
+      const titles = (
+        await instance.listDocumentsVisibleTo("ungranted-member", [])
+      ).map((d: { title: string }) => d.title);
+      expect(titles).toContain("open-doc");
+      expect(titles).not.toContain("restricted-doc");
+    });
+  });
+});

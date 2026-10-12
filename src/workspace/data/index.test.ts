@@ -8,6 +8,9 @@ import { workspaceSchema } from "../schema-map.js";
 import {
   type AgentSessionInput,
   createAgentSession,
+  createDocument,
+  listDocumentsVisibleTo,
+  setDocumentPermission,
   createCustomer,
   createEntityAttachment,
   deleteCustomer,
@@ -550,6 +553,49 @@ describe("document links", () => {
       expect(listDocumentLinks(db, WORKSPACE_ID, { documentId })).toHaveLength(
         40
       );
+    });
+  });
+});
+
+describe("listDocumentsVisibleTo", () => {
+  it("returns open docs plus docs the actor is granted on", async () => {
+    await withDb(async (db) => {
+      const org = `vis-${crypto.randomUUID()}`;
+      const open = createDocument(db, {
+        organizationId: org,
+        title: "open",
+        createdById: "owner-1",
+      });
+      const restricted = createDocument(db, {
+        organizationId: org,
+        title: "restricted",
+        createdById: "owner-1",
+      });
+      setDocumentPermission(
+        db,
+        org,
+        restricted.id,
+        "someone-else",
+        "user",
+        "edit"
+      );
+
+      const rows = listDocumentsVisibleTo(db, org, "member-1", []);
+      const titles = rows.map((d) => d.title);
+      expect(titles).toContain("open");
+      expect(titles).not.toContain("restricted");
+
+      // granted actor sees it
+      setDocumentPermission(
+        db,
+        org,
+        restricted.id,
+        "member-1",
+        "user",
+        "view"
+      );
+      const granted = listDocumentsVisibleTo(db, org, "member-1", []);
+      expect(granted.map((d) => d.title)).toContain("restricted");
     });
   });
 });

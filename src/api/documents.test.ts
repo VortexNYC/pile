@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { createD1 } from "../global/db.js";
 import { user as userTable } from "../global/schema.js";
+import { createMembership } from "../global/workspace-entities.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
@@ -353,5 +354,97 @@ describe("issue-linked documents", () => {
     expect(res.status).toBe(200);
     const updated = z.object({ issueId: z.string() }).parse(await res.json());
     expect(updated.issueId).toBe(issue.id);
+  });
+});
+
+describe("member document visibility", () => {
+  it("hides restricted docs from ungranted members in the list", async () => {
+    const db = createD1(env.D1);
+    const now = new Date();
+    await db
+      .insert(userTable)
+      .values({
+        id: "user-documents-member",
+        name: "Member",
+        email: "documents-member@example.com",
+        emailVerified: false,
+        image: null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({ target: [userTable.email] });
+
+    const { organizationId, token } = await seedWorkspace();
+    await createMembership(
+      db,
+      env,
+      organizationId,
+      "user-documents-member",
+      "member"
+    );
+
+    // One open doc + one restricted doc
+    const openRes = await fetch(
+      `/workspaces/${organizationId}/documents`,
+      { method: "POST", body: JSON.stringify({ title: "Open doc" }) },
+      token
+    );
+    expect(openRes.status).toBe(201);
+    const restrictedRes = await fetch(
+      `/workspaces/${organizationId}/documents`,
+      { method: "POST", body: JSON.stringify({ title: "Restricted doc" }) },
+      token
+    );
+    expect(restrictedRes.status).toBe(201);
+    const restricted = z
+      .object({ id: z.string() })
+      .parse(await restrictedRes.json());
+
+    // Restrict it — grant row to a random actor nobody matches
+    const grant = await fetch(
+      `/workspaces/${organizationId}/documents/${restricted.id}/permissions`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          actorId: "somebody-else",
+          level: "edit",
+        }),
+      },
+      token
+    );
+    expect(grant.status).toBe(200);
+
+    // Mint a plain `read` key — same ceiling an unprivileged member hits
+    // on restricted docs (documentAccessLevel → null → hidden/404).
+    const auth = await createAuth(env);
+    const keyRes = await auth.api.createApiKey({
+      body: {
+        userId: "user-documents-member",
+        name: "member-read",
+        rateLimitEnabled: false,
+        metadata: { organizationId, permissions: "read" },
+      },
+    });
+    const memberKey = z.object({ key: z.string() }).parse(keyRes).key;
+
+    const list = await fetch(
+      `/workspaces/${organizationId}/documents`,
+      {},
+      memberKey
+    );
+    expect(list.status).toBe(200);
+    const titles = z
+      .object({ documents: z.array(z.object({ title: z.string() })) })
+      .parse(await list.json())
+      .documents.map((d) => d.title);
+    expect(titles).toContain("Open doc");
+    expect(titles).not.toContain("Restricted doc");
+
+    const detail = await fetch(
+      `/workspaces/${organizationId}/documents/${restricted.id}`,
+      {},
+      memberKey
+    );
+    expect(detail.status).toBe(404);
   });
 });
