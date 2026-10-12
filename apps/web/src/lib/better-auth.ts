@@ -1,5 +1,6 @@
 import { apiKeyClient } from "@better-auth/api-key/client";
 import {
+  adminClient,
   organizationClient,
   twoFactorClient,
 } from "better-auth/client/plugins";
@@ -16,6 +17,7 @@ export const betterAuthClient = createAuthClient({
   fetchOptions: { credentials: "include" },
   plugins: [
     organizationClient({ ac, roles }),
+    adminClient(),
     apiKeyClient(),
     twoFactorClient(),
   ],
