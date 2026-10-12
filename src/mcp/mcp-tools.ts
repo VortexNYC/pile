@@ -569,6 +569,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdFieldsFieldId",
+    "description": "Delete field (DELETE /workspaces/{organizationId}/fields/{fieldId}) Path params (top-level, required): organizationId, fieldId.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/fields/{fieldId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "fieldId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "fieldId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdGitautomationstatesId",
     "description": "Delete git automation state (DELETE /workspaces/{organizationId}/git-automation-states/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
@@ -2963,6 +2984,47 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdFields",
+    "description": "List fields (GET /workspaces/{organizationId}/fields) Path params (top-level, required): organizationId. Query params (top-level, optional): entityType.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/fields",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "entityType": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdFieldsValuesEntityId",
+    "description": "Get field value (GET /workspaces/{organizationId}/fields/values/{entityId}) Path params (top-level, required): organizationId, entityId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/fields/values/{entityId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "entityId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "entityId",
         "organizationId"
       ]
     }
@@ -11172,6 +11234,60 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdFields",
+    "description": "Create field (POST /workspaces/{organizationId}/fields) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: entityType*, name*, type*, options, position (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/fields",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "entityType": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "text",
+                "number",
+                "select",
+                "date",
+                "boolean"
+              ]
+            },
+            "options": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "position": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "entityType",
+            "name",
+            "type"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdFiles",
     "description": "Create file (POST /workspaces/{organizationId}/files) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: filename*, contentType, contentBase64* (* = required).",
     "method": "POST",
@@ -16387,6 +16503,43 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "putWorkspacesOrganizationIdFieldsFieldIdValue",
+    "description": "Update field value (PUT /workspaces/{organizationId}/fields/{fieldId}/value) Path params (top-level, required): organizationId, fieldId. Request body goes in the \"body\" object; fields: entityId*, value* (* = required).",
+    "method": "PUT",
+    "path": "/workspaces/{organizationId}/fields/{fieldId}/value",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "fieldId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "entityId": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          "required": [
+            "entityId",
+            "value"
+          ]
+        }
+      },
+      "required": [
+        "fieldId",
         "organizationId"
       ]
     }

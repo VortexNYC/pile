@@ -74,7 +74,7 @@ describe("deals", () => {
       { method: "POST", body: JSON.stringify({ name: "Acme" }) },
       token
     );
-    customerId = (await res.json()).id;
+    customerId = ((await res.json()) as { id: string }).id;
   });
 
   it("creates, lists, updates, and deletes deals", async () => {
@@ -93,7 +93,7 @@ describe("deals", () => {
       token
     );
     expect(create.status).toBe(201);
-    const { deal } = await create.json();
+    const { deal } = (await create.json()) as { deal: Record<string, unknown> };
     expect(deal.stage).toBe("qualified");
     expect(deal.amountCents).toBe(12_000_000);
     expect(deal.contactIds).toEqual([]);
@@ -103,7 +103,7 @@ describe("deals", () => {
       {},
       token
     );
-    const { deals } = await list.json();
+    const { deals } = (await list.json()) as { deals: { id: string }[] };
     expect(deals.map((d: { id: string }) => d.id)).toContain(deal.id);
 
     const patch = await fetch(
@@ -111,7 +111,11 @@ describe("deals", () => {
       { method: "PATCH", body: JSON.stringify({ stage: "won" }) },
       token
     );
-    const updated = (await patch.json()).deal;
+    const updated = (
+      (await patch.json()) as {
+        deal: { stage: string; closedAt: string | null };
+      }
+    ).deal;
     expect(updated.stage).toBe("won");
     expect(updated.closedAt).toBeTruthy();
 
@@ -120,14 +124,17 @@ describe("deals", () => {
       { method: "PATCH", body: JSON.stringify({ stage: "negotiation" }) },
       token
     );
-    expect((await reopen.json()).deal.closedAt).toBeNull();
+    expect(
+      ((await reopen.json()) as { deal: { closedAt: string | null } }).deal
+        .closedAt
+    ).toBeNull();
 
     const del = await fetch(
       `/workspaces/${organizationId}/deals/${deal.id}`,
       { method: "DELETE" },
       token
     );
-    expect((await del.json()).ok).toBe(true);
+    expect(((await del.json()) as { ok: boolean }).ok).toBe(true);
     const gone = await fetch(
       `/workspaces/${organizationId}/deals/${deal.id}`,
       {},
@@ -150,14 +157,94 @@ describe("deals", () => {
       },
       token
     );
-    const { deal } = await create.json();
-    expect(deal.contactIds.sort()).toEqual(["contact-a", "contact-b"]);
+    const { deal } = (await create.json()) as {
+      deal: { id: string; contactIds: string[] };
+    };
+    expect([...deal.contactIds].sort()).toEqual(["contact-a", "contact-b"]);
 
     const patch = await fetch(
       `/workspaces/${organizationId}/deals/${deal.id}`,
       { method: "PATCH", body: JSON.stringify({ contactIds: ["contact-c"] }) },
       token
     );
-    expect((await patch.json()).deal.contactIds).toEqual(["contact-c"]);
+    const patched = (await patch.json()) as { deal: { contactIds: string[] } };
+    expect(patched.deal.contactIds).toEqual(["contact-c"]);
+  });
+});
+
+describe("custom fields", () => {
+  let organizationId = "";
+  let token = "";
+
+  beforeAll(async () => {
+    ({ organizationId, token } = await seedWorkspace());
+  });
+
+  it("defines fields and sets values per entity", async () => {
+    const create = await fetch(
+      `/workspaces/${organizationId}/fields`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          entityType: "issue",
+          name: "Sprint",
+          type: "select",
+          options: ["S1", "S2"],
+        }),
+      },
+      token
+    );
+    expect(create.status).toBe(201);
+    const { field } = (await create.json()) as {
+      field: { id: string; options: string[] | null };
+    };
+    expect(field.options).toEqual(["S1", "S2"]);
+
+    const list = await fetch(
+      `/workspaces/${organizationId}/fields?entityType=issue`,
+      {},
+      token
+    );
+    expect(((await list.json()) as { fields: unknown[] }).fields).toHaveLength(
+      1
+    );
+
+    const set = await fetch(
+      `/workspaces/${organizationId}/fields/${field.id}/value`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ entityId: "issue-1", value: "S2" }),
+      },
+      token
+    );
+    expect(set.status).toBe(200);
+
+    const values = await fetch(
+      `/workspaces/${organizationId}/fields/values/issue-1`,
+      {},
+      token
+    );
+    expect(
+      ((await values.json()) as { values: { value: string | null }[] })
+        .values[0]?.value
+    ).toBe("S2");
+
+    // clearing removes the row
+    await fetch(
+      `/workspaces/${organizationId}/fields/${field.id}/value`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ entityId: "issue-1", value: null }),
+      },
+      token
+    );
+    const cleared = await fetch(
+      `/workspaces/${organizationId}/fields/values/issue-1`,
+      {},
+      token
+    );
+    expect(
+      ((await cleared.json()) as { values: unknown[] }).values
+    ).toHaveLength(0);
   });
 });

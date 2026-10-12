@@ -43,6 +43,7 @@ import { Route as AuthenticatedSlugSessionsSessionIdRouteImport } from './routes
 import { Route as AuthenticatedSlugSettingsIndexRouteImport } from './routes/_authenticated/$slug/settings/index'
 import { Route as AuthenticatedSlugSettingsAccountRouteImport } from './routes/_authenticated/$slug/settings/account'
 import { Route as AuthenticatedSlugSettingsDeveloperRouteImport } from './routes/_authenticated/$slug/settings/developer'
+import { Route as AuthenticatedSlugSettingsFieldsRouteImport } from './routes/_authenticated/$slug/settings/fields'
 import { Route as AuthenticatedSlugSettingsMembersRouteImport } from './routes/_authenticated/$slug/settings/members'
 import { Route as AuthenticatedSlugSettingsSurfacesRouteImport } from './routes/_authenticated/$slug/settings/surfaces'
 import { Route as AuthenticatedSlugTicketsIndexRouteImport } from './routes/_authenticated/$slug/tickets/index'
@@ -238,6 +239,12 @@ const AuthenticatedSlugSettingsDeveloperRoute =
     path: '/settings/developer',
     getParentRoute: () => AuthenticatedSlugRoute,
   } as any)
+const AuthenticatedSlugSettingsFieldsRoute =
+  AuthenticatedSlugSettingsFieldsRouteImport.update({
+    id: '/settings/fields',
+    path: '/settings/fields',
+    getParentRoute: () => AuthenticatedSlugRoute,
+  } as any)
 const AuthenticatedSlugSettingsMembersRoute =
   AuthenticatedSlugSettingsMembersRouteImport.update({
     id: '/settings/members',
@@ -295,6 +302,7 @@ export interface FileRoutesByFullPath {
   '/$slug/sessions/$sessionId': typeof AuthenticatedSlugSessionsSessionIdRoute
   '/$slug/settings/account': typeof AuthenticatedSlugSettingsAccountRoute
   '/$slug/settings/developer': typeof AuthenticatedSlugSettingsDeveloperRoute
+  '/$slug/settings/fields': typeof AuthenticatedSlugSettingsFieldsRoute
   '/$slug/settings/members': typeof AuthenticatedSlugSettingsMembersRoute
   '/$slug/settings/surfaces': typeof AuthenticatedSlugSettingsSurfacesRoute
   '/$slug/tickets/$ticketId': typeof AuthenticatedSlugTicketsTicketIdRoute
@@ -334,6 +342,7 @@ export interface FileRoutesByTo {
   '/$slug/sessions/$sessionId': typeof AuthenticatedSlugSessionsSessionIdRoute
   '/$slug/settings/account': typeof AuthenticatedSlugSettingsAccountRoute
   '/$slug/settings/developer': typeof AuthenticatedSlugSettingsDeveloperRoute
+  '/$slug/settings/fields': typeof AuthenticatedSlugSettingsFieldsRoute
   '/$slug/settings/members': typeof AuthenticatedSlugSettingsMembersRoute
   '/$slug/settings/surfaces': typeof AuthenticatedSlugSettingsSurfacesRoute
   '/$slug/tickets/$ticketId': typeof AuthenticatedSlugTicketsTicketIdRoute
@@ -377,6 +386,7 @@ export interface FileRoutesById {
   '/_authenticated/$slug/sessions/$sessionId': typeof AuthenticatedSlugSessionsSessionIdRoute
   '/_authenticated/$slug/settings/account': typeof AuthenticatedSlugSettingsAccountRoute
   '/_authenticated/$slug/settings/developer': typeof AuthenticatedSlugSettingsDeveloperRoute
+  '/_authenticated/$slug/settings/fields': typeof AuthenticatedSlugSettingsFieldsRoute
   '/_authenticated/$slug/settings/members': typeof AuthenticatedSlugSettingsMembersRoute
   '/_authenticated/$slug/settings/surfaces': typeof AuthenticatedSlugSettingsSurfacesRoute
   '/_authenticated/$slug/tickets/$ticketId': typeof AuthenticatedSlugTicketsTicketIdRoute
@@ -419,6 +429,7 @@ export interface FileRouteTypes {
     | '/$slug/sessions/$sessionId'
     | '/$slug/settings/account'
     | '/$slug/settings/developer'
+    | '/$slug/settings/fields'
     | '/$slug/settings/members'
     | '/$slug/settings/surfaces'
     | '/$slug/tickets/$ticketId'
@@ -458,6 +469,7 @@ export interface FileRouteTypes {
     | '/$slug/sessions/$sessionId'
     | '/$slug/settings/account'
     | '/$slug/settings/developer'
+    | '/$slug/settings/fields'
     | '/$slug/settings/members'
     | '/$slug/settings/surfaces'
     | '/$slug/tickets/$ticketId'
@@ -500,6 +512,7 @@ export interface FileRouteTypes {
     | '/_authenticated/$slug/sessions/$sessionId'
     | '/_authenticated/$slug/settings/account'
     | '/_authenticated/$slug/settings/developer'
+    | '/_authenticated/$slug/settings/fields'
     | '/_authenticated/$slug/settings/members'
     | '/_authenticated/$slug/settings/surfaces'
     | '/_authenticated/$slug/tickets/$ticketId'
@@ -768,6 +781,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSlugSettingsDeveloperRouteImport
       parentRoute: typeof AuthenticatedSlugRoute
     }
+    '/_authenticated/$slug/settings/fields': {
+      id: '/_authenticated/$slug/settings/fields'
+      path: '/settings/fields'
+      fullPath: '/$slug/settings/fields'
+      preLoaderRoute: typeof AuthenticatedSlugSettingsFieldsRouteImport
+      parentRoute: typeof AuthenticatedSlugRoute
+    }
     '/_authenticated/$slug/settings/members': {
       id: '/_authenticated/$slug/settings/members'
       path: '/settings/members'
@@ -845,6 +865,7 @@ interface AuthenticatedSlugRouteChildren {
   AuthenticatedSlugSessionsSessionIdRoute: typeof AuthenticatedSlugSessionsSessionIdRoute
   AuthenticatedSlugSettingsAccountRoute: typeof AuthenticatedSlugSettingsAccountRoute
   AuthenticatedSlugSettingsDeveloperRoute: typeof AuthenticatedSlugSettingsDeveloperRoute
+  AuthenticatedSlugSettingsFieldsRoute: typeof AuthenticatedSlugSettingsFieldsRoute
   AuthenticatedSlugSettingsMembersRoute: typeof AuthenticatedSlugSettingsMembersRoute
   AuthenticatedSlugSettingsSurfacesRoute: typeof AuthenticatedSlugSettingsSurfacesRoute
   AuthenticatedSlugTicketsTicketIdRoute: typeof AuthenticatedSlugTicketsTicketIdRoute
@@ -879,6 +900,7 @@ const AuthenticatedSlugRouteChildren: AuthenticatedSlugRouteChildren = {
   AuthenticatedSlugSettingsAccountRoute: AuthenticatedSlugSettingsAccountRoute,
   AuthenticatedSlugSettingsDeveloperRoute:
     AuthenticatedSlugSettingsDeveloperRoute,
+  AuthenticatedSlugSettingsFieldsRoute: AuthenticatedSlugSettingsFieldsRoute,
   AuthenticatedSlugSettingsMembersRoute: AuthenticatedSlugSettingsMembersRoute,
   AuthenticatedSlugSettingsSurfacesRoute:
     AuthenticatedSlugSettingsSurfacesRoute,

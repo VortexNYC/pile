@@ -1304,3 +1304,51 @@ export const workspaceDealContacts = sqliteTable(
     index("deal_contacts_contact_idx" as string).on(table.contactId),
   ]
 );
+
+// Custom fields: field definitions scoped to entity types + their values
+// per entity — the "make it yours" layer on issues, customers, deals.
+export const workspaceFieldDefinitions = sqliteTable(
+  "field_definitions" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    entityType: text("entity_type" as string).notNull(),
+    name: text("name" as string).notNull(),
+    type: text("type" as string).notNull(),
+    options: text("options" as string),
+    position: integer("position" as string)
+      .notNull()
+      .default(0),
+    createdAt: text("created_at" as string).notNull(),
+    updatedAt: text("updated_at" as string).notNull(),
+  },
+  (table) => [
+    index("field_definitions_org_entity_idx" as string).on(
+      table.organizationId,
+      table.entityType
+    ),
+    uniqueIndex("field_definitions_name_idx" as string).on(
+      table.organizationId,
+      table.entityType,
+      table.name
+    ),
+  ]
+);
+
+export const workspaceFieldValues = sqliteTable(
+  "field_values" as string,
+  {
+    fieldId: text("field_id" as string).notNull(),
+    entityId: text("entity_id" as string).notNull(),
+    organizationId: text("organization_id" as string).notNull(),
+    value: text("value" as string),
+    updatedAt: text("updated_at" as string).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.fieldId, table.entityId] }),
+    index("field_values_entity_idx" as string).on(
+      table.organizationId,
+      table.entityId
+    ),
+  ]
+);

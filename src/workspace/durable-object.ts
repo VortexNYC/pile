@@ -1447,6 +1447,33 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return ok;
   }
 
+  // ---- custom fields ----
+  createFieldDefinition(
+    input: Omit<data.FieldDefinitionInput, "organizationId">
+  ) {
+    return data.createFieldDefinition(this.db, {
+      ...input,
+      organizationId: this.organizationId,
+    });
+  }
+
+  listFieldDefinitions(entityType?: string) {
+    return data.listFieldDefinitions(this.db, this.organizationId, entityType);
+  }
+
+  deleteFieldDefinition(id: string) {
+    return data.deleteFieldDefinition(this.db, this.organizationId, id);
+  }
+
+  setFieldValue(fieldId: string, entityId: string, value: string | null) {
+    data.setFieldValue(this.db, this.organizationId, fieldId, entityId, value);
+    return { ok: true };
+  }
+
+  listFieldValues(entityId: string) {
+    return data.listFieldValues(this.db, this.organizationId, entityId);
+  }
+
   // ---- entity attachments (R2-backed, scoped to entityType + entityId) ----
   listEntityAttachments(entityType: string, entityId: string) {
     return data.listEntityAttachments(

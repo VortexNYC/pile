@@ -59,6 +59,7 @@ const SETTINGS = [
   },
   { title: "Members", path: "settings/members", icon: UsersThree },
   { title: "Surfaces", path: "settings/surfaces", icon: Layout },
+  { title: "Fields", path: "settings/fields", icon: Layout },
   {
     title: "Developer",
     path: "settings/developer",

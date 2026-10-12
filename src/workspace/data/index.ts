@@ -45,6 +45,8 @@ import {
   workspaceCustomers,
   workspaceDealContacts,
   workspaceDeals,
+  workspaceFieldDefinitions,
+  workspaceFieldValues,
   workspaceCustomerStatuses,
   workspaceCustomerTiers,
   workspaceIssueApprovals,
@@ -2951,6 +2953,158 @@ export function setDealContacts(
       .values({ dealId, contactId, createdAt: now })
       .run();
   }
+}
+
+// ---- custom fields ----
+// Field definitions scoped per entity type; values join entityId.
+
+export const FIELD_TYPES = [
+  "text",
+  "number",
+  "select",
+  "date",
+  "boolean",
+] as const;
+export type FieldType = (typeof FIELD_TYPES)[number];
+
+export interface FieldDefinitionInput {
+  organizationId: string;
+  entityType: string;
+  name: string;
+  type: FieldType;
+  options?: string[];
+  position?: number;
+}
+
+export function createFieldDefinition(
+  db: WorkspaceDb,
+  input: FieldDefinitionInput
+) {
+  const now = new Date().toISOString();
+  const field = db
+    .insert(workspaceFieldDefinitions)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId: input.organizationId,
+      entityType: input.entityType,
+      name: input.name,
+      type: input.type,
+      options: input.options ? JSON.stringify(input.options) : null,
+      position: input.position ?? 0,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning()
+    .get();
+  return {
+    ...field,
+    type: field.type as FieldType,
+    options: field.options ? (JSON.parse(field.options) as string[]) : null,
+  };
+}
+
+export function listFieldDefinitions(
+  db: WorkspaceDb,
+  organizationId: string,
+  entityType?: string
+) {
+  return db
+    .select()
+    .from(workspaceFieldDefinitions)
+    .where(
+      and(
+        eq(workspaceFieldDefinitions.organizationId, organizationId),
+        entityType !== undefined
+          ? eq(workspaceFieldDefinitions.entityType, entityType)
+          : undefined
+      )
+    )
+    .orderBy(workspaceFieldDefinitions.position, workspaceFieldDefinitions.name)
+    .all()
+    .map((d) => ({
+      ...d,
+      type: d.type as FieldType,
+      options: d.options ? (JSON.parse(d.options) as string[]) : null,
+    }));
+}
+
+export function deleteFieldDefinition(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  db.delete(workspaceFieldValues)
+    .where(
+      and(
+        eq(workspaceFieldValues.fieldId, id),
+        eq(workspaceFieldValues.organizationId, organizationId)
+      )
+    )
+    .run();
+  return (
+    db
+      .delete(workspaceFieldDefinitions)
+      .where(
+        and(
+          eq(workspaceFieldDefinitions.id, id),
+          eq(workspaceFieldDefinitions.organizationId, organizationId)
+        )
+      )
+      .returning()
+      .all().length > 0
+  );
+}
+
+export function setFieldValue(
+  db: WorkspaceDb,
+  organizationId: string,
+  fieldId: string,
+  entityId: string,
+  value: string | null
+) {
+  const now = new Date().toISOString();
+  if (value === null) {
+    db.delete(workspaceFieldValues)
+      .where(
+        and(
+          eq(workspaceFieldValues.fieldId, fieldId),
+          eq(workspaceFieldValues.entityId, entityId),
+          eq(workspaceFieldValues.organizationId, organizationId)
+        )
+      )
+      .run();
+    return;
+  }
+  db.insert(workspaceFieldValues)
+    .values({
+      fieldId,
+      entityId,
+      organizationId,
+      value,
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: [workspaceFieldValues.fieldId, workspaceFieldValues.entityId],
+      set: { value, updatedAt: now },
+    })
+    .run();
+}
+
+export function listFieldValues(
+  db: WorkspaceDb,
+  organizationId: string,
+  entityId: string
+) {
+  return db
+    .select()
+    .from(workspaceFieldValues)
+    .where(
+      and(
+        eq(workspaceFieldValues.organizationId, organizationId),
+        eq(workspaceFieldValues.entityId, entityId)
+      )
+    )
+    .all();
 }
 
 // ---- entity attachments ----

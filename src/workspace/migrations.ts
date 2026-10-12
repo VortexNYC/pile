@@ -871,6 +871,33 @@ const v55 = `ALTER TABLE user_workspace_preferences ADD COLUMN hidden_surfaces T
 const v57 = `ALTER TABLE user_workspace_preferences ADD COLUMN favorites TEXT`;
 const v58 = `ALTER TABLE customers ADD COLUMN booking_url TEXT`;
 
+const v60 = `CREATE TABLE IF NOT EXISTS field_definitions (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL,
+  options TEXT,
+  position INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS field_definitions_org_entity_idx ON field_definitions (organization_id, entity_type)
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS field_definitions_name_idx ON field_definitions (organization_id, entity_type, name)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS field_values (
+  field_id TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  organization_id TEXT NOT NULL,
+  value TEXT,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (field_id, entity_id)
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS field_values_entity_idx ON field_values (organization_id, entity_id)`;
+
 const v59 = `CREATE TABLE IF NOT EXISTS deals (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -971,6 +998,7 @@ export const workspaceMigrations = {
       { idx: 56, when: 56, tag: "v57", breakpoints: false },
       { idx: 57, when: 57, tag: "v58", breakpoints: false },
       { idx: 58, when: 58, tag: "v59", breakpoints: false },
+      { idx: 59, when: 59, tag: "v60", breakpoints: false },
     ],
   },
   migrations: {
@@ -1033,5 +1061,6 @@ export const workspaceMigrations = {
     m0056: v57,
     m0057: v58,
     m0058: v59,
+    m0059: v60,
   },
 } satisfies Parameters<typeof migrate>[1];
