@@ -1,3 +1,4 @@
+import { Button } from "@cloudflare/kumo/components/button";
 import { Sidebar } from "@cloudflare/kumo/components/sidebar";
 import {
   createFileRoute,
@@ -79,6 +80,7 @@ function WorkspaceLayout() {
             <Sidebar.Trigger />
             <NotificationsBell />
           </header>
+          <ImpersonationBanner />
           <main className="min-h-0 flex-1 overflow-y-auto">
             <GuestGate workspace={workspace}>
               <Outlet key={workspace.id} />
@@ -133,4 +135,35 @@ function GuestGate({
   }, [pathname, permissions, workspace.slug, navigate]);
 
   return <>{children}</>;
+}
+
+
+/** Shown while an admin views as another member — BA's admin plugin marks
+ * the session with `impersonatedBy`. One click returns to their own
+ * session. */
+function ImpersonationBanner() {
+  const { data: session } = betterAuthClient.useSession();
+  const impersonatedBy = (
+    session?.session as { impersonatedBy?: string } | undefined
+  )?.impersonatedBy;
+  if (!impersonatedBy) return null;
+  return (
+    <div className="border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+      <div className="flex items-center justify-between gap-3">
+        <span>
+          Viewing as {session?.user?.email ?? "another member"} — actions
+          count as theirs.
+        </span>
+        <Button
+          variant="secondary"
+          onClick={async () => {
+            await betterAuthClient.admin.stopImpersonating();
+            window.location.href = "/app";
+          }}
+        >
+          Stop impersonating
+        </Button>
+      </div>
+    </div>
+  );
 }
