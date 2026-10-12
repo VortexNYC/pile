@@ -1557,3 +1557,72 @@ describe("possible duplicates on create (PILE-163)", () => {
     expect(fetched.repo).toBe(teamRepo);
   });
 });
+
+describe("grant-only issue visibility (scoped keys)", () => {
+  it("an issue:view key sees only explicitly granted issues", async () => {
+    const { organizationId, token } = await seedWorkspace();
+
+    const openRes = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      { method: "POST", body: JSON.stringify({ title: "visible" }) },
+      token
+    );
+    expect(openRes.status).toBe(201);
+    const open = z
+      .object({ id: z.string() })
+      .parse(await openRes.json());
+    const otherRes = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      { method: "POST", body: JSON.stringify({ title: "hidden" }) },
+      token
+    );
+    expect(otherRes.status).toBe(201);
+
+    // issue:view-scoped key — no workspace:read, so lists run grant-only.
+    const auth = await createAuth(env);
+    const keyRes = await auth.api.createApiKey({
+      body: {
+        userId: "user-issues",
+        name: "scoped-view",
+        rateLimitEnabled: false,
+        metadata: { organizationId, permissions: "issue:view" },
+      },
+    });
+    const scoped = z.object({ key: z.string() }).parse(keyRes).key;
+
+    // Nothing granted yet → the list is empty.
+    const empty = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      {},
+      scoped
+    );
+    expect(empty.status).toBe(200);
+    const emptyBody = z
+      .object({ issues: z.array(z.object({ id: z.string() })) })
+      .parse(await empty.json());
+    expect(emptyBody.issues).toHaveLength(0);
+
+    // Grant the actor one issue → only it comes back.
+    const grant = await fetch(
+      `/workspaces/${organizationId}/issues/${open.id}/permissions`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ actorId: "user-issues", actorType: "user" }),
+      },
+      token
+    );
+    expect(grant.status).toBe(200);
+
+    const list = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      {},
+      scoped
+    );
+    expect(list.status).toBe(200);
+    const ids = z
+      .object({ issues: z.array(z.object({ id: z.string() })) })
+      .parse(await list.json())
+      .issues.map((i) => i.id);
+    expect(ids).toEqual([open.id]);
+  });
+});

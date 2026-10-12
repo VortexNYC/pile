@@ -2653,13 +2653,29 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.listIssuePermissions(this.db, issueId);
   }
 
-  issueVisibleTo(issueId: string, actorId: string, teamIds: string[] = []) {
-    return data.hasIssueAccess(this.db, issueId, actorId, teamIds);
+  issueVisibleTo(
+    issueId: string,
+    actorId: string,
+    teamIds: string[] = [],
+    grantedOnly = false
+  ) {
+    return data.hasIssueAccess(
+      this.db,
+      issueId,
+      actorId,
+      teamIds,
+      grantedOnly
+    );
   }
 
   hiddenIssueIdsFor(viewer?: IssueViewer): string[] {
     if (!viewer) return [];
-    return data.hiddenIssueIds(this.db, viewer.actorId, viewer.teamIds);
+    return data.hiddenIssueIds(
+      this.db,
+      viewer.actorId,
+      viewer.teamIds,
+      viewer.grantedOnly
+    );
   }
 
   listDocumentLinks(

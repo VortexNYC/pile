@@ -69,3 +69,14 @@ describe("workspace shared types", () => {
     expect(keys).toEqual(["prUrl", "prState"]);
   });
 });
+
+describe("IssueViewer", () => {
+  it("grantedOnly marks grant-scoped actors", () => {
+    const viewer: import("./workspace.js").IssueViewer = {
+      actorId: "u-1",
+      teamIds: ["t-1"],
+      grantedOnly: true,
+    };
+    expect(viewer.grantedOnly).toBe(true);
+  });
+});

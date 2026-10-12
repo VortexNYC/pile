@@ -7,8 +7,9 @@ import { canAccessTeam } from "../global/teams.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { AppContext } from "../platform/middleware.js";
-import { isAdminIdentity } from "../platform/permissions.js";
 import type { Issue, IssueViewer } from "../types/workspace.js";
+
+import { canAccess, isAdminIdentity } from "../platform/permissions.js";
 
 type WorkspaceDb = ReturnType<typeof createD1>;
 
@@ -18,7 +19,8 @@ interface IssueAccessStub {
   issueVisibleTo(
     issueId: string,
     actorId: string,
-    teamIds: string[]
+    teamIds: string[],
+    grantedOnly?: boolean
   ): Promise<boolean>;
   hiddenIssueIdsFor(viewer?: IssueViewer): Promise<string[]>;
 }
@@ -47,7 +49,11 @@ export async function issueViewer(
   identity: WorkspaceIdentity
 ): Promise<IssueViewer | undefined> {
   if (isAdminIdentity(identity)) return undefined;
-  return { actorId: identity.id, teamIds: await grantTeamIds(db, identity) };
+  return {
+    actorId: identity.id,
+    teamIds: await grantTeamIds(db, identity),
+    grantedOnly: !canAccess(identity.permissions, "read"),
+  };
 }
 
 // Team access first (existing model), then per-issue grants: when an issue
@@ -66,7 +72,8 @@ export async function assertIssueAccess(
       (await stub.issueVisibleTo(
         issue.id,
         identity.id,
-        await grantTeamIds(db, identity)
+        await grantTeamIds(db, identity),
+        !canAccess(identity.permissions, "read")
       )));
   if (!visible) {
     throw new VortexError({

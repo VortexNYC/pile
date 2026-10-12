@@ -5137,10 +5137,13 @@ export function hasIssueAccess(
   db: WorkspaceDb,
   issueId: string,
   actorId: string,
-  teamIds: string[] = []
+  teamIds: string[] = [],
+  defaultDenied = false
 ): boolean {
   const grants = listIssuePermissions(db, issueId);
-  if (grants.length === 0) return true;
+  // Default-deny actors (no workspace:read) see only what a grant row
+  // gives them — unrestricted issues stay invisible.
+  if (grants.length === 0) return !defaultDenied;
   return grants.some(
     (grant) =>
       grant.actorId === actorId ||
@@ -5154,7 +5157,8 @@ export function hasIssueAccess(
 export function hiddenIssueIds(
   db: WorkspaceDb,
   actorId: string,
-  teamIds: string[] = []
+  teamIds: string[] = [],
+  grantedOnly = false
 ): string[] {
   const grants = db
     .select({
@@ -5173,6 +5177,14 @@ export function hiddenIssueIds(
       )
       .map((grant) => grant.issueId)
   );
+  if (grantedOnly) {
+    return db
+      .select({ id: workspaceIssues.id })
+      .from(workspaceIssues)
+      .all()
+      .map((row) => row.id)
+      .filter((issueId) => !visible.has(issueId));
+  }
   return [...new Set(grants.map((grant) => grant.issueId))].filter(
     (issueId) => !visible.has(issueId)
   );

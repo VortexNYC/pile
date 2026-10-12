@@ -122,6 +122,8 @@ export interface IssueCursor {
 export interface IssueViewer {
   actorId: string;
   teamIds: string[];
+  /** Actors without workspace:read only see issues they're granted on. */
+  grantedOnly?: boolean;
 }
 
 export interface ListIssuesArgs {
