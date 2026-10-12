@@ -18,6 +18,7 @@ import { CapturesGrid } from "@/components/captures-grid";
 import { ContactsList } from "@/components/contacts-list";
 import { CustomersList } from "@/components/customers-list";
 import { DealsList } from "@/components/deals-list";
+import { usePermissions } from "@/hooks/use-permissions";
 import { EntityHover } from "@/components/entity-hover";
 import { PeekHeader, usePeek } from "@/components/entity-peek";
 import { FieldMenu } from "@/components/field-menu";
@@ -50,6 +51,7 @@ export const Route = createFileRoute("/_authenticated/$slug/tickets/")({
 
 function TicketsList() {
   const workspace = useWorkspace();
+  const permissions = usePermissions(workspace.id);
   const { status } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const session = betterAuthClient.useSession();
@@ -264,22 +266,32 @@ function TicketsList() {
         )}
       </>
 
-      <div className="mt-8 flex flex-col gap-2 border-t border-kumo-line pt-4">
-        <h2 className="text-sm font-medium text-kumo-subtle px-1">Deals</h2>
-        <DealsList />
-      </div>
-      <div className="flex flex-col gap-2">
-        <h2 className="text-sm font-medium text-kumo-subtle px-1">Customers</h2>
-        <CustomersList />
-      </div>
-      <div className="flex flex-col gap-2">
-        <h2 className="text-sm font-medium text-kumo-subtle px-1">Contacts</h2>
-        <ContactsList />
-      </div>
-      <div className="flex flex-col gap-2">
-        <h2 className="text-sm font-medium text-kumo-subtle px-1">Captures</h2>
-        <CapturesGrid />
-      </div>
+      {(
+        [
+          ["deal", "Deals", "DealsList"],
+          ["customer", "Customers", "CustomersList"],
+          ["contact", "Contacts", "ContactsList"],
+          ["ticket", "Captures", "CapturesGrid"],
+        ] as const
+      )
+        .filter(([res]) => permissions.can(res, "view"))
+        .map(([res, title], i) => (
+          <div
+            key={res}
+            className={`flex flex-col gap-2${i === 0 ? " mt-8 border-t border-kumo-line pt-4" : ""}`}
+          >
+            <h2 className="text-sm font-medium text-kumo-subtle px-1">{title}</h2>
+            {res === "deal" ? (
+              <DealsList />
+            ) : res === "customer" ? (
+              <CustomersList />
+            ) : res === "contact" ? (
+              <ContactsList />
+            ) : (
+              <CapturesGrid />
+            )}
+          </div>
+        ))}
 
       <peek.Drawer>
         {peek.peeked ? (
