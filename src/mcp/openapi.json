@@ -34591,7 +34591,8 @@
                       "intercom",
                       "zendesk",
                       "plain",
-                      "linear"
+                      "linear",
+                      "sms"
                     ]
                   },
                   "priority": {
@@ -34657,7 +34658,8 @@
                           "intercom",
                           "zendesk",
                           "plain",
-                          "linear"
+                          "linear",
+                          "sms"
                         ],
                         "default": "chat"
                       }
@@ -34739,7 +34741,8 @@
                             "intercom",
                             "zendesk",
                             "plain",
-                            "linear"
+                            "linear",
+                            "sms"
                           ]
                         },
                         "issueId": {
@@ -34989,7 +34992,8 @@
                                       "intercom",
                                       "zendesk",
                                       "plain",
-                                      "linear"
+                                      "linear",
+                                      "sms"
                                     ]
                                   },
                                   "customerId": {
@@ -35163,7 +35167,8 @@
                 "intercom",
                 "zendesk",
                 "plain",
-                "linear"
+                "linear",
+                "sms"
               ]
             },
             "required": false,
@@ -35280,7 +35285,8 @@
                               "intercom",
                               "zendesk",
                               "plain",
-                              "linear"
+                              "linear",
+                              "sms"
                             ]
                           },
                           "issueId": {
@@ -35530,7 +35536,8 @@
                                         "intercom",
                                         "zendesk",
                                         "plain",
-                                        "linear"
+                                        "linear",
+                                        "sms"
                                       ]
                                     },
                                     "customerId": {
@@ -35832,7 +35839,8 @@
                             "intercom",
                             "zendesk",
                             "plain",
-                            "linear"
+                            "linear",
+                            "sms"
                           ]
                         },
                         "issueId": {
@@ -36082,7 +36090,8 @@
                                       "intercom",
                                       "zendesk",
                                       "plain",
-                                      "linear"
+                                      "linear",
+                                      "sms"
                                     ]
                                   },
                                   "customerId": {
@@ -36317,7 +36326,8 @@
                             "intercom",
                             "zendesk",
                             "plain",
-                            "linear"
+                            "linear",
+                            "sms"
                           ]
                         },
                         "issueId": {
@@ -36567,7 +36577,8 @@
                                       "intercom",
                                       "zendesk",
                                       "plain",
-                                      "linear"
+                                      "linear",
+                                      "sms"
                                     ]
                                   },
                                   "customerId": {
@@ -36807,7 +36818,8 @@
                       "intercom",
                       "zendesk",
                       "plain",
-                      "linear"
+                      "linear",
+                      "sms"
                     ]
                   },
                   "customerId": {
@@ -36927,7 +36939,8 @@
                                 "intercom",
                                 "zendesk",
                                 "plain",
-                                "linear"
+                                "linear",
+                                "sms"
                               ]
                             },
                             "customerId": {
@@ -37138,7 +37151,8 @@
                                 "intercom",
                                 "zendesk",
                                 "plain",
-                                "linear"
+                                "linear",
+                                "sms"
                               ]
                             },
                             "customerId": {
@@ -37332,7 +37346,8 @@
                                 "intercom",
                                 "zendesk",
                                 "plain",
-                                "linear"
+                                "linear",
+                                "sms"
                               ]
                             },
                             "customerId": {
@@ -37558,7 +37573,8 @@
                                   "intercom",
                                   "zendesk",
                                   "plain",
-                                  "linear"
+                                  "linear",
+                                  "sms"
                                 ]
                               },
                               "customerId": {
@@ -37717,7 +37733,8 @@
                             "intercom",
                             "zendesk",
                             "plain",
-                            "linear"
+                            "linear",
+                            "sms"
                           ]
                         },
                         "issueId": {
@@ -37967,7 +37984,8 @@
                                       "intercom",
                                       "zendesk",
                                       "plain",
-                                      "linear"
+                                      "linear",
+                                      "sms"
                                     ]
                                   },
                                   "customerId": {
@@ -38147,7 +38165,8 @@
                             "intercom",
                             "zendesk",
                             "plain",
-                            "linear"
+                            "linear",
+                            "sms"
                           ]
                         },
                         "issueId": {
@@ -38397,7 +38416,8 @@
                                       "intercom",
                                       "zendesk",
                                       "plain",
-                                      "linear"
+                                      "linear",
+                                      "sms"
                                     ]
                                   },
                                   "customerId": {
@@ -38608,7 +38628,8 @@
                             "intercom",
                             "zendesk",
                             "plain",
-                            "linear"
+                            "linear",
+                            "sms"
                           ]
                         },
                         "issueId": {
@@ -38858,7 +38879,8 @@
                                       "intercom",
                                       "zendesk",
                                       "plain",
-                                      "linear"
+                                      "linear",
+                                      "sms"
                                     ]
                                   },
                                   "customerId": {
@@ -39095,7 +39117,8 @@
                             "intercom",
                             "zendesk",
                             "plain",
-                            "linear"
+                            "linear",
+                            "sms"
                           ]
                         },
                         "issueId": {
@@ -39345,7 +39368,8 @@
                                       "intercom",
                                       "zendesk",
                                       "plain",
-                                      "linear"
+                                      "linear",
+                                      "sms"
                                     ]
                                   },
                                   "customerId": {
@@ -39545,7 +39569,8 @@
                             "intercom",
                             "zendesk",
                             "plain",
-                            "linear"
+                            "linear",
+                            "sms"
                           ]
                         },
                         "issueId": {
@@ -39795,7 +39820,8 @@
                                       "intercom",
                                       "zendesk",
                                       "plain",
-                                      "linear"
+                                      "linear",
+                                      "sms"
                                     ]
                                   },
                                   "customerId": {
@@ -45101,6 +45127,118 @@
           }
         },
         "summary": "Create support import validate"
+      }
+    },
+    "/support/sms/inbound": {
+      "post": {
+        "tags": [
+          "support-sms"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "from_number": {
+                    "type": "string",
+                    "minLength": 4
+                  },
+                  "to_number": {
+                    "type": "string"
+                  },
+                  "content": {
+                    "type": "string",
+                    "maxLength": 10000
+                  },
+                  "media_url": {
+                    "type": "string"
+                  },
+                  "service": {
+                    "type": "string"
+                  },
+                  "date_sent": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "from_number"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          }
+        },
+        "summary": "Create support sm inbound"
+      }
+    },
+    "/workspaces/{organizationId}/support/sms/threads/{threadId}/reply": {
+      "post": {
+        "tags": [
+          "support-sms"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "threadId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "body": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 10000
+                  }
+                },
+                "required": [
+                  "body"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reply delivered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "delivered": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "delivered"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create support sm thread reply"
       }
     },
     "/workspaces/{organizationId}/support/users/{userId}/status": {
