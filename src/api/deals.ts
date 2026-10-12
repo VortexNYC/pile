@@ -317,3 +317,35 @@ export function registerDealIssueLinkRoutes(app: OpenAPIHono<AppContext>) {
     return c.json({ ok: true }, 200);
   });
 }
+
+const issueDealsRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/issues/{issueId}/deals",
+  tags: ["deals"],
+  middleware: [rls("read")],
+  request: {
+    params: z.object({
+      organizationId: z.string(),
+      issueId: z.string(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Deals linked to this issue",
+      content: {
+        "application/json": {
+          schema: z.object({ deals: z.array(dealSchema) }),
+        },
+      },
+    },
+  },
+});
+
+export function registerIssueDealRoutes(app: OpenAPIHono<AppContext>) {
+  app.openapi(issueDealsRoute, async (c) => {
+    const { organizationId, issueId } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const deals = await stub.listDealsForIssue(issueId);
+    return c.json({ deals: [...deals] }, 200);
+  });
+}

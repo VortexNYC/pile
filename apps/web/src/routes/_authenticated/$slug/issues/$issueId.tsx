@@ -209,6 +209,18 @@ function IssueDetail() {
       ).issues,
   });
 
+  const deals = useQuery({
+    queryKey: wsKey(organizationId, "issues", issueId, "deals"),
+    queryFn: async () =>
+      (
+        await unwrap(
+          api.GET("/workspaces/{organizationId}/issues/{issueId}/deals", {
+            params: { path: { organizationId, issueId } },
+          })
+        )
+      ).deals,
+  });
+
   const tickets = useQuery({
     queryKey: wsKey(organizationId, "tickets", "issue", issueId),
     queryFn: async () =>
@@ -813,6 +825,21 @@ function IssueDetail() {
                     <Badge key={w.id} variant="neutral">
                       {w.linearUserId}
                     </Badge>
+                  ))}
+                </div>
+              </RailSection>
+            ) : null}
+            {(deals.data?.length ?? 0) > 0 ? (
+              <RailSection title="Deals">
+                <div className="flex flex-col gap-1.5">
+                  {deals.data!.map((deal) => (
+                    <RailLink
+                      key={deal.id}
+                      to="/$slug/deals/$dealId"
+                      params={{ slug: workspace.slug, dealId: deal.id }}
+                    >
+                      {deal.name}
+                    </RailLink>
                   ))}
                 </div>
               </RailSection>

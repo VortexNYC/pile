@@ -36,7 +36,11 @@ import { registerCommentRoutes } from "./comments.js";
 import { registerCommsRoutes } from "./comms.js";
 import { registerCsvExportRoutes } from "./csv-export.js";
 import { registerCustomerRoutes } from "./customers.js";
-import { registerDealIssueLinkRoutes, registerDealRoutes } from "./deals.js";
+import {
+  registerDealIssueLinkRoutes,
+  registerDealRoutes,
+  registerIssueDealRoutes,
+} from "./deals.js";
 import { registerDocsSiteRoutes } from "./docs-site.js";
 import { registerDocumentRoutes } from "./documents.js";
 import { registerEmailInboxRoutes } from "./email-inboxes.js";
@@ -243,6 +247,7 @@ registerCommsRoutes(app);
 registerCustomerRoutes(app);
 registerDealRoutes(app);
 registerDealIssueLinkRoutes(app);
+registerIssueDealRoutes(app);
 registerFieldRoutes(app);
 registerLeadRoutes(app);
 registerSupportContactRoutes(app);

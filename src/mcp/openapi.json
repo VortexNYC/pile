@@ -31480,6 +31480,132 @@
         "summary": "Delete deal issue"
       }
     },
+    "/workspaces/{organizationId}/issues/{issueId}/deals": {
+      "get": {
+        "tags": [
+          "deals"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "issueId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deals linked to this issue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deals": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "customerId": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "stage": {
+                            "type": "string",
+                            "enum": [
+                              "lead",
+                              "qualified",
+                              "proposal",
+                              "negotiation",
+                              "won",
+                              "lost"
+                            ]
+                          },
+                          "amountCents": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "currency": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "expectedCloseAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "description": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "closedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "archivedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "contactIds": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "customerId",
+                          "name",
+                          "stage",
+                          "amountCents",
+                          "currency",
+                          "expectedCloseAt",
+                          "description",
+                          "closedAt",
+                          "archivedAt",
+                          "contactIds",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "deals"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List issue deals"
+      }
+    },
     "/workspaces/{organizationId}/fields": {
       "get": {
         "tags": [

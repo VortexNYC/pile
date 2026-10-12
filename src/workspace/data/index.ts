@@ -2996,7 +2996,7 @@ export function listDealIssueIds(db: WorkspaceDb, dealId: string) {
 
 export function listDealsForIssue(db: WorkspaceDb, issueId: string) {
   return db
-    .select()
+    .select({ deal: workspaceDeals })
     .from(workspaceDeals)
     .innerJoin(
       workspaceDealIssueLinks,
@@ -3004,7 +3004,11 @@ export function listDealsForIssue(db: WorkspaceDb, issueId: string) {
     )
     .where(eq(workspaceDealIssueLinks.issueId, issueId))
     .all()
-    .map((r) => r.deals);
+    .map((r) => ({
+      ...r.deal,
+      stage: r.deal.stage as DealStage,
+      contactIds: listDealContactIds(db, r.deal.id),
+    }));
 }
 
 // ---- custom fields ----

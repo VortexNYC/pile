@@ -3810,6 +3810,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdIssuesIssueIdDeals",
+    "description": "List issue deals (GET /workspaces/{organizationId}/issues/{issueId}/deals) Path params (top-level, required): organizationId, issueId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/issues/{issueId}/deals",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "issueId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "issueId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdIssuesIssueIdDocuments",
     "description": "List issue documents (GET /workspaces/{organizationId}/issues/{issueId}/documents) Path params (top-level, required): organizationId, issueId.",
     "method": "GET",
