@@ -23,7 +23,7 @@ import { registerAgentContextRoutes } from "./agent-context.js";
 import { registerAgentEnvironmentRoutes } from "./agent-environment.js";
 import { registerAgentProviderRoutes } from "./agent-providers.js";
 import { registerAgentSessionRoutes } from "./agent-sessions.js";
-import { registerAppRoute, registerAppSubdomain } from "./app.js";
+import { registerAppRoute, registerAppSubdomain, serveConsole } from "./app.js";
 import { registerApprovalRoutes } from "./approvals.js";
 import { registerAttachmentRoutes } from "./attachments.js";
 import { registerAuditRoutes } from "./audit.js";
@@ -402,8 +402,12 @@ app.all("/api/auth/*", async (c) => {
 });
 
 app.get("/", (c) => {
-  if (new URL(c.req.url).hostname === "staging.pile.nyc") {
+  const host = new URL(c.req.url).hostname;
+  if (host === "staging.pile.nyc") {
     return c.redirect("/app");
+  }
+  if (host === "app.pile.nyc") {
+    return serveConsole(c);
   }
   const html = `<!doctype html>
 <html lang="en">
