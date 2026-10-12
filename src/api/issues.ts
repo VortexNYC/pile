@@ -50,7 +50,7 @@ import {
 import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
-import { isAdminIdentity } from "../platform/permissions.js";
+import { canAccess, isAdminIdentity } from "../platform/permissions.js";
 import { rls } from "../platform/rls.js";
 import {
   ISSUE_PRIORITIES,
@@ -1343,6 +1343,17 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         viewer: await issueViewer(db, identity),
       }
     );
+    // Grant-scoped members (no workspace:read) can only see granted
+    // issues — give the creator an explicit row so his own work stays
+    // visible to him.
+    if (created.issue && !canAccess(identity.permissions, "read")) {
+      await stub.setIssuePermission(
+        created.issue.id,
+        identity.id,
+        "user",
+        identity.id
+      );
+    }
     const possibleDuplicates = created.possibleDuplicates.map(
       ({ issue: match, score }) => ({
         id: match.id,

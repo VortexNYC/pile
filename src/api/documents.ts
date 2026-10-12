@@ -877,6 +877,11 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
       issueId,
       createdById: identity.id,
     });
+    // Default-deny members (no workspace:read) keep sight of what they
+    // created via an explicit grant row.
+    if (!canAccess(identity.permissions, "read")) {
+      await stub.setDocumentPermission(doc.id, identity.id, "user", "edit");
+    }
     return c.json(toResponse(doc), 201);
   });
 
