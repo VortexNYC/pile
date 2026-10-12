@@ -7,6 +7,7 @@ import type { WorkspaceDO } from "../durable-object.js";
 import { workspaceSchema } from "../schema-map.js";
 import { workspaceIssues } from "../schema.js";
 import {
+  hiddenIssueCondition,
   type AgentSessionInput,
   createAgentSession,
   createDocument,
@@ -616,39 +617,82 @@ describe("grantedOnly issue visibility", () => {
       };
       const open = mk("open issue");
       const restricted = mk("restricted issue");
-      setIssuePermission(
-        db,
-        org,
-        restricted.id,
-        "someone-else",
-        "user"
-      );
+      setIssuePermission(db, org, restricted.id, "someone-else", "user");
       const mine = mk("my issue");
       setIssuePermission(db, org, mine.id, "contractor-1", "user");
 
       // grantedOnly: only `mine` is visible — open issues are hidden too.
-      const hidden = new Set(
-        hiddenIssueIds(db, "contractor-1", [], true)
-      );
+      const hidden = new Set(hiddenIssueIds(db, "contractor-1", [], true));
       expect(hidden.has(open.id)).toBe(true);
       expect(hidden.has(restricted.id)).toBe(true);
       expect(hidden.has(mine.id)).toBe(false);
 
       // non-grantedOnly (normal member): only the restricted one is hidden.
-      const memberHidden = new Set(
-        hiddenIssueIds(db, "member-1", [])
-      );
+      const memberHidden = new Set(hiddenIssueIds(db, "member-1", []));
       expect(memberHidden.has(restricted.id)).toBe(true);
       expect(memberHidden.has(open.id)).toBe(false);
 
       // direct access — unrestricted issue stays open for members but
       // not for default-deny actors.
       expect(hasIssueAccess(db, open.id, "member-1")).toBe(true);
-      expect(hasIssueAccess(db, open.id, "contractor-1", [], true)).toBe(
+      expect(hasIssueAccess(db, open.id, "contractor-1", [], true)).toBe(false);
+      expect(hasIssueAccess(db, mine.id, "contractor-1", [], true)).toBe(true);
+    });
+  });
+});
+
+describe("hiddenIssueCondition", () => {
+  it("grantedOnly keeps only grant-matched issues", async () => {
+    await withDb(async (db) => {
+      const org = `hc-${crypto.randomUUID()}`;
+      const mk = (title: string) => {
+        const id = crypto.randomUUID();
+        db.insert(workspaceIssues)
+          .values({
+            id,
+            organizationId: org,
+            teamId: "team-1",
+            title,
+            status: "triage",
+            priority: "medium",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          })
+          .run();
+        return { id };
+      };
+      const open = mk("open");
+      const mine = mk("mine");
+      setIssuePermission(db, org, mine.id, "u-9", "user");
+
+      const cond = hiddenIssueCondition(
+        db,
+        workspaceIssues.id,
+        "u-9",
+        [],
+        true
+      );
+      const visible = await db
+        .select({ id: workspaceIssues.id })
+        .from(workspaceIssues)
+        .where(cond)
+        .all();
+      expect(visible.map((r) => r.id)).toEqual([mine.id]);
+
+      const cond2 = hiddenIssueCondition(
+        db,
+        workspaceIssues.id,
+        "u-9",
+        [],
         false
       );
-      expect(hasIssueAccess(db, mine.id, "contractor-1", [], true)).toBe(
-        true
+      const visible2 = await db
+        .select({ id: workspaceIssues.id })
+        .from(workspaceIssues)
+        .where(cond2)
+        .all();
+      expect(new Set(visible2.map((r) => r.id))).toEqual(
+        new Set([open.id, mine.id])
       );
     });
   });

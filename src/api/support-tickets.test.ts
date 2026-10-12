@@ -1247,4 +1247,43 @@ describe("support-tickets API", () => {
     // No customer PII leaks onto the public board.
     expect(JSON.stringify(board)).not.toContain("board-owner@example.com");
   });
+  it("accepts a note with an @mention without error", async () => {
+    const customerRes = await fetch(
+      `/workspaces/${organizationId}/support/customers`,
+      {
+        method: "POST",
+        body: JSON.stringify({ name: "Mention Co", email: "m@example.com" }),
+      },
+      token
+    );
+    const customer = (await customerRes.json()) as {
+      customer: { id: string };
+    };
+    const ticketRes = await fetch(
+      `/workspaces/${organizationId}/support/tickets`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          customerId: customer.customer.id,
+          title: "mention target",
+          sourceChannel: "api",
+        }),
+      },
+      token
+    );
+    const ticket = (await ticketRes.json()) as {
+      ticket: { id: string };
+    };
+    const noteRes = await fetch(
+      `/workspaces/${organizationId}/support/tickets/${ticket.ticket.id}/notes`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          body: "FYI @test-user please look",
+        }),
+      },
+      token
+    );
+    expect(noteRes.status).toBe(201);
+  });
 });

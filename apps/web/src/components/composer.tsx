@@ -2,6 +2,8 @@ import { Button } from "@cloudflare/kumo/components/button";
 import { InputArea } from "@cloudflare/kumo/components/input";
 import { useMemo, useState } from "react";
 
+import { filterMentionTargets, mentionQuery } from "@/lib/mentions";
+
 export type MentionTarget = {
   id: string;
   name: string;
@@ -11,10 +13,7 @@ export type MentionTarget = {
 // A "@handle" being typed at the end of the text — the picker matches
 // against name (spaces stripped) and the email local part, the same
 // handles the API's resolveMentions uses.
-function mentionQuery(text: string): string | null {
-  const m = /@([a-zA-Z0-9._-]{0,})$/.exec(text);
-  return m && m[1] !== undefined ? m[1] : null;
-}
+
 
 export type ComposerMode = {
   id: string;
@@ -50,20 +49,10 @@ export function Composer({
   const [text, setText] = useState("");
   const [mode, setMode] = useState(modes?.[0]?.id);
   const q = mentionQuery(text);
-  const suggestions = useMemo(() => {
-    if (q === null || !members?.length) return [];
-    const needle = q.toLowerCase();
-    return members
-      .filter((m) => {
-        const handles = [
-          m.name.toLowerCase().replace(/\s+/g, ""),
-          m.name.toLowerCase().replace(/\s+/g, "-"),
-          (m.email.split("@")[0] ?? "").toLowerCase(),
-        ];
-        return needle === "" || handles.some((h) => h.startsWith(needle));
-      })
-      .slice(0, 6);
-  }, [q, members]);
+  const suggestions = useMemo(
+    () => (q === null || !members?.length ? [] : filterMentionTargets(members, q)),
+    [q, members]
+  );
 
   const insertMention = (member: MentionTarget) => {
     const handle = member.name.toLowerCase().replace(/\s+/g, "-");
