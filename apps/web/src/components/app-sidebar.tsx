@@ -4,6 +4,7 @@ import { Text } from "@cloudflare/kumo/components/text";
 import {
   BellRinging,
   CaretUpDown,
+  TrendUp,
   GearSix,
   MagnifyingGlass,
   Plus,
@@ -198,6 +199,14 @@ export function AppSidebar({
                 }
               >
                 New customer
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                icon={<TrendUp />}
+                onClick={() =>
+                  window.dispatchEvent(new CustomEvent("pile:create-deal"))
+                }
+              >
+                New deal
               </DropdownMenu.Item>
             </DropdownMenu.Content>
           </DropdownMenu>

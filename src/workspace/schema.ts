@@ -1267,3 +1267,40 @@ export const workspaceAgentEnvironmentFiles = sqliteTable(
     ),
   ]
 );
+
+// Deals: the CRM pipeline — deals belong to customers and link to
+// contacts (support customers), with stage + amount + expected close.
+export const workspaceDeals = sqliteTable(
+  "deals" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    customerId: text("customer_id" as string).notNull(),
+    name: text("name" as string).notNull(),
+    stage: text("stage" as string).notNull(),
+    amountCents: integer("amount_cents" as string),
+    currency: text("currency" as string),
+    expectedCloseAt: text("expected_close_at" as string),
+    closedAt: text("closed_at" as string),
+    archivedAt: text("archived_at" as string),
+    createdAt: text("created_at" as string).notNull(),
+    updatedAt: text("updated_at" as string).notNull(),
+  },
+  (table) => [
+    index("deals_organization_idx" as string).on(table.organizationId),
+    index("deals_customer_idx" as string).on(table.customerId),
+  ]
+);
+
+export const workspaceDealContacts = sqliteTable(
+  "deal_contacts" as string,
+  {
+    dealId: text("deal_id" as string).notNull(),
+    contactId: text("contact_id" as string).notNull(),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.dealId, table.contactId] }),
+    index("deal_contacts_contact_idx" as string).on(table.contactId),
+  ]
+);

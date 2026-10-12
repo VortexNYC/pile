@@ -84,6 +84,20 @@ function CustomerEditor({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [url, setUrl] = useState(customer.url ?? "");
   const [bookingUrl, setBookingUrl] = useState(customer.bookingUrl ?? "");
+  const deals = useQuery({
+    queryKey: wsKey(workspace.id, "deals", { customerId: customer.id }),
+    queryFn: async () =>
+      (
+        await unwrap(
+          api.GET("/workspaces/{organizationId}/deals", {
+            params: {
+              path: { organizationId: workspace.id },
+              query: { customerId: customer.id },
+            },
+          })
+        )
+      ).deals,
+  });
   const listKey = wsKey(workspace.id, "customers");
   const path = { organizationId: workspace.id, id: customer.id };
 
@@ -257,6 +271,39 @@ function CustomerEditor({
                 )}
               </div>
             </RailSection>
+            {(deals.data?.length ?? 0) > 0 ? (
+              <RailSection title="Deals">
+                <div className="flex flex-col gap-1.5 text-sm">
+                  {deals.data!.map((deal) => (
+                    <div key={deal.id} className="flex items-center gap-2">
+                      <Badge
+                        variant={
+                          deal.stage === "won"
+                            ? "green"
+                            : deal.stage === "lost"
+                              ? "neutral"
+                              : "blue"
+                        }
+                      >
+                        {deal.stage}
+                      </Badge>
+                      <span className="min-w-0 flex-1 truncate text-kumo-default">
+                        {deal.name}
+                      </span>
+                      {deal.amountCents !== null ? (
+                        <span className="text-xs text-kumo-subtle">
+                          {new Intl.NumberFormat("en", {
+                            style: "currency",
+                            currency: deal.currency ?? "USD",
+                            maximumFractionDigits: 0,
+                          }).format(deal.amountCents / 100)}
+                        </span>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </RailSection>
+            ) : null}
           </>
         }
       />

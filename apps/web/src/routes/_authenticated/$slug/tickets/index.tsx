@@ -16,6 +16,7 @@ import { useState } from "react";
 
 import { CapturesGrid } from "@/components/captures-grid";
 import { CustomersList } from "@/components/customers-list";
+import { DealsList } from "@/components/deals-list";
 import { EntityHover } from "@/components/entity-hover";
 import { PeekHeader, usePeek } from "@/components/entity-peek";
 import { FieldMenu } from "@/components/field-menu";
@@ -263,6 +264,10 @@ function TicketsList() {
       </>
 
       <div className="mt-8 flex flex-col gap-2 border-t border-kumo-line pt-4">
+        <h2 className="text-sm font-medium text-kumo-subtle px-1">Deals</h2>
+        <DealsList />
+      </div>
+      <div className="flex flex-col gap-2">
         <h2 className="text-sm font-medium text-kumo-subtle px-1">Customers</h2>
         <CustomersList />
       </div>

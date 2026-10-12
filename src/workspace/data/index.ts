@@ -43,6 +43,8 @@ import {
   workspaceCustomerIntakeItems,
   workspaceCustomerNeeds,
   workspaceCustomers,
+  workspaceDealContacts,
+  workspaceDeals,
   workspaceCustomerStatuses,
   workspaceCustomerTiers,
   workspaceIssueApprovals,
@@ -2755,6 +2757,200 @@ export function deleteCustomer(
       .returning()
       .all().length > 0
   );
+}
+
+// ---- deals ----
+// The CRM pipeline: deals belong to a customer (company), carry a stage,
+// amount + currency + expected close, and link to contact people.
+
+export const DEAL_STAGES = [
+  "lead",
+  "qualified",
+  "proposal",
+  "negotiation",
+  "won",
+  "lost",
+] as const;
+export type DealStage = (typeof DEAL_STAGES)[number];
+
+export interface DealInput {
+  organizationId: string;
+  customerId: string;
+  name: string;
+  stage: DealStage;
+  amountCents?: number | null;
+  currency?: string | null;
+  expectedCloseAt?: string | null;
+  contactIds?: string[];
+}
+
+export function createDeal(db: WorkspaceDb, input: DealInput) {
+  const now = new Date().toISOString();
+  const deal = db
+    .insert(workspaceDeals)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId: input.organizationId,
+      customerId: input.customerId,
+      name: input.name,
+      stage: input.stage,
+      amountCents: input.amountCents ?? null,
+      currency: input.currency ?? null,
+      expectedCloseAt: input.expectedCloseAt ?? null,
+      closedAt: input.stage === "won" || input.stage === "lost" ? now : null,
+      archivedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning()
+    .get();
+  if (input.contactIds?.length) {
+    setDealContacts(db, deal.id, input.contactIds);
+  }
+  return {
+    ...deal,
+    stage: deal.stage as DealStage,
+    contactIds: listDealContactIds(db, deal.id),
+  };
+}
+
+export function listDeals(
+  db: WorkspaceDb,
+  organizationId: string,
+  opts: { includeArchived?: boolean } = {}
+) {
+  const rows = db
+    .select()
+    .from(workspaceDeals)
+    .where(eq(workspaceDeals.organizationId, organizationId))
+    .all();
+  const filtered = opts.includeArchived
+    ? rows
+    : rows.filter((d) => d.archivedAt === null);
+  return filtered.map((deal) => ({
+    ...deal,
+    stage: deal.stage as DealStage,
+    contactIds: listDealContactIds(db, deal.id),
+  }));
+}
+
+export function getDeal(db: WorkspaceDb, organizationId: string, id: string) {
+  const deal = db
+    .select()
+    .from(workspaceDeals)
+    .where(
+      and(
+        eq(workspaceDeals.id, id),
+        eq(workspaceDeals.organizationId, organizationId)
+      )
+    )
+    .get();
+  if (!deal) return undefined;
+  return {
+    ...deal,
+    stage: deal.stage as DealStage,
+    contactIds: listDealContactIds(db, id),
+  };
+}
+
+export function updateDeal(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string,
+  patch: Partial<
+    Omit<DealInput, "organizationId" | "customerId" | "contactIds">
+  > & {
+    customerId?: string;
+    contactIds?: string[];
+    archivedAt?: string | null;
+  }
+) {
+  const updates: Record<string, unknown> = {
+    updatedAt: new Date().toISOString(),
+  };
+  for (const key of [
+    "name",
+    "customerId",
+    "stage",
+    "amountCents",
+    "currency",
+    "expectedCloseAt",
+    "archivedAt",
+  ] as const) {
+    if (patch[key] !== undefined) updates[key] = patch[key];
+  }
+  if (patch.stage === "won" || patch.stage === "lost") {
+    updates.closedAt = new Date().toISOString();
+  } else if (patch.stage !== undefined) {
+    updates.closedAt = null;
+  }
+  const deal = db
+    .update(workspaceDeals)
+    .set(updates)
+    .where(
+      and(
+        eq(workspaceDeals.id, id),
+        eq(workspaceDeals.organizationId, organizationId)
+      )
+    )
+    .returning()
+    .get();
+  if (patch.contactIds !== undefined) {
+    setDealContacts(db, id, patch.contactIds);
+  }
+  if (!deal) return undefined;
+  return {
+    ...deal,
+    stage: deal.stage as DealStage,
+    contactIds: listDealContactIds(db, id),
+  };
+}
+
+export function deleteDeal(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  db.delete(workspaceDealContacts)
+    .where(eq(workspaceDealContacts.dealId, id))
+    .run();
+  return (
+    db
+      .delete(workspaceDeals)
+      .where(
+        and(
+          eq(workspaceDeals.id, id),
+          eq(workspaceDeals.organizationId, organizationId)
+        )
+      )
+      .returning()
+      .all().length > 0
+  );
+}
+
+function listDealContactIds(db: WorkspaceDb, dealId: string) {
+  return db
+    .select({ contactId: workspaceDealContacts.contactId })
+    .from(workspaceDealContacts)
+    .where(eq(workspaceDealContacts.dealId, dealId))
+    .all()
+    .map((r) => r.contactId);
+}
+
+export function setDealContacts(
+  db: WorkspaceDb,
+  dealId: string,
+  contactIds: string[]
+) {
+  const now = new Date().toISOString();
+  db.delete(workspaceDealContacts)
+    .where(eq(workspaceDealContacts.dealId, dealId))
+    .run();
+  for (const contactId of contactIds) {
+    db.insert(workspaceDealContacts)
+      .values({ dealId, contactId, createdAt: now })
+      .run();
+  }
 }
 
 // ---- entity attachments ----

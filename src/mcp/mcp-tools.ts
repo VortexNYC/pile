@@ -372,6 +372,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdDealsDealId",
+    "description": "Delete deal (DELETE /workspaces/{organizationId}/deals/{dealId}) Path params (top-level, required): organizationId, dealId.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/deals/{dealId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "dealId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "dealId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdDocumentsId",
     "description": "Delete document (DELETE /workspaces/{organizationId}/documents/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
@@ -2573,6 +2594,50 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdDeals",
+    "description": "List deals (GET /workspaces/{organizationId}/deals) Path params (top-level, required): organizationId. Query params (top-level, optional): customerId, includeArchived.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/deals",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "customerId": {
+          "type": "string"
+        },
+        "includeArchived": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdDealsDealId",
+    "description": "Get deal (GET /workspaces/{organizationId}/deals/{dealId}) Path params (top-level, required): organizationId, dealId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/deals/{dealId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "dealId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "dealId",
         "organizationId"
       ]
     }
@@ -6298,6 +6363,75 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "patchWorkspacesOrganizationIdDealsDealId",
+    "description": "Update deal (PATCH /workspaces/{organizationId}/deals/{dealId}) Path params (top-level, required): organizationId, dealId. Request body goes in the \"body\" object; fields: customerId, name, stage, amountCents, currency, expectedCloseAt, archivedAt, contactIds.",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/deals/{dealId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "dealId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "customerId": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "stage": {
+              "type": "string",
+              "enum": [
+                "lead",
+                "qualified",
+                "proposal",
+                "negotiation",
+                "won",
+                "lost"
+              ]
+            },
+            "amountCents": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 0
+            },
+            "currency": {
+              "type": "string",
+              "nullable": true,
+              "minLength": 3,
+              "maxLength": 3
+            },
+            "expectedCloseAt": {
+              "type": "string",
+              "nullable": true
+            },
+            "archivedAt": {
+              "type": "string",
+              "nullable": true
+            },
+            "contactIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "dealId",
         "organizationId"
       ]
     }
@@ -10590,6 +10724,72 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "properties": {
         "organizationId": {
           "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdDeals",
+    "description": "Create deal (POST /workspaces/{organizationId}/deals) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: customerId*, name*, stage, amountCents, currency, expectedCloseAt, contactIds (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/deals",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "customerId": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "stage": {
+              "type": "string",
+              "enum": [
+                "lead",
+                "qualified",
+                "proposal",
+                "negotiation",
+                "won",
+                "lost"
+              ],
+              "default": "lead"
+            },
+            "amountCents": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 0
+            },
+            "currency": {
+              "type": "string",
+              "nullable": true,
+              "minLength": 3,
+              "maxLength": 3
+            },
+            "expectedCloseAt": {
+              "type": "string",
+              "nullable": true
+            },
+            "contactIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "customerId",
+            "name"
+          ]
         }
       },
       "required": [

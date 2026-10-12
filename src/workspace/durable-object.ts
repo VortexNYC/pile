@@ -1410,6 +1410,43 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return this.db.select().from(workspaceAttachments).all();
   }
 
+  // ---- deals ----
+  createDeal(input: Omit<data.DealInput, "organizationId">) {
+    const deal = data.createDeal(this.db, {
+      ...input,
+      organizationId: this.organizationId,
+    });
+    this.audit("deal.created", "deal", deal.id);
+    return deal;
+  }
+
+  listDeals(opts?: { includeArchived?: boolean }) {
+    return data.listDeals(this.db, this.organizationId, opts);
+  }
+
+  getDeal(id: string) {
+    return data.getDeal(this.db, this.organizationId, id);
+  }
+
+  updateDeal(
+    id: string,
+    patch: Partial<Omit<data.DealInput, "organizationId" | "contactIds">> & {
+      contactIds?: string[];
+      archivedAt?: string | null;
+    },
+    actorId?: string
+  ) {
+    const deal = data.updateDeal(this.db, this.organizationId, id, patch);
+    if (deal) this.audit("deal.updated", "deal", id, actorId);
+    return deal;
+  }
+
+  deleteDeal(id: string, actorId?: string) {
+    const ok = data.deleteDeal(this.db, this.organizationId, id);
+    if (ok) this.audit("deal.deleted", "deal", id, actorId);
+    return ok;
+  }
+
   // ---- entity attachments (R2-backed, scoped to entityType + entityId) ----
   listEntityAttachments(entityType: string, entityId: string) {
     return data.listEntityAttachments(
