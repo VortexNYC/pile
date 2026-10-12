@@ -40,6 +40,90 @@ const TYPE_ICONS: Record<string, React.ReactNode> = {
   document: <FileText size={14} />,
 };
 
+type EntityOption = { id: string; label: string };
+
+/** Title-search per entity type — hits the existing list endpoints. */
+function useEntitySearch(toType: string, q: string) {
+  const workspace = useWorkspace();
+  return useQuery({
+    queryKey: wsKey(workspace.id, "entity-search", toType, q),
+    queryFn: async (): Promise<EntityOption[]> => {
+      const org = workspace.id;
+      if (toType === "issue") {
+        const data = await unwrap(
+          api.GET("/workspaces/{organizationId}/issues", {
+            params: {
+              path: { organizationId: org },
+              query: { search: q || undefined, limit: 8 },
+            },
+          })
+        );
+        return data.issues.map((i) => ({
+          id: i.id,
+          label: `${i.identifier ?? ""} ${i.title}`.trim(),
+        }));
+      }
+      if (toType === "ticket") {
+        const data = await unwrap(
+          api.GET("/workspaces/{organizationId}/support/tickets", {
+            params: { path: { organizationId: org }, query: { q, limit: 8 } },
+          })
+        );
+        return data.tickets.map((t) => ({ id: t.id, label: t.title }));
+      }
+      if (toType === "deal") {
+        const data = await unwrap(
+          api.GET("/workspaces/{organizationId}/deals", {
+            params: { path: { organizationId: org } },
+          })
+        );
+        return data.deals
+          .filter((d) => !q || d.name.toLowerCase().includes(q.toLowerCase()))
+          .slice(0, 8)
+          .map((d) => ({ id: d.id, label: d.name }));
+      }
+      if (toType === "customer") {
+        const data = await unwrap(
+          api.GET("/workspaces/{organizationId}/customers", {
+            params: { path: { organizationId: org } },
+          })
+        );
+        return data.customers
+          .filter((x) => !q || x.name.toLowerCase().includes(q.toLowerCase()))
+          .slice(0, 8)
+          .map((x) => ({ id: x.id, label: x.name }));
+      }
+      if (toType === "contact") {
+        const data = await unwrap(
+          api.GET("/workspaces/{organizationId}/support/customers", {
+            params: { path: { organizationId: org }, query: { q, limit: 8 } },
+          })
+        );
+        return data.customers.map((x) => ({
+          id: x.id,
+          label: x.fullName ?? x.email,
+        }));
+      }
+      if (toType === "document") {
+        const data = await unwrap(
+          api.GET("/workspaces/{organizationId}/documents", {
+            params: { path: { organizationId: org }, query: {} },
+          })
+        );
+        return data.documents
+          .filter((d) => !q || d.title.toLowerCase().includes(q.toLowerCase()))
+          .slice(0, 8)
+          .map((d) => ({
+            id: d.id,
+            label: d.title || "Untitled",
+          }));
+      }
+      return [];
+    },
+    staleTime: 15_000,
+  });
+}
+
 export function EntityLinksRail({
   entityType,
   entityId,
@@ -52,6 +136,9 @@ export function EntityLinksRail({
   const [adding, setAdding] = useState(false);
   const [toType, setToType] = useState("issue");
   const [toId, setToId] = useState("");
+  const [toLabel, setToLabel] = useState("");
+  const [q, setQ] = useState("");
+  const options = useEntitySearch(toType, q);
   const key = wsKey(workspace.id, "links", entityType, entityId);
 
   const links = useQuery({
@@ -159,12 +246,33 @@ export function EntityLinksRail({
               <Select.Option value="session">Session</Select.Option>
             </Select>
             <input
-              aria-label="Entity ID"
-              placeholder="Entity id…"
-              value={toId}
-              onChange={(e) => setToId(e.target.value)}
+              aria-label="Search"
+              placeholder="Search by title…"
+              value={toLabel || q}
+              onChange={(e) => {
+                setToId("");
+                setToLabel("");
+                setQ(e.target.value);
+              }}
               className="border-kumo-line bg-kumo-canvas h-8 rounded-md border px-2 text-sm text-kumo-default outline-none focus:border-kumo-brand"
             />
+            {!toId && (options.data ?? []).length > 0 ? (
+              <div className="flex max-h-40 flex-col overflow-y-auto rounded-md border border-kumo-line">
+                {(options.data ?? []).map((o) => (
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() => {
+                      setToId(o.id);
+                      setToLabel(o.label);
+                    }}
+                    className="px-2 py-1.5 text-left text-sm text-kumo-default hover:bg-kumo-elevated"
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <div className="flex gap-2">
               <Button
                 variant="primary"
