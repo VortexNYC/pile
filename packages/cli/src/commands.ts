@@ -924,6 +924,22 @@ export const COMMANDS: Record<string, CommandDef> = {
     ],
     body: [],
   },
+  "issues share list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/issues/{id}/share",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "issues share create": {
     method: "POST",
     path: "/workspaces/{organizationId}/issues/{id}/share",
@@ -5508,6 +5524,22 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "documents share list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/documents/{id}/share",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "documents share create": {
     method: "POST",
     path: "/workspaces/{organizationId}/documents/{id}/share",
@@ -5918,6 +5950,105 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "support customers events list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/customers/{customerId}/events",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "customerId",
+        flag: "customer-id",
+      },
+    ],
+    query: [
+      {
+        name: "limit",
+        flag: "limit",
+      },
+    ],
+    body: [],
+  },
+  "support customers events create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/customers/{customerId}/events",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "customerId",
+        flag: "customer-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "type",
+        flag: "type",
+      },
+      {
+        name: "summary",
+        flag: "summary",
+      },
+      {
+        name: "externalId",
+        flag: "external-id",
+      },
+      {
+        name: "payload",
+        flag: "payload",
+      },
+      {
+        name: "occurredAt",
+        flag: "occurred-at",
+      },
+    ],
+  },
+  "comms integrations update": {
+    method: "PUT",
+    path: "/workspaces/{organizationId}/comms/integrations/{source}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "source",
+        flag: "source",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "webhookSecret",
+        flag: "webhook-secret",
+      },
+      {
+        name: "config",
+        flag: "config",
+      },
+    ],
+  },
+  "webhooks comms create": {
+    method: "POST",
+    path: "/webhooks/comms/{organizationId}/{source}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "source",
+        flag: "source",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "customers list": {
     method: "GET",
     path: "/workspaces/{organizationId}/customers",
@@ -5948,6 +6079,14 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "url",
         flag: "url",
+      },
+      {
+        name: "bookingUrl",
+        flag: "booking-url",
+      },
+      {
+        name: "notes",
+        flag: "notes",
       },
       {
         name: "logoUrl",
@@ -6009,6 +6148,14 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "url",
         flag: "url",
+      },
+      {
+        name: "bookingUrl",
+        flag: "booking-url",
+      },
+      {
+        name: "notes",
+        flag: "notes",
       },
       {
         name: "logoUrl",
@@ -6476,6 +6623,459 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "deals list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/deals",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "customerId",
+        flag: "customer-id",
+      },
+      {
+        name: "contactId",
+        flag: "contact-id",
+      },
+      {
+        name: "includeArchived",
+        flag: "include-archived",
+      },
+    ],
+    body: [],
+  },
+  "deals create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/deals",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "customerId",
+        flag: "customer-id",
+      },
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "stage",
+        flag: "stage",
+      },
+      {
+        name: "amountCents",
+        flag: "amount-cents",
+      },
+      {
+        name: "currency",
+        flag: "currency",
+      },
+      {
+        name: "expectedCloseAt",
+        flag: "expected-close-at",
+      },
+      {
+        name: "description",
+        flag: "description",
+      },
+      {
+        name: "contactIds",
+        flag: "contact-ids",
+      },
+    ],
+  },
+  "deals get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/deals/{dealId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "dealId",
+        flag: "deal-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "deals update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/deals/{dealId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "dealId",
+        flag: "deal-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "customerId",
+        flag: "customer-id",
+      },
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "stage",
+        flag: "stage",
+      },
+      {
+        name: "amountCents",
+        flag: "amount-cents",
+      },
+      {
+        name: "currency",
+        flag: "currency",
+      },
+      {
+        name: "expectedCloseAt",
+        flag: "expected-close-at",
+      },
+      {
+        name: "archivedAt",
+        flag: "archived-at",
+      },
+      {
+        name: "contactIds",
+        flag: "contact-ids",
+      },
+      {
+        name: "issueIds",
+        flag: "issue-ids",
+      },
+    ],
+  },
+  "deals delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/deals/{dealId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "dealId",
+        flag: "deal-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "deals issues list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/deals/{dealId}/issues",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "dealId",
+        flag: "deal-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "deals issues update": {
+    method: "PUT",
+    path: "/workspaces/{organizationId}/deals/{dealId}/issues",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "dealId",
+        flag: "deal-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+    ],
+  },
+  "deals issues delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/deals/{dealId}/issues/{issueId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "dealId",
+        flag: "deal-id",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "issues deals list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/issues/{issueId}/deals",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "fields list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/fields",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "entityType",
+        flag: "entity-type",
+      },
+    ],
+    body: [],
+  },
+  "fields create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/fields",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "entityType",
+        flag: "entity-type",
+      },
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "type",
+        flag: "type",
+      },
+      {
+        name: "options",
+        flag: "options",
+      },
+      {
+        name: "position",
+        flag: "position",
+      },
+    ],
+  },
+  "fields delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/fields/{fieldId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "fieldId",
+        flag: "field-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "fields values get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/fields/values/{entityId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "entityId",
+        flag: "entity-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "fields value update": {
+    method: "PUT",
+    path: "/workspaces/{organizationId}/fields/{fieldId}/value",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "fieldId",
+        flag: "field-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "entityId",
+        flag: "entity-id",
+      },
+      {
+        name: "value",
+        flag: "value",
+      },
+    ],
+  },
+  "public leads create": {
+    method: "POST",
+    path: "/public/leads/{organizationId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "email",
+        flag: "email",
+      },
+      {
+        name: "fullName",
+        flag: "full-name",
+      },
+      {
+        name: "company",
+        flag: "company",
+      },
+      {
+        name: "dealName",
+        flag: "deal-name",
+      },
+      {
+        name: "amountCents",
+        flag: "amount-cents",
+      },
+      {
+        name: "currency",
+        flag: "currency",
+      },
+      {
+        name: "message",
+        flag: "message",
+      },
+      {
+        name: "source",
+        flag: "source",
+      },
+    ],
+  },
+  "entities links list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/entities/{entityType}/{entityId}/links",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "entityType",
+        flag: "entity-type",
+      },
+      {
+        name: "entityId",
+        flag: "entity-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "entities links create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/entities/{entityType}/{entityId}/links",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "entityType",
+        flag: "entity-type",
+      },
+      {
+        name: "entityId",
+        flag: "entity-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "toType",
+        flag: "to-type",
+      },
+      {
+        name: "toId",
+        flag: "to-id",
+      },
+      {
+        name: "kind",
+        flag: "kind",
+      },
+      {
+        name: "label",
+        flag: "label",
+      },
+    ],
+  },
+  "links delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/links/{linkId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "linkId",
+        flag: "link-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "support unsubscribe create": {
     method: "POST",
     path: "/support/unsubscribe",
@@ -6738,6 +7338,22 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "external-source",
       },
     ],
+  },
+  "support companies contacts list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/companies/{companyId}/contacts",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "companyId",
+        flag: "company-id",
+      },
+    ],
+    query: [],
+    body: [],
   },
   "support companies get": {
     method: "GET",
@@ -9531,6 +10147,10 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "hiddenSurfaces",
         flag: "hidden-surfaces",
+      },
+      {
+        name: "favorites",
+        flag: "favorites",
       },
     ],
   },
