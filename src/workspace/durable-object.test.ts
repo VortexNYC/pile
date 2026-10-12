@@ -2105,6 +2105,15 @@ describe("grantedOnly issue visibility", () => {
       ).toBe(true);
       // Without the flag, open issues stay open.
       expect(await instance.issueVisibleTo(open.id, "c-1", [])).toBe(true);
+
+      // The SQL-side exclusion (hiddenIssueConditionFor) drives
+      // listIssues — under grantedOnly it returns only `mine`. This is
+      // the path that previously overflowed SQLite's variable cap by
+      // enumerating every issue id into notInArray.
+      const listed = await instance.listIssues({ viewer });
+      const listedIds = new Set(listed.map((i) => i.id));
+      expect(listedIds.has(mine.id)).toBe(true);
+      expect(listedIds.has(open.id)).toBe(false);
     });
   });
 });

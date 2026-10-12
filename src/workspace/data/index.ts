@@ -12,6 +12,7 @@ import {
   isNotNull,
   isNull,
   lte,
+  notInArray,
   ne,
   or,
   sql,
@@ -5168,18 +5169,13 @@ export function hiddenIssueCondition(
         )
       : undefined
   );
-  const grantedToViewer = db
-    .select({ id: workspaceIssuePermissions.issueId })
-    .from(workspaceIssuePermissions)
-    .where(grantForViewer);
   if (grantedOnly) {
-    return sql`${col} NOT IN ${grantedToViewer}`;
+    // Visible = granted to the viewer — keep the grant-matching ids.
+    return sql`${col} IN (SELECT ${workspaceIssuePermissions.issueId} FROM ${workspaceIssuePermissions} WHERE ${grantForViewer})`;
   }
-  const restricted = db
-    .select({ id: workspaceIssuePermissions.issueId })
-    .from(workspaceIssuePermissions)
-    .groupBy(workspaceIssuePermissions.issueId);
-  return sql`${col} IN ${restricted} AND ${col} NOT IN ${grantedToViewer}`;
+  // Visible = unrestricted OR granted — hide ids that carry a grant
+  // row at all but none for this viewer.
+  return sql`(${col} NOT IN (SELECT ${workspaceIssuePermissions.issueId} FROM ${workspaceIssuePermissions}) OR ${col} IN (SELECT ${workspaceIssuePermissions.issueId} FROM ${workspaceIssuePermissions} WHERE ${grantForViewer}))`;
 }
 
 export function hiddenIssueIds(
