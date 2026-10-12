@@ -31704,6 +31704,90 @@
         "summary": "Update field value"
       }
     },
+    "/public/leads/{organizationId}": {
+      "post": {
+        "tags": [
+          "leads"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "fullName": {
+                    "type": "string"
+                  },
+                  "company": {
+                    "type": "string"
+                  },
+                  "dealName": {
+                    "type": "string"
+                  },
+                  "amountCents": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "currency": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 3
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string",
+                    "default": "form"
+                  }
+                },
+                "required": [
+                  "email"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Lead accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "customerId": {
+                      "type": "string"
+                    },
+                    "dealId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "customerId"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create public lead"
+      }
+    },
     "/support/unsubscribe": {
       "post": {
         "tags": [

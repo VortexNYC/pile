@@ -8290,6 +8290,60 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postPublicLeadsOrganizationId",
+    "description": "Create public lead (POST /public/leads/{organizationId}) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: email*, fullName, company, dealName, amountCents, currency, message, source (* = required).",
+    "method": "POST",
+    "path": "/public/leads/{organizationId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "email": {
+              "type": "string",
+              "format": "email"
+            },
+            "fullName": {
+              "type": "string"
+            },
+            "company": {
+              "type": "string"
+            },
+            "dealName": {
+              "type": "string"
+            },
+            "amountCents": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "currency": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 3
+            },
+            "message": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string",
+              "default": "form"
+            }
+          },
+          "required": [
+            "email"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postSupportCaptureFinalize",
     "description": "Create support capture finalize (POST /support/capture/finalize)",
     "method": "POST",

@@ -16485,6 +16485,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/public/leads/{organizationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create public lead */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** Format: email */
+                        email: string;
+                        fullName?: string;
+                        company?: string;
+                        dealName?: string;
+                        amountCents?: number;
+                        currency?: string;
+                        message?: string;
+                        /** @default form */
+                        source?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Lead accepted */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            customerId: string;
+                            dealId?: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/support/unsubscribe": {
         parameters: {
             query?: never;

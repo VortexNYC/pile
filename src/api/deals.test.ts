@@ -248,3 +248,81 @@ describe("custom fields", () => {
     ).toHaveLength(0);
   });
 });
+
+describe("lead intake", () => {
+  it("creates a contact + deal from a public form post", async () => {
+    const db = createD1(env.D1);
+    const now = new Date();
+    await db
+      .insert(userTable)
+      .values({
+        id: "user-leads",
+        name: "Leads User",
+        email: "leads-user@example.com",
+        emailVerified: false,
+        image: null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({ target: [userTable.email] });
+    const setupHeaders = await createAdminHeaders(env, "user-leads");
+    const workspace = await createWorkspace(db, env, setupHeaders, {
+      name: "Leads test",
+      slug: `leads-${crypto.randomUUID()}`,
+      key: `L${crypto.randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+      ownerId: "user-leads",
+    });
+    const org = workspace!.id;
+
+    const res = await app.fetch(
+      new Request(`https://example.com/public/leads/${org}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: "lead@acme.io",
+          fullName: "Lead Person",
+          company: "Acme",
+          dealName: "Acme inbound",
+          amountCents: 50_000_00,
+          currency: "USD",
+          message: "Saw the demo, want to talk.",
+        }),
+      }),
+      env
+    );
+    expect(res.status).toBe(201);
+    const { customerId, dealId } = (await res.json()) as {
+      customerId: string;
+      dealId: string;
+    };
+    expect(customerId).toBeTruthy();
+    expect(dealId).toBeTruthy();
+
+    // the deal exists and lands at lead stage
+    const dealsRes = await app.fetch(
+      new Request(`https://example.com/workspaces/${org}/deals`, {
+        headers: {
+          Authorization: `Bearer ${await (async () => {
+            const auth = await createAuth(env);
+            const r = await auth.api.createApiKey({
+              body: {
+                userId: "user-leads",
+                name: "t",
+                rateLimitEnabled: false,
+                metadata: { organizationId: org, permissions: "admin" },
+              },
+            });
+            return z.object({ key: z.string() }).parse(r).key;
+          })()}`,
+        },
+      }),
+      env
+    );
+    const { deals } = (await dealsRes.json()) as {
+      deals: { id: string; stage: string; name: string }[];
+    };
+    const created = deals.find((d) => d.id === dealId);
+    expect(created?.stage).toBe("lead");
+    expect(created?.name).toBe("Acme inbound");
+  });
+});
