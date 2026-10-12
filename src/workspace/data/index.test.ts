@@ -586,14 +586,7 @@ describe("listDocumentsVisibleTo", () => {
       expect(titles).not.toContain("restricted");
 
       // granted actor sees it
-      setDocumentPermission(
-        db,
-        org,
-        restricted.id,
-        "member-1",
-        "user",
-        "view"
-      );
+      setDocumentPermission(db, org, restricted.id, "member-1", "user", "view");
       const granted = listDocumentsVisibleTo(db, org, "member-1", []);
       expect(granted.map((d) => d.title)).toContain("restricted");
     });

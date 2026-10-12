@@ -23,7 +23,7 @@ import { registerAgentContextRoutes } from "./agent-context.js";
 import { registerAgentEnvironmentRoutes } from "./agent-environment.js";
 import { registerAgentProviderRoutes } from "./agent-providers.js";
 import { registerAgentSessionRoutes } from "./agent-sessions.js";
-import { registerAppRoute } from "./app.js";
+import { registerAppRoute, registerAppSubdomain } from "./app.js";
 import { registerApprovalRoutes } from "./approvals.js";
 import { registerAttachmentRoutes } from "./attachments.js";
 import { registerAuditRoutes } from "./audit.js";
@@ -506,5 +506,8 @@ app.doc("/openapi.json", {
 app.all("/mcp", async (c) => {
   return handleMcpRequest(c.req.raw, c.env, app);
 });
+
+// app.pile.nyc serves the member console at root — catch-all last.
+registerAppSubdomain(app);
 
 export default app;

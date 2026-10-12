@@ -7,7 +7,7 @@ import type { AppContext } from "./middleware.js";
 
 const UNSAFE_METHODS = new Set(["POST", "PATCH", "PUT", "DELETE"]);
 
-function allowedOrigins(env: AppEnv): Set<string> {
+export function allowedOrigins(env: AppEnv): Set<string> {
   const set = new Set<string>();
   if (env.BETTER_AUTH_URL) {
     try {
