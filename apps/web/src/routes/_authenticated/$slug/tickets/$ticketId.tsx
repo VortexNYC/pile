@@ -182,7 +182,8 @@ function TicketDetail() {
         | "intercom"
         | "zendesk"
         | "plain"
-        | "linear";
+        | "linear"
+        | "sms";
     }) => {
       if (input.mode === "note") {
         await unwrap(

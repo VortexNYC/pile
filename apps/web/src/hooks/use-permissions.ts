@@ -33,9 +33,7 @@ export function usePermissions(organizationId: string) {
   const perms = useQuery({
     queryKey: wsKey(organizationId, "my-permissions"),
     queryFn: async () => {
-      const res = await fetch(
-        `/workspaces/${organizationId}/me/permissions`
-      );
+      const res = await fetch(`/workspaces/${organizationId}/me/permissions`);
       if (!res.ok) return { permissions: [] as string[] };
       return (await res.json()) as { permissions: string[] };
     },

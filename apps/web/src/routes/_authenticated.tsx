@@ -1,11 +1,10 @@
-import { useEffect } from "react";
-
 import {
   createFileRoute,
   Navigate,
   Outlet,
   useLocation,
 } from "@tanstack/react-router";
+import { useEffect } from "react";
 
 import { LoadingState } from "@/components/states";
 import { betterAuthClient } from "@/lib/better-auth";

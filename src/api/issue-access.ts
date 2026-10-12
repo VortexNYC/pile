@@ -7,9 +7,8 @@ import { canAccessTeam } from "../global/teams.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { AppContext } from "../platform/middleware.js";
-import type { Issue, IssueViewer } from "../types/workspace.js";
-
 import { canAccess, isAdminIdentity } from "../platform/permissions.js";
+import type { Issue, IssueViewer } from "../types/workspace.js";
 
 type WorkspaceDb = ReturnType<typeof createD1>;
 

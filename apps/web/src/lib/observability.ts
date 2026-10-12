@@ -20,7 +20,11 @@ export function initPosthog() {
   initialized = true;
 }
 
-export function identifyPosthog(user: { id: string; email?: string | null; name?: string | null }) {
+export function identifyPosthog(user: {
+  id: string;
+  email?: string | null;
+  name?: string | null;
+}) {
   if (!initialized) return;
   posthog.identify(user.id, {
     ...(user.email ? { email: user.email } : {}),

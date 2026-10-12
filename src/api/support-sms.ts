@@ -1,8 +1,10 @@
 import { createRoute } from "@hono/zod-openapi";
 import { OpenAPIHono } from "@hono/zod-openapi";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { createD1 } from "../global/db.js";
+import { organization as organizationTable } from "../global/schema.js";
 import {
   handleInboundSms,
   deliverSmsReply,
@@ -72,6 +74,58 @@ export function registerSupportSmsRoutes(app: OpenAPIHono<AppContext>) {
         await work;
       }
       return c.body(null, 202);
+    }
+  );
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/workspaces/{organizationId}/support/sms/status",
+      tags: ["support-sms"],
+      middleware: [rls("ticket:view")],
+      request: {
+        params: z.object({ organizationId: z.string() }),
+      },
+      responses: {
+        200: {
+          description: "SMS intake status",
+          content: {
+            "application/json": {
+              schema: z.object({
+                enabled: z.boolean(),
+                number: z.string().nullable(),
+              }),
+            },
+          },
+        },
+      },
+    }),
+    async (c) => {
+      const { organizationId } = c.req.valid("param");
+      const env = c.env as unknown as {
+        SENDBLUE_FROM_NUMBER?: string;
+        SMS_ORGANIZATION_ID?: string;
+      };
+      const db = createD1(c.env.D1);
+      const [org] = await db
+        .select({ metadata: organizationTable.metadata })
+        .from(organizationTable)
+        .where(eq(organizationTable.id, organizationId))
+        .limit(1);
+      let number: string | null = null;
+      try {
+        const meta = org?.metadata ? JSON.parse(org.metadata) : {};
+        if (typeof meta.smsNumber === "string") number = meta.smsNumber;
+      } catch {
+        number = null;
+      }
+      number = number ?? env.SENDBLUE_FROM_NUMBER ?? null;
+      const enabled = Boolean(
+        number &&
+        (env.SMS_ORGANIZATION_ID === organizationId ||
+          (org?.metadata ?? "").includes("smsNumber"))
+      );
+      return c.json({ enabled, number });
     }
   );
 
