@@ -357,6 +357,12 @@ app.get("/api/auth/organization/accept-invitation", (c) => {
   if (!inviteId) {
     return c.text("Missing invitation id", 400);
   }
+  // No session → send them through the console sign-in, then back here.
+  const cookie = c.req.header("Cookie") ?? "";
+  if (!cookie.includes("better-auth.session_token")) {
+    const back = `/api/auth/organization/accept-invitation?id=${encodeURIComponent(inviteId)}`;
+    return c.redirect(`/app/sign-in?redirect=${encodeURIComponent(back)}`);
+  }
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -384,6 +390,11 @@ app.get("/api/auth/organization/accept-invitation", (c) => {
         body: JSON.stringify({ invitationId: inviteId }),
       });
       const text = await res.text();
+      if (res.status === 401 || res.status === 403) {
+        window.location.href = "/app/sign-in?redirect=" +
+          encodeURIComponent("/api/auth/organization/accept-invitation?id=" + inviteId);
+        return;
+      }
       document.getElementById("status").textContent = res.ok
         ? "Invitation accepted. You can close this window."
         : "Error: " + text;
