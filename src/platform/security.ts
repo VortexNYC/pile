@@ -64,6 +64,7 @@ function isPublicPath(pathname: string): boolean {
     pathname === "/billing/webhook" ||
     pathname.startsWith("/support/incoming/") ||
     pathname.startsWith("/support/capture/") ||
+    pathname === "/support/sms/inbound" ||
     pathname.startsWith("/support/widget/") ||
     pathname.startsWith("/webhooks/agent/") ||
     pathname.startsWith("/webhooks/comms/") ||

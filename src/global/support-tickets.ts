@@ -60,7 +60,8 @@ export type SupportTicketSource =
   | "manual"
   | "capture"
   | "jam"
-  | "linear";
+  | "linear"
+  | "sms";
 export type SupportTicketChannel =
   | "email"
   | "slack"
@@ -72,12 +73,14 @@ export type SupportTicketChannel =
   | "intercom"
   | "zendesk"
   | "plain"
-  | "linear";
+  | "linear"
+  | "sms";
 export type SupportTicketMessageDirection = "inbound" | "outbound";
 export type SupportTicketMessageChannel =
   | "email"
   | "slack"
   | "msteams"
+  | "sms"
   | "discord"
   | "chat"
   | "capture"

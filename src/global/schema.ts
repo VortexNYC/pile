@@ -2142,6 +2142,7 @@ export const supportTickets = sqliteTable(
         "jam",
         "linear",
         "manual",
+        "sms",
       ] as const,
     })
       .notNull()
@@ -2170,6 +2171,7 @@ export const supportTickets = sqliteTable(
         "zendesk",
         "plain",
         "linear",
+        "sms",
       ] as const,
     }).notNull(),
     issueId: text("issue_id" as string),
@@ -2382,6 +2384,7 @@ export const supportTicketMessages = sqliteTable(
         "zendesk",
         "plain",
         "linear",
+        "sms",
       ] as const,
     }).notNull(),
     customerId: text("customer_id" as string).references(
@@ -2585,6 +2588,7 @@ export const supportChannels = sqliteTable(
         "zendesk",
         "plain",
         "linear",
+        "sms",
       ] as const,
     }).notNull(),
     name: text("name").notNull(),
@@ -3311,5 +3315,44 @@ export const commsIntegrations = sqliteTable(
       table.organizationId,
       table.source
     ),
+  ]
+);
+
+// One row per Sendblue phone-thread — binds an sms customer thread to its
+// support ticket, the Devin session answering it, and the workspace-
+// scoped API key the agent uses to read/write workspace data.
+export const supportSmsThreads = sqliteTable(
+  "support_sms_threads" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    phone: text("phone" as string).notNull(),
+    customerId: text("customer_id" as string).references(
+      () => supportCustomers.id,
+      { onDelete: "set null" }
+    ),
+    ticketId: text("ticket_id" as string).references(() => supportTickets.id, {
+      onDelete: "set null",
+    }),
+    devinSessionId: text("devin_session_id" as string),
+    // Plaintext on purpose — the agent's scoped API key must be handed to
+    // Devin at dispatch; revoking the apikey row kills it.
+    apiKey: text("api_key" as string),
+    apiKeyId: text("api_key_id" as string),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("support_sms_threads_org_phone_idx" as string).on(
+      table.organizationId,
+      table.phone
+    ),
+    index("support_sms_threads_ticket_idx" as string).on(table.ticketId),
   ]
 );
