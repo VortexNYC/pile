@@ -2569,10 +2569,6 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.revokeDocumentPermission(this.db, documentId, actorId);
   }
 
-  listDocumentPermissions(documentId: string) {
-    return data.listDocumentPermissions(this.db, documentId);
-  }
-
   documentAccessLevel(
     documentId: string,
     actorId: string,
@@ -2585,6 +2581,22 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       actorId,
       teamIds,
       defaultDenied
+    );
+  }
+
+  listDocumentPermissions(documentId: string) {
+    return data.listDocumentPermissions(this.db, documentId);
+  }
+
+  listDocumentsVisibleTo(
+    actorId: string,
+    args: data.ListDocumentsArgs = {}
+  ) {
+    return data.listDocumentsVisibleTo(
+      this.db,
+      this.organizationId,
+      actorId,
+      args
     );
   }
 

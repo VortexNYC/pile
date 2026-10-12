@@ -666,6 +666,20 @@ const permissionSchema = z.object({
   level: z.enum(["view", "edit"]),
 });
 
+const listPermissionsRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/documents/{id}/permissions",
+  tags: ["documents"],
+  middleware: [rls("document:view")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    200: { description: "Document permission grants" },
+    404: { description: "Document not found" },
+  },
+});
+
 const setPermissionRoute = createRoute({
   method: "put",
   path: "/workspaces/{organizationId}/documents/{id}/permissions",
@@ -820,9 +834,11 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
       isTemplate: query.isTemplate,
       includeTrashed: query.includeTrashed,
     };
-    const rows = !canAccess(identity.permissions, "read")
-      ? await stub.listDocumentsForActor(identity.id, args)
-      : await stub.listDocuments(args);
+    const rows = isAdminIdentity(identity)
+      ? await stub.listDocuments(args)
+      : !canAccess(identity.permissions, "read")
+        ? await stub.listDocumentsForActor(identity.id, args)
+        : await stub.listDocumentsVisibleTo(identity.id, args);
     return c.json({ documents: rows.map(toResponse) });
   });
 
@@ -1084,6 +1100,16 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
       await Promise.all(ids.map((id) => stub.getDocument(id)))
     ).filter((d) => d !== undefined);
     return c.json({ documents: docs.map(toResponse) });
+  });
+
+  app.openapi(listPermissionsRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    await assertDocAccess(c, stub, id, "view");
+    const doc = await stub.getDocument(id);
+    if (!doc) return notFound();
+    const grants = await stub.listDocumentPermissions(id);
+    return c.json({ permissions: grants });
   });
 
   app.openapi(setPermissionRoute, async (c) => {
