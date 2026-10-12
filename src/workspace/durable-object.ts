@@ -1441,6 +1441,24 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return deal;
   }
 
+  linkDealIssue(dealId: string, issueId: string) {
+    data.linkDealIssue(this.db, dealId, issueId);
+    return { ok: true };
+  }
+
+  unlinkDealIssue(dealId: string, issueId: string) {
+    data.unlinkDealIssue(this.db, dealId, issueId);
+    return { ok: true };
+  }
+
+  listDealIssueIds(dealId: string) {
+    return data.listDealIssueIds(this.db, dealId);
+  }
+
+  listDealsForIssue(issueId: string) {
+    return data.listDealsForIssue(this.db, issueId);
+  }
+
   deleteDeal(id: string, actorId?: string) {
     const ok = data.deleteDeal(this.db, this.organizationId, id);
     if (ok) this.audit("deal.deleted", "deal", id, actorId);

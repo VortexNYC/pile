@@ -25,6 +25,7 @@ const dealSchema = z.object({
   amountCents: z.number().nullable(),
   currency: z.string().nullable(),
   expectedCloseAt: z.string().nullable(),
+  description: z.string().nullable(),
   closedAt: z.string().nullable(),
   archivedAt: z.string().nullable(),
   contactIds: z.array(z.string()),
@@ -39,6 +40,7 @@ const createDealSchema = z.object({
   amountCents: z.number().int().nonnegative().nullable().optional(),
   currency: z.string().length(3).nullable().optional(),
   expectedCloseAt: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
   contactIds: z.array(z.string()).optional(),
 });
 
@@ -51,6 +53,7 @@ const updateDealSchema = z.object({
   expectedCloseAt: z.string().nullable().optional(),
   archivedAt: z.string().nullable().optional(),
   contactIds: z.array(z.string()).optional(),
+  issueIds: z.array(z.string()).optional(),
 });
 
 function notFound(): never {
@@ -227,5 +230,90 @@ export function registerDealRoutes(app: OpenAPIHono<AppContext>) {
     const ok = await stub.deleteDeal(dealId);
     if (!ok) notFound();
     return c.json({ ok }, 200);
+  });
+}
+
+// deal ↔ issue links — the work-graph bridge
+
+const linkSchema = z.object({ issueId: z.string() });
+const dealIssueParam = z.object({
+  organizationId: z.string(),
+  dealId: z.string(),
+  issueId: z.string().optional(),
+});
+
+const listDealIssuesRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/deals/{dealId}/issues",
+  tags: ["deals"],
+  middleware: [rls("read")],
+  request: { params: dealIdParam },
+  responses: {
+    200: {
+      description: "Issue ids linked to this deal",
+      content: {
+        "application/json": {
+          schema: z.object({ issueIds: z.array(z.string()) }),
+        },
+      },
+    },
+  },
+});
+
+const linkIssueRoute = createRoute({
+  method: "put",
+  path: "/workspaces/{organizationId}/deals/{dealId}/issues",
+  tags: ["deals"],
+  middleware: [rls("write")],
+  request: {
+    params: dealIdParam,
+    body: { content: { "application/json": { schema: linkSchema } } },
+  },
+  responses: {
+    200: {
+      description: "Linked",
+      content: {
+        "application/json": { schema: z.object({ ok: z.boolean() }) },
+      },
+    },
+  },
+});
+
+const unlinkIssueRoute = createRoute({
+  method: "delete",
+  path: "/workspaces/{organizationId}/deals/{dealId}/issues/{issueId}",
+  tags: ["deals"],
+  middleware: [rls("write")],
+  request: { params: dealIssueParam },
+  responses: {
+    200: {
+      description: "Unlinked",
+      content: {
+        "application/json": { schema: z.object({ ok: z.boolean() }) },
+      },
+    },
+  },
+});
+
+export function registerDealIssueLinkRoutes(app: OpenAPIHono<AppContext>) {
+  app.openapi(listDealIssuesRoute, async (c) => {
+    const { organizationId, dealId } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    return c.json({ issueIds: await stub.listDealIssueIds(dealId) }, 200);
+  });
+
+  app.openapi(linkIssueRoute, async (c) => {
+    const { organizationId, dealId } = c.req.valid("param");
+    const { issueId } = c.req.valid("json");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.linkDealIssue(dealId, issueId);
+    return c.json({ ok: true }, 200);
+  });
+
+  app.openapi(unlinkIssueRoute, async (c) => {
+    const { organizationId, dealId, issueId } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.unlinkDealIssue(dealId, issueId!);
+    return c.json({ ok: true }, 200);
   });
 }

@@ -1,6 +1,15 @@
 import { Badge } from "@cloudflare/kumo/components/badge";
 import { Button } from "@cloudflare/kumo/components/button";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
+import {
+  DndContext,
+  PointerSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
 import { Plus, TrendUp } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -67,6 +76,9 @@ export function DealsList() {
         )
       ).deals,
   });
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
+  );
   const patch = useMutation({
     mutationFn: (args: { id: string; body: Record<string, unknown> }) =>
       unwrap(
@@ -80,6 +92,14 @@ export function DealsList() {
         queryKey: wsKey(workspace.id, "deals"),
       }),
   });
+
+  const onDragEnd = (event: DragEndEvent) => {
+    const id = String(event.active.id);
+    const next = event.over ? String(event.over.id) : null;
+    if (next && (STAGES as readonly string[]).includes(next)) {
+      patch.mutate({ id, body: { stage: next } });
+    }
+  };
 
   if (deals.isPending) return <LoadingState label="Loading deals" />;
   if (deals.isError) {
@@ -113,104 +133,111 @@ export function DealsList() {
           New deal
         </Button>
       </div>
-      <div className="flex flex-col gap-5">
-        {STAGES.map((stage) => {
-          const rows = open.filter((d) => d.stage === stage);
-          if (rows.length === 0) return null;
-          return (
-            <div key={stage} className="flex flex-col">
-              <div className="flex items-center gap-2 px-1 pb-1.5">
-                <span className="text-xs font-medium text-kumo-subtle uppercase">
-                  {STAGE_LABELS[stage]}
-                </span>
-                <span className="text-xs text-kumo-subtle">{rows.length}</span>
-                {rows.some((d) => d.amountCents !== null) ? (
-                  <span className="text-xs text-kumo-subtle">
-                    ·{" "}
-                    {money(
-                      rows.reduce((s, d) => s + (d.amountCents ?? 0), 0),
-                      rows[0]?.currency ?? "USD"
-                    )}
-                  </span>
-                ) : null}
-              </div>
-              <LayerCard className="p-0">
-                <div className="divide-y divide-kumo-line">
-                  {rows.map((deal) => (
-                    <EntityHover
-                      key={deal.id}
-                      meta={
-                        <Badge
-                          variant={
-                            deal.stage === "won"
-                              ? "green"
-                              : deal.stage === "lost"
-                                ? "neutral"
-                                : "blue"
-                          }
-                        >
-                          {STAGE_LABELS[deal.stage]}
-                        </Badge>
-                      }
-                      title={deal.name}
-                      description={customerName(deal.customerId)}
-                    >
-                      <Link
-                        to="/$slug/customers/$customerId"
-                        params={{
-                          slug: workspace.slug,
-                          customerId: deal.customerId,
-                        }}
-                        onClick={peek.peekOnClick(deal)}
-                        className="flex h-11 items-center gap-3 px-4 hover:bg-kumo-tint"
-                      >
-                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-kumo-default">
-                          {deal.name}
-                        </span>
-                        <span className="text-xs text-kumo-subtle truncate max-w-28">
-                          {customerName(deal.customerId)}
-                        </span>
-                        <span className="w-20 text-right text-sm text-kumo-default">
-                          {money(deal.amountCents, deal.currency)}
-                        </span>
-                        <FieldMenu
-                          title="Stage"
-                          options={[...STAGES]}
-                          labels={STAGE_LABELS}
-                          onSelect={(v) =>
-                            patch.mutate({ id: deal.id, body: { stage: v } })
-                          }
-                        >
-                          <button
-                            type="button"
-                            onClick={(e) => e.preventDefault()}
-                            className="cursor-pointer"
+      <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+        <div className="flex flex-col gap-5">
+          {STAGES.map((stage) => {
+            const rows = open.filter((d) => d.stage === stage);
+            if (rows.length === 0) return null;
+            return (
+              <DroppableGroup key={stage} id={stage}>
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-2 px-1 pb-1.5">
+                    <span className="text-xs font-medium text-kumo-subtle uppercase">
+                      {STAGE_LABELS[stage]}
+                    </span>
+                    <span className="text-xs text-kumo-subtle">
+                      {rows.length}
+                    </span>
+                    {rows.some((d) => d.amountCents !== null) ? (
+                      <span className="text-xs text-kumo-subtle">
+                        ·{" "}
+                        {money(
+                          rows.reduce((s, d) => s + (d.amountCents ?? 0), 0),
+                          rows[0]?.currency ?? "USD"
+                        )}
+                      </span>
+                    ) : null}
+                  </div>
+                  <LayerCard className="p-0">
+                    <div className="divide-y divide-kumo-line">
+                      {rows.map((deal) => (
+                        <DraggableRow key={deal.id} id={deal.id}>
+                          <EntityHover
+                            meta={
+                              <Badge
+                                variant={
+                                  deal.stage === "won"
+                                    ? "green"
+                                    : deal.stage === "lost"
+                                      ? "neutral"
+                                      : "blue"
+                                }
+                              >
+                                {STAGE_LABELS[deal.stage]}
+                              </Badge>
+                            }
+                            title={deal.name}
+                            description={customerName(deal.customerId)}
                           >
-                            <Badge
-                              variant={
-                                deal.stage === "won"
-                                  ? "green"
-                                  : deal.stage === "lost"
-                                    ? "neutral"
-                                    : "blue"
-                              }
+                            <Link
+                              to="/$slug/deals/$dealId"
+                              params={{ slug: workspace.slug, dealId: deal.id }}
+                              onClick={peek.peekOnClick(deal)}
+                              className="flex h-11 items-center gap-3 px-4 hover:bg-kumo-tint"
                             >
-                              {STAGE_LABELS[deal.stage]}
-                            </Badge>
-                          </button>
-                        </FieldMenu>
-                        <span className="w-16 shrink-0 text-right text-xs text-kumo-subtle">
-                          {formatRelative(deal.updatedAt)}
-                        </span>
-                      </Link>
-                    </EntityHover>
-                  ))}
+                              <span className="min-w-0 flex-1 truncate text-sm font-medium text-kumo-default">
+                                {deal.name}
+                              </span>
+                              <span className="text-xs text-kumo-subtle truncate max-w-28">
+                                {customerName(deal.customerId)}
+                              </span>
+                              <span className="w-20 text-right text-sm text-kumo-default">
+                                {money(deal.amountCents, deal.currency)}
+                              </span>
+                              <FieldMenu
+                                title="Stage"
+                                options={[...STAGES]}
+                                labels={STAGE_LABELS}
+                                onSelect={(v) =>
+                                  patch.mutate({
+                                    id: deal.id,
+                                    body: { stage: v },
+                                  })
+                                }
+                              >
+                                <button
+                                  type="button"
+                                  onClick={(e) => e.preventDefault()}
+                                  className="cursor-pointer"
+                                >
+                                  <Badge
+                                    variant={
+                                      deal.stage === "won"
+                                        ? "green"
+                                        : deal.stage === "lost"
+                                          ? "neutral"
+                                          : "blue"
+                                    }
+                                  >
+                                    {STAGE_LABELS[deal.stage]}
+                                  </Badge>
+                                </button>
+                              </FieldMenu>
+                              <span className="w-16 shrink-0 text-right text-xs text-kumo-subtle">
+                                {formatRelative(deal.updatedAt)}
+                              </span>
+                            </Link>
+                          </EntityHover>
+                        </DraggableRow>
+                      ))}
+                    </div>
+                  </LayerCard>
                 </div>
-              </LayerCard>
-            </div>
-          );
-        })}
-      </div>
+              </DroppableGroup>
+            );
+          })}
+        </div>
+      </DndContext>
       <peek.Drawer>
         {peek.peeked ? (
           <>
@@ -229,10 +256,19 @@ export function DealsList() {
                 </Badge>
               }
               title={peek.peeked.name}
-              href={`/${workspace.slug}/customers/${peek.peeked.customerId}`}
+              href={`/${workspace.slug}/deals/${peek.peeked.id}`}
             />
             <div className="mt-4 flex flex-col gap-2 text-sm text-kumo-subtle">
-              <div>Customer: {customerName(peek.peeked.customerId)}</div>
+              <Link
+                to="/$slug/customers/$customerId"
+                params={{
+                  slug: workspace.slug,
+                  customerId: peek.peeked.customerId,
+                }}
+                className="text-kumo-link hover:underline"
+              >
+                {customerName(peek.peeked.customerId)}
+              </Link>
               {peek.peeked.amountCents !== null ? (
                 <div>
                   {money(peek.peeked.amountCents, peek.peeked.currency)}
@@ -246,5 +282,47 @@ export function DealsList() {
         ) : null}
       </peek.Drawer>
     </>
+  );
+}
+
+function DroppableGroup({
+  id,
+  children,
+}: {
+  id: string;
+  children: React.ReactNode;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      className={
+        isOver ? "rounded-lg bg-kumo-tint/60 ring-1 ring-kumo-brand" : undefined
+      }
+    >
+      {children}
+    </div>
+  );
+}
+
+function DraggableRow({
+  id,
+  children,
+}: {
+  id: string;
+  children: React.ReactNode;
+}) {
+  const { setNodeRef, listeners, attributes, isDragging } = useDraggable({
+    id,
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      className={isDragging ? "opacity-40" : undefined}
+    >
+      {children}
+    </div>
   );
 }

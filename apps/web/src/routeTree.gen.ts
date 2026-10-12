@@ -28,6 +28,7 @@ import { Route as AuthenticatedSlugChangelogIndexRouteImport } from './routes/_a
 import { Route as AuthenticatedSlugCustomersIndexRouteImport } from './routes/_authenticated/$slug/customers/index'
 import { Route as AuthenticatedSlugCustomersCustomerIdRouteImport } from './routes/_authenticated/$slug/customers/$customerId'
 import { Route as AuthenticatedSlugCyclesIndexRouteImport } from './routes/_authenticated/$slug/cycles/index'
+import { Route as AuthenticatedSlugDealsDealIdRouteImport } from './routes/_authenticated/$slug/deals/$dealId'
 import { Route as AuthenticatedSlugDocumentsIndexRouteImport } from './routes/_authenticated/$slug/documents/index'
 import { Route as AuthenticatedSlugDocumentsDocumentIdRouteImport } from './routes/_authenticated/$slug/documents/$documentId'
 import { Route as AuthenticatedSlugDocumentsNewRouteImport } from './routes/_authenticated/$slug/documents/new'
@@ -147,6 +148,12 @@ const AuthenticatedSlugCyclesIndexRoute =
   AuthenticatedSlugCyclesIndexRouteImport.update({
     id: '/cycles/',
     path: '/cycles/',
+    getParentRoute: () => AuthenticatedSlugRoute,
+  } as any)
+const AuthenticatedSlugDealsDealIdRoute =
+  AuthenticatedSlugDealsDealIdRouteImport.update({
+    id: '/deals/$dealId',
+    path: '/deals/$dealId',
     getParentRoute: () => AuthenticatedSlugRoute,
   } as any)
 const AuthenticatedSlugDocumentsIndexRoute =
@@ -294,6 +301,7 @@ export interface FileRoutesByFullPath {
   '/share/capture/$ticketId': typeof ShareCaptureTicketIdRoute
   '/$slug/': typeof AuthenticatedSlugIndexRoute
   '/$slug/customers/$customerId': typeof AuthenticatedSlugCustomersCustomerIdRoute
+  '/$slug/deals/$dealId': typeof AuthenticatedSlugDealsDealIdRoute
   '/$slug/documents/$documentId': typeof AuthenticatedSlugDocumentsDocumentIdRoute
   '/$slug/documents/new': typeof AuthenticatedSlugDocumentsNewRoute
   '/$slug/issues/$issueId': typeof AuthenticatedSlugIssuesIssueIdRoute
@@ -334,6 +342,7 @@ export interface FileRoutesByTo {
   '/share/capture/$ticketId': typeof ShareCaptureTicketIdRoute
   '/$slug': typeof AuthenticatedSlugIndexRoute
   '/$slug/customers/$customerId': typeof AuthenticatedSlugCustomersCustomerIdRoute
+  '/$slug/deals/$dealId': typeof AuthenticatedSlugDealsDealIdRoute
   '/$slug/documents/$documentId': typeof AuthenticatedSlugDocumentsDocumentIdRoute
   '/$slug/documents/new': typeof AuthenticatedSlugDocumentsNewRoute
   '/$slug/issues/$issueId': typeof AuthenticatedSlugIssuesIssueIdRoute
@@ -378,6 +387,7 @@ export interface FileRoutesById {
   '/share/capture/$ticketId': typeof ShareCaptureTicketIdRoute
   '/_authenticated/$slug/': typeof AuthenticatedSlugIndexRoute
   '/_authenticated/$slug/customers/$customerId': typeof AuthenticatedSlugCustomersCustomerIdRoute
+  '/_authenticated/$slug/deals/$dealId': typeof AuthenticatedSlugDealsDealIdRoute
   '/_authenticated/$slug/documents/$documentId': typeof AuthenticatedSlugDocumentsDocumentIdRoute
   '/_authenticated/$slug/documents/new': typeof AuthenticatedSlugDocumentsNewRoute
   '/_authenticated/$slug/issues/$issueId': typeof AuthenticatedSlugIssuesIssueIdRoute
@@ -421,6 +431,7 @@ export interface FileRouteTypes {
     | '/share/capture/$ticketId'
     | '/$slug/'
     | '/$slug/customers/$customerId'
+    | '/$slug/deals/$dealId'
     | '/$slug/documents/$documentId'
     | '/$slug/documents/new'
     | '/$slug/issues/$issueId'
@@ -461,6 +472,7 @@ export interface FileRouteTypes {
     | '/share/capture/$ticketId'
     | '/$slug'
     | '/$slug/customers/$customerId'
+    | '/$slug/deals/$dealId'
     | '/$slug/documents/$documentId'
     | '/$slug/documents/new'
     | '/$slug/issues/$issueId'
@@ -504,6 +516,7 @@ export interface FileRouteTypes {
     | '/share/capture/$ticketId'
     | '/_authenticated/$slug/'
     | '/_authenticated/$slug/customers/$customerId'
+    | '/_authenticated/$slug/deals/$dealId'
     | '/_authenticated/$slug/documents/$documentId'
     | '/_authenticated/$slug/documents/new'
     | '/_authenticated/$slug/issues/$issueId'
@@ -674,6 +687,13 @@ declare module '@tanstack/react-router' {
       path: '/cycles'
       fullPath: '/$slug/cycles/'
       preLoaderRoute: typeof AuthenticatedSlugCyclesIndexRouteImport
+      parentRoute: typeof AuthenticatedSlugRoute
+    }
+    '/_authenticated/$slug/deals/$dealId': {
+      id: '/_authenticated/$slug/deals/$dealId'
+      path: '/deals/$dealId'
+      fullPath: '/$slug/deals/$dealId'
+      preLoaderRoute: typeof AuthenticatedSlugDealsDealIdRouteImport
       parentRoute: typeof AuthenticatedSlugRoute
     }
     '/_authenticated/$slug/documents/': {
@@ -857,6 +877,7 @@ interface AuthenticatedSlugRouteChildren {
   AuthenticatedSlugInboxRoute: typeof AuthenticatedSlugInboxRoute
   AuthenticatedSlugIndexRoute: typeof AuthenticatedSlugIndexRoute
   AuthenticatedSlugCustomersCustomerIdRoute: typeof AuthenticatedSlugCustomersCustomerIdRoute
+  AuthenticatedSlugDealsDealIdRoute: typeof AuthenticatedSlugDealsDealIdRoute
   AuthenticatedSlugDocumentsDocumentIdRoute: typeof AuthenticatedSlugDocumentsDocumentIdRoute
   AuthenticatedSlugDocumentsNewRoute: typeof AuthenticatedSlugDocumentsNewRoute
   AuthenticatedSlugIssuesIssueIdRoute: typeof AuthenticatedSlugIssuesIssueIdRoute
@@ -888,6 +909,7 @@ const AuthenticatedSlugRouteChildren: AuthenticatedSlugRouteChildren = {
   AuthenticatedSlugIndexRoute: AuthenticatedSlugIndexRoute,
   AuthenticatedSlugCustomersCustomerIdRoute:
     AuthenticatedSlugCustomersCustomerIdRoute,
+  AuthenticatedSlugDealsDealIdRoute: AuthenticatedSlugDealsDealIdRoute,
   AuthenticatedSlugDocumentsDocumentIdRoute:
     AuthenticatedSlugDocumentsDocumentIdRoute,
   AuthenticatedSlugDocumentsNewRoute: AuthenticatedSlugDocumentsNewRoute,

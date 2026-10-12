@@ -30741,6 +30741,10 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "description": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "closedAt": {
                             "type": "string",
                             "nullable": true
@@ -30771,6 +30775,7 @@
                           "amountCents",
                           "currency",
                           "expectedCloseAt",
+                          "description",
                           "closedAt",
                           "archivedAt",
                           "contactIds",
@@ -30844,6 +30849,10 @@
                     "type": "string",
                     "nullable": true
                   },
+                  "description": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "contactIds": {
                     "type": "array",
                     "items": {
@@ -30905,6 +30914,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "description": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "closedAt": {
                           "type": "string",
                           "nullable": true
@@ -30935,6 +30948,7 @@
                         "amountCents",
                         "currency",
                         "expectedCloseAt",
+                        "description",
                         "closedAt",
                         "archivedAt",
                         "contactIds",
@@ -31023,6 +31037,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "description": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "closedAt": {
                           "type": "string",
                           "nullable": true
@@ -31053,6 +31071,7 @@
                         "amountCents",
                         "currency",
                         "expectedCloseAt",
+                        "description",
                         "closedAt",
                         "archivedAt",
                         "contactIds",
@@ -31141,6 +31160,12 @@
                     "items": {
                       "type": "string"
                     }
+                  },
+                  "issueIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -31193,6 +31218,10 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "description": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "closedAt": {
                           "type": "string",
                           "nullable": true
@@ -31223,6 +31252,7 @@
                         "amountCents",
                         "currency",
                         "expectedCloseAt",
+                        "description",
                         "closedAt",
                         "archivedAt",
                         "contactIds",
@@ -31284,6 +31314,170 @@
           }
         },
         "summary": "Delete deal"
+      }
+    },
+    "/workspaces/{organizationId}/deals/{dealId}/issues": {
+      "get": {
+        "tags": [
+          "deals"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "dealId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Issue ids linked to this deal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "issueIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "issueIds"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List deal issues"
+      },
+      "put": {
+        "tags": [
+          "deals"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "dealId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "issueId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "issueId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Linked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Update deal issues"
+      }
+    },
+    "/workspaces/{organizationId}/deals/{dealId}/issues/{issueId}": {
+      "delete": {
+        "tags": [
+          "deals"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "dealId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "issueId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unlinked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete deal issue"
       }
     },
     "/workspaces/{organizationId}/fields": {

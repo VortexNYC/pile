@@ -393,6 +393,31 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdDealsDealIdIssuesIssueId",
+    "description": "Delete deal issue (DELETE /workspaces/{organizationId}/deals/{dealId}/issues/{issueId}) Path params (top-level, required): organizationId, dealId, issueId.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/deals/{dealId}/issues/{issueId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "dealId": {
+          "type": "string"
+        },
+        "issueId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "dealId",
+        "issueId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdDocumentsId",
     "description": "Delete document (DELETE /workspaces/{organizationId}/documents/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
@@ -2647,6 +2672,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "Get deal (GET /workspaces/{organizationId}/deals/{dealId}) Path params (top-level, required): organizationId, dealId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/deals/{dealId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "dealId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "dealId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdDealsDealIdIssues",
+    "description": "List deal issues (GET /workspaces/{organizationId}/deals/{dealId}/issues) Path params (top-level, required): organizationId, dealId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/deals/{dealId}/issues",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -6431,7 +6477,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdDealsDealId",
-    "description": "Update deal (PATCH /workspaces/{organizationId}/deals/{dealId}) Path params (top-level, required): organizationId, dealId. Request body goes in the \"body\" object; fields: customerId, name, stage, amountCents, currency, expectedCloseAt, archivedAt, contactIds.",
+    "description": "Update deal (PATCH /workspaces/{organizationId}/deals/{dealId}) Path params (top-level, required): organizationId, dealId. Request body goes in the \"body\" object; fields: customerId, name, stage, amountCents, currency, expectedCloseAt, archivedAt, contactIds, issueIds.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/deals/{dealId}",
     "inputSchema": {
@@ -6484,6 +6530,12 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "nullable": true
             },
             "contactIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "issueIds": {
               "type": "array",
               "items": {
                 "type": "string"
@@ -10849,7 +10901,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdDeals",
-    "description": "Create deal (POST /workspaces/{organizationId}/deals) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: customerId*, name*, stage, amountCents, currency, expectedCloseAt, contactIds (* = required).",
+    "description": "Create deal (POST /workspaces/{organizationId}/deals) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: customerId*, name*, stage, amountCents, currency, expectedCloseAt, description, contactIds (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/deals",
     "inputSchema": {
@@ -10892,6 +10944,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "maxLength": 3
             },
             "expectedCloseAt": {
+              "type": "string",
+              "nullable": true
+            },
+            "description": {
               "type": "string",
               "nullable": true
             },
@@ -16510,6 +16566,38 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "organizationId",
         "source"
+      ]
+    }
+  },
+  {
+    "name": "putWorkspacesOrganizationIdDealsDealIdIssues",
+    "description": "Update deal issues (PUT /workspaces/{organizationId}/deals/{dealId}/issues) Path params (top-level, required): organizationId, dealId. Request body goes in the \"body\" object; fields: issueId* (* = required).",
+    "method": "PUT",
+    "path": "/workspaces/{organizationId}/deals/{dealId}/issues",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "dealId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "issueId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "issueId"
+          ]
+        }
+      },
+      "required": [
+        "dealId",
+        "organizationId"
       ]
     }
   },

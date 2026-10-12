@@ -16041,6 +16041,7 @@ export interface paths {
                                 amountCents: number | null;
                                 currency: string | null;
                                 expectedCloseAt: string | null;
+                                description: string | null;
                                 closedAt: string | null;
                                 archivedAt: string | null;
                                 contactIds: string[];
@@ -16076,6 +16077,7 @@ export interface paths {
                         amountCents?: number | null;
                         currency?: string | null;
                         expectedCloseAt?: string | null;
+                        description?: string | null;
                         contactIds?: string[];
                     };
                 };
@@ -16098,6 +16100,7 @@ export interface paths {
                                 amountCents: number | null;
                                 currency: string | null;
                                 expectedCloseAt: string | null;
+                                description: string | null;
                                 closedAt: string | null;
                                 archivedAt: string | null;
                                 contactIds: string[];
@@ -16152,6 +16155,7 @@ export interface paths {
                                 amountCents: number | null;
                                 currency: string | null;
                                 expectedCloseAt: string | null;
+                                description: string | null;
                                 closedAt: string | null;
                                 archivedAt: string | null;
                                 contactIds: string[];
@@ -16216,6 +16220,7 @@ export interface paths {
                         expectedCloseAt?: string | null;
                         archivedAt?: string | null;
                         contactIds?: string[];
+                        issueIds?: string[];
                     };
                 };
             };
@@ -16237,6 +16242,7 @@ export interface paths {
                                 amountCents: number | null;
                                 currency: string | null;
                                 expectedCloseAt: string | null;
+                                description: string | null;
                                 closedAt: string | null;
                                 archivedAt: string | null;
                                 contactIds: string[];
@@ -16248,6 +16254,120 @@ export interface paths {
                 };
             };
         };
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/deals/{dealId}/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List deal issues */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    dealId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Issue ids linked to this deal */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            issueIds: string[];
+                        };
+                    };
+                };
+            };
+        };
+        /** Update deal issues */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    dealId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        issueId: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Linked */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/deals/{dealId}/issues/{issueId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete deal issue */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    dealId: string;
+                    issueId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Unlinked */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/workspaces/{organizationId}/fields": {

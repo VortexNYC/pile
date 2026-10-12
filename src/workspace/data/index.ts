@@ -44,6 +44,7 @@ import {
   workspaceCustomerNeeds,
   workspaceCustomers,
   workspaceDealContacts,
+  workspaceDealIssueLinks,
   workspaceDeals,
   workspaceFieldDefinitions,
   workspaceFieldValues,
@@ -2783,6 +2784,7 @@ export interface DealInput {
   amountCents?: number | null;
   currency?: string | null;
   expectedCloseAt?: string | null;
+  description?: string | null;
   contactIds?: string[];
 }
 
@@ -2799,6 +2801,7 @@ export function createDeal(db: WorkspaceDb, input: DealInput) {
       amountCents: input.amountCents ?? null,
       currency: input.currency ?? null,
       expectedCloseAt: input.expectedCloseAt ?? null,
+      description: input.description ?? null,
       closedAt: input.stage === "won" || input.stage === "lost" ? now : null,
       archivedAt: null,
       createdAt: now,
@@ -2877,6 +2880,7 @@ export function updateDeal(
     "amountCents",
     "currency",
     "expectedCloseAt",
+    "description",
     "archivedAt",
   ] as const) {
     if (patch[key] !== undefined) updates[key] = patch[key];
@@ -2953,6 +2957,54 @@ export function setDealContacts(
       .values({ dealId, contactId, createdAt: now })
       .run();
   }
+}
+
+export function linkDealIssue(
+  db: WorkspaceDb,
+  dealId: string,
+  issueId: string
+) {
+  db.insert(workspaceDealIssueLinks)
+    .values({ dealId, issueId, createdAt: new Date().toISOString() })
+    .onConflictDoNothing()
+    .run();
+}
+
+export function unlinkDealIssue(
+  db: WorkspaceDb,
+  dealId: string,
+  issueId: string
+) {
+  db.delete(workspaceDealIssueLinks)
+    .where(
+      and(
+        eq(workspaceDealIssueLinks.dealId, dealId),
+        eq(workspaceDealIssueLinks.issueId, issueId)
+      )
+    )
+    .run();
+}
+
+export function listDealIssueIds(db: WorkspaceDb, dealId: string) {
+  return db
+    .select({ issueId: workspaceDealIssueLinks.issueId })
+    .from(workspaceDealIssueLinks)
+    .where(eq(workspaceDealIssueLinks.dealId, dealId))
+    .all()
+    .map((r) => r.issueId);
+}
+
+export function listDealsForIssue(db: WorkspaceDb, issueId: string) {
+  return db
+    .select()
+    .from(workspaceDeals)
+    .innerJoin(
+      workspaceDealIssueLinks,
+      eq(workspaceDealIssueLinks.dealId, workspaceDeals.id)
+    )
+    .where(eq(workspaceDealIssueLinks.issueId, issueId))
+    .all()
+    .map((r) => r.deals);
 }
 
 // ---- custom fields ----

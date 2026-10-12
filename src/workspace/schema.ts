@@ -1281,6 +1281,7 @@ export const workspaceDeals = sqliteTable(
     amountCents: integer("amount_cents" as string),
     currency: text("currency" as string),
     expectedCloseAt: text("expected_close_at" as string),
+    description: text("description" as string),
     closedAt: text("closed_at" as string),
     archivedAt: text("archived_at" as string),
     createdAt: text("created_at" as string).notNull(),
@@ -1350,5 +1351,18 @@ export const workspaceFieldValues = sqliteTable(
       table.organizationId,
       table.entityId
     ),
+  ]
+);
+
+export const workspaceDealIssueLinks = sqliteTable(
+  "deal_issue_links" as string,
+  {
+    dealId: text("deal_id" as string).notNull(),
+    issueId: text("issue_id" as string).notNull(),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.dealId, table.issueId] }),
+    index("deal_issue_links_issue_idx" as string).on(table.issueId),
   ]
 );
