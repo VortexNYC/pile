@@ -4,17 +4,11 @@ import { eq } from "drizzle-orm";
 
 import { createD1 } from "../global/db.js";
 import { anonymizeCustomer } from "../global/deletion.js";
+import { supportCustomerCompanies } from "../global/schema.js";
 import {
-  supportCompanies,
-  supportCustomerCompanies,
-} from "../global/schema.js";
-import {
-  createCompany,
   createCustomer,
-  getCompanyById,
   getCustomerByEmail,
   getCustomerById,
-  listCompanies,
   listCustomers,
   setCustomerCompanies,
   setCustomerIdentities,
@@ -731,9 +725,7 @@ export function registerSupportContactRoutes(app: OpenAPIHono<AppContext>) {
 }
 
 /** Domain → workspace customer — find or create the org for a
- * contact's email domain. One company model now: customers.
- * A shadow support_companies row keeps the join's FK honest —
- * companyId is the customer's id. */
+ * contact's email domain. One company model: customers. */
 async function ensureCustomerByDomain(
   env: WorkerEnv,
   organizationId: string,
@@ -750,88 +742,5 @@ async function ensureCustomerByDomain(
     url: `https://${domain}`,
     domain,
   });
-  if (!created) return null;
-  const db = createD1(env.D1);
-  const now = new Date().toISOString();
-  await db
-    .insert(supportCompanies)
-    .values({
-      id: created.id,
-      organizationId,
-      name: created.name,
-      domain,
-      externalSource: "workspace",
-      createdAt: now,
-      updatedAt: now,
-    })
-    .onConflictDoNothing();
-  return created.id;
-}
-
-/** One-shot backfill: legacy support_companies rows → workspace
- * customers; rewrites support_customer_companies.companyId. */
-export function registerCompanyBackfillRoute(app: OpenAPIHono<AppContext>) {
-  app.openapi(
-    createRoute({
-      method: "post",
-      path: "/workspaces/{organizationId}/support/companies/backfill",
-      tags: ["support-contacts"],
-      middleware: [rls("write")],
-      request: { params: orgParam },
-      responses: {
-        200: {
-          description: "Backfilled",
-          content: {
-            "application/json": {
-              schema: z.object({
-                migrated: z.number(),
-                skipped: z.number(),
-              }),
-            },
-          },
-        },
-      },
-    }),
-    async (c) => {
-      const { organizationId } = c.req.valid("param");
-      const db = createD1(c.env.D1);
-      const stub = getWorkspaceStub(c.env, organizationId);
-      await stub.setOrganizationId(organizationId);
-
-      const legacy = await db
-        .select()
-        .from(supportCompanies)
-        .where(eq(supportCompanies.organizationId, organizationId))
-        .all();
-
-      let migrated = 0;
-      let skipped = 0;
-      for (const company of legacy) {
-        const existing = company.domain
-          ? await stub.getCustomerByDomain(company.domain)
-          : null;
-        const customerId =
-          existing?.id ??
-          (
-            await stub.createCustomer({
-              name: company.name,
-              domain: company.domain ?? null,
-              externalId: company.externalId ?? null,
-            })
-          ).id;
-        // repoint the joins
-        await db
-          .update(supportCustomerCompanies)
-          .set({ companyId: customerId, companyName: company.name })
-          .where(eq(supportCustomerCompanies.companyId, company.id))
-          .run();
-        skipped++;
-        await db
-          .delete(supportCompanies)
-          .where(eq(supportCompanies.id, company.id))
-          .run();
-      }
-      return c.json({ migrated: skipped, skipped: 0 }, 200);
-    }
-  );
+  return created?.id ?? null;
 }

@@ -86,7 +86,7 @@ const supportCustomerSummarySchema = z.object({
 
 const supportCompanySummarySchema = z.object({
   id: z.string(),
-  name: z.string(),
+  name: z.string().nullable(),
   isPrimary: z.boolean(),
 });
 

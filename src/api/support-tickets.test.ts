@@ -14,7 +14,6 @@ import {
 } from "../global/schema.js";
 import {
   createCustomer as createSupportCustomer,
-  createCompany,
   getCustomerById,
   setCustomerCompanies,
   setCustomerIdentities,
@@ -36,6 +35,7 @@ import { createAuth } from "../platform/auth.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
 import { intercomSupportOptionsSchema } from "../support-migration/intercom.js";
 import { plainSupportOptionsSchema } from "../support-migration/plain.js";
+import { getWorkspaceStub } from "./stub.js";
 
 const ORIGIN = "https://your-domain.com";
 
@@ -656,12 +656,11 @@ describe("support-tickets API", () => {
       externalId: null,
     });
 
-    const company = await createCompany(db, {
-      organizationId,
+    const stub = getWorkspaceStub(env, organizationId);
+    await stub.setOrganizationId(organizationId);
+    const company = await stub.createCustomer({
       name: "Acme",
-      domain: "acme.example",
-      externalId: "acme-123",
-      externalSource: "test",
+      domain: "acme.com",
     });
 
     await setCustomerCompanies(db, organizationId, customer.id, [

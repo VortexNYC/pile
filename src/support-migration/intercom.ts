@@ -153,7 +153,7 @@ async function getOrCreateIntercomSupportCustomer(
   const companies = await Promise.all(
     companyInputs.map(async (input) => {
       const company = await findOrCreateCompany(
-        ctx.db,
+        ctx.stub,
         ctx.organizationId,
         input
       );

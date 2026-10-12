@@ -19,7 +19,6 @@ import type { RealtimeEvent } from "../types/workspace.js";
 import type { D1Client } from "./db.js";
 import {
   labels,
-  supportCompanies,
   supportCustomerCompanies,
   supportCustomerIdentities,
   supportCustomers,
@@ -159,7 +158,7 @@ export type SupportTicketWithRelations = SupportTicket & {
     fullName: string | null;
     phone: string | null;
   };
-  companies: { id: string; name: string; isPrimary: boolean }[];
+  companies: { id: string; name: string | null; isPrimary: boolean }[];
   identities: SupportCustomerIdentity[];
   labels: { id: string; labelId: string; name: string; color: string | null }[];
   assignees: {
@@ -509,15 +508,11 @@ export async function hydrateTicketRelations(
     db
       .select({
         id: supportCustomerCompanies.id,
-        name: supportCompanies.name,
+        name: supportCustomerCompanies.companyName,
         isPrimary: supportCustomerCompanies.isPrimary,
         customerId: supportCustomerCompanies.customerId,
       })
       .from(supportCustomerCompanies)
-      .innerJoin(
-        supportCompanies,
-        eq(supportCustomerCompanies.companyId, supportCompanies.id)
-      )
       .where(inArray(supportCustomerCompanies.customerId, customerIds)),
     db
       .select()

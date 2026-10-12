@@ -90,10 +90,7 @@ import {
 import { registerStateRoutes } from "./states.js";
 import { registerSupportCaptureRoutes } from "./support-capture.js";
 import { registerSupportChannelRoutes } from "./support-channels.js";
-import {
-  registerCompanyBackfillRoute,
-  registerSupportContactRoutes,
-} from "./support-contacts.js";
+import { registerSupportContactRoutes } from "./support-contacts.js";
 import { registerSupportContentRoutes } from "./support-content.js";
 import { registerSupportEscalationRoutes } from "./support-escalation.js";
 import { registerSupportInboxRoutes } from "./support-inbox.js";
@@ -255,7 +252,6 @@ registerIssueDealRoutes(app);
 registerFieldRoutes(app);
 registerLeadRoutes(app);
 registerLinkRoutes(app);
-registerCompanyBackfillRoute(app);
 registerSupportContactRoutes(app);
 registerSupportTicketRoutes(app);
 registerChangelogRoutes(app);
