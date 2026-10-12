@@ -736,6 +736,13 @@
       "when": 1791686803643,
       "tag": "0105_rainy_aaron_stack",
       "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "6",
+      "when": 1791769595893,
+      "tag": "0106_company_name",
+      "breakpoints": true
     }
   ]
 }

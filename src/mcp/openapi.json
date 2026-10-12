@@ -32410,6 +32410,48 @@
         "summary": "Delete link"
       }
     },
+    "/workspaces/{organizationId}/support/companies/backfill": {
+      "post": {
+        "tags": [
+          "support-contacts"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Backfilled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "migrated": {
+                      "type": "number"
+                    },
+                    "skipped": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "migrated",
+                    "skipped"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create support company backfill"
+      }
+    },
     "/support/unsubscribe": {
       "post": {
         "tags": [
@@ -32630,7 +32672,8 @@
                                 "type": "string"
                               },
                               "name": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "isPrimary": {
                                 "type": "boolean"
@@ -32847,7 +32890,8 @@
                                   "type": "string"
                                 },
                                 "name": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "nullable": true
                                 },
                                 "isPrimary": {
                                   "type": "boolean"
@@ -33043,7 +33087,8 @@
                                 "type": "string"
                               },
                               "name": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "isPrimary": {
                                 "type": "boolean"
@@ -33264,7 +33309,8 @@
                                 "type": "string"
                               },
                               "name": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "isPrimary": {
                                 "type": "boolean"
@@ -33537,7 +33583,8 @@
                                 "type": "string"
                               },
                               "name": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "isPrimary": {
                                 "type": "boolean"
@@ -33778,7 +33825,8 @@
                                 "type": "string"
                               },
                               "name": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "isPrimary": {
                                 "type": "boolean"
@@ -34182,7 +34230,8 @@
                                   "type": "string"
                                 },
                                 "name": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "nullable": true
                                 },
                                 "isPrimary": {
                                   "type": "boolean"

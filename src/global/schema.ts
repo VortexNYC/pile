@@ -2130,6 +2130,7 @@ export const supportCustomerCompanies = sqliteTable(
     companyId: text("company_id" as string)
       .notNull()
       .references(() => supportCompanies.id, { onDelete: "cascade" }),
+    companyName: text("company_name" as string),
     isPrimary: integer("is_primary" as string, { mode: "boolean" })
       .notNull()
       .default(false),

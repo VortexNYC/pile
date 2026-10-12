@@ -14378,6 +14378,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdSupportCompaniesBackfill",
+    "description": "Create support company backfill (POST /workspaces/{organizationId}/support/companies/backfill) Path params (top-level, required): organizationId.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/companies/backfill",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdSupportCustomers",
     "description": "Create support customer (POST /workspaces/{organizationId}/support/customers) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: email*, fullName, phone, userId, externalId, externalSource, companies, identities (* = required).",
     "method": "POST",

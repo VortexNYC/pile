@@ -16864,6 +16864,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/support/companies/backfill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create support company backfill */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Backfilled */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            migrated: number;
+                            skipped: number;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/support/unsubscribe": {
         parameters: {
             query?: never;
@@ -16958,7 +16999,7 @@ export interface paths {
                                     id: string;
                                     customerId: string;
                                     companyId: string;
-                                    name: string;
+                                    name: string | null;
                                     isPrimary: boolean;
                                     createdAt: string;
                                 }[];
@@ -17041,7 +17082,7 @@ export interface paths {
                                     id: string;
                                     customerId: string;
                                     companyId: string;
-                                    name: string;
+                                    name: string | null;
                                     isPrimary: boolean;
                                     createdAt: string;
                                 }[];
@@ -17111,7 +17152,7 @@ export interface paths {
                                     id: string;
                                     customerId: string;
                                     companyId: string;
-                                    name: string;
+                                    name: string | null;
                                     isPrimary: boolean;
                                     createdAt: string;
                                 }[];
@@ -17219,7 +17260,7 @@ export interface paths {
                                     id: string;
                                     customerId: string;
                                     companyId: string;
-                                    name: string;
+                                    name: string | null;
                                     isPrimary: boolean;
                                     createdAt: string;
                                 }[];
@@ -17296,7 +17337,7 @@ export interface paths {
                                     id: string;
                                     customerId: string;
                                     companyId: string;
-                                    name: string;
+                                    name: string | null;
                                     isPrimary: boolean;
                                     createdAt: string;
                                 }[];
@@ -17381,7 +17422,7 @@ export interface paths {
                                     id: string;
                                     customerId: string;
                                     companyId: string;
-                                    name: string;
+                                    name: string | null;
                                     isPrimary: boolean;
                                     createdAt: string;
                                 }[];
@@ -17548,7 +17589,7 @@ export interface paths {
                                     id: string;
                                     customerId: string;
                                     companyId: string;
-                                    name: string;
+                                    name: string | null;
                                     isPrimary: boolean;
                                     createdAt: string;
                                 }[];

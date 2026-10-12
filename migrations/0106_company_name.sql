@@ -1,0 +1,1 @@
+ALTER TABLE `support_customer_companies` ADD `company_name` text;

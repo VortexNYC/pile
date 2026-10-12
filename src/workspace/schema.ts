@@ -660,6 +660,7 @@ export const workspaceCustomers = sqliteTable(
     logoUrl: text("logo_url" as string),
     bookingUrl: text("booking_url" as string),
     notes: text("notes" as string),
+    domain: text("domain" as string),
     externalId: text("external_id" as string),
     tierId: text("tier_id" as string),
     statusId: text("status_id" as string),

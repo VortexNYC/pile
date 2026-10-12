@@ -1,5 +1,6 @@
 import { and, asc, eq, gt, like, or, type SQL } from "drizzle-orm";
 
+import type { WorkerEnv } from "../platform/middleware.js";
 import type { D1Client } from "./db.js";
 import {
   supportCompanies,
@@ -43,7 +44,7 @@ export type SupportCustomerCompany = {
   id: string;
   customerId: string;
   companyId: string;
-  name: string;
+  name: string | null;
   isPrimary: boolean;
   createdAt: string;
 };
@@ -247,19 +248,8 @@ export async function getCustomerById(
 
   const [companies, identities] = await Promise.all([
     db
-      .select({
-        id: supportCustomerCompanies.id,
-        customerId: supportCustomerCompanies.customerId,
-        companyId: supportCustomerCompanies.companyId,
-        name: supportCompanies.name,
-        isPrimary: supportCustomerCompanies.isPrimary,
-        createdAt: supportCustomerCompanies.createdAt,
-      })
+      .select()
       .from(supportCustomerCompanies)
-      .innerJoin(
-        supportCompanies,
-        eq(supportCustomerCompanies.companyId, supportCompanies.id)
-      )
       .where(eq(supportCustomerCompanies.customerId, id)),
     db
       .select()
@@ -273,7 +263,7 @@ export async function getCustomerById(
       id: c.id,
       customerId: c.customerId,
       companyId: c.companyId,
-      name: c.name,
+      name: c.companyName,
       isPrimary: c.isPrimary,
       createdAt: c.createdAt,
     })),
@@ -424,7 +414,8 @@ export async function setCustomerCompanies(
   db: D1Client,
   organizationId: string,
   customerId: string,
-  companies: { companyId: string; isPrimary: boolean }[]
+  companies: { companyId: string; isPrimary: boolean }[],
+  env?: WorkerEnv
 ): Promise<void> {
   const customer = await getCustomerById(db, organizationId, customerId);
   if (!customer) {
@@ -437,11 +428,46 @@ export async function setCustomerCompanies(
 
   if (companies.length > 0) {
     const now = new Date().toISOString();
+    // Names denormalize at write time — the join reads without
+    // touching the workspace DO. Resolved via the stub when env is
+    // present; falls back to null (the name renders as the id until
+    // the next set call refreshes it).
+    let names = new Map<string, string>();
+    if (env) {
+      const { getWorkspaceStub } = await import("../api/stub.js");
+      const stub = getWorkspaceStub(env, organizationId);
+      await stub.setOrganizationId(organizationId);
+      const rows = await Promise.all(
+        companies.map(async (c) => {
+          const customer = await stub
+            .getCustomer(c.companyId)
+            .catch(() => null);
+          return [c.companyId, customer?.name ?? null] as const;
+        })
+      );
+      names = new Map(rows.filter((r): r is [string, string] => r[1] !== null));
+    }
+    // companyId is a customer id — the shadow row keeps the FK honest
+    for (const c of companies) {
+      await db
+        .insert(supportCompanies)
+        .values({
+          id: c.companyId,
+          organizationId,
+          name: names.get(c.companyId) ?? c.companyId,
+          domain: null,
+          externalSource: "workspace",
+          createdAt: now,
+          updatedAt: now,
+        })
+        .onConflictDoNothing();
+    }
     await db.insert(supportCustomerCompanies).values(
       companies.map((c) => ({
         id: crypto.randomUUID(),
         customerId,
         companyId: c.companyId,
+        companyName: names.get(c.companyId) ?? null,
         isPrimary: c.isPrimary,
         createdAt: now,
       }))

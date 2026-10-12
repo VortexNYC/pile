@@ -2013,6 +2013,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.listCustomers(this.db, this.organizationId);
   }
 
+  getCustomerByDomain(domain: string) {
+    return data.getCustomerByDomain(this.db, this.organizationId, domain);
+  }
+
   getCustomer(id: string) {
     return data.getCustomer(this.db, this.organizationId, id);
   }

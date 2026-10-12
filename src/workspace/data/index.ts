@@ -2630,6 +2630,7 @@ export interface CustomerInput {
   logoUrl?: string | null;
   bookingUrl?: string | null;
   notes?: string | null;
+  domain?: string | null;
   externalId?: string | null;
   tierId?: string | null;
   statusId?: string | null;
@@ -2649,6 +2650,7 @@ export function createCustomer(db: WorkspaceDb, input: CustomerInput) {
       logoUrl: input.logoUrl ?? null,
       bookingUrl: input.bookingUrl ?? null,
       notes: input.notes ?? null,
+      domain: input.domain ?? null,
       externalId: input.externalId ?? null,
       tierId: input.tierId ?? null,
       statusId: input.statusId ?? null,
@@ -2700,6 +2702,7 @@ export function updateCustomer(
     "logoUrl",
     "bookingUrl",
     "notes",
+    "domain",
     "externalId",
     "tierId",
     "statusId",
@@ -5036,4 +5039,21 @@ export function shiftIssueCycle(
     .where(inArray(workspaceIssues.id, ids))
     .run();
   return ids.length;
+}
+
+export function getCustomerByDomain(
+  db: WorkspaceDb,
+  organizationId: string,
+  domain: string
+) {
+  return db
+    .select()
+    .from(workspaceCustomers)
+    .where(
+      and(
+        eq(workspaceCustomers.organizationId, organizationId),
+        eq(workspaceCustomers.domain, domain)
+      )
+    )
+    .get();
 }

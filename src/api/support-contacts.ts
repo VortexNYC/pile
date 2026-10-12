@@ -1,8 +1,13 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
+import { eq } from "drizzle-orm";
 
 import { createD1 } from "../global/db.js";
 import { anonymizeCustomer } from "../global/deletion.js";
+import {
+  supportCompanies,
+  supportCustomerCompanies,
+} from "../global/schema.js";
 import {
   createCompany,
   createCustomer,
@@ -11,16 +16,17 @@ import {
   getCustomerById,
   listCompanies,
   listCustomers,
-  resolveCompanyByDomain,
   setCustomerCompanies,
   setCustomerIdentities,
   setEmailOptOutByEmail,
   updateCustomer,
 } from "../global/support-contacts.js";
 import { VortexError } from "../platform/errors.js";
+import type { WorkerEnv } from "../platform/middleware.js";
 import type { AppContext } from "../platform/middleware.js";
 import { publicRateLimit } from "../platform/rate-limit.js";
 import { rls } from "../platform/rls.js";
+import { getWorkspaceStub } from "./stub.js";
 
 const identityTypeEnum = z.enum([
   "email",
@@ -39,7 +45,7 @@ const supportCustomerCompanySchema = z.object({
   id: z.string(),
   customerId: z.string(),
   companyId: z.string(),
-  name: z.string(),
+  name: z.string().nullable(),
   isPrimary: z.boolean(),
   createdAt: z.string(),
 });
@@ -81,6 +87,29 @@ const supportCompanySchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
 });
+
+// One company model: support_companies folded into workspace customers.
+// The routes proxy the DO; domain replaces url parsing on the client.
+function customerAsCompany(customer: {
+  id: string;
+  organizationId: string;
+  name: string;
+  domain: string | null;
+  externalId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}) {
+  return {
+    id: customer.id,
+    organizationId: customer.organizationId,
+    name: customer.name,
+    domain: customer.domain,
+    externalId: customer.externalId,
+    externalSource: "workspace",
+    createdAt: customer.createdAt,
+    updatedAt: customer.updatedAt,
+  };
+}
 
 const createCustomerBodySchema = z.object({
   email: z.string().email(),
@@ -509,8 +538,8 @@ export function registerSupportContactRoutes(app: OpenAPIHono<AppContext>) {
     const companyLinks = body.companies ?? [];
 
     if (companyLinks.length === 0) {
-      const companyId = await resolveCompanyByDomain(
-        db,
+      const companyId = await ensureCustomerByDomain(
+        c.env,
         organizationId,
         customer.email
       );
@@ -520,7 +549,13 @@ export function registerSupportContactRoutes(app: OpenAPIHono<AppContext>) {
     }
 
     if (companyLinks.length > 0) {
-      await setCustomerCompanies(db, organizationId, customer.id, companyLinks);
+      await setCustomerCompanies(
+        db,
+        organizationId,
+        customer.id,
+        companyLinks,
+        c.env
+      );
     }
 
     const identities = body.identities ?? [
@@ -602,7 +637,13 @@ export function registerSupportContactRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId, customerId } = c.req.valid("param");
     const { companies } = c.req.valid("json");
     const db = createD1(c.env.D1);
-    await setCustomerCompanies(db, organizationId, customerId, companies);
+    await setCustomerCompanies(
+      db,
+      organizationId,
+      customerId,
+      companies,
+      c.env
+    );
     const customer = await getCustomerById(db, organizationId, customerId);
     if (!customer) {
       customerNotFound();
@@ -625,21 +666,33 @@ export function registerSupportContactRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(createCompanyRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const body = c.req.valid("json");
-    const db = createD1(c.env.D1);
-    const company = await createCompany(db, { ...body, organizationId });
-    return c.json({ company }, 201);
+    const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
+    const customer = await stub.createCustomer({
+      name: body.name,
+      domain: body.domain ?? null,
+      externalId: body.externalId ?? null,
+    });
+    return c.json({ company: customerAsCompany(customer) }, 201);
   });
 
   app.openapi(listCompaniesRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const query = c.req.valid("query");
-    const db = createD1(c.env.D1);
-    const { companies, nextCursor } = await listCompanies(db, organizationId, {
-      limit: query.limit,
-      cursor: query.cursor,
-      q: query.q,
+    const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
+    const all = await stub.listCustomers();
+    const filtered = query.q
+      ? all.filter(
+          (c) =>
+            c.name.toLowerCase().includes(query.q!.toLowerCase()) ||
+            (c.domain ?? "").toLowerCase().includes(query.q!.toLowerCase())
+        )
+      : all;
+    return c.json({
+      companies: filtered.map(customerAsCompany),
+      nextCursor: null,
     });
-    return c.json({ companies, nextCursor });
   });
 
   app.openapi(listCompanyContactsRoute, async (c) => {
@@ -667,11 +720,118 @@ export function registerSupportContactRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(getCompanyRoute, async (c) => {
     const { organizationId, companyId } = c.req.valid("param");
-    const db = createD1(c.env.D1);
-    const company = await getCompanyById(db, organizationId, companyId);
-    if (!company) {
+    const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
+    const customer = await stub.getCustomer(companyId);
+    if (!customer) {
       companyNotFound();
     }
-    return c.json({ company });
+    return c.json({ company: customerAsCompany(customer!) });
   });
+}
+
+/** Domain → workspace customer — find or create the org for a
+ * contact's email domain. One company model now: customers.
+ * A shadow support_companies row keeps the join's FK honest —
+ * companyId is the customer's id. */
+async function ensureCustomerByDomain(
+  env: WorkerEnv,
+  organizationId: string,
+  email: string
+): Promise<string | null> {
+  const domain = email.split("@")[1]?.toLowerCase();
+  if (!domain) return null;
+  const stub = getWorkspaceStub(env, organizationId);
+  await stub.setOrganizationId(organizationId);
+  const existing = await stub.getCustomerByDomain(domain);
+  if (existing) return existing.id;
+  const created = await stub.createCustomer({
+    name: domain.replace(/\.[a-z]+$/, ""),
+    url: `https://${domain}`,
+    domain,
+  });
+  if (!created) return null;
+  const db = createD1(env.D1);
+  const now = new Date().toISOString();
+  await db
+    .insert(supportCompanies)
+    .values({
+      id: created.id,
+      organizationId,
+      name: created.name,
+      domain,
+      externalSource: "workspace",
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoNothing();
+  return created.id;
+}
+
+/** One-shot backfill: legacy support_companies rows → workspace
+ * customers; rewrites support_customer_companies.companyId. */
+export function registerCompanyBackfillRoute(app: OpenAPIHono<AppContext>) {
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/workspaces/{organizationId}/support/companies/backfill",
+      tags: ["support-contacts"],
+      middleware: [rls("write")],
+      request: { params: orgParam },
+      responses: {
+        200: {
+          description: "Backfilled",
+          content: {
+            "application/json": {
+              schema: z.object({
+                migrated: z.number(),
+                skipped: z.number(),
+              }),
+            },
+          },
+        },
+      },
+    }),
+    async (c) => {
+      const { organizationId } = c.req.valid("param");
+      const db = createD1(c.env.D1);
+      const stub = getWorkspaceStub(c.env, organizationId);
+      await stub.setOrganizationId(organizationId);
+
+      const legacy = await db
+        .select()
+        .from(supportCompanies)
+        .where(eq(supportCompanies.organizationId, organizationId))
+        .all();
+
+      let migrated = 0;
+      let skipped = 0;
+      for (const company of legacy) {
+        const existing = company.domain
+          ? await stub.getCustomerByDomain(company.domain)
+          : null;
+        const customerId =
+          existing?.id ??
+          (
+            await stub.createCustomer({
+              name: company.name,
+              domain: company.domain ?? null,
+              externalId: company.externalId ?? null,
+            })
+          ).id;
+        // repoint the joins
+        await db
+          .update(supportCustomerCompanies)
+          .set({ companyId: customerId, companyName: company.name })
+          .where(eq(supportCustomerCompanies.companyId, company.id))
+          .run();
+        skipped++;
+        await db
+          .delete(supportCompanies)
+          .where(eq(supportCompanies.id, company.id))
+          .run();
+      }
+      return c.json({ migrated: skipped, skipped: 0 }, 200);
+    }
+  );
 }
