@@ -14,6 +14,7 @@ const linkSchema = z.object({
   toType: z.string(),
   toId: z.string(),
   kind: z.string(),
+  label: z.string().nullable(),
   createdAt: z.string(),
 });
 
@@ -21,6 +22,7 @@ const createLinkSchema = z.object({
   toType: z.string().min(1),
   toId: z.string().min(1),
   kind: z.string().default("relates"),
+  label: z.string().optional(),
 });
 
 const entityParam = z.object({
@@ -105,6 +107,7 @@ export function registerLinkRoutes(app: OpenAPIHono<AppContext>) {
       toType: body.toType,
       toId: body.toId,
       kind: body.kind,
+      label: body.label,
     });
     return c.json({ link }, 201);
   });

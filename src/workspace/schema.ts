@@ -174,28 +174,6 @@ export const workspaceIssueSubscribers = sqliteTable(
   ]
 );
 
-export const workspaceIssueRelations = sqliteTable(
-  "issue_relations" as string,
-  {
-    id: text("id" as string).primaryKey(),
-    organizationId: text("organization_id" as string).notNull(),
-    fromIssueId: text("from_issue_id" as string).notNull(),
-    toIssueId: text("to_issue_id" as string).notNull(),
-    type: text("type" as string).notNull(),
-    createdAt: text("created_at" as string).notNull(),
-  },
-  (table) => [
-    index("issue_relations_from_idx" as string).on(
-      table.organizationId,
-      table.fromIssueId
-    ),
-    index("issue_relations_to_idx" as string).on(
-      table.organizationId,
-      table.toIssueId
-    ),
-  ]
-);
-
 export const workspaceIssueApprovals = sqliteTable(
   "issue_approvals" as string,
   {
@@ -1355,6 +1333,7 @@ export const workspaceEntityLinks = sqliteTable(
     kind: text("kind" as string)
       .notNull()
       .default("relates"),
+    label: text("label" as string),
     createdAt: text("created_at" as string).notNull(),
   },
   (table) => [

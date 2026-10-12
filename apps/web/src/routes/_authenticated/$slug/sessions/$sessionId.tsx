@@ -282,11 +282,11 @@ function SessionDetail() {
                   a cold session.
                 </p>
               ) : null}
-              <EntityLinksRail entityType="session" entityId={sessionId} />
             </>
           }
           rail={
             <>
+              <EntityLinksRail entityType="session" entityId={sessionId} />
               <RailSection title="Properties">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant={sessionStatusVariant(s.status)}>

@@ -90,11 +90,6 @@ export type SupportCompany = {
   updatedAt: string;
 };
 
-function domainFromEmail(email: string): string | undefined {
-  const at = email.lastIndexOf("@");
-  return at >= 0 ? email.slice(at + 1).toLowerCase() : undefined;
-}
-
 export async function createCustomer(
   db: D1Client,
   input: SupportCustomerInput
@@ -392,8 +387,8 @@ export async function setCustomerCompanies(
   companies: { companyId: string; isPrimary: boolean }[],
   env?: WorkerEnv
 ): Promise<void> {
-  const customer = await getCustomerById(db, organizationId, customerId);
-  if (!customer) {
+  const existing = await getCustomerById(db, organizationId, customerId);
+  if (!existing) {
     return;
   }
 

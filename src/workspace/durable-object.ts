@@ -110,7 +110,6 @@ import {
   workspaceIssueApprovals,
   workspaceIssueHistory,
   workspaceEntityLinks,
-  workspaceIssueRelations,
   workspaceIssues,
   workspaceIssueSubscribers,
   workspaceLinearUsers,
@@ -397,7 +396,18 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       await this.db.insert(workspaceIssueSubscribers).values(subscribers);
     }
     if (relations.length > 0) {
-      await this.db.insert(workspaceIssueRelations).values(relations);
+      await this.db.insert(workspaceEntityLinks).values(
+        relations.map((r) => ({
+          id: r.id,
+          organizationId: this.organizationId,
+          fromType: "issue",
+          fromId: r.fromIssueId,
+          toType: "issue",
+          toId: r.toIssueId,
+          kind: r.type,
+          createdAt: r.createdAt,
+        }))
+      );
     }
     if (approvals.length > 0) {
       await this.db.insert(workspaceIssueApprovals).values(approvals);
@@ -1315,7 +1325,17 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   listWorkspaceIssueRelations() {
-    return this.db.select().from(workspaceIssueRelations).all();
+    return this.db
+      .select()
+      .from(workspaceEntityLinks)
+      .where(
+        and(
+          eq(workspaceEntityLinks.organizationId, this.organizationId),
+          eq(workspaceEntityLinks.fromType, "issue"),
+          eq(workspaceEntityLinks.toType, "issue")
+        )
+      )
+      .all();
   }
 
   // ---- issue approvals ----
@@ -5380,11 +5400,17 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       .delete(workspaceIssueSubscribers)
       .where(eq(workspaceIssueSubscribers.issueId, issueId));
     await this.db
-      .delete(workspaceIssueRelations)
+      .delete(workspaceEntityLinks)
       .where(
         or(
-          eq(workspaceIssueRelations.fromIssueId, issueId),
-          eq(workspaceIssueRelations.toIssueId, issueId)
+          and(
+            eq(workspaceEntityLinks.fromType, "issue"),
+            eq(workspaceEntityLinks.fromId, issueId)
+          ),
+          and(
+            eq(workspaceEntityLinks.toType, "issue"),
+            eq(workspaceEntityLinks.toId, issueId)
+          )
         )
       );
     await this.db

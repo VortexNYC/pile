@@ -115,6 +115,7 @@ export function EntityLinksRail({
               ? { type: link.toType, id: link.toId }
               : { type: link.fromType, id: link.fromId };
           const href = ROUTES[other.type]?.(workspace.slug, other.id);
+          const text = link.label ?? `${other.type} ${other.id.slice(0, 8)}`;
           return (
             <div key={link.id} className="flex items-center gap-2">
               <span className="text-kumo-subtle">
@@ -126,12 +127,10 @@ export function EntityLinksRail({
                   onClick={() => void navigate({ to: href })}
                   className="min-w-0 flex-1 truncate text-left text-sm text-kumo-link hover:underline"
                 >
-                  {other.type} {other.id.slice(0, 8)}
+                  {text}
                 </button>
               ) : (
-                <span className="text-sm text-kumo-subtle">
-                  {other.type} {other.id.slice(0, 8)}
-                </span>
+                <span className="text-sm text-kumo-subtle">{text}</span>
               )}
               <button
                 type="button"

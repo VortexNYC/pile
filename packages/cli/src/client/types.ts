@@ -16764,6 +16764,7 @@ export interface paths {
                                 toType: string;
                                 toId: string;
                                 kind: string;
+                                label: string | null;
                                 createdAt: string;
                             }[];
                         };
@@ -16791,6 +16792,7 @@ export interface paths {
                         toId: string;
                         /** @default relates */
                         kind?: string;
+                        label?: string;
                     };
                 };
             };
@@ -16810,6 +16812,7 @@ export interface paths {
                                 toType: string;
                                 toId: string;
                                 kind: string;
+                                label: string | null;
                                 createdAt: string;
                             };
                         };
@@ -16859,47 +16862,6 @@ export interface paths {
                 };
             };
         };
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/workspaces/{organizationId}/support/companies/backfill": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Create support company backfill */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    organizationId: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Backfilled */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            migrated: number;
-                            skipped: number;
-                        };
-                    };
-                };
-            };
-        };
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -17787,7 +17749,7 @@ export interface paths {
                                 };
                                 companies: {
                                     id: string;
-                                    name: string;
+                                    name: string | null;
                                     isPrimary: boolean;
                                 }[];
                                 identities: {
@@ -17930,7 +17892,7 @@ export interface paths {
                                 };
                                 companies: {
                                     id: string;
-                                    name: string;
+                                    name: string | null;
                                     isPrimary: boolean;
                                 }[];
                                 identities: {
@@ -18106,7 +18068,7 @@ export interface paths {
                                 };
                                 companies: {
                                     id: string;
-                                    name: string;
+                                    name: string | null;
                                     isPrimary: boolean;
                                 }[];
                                 identities: {
@@ -18235,7 +18197,7 @@ export interface paths {
                                 };
                                 companies: {
                                     id: string;
-                                    name: string;
+                                    name: string | null;
                                     isPrimary: boolean;
                                 }[];
                                 identities: {
@@ -18652,7 +18614,7 @@ export interface paths {
                                 };
                                 companies: {
                                     id: string;
-                                    name: string;
+                                    name: string | null;
                                     isPrimary: boolean;
                                 }[];
                                 identities: {
@@ -18774,7 +18736,7 @@ export interface paths {
                                 };
                                 companies: {
                                     id: string;
-                                    name: string;
+                                    name: string | null;
                                     isPrimary: boolean;
                                 }[];
                                 identities: {
@@ -18906,7 +18868,7 @@ export interface paths {
                                 };
                                 companies: {
                                     id: string;
-                                    name: string;
+                                    name: string | null;
                                     isPrimary: boolean;
                                 }[];
                                 identities: {
@@ -19043,7 +19005,7 @@ export interface paths {
                                 };
                                 companies: {
                                     id: string;
-                                    name: string;
+                                    name: string | null;
                                     isPrimary: boolean;
                                 }[];
                                 identities: {
@@ -19171,7 +19133,7 @@ export interface paths {
                                 };
                                 companies: {
                                     id: string;
-                                    name: string;
+                                    name: string | null;
                                     isPrimary: boolean;
                                 }[];
                                 identities: {

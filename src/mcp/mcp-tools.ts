@@ -11398,7 +11398,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdEntitiesEntityTypeEntityIdLinks",
-    "description": "Create entity {entityType} link (POST /workspaces/{organizationId}/entities/{entityType}/{entityId}/links) Path params (top-level, required): organizationId, entityType, entityId. Request body goes in the \"body\" object; fields: toType*, toId*, kind (* = required).",
+    "description": "Create entity {entityType} link (POST /workspaces/{organizationId}/entities/{entityType}/{entityId}/links) Path params (top-level, required): organizationId, entityType, entityId. Request body goes in the \"body\" object; fields: toType*, toId*, kind, label (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/entities/{entityType}/{entityId}/links",
     "inputSchema": {
@@ -11427,6 +11427,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "kind": {
               "type": "string",
               "default": "relates"
+            },
+            "label": {
+              "type": "string"
             }
           },
           "required": [
@@ -14370,23 +14373,6 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "required": [
             "name"
           ]
-        }
-      },
-      "required": [
-        "organizationId"
-      ]
-    }
-  },
-  {
-    "name": "postWorkspacesOrganizationIdSupportCompaniesBackfill",
-    "description": "Create support company backfill (POST /workspaces/{organizationId}/support/companies/backfill) Path params (top-level, required): organizationId.",
-    "method": "POST",
-    "path": "/workspaces/{organizationId}/support/companies/backfill",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "organizationId": {
-          "type": "string"
         }
       },
       "required": [

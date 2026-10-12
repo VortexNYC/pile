@@ -52,7 +52,6 @@ import {
   workspaceIssueApprovals,
   workspaceIssuePermissions,
   workspaceIssues,
-  workspaceIssueRelations,
   workspaceIssueSubscribers,
   workspaceLinearUsers,
   workspaceNotificationPreferences,
@@ -167,12 +166,21 @@ export function listIssueRelations(
   fromIssueId: string
 ) {
   return db
-    .select()
-    .from(workspaceIssueRelations)
+    .select({
+      id: workspaceEntityLinks.id,
+      organizationId: workspaceEntityLinks.organizationId,
+      fromIssueId: workspaceEntityLinks.fromId,
+      toIssueId: workspaceEntityLinks.toId,
+      type: workspaceEntityLinks.kind,
+      createdAt: workspaceEntityLinks.createdAt,
+    })
+    .from(workspaceEntityLinks)
     .where(
       and(
-        eq(workspaceIssueRelations.organizationId, organizationId),
-        eq(workspaceIssueRelations.fromIssueId, fromIssueId)
+        eq(workspaceEntityLinks.organizationId, organizationId),
+        eq(workspaceEntityLinks.fromType, "issue"),
+        eq(workspaceEntityLinks.fromId, fromIssueId),
+        eq(workspaceEntityLinks.toType, "issue")
       )
     )
     .all();
@@ -184,12 +192,21 @@ export function listInverseIssueRelations(
   toIssueId: string
 ) {
   return db
-    .select()
-    .from(workspaceIssueRelations)
+    .select({
+      id: workspaceEntityLinks.id,
+      organizationId: workspaceEntityLinks.organizationId,
+      fromIssueId: workspaceEntityLinks.fromId,
+      toIssueId: workspaceEntityLinks.toId,
+      type: workspaceEntityLinks.kind,
+      createdAt: workspaceEntityLinks.createdAt,
+    })
+    .from(workspaceEntityLinks)
     .where(
       and(
-        eq(workspaceIssueRelations.organizationId, organizationId),
-        eq(workspaceIssueRelations.toIssueId, toIssueId)
+        eq(workspaceEntityLinks.organizationId, organizationId),
+        eq(workspaceEntityLinks.fromType, "issue"),
+        eq(workspaceEntityLinks.toType, "issue"),
+        eq(workspaceEntityLinks.toId, toIssueId)
       )
     )
     .all();
@@ -200,16 +217,25 @@ export function getIssueRelation(
   organizationId: string,
   id: string
 ) {
-  return db
+  const row = db
     .select()
-    .from(workspaceIssueRelations)
+    .from(workspaceEntityLinks)
     .where(
       and(
-        eq(workspaceIssueRelations.organizationId, organizationId),
-        eq(workspaceIssueRelations.id, id)
+        eq(workspaceEntityLinks.organizationId, organizationId),
+        eq(workspaceEntityLinks.id, id)
       )
     )
     .get();
+  if (!row) return undefined;
+  return {
+    id: row.id,
+    organizationId: row.organizationId,
+    fromIssueId: row.fromId,
+    toIssueId: row.toId,
+    type: row.kind,
+    createdAt: row.createdAt,
+  };
 }
 
 export async function createIssueRelation(
@@ -222,12 +248,14 @@ export async function createIssueRelation(
   }
   const id = crypto.randomUUID();
   const ts = new Date().toISOString();
-  await db.insert(workspaceIssueRelations).values({
+  await db.insert(workspaceEntityLinks).values({
     id,
     organizationId,
-    fromIssueId: values.fromIssueId,
-    toIssueId: values.toIssueId,
-    type: values.type,
+    fromType: "issue",
+    fromId: values.fromIssueId,
+    toType: "issue",
+    toId: values.toIssueId,
+    kind: values.type,
     createdAt: ts,
   });
   return getIssueRelation(db, organizationId, id);
@@ -239,11 +267,11 @@ export async function deleteIssueRelation(
   id: string
 ) {
   await db
-    .delete(workspaceIssueRelations)
+    .delete(workspaceEntityLinks)
     .where(
       and(
-        eq(workspaceIssueRelations.organizationId, organizationId),
-        eq(workspaceIssueRelations.id, id)
+        eq(workspaceEntityLinks.organizationId, organizationId),
+        eq(workspaceEntityLinks.id, id)
       )
     );
 }
@@ -3080,9 +3108,62 @@ export interface EntityLinkInput {
   toType: string;
   toId: string;
   kind?: string;
+  label?: string;
+}
+
+function resolveLinkLabel(
+  db: WorkspaceDb,
+  type: string,
+  id: string
+): string | null {
+  if (type === "issue") {
+    const row = db
+      .select({
+        identifier: workspaceIssues.identifier,
+        title: workspaceIssues.title,
+      })
+      .from(workspaceIssues)
+      .where(eq(workspaceIssues.id, id))
+      .get();
+    return row
+      ? `${row.identifier ? `${row.identifier} ` : ""}${row.title}`
+      : null;
+  }
+  if (type === "deal") {
+    return (
+      db
+        .select({ name: workspaceDeals.name })
+        .from(workspaceDeals)
+        .where(eq(workspaceDeals.id, id))
+        .get()?.name ?? null
+    );
+  }
+  if (type === "customer") {
+    return (
+      db
+        .select({ name: workspaceCustomers.name })
+        .from(workspaceCustomers)
+        .where(eq(workspaceCustomers.id, id))
+        .get()?.name ?? null
+    );
+  }
+  if (type === "document") {
+    return (
+      db
+        .select({ title: workspaceDocuments.title })
+        .from(workspaceDocuments)
+        .where(eq(workspaceDocuments.id, id))
+        .get()?.title ?? null
+    );
+  }
+  return null;
 }
 
 export function linkEntities(db: WorkspaceDb, input: EntityLinkInput) {
+  const label =
+    input.label ??
+    resolveLinkLabel(db, input.toType, input.toId) ??
+    resolveLinkLabel(db, input.fromType, input.fromId);
   return db
     .insert(workspaceEntityLinks)
     .values({
@@ -3093,6 +3174,7 @@ export function linkEntities(db: WorkspaceDb, input: EntityLinkInput) {
       toType: input.toType,
       toId: input.toId,
       kind: input.kind ?? "relates",
+      label,
       createdAt: new Date().toISOString(),
     })
     .onConflictDoNothing()

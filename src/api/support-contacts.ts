@@ -1,10 +1,8 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
-import { eq } from "drizzle-orm";
 
 import { createD1 } from "../global/db.js";
 import { anonymizeCustomer } from "../global/deletion.js";
-import { supportCustomerCompanies } from "../global/schema.js";
 import {
   createCustomer,
   getCustomerByEmail,
@@ -676,11 +674,12 @@ export function registerSupportContactRoutes(app: OpenAPIHono<AppContext>) {
     const stub = getWorkspaceStub(c.env, organizationId);
     await stub.setOrganizationId(organizationId);
     const all = await stub.listCustomers();
-    const filtered = query.q
+    const q = query.q?.toLowerCase();
+    const filtered = q
       ? all.filter(
-          (c) =>
-            c.name.toLowerCase().includes(query.q!.toLowerCase()) ||
-            (c.domain ?? "").toLowerCase().includes(query.q!.toLowerCase())
+          (row) =>
+            row.name.toLowerCase().includes(q) ||
+            (row.domain ?? "").toLowerCase().includes(q)
         )
       : all;
     return c.json({
