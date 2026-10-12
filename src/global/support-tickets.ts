@@ -2655,3 +2655,98 @@ export async function listPublicBoard(
     nextCursor: hasMore ? String(safeOffset + limit) : null,
   };
 }
+
+async function noteEventForTicket(
+  db: D1Client,
+  organizationId: string,
+  ticketId: string,
+  eventId: string
+) {
+  const event = await db
+    .select({
+      id: supportTicketEvents.id,
+      type: supportTicketEvents.type,
+    })
+    .from(supportTicketEvents)
+    .innerJoin(
+      supportTickets,
+      and(
+        eq(supportTicketEvents.ticketId, supportTickets.id),
+        eq(supportTickets.organizationId, organizationId)
+      )
+    )
+    .where(
+      and(
+        eq(supportTicketEvents.id, eventId),
+        eq(supportTicketEvents.ticketId, ticketId),
+        eq(supportTicketEvents.type, "note")
+      )
+    )
+    .get();
+  if (!event) {
+    throw new VortexError({
+      code: "NOT_FOUND",
+      status: 404,
+      message: "Note not found",
+    });
+  }
+  return event;
+}
+
+export async function updateTicketNote(
+  db: D1Client,
+  organizationId: string,
+  ticketId: string,
+  eventId: string,
+  body: string
+) {
+  if (!body || body.trim().length === 0) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: "Note body cannot be empty",
+    });
+  }
+  const event = await noteEventForTicket(db, organizationId, ticketId, eventId);
+  await db
+    .update(supportTicketNotes)
+    .set({ body })
+    .where(eq(supportTicketNotes.eventId, event.id))
+    .run();
+  const events = await listTicketEvents(db, organizationId, ticketId, {
+    limit: 200,
+  });
+  const updated = events.find((e) => e.id === event.id);
+  if (updated) return updated;
+  // Off-page event — return the bare event + updated note body.
+  const note = await db
+    .select()
+    .from(supportTicketNotes)
+    .where(eq(supportTicketNotes.eventId, event.id))
+    .get();
+  if (!note) {
+    throw new VortexError({
+      code: "NOT_FOUND",
+      status: 404,
+      message: "Note not found",
+    });
+  }
+  return {
+    ...event,
+    ticketId,
+    note,
+  } as SupportTicketEventWithDetails;
+}
+
+export async function deleteTicketNote(
+  db: D1Client,
+  organizationId: string,
+  ticketId: string,
+  eventId: string
+) {
+  const event = await noteEventForTicket(db, organizationId, ticketId, eventId);
+  await db
+    .delete(supportTicketEvents)
+    .where(eq(supportTicketEvents.id, event.id))
+    .run();
+}

@@ -21125,6 +21125,52 @@
         }
       }
     },
+    "/workspaces/{organizationId}/me/permissions": {
+      "get": {
+        "tags": [
+          "memberships"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The caller's flattened permissions for the workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "role": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "permissions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "role",
+                    "permissions"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List me permissions"
+      }
+    },
     "/workspaces/{organizationId}/available-users": {
       "get": {
         "tags": [
@@ -26987,6 +27033,38 @@
       }
     },
     "/workspaces/{organizationId}/documents/{id}/permissions": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Document permission grants"
+          },
+          "404": {
+            "description": "Document not found"
+          }
+        },
+        "summary": "List document permissions"
+      },
       "put": {
         "tags": [
           "documents"
@@ -37125,6 +37203,237 @@
           }
         },
         "summary": "Create support ticket note"
+      }
+    },
+    "/workspaces/{organizationId}/support/tickets/{ticketId}/notes/{eventId}": {
+      "patch": {
+        "tags": [
+          "support-tickets"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "ticketId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "eventId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "body": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "body"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Note updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "event": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "ticketId": {
+                          "type": "string"
+                        },
+                        "type": {
+                          "type": "string"
+                        },
+                        "subType": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "actorType": {
+                          "type": "string"
+                        },
+                        "actorId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "metadata": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "externalId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "eventId": {
+                              "type": "string"
+                            },
+                            "direction": {
+                              "type": "string",
+                              "enum": [
+                                "inbound",
+                                "outbound"
+                              ]
+                            },
+                            "textContent": {
+                              "type": "string"
+                            },
+                            "markdownContent": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "channel": {
+                              "type": "string",
+                              "enum": [
+                                "email",
+                                "slack",
+                                "msteams",
+                                "discord",
+                                "chat",
+                                "capture",
+                                "api",
+                                "intercom",
+                                "zendesk",
+                                "plain",
+                                "linear"
+                              ]
+                            },
+                            "customerId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "userId": {
+                              "type": "string",
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "eventId",
+                            "direction",
+                            "textContent",
+                            "markdownContent",
+                            "channel",
+                            "customerId",
+                            "userId"
+                          ]
+                        },
+                        "note": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "eventId": {
+                              "type": "string"
+                            },
+                            "body": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "eventId",
+                            "body"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "ticketId",
+                        "type",
+                        "subType",
+                        "actorType",
+                        "actorId",
+                        "metadata",
+                        "externalId",
+                        "createdAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "event"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Update support ticket note"
+      },
+      "delete": {
+        "tags": [
+          "support-tickets"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "ticketId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "eventId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Note deleted"
+          }
+        },
+        "summary": "Delete support ticket note"
       }
     },
     "/workspaces/{organizationId}/support/tickets/{ticketId}/events": {

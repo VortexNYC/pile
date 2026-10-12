@@ -2095,9 +2095,7 @@ describe("comment mentions", () => {
         "user"
       );
       expect(
-        mentioned.some(
-          (n) => n.type === "mention" && n.issueId === issue.id
-        )
+        mentioned.some((n) => n.type === "mention" && n.issueId === issue.id)
       ).toBe(true);
       const second = await instance.listNotificationsForRecipient(
         "second-user",
@@ -2113,6 +2111,29 @@ describe("comment mentions", () => {
           (n) => n.type === "mention" && n.issueId === issue.id
         )
       ).toHaveLength(0);
+    });
+  });
+
+  it("notifies the issue assignee on a new comment", async () => {
+    await withWorkspace(getStub(), async (instance) => {
+      const issue = await instance.createIssue({
+        title: "assignee target",
+        assigneeId: "user-1",
+      });
+      await instance.createComment({
+        issueId: issue.id,
+        authorId: "author-2",
+        body: "assignee ping",
+      });
+      const notes = await instance.listNotificationsForRecipient(
+        "user-1",
+        "user"
+      );
+      expect(
+        notes.some(
+          (n) => n.type === "comment_created" && n.issueId === issue.id
+        )
+      ).toBe(true);
     });
   });
 });

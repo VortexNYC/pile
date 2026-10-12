@@ -10,6 +10,8 @@ import { maybeEscalate } from "../global/support-escalation.js";
 import {
   addTicketMessage,
   addTicketNote,
+  deleteTicketNote,
+  updateTicketNote,
   addTicketVote,
   createTicket,
   getTicketById,
@@ -1116,6 +1118,73 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
     }
     return c.json({ event }, 201);
   });
+
+  const noteParams = z.object({
+    organizationId: z.string(),
+    ticketId: z.string(),
+    eventId: z.string(),
+  });
+
+  app.openapi(
+    createRoute({
+      method: "patch",
+      path: "/workspaces/{organizationId}/support/tickets/{ticketId}/notes/{eventId}",
+      tags: ["support-tickets"],
+      middleware: [rls("comment:edit")],
+      request: {
+        params: noteParams,
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({ body: z.string().min(1) }),
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "Note updated",
+          content: {
+            "application/json": {
+              schema: z.object({ event: supportTicketEventSchema }),
+            },
+          },
+        },
+      },
+    }),
+    async (c) => {
+      const { organizationId, ticketId, eventId } = c.req.valid("param");
+      const input = c.req.valid("json");
+      const db = createD1(c.env.D1);
+      const event = await updateTicketNote(
+        db,
+        organizationId,
+        ticketId,
+        eventId,
+        input.body
+      );
+      return c.json({ event });
+    }
+  );
+
+  app.openapi(
+    createRoute({
+      method: "delete",
+      path: "/workspaces/{organizationId}/support/tickets/{ticketId}/notes/{eventId}",
+      tags: ["support-tickets"],
+      middleware: [rls("comment:edit")],
+      request: { params: noteParams },
+      responses: {
+        204: { description: "Note deleted" },
+      },
+    }),
+    async (c) => {
+      const { organizationId, ticketId, eventId } = c.req.valid("param");
+      const db = createD1(c.env.D1);
+      await deleteTicketNote(db, organizationId, ticketId, eventId);
+      return c.body(null, 204);
+    }
+  );
 
   app.openapi(listEventsRoute, async (c) => {
     const { organizationId, ticketId } = c.req.valid("param");

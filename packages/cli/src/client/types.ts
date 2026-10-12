@@ -10511,6 +10511,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/me/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List me permissions */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The caller's flattened permissions for the workspace */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            role: string | null;
+                            permissions: string[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/available-users": {
         parameters: {
             query?: never;
@@ -13857,7 +13898,35 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List document permissions */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Document permission grants */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Document not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         /** Update document permissions */
         put: {
             parameters: {
@@ -18479,6 +18548,103 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/tickets/{ticketId}/notes/{eventId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete support ticket note */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    ticketId: string;
+                    eventId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Note deleted */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** Update support ticket note */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    ticketId: string;
+                    eventId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        body: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Note updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            event: {
+                                id: string;
+                                ticketId: string;
+                                type: string;
+                                subType: string | null;
+                                actorType: string;
+                                actorId: string | null;
+                                metadata: string | null;
+                                externalId: string | null;
+                                createdAt: string;
+                                message?: {
+                                    id: string;
+                                    eventId: string;
+                                    /** @enum {string} */
+                                    direction: "inbound" | "outbound";
+                                    textContent: string;
+                                    markdownContent: string | null;
+                                    /** @enum {string} */
+                                    channel: "email" | "slack" | "msteams" | "discord" | "chat" | "capture" | "api" | "intercom" | "zendesk" | "plain" | "linear";
+                                    customerId: string | null;
+                                    userId: string | null;
+                                };
+                                note?: {
+                                    id: string;
+                                    eventId: string;
+                                    body: string;
+                                };
+                            };
+                        };
+                    };
+                };
+            };
+        };
         trace?: never;
     };
     "/workspaces/{organizationId}/support/tickets/{ticketId}/events": {

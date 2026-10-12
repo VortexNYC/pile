@@ -22,6 +22,7 @@ function FeedRow({
   timestamp,
   workspaceSlug,
   compact,
+  actions,
 }: {
   /** Left anchor — a status/kind Badge or a small icon. */
   marker: ReactNode;
@@ -31,10 +32,12 @@ function FeedRow({
   workspaceSlug?: string;
   /** Quieter chrome for tool-trace style rows. */
   compact?: boolean;
+  /** Hover-revealed affordances on the row's trailing edge. */
+  actions?: ReactNode;
 }) {
   return (
     <div
-      className={`flex items-baseline gap-3 px-4 ${
+      className={`group flex items-baseline gap-3 px-4 ${
         compact ? "py-1.5 text-kumo-subtle" : "py-2.5"
       }`}
     >
@@ -49,6 +52,11 @@ function FeedRow({
       <span className="text-xs text-kumo-subtle shrink-0">
         {formatRelative(timestamp)}
       </span>
+      {actions ? (
+        <span className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+          {actions}
+        </span>
+      ) : null}
     </div>
   );
 }

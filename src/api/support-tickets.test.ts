@@ -1253,8 +1253,7 @@ describe("support-tickets API", () => {
       {
         method: "POST",
         body: JSON.stringify({ name: "Mention Co", email: "m@example.com" }),
-      },
-      token
+      }
     );
     const customer = (await customerRes.json()) as {
       customer: { id: string };
@@ -1268,8 +1267,7 @@ describe("support-tickets API", () => {
           title: "mention target",
           sourceChannel: "api",
         }),
-      },
-      token
+      }
     );
     const ticket = (await ticketRes.json()) as {
       ticket: { id: string };
@@ -1281,9 +1279,72 @@ describe("support-tickets API", () => {
         body: JSON.stringify({
           body: "FYI @test-user please look",
         }),
-      },
-      token
+      }
     );
     expect(noteRes.status).toBe(201);
+  });
+  it("edits and deletes a note", async () => {
+    const customerRes = await fetch(
+      `/workspaces/${organizationId}/support/customers`,
+      {
+        method: "POST",
+        body: JSON.stringify({ name: "Edit Co", email: "e@example.com" }),
+      }
+    );
+    const customer = (await customerRes.json()) as {
+      customer: { id: string };
+    };
+    const ticketRes = await fetch(
+      `/workspaces/${organizationId}/support/tickets`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          customerId: customer.customer.id,
+          title: "edit target",
+          sourceChannel: "api",
+        }),
+      }
+    );
+    const ticket = (await ticketRes.json()) as {
+      ticket: { id: string };
+    };
+    const noteRes = await fetch(
+      `/workspaces/${organizationId}/support/tickets/${ticket.ticket.id}/notes`,
+      {
+        method: "POST",
+        body: JSON.stringify({ body: "first draft" }),
+      }
+    );
+    expect(noteRes.status).toBe(201);
+    const note = (await noteRes.json()) as {
+      event: { id: string; note: { body: string } };
+    };
+
+    const patch = await fetch(
+      `/workspaces/${organizationId}/support/tickets/${ticket.ticket.id}/notes/${note.event.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ body: "edited draft" }),
+      }
+    );
+    expect(patch.status).toBe(200);
+    const updated = (await patch.json()) as {
+      event: { note: { body: string } };
+    };
+    expect(updated.event.note.body).toBe("edited draft");
+
+    const del = await fetch(
+      `/workspaces/${organizationId}/support/tickets/${ticket.ticket.id}/notes/${note.event.id}`,
+      { method: "DELETE" }
+    );
+    expect(del.status).toBe(204);
+
+    const gone = await fetch(
+      `/workspaces/${organizationId}/support/tickets/${ticket.ticket.id}/events`
+    );
+    const events = (await gone.json()) as {
+      events: Array<{ id: string }>;
+    };
+    expect(events.events.map((e) => e.id)).not.toContain(note.event.id);
   });
 });

@@ -818,6 +818,30 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const subjectId = values.documentId ?? values.issueId;
     if (subjectId) {
       const notified = new Set<string>();
+      if (values.issueId) {
+        // Linear parity — a comment on an issue pages its assignee and
+        // subscribers, the same audience issue updates already reach.
+        const issue = await this.getIssue(values.issueId);
+        if (issue) {
+          const recipients = await this.resolveIssueRecipients(
+            issue,
+            values.authorId ?? undefined
+          );
+          await Promise.all(
+            recipients.map(async (recipientId) => {
+              if (notified.has(recipientId)) return;
+              notified.add(recipientId);
+              await this.deliverNotification({
+                recipientId,
+                recipientType: "user",
+                issueId: values.issueId!,
+                type: "comment_created",
+                metadata: { issueId: values.issueId, commentId: id },
+              });
+            })
+          );
+        }
+      }
       if (values.documentId) {
         await Promise.all(
           data
