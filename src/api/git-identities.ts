@@ -34,7 +34,7 @@ const listIdentitiesRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/git/identities",
   tags: ["git-identities"],
-  middleware: [rls("read", "agent:read")],
+  middleware: [rls("settings:view", "agent:read")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },

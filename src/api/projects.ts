@@ -346,7 +346,7 @@ export function registerProjectDetailRoutes(app: OpenAPIHono<AppContext>) {
     method: "post",
     path: "/workspaces/{organizationId}/project-update-reminders",
     tags: ["projects"],
-    middleware: [rls("write")],
+    middleware: [rls("project:create")],
     request: {
       params: z.object({ organizationId: z.string() }),
       body: {
@@ -374,7 +374,7 @@ export function registerProjectDetailRoutes(app: OpenAPIHono<AppContext>) {
     method: "post",
     path: "/workspaces/{organizationId}/project-update-reminders/fire-due",
     tags: ["projects"],
-    middleware: [rls("write")],
+    middleware: [rls("project:create")],
     request: {
       params: z.object({ organizationId: z.string() }),
     },

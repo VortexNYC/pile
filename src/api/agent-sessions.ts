@@ -315,7 +315,7 @@ const listSessionsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/agent/sessions",
   tags: ["agent-sessions"],
-  middleware: [rls("read", "agent:read")],
+  middleware: [rls("session:view", "agent:read")],
   request: {
     params: z.object({ organizationId: z.string() }),
     query: z.object({
@@ -351,7 +351,7 @@ const agentStatsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/agent/stats",
   tags: ["agent-sessions"],
-  middleware: [rls("read", "agent:read")],
+  middleware: [rls("session:view", "agent:read")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -390,7 +390,7 @@ const fleetHealthRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/agent/fleet-health",
   tags: ["agent-sessions"],
-  middleware: [rls("read", "agent:read")],
+  middleware: [rls("session:view", "agent:read")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -423,7 +423,7 @@ const issueLiveRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/issues/{issueId}/live",
   tags: ["agent-sessions"],
-  middleware: [rls("read", "agent:read")],
+  middleware: [rls("issue:view", "agent:read")],
   request: {
     params: z.object({ organizationId: z.string(), issueId: z.string() }),
   },
@@ -446,7 +446,7 @@ const getSessionRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/agent/sessions/{sessionId}",
   tags: ["agent-sessions"],
-  middleware: [rls("read", "agent:read")],
+  middleware: [rls("session:view", "agent:read")],
   request: {
     params: z.object({ organizationId: z.string(), sessionId: z.string() }),
     query: z.object({ summary: z.string().optional() }),
@@ -469,7 +469,7 @@ const getSessionEventsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/events",
   tags: ["agent-sessions"],
-  middleware: [rls("read", "agent:read")],
+  middleware: [rls("session:view", "agent:read")],
   request: {
     params: z.object({ organizationId: z.string(), sessionId: z.string() }),
     query: z.object({
@@ -508,7 +508,7 @@ const getSessionChecksRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/checks",
   tags: ["agent-sessions"],
-  middleware: [rls("read", "agent:read")],
+  middleware: [rls("session:view", "agent:read")],
   request: {
     params: z.object({ organizationId: z.string(), sessionId: z.string() }),
   },
@@ -542,7 +542,7 @@ const addActivityRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/activities",
   tags: ["agent-sessions"],
-  middleware: [rls("write", "agent:write")],
+  middleware: [rls("session:create", "agent:write")],
   request: {
     params: z.object({ organizationId: z.string(), sessionId: z.string() }),
     body: {
@@ -588,7 +588,13 @@ const createArtifactBodySchema = z
     content: z.string().optional(),
     data: z.string().optional(),
     mimeType: z.string().optional(),
-    url: z.string().optional(),
+    url: z
+      .string()
+      .refine(
+        (v) => /^https?:\/\//i.test(v),
+        "URL must start with http:// or https://"
+      )
+      .optional(),
   })
   .refine(
     (value) =>
@@ -602,7 +608,7 @@ const createArtifactRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/artifacts",
   tags: ["agent-sessions"],
-  middleware: [rls("write", "agent:write")],
+  middleware: [rls("session:create", "agent:write")],
   request: {
     params: z.object({ organizationId: z.string(), sessionId: z.string() }),
     body: {
@@ -624,7 +630,7 @@ const patchSessionRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/agent/sessions/{sessionId}",
   tags: ["agent-sessions"],
-  middleware: [rls("write", "agent:write")],
+  middleware: [rls("session:edit", "agent:write")],
   request: {
     params: z.object({ organizationId: z.string(), sessionId: z.string() }),
     body: {
@@ -633,7 +639,13 @@ const patchSessionRoute = createRoute({
           schema: z.object({
             status: agentSessionStatusSchema.optional(),
             result: z.string().optional(),
-            url: z.string().optional(),
+            url: z
+              .string()
+              .refine(
+                (v) => /^https?:\/\//i.test(v),
+                "URL must start with http:// or https://"
+              )
+              .optional(),
             prUrl: z.string().optional(),
             prState: z.string().optional(),
             branch: z.string().optional(),
@@ -657,7 +669,7 @@ const cancelSessionRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/cancel",
   tags: ["agent-sessions"],
-  middleware: [rls("write", "agent:write")],
+  middleware: [rls("session:create", "agent:write")],
   request: {
     params: z.object({ organizationId: z.string(), sessionId: z.string() }),
   },
@@ -676,7 +688,7 @@ const pollSessionRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/poll",
   tags: ["agent-sessions"],
-  middleware: [rls("write", "agent:write")],
+  middleware: [rls("session:create", "agent:write")],
   request: {
     params: z.object({ organizationId: z.string(), sessionId: z.string() }),
   },
@@ -695,7 +707,7 @@ const getSessionStateRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/state",
   tags: ["agent-sessions"],
-  middleware: [rls("read", "agent:read")],
+  middleware: [rls("session:view", "agent:read")],
   request: {
     params: z.object({
       organizationId: z.string(),
@@ -738,7 +750,7 @@ const createChildSessionRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/children",
   tags: ["agent-sessions"],
-  middleware: [rls("write", "agent:write")],
+  middleware: [rls("session:create", "agent:write")],
   request: {
     params: z.object({ organizationId: z.string(), sessionId: z.string() }),
     body: {
@@ -784,7 +796,7 @@ const registerSessionRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/agent/sessions/register",
   tags: ["agent-sessions"],
-  middleware: [rls("write", "agent:write")],
+  middleware: [rls("session:create", "agent:write")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
@@ -796,7 +808,13 @@ const registerSessionRoute = createRoute({
               provider: z.string().min(1),
               providerSessionId: z.string().optional(),
               status: agentSessionStatusSchema.optional(),
-              url: z.string().optional(),
+              url: z
+                .string()
+                .refine(
+                  (v) => /^https?:\/\//i.test(v),
+                  "URL must start with http:// or https://"
+                )
+                .optional(),
               branch: z.string().optional(),
               prUrl: z.string().optional(),
             })
@@ -888,7 +906,7 @@ const dispatchBatchRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/agent/dispatch-batch",
   tags: ["agent-sessions"],
-  middleware: [rls("write", "agent:write")],
+  middleware: [rls("session:create", "agent:write")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
@@ -930,7 +948,7 @@ const promptSessionRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/prompt",
   tags: ["agent-sessions"],
-  middleware: [rls("write", "agent:write")],
+  middleware: [rls("session:create", "agent:write")],
   request: {
     params: z.object({ organizationId: z.string(), sessionId: z.string() }),
     body: {
@@ -958,7 +976,7 @@ const retrySessionRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/retry",
   tags: ["agent-sessions"],
-  middleware: [rls("write", "agent:write")],
+  middleware: [rls("session:create", "agent:write")],
   request: {
     params: z.object({ organizationId: z.string(), sessionId: z.string() }),
     body: {
@@ -1008,7 +1026,7 @@ const listAutomationsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/agent/automations",
   tags: ["agent-sessions"],
-  middleware: [rls("read", "agent:read")],
+  middleware: [rls("session:view", "agent:read")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -1028,7 +1046,7 @@ const createAutomationRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/agent/automations",
   tags: ["agent-sessions"],
-  middleware: [rls("write", "agent:write")],
+  middleware: [rls("session:create", "agent:write")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
@@ -1061,7 +1079,7 @@ const deleteAutomationRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/agent/automations/{automationId}",
   tags: ["agent-sessions"],
-  middleware: [rls("write", "agent:write")],
+  middleware: [rls("session:delete", "agent:write")],
   request: {
     params: z.object({
       organizationId: z.string(),
@@ -2687,6 +2705,30 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     const issue = await stub.getIssue(session.issueId);
     if (!issue) {
       return c.json({ message: "Issue not found" }, 404);
+    }
+
+    // Externally-managed sessions (a local coding agent registered itself
+    // via /sessions/register; no providerSessionId, no kept sandbox) can't
+    // receive a live sendPrompt — the reply is queued as a readable event
+    // and the agent picks it up by polling /events or the SSE stream.
+    const externallyManaged = session.providerSessionId === null;
+    if (externallyManaged) {
+      await stub.addAgentSessionEvent({
+        sessionId,
+        type: "prompt.followup",
+        message: `Follow-up prompt queued (${prompt.length} chars)`,
+        payload: { prompt: prompt.slice(0, 2000), delivery: "queued" },
+      });
+      const queued = await stub.applyAgentSessionResult(
+        sessionId,
+        { status: "running", result: null },
+        identity.id
+      );
+      const queuedActivities = await stub.listAgentActivities(sessionId);
+      return c.json(
+        toSessionResponse(queued ?? session, queuedActivities),
+        200
+      );
     }
 
     const providerConfig = await loadProviderConfig(

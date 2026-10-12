@@ -66,7 +66,7 @@ const setStatusRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/users/{userId}/status",
   tags: ["support-team"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: userIdParam,
     body: {
@@ -96,7 +96,7 @@ const listAgentsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/agents",
   tags: ["support-team"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: { params: orgParam },
   responses: {
     200: {
@@ -114,7 +114,7 @@ const createTierRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/tiers",
   tags: ["support-team"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: orgParam,
     body: {
@@ -142,7 +142,7 @@ const listTiersRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/tiers",
   tags: ["support-team"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: { params: orgParam },
   responses: {
     200: {
@@ -160,7 +160,7 @@ const getTierRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/tiers/{tierId}",
   tags: ["support-team"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: { params: tierIdParam },
   responses: {
     200: {
@@ -177,7 +177,7 @@ const updateTierRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/support/tiers/{tierId}",
   tags: ["support-team"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:edit")],
   request: {
     params: tierIdParam,
     body: {
@@ -206,7 +206,7 @@ const deleteTierRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/support/tiers/{tierId}",
   tags: ["support-team"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:delete")],
   request: { params: tierIdParam },
   responses: {
     204: { description: "Deleted" },
@@ -218,7 +218,7 @@ const addTierMemberRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/tiers/{tierId}/members",
   tags: ["support-team"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: tierIdParam,
     body: {
@@ -237,7 +237,7 @@ const removeTierMemberRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/support/tiers/{tierId}/members/{userId}",
   tags: ["support-team"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:delete")],
   request: { params: tierMemberParam },
   responses: {
     204: { description: "Member removed" },
@@ -249,7 +249,7 @@ const listTierMembersRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/tiers/{tierId}/members",
   tags: ["support-team"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: { params: tierIdParam },
   responses: {
     200: {

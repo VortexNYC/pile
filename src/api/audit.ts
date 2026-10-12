@@ -27,7 +27,7 @@ const listRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/audit-log",
   tags: ["audit"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
     query: z.object({
@@ -57,7 +57,7 @@ const getRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/audit-log/{id}",
   tags: ["audit"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },

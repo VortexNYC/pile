@@ -294,8 +294,7 @@ async function getOrCreatePlainSupportCustomer(
 
   const companies: { companyId: string; isPrimary: boolean }[] = [];
   if (customer.company) {
-    const company = await findOrCreateCompany(ctx.db, ctx.organizationId, {
-      organizationId: ctx.organizationId,
+    const company = await findOrCreateCompany(ctx.stub, ctx.organizationId, {
       name: customer.company.name ?? "Unknown company",
       domain: customer.company.domainName ?? null,
       externalId: customer.company.id,
@@ -308,7 +307,6 @@ async function getOrCreatePlainSupportCustomer(
     .map((edge) => edge.node.tenant)
     .filter((tenant) => tenant.id)
     .map((tenant) => ({
-      organizationId: ctx.organizationId,
       name: tenant.name ?? "Unknown tenant",
       domain: tenant.externalId ?? null,
       externalId: tenant.externalId ?? tenant.id,
@@ -318,7 +316,7 @@ async function getOrCreatePlainSupportCustomer(
   const tenantCompanies = await Promise.all(
     tenantInputs.map(async (input) => {
       const company = await findOrCreateCompany(
-        ctx.db,
+        ctx.stub,
         ctx.organizationId,
         input
       );

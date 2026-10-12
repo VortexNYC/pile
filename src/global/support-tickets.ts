@@ -19,7 +19,6 @@ import type { RealtimeEvent } from "../types/workspace.js";
 import type { D1Client } from "./db.js";
 import {
   labels,
-  supportCompanies,
   supportCustomerCompanies,
   supportCustomerIdentities,
   supportCustomers,
@@ -159,7 +158,7 @@ export type SupportTicketWithRelations = SupportTicket & {
     fullName: string | null;
     phone: string | null;
   };
-  companies: { id: string; name: string; isPrimary: boolean }[];
+  companies: { id: string; name: string | null; isPrimary: boolean }[];
   identities: SupportCustomerIdentity[];
   labels: { id: string; labelId: string; name: string; color: string | null }[];
   assignees: {
@@ -314,6 +313,18 @@ export async function createTicket(
     createdAt,
     updatedAt,
   };
+
+  if (resolvedIssueId && env) {
+    const stub = getWorkspaceStub(env, input.organizationId);
+    await stub.setOrganizationId(input.organizationId);
+    await stub.linkEntities({
+      fromType: "ticket",
+      fromId: id,
+      toType: "issue",
+      toId: resolvedIssueId,
+      kind: "about",
+    });
+  }
 
   let inserted: SupportTicket | undefined;
   if (input.externalId) {
@@ -497,15 +508,11 @@ export async function hydrateTicketRelations(
     db
       .select({
         id: supportCustomerCompanies.id,
-        name: supportCompanies.name,
+        name: supportCustomerCompanies.companyName,
         isPrimary: supportCustomerCompanies.isPrimary,
         customerId: supportCustomerCompanies.customerId,
       })
       .from(supportCustomerCompanies)
-      .innerJoin(
-        supportCompanies,
-        eq(supportCustomerCompanies.companyId, supportCompanies.id)
-      )
       .where(inArray(supportCustomerCompanies.customerId, customerIds)),
     db
       .select()
@@ -603,6 +610,7 @@ export type ListTicketsOptions = {
   assignedTo?: string;
   label?: string;
   q?: string;
+  issueId?: string;
 };
 
 export async function listTickets(
@@ -616,6 +624,9 @@ export async function listTickets(
 
   if (options.customerId) {
     conditions.push(eq(supportTickets.customerId, options.customerId));
+  }
+  if (options.issueId) {
+    conditions.push(eq(supportTickets.issueId, options.issueId));
   }
   if (options.status) {
     conditions.push(eq(supportTickets.status, options.status));
@@ -772,6 +783,30 @@ export async function updateTicket(
 
   if (input.title !== undefined) updates.title = input.title;
   if (input.isPublic !== undefined) updates.isPublic = input.isPublic;
+
+  if (resolvedIssueId !== undefined && env) {
+    const stub = getWorkspaceStub(env, organizationId);
+    await stub.setOrganizationId(organizationId);
+    if (resolvedIssueId === null) {
+      // clear all ticket→issue edges for this ticket
+      const links = await stub.listEntityLinks("ticket", ticketId);
+      for (const l of links.filter(
+        (x) =>
+          (x.fromType === "ticket" && x.toType === "issue") ||
+          (x.fromType === "issue" && x.toType === "ticket")
+      )) {
+        await stub.unlinkEntities(l.id);
+      }
+    } else {
+      await stub.linkEntities({
+        fromType: "ticket",
+        fromId: ticketId,
+        toType: "issue",
+        toId: resolvedIssueId,
+        kind: "about",
+      });
+    }
+  }
 
   const eventsToCreate: (typeof supportTicketEvents.$inferInsert)[] = [];
 

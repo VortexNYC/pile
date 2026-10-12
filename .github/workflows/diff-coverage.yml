@@ -5,6 +5,7 @@ name: Diff Coverage
 on:
   pull_request:
     types: [opened, reopened, synchronize, edited]
+  merge_group:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -38,5 +39,7 @@ jobs:
       - name: Diff coverage
         env:
           DIFF_COVERAGE_BASE: HEAD^1
-          PR_BODY: ${{ github.event.pull_request.body }}
+          # merge_group commits embed the PR title + body in the message;
+          # pull_request events read it directly.
+          PR_BODY: ${{ github.event.pull_request.body || github.event.merge_group.head_commit.message }}
         run: vp run diff-coverage

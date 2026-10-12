@@ -33,14 +33,21 @@ import { registerBillingRoutes } from "./billing.js";
 import { registerChangelogRoutes } from "./changelog.js";
 import { registerClipperRoutes } from "./clipper.js";
 import { registerCommentRoutes } from "./comments.js";
+import { registerCommsRoutes } from "./comms.js";
 import { registerCsvExportRoutes } from "./csv-export.js";
 import { registerCustomerRoutes } from "./customers.js";
+import {
+  registerDealIssueLinkRoutes,
+  registerDealRoutes,
+  registerIssueDealRoutes,
+} from "./deals.js";
 import { registerDocsSiteRoutes } from "./docs-site.js";
 import { registerDocumentRoutes } from "./documents.js";
 import { registerEmailInboxRoutes } from "./email-inboxes.js";
 import { registerEmojiRoutes } from "./emojis.js";
 import { getExecutionCtx } from "./execution-ctx.js";
 import { registerExternalLinkRoutes } from "./external-links.js";
+import { registerFieldRoutes } from "./fields.js";
 import { registerFileRoutes } from "./files.js";
 import { registerGitAutomationRoutes } from "./git-automation.js";
 import { registerGitIdentityRoutes } from "./git-identities.js";
@@ -56,7 +63,9 @@ import { registerIssueRelationRoutes } from "./issue-relations.js";
 import { registerIssueSubscriberRoutes } from "./issue-subscribers.js";
 import { registerIssueRoutes } from "./issues.js";
 import { registerLaneMcpRoutes } from "./lane-mcp.js";
+import { registerLeadRoutes } from "./leads.js";
 import { registerLinearUserRoutes } from "./linear-users.js";
+import { registerLinkRoutes } from "./links.js";
 import { registerMcpServerRoutes } from "./mcp-servers.js";
 import { registerNotificationRoutes } from "./notifications.js";
 import { registerNotionWebhookRoute } from "./notion-webhook.js";
@@ -235,7 +244,14 @@ registerDocumentRoutes(app);
 registerEmojiRoutes(app);
 registerDocsSiteRoutes(app);
 registerAuditRoutes(app);
+registerCommsRoutes(app);
 registerCustomerRoutes(app);
+registerDealRoutes(app);
+registerDealIssueLinkRoutes(app);
+registerIssueDealRoutes(app);
+registerFieldRoutes(app);
+registerLeadRoutes(app);
+registerLinkRoutes(app);
 registerSupportContactRoutes(app);
 registerSupportTicketRoutes(app);
 registerChangelogRoutes(app);
@@ -386,6 +402,9 @@ app.all("/api/auth/*", async (c) => {
 });
 
 app.get("/", (c) => {
+  if (new URL(c.req.url).hostname === "staging.pile.nyc") {
+    return c.redirect("/app");
+  }
   const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -409,6 +428,7 @@ support ticket and the engineering issue are the same object.</p>
 pile auth login
 pile issues create --title "…"</pre>
 <p>
+<a href="/app">app</a> ·
 <a href="/openapi.json">openapi.json</a> ·
 <a href="/llms.txt">llms.txt</a> ·
 <a href="/llms-full.txt">llms-full.txt</a> ·

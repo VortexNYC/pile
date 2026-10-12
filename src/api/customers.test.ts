@@ -90,6 +90,35 @@ async function createCustomer(
 }
 
 describe("customers API", () => {
+  it("round-trips bookingUrl", async () => {
+    const res = await fetch(
+      `/workspaces/${organizationId}/customers`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "Cal Co",
+          bookingUrl: "https://cal.com/acme/sync",
+        }),
+      },
+      token
+    );
+    expect(res.status).toBe(201);
+    const created = z
+      .object({ id: z.string(), bookingUrl: z.string().nullable() })
+      .parse(await res.json());
+    expect(created.bookingUrl).toBe("https://cal.com/acme/sync");
+
+    const updated = await fetch(
+      `/workspaces/${organizationId}/customers/${created.id}`,
+      { method: "PATCH", body: JSON.stringify({ bookingUrl: null }) },
+      token
+    );
+    expect(updated.status).toBe(200);
+    const body = z
+      .object({ bookingUrl: z.string().nullable() })
+      .parse(await updated.json());
+    expect(body.bookingUrl).toBeNull();
+  });
   let organizationId: string;
   let token: string;
 

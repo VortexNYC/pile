@@ -1,10 +1,21 @@
 import { Sidebar } from "@cloudflare/kumo/components/sidebar";
-import { createFileRoute, Outlet } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Outlet,
+  useLocation,
+  useNavigate,
+} from "@tanstack/react-router";
 import { useEffect } from "react";
 
 import { AppSidebar } from "@/components/app-sidebar";
+import { CommandMenu } from "@/components/command-menu";
+import { CreateCustomerDialog } from "@/components/create-customer-dialog";
+import { CreateDealDialog } from "@/components/create-deal-dialog";
+import { CreateIssueDialog } from "@/components/create-issue-dialog";
+import { CreateTicketDialog } from "@/components/create-ticket-dialog";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useWorkspaces, WorkspaceContext } from "@/hooks/use-workspace";
 import { betterAuthClient } from "@/lib/better-auth";
 
@@ -15,7 +26,10 @@ export const Route = createFileRoute("/_authenticated/$slug")({
 function WorkspaceLayout() {
   const { slug } = Route.useParams();
   const workspaces = useWorkspaces();
-  const workspace = workspaces.data?.find((w) => w.slug === slug) ?? null;
+  // Accept the org id too — CLI-side links (pile.nyc/app/<org>/...) carry
+  // the organizationId, not the slug.
+  const workspace =
+    workspaces.data?.find((w) => w.slug === slug || w.id === slug) ?? null;
   const workspaceId = workspace?.id;
 
   // better-auth-ui's member screens act on the session's active org.
@@ -54,6 +68,11 @@ function WorkspaceLayout() {
   return (
     <WorkspaceContext.Provider value={workspace}>
       <Sidebar.Provider className="bg-kumo-canvas h-dvh min-h-0">
+        <CommandMenu />
+        <CreateIssueDialog />
+        <CreateTicketDialog />
+        <CreateCustomerDialog />
+        <CreateDealDialog />
         <AppSidebar workspace={workspace} workspaces={workspaces.data} />
         <div className="flex h-dvh min-h-0 min-w-0 flex-1 flex-col">
           <header className="border-kumo-hairline flex h-14 shrink-0 items-center justify-between gap-2 border-b px-4">
@@ -61,10 +80,57 @@ function WorkspaceLayout() {
             <NotificationsBell />
           </header>
           <main className="min-h-0 flex-1 overflow-y-auto">
-            <Outlet key={workspace.id} />
+            <GuestGate workspace={workspace}>
+              <Outlet key={workspace.id} />
+            </GuestGate>
           </main>
         </div>
       </Sidebar.Provider>
     </WorkspaceContext.Provider>
   );
+}
+
+/** Redirect members to a surface they can view when they land on a
+ * path their role excludes — mirrors the server's rls gates. */
+function GuestGate({
+  workspace,
+  children,
+}: {
+  workspace: { id: string; slug: string };
+  children: React.ReactNode;
+}) {
+  const { pathname } = useLocation();
+  const permissions = usePermissions(workspace.id);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!permissions.isLoaded || permissions.role === null) return;
+    if (permissions.isAdmin) return;
+    // First surface the member can see — the redirect target.
+    const home = permissions.can("document", "view")
+      ? `/${workspace.slug}/documents`
+      : `/${workspace.slug}`;
+    const SURFACE_RESOURCES: Array<
+      [string, Parameters<typeof permissions.can>[0]]
+    > = [
+      ["/issues", "issue"],
+      ["/tickets", "ticket"],
+      ["/documents", "document"],
+      ["/customers", "customer"],
+      ["/contacts", "contact"],
+      ["/deals", "deal"],
+      ["/projects", "project"],
+      ["/sessions", "session"],
+      ["/settings", "settings"],
+    ];
+    const rel = pathname.slice(`/${workspace.slug}`.length);
+    const match = SURFACE_RESOURCES.find(([prefix]) => rel.startsWith(prefix));
+    // Account settings are always allowed; other settings need the role.
+    if (rel.startsWith("/settings/account")) return;
+    if (match && !permissions.can(match[1], "view")) {
+      void navigate({ to: home });
+    }
+  }, [pathname, permissions, workspace.slug, navigate]);
+
+  return <>{children}</>;
 }

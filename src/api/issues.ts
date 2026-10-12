@@ -50,6 +50,7 @@ import {
 import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
+import { isAdminIdentity } from "../platform/permissions.js";
 import { rls } from "../platform/rls.js";
 import {
   ISSUE_PRIORITIES,
@@ -344,7 +345,7 @@ const listIssuesRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/issues",
   tags: ["issues"],
-  middleware: [rls("read")],
+  middleware: [rls("issue:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
     query: listIssuesQuerySchema,
@@ -368,7 +369,7 @@ const listTriageIssuesRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/triage",
   tags: ["issues"],
-  middleware: [rls("read")],
+  middleware: [rls("issue:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -390,7 +391,7 @@ const getIssueBranchNameRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/issues/{id}/branch-name",
   tags: ["issues"],
-  middleware: [rls("read")],
+  middleware: [rls("issue:view")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -411,7 +412,7 @@ const issueAnalyticsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/issue-analytics",
   tags: ["issues"],
-  middleware: [rls("read")],
+  middleware: [rls("issue:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
     query: z.object({
@@ -452,7 +453,7 @@ const burndownRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/issue-analytics/burndown",
   tags: ["issues"],
-  middleware: [rls("read")],
+  middleware: [rls("issue:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
     query: z.object({ cycleId: z.string() }),
@@ -483,7 +484,7 @@ const listTriageRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/triage",
   tags: ["issues"],
-  middleware: [rls("read")],
+  middleware: [rls("issue:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
     query: listIssuesQuerySchema,
@@ -524,7 +525,7 @@ const createIssueRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/issues",
   tags: ["issues"],
-  middleware: [rls("write")],
+  middleware: [rls("issue:create")],
   description:
     "The 201 response includes possibleDuplicates: open issues (in teams you can see) whose titles closely match, best first. Non-blocking — if one is the same work, comment on or update it instead of keeping the new issue. Pass dedupe=block to get 409 with the matches in details.possibleDuplicates instead of creating.",
   request: {
@@ -580,7 +581,7 @@ const captureIssueRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/capture",
   tags: ["capture"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:create")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
@@ -603,7 +604,7 @@ const getIssueRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/issues/{id}",
   tags: ["issues"],
-  middleware: [rls("read")],
+  middleware: [rls("issue:view")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -617,11 +618,112 @@ const getIssueRoute = createRoute({
   },
 });
 
+const issueShareSchema = z.object({
+  token: z.string(),
+  organizationId: z.string(),
+  issueId: z.string(),
+  createdById: z.string(),
+  createdAt: z.string(),
+  expiresAt: z.string().nullable(),
+});
+
+const shareIssueRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/issues/{id}/share",
+  tags: ["issues"],
+  middleware: [rls("issue:create")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({ expiresAt: z.string().nullable().optional() }),
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Share link created",
+      content: { "application/json": { schema: issueShareSchema } },
+    },
+    404: { description: "Issue not found" },
+  },
+});
+
+const getIssueShareRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/issues/{id}/share",
+  tags: ["issues"],
+  middleware: [rls("issue:view")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "The active share for this issue, if any.",
+      content: {
+        "application/json": {
+          schema: issueShareSchema.nullable(),
+        },
+      },
+    },
+  },
+});
+
+const deleteIssueShareRoute = createRoute({
+  method: "delete",
+  path: "/workspaces/{organizationId}/issues/{id}/share/{token}",
+  tags: ["issues"],
+  middleware: [rls("issue:delete")],
+  request: {
+    params: z.object({
+      organizationId: z.string(),
+      id: z.string(),
+      token: z.string(),
+    }),
+  },
+  responses: {
+    204: { description: "Share revoked" },
+    404: { description: "Share not found" },
+  },
+});
+
+// Public share read — the token is the capability; no workspace auth.
+const readSharedIssueRoute = createRoute({
+  method: "get",
+  path: "/shared-issues/{organizationId}/{token}",
+  tags: ["issues"],
+  request: {
+    params: z.object({ organizationId: z.string(), token: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Shared issue",
+      content: {
+        "application/json": {
+          schema: z.object({
+            issue: z.object({
+              title: z.string(),
+              identifier: z.string().nullable(),
+              status: z.string(),
+              priority: z.string(),
+              description: z.string().nullable(),
+              createdAt: z.string(),
+            }),
+          }),
+        },
+      },
+    },
+    404: { description: "Share not found or expired" },
+  },
+});
+
 const updateIssueRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/issues/{id}",
   tags: ["issues"],
-  middleware: [rls("write")],
+  middleware: [rls("issue:edit")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
@@ -649,7 +751,7 @@ const batchUpdateIssuesRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/issues/batch",
   tags: ["issues"],
-  middleware: [rls("write")],
+  middleware: [rls("issue:create")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
@@ -674,7 +776,7 @@ const deleteIssueRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/issues/{id}",
   tags: ["issues"],
-  middleware: [rls("write")],
+  middleware: [rls("issue:delete")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -687,7 +789,7 @@ const getIssueChildrenRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/issues/{id}/children",
   tags: ["issues"],
-  middleware: [rls("read")],
+  middleware: [rls("issue:view")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -707,7 +809,7 @@ const similarIssuesRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/issues/{id}/similar",
   tags: ["issues"],
-  middleware: [rls("read")],
+  middleware: [rls("issue:view")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
     query: z.object({
@@ -740,7 +842,7 @@ const dispatchRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/issues/{id}/dispatch",
   tags: ["agents"],
-  middleware: [rls("write", "agent:write")],
+  middleware: [rls("issue:create", "agent:write")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
@@ -835,7 +937,7 @@ const listIssuePermissionsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/issues/{id}/permissions",
   tags: ["issues"],
-  middleware: [rls("read")],
+  middleware: [rls("issue:view")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -858,7 +960,7 @@ const setIssuePermissionRoute = createRoute({
   method: "put",
   path: "/workspaces/{organizationId}/issues/{id}/permissions",
   tags: ["issues"],
-  middleware: [rls("write")],
+  middleware: [rls("issue:edit")],
   description:
     "Grant an actor access to this issue. The first grant restricts the issue to listed actors + workspace admins; revoking the last grant reopens it.",
   request: {
@@ -882,7 +984,7 @@ const revokeIssuePermissionRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/issues/{id}/permissions/{actorId}",
   tags: ["issues"],
-  middleware: [rls("write")],
+  middleware: [rls("issue:delete")],
   description:
     "Revoke an actor's access grant. When the last grant is removed the issue is open to the workspace again.",
   request: {
@@ -902,7 +1004,7 @@ const assignIssueRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/issues/{id}/assign",
   tags: ["issues"],
-  middleware: [rls("write")],
+  middleware: [rls("issue:create")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
@@ -956,7 +1058,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         !view ||
         (view.ownerId !== identity.id &&
           !view.shared &&
-          !identity.permissions.includes("admin"))
+          !isAdminIdentity(identity))
       ) {
         throw new VortexError({
           code: "NOT_FOUND",
@@ -1484,7 +1586,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     // Grant management is admin-only: a granted member could otherwise
     // declassify the issue by revoking every grant, and any member could
     // restrict an open issue to themselves.
-    if (!identity.permissions.includes("admin")) {
+    if (!isAdminIdentity(identity)) {
       throw new VortexError({
         code: "FORBIDDEN",
         status: 403,
@@ -1514,7 +1616,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     await assertIssueAccess(db, stub, issue, identity);
-    if (!identity.permissions.includes("admin")) {
+    if (!isAdminIdentity(identity)) {
       throw new VortexError({
         code: "FORBIDDEN",
         status: 403,
@@ -1584,6 +1686,71 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       similar: similar.filter((hit) =>
         visibleTeamIds.includes(hit.issue.teamId)
       ),
+    });
+  });
+
+  app.openapi(getIssueShareRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const stub = await getStub(c.env, organizationId);
+    return c.json((await stub.getIssueShare(id)) ?? null);
+  });
+
+  app.openapi(shareIssueRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const identity = c.get("workspaceIdentity");
+    const stub = await getStub(c.env, organizationId);
+    const issue = await stub.getIssue(id);
+    if (!issue) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Issue not found",
+      });
+    }
+    const share = await stub.createIssueShare({
+      issueId: issue.id,
+      createdById: identity.id,
+      expiresAt: input.expiresAt,
+    });
+    return c.json(share, 201);
+  });
+
+  app.openapi(deleteIssueShareRoute, async (c) => {
+    const { organizationId, token } = c.req.valid("param");
+    const stub = await getStub(c.env, organizationId);
+    await stub.deleteIssueShare(token);
+    return c.body(null, 204);
+  });
+
+  app.openapi(readSharedIssueRoute, async (c) => {
+    const { organizationId, token } = c.req.valid("param");
+    const stub = await getStub(c.env, organizationId);
+    const share = await stub.getIssueShareByToken(token);
+    const expired =
+      share?.expiresAt !== null &&
+      share?.expiresAt !== undefined &&
+      share.expiresAt < new Date().toISOString();
+    const issue =
+      !share || expired || share.organizationId !== organizationId
+        ? null
+        : await stub.getIssue(share.issueId);
+    if (!issue) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Share not found or expired",
+      });
+    }
+    return c.json({
+      issue: {
+        title: issue.title,
+        identifier: issue.identifier ?? null,
+        status: issue.status,
+        priority: issue.priority,
+        description: issue.description ?? null,
+        createdAt: issue.createdAt,
+      },
     });
   });
 

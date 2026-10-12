@@ -42,7 +42,7 @@ const listStatesRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/git-automation-states",
   tags: ["git-automation"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: { params: orgIdParam },
   responses: {
     200: {
@@ -60,7 +60,7 @@ const createStateRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/git-automation-states",
   tags: ["git-automation"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:create")],
   request: {
     params: orgIdParam,
     body: { content: { "application/json": { schema: stateBodySchema } } },
@@ -77,7 +77,7 @@ const getStateRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/git-automation-states/{id}",
   tags: ["git-automation"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: { params: orgIdParam.merge(z.object({ id: z.string() })) },
   responses: {
     200: {
@@ -92,7 +92,7 @@ const updateStateRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/git-automation-states/{id}",
   tags: ["git-automation"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:edit")],
   request: {
     params: orgIdParam.merge(z.object({ id: z.string() })),
     body: {
@@ -112,7 +112,7 @@ const deleteStateRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/git-automation-states/{id}",
   tags: ["git-automation"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:delete")],
   request: { params: orgIdParam.merge(z.object({ id: z.string() })) },
   responses: {
     204: { description: "State deleted" },
@@ -124,7 +124,7 @@ const listBranchesRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/git-automation-target-branches",
   tags: ["git-automation"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: { params: orgIdParam },
   responses: {
     200: {
@@ -142,7 +142,7 @@ const createBranchRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/git-automation-target-branches",
   tags: ["git-automation"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:create")],
   request: {
     params: orgIdParam,
     body: {
@@ -161,7 +161,7 @@ const getBranchRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/git-automation-target-branches/{id}",
   tags: ["git-automation"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: { params: orgIdParam.merge(z.object({ id: z.string() })) },
   responses: {
     200: {
@@ -176,7 +176,7 @@ const updateBranchRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/git-automation-target-branches/{id}",
   tags: ["git-automation"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:edit")],
   request: {
     params: orgIdParam.merge(z.object({ id: z.string() })),
     body: {
@@ -198,7 +198,7 @@ const deleteBranchRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/git-automation-target-branches/{id}",
   tags: ["git-automation"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:delete")],
   request: { params: orgIdParam.merge(z.object({ id: z.string() })) },
   responses: {
     204: { description: "Target branch deleted" },

@@ -1522,6 +1522,195 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/issues/{id}/share": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List issue share */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The active share for this issue, if any. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            token: string;
+                            organizationId: string;
+                            issueId: string;
+                            createdById: string;
+                            createdAt: string;
+                            expiresAt: string | null;
+                        } | null;
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create issue share */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        expiresAt?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Share link created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            token: string;
+                            organizationId: string;
+                            issueId: string;
+                            createdById: string;
+                            createdAt: string;
+                            expiresAt: string | null;
+                        };
+                    };
+                };
+                /** @description Issue not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/issues/{id}/share/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete issue share */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Share revoked */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Share not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/shared-issues/{organizationId}/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** GET /shared-issues/{organizationId}/{token} */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    token: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Shared issue */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            issue: {
+                                title: string;
+                                identifier: string | null;
+                                status: string;
+                                priority: string;
+                                description: string | null;
+                                createdAt: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Share not found or expired */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/issues/batch": {
         parameters: {
             query?: never;
@@ -5536,8 +5725,7 @@ export interface paths {
                                 id: string;
                                 organizationId: string;
                                 userId: string;
-                                /** @enum {string} */
-                                role: "owner" | "admin" | "member";
+                                role: string;
                                 createdAt: string;
                             }[];
                         };
@@ -5560,8 +5748,7 @@ export interface paths {
                 content: {
                     "application/json": {
                         userId: string;
-                        /** @enum {string} */
-                        role?: "owner" | "admin" | "member";
+                        role?: string;
                     };
                 };
             };
@@ -5576,8 +5763,7 @@ export interface paths {
                             id: string;
                             organizationId: string;
                             userId: string;
-                            /** @enum {string} */
-                            role: "owner" | "admin" | "member";
+                            role: string;
                             createdAt: string;
                         };
                     };
@@ -10477,8 +10663,7 @@ export interface paths {
                     "application/json": {
                         /** Format: email */
                         email: string;
-                        /** @enum {string} */
-                        role: "owner" | "admin" | "member";
+                        role: string;
                         teamId?: string;
                     };
                 };
@@ -12528,7 +12713,7 @@ export interface paths {
                                     [key: string]: unknown;
                                 }[] | string;
                                 /** @enum {string} */
-                                contentFormat: "blocks" | "markdown";
+                                contentFormat: "blocks" | "markdown" | "canvas";
                                 slug: string | null;
                                 projectId: string | null;
                                 issueId: string | null;
@@ -12567,7 +12752,7 @@ export interface paths {
                             [key: string]: unknown;
                         }[] | string;
                         /** @enum {string} */
-                        contentFormat?: "blocks" | "markdown";
+                        contentFormat?: "blocks" | "markdown" | "canvas";
                         slug?: string;
                         projectId?: string;
                         issueId?: string;
@@ -12594,7 +12779,7 @@ export interface paths {
                                 [key: string]: unknown;
                             }[] | string;
                             /** @enum {string} */
-                            contentFormat: "blocks" | "markdown";
+                            contentFormat: "blocks" | "markdown" | "canvas";
                             slug: string | null;
                             projectId: string | null;
                             issueId: string | null;
@@ -12653,7 +12838,7 @@ export interface paths {
                                 [key: string]: unknown;
                             }[] | string;
                             /** @enum {string} */
-                            contentFormat: "blocks" | "markdown";
+                            contentFormat: "blocks" | "markdown" | "canvas";
                             slug: string | null;
                             projectId: string | null;
                             issueId: string | null;
@@ -12731,7 +12916,7 @@ export interface paths {
                             [key: string]: unknown;
                         }[] | string;
                         /** @enum {string} */
-                        contentFormat?: "blocks" | "markdown";
+                        contentFormat?: "blocks" | "markdown" | "canvas";
                         slug?: string | null;
                         projectId?: string | null;
                         issueId?: string | null;
@@ -12758,7 +12943,7 @@ export interface paths {
                                 [key: string]: unknown;
                             }[] | string;
                             /** @enum {string} */
-                            contentFormat: "blocks" | "markdown";
+                            contentFormat: "blocks" | "markdown" | "canvas";
                             slug: string | null;
                             projectId: string | null;
                             issueId: string | null;
@@ -12822,7 +13007,7 @@ export interface paths {
                                 [key: string]: unknown;
                             }[] | string;
                             /** @enum {string} */
-                            contentFormat: "blocks" | "markdown";
+                            contentFormat: "blocks" | "markdown" | "canvas";
                             slug: string | null;
                             projectId: string | null;
                             issueId: string | null;
@@ -13317,7 +13502,36 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List document share */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The active share for this document, if any. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            token: string;
+                            documentId: string;
+                            includeChildren: boolean;
+                            createdAt: string;
+                            expiresAt: string | null;
+                        } | null;
+                    };
+                };
+            };
+        };
         put?: never;
         /** Create document share */
         post: {
@@ -13450,7 +13664,7 @@ export interface paths {
                                     [key: string]: unknown;
                                 }[] | string;
                                 /** @enum {string} */
-                                contentFormat: "blocks" | "markdown";
+                                contentFormat: "blocks" | "markdown" | "canvas";
                                 slug: string | null;
                                 projectId: string | null;
                                 issueId: string | null;
@@ -13473,7 +13687,7 @@ export interface paths {
                                     [key: string]: unknown;
                                 }[] | string;
                                 /** @enum {string} */
-                                contentFormat: "blocks" | "markdown";
+                                contentFormat: "blocks" | "markdown" | "canvas";
                                 slug: string | null;
                                 projectId: string | null;
                                 issueId: string | null;
@@ -13609,7 +13823,7 @@ export interface paths {
                                     [key: string]: unknown;
                                 }[] | string;
                                 /** @enum {string} */
-                                contentFormat: "blocks" | "markdown";
+                                contentFormat: "blocks" | "markdown" | "canvas";
                                 slug: string | null;
                                 projectId: string | null;
                                 issueId: string | null;
@@ -13849,7 +14063,7 @@ export interface paths {
                                     [key: string]: unknown;
                                 }[] | string;
                                 /** @enum {string} */
-                                contentFormat: "blocks" | "markdown";
+                                contentFormat: "blocks" | "markdown" | "canvas";
                                 slug: string | null;
                                 projectId: string | null;
                                 issueId: string | null;
@@ -13914,7 +14128,7 @@ export interface paths {
                                 [key: string]: unknown;
                             }[] | string;
                             /** @enum {string} */
-                            contentFormat: "blocks" | "markdown";
+                            contentFormat: "blocks" | "markdown" | "canvas";
                             slug: string | null;
                             projectId: string | null;
                             issueId: string | null;
@@ -14372,6 +14586,201 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/support/customers/{customerId}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List support customer events */
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number | null;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                    customerId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Recent comms events for a support customer */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            events: {
+                                id: string;
+                                type: string;
+                                source: string;
+                                summary: string;
+                                occurredAt: string;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create support customer event */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    customerId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        type: "booking" | "call" | "meeting" | "email" | "note" | "custom";
+                        summary: string;
+                        externalId?: string;
+                        payload?: string;
+                        occurredAt?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Event recorded */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/comms/integrations/{source}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update comm integration */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    source: "calcom" | "gcal" | "email";
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        webhookSecret: string;
+                        config?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Integration configured */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/webhooks/comms/{organizationId}/{source}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** POST /webhooks/comms/{organizationId}/{source} */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    source: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            responses: {
+                /** @description Webhook processed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            recorded: number;
+                        };
+                    };
+                };
+                /** @description Bad secret */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Integration not configured */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/customers": {
         parameters: {
             query?: never;
@@ -14403,6 +14812,8 @@ export interface paths {
                                 organizationId: string;
                                 name: string;
                                 url: string | null;
+                                bookingUrl: string | null;
+                                notes: string | null;
                                 logoUrl: string | null;
                                 externalId: string | null;
                                 tierId: string | null;
@@ -14432,6 +14843,8 @@ export interface paths {
                     "application/json": {
                         name: string;
                         url?: string;
+                        bookingUrl?: string | null;
+                        notes?: string | null;
                         logoUrl?: string;
                         externalId?: string;
                         tierId?: string;
@@ -14452,6 +14865,8 @@ export interface paths {
                             organizationId: string;
                             name: string;
                             url: string | null;
+                            bookingUrl: string | null;
+                            notes: string | null;
                             logoUrl: string | null;
                             externalId: string | null;
                             tierId: string | null;
@@ -14501,6 +14916,8 @@ export interface paths {
                             organizationId: string;
                             name: string;
                             url: string | null;
+                            bookingUrl: string | null;
+                            notes: string | null;
                             logoUrl: string | null;
                             externalId: string | null;
                             tierId: string | null;
@@ -14569,6 +14986,8 @@ export interface paths {
                     "application/json": {
                         name?: string;
                         url?: string;
+                        bookingUrl?: string | null;
+                        notes?: string | null;
                         logoUrl?: string;
                         externalId?: string;
                         tierId?: string;
@@ -14589,6 +15008,8 @@ export interface paths {
                             organizationId: string;
                             name: string;
                             url: string | null;
+                            bookingUrl: string | null;
+                            notes: string | null;
                             logoUrl: string | null;
                             externalId: string | null;
                             tierId: string | null;
@@ -14646,6 +15067,8 @@ export interface paths {
                                 size: number;
                                 r2Key: string;
                                 url: string;
+                                bookingUrl?: string | null;
+                                notes?: string | null;
                                 createdById: string | null;
                                 createdAt: string;
                             }[];
@@ -14698,6 +15121,8 @@ export interface paths {
                             size: number;
                             r2Key: string;
                             url: string;
+                            bookingUrl?: string | null;
+                            notes?: string | null;
                             createdById: string | null;
                             createdAt: string;
                         };
@@ -14761,6 +15186,8 @@ export interface paths {
                             size: number;
                             r2Key: string;
                             url: string;
+                            bookingUrl?: string | null;
+                            notes?: string | null;
                             createdById: string | null;
                             createdAt: string;
                         };
@@ -15580,6 +16007,862 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/deals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List deals */
+        get: {
+            parameters: {
+                query?: {
+                    customerId?: string;
+                    contactId?: string;
+                    includeArchived?: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Deal list */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            deals: {
+                                id: string;
+                                organizationId: string;
+                                customerId: string;
+                                name: string;
+                                /** @enum {string} */
+                                stage: "lead" | "qualified" | "proposal" | "negotiation" | "won" | "lost";
+                                amountCents: number | null;
+                                currency: string | null;
+                                expectedCloseAt: string | null;
+                                description: string | null;
+                                closedAt: string | null;
+                                archivedAt: string | null;
+                                contactIds: string[];
+                                createdAt: string;
+                                updatedAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create deal */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        customerId: string;
+                        name: string;
+                        /**
+                         * @default lead
+                         * @enum {string}
+                         */
+                        stage?: "lead" | "qualified" | "proposal" | "negotiation" | "won" | "lost";
+                        amountCents?: number | null;
+                        currency?: string | null;
+                        expectedCloseAt?: string | null;
+                        description?: string | null;
+                        contactIds?: string[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Created deal */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            deal: {
+                                id: string;
+                                organizationId: string;
+                                customerId: string;
+                                name: string;
+                                /** @enum {string} */
+                                stage: "lead" | "qualified" | "proposal" | "negotiation" | "won" | "lost";
+                                amountCents: number | null;
+                                currency: string | null;
+                                expectedCloseAt: string | null;
+                                description: string | null;
+                                closedAt: string | null;
+                                archivedAt: string | null;
+                                contactIds: string[];
+                                createdAt: string;
+                                updatedAt: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/deals/{dealId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get deal */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    dealId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Deal detail */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            deal: {
+                                id: string;
+                                organizationId: string;
+                                customerId: string;
+                                name: string;
+                                /** @enum {string} */
+                                stage: "lead" | "qualified" | "proposal" | "negotiation" | "won" | "lost";
+                                amountCents: number | null;
+                                currency: string | null;
+                                expectedCloseAt: string | null;
+                                description: string | null;
+                                closedAt: string | null;
+                                archivedAt: string | null;
+                                contactIds: string[];
+                                createdAt: string;
+                                updatedAt: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /** Delete deal */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    dealId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Deleted deal */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** Update deal */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    dealId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        customerId?: string;
+                        name?: string;
+                        /** @enum {string} */
+                        stage?: "lead" | "qualified" | "proposal" | "negotiation" | "won" | "lost";
+                        amountCents?: number | null;
+                        currency?: string | null;
+                        expectedCloseAt?: string | null;
+                        archivedAt?: string | null;
+                        contactIds?: string[];
+                        issueIds?: string[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated deal */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            deal: {
+                                id: string;
+                                organizationId: string;
+                                customerId: string;
+                                name: string;
+                                /** @enum {string} */
+                                stage: "lead" | "qualified" | "proposal" | "negotiation" | "won" | "lost";
+                                amountCents: number | null;
+                                currency: string | null;
+                                expectedCloseAt: string | null;
+                                description: string | null;
+                                closedAt: string | null;
+                                archivedAt: string | null;
+                                contactIds: string[];
+                                createdAt: string;
+                                updatedAt: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/deals/{dealId}/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List deal issues */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    dealId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Issue ids linked to this deal */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            issueIds: string[];
+                        };
+                    };
+                };
+            };
+        };
+        /** Update deal issues */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    dealId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        issueId: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Linked */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/deals/{dealId}/issues/{issueId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete deal issue */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    dealId: string;
+                    issueId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Unlinked */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/issues/{issueId}/deals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List issue deals */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    issueId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Deals linked to this issue */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            deals: {
+                                id: string;
+                                organizationId: string;
+                                customerId: string;
+                                name: string;
+                                /** @enum {string} */
+                                stage: "lead" | "qualified" | "proposal" | "negotiation" | "won" | "lost";
+                                amountCents: number | null;
+                                currency: string | null;
+                                expectedCloseAt: string | null;
+                                description: string | null;
+                                closedAt: string | null;
+                                archivedAt: string | null;
+                                contactIds: string[];
+                                createdAt: string;
+                                updatedAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/fields": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List fields */
+        get: {
+            parameters: {
+                query?: {
+                    entityType?: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Field definitions */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            fields: {
+                                id: string;
+                                organizationId: string;
+                                entityType: string;
+                                name: string;
+                                /** @enum {string} */
+                                type: "text" | "number" | "select" | "date" | "boolean";
+                                options: string[] | null;
+                                position: number;
+                                createdAt: string;
+                                updatedAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create field */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        entityType: string;
+                        name: string;
+                        /** @enum {string} */
+                        type: "text" | "number" | "select" | "date" | "boolean";
+                        options?: string[];
+                        position?: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Created field */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            field: {
+                                id: string;
+                                organizationId: string;
+                                entityType: string;
+                                name: string;
+                                /** @enum {string} */
+                                type: "text" | "number" | "select" | "date" | "boolean";
+                                options: string[] | null;
+                                position: number;
+                                createdAt: string;
+                                updatedAt: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/fields/{fieldId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete field */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    fieldId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Deleted field */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/fields/values/{entityId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get field value */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    entityId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Field values for an entity */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            values: {
+                                fieldId: string;
+                                entityId: string;
+                                organizationId: string;
+                                value: string | null;
+                                updatedAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/fields/{fieldId}/value": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update field value */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    fieldId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        entityId: string;
+                        value: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Field value set */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/public/leads/{organizationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create public lead */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** Format: email */
+                        email: string;
+                        fullName?: string;
+                        company?: string;
+                        dealName?: string;
+                        amountCents?: number;
+                        currency?: string;
+                        message?: string;
+                        /** @default form */
+                        source?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Lead accepted */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            customerId: string;
+                            dealId?: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/entities/{entityType}/{entityId}/links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List entity {entityType} links */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    entityType: string;
+                    entityId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Edges for a node — both directions */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            links: {
+                                id: string;
+                                organizationId: string;
+                                fromType: string;
+                                fromId: string;
+                                toType: string;
+                                toId: string;
+                                kind: string;
+                                label: string | null;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create entity {entityType} link */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    entityType: string;
+                    entityId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        toType: string;
+                        toId: string;
+                        /** @default relates */
+                        kind?: string;
+                        label?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Linked */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            link: {
+                                id: string;
+                                organizationId: string;
+                                fromType: string;
+                                fromId: string;
+                                toType: string;
+                                toId: string;
+                                kind: string;
+                                label: string | null;
+                                createdAt: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/links/{linkId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete link */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    linkId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Unlinked */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/support/unsubscribe": {
         parameters: {
             query?: never;
@@ -15674,7 +16957,7 @@ export interface paths {
                                     id: string;
                                     customerId: string;
                                     companyId: string;
-                                    name: string;
+                                    name: string | null;
                                     isPrimary: boolean;
                                     createdAt: string;
                                 }[];
@@ -15757,7 +17040,7 @@ export interface paths {
                                     id: string;
                                     customerId: string;
                                     companyId: string;
-                                    name: string;
+                                    name: string | null;
                                     isPrimary: boolean;
                                     createdAt: string;
                                 }[];
@@ -15827,7 +17110,7 @@ export interface paths {
                                     id: string;
                                     customerId: string;
                                     companyId: string;
-                                    name: string;
+                                    name: string | null;
                                     isPrimary: boolean;
                                     createdAt: string;
                                 }[];
@@ -15935,7 +17218,7 @@ export interface paths {
                                     id: string;
                                     customerId: string;
                                     companyId: string;
-                                    name: string;
+                                    name: string | null;
                                     isPrimary: boolean;
                                     createdAt: string;
                                 }[];
@@ -16012,7 +17295,7 @@ export interface paths {
                                     id: string;
                                     customerId: string;
                                     companyId: string;
-                                    name: string;
+                                    name: string | null;
                                     isPrimary: boolean;
                                     createdAt: string;
                                 }[];
@@ -16097,7 +17380,7 @@ export interface paths {
                                     id: string;
                                     customerId: string;
                                     companyId: string;
-                                    name: string;
+                                    name: string | null;
                                     isPrimary: boolean;
                                     createdAt: string;
                                 }[];
@@ -16214,6 +17497,78 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/companies/{companyId}/contacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List support company contacts */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    companyId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Contacts in a company */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            contacts: {
+                                id: string;
+                                organizationId: string;
+                                userId: string | null;
+                                externalId: string | null;
+                                externalSource: string;
+                                email: string;
+                                fullName: string | null;
+                                phone: string | null;
+                                emailOptOut: boolean;
+                                emailOptOutAt: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                companies: {
+                                    id: string;
+                                    customerId: string;
+                                    companyId: string;
+                                    name: string | null;
+                                    isPrimary: boolean;
+                                    createdAt: string;
+                                }[];
+                                identities: {
+                                    id: string;
+                                    customerId: string;
+                                    /** @enum {string} */
+                                    type: "email" | "phone" | "slack" | "msteams" | "discord" | "whatsapp" | "chat" | "api" | "social" | "custom";
+                                    subType: string | null;
+                                    value: string;
+                                    isPrimary: boolean;
+                                    createdAt: string;
+                                }[];
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -16345,6 +17700,7 @@ export interface paths {
                     externalSource?: "intercom" | "zendesk" | "plain" | "email" | "slack" | "msteams" | "discord" | "chat" | "api" | "manual";
                     assignedTo?: string;
                     q?: string;
+                    issueId?: string;
                 };
                 header?: never;
                 path: {
@@ -16389,7 +17745,7 @@ export interface paths {
                                 };
                                 companies: {
                                     id: string;
-                                    name: string;
+                                    name: string | null;
                                     isPrimary: boolean;
                                 }[];
                                 identities: {
@@ -16532,7 +17888,7 @@ export interface paths {
                                 };
                                 companies: {
                                     id: string;
-                                    name: string;
+                                    name: string | null;
                                     isPrimary: boolean;
                                 }[];
                                 identities: {
@@ -16597,6 +17953,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/support/captures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List support captures */
+        get: {
+            parameters: {
+                query?: {
+                    type?: string;
+                    limit?: number;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description All capture media across support tickets — the jams gallery: every screenshot, video, log, and artifact joined to its ticket. */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            captures: {
+                                id: string;
+                                type: string;
+                                fileName: string | null;
+                                contentType: string | null;
+                                url: string | null;
+                                size: number | null;
+                                createdAt: string;
+                                ticket: {
+                                    id: string;
+                                    number: number;
+                                    title: string;
+                                };
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/support/tickets/{ticketId}": {
         parameters: {
             query?: never;
@@ -16652,7 +18064,7 @@ export interface paths {
                                 };
                                 companies: {
                                     id: string;
-                                    name: string;
+                                    name: string | null;
                                     isPrimary: boolean;
                                 }[];
                                 identities: {
@@ -16781,7 +18193,7 @@ export interface paths {
                                 };
                                 companies: {
                                     id: string;
-                                    name: string;
+                                    name: string | null;
                                     isPrimary: boolean;
                                 }[];
                                 identities: {
@@ -17198,7 +18610,7 @@ export interface paths {
                                 };
                                 companies: {
                                     id: string;
-                                    name: string;
+                                    name: string | null;
                                     isPrimary: boolean;
                                 }[];
                                 identities: {
@@ -17320,7 +18732,7 @@ export interface paths {
                                 };
                                 companies: {
                                     id: string;
-                                    name: string;
+                                    name: string | null;
                                     isPrimary: boolean;
                                 }[];
                                 identities: {
@@ -17452,7 +18864,7 @@ export interface paths {
                                 };
                                 companies: {
                                     id: string;
-                                    name: string;
+                                    name: string | null;
                                     isPrimary: boolean;
                                 }[];
                                 identities: {
@@ -17589,7 +19001,7 @@ export interface paths {
                                 };
                                 companies: {
                                     id: string;
-                                    name: string;
+                                    name: string | null;
                                     isPrimary: boolean;
                                 }[];
                                 identities: {
@@ -17717,7 +19129,7 @@ export interface paths {
                                 };
                                 companies: {
                                     id: string;
-                                    name: string;
+                                    name: string | null;
                                     isPrimary: boolean;
                                 }[];
                                 identities: {
@@ -23771,6 +25183,15 @@ export interface paths {
                     content: {
                         "application/json": {
                             defaultViewId: string | null;
+                            hiddenSurfaces: string[] | null;
+                            favorites: {
+                                /** @enum {string} */
+                                type: "issue" | "document";
+                                id: string;
+                                title: string;
+                                identifier?: string | null;
+                                addedAt: string;
+                            }[] | null;
                         };
                     };
                 };
@@ -23789,7 +25210,16 @@ export interface paths {
             requestBody?: {
                 content: {
                     "application/json": {
-                        defaultViewId: string | null;
+                        defaultViewId?: string | null;
+                        hiddenSurfaces?: string[] | null;
+                        favorites?: {
+                            /** @enum {string} */
+                            type: "issue" | "document";
+                            id: string;
+                            title: string;
+                            identifier?: string | null;
+                            addedAt: string;
+                        }[] | null;
                     };
                 };
             };
@@ -23802,6 +25232,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             defaultViewId: string | null;
+                            hiddenSurfaces: string[] | null;
                         };
                     };
                 };

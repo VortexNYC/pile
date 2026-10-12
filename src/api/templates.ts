@@ -30,7 +30,7 @@ const listTemplatesRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/templates",
   tags: ["templates"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -50,7 +50,7 @@ const createTemplateRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/templates",
   tags: ["templates"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:create")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
@@ -73,7 +73,7 @@ const getTemplateRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/templates/{id}",
   tags: ["templates"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },

@@ -19,7 +19,7 @@ const traceRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/trace/{id}",
   tags: ["support-tickets"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: {
     params: z.object({
       organizationId: z.string(),

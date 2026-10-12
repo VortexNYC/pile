@@ -4,6 +4,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { createD1 } from "../global/db.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
+import { isAdminIdentity } from "../platform/permissions.js";
 import { rls } from "../platform/rls.js";
 import { assertIssueAccess } from "./issue-access.js";
 import { getWorkspaceStub } from "./stub.js";
@@ -24,7 +25,7 @@ const createApprovalRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/issues/{issueId}/approvals",
   tags: ["approvals"],
-  middleware: [rls("write")],
+  middleware: [rls("issue:create")],
   request: {
     params: z.object({ organizationId: z.string(), issueId: z.string() }),
     body: {
@@ -50,7 +51,7 @@ const listApprovalsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/issues/{issueId}/approvals",
   tags: ["approvals"],
-  middleware: [rls("read")],
+  middleware: [rls("issue:view")],
   request: {
     params: z.object({ organizationId: z.string(), issueId: z.string() }),
   },
@@ -70,7 +71,7 @@ const respondApprovalRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/approvals/{id}/respond",
   tags: ["approvals"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:create")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
@@ -157,7 +158,7 @@ export function registerApprovalRoutes(app: OpenAPIHono<AppContext>) {
     }
     await assertIssueAccess(createD1(c.env.D1), stub, issue, identity);
     const isApprover = identity.id === item.approverId;
-    const isAdmin = identity.permissions.includes("admin");
+    const isAdmin = isAdminIdentity(identity);
     if (!isApprover && !isAdmin) {
       throw new VortexError({
         code: "FORBIDDEN",

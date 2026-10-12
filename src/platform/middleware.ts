@@ -1,6 +1,9 @@
+import { and, eq } from "drizzle-orm";
 import { createMiddleware } from "hono/factory";
+import { z } from "zod";
 
 import { createD1 } from "../global/db.js";
+import { organizationRole } from "../global/schema.js";
 import {
   getWorkspaceMembership,
   hasSSOAccountForWorkspace,
@@ -10,10 +13,11 @@ import type { WorkspaceDO } from "../workspace/durable-object.js";
 import { createAuth } from "./auth.js";
 import type { AppEnv } from "./env.js";
 import { VortexError } from "./errors.js";
+import { roleMap } from "./identity.js";
 import {
+  flattenStatements,
   rolePermissionsFor,
   toApiKeyWorkspaceIdentity,
-  toUserWorkspaceIdentity,
   type WorkspaceIdentity,
 } from "./identity.js";
 import { getSessionUserId } from "./session.js";
@@ -116,10 +120,21 @@ export const workspaceAuthMiddleware = createMiddleware<{
           message: "Token owner is no longer a member of this workspace",
         });
       }
-      const rolePerms = rolePermissionsFor(membership.role);
+      const rolePerms = new Set(
+        await resolveRolePermissions(
+          db,
+          identity.organizationId,
+          membership.role
+        )
+      );
+      // Keys may carry bare legacy verbs (read/write/admin) or
+      // resource:action grants — a bare verb counts when the role's
+      // flattened statements include its workspace:-prefixed form.
       identity = {
         ...identity,
-        permissions: identity.permissions.filter((p) => rolePerms.includes(p)),
+        permissions: identity.permissions.filter(
+          (p) => rolePerms.has(p) || rolePerms.has(`workspace:${p}`)
+        ),
       };
     }
     c.set("workspaceIdentity", identity);
@@ -169,10 +184,18 @@ export const workspaceAuthMiddleware = createMiddleware<{
     });
   }
 
-  c.set(
-    "workspaceIdentity",
-    toUserWorkspaceIdentity(userId, organizationId, membership.role)
+  const rolePerms = await resolveRolePermissions(
+    db,
+    organizationId,
+    membership.role
   );
+  c.set("workspaceIdentity", {
+    id: userId,
+    organizationId,
+    type: "user",
+    role: membership.role,
+    permissions: rolePerms,
+  });
   await next();
 });
 
@@ -191,3 +214,29 @@ export const requireHumanSession = createMiddleware<{
   c.set("userId", userId);
   await next();
 });
+
+/** Builtin roles flatten via roleMap; anything else is a dynamic
+ * organizationRole row (BA dynamicAccessControl) — its `permission`
+ * JSON is Record<resource, actions[]>. */
+async function resolveRolePermissions(
+  db: ReturnType<typeof createD1>,
+  organizationId: string,
+  role: string
+): Promise<string[]> {
+  if (role in roleMap) return [...rolePermissionsFor(role)];
+  const row = await db
+    .select({ permission: organizationRole.permission })
+    .from(organizationRole)
+    .where(
+      and(
+        eq(organizationRole.organizationId, organizationId),
+        eq(organizationRole.role, role)
+      )
+    )
+    .get();
+  if (!row) return [];
+  const parsed = z
+    .record(z.string(), z.array(z.string()))
+    .parse(JSON.parse(row.permission));
+  return flattenStatements(parsed);
+}

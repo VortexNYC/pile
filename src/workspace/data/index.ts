@@ -30,10 +30,9 @@ import {
   workspaceDocumentLinks,
   workspaceDocumentPermissions,
   workspaceDocuments,
-  workspaceDocumentShares,
   workspaceDocumentSpaces,
-  workspaceDocumentWatchers,
   workspaceEntityAttachments,
+  workspaceEntityLinks,
   workspaceAgentProviderConfigs,
   workspaceAgentSessions,
   workspaceAgentEnvironmentFiles,
@@ -42,13 +41,16 @@ import {
   workspaceCustomerIntakeItems,
   workspaceCustomerNeeds,
   workspaceCustomers,
+  workspaceDeals,
+  workspaceFieldDefinitions,
+  workspaceFieldValues,
   workspaceCustomerStatuses,
   workspaceCustomerTiers,
   workspaceIssueApprovals,
   workspaceIssuePermissions,
+  workspaceShares,
+  workspaceSubscriptions,
   workspaceIssues,
-  workspaceIssueRelations,
-  workspaceIssueSubscribers,
   workspaceLinearUsers,
   workspaceNotificationPreferences,
   workspaceNotifications,
@@ -70,6 +72,22 @@ export type WorkspaceDb = DrizzleSqliteDODatabase<typeof workspaceSchema>;
 
 // ---- issue_subscribers ----
 
+function subscriptionAsIssueSubscriber(row: {
+  id: string;
+  organizationId: string;
+  entityId: string;
+  userId: string;
+  createdAt: string;
+}) {
+  return {
+    id: row.id,
+    organizationId: row.organizationId,
+    issueId: row.entityId,
+    linearUserId: row.userId,
+    createdAt: row.createdAt,
+  };
+}
+
 export function listIssueSubscribers(
   db: WorkspaceDb,
   organizationId: string,
@@ -77,14 +95,16 @@ export function listIssueSubscribers(
 ) {
   return db
     .select()
-    .from(workspaceIssueSubscribers)
+    .from(workspaceSubscriptions)
     .where(
       and(
-        eq(workspaceIssueSubscribers.organizationId, organizationId),
-        eq(workspaceIssueSubscribers.issueId, issueId)
+        eq(workspaceSubscriptions.organizationId, organizationId),
+        eq(workspaceSubscriptions.entityType, "issue"),
+        eq(workspaceSubscriptions.entityId, issueId)
       )
     )
-    .all();
+    .all()
+    .map(subscriptionAsIssueSubscriber);
 }
 
 export function getIssueSubscriber(
@@ -92,16 +112,17 @@ export function getIssueSubscriber(
   organizationId: string,
   id: string
 ) {
-  return db
+  const row = db
     .select()
-    .from(workspaceIssueSubscribers)
+    .from(workspaceSubscriptions)
     .where(
       and(
-        eq(workspaceIssueSubscribers.organizationId, organizationId),
-        eq(workspaceIssueSubscribers.id, id)
+        eq(workspaceSubscriptions.organizationId, organizationId),
+        eq(workspaceSubscriptions.id, id)
       )
     )
     .get();
+  return row ? subscriptionAsIssueSubscriber(row) : undefined;
 }
 
 export async function deleteIssueSubscriber(
@@ -110,11 +131,11 @@ export async function deleteIssueSubscriber(
   id: string
 ) {
   await db
-    .delete(workspaceIssueSubscribers)
+    .delete(workspaceSubscriptions)
     .where(
       and(
-        eq(workspaceIssueSubscribers.organizationId, organizationId),
-        eq(workspaceIssueSubscribers.id, id)
+        eq(workspaceSubscriptions.organizationId, organizationId),
+        eq(workspaceSubscriptions.id, id)
       )
     );
 }
@@ -126,23 +147,25 @@ export async function createIssueSubscriber(
 ) {
   const existing = await db
     .select()
-    .from(workspaceIssueSubscribers)
+    .from(workspaceSubscriptions)
     .where(
       and(
-        eq(workspaceIssueSubscribers.organizationId, organizationId),
-        eq(workspaceIssueSubscribers.issueId, values.issueId),
-        eq(workspaceIssueSubscribers.linearUserId, values.linearUserId)
+        eq(workspaceSubscriptions.organizationId, organizationId),
+        eq(workspaceSubscriptions.entityType, "issue"),
+        eq(workspaceSubscriptions.entityId, values.issueId),
+        eq(workspaceSubscriptions.userId, values.linearUserId)
       )
     )
     .get();
-  if (existing) return existing;
+  if (existing) return subscriptionAsIssueSubscriber(existing);
   const id = crypto.randomUUID();
   const ts = new Date().toISOString();
-  await db.insert(workspaceIssueSubscribers).values({
+  await db.insert(workspaceSubscriptions).values({
     id,
     organizationId,
-    issueId: values.issueId,
-    linearUserId: values.linearUserId,
+    entityType: "issue",
+    entityId: values.issueId,
+    userId: values.linearUserId,
     createdAt: ts,
   });
   return getIssueSubscriber(db, organizationId, id);
@@ -162,12 +185,21 @@ export function listIssueRelations(
   fromIssueId: string
 ) {
   return db
-    .select()
-    .from(workspaceIssueRelations)
+    .select({
+      id: workspaceEntityLinks.id,
+      organizationId: workspaceEntityLinks.organizationId,
+      fromIssueId: workspaceEntityLinks.fromId,
+      toIssueId: workspaceEntityLinks.toId,
+      type: workspaceEntityLinks.kind,
+      createdAt: workspaceEntityLinks.createdAt,
+    })
+    .from(workspaceEntityLinks)
     .where(
       and(
-        eq(workspaceIssueRelations.organizationId, organizationId),
-        eq(workspaceIssueRelations.fromIssueId, fromIssueId)
+        eq(workspaceEntityLinks.organizationId, organizationId),
+        eq(workspaceEntityLinks.fromType, "issue"),
+        eq(workspaceEntityLinks.fromId, fromIssueId),
+        eq(workspaceEntityLinks.toType, "issue")
       )
     )
     .all();
@@ -179,12 +211,21 @@ export function listInverseIssueRelations(
   toIssueId: string
 ) {
   return db
-    .select()
-    .from(workspaceIssueRelations)
+    .select({
+      id: workspaceEntityLinks.id,
+      organizationId: workspaceEntityLinks.organizationId,
+      fromIssueId: workspaceEntityLinks.fromId,
+      toIssueId: workspaceEntityLinks.toId,
+      type: workspaceEntityLinks.kind,
+      createdAt: workspaceEntityLinks.createdAt,
+    })
+    .from(workspaceEntityLinks)
     .where(
       and(
-        eq(workspaceIssueRelations.organizationId, organizationId),
-        eq(workspaceIssueRelations.toIssueId, toIssueId)
+        eq(workspaceEntityLinks.organizationId, organizationId),
+        eq(workspaceEntityLinks.fromType, "issue"),
+        eq(workspaceEntityLinks.toType, "issue"),
+        eq(workspaceEntityLinks.toId, toIssueId)
       )
     )
     .all();
@@ -195,16 +236,25 @@ export function getIssueRelation(
   organizationId: string,
   id: string
 ) {
-  return db
+  const row = db
     .select()
-    .from(workspaceIssueRelations)
+    .from(workspaceEntityLinks)
     .where(
       and(
-        eq(workspaceIssueRelations.organizationId, organizationId),
-        eq(workspaceIssueRelations.id, id)
+        eq(workspaceEntityLinks.organizationId, organizationId),
+        eq(workspaceEntityLinks.id, id)
       )
     )
     .get();
+  if (!row) return undefined;
+  return {
+    id: row.id,
+    organizationId: row.organizationId,
+    fromIssueId: row.fromId,
+    toIssueId: row.toId,
+    type: row.kind,
+    createdAt: row.createdAt,
+  };
 }
 
 export async function createIssueRelation(
@@ -217,12 +267,14 @@ export async function createIssueRelation(
   }
   const id = crypto.randomUUID();
   const ts = new Date().toISOString();
-  await db.insert(workspaceIssueRelations).values({
+  await db.insert(workspaceEntityLinks).values({
     id,
     organizationId,
-    fromIssueId: values.fromIssueId,
-    toIssueId: values.toIssueId,
-    type: values.type,
+    fromType: "issue",
+    fromId: values.fromIssueId,
+    toType: "issue",
+    toId: values.toIssueId,
+    kind: values.type,
     createdAt: ts,
   });
   return getIssueRelation(db, organizationId, id);
@@ -234,11 +286,11 @@ export async function deleteIssueRelation(
   id: string
 ) {
   await db
-    .delete(workspaceIssueRelations)
+    .delete(workspaceEntityLinks)
     .where(
       and(
-        eq(workspaceIssueRelations.organizationId, organizationId),
-        eq(workspaceIssueRelations.id, id)
+        eq(workspaceEntityLinks.organizationId, organizationId),
+        eq(workspaceEntityLinks.id, id)
       )
     );
 }
@@ -650,6 +702,74 @@ export async function setDefaultView(
       organizationId,
       userId,
       defaultViewId,
+      updatedAt: ts,
+    });
+  }
+  return getUserViewPreferences(db, organizationId, userId);
+}
+
+export async function setHiddenSurfaces(
+  db: WorkspaceDb,
+  organizationId: string,
+  userId: string,
+  hiddenSurfaces: string[] | null
+) {
+  const value = hiddenSurfaces ? JSON.stringify(hiddenSurfaces) : null;
+  const existing = await getUserViewPreferences(db, organizationId, userId);
+  const ts = new Date().toISOString();
+  if (existing) {
+    await db
+      .update(workspaceUserPreferences)
+      .set({ hiddenSurfaces: value, updatedAt: ts })
+      .where(
+        and(
+          eq(workspaceUserPreferences.organizationId, organizationId),
+          eq(workspaceUserPreferences.userId, userId)
+        )
+      );
+  } else {
+    await db.insert(workspaceUserPreferences).values({
+      organizationId,
+      userId,
+      hiddenSurfaces: value,
+      updatedAt: ts,
+    });
+  }
+  return getUserViewPreferences(db, organizationId, userId);
+}
+
+export interface EntityFavorite {
+  type: "issue" | "document";
+  id: string;
+  title: string;
+  identifier?: string | null;
+  addedAt: string;
+}
+
+export async function setFavorites(
+  db: WorkspaceDb,
+  organizationId: string,
+  userId: string,
+  favorites: EntityFavorite[] | null
+) {
+  const value = favorites ? JSON.stringify(favorites) : null;
+  const existing = await getUserViewPreferences(db, organizationId, userId);
+  const ts = new Date().toISOString();
+  if (existing) {
+    await db
+      .update(workspaceUserPreferences)
+      .set({ favorites: value, updatedAt: ts })
+      .where(
+        and(
+          eq(workspaceUserPreferences.organizationId, organizationId),
+          eq(workspaceUserPreferences.userId, userId)
+        )
+      );
+  } else {
+    await db.insert(workspaceUserPreferences).values({
+      organizationId,
+      userId,
+      favorites: value,
       updatedAt: ts,
     });
   }
@@ -2115,7 +2235,7 @@ export interface DocumentInput {
   title: string;
   icon?: string | null;
   content?: unknown[] | string; // BlockNote blocks or markdown
-  contentFormat?: "blocks" | "markdown";
+  contentFormat?: "blocks" | "markdown" | "canvas";
   slug?: string | null;
   projectId?: string | null;
   issueId?: string | null;
@@ -2224,6 +2344,31 @@ export function listDocuments(
     .all();
 }
 
+/** Guest-scope: docs visible iff the actor holds an explicit grant —
+ * default-deny, matching "shared with me" semantics. */
+export function listDocumentsForActor(
+  db: WorkspaceDb,
+  organizationId: string,
+  actorId: string,
+  args: ListDocumentsArgs = {}
+) {
+  const all = listDocuments(db, organizationId, args);
+  const grants = db
+    .select({
+      documentId: workspaceDocumentPermissions.documentId,
+      actorId: workspaceDocumentPermissions.actorId,
+      actorType: workspaceDocumentPermissions.actorType,
+    })
+    .from(workspaceDocumentPermissions)
+    .where(eq(workspaceDocumentPermissions.organizationId, organizationId))
+    .all();
+  const visible = new Set(
+    grants.filter((g) => g.actorId === actorId).map((g) => g.documentId)
+  );
+  // Team grants resolve caller-side (the API layer supplies teamIds).
+  return all.filter((d) => visible.has(d.id));
+}
+
 export function getDocument(
   db: WorkspaceDb,
   organizationId: string,
@@ -2245,7 +2390,7 @@ export interface DocumentUpdate {
   title?: string;
   icon?: string | null;
   content?: unknown[] | string;
-  contentFormat?: "blocks" | "markdown";
+  contentFormat?: "blocks" | "markdown" | "canvas";
   slug?: string | null;
   projectId?: string | null;
   issueId?: string | null;
@@ -2286,7 +2431,7 @@ export function updateDocument(
       typeof update.content === "string"
         ? update.content
         : JSON.stringify(update.content);
-    const resolvedFormat: "blocks" | "markdown" =
+    const resolvedFormat: "blocks" | "markdown" | "canvas" =
       update.contentFormat ??
       (typeof update.content === "string" ? "markdown" : "blocks");
     patch.contentFormat = resolvedFormat;
@@ -2555,6 +2700,9 @@ export interface CustomerInput {
   name: string;
   url?: string | null;
   logoUrl?: string | null;
+  bookingUrl?: string | null;
+  notes?: string | null;
+  domain?: string | null;
   externalId?: string | null;
   tierId?: string | null;
   statusId?: string | null;
@@ -2572,6 +2720,9 @@ export function createCustomer(db: WorkspaceDb, input: CustomerInput) {
       name: input.name,
       url: input.url ?? null,
       logoUrl: input.logoUrl ?? null,
+      bookingUrl: input.bookingUrl ?? null,
+      notes: input.notes ?? null,
+      domain: input.domain ?? null,
       externalId: input.externalId ?? null,
       tierId: input.tierId ?? null,
       statusId: input.statusId ?? null,
@@ -2621,6 +2772,9 @@ export function updateCustomer(
     "name",
     "url",
     "logoUrl",
+    "bookingUrl",
+    "notes",
+    "domain",
     "externalId",
     "tierId",
     "statusId",
@@ -2683,6 +2837,592 @@ export function deleteCustomer(
       .returning()
       .all().length > 0
   );
+}
+
+// ---- deals ----
+// The CRM pipeline: deals belong to a customer (company), carry a stage,
+// amount + currency + expected close, and link to contact people.
+
+export const DEAL_STAGES = [
+  "lead",
+  "qualified",
+  "proposal",
+  "negotiation",
+  "won",
+  "lost",
+] as const;
+export type DealStage = (typeof DEAL_STAGES)[number];
+
+export interface DealInput {
+  organizationId: string;
+  customerId: string;
+  name: string;
+  stage: DealStage;
+  amountCents?: number | null;
+  currency?: string | null;
+  expectedCloseAt?: string | null;
+  description?: string | null;
+  contactIds?: string[];
+}
+
+export function createDeal(db: WorkspaceDb, input: DealInput) {
+  const now = new Date().toISOString();
+  const deal = db
+    .insert(workspaceDeals)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId: input.organizationId,
+      customerId: input.customerId,
+      name: input.name,
+      stage: input.stage,
+      amountCents: input.amountCents ?? null,
+      currency: input.currency ?? null,
+      expectedCloseAt: input.expectedCloseAt ?? null,
+      description: input.description ?? null,
+      closedAt: input.stage === "won" || input.stage === "lost" ? now : null,
+      archivedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning()
+    .get();
+  if (input.contactIds?.length) {
+    setDealContacts(db, input.organizationId, deal.id, input.contactIds);
+  }
+  return {
+    ...deal,
+    stage: deal.stage as DealStage,
+    contactIds: listDealContactIds(db, deal.id),
+  };
+}
+
+export function listDeals(
+  db: WorkspaceDb,
+  organizationId: string,
+  opts: { includeArchived?: boolean } = {}
+) {
+  const rows = db
+    .select()
+    .from(workspaceDeals)
+    .where(eq(workspaceDeals.organizationId, organizationId))
+    .all();
+  const filtered = opts.includeArchived
+    ? rows
+    : rows.filter((d) => d.archivedAt === null);
+  return filtered.map((deal) => ({
+    ...deal,
+    stage: deal.stage as DealStage,
+    contactIds: listDealContactIds(db, deal.id),
+  }));
+}
+
+export function getDeal(db: WorkspaceDb, organizationId: string, id: string) {
+  const deal = db
+    .select()
+    .from(workspaceDeals)
+    .where(
+      and(
+        eq(workspaceDeals.id, id),
+        eq(workspaceDeals.organizationId, organizationId)
+      )
+    )
+    .get();
+  if (!deal) return undefined;
+  return {
+    ...deal,
+    stage: deal.stage as DealStage,
+    contactIds: listDealContactIds(db, id),
+  };
+}
+
+export function updateDeal(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string,
+  patch: Partial<
+    Omit<DealInput, "organizationId" | "customerId" | "contactIds">
+  > & {
+    customerId?: string;
+    contactIds?: string[];
+    archivedAt?: string | null;
+  }
+) {
+  const updates: Record<string, unknown> = {
+    updatedAt: new Date().toISOString(),
+  };
+  for (const key of [
+    "name",
+    "customerId",
+    "stage",
+    "amountCents",
+    "currency",
+    "expectedCloseAt",
+    "description",
+    "archivedAt",
+  ] as const) {
+    if (patch[key] !== undefined) updates[key] = patch[key];
+  }
+  if (patch.stage === "won" || patch.stage === "lost") {
+    updates.closedAt = new Date().toISOString();
+  } else if (patch.stage !== undefined) {
+    updates.closedAt = null;
+  }
+  const deal = db
+    .update(workspaceDeals)
+    .set(updates)
+    .where(
+      and(
+        eq(workspaceDeals.id, id),
+        eq(workspaceDeals.organizationId, organizationId)
+      )
+    )
+    .returning()
+    .get();
+  if (patch.contactIds !== undefined) {
+    setDealContacts(db, organizationId, id, patch.contactIds);
+  }
+  if (!deal) return undefined;
+  return {
+    ...deal,
+    stage: deal.stage as DealStage,
+    contactIds: listDealContactIds(db, id),
+  };
+}
+
+export function deleteDeal(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  db.delete(workspaceEntityLinks)
+    .where(
+      and(
+        eq(workspaceEntityLinks.organizationId, organizationId),
+        or(
+          and(
+            eq(workspaceEntityLinks.fromType, "deal"),
+            eq(workspaceEntityLinks.fromId, id)
+          ),
+          and(
+            eq(workspaceEntityLinks.toType, "deal"),
+            eq(workspaceEntityLinks.toId, id)
+          )
+        )
+      )
+    )
+    .run();
+  return (
+    db
+      .delete(workspaceDeals)
+      .where(
+        and(
+          eq(workspaceDeals.id, id),
+          eq(workspaceDeals.organizationId, organizationId)
+        )
+      )
+      .returning()
+      .all().length > 0
+  );
+}
+
+function listDealContactIds(db: WorkspaceDb, dealId: string) {
+  return db
+    .select({ contactId: workspaceEntityLinks.toId })
+    .from(workspaceEntityLinks)
+    .where(
+      and(
+        eq(workspaceEntityLinks.fromType, "deal"),
+        eq(workspaceEntityLinks.fromId, dealId),
+        eq(workspaceEntityLinks.toType, "contact")
+      )
+    )
+    .all()
+    .map((r) => r.contactId);
+}
+
+export function setDealContacts(
+  db: WorkspaceDb,
+  organizationId: string,
+  dealId: string,
+  contactIds: string[]
+) {
+  db.delete(workspaceEntityLinks)
+    .where(
+      and(
+        eq(workspaceEntityLinks.fromType, "deal"),
+        eq(workspaceEntityLinks.fromId, dealId),
+        eq(workspaceEntityLinks.toType, "contact")
+      )
+    )
+    .run();
+  for (const contactId of contactIds) {
+    db.insert(workspaceEntityLinks)
+      .values({
+        id: crypto.randomUUID(),
+        organizationId: organizationId,
+        fromType: "deal",
+        fromId: dealId,
+        toType: "contact",
+        toId: contactId,
+        kind: "contact",
+        createdAt: new Date().toISOString(),
+      })
+      .run();
+  }
+}
+
+export function linkDealIssue(
+  db: WorkspaceDb,
+  organizationId: string,
+  dealId: string,
+  issueId: string
+) {
+  linkEntities(db, {
+    organizationId,
+    fromType: "deal",
+    fromId: dealId,
+    toType: "issue",
+    toId: issueId,
+    kind: "relates",
+  });
+}
+
+export function unlinkDealIssue(
+  db: WorkspaceDb,
+  dealId: string,
+  issueId: string
+) {
+  db.delete(workspaceEntityLinks)
+    .where(
+      and(
+        eq(workspaceEntityLinks.fromType, "deal"),
+        eq(workspaceEntityLinks.fromId, dealId),
+        eq(workspaceEntityLinks.toType, "issue"),
+        eq(workspaceEntityLinks.toId, issueId)
+      )
+    )
+    .run();
+}
+
+export function listDealIssueIds(db: WorkspaceDb, dealId: string) {
+  return db
+    .select({ issueId: workspaceEntityLinks.toId })
+    .from(workspaceEntityLinks)
+    .where(
+      and(
+        eq(workspaceEntityLinks.fromType, "deal"),
+        eq(workspaceEntityLinks.fromId, dealId),
+        eq(workspaceEntityLinks.toType, "issue")
+      )
+    )
+    .all()
+    .map((r) => r.issueId);
+}
+
+export function listDealsForIssue(
+  db: WorkspaceDb,
+  organizationId: string,
+  issueId: string
+) {
+  const links = db
+    .select({ dealId: workspaceEntityLinks.fromId })
+    .from(workspaceEntityLinks)
+    .where(
+      and(
+        eq(workspaceEntityLinks.organizationId, organizationId),
+        eq(workspaceEntityLinks.fromType, "deal"),
+        eq(workspaceEntityLinks.toType, "issue"),
+        eq(workspaceEntityLinks.toId, issueId)
+      )
+    )
+    .all();
+  return links
+    .map((l) => getDeal(db, organizationId, l.dealId))
+    .filter((d): d is NonNullable<typeof d> => d !== undefined);
+}
+
+// ---- entity links — the graph ----
+// Edges between any two nodes. Issues↔deals↔contacts↔documents↔
+// tickets↔customers are all the same kind of fact.
+
+export interface EntityLinkInput {
+  organizationId: string;
+  fromType: string;
+  fromId: string;
+  toType: string;
+  toId: string;
+  kind?: string;
+  label?: string;
+}
+
+function resolveLinkLabel(
+  db: WorkspaceDb,
+  type: string,
+  id: string
+): string | null {
+  if (type === "issue") {
+    const row = db
+      .select({
+        identifier: workspaceIssues.identifier,
+        title: workspaceIssues.title,
+      })
+      .from(workspaceIssues)
+      .where(eq(workspaceIssues.id, id))
+      .get();
+    return row
+      ? `${row.identifier ? `${row.identifier} ` : ""}${row.title}`
+      : null;
+  }
+  if (type === "deal") {
+    return (
+      db
+        .select({ name: workspaceDeals.name })
+        .from(workspaceDeals)
+        .where(eq(workspaceDeals.id, id))
+        .get()?.name ?? null
+    );
+  }
+  if (type === "customer") {
+    return (
+      db
+        .select({ name: workspaceCustomers.name })
+        .from(workspaceCustomers)
+        .where(eq(workspaceCustomers.id, id))
+        .get()?.name ?? null
+    );
+  }
+  if (type === "document") {
+    return (
+      db
+        .select({ title: workspaceDocuments.title })
+        .from(workspaceDocuments)
+        .where(eq(workspaceDocuments.id, id))
+        .get()?.title ?? null
+    );
+  }
+  return null;
+}
+
+export function linkEntities(db: WorkspaceDb, input: EntityLinkInput) {
+  const label =
+    input.label ??
+    resolveLinkLabel(db, input.toType, input.toId) ??
+    resolveLinkLabel(db, input.fromType, input.fromId);
+  return db
+    .insert(workspaceEntityLinks)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId: input.organizationId,
+      fromType: input.fromType,
+      fromId: input.fromId,
+      toType: input.toType,
+      toId: input.toId,
+      kind: input.kind ?? "relates",
+      label,
+      createdAt: new Date().toISOString(),
+    })
+    .onConflictDoNothing()
+    .returning()
+    .get();
+}
+
+export function unlinkEntities(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return (
+    db
+      .delete(workspaceEntityLinks)
+      .where(
+        and(
+          eq(workspaceEntityLinks.id, id),
+          eq(workspaceEntityLinks.organizationId, organizationId)
+        )
+      )
+      .returning()
+      .all().length > 0
+  );
+}
+
+// Both directions — a link reads the same from either node.
+export function listEntityLinks(
+  db: WorkspaceDb,
+  organizationId: string,
+  type: string,
+  id: string
+) {
+  return db
+    .select()
+    .from(workspaceEntityLinks)
+    .where(
+      and(
+        eq(workspaceEntityLinks.organizationId, organizationId),
+        or(
+          and(
+            eq(workspaceEntityLinks.fromType, type),
+            eq(workspaceEntityLinks.fromId, id)
+          ),
+          and(
+            eq(workspaceEntityLinks.toType, type),
+            eq(workspaceEntityLinks.toId, id)
+          )
+        )
+      )
+    )
+    .all();
+}
+
+// ---- custom fields ----
+// Field definitions scoped per entity type; values join entityId.
+
+export const FIELD_TYPES = [
+  "text",
+  "number",
+  "select",
+  "date",
+  "boolean",
+] as const;
+export type FieldType = (typeof FIELD_TYPES)[number];
+
+export interface FieldDefinitionInput {
+  organizationId: string;
+  entityType: string;
+  name: string;
+  type: FieldType;
+  options?: string[];
+  position?: number;
+}
+
+export function createFieldDefinition(
+  db: WorkspaceDb,
+  input: FieldDefinitionInput
+) {
+  const now = new Date().toISOString();
+  const field = db
+    .insert(workspaceFieldDefinitions)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId: input.organizationId,
+      entityType: input.entityType,
+      name: input.name,
+      type: input.type,
+      options: input.options ? JSON.stringify(input.options) : null,
+      position: input.position ?? 0,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning()
+    .get();
+  return {
+    ...field,
+    type: field.type as FieldType,
+    options: field.options ? (JSON.parse(field.options) as string[]) : null,
+  };
+}
+
+export function listFieldDefinitions(
+  db: WorkspaceDb,
+  organizationId: string,
+  entityType?: string
+) {
+  return db
+    .select()
+    .from(workspaceFieldDefinitions)
+    .where(
+      and(
+        eq(workspaceFieldDefinitions.organizationId, organizationId),
+        entityType !== undefined
+          ? eq(workspaceFieldDefinitions.entityType, entityType)
+          : undefined
+      )
+    )
+    .orderBy(workspaceFieldDefinitions.position, workspaceFieldDefinitions.name)
+    .all()
+    .map((d) => ({
+      ...d,
+      type: d.type as FieldType,
+      options: d.options ? (JSON.parse(d.options) as string[]) : null,
+    }));
+}
+
+export function deleteFieldDefinition(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  db.delete(workspaceFieldValues)
+    .where(
+      and(
+        eq(workspaceFieldValues.fieldId, id),
+        eq(workspaceFieldValues.organizationId, organizationId)
+      )
+    )
+    .run();
+  return (
+    db
+      .delete(workspaceFieldDefinitions)
+      .where(
+        and(
+          eq(workspaceFieldDefinitions.id, id),
+          eq(workspaceFieldDefinitions.organizationId, organizationId)
+        )
+      )
+      .returning()
+      .all().length > 0
+  );
+}
+
+export function setFieldValue(
+  db: WorkspaceDb,
+  organizationId: string,
+  fieldId: string,
+  entityId: string,
+  value: string | null
+) {
+  const now = new Date().toISOString();
+  if (value === null) {
+    db.delete(workspaceFieldValues)
+      .where(
+        and(
+          eq(workspaceFieldValues.fieldId, fieldId),
+          eq(workspaceFieldValues.entityId, entityId),
+          eq(workspaceFieldValues.organizationId, organizationId)
+        )
+      )
+      .run();
+    return;
+  }
+  db.insert(workspaceFieldValues)
+    .values({
+      fieldId,
+      entityId,
+      organizationId,
+      value,
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: [workspaceFieldValues.fieldId, workspaceFieldValues.entityId],
+      set: { value, updatedAt: now },
+    })
+    .run();
+}
+
+export function listFieldValues(
+  db: WorkspaceDb,
+  organizationId: string,
+  entityId: string
+) {
+  return db
+    .select()
+    .from(workspaceFieldValues)
+    .where(
+      and(
+        eq(workspaceFieldValues.organizationId, organizationId),
+        eq(workspaceFieldValues.entityId, entityId)
+      )
+    )
+    .all();
 }
 
 // ---- entity attachments ----
@@ -3953,6 +4693,113 @@ export function deleteDocumentSpace(
   );
 }
 
+function shareAsIssueShare(row: {
+  token: string;
+  organizationId: string;
+  entityId: string;
+  createdById: string;
+  createdAt: string;
+  expiresAt: string | null;
+}) {
+  return {
+    token: row.token,
+    organizationId: row.organizationId,
+    issueId: row.entityId,
+    createdById: row.createdById,
+    createdAt: row.createdAt,
+    expiresAt: row.expiresAt,
+  };
+}
+
+function shareAsDocumentShare(row: {
+  token: string;
+  organizationId: string;
+  entityId: string;
+  includeChildren: boolean;
+  createdById: string;
+  createdAt: string;
+  expiresAt: string | null;
+}) {
+  return {
+    token: row.token,
+    organizationId: row.organizationId,
+    documentId: row.entityId,
+    includeChildren: row.includeChildren,
+    createdById: row.createdById,
+    createdAt: row.createdAt,
+    expiresAt: row.expiresAt,
+  };
+}
+
+export function createIssueShare(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: {
+    issueId: string;
+    createdById: string;
+    expiresAt?: string | null;
+  }
+) {
+  const row = db
+    .insert(workspaceShares)
+    .values({
+      token: crypto.randomUUID().replace(/-/g, ""),
+      organizationId,
+      entityType: "issue",
+      entityId: input.issueId,
+      createdById: input.createdById,
+      createdAt: new Date().toISOString(),
+      expiresAt: input.expiresAt ?? null,
+    })
+    .returning()
+    .get();
+  return row ? shareAsIssueShare(row) : undefined;
+}
+
+export function getIssueShare(
+  db: WorkspaceDb,
+  organizationId: string,
+  issueId: string
+) {
+  const row = db
+    .select()
+    .from(workspaceShares)
+    .where(
+      and(
+        eq(workspaceShares.entityType, "issue"),
+        eq(workspaceShares.entityId, issueId),
+        eq(workspaceShares.organizationId, organizationId)
+      )
+    )
+    .get();
+  return row ? shareAsIssueShare(row) : undefined;
+}
+
+export function getIssueShareByToken(db: WorkspaceDb, token: string) {
+  const row = db
+    .select()
+    .from(workspaceShares)
+    .where(eq(workspaceShares.token, token))
+    .get();
+  return row ? shareAsIssueShare(row) : undefined;
+}
+
+export function deleteIssueShare(
+  db: WorkspaceDb,
+  organizationId: string,
+  token: string
+) {
+  return db
+    .delete(workspaceShares)
+    .where(
+      and(
+        eq(workspaceShares.token, token),
+        eq(workspaceShares.organizationId, organizationId)
+      )
+    )
+    .run();
+}
+
 export function createDocumentShare(
   db: WorkspaceDb,
   organizationId: string,
@@ -3963,12 +4810,13 @@ export function createDocumentShare(
     expiresAt?: string | null;
   }
 ) {
-  return db
-    .insert(workspaceDocumentShares)
+  const row = db
+    .insert(workspaceShares)
     .values({
       token: crypto.randomUUID().replace(/-/g, ""),
       organizationId,
-      documentId: input.documentId,
+      entityType: "document",
+      entityId: input.documentId,
       includeChildren: input.includeChildren ?? false,
       createdById: input.createdById,
       createdAt: new Date().toISOString(),
@@ -3976,6 +4824,7 @@ export function createDocumentShare(
     })
     .returning()
     .get();
+  return row ? shareAsDocumentShare(row) : undefined;
 }
 
 export function getDocumentShare(
@@ -3983,24 +4832,27 @@ export function getDocumentShare(
   organizationId: string,
   documentId: string
 ) {
-  return db
+  const row = db
     .select()
-    .from(workspaceDocumentShares)
+    .from(workspaceShares)
     .where(
       and(
-        eq(workspaceDocumentShares.documentId, documentId),
-        eq(workspaceDocumentShares.organizationId, organizationId)
+        eq(workspaceShares.entityType, "document"),
+        eq(workspaceShares.entityId, documentId),
+        eq(workspaceShares.organizationId, organizationId)
       )
     )
     .get();
+  return row ? shareAsDocumentShare(row) : undefined;
 }
 
 export function getDocumentShareByToken(db: WorkspaceDb, token: string) {
-  return db
+  const row = db
     .select()
-    .from(workspaceDocumentShares)
-    .where(eq(workspaceDocumentShares.token, token))
+    .from(workspaceShares)
+    .where(eq(workspaceShares.token, token))
     .get();
+  return row ? shareAsDocumentShare(row) : undefined;
 }
 
 export function deleteDocumentShare(
@@ -4010,11 +4862,11 @@ export function deleteDocumentShare(
 ) {
   return (
     db
-      .delete(workspaceDocumentShares)
+      .delete(workspaceShares)
       .where(
         and(
-          eq(workspaceDocumentShares.token, token),
-          eq(workspaceDocumentShares.organizationId, organizationId)
+          eq(workspaceShares.token, token),
+          eq(workspaceShares.organizationId, organizationId)
         )
       )
       .returning()
@@ -4030,21 +4882,23 @@ export function watchDocument(
 ) {
   const existing = db
     .select()
-    .from(workspaceDocumentWatchers)
+    .from(workspaceSubscriptions)
     .where(
       and(
-        eq(workspaceDocumentWatchers.documentId, documentId),
-        eq(workspaceDocumentWatchers.userId, userId)
+        eq(workspaceSubscriptions.entityType, "document"),
+        eq(workspaceSubscriptions.entityId, documentId),
+        eq(workspaceSubscriptions.userId, userId)
       )
     )
     .get();
   if (existing) return existing;
   return db
-    .insert(workspaceDocumentWatchers)
+    .insert(workspaceSubscriptions)
     .values({
       id: crypto.randomUUID(),
       organizationId,
-      documentId,
+      entityType: "document",
+      entityId: documentId,
       userId,
       createdAt: new Date().toISOString(),
     })
@@ -4059,11 +4913,12 @@ export function unwatchDocument(
 ) {
   return (
     db
-      .delete(workspaceDocumentWatchers)
+      .delete(workspaceSubscriptions)
       .where(
         and(
-          eq(workspaceDocumentWatchers.documentId, documentId),
-          eq(workspaceDocumentWatchers.userId, userId)
+          eq(workspaceSubscriptions.entityType, "document"),
+          eq(workspaceSubscriptions.entityId, documentId),
+          eq(workspaceSubscriptions.userId, userId)
         )
       )
       .returning()
@@ -4076,9 +4931,14 @@ export function listDocumentWatchers(
   documentId: string
 ): string[] {
   return db
-    .select({ userId: workspaceDocumentWatchers.userId })
-    .from(workspaceDocumentWatchers)
-    .where(eq(workspaceDocumentWatchers.documentId, documentId))
+    .select({ userId: workspaceSubscriptions.userId })
+    .from(workspaceSubscriptions)
+    .where(
+      and(
+        eq(workspaceSubscriptions.entityType, "document"),
+        eq(workspaceSubscriptions.entityId, documentId)
+      )
+    )
     .all()
     .map((row) => row.userId);
 }
@@ -4159,10 +5019,13 @@ export function documentAccessLevel(
   db: WorkspaceDb,
   documentId: string,
   actorId: string,
-  teamIds: string[] = []
+  teamIds: string[] = [],
+  defaultDenied = false
 ): "view" | "edit" | null {
   const grants = listDocumentPermissions(db, documentId);
-  if (grants.length === 0) return "edit";
+  // Members: no grants = open doc. Guests: no grants = invisible doc —
+  // they see only what a permission row explicitly gives them.
+  if (grants.length === 0) return defaultDenied ? null : "edit";
   let level: "view" | "edit" | null = null;
   for (const grant of grants) {
     const covered =
@@ -4361,4 +5224,21 @@ export function shiftIssueCycle(
     .where(inArray(workspaceIssues.id, ids))
     .run();
   return ids.length;
+}
+
+export function getCustomerByDomain(
+  db: WorkspaceDb,
+  organizationId: string,
+  domain: string
+) {
+  return db
+    .select()
+    .from(workspaceCustomers)
+    .where(
+      and(
+        eq(workspaceCustomers.organizationId, organizationId),
+        eq(workspaceCustomers.domain, domain)
+      )
+    )
+    .get();
 }

@@ -400,8 +400,7 @@ async function getOrCreateZendeskSupportCustomer(
     : null;
   if (org) {
     const domain = org.domain_names?.[0] ?? null;
-    const company = await findOrCreateCompany(ctx.db, ctx.organizationId, {
-      organizationId: ctx.organizationId,
+    const company = await findOrCreateCompany(ctx.stub, ctx.organizationId, {
       name: org.name ?? "Unknown organization",
       domain,
       externalId: org.external_id ?? String(org.id),

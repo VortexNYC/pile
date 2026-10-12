@@ -3,11 +3,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
   AuthProvider,
   InviteMemberForm,
-  isOrganizationAdminRole,
   OrganizationMembers,
 } from "@vortex-api/better-auth-ui";
 
 import { Page } from "@/components/page";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { betterAuthClient } from "@/lib/better-auth";
 import { getBetterAuthUiClient } from "@/lib/better-auth-ui-adapter";
@@ -18,17 +18,23 @@ export const Route = createFileRoute("/_authenticated/$slug/settings/members")({
 
 function MembersSettings() {
   const workspace = useWorkspace();
-  const role = useQuery({
-    queryKey: wsKey(workspace.id, "member-role"),
+  const canManage = usePermissions(workspace.id).isAdmin;
+  // Builtin role names plus every custom role on the org.
+  const customRoles = useQuery({
+    queryKey: wsKey(workspace.id, "org-roles"),
     queryFn: async () => {
-      await betterAuthClient.organization.setActive({
-        organizationId: workspace.id,
-      });
-      const result = await betterAuthClient.organization.getActiveMemberRole();
-      return result.data?.role ?? null;
+      const result = await betterAuthClient.$fetch(
+        `/organization/list-roles?organizationId=${workspace.id}`
+      );
+      return (result.data ?? []) as { role: string }[];
     },
   });
-  const canManage = isOrganizationAdminRole(role.data ?? undefined);
+  const roleOptions = [
+    "member",
+    "admin",
+    "guest",
+    ...(customRoles.data ?? []).map((r) => r.role),
+  ];
 
   return (
     <AuthProvider client={getBetterAuthUiClient()}>
@@ -39,11 +45,13 @@ function MembersSettings() {
               className="w-full max-w-none"
               title="Invite a teammate"
               description="They'll get an email with a link to join."
+              roleOptions={roleOptions}
             />
           ) : null}
           <OrganizationMembers
             className="w-full max-w-none"
             canManageMembers={canManage}
+            roleOptions={roleOptions}
           />
         </div>
       </Page>

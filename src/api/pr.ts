@@ -28,7 +28,7 @@ const reconcilePrRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/issues/{id}/reconcile",
   tags: ["pr"],
-  middleware: [rls("write", "agent:write")],
+  middleware: [rls("issue:create", "agent:write")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -49,7 +49,7 @@ const getPrStatusRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/issues/{id}/pr",
   tags: ["pr"],
-  middleware: [rls("read")],
+  middleware: [rls("issue:view")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },

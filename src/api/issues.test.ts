@@ -1206,6 +1206,69 @@ describe("issues API", () => {
     const issue = (await res.json()) as CaptureIssue;
     expect(issue.status).toBe("triage");
   });
+
+  it("creates, reads publicly, and revokes an issue share", async () => {
+    const createRes = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          title: "Shareable issue",
+          description: "shared body",
+        }),
+      },
+      token
+    );
+    expect(createRes.status).toBe(201);
+    const issueId = ((await createRes.json()) as { id: string }).id;
+
+    const shareRes = await fetch(
+      `/workspaces/${organizationId}/issues/${issueId}/share`,
+      { method: "POST", body: JSON.stringify({}) },
+      token
+    );
+    expect(shareRes.status).toBe(201);
+    const shareToken = ((await shareRes.json()) as { token: string }).token;
+
+    const getRes = await fetch(
+      `/workspaces/${organizationId}/issues/${issueId}/share`,
+      {},
+      token
+    );
+    expect(getRes.status).toBe(200);
+    const active = (await getRes.json()) as { token: string } | null;
+    expect(active?.token).toBe(shareToken);
+
+    const pub = await app.fetch(
+      new Request(
+        `https://example.com/shared-issues/${organizationId}/${shareToken}`
+      ),
+      env
+    );
+    expect(pub.status).toBe(200);
+    const body = (await pub.json()) as { issue: { title: string } };
+    expect(body.issue.title).toBe("Shareable issue");
+
+    await fetch(
+      `/workspaces/${organizationId}/issues/${issueId}/share/${shareToken}`,
+      { method: "DELETE" },
+      token
+    );
+    const gone = await app.fetch(
+      new Request(
+        `https://example.com/shared-issues/${organizationId}/${shareToken}`
+      ),
+      env
+    );
+    expect(gone.status).toBe(404);
+
+    const afterRevoke = await fetch(
+      `/workspaces/${organizationId}/issues/${issueId}/share`,
+      {},
+      token
+    );
+    expect((await afterRevoke.json()) as unknown).toBeNull();
+  });
 });
 
 describe("similar issues API", () => {

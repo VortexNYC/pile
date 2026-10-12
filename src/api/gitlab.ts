@@ -44,7 +44,7 @@ const gitlabUserRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/gitlab/users",
   tags: ["gitlab"],
-  middleware: [rls("write")],
+  middleware: [rls("member:create")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
@@ -72,7 +72,7 @@ const gitlabUsersRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/gitlab/users",
   tags: ["gitlab"],
-  middleware: [rls("read")],
+  middleware: [rls("member:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -92,7 +92,7 @@ const gitlabInstallRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/gitlab/install",
   tags: ["gitlab"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:create")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
@@ -115,7 +115,7 @@ const gitlabInstallationsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/gitlab/installations",
   tags: ["gitlab"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -137,7 +137,7 @@ const gitlabInstallationDeleteRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/gitlab/installations/{id}",
   tags: ["gitlab"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:delete")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },

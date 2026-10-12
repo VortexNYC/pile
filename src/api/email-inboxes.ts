@@ -34,7 +34,7 @@ const listEmailInboxesRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/email-inboxes",
   tags: ["email-inboxes"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },

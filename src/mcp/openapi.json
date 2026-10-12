@@ -3072,6 +3072,278 @@
         "summary": "List issue similar"
       }
     },
+    "/workspaces/{organizationId}/issues/{id}/share": {
+      "get": {
+        "tags": [
+          "issues"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The active share for this issue, if any.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "nullable": true,
+                  "properties": {
+                    "token": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "issueId": {
+                      "type": "string"
+                    },
+                    "createdById": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "token",
+                    "organizationId",
+                    "issueId",
+                    "createdById",
+                    "createdAt",
+                    "expiresAt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List issue share"
+      },
+      "post": {
+        "tags": [
+          "issues"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expiresAt": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Share link created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "issueId": {
+                      "type": "string"
+                    },
+                    "createdById": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "token",
+                    "organizationId",
+                    "issueId",
+                    "createdById",
+                    "createdAt",
+                    "expiresAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Issue not found"
+          }
+        },
+        "summary": "Create issue share"
+      }
+    },
+    "/workspaces/{organizationId}/issues/{id}/share/{token}": {
+      "delete": {
+        "tags": [
+          "issues"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "token",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Share revoked"
+          },
+          "404": {
+            "description": "Share not found"
+          }
+        },
+        "summary": "Delete issue share"
+      }
+    },
+    "/shared-issues/{organizationId}/{token}": {
+      "get": {
+        "tags": [
+          "issues"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "token",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Shared issue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "issue": {
+                      "type": "object",
+                      "properties": {
+                        "title": {
+                          "type": "string"
+                        },
+                        "identifier": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "priority": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "title",
+                        "identifier",
+                        "status",
+                        "priority",
+                        "description",
+                        "createdAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "issue"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Share not found or expired"
+          }
+        },
+        "summary": "GET /shared-issues/{organizationId}/{token}"
+      }
+    },
     "/workspaces/{organizationId}/issues/batch": {
       "post": {
         "tags": [
@@ -12160,12 +12432,7 @@
                             "type": "string"
                           },
                           "role": {
-                            "type": "string",
-                            "enum": [
-                              "owner",
-                              "admin",
-                              "member"
-                            ]
+                            "type": "string"
                           },
                           "createdAt": {
                             "type": "string"
@@ -12216,12 +12483,7 @@
                     "minLength": 1
                   },
                   "role": {
-                    "type": "string",
-                    "enum": [
-                      "owner",
-                      "admin",
-                      "member"
-                    ]
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -12249,12 +12511,7 @@
                       "type": "string"
                     },
                     "role": {
-                      "type": "string",
-                      "enum": [
-                        "owner",
-                        "admin",
-                        "member"
-                      ]
+                      "type": "string"
                     },
                     "createdAt": {
                       "type": "string"
@@ -20990,12 +21247,7 @@
                     "format": "email"
                   },
                   "role": {
-                    "type": "string",
-                    "enum": [
-                      "owner",
-                      "admin",
-                      "member"
-                    ]
+                    "type": "string"
                   },
                   "teamId": {
                     "type": "string"
@@ -24473,7 +24725,8 @@
                             "type": "string",
                             "enum": [
                               "blocks",
-                              "markdown"
+                              "markdown",
+                              "canvas"
                             ]
                           },
                           "slug": {
@@ -24601,7 +24854,8 @@
                     "type": "string",
                     "enum": [
                       "blocks",
-                      "markdown"
+                      "markdown",
+                      "canvas"
                     ]
                   },
                   "slug": {
@@ -24674,7 +24928,8 @@
                       "type": "string",
                       "enum": [
                         "blocks",
-                        "markdown"
+                        "markdown",
+                        "canvas"
                       ]
                     },
                     "slug": {
@@ -24814,7 +25069,8 @@
                       "type": "string",
                       "enum": [
                         "blocks",
-                        "markdown"
+                        "markdown",
+                        "canvas"
                       ]
                     },
                     "slug": {
@@ -24948,7 +25204,8 @@
                     "type": "string",
                     "enum": [
                       "blocks",
-                      "markdown"
+                      "markdown",
+                      "canvas"
                     ]
                   },
                   "slug": {
@@ -25024,7 +25281,8 @@
                       "type": "string",
                       "enum": [
                         "blocks",
-                        "markdown"
+                        "markdown",
+                        "canvas"
                       ]
                     },
                     "slug": {
@@ -25199,7 +25457,8 @@
                       "type": "string",
                       "enum": [
                         "blocks",
-                        "markdown"
+                        "markdown",
+                        "canvas"
                       ]
                     },
                     "slug": {
@@ -26064,6 +26323,68 @@
       }
     },
     "/workspaces/{organizationId}/documents/{id}/share": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The active share for this document, if any.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "nullable": true,
+                  "properties": {
+                    "token": {
+                      "type": "string"
+                    },
+                    "documentId": {
+                      "type": "string"
+                    },
+                    "includeChildren": {
+                      "type": "boolean"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "token",
+                    "documentId",
+                    "includeChildren",
+                    "createdAt",
+                    "expiresAt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List document share"
+      },
       "post": {
         "tags": [
           "documents"
@@ -26255,7 +26576,8 @@
                           "type": "string",
                           "enum": [
                             "blocks",
-                            "markdown"
+                            "markdown",
+                            "canvas"
                           ]
                         },
                         "slug": {
@@ -26362,7 +26684,8 @@
                             "type": "string",
                             "enum": [
                               "blocks",
-                              "markdown"
+                              "markdown",
+                              "canvas"
                             ]
                           },
                           "slug": {
@@ -26580,7 +26903,8 @@
                             "type": "string",
                             "enum": [
                               "blocks",
-                              "markdown"
+                              "markdown",
+                              "canvas"
                             ]
                           },
                           "slug": {
@@ -26947,7 +27271,8 @@
                             "type": "string",
                             "enum": [
                               "blocks",
-                              "markdown"
+                              "markdown",
+                              "canvas"
                             ]
                           },
                           "slug": {
@@ -27101,7 +27426,8 @@
                       "type": "string",
                       "enum": [
                         "blocks",
-                        "markdown"
+                        "markdown",
+                        "canvas"
                       ]
                     },
                     "slug": {
@@ -27858,6 +28184,312 @@
         "summary": "Get audit log"
       }
     },
+    "/workspaces/{organizationId}/support/customers/{customerId}/events": {
+      "get": {
+        "tags": [
+          "comms"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "customerId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "number",
+              "nullable": true,
+              "default": 20
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recent comms events for a support customer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "source": {
+                            "type": "string"
+                          },
+                          "summary": {
+                            "type": "string"
+                          },
+                          "occurredAt": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "source",
+                          "summary",
+                          "occurredAt",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "events"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List support customer events"
+      },
+      "post": {
+        "tags": [
+          "comms"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "customerId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "booking",
+                      "call",
+                      "meeting",
+                      "email",
+                      "note",
+                      "custom"
+                    ]
+                  },
+                  "summary": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "externalId": {
+                    "type": "string"
+                  },
+                  "payload": {
+                    "type": "string"
+                  },
+                  "occurredAt": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "summary"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Event recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create support customer event"
+      }
+    },
+    "/workspaces/{organizationId}/comms/integrations/{source}": {
+      "put": {
+        "tags": [
+          "comms"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "calcom",
+                "gcal",
+                "email"
+              ]
+            },
+            "required": true,
+            "name": "source",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "webhookSecret": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "config": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "webhookSecret"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Integration configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Update comm integration"
+      }
+    },
+    "/webhooks/comms/{organizationId}/{source}": {
+      "post": {
+        "tags": [
+          "comms"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "source",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook processed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "recorded": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "recorded"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Bad secret"
+          },
+          "404": {
+            "description": "Integration not configured"
+          }
+        },
+        "summary": "POST /webhooks/comms/{organizationId}/{source}"
+      }
+    },
     "/workspaces/{organizationId}/customers": {
       "get": {
         "tags": [
@@ -27899,6 +28531,14 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "bookingUrl": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "notes": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "logoUrl": {
                             "type": "string",
                             "nullable": true
@@ -27931,6 +28571,8 @@
                           "organizationId",
                           "name",
                           "url",
+                          "bookingUrl",
+                          "notes",
                           "logoUrl",
                           "externalId",
                           "tierId",
@@ -27979,6 +28621,14 @@
                   "url": {
                     "type": "string"
                   },
+                  "bookingUrl": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "notes": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "logoUrl": {
                     "type": "string"
                   },
@@ -28023,6 +28673,14 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "bookingUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "notes": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "logoUrl": {
                       "type": "string",
                       "nullable": true
@@ -28055,6 +28713,8 @@
                     "organizationId",
                     "name",
                     "url",
+                    "bookingUrl",
+                    "notes",
                     "logoUrl",
                     "externalId",
                     "tierId",
@@ -28115,6 +28775,14 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "bookingUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "notes": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "logoUrl": {
                       "type": "string",
                       "nullable": true
@@ -28147,6 +28815,8 @@
                     "organizationId",
                     "name",
                     "url",
+                    "bookingUrl",
+                    "notes",
                     "logoUrl",
                     "externalId",
                     "tierId",
@@ -28200,6 +28870,14 @@
                   "url": {
                     "type": "string"
                   },
+                  "bookingUrl": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "notes": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "logoUrl": {
                     "type": "string"
                   },
@@ -28241,6 +28919,14 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "bookingUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "notes": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "logoUrl": {
                       "type": "string",
                       "nullable": true
@@ -28273,6 +28959,8 @@
                     "organizationId",
                     "name",
                     "url",
+                    "bookingUrl",
+                    "notes",
                     "logoUrl",
                     "externalId",
                     "tierId",
@@ -28383,6 +29071,14 @@
                           },
                           "url": {
                             "type": "string"
+                          },
+                          "bookingUrl": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "notes": {
+                            "type": "string",
+                            "nullable": true
                           },
                           "createdById": {
                             "type": "string",
@@ -28500,6 +29196,14 @@
                     "url": {
                       "type": "string"
                     },
+                    "bookingUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "notes": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "createdById": {
                       "type": "string",
                       "nullable": true
@@ -28596,6 +29300,14 @@
                     },
                     "url": {
                       "type": "string"
+                    },
+                    "bookingUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "notes": {
+                      "type": "string",
+                      "nullable": true
                     },
                     "createdById": {
                       "type": "string",
@@ -29970,6 +30682,1727 @@
         "summary": "List customer intake"
       }
     },
+    "/workspaces/{organizationId}/deals": {
+      "get": {
+        "tags": [
+          "deals"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "customerId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "contactId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "includeArchived",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deal list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deals": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "customerId": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "stage": {
+                            "type": "string",
+                            "enum": [
+                              "lead",
+                              "qualified",
+                              "proposal",
+                              "negotiation",
+                              "won",
+                              "lost"
+                            ]
+                          },
+                          "amountCents": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "currency": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "expectedCloseAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "description": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "closedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "archivedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "contactIds": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "customerId",
+                          "name",
+                          "stage",
+                          "amountCents",
+                          "currency",
+                          "expectedCloseAt",
+                          "description",
+                          "closedAt",
+                          "archivedAt",
+                          "contactIds",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "deals"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List deals"
+      },
+      "post": {
+        "tags": [
+          "deals"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "customerId": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "stage": {
+                    "type": "string",
+                    "enum": [
+                      "lead",
+                      "qualified",
+                      "proposal",
+                      "negotiation",
+                      "won",
+                      "lost"
+                    ],
+                    "default": "lead"
+                  },
+                  "amountCents": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "currency": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 3,
+                    "maxLength": 3
+                  },
+                  "expectedCloseAt": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "description": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "contactIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "customerId",
+                  "name"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created deal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deal": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "customerId": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "stage": {
+                          "type": "string",
+                          "enum": [
+                            "lead",
+                            "qualified",
+                            "proposal",
+                            "negotiation",
+                            "won",
+                            "lost"
+                          ]
+                        },
+                        "amountCents": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "currency": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "expectedCloseAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "description": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "closedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "archivedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "contactIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "customerId",
+                        "name",
+                        "stage",
+                        "amountCents",
+                        "currency",
+                        "expectedCloseAt",
+                        "description",
+                        "closedAt",
+                        "archivedAt",
+                        "contactIds",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "deal"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create deal"
+      }
+    },
+    "/workspaces/{organizationId}/deals/{dealId}": {
+      "get": {
+        "tags": [
+          "deals"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "dealId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deal detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deal": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "customerId": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "stage": {
+                          "type": "string",
+                          "enum": [
+                            "lead",
+                            "qualified",
+                            "proposal",
+                            "negotiation",
+                            "won",
+                            "lost"
+                          ]
+                        },
+                        "amountCents": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "currency": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "expectedCloseAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "description": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "closedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "archivedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "contactIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "customerId",
+                        "name",
+                        "stage",
+                        "amountCents",
+                        "currency",
+                        "expectedCloseAt",
+                        "description",
+                        "closedAt",
+                        "archivedAt",
+                        "contactIds",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "deal"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get deal"
+      },
+      "patch": {
+        "tags": [
+          "deals"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "dealId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "customerId": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "stage": {
+                    "type": "string",
+                    "enum": [
+                      "lead",
+                      "qualified",
+                      "proposal",
+                      "negotiation",
+                      "won",
+                      "lost"
+                    ]
+                  },
+                  "amountCents": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "currency": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 3,
+                    "maxLength": 3
+                  },
+                  "expectedCloseAt": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "archivedAt": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "contactIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "issueIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated deal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deal": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "customerId": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "stage": {
+                          "type": "string",
+                          "enum": [
+                            "lead",
+                            "qualified",
+                            "proposal",
+                            "negotiation",
+                            "won",
+                            "lost"
+                          ]
+                        },
+                        "amountCents": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "currency": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "expectedCloseAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "description": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "closedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "archivedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "contactIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "customerId",
+                        "name",
+                        "stage",
+                        "amountCents",
+                        "currency",
+                        "expectedCloseAt",
+                        "description",
+                        "closedAt",
+                        "archivedAt",
+                        "contactIds",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "deal"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Update deal"
+      },
+      "delete": {
+        "tags": [
+          "deals"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "dealId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted deal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete deal"
+      }
+    },
+    "/workspaces/{organizationId}/deals/{dealId}/issues": {
+      "get": {
+        "tags": [
+          "deals"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "dealId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Issue ids linked to this deal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "issueIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "issueIds"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List deal issues"
+      },
+      "put": {
+        "tags": [
+          "deals"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "dealId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "issueId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "issueId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Linked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Update deal issues"
+      }
+    },
+    "/workspaces/{organizationId}/deals/{dealId}/issues/{issueId}": {
+      "delete": {
+        "tags": [
+          "deals"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "dealId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "issueId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unlinked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete deal issue"
+      }
+    },
+    "/workspaces/{organizationId}/issues/{issueId}/deals": {
+      "get": {
+        "tags": [
+          "deals"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "issueId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deals linked to this issue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deals": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "customerId": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "stage": {
+                            "type": "string",
+                            "enum": [
+                              "lead",
+                              "qualified",
+                              "proposal",
+                              "negotiation",
+                              "won",
+                              "lost"
+                            ]
+                          },
+                          "amountCents": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "currency": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "expectedCloseAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "description": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "closedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "archivedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "contactIds": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "customerId",
+                          "name",
+                          "stage",
+                          "amountCents",
+                          "currency",
+                          "expectedCloseAt",
+                          "description",
+                          "closedAt",
+                          "archivedAt",
+                          "contactIds",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "deals"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List issue deals"
+      }
+    },
+    "/workspaces/{organizationId}/fields": {
+      "get": {
+        "tags": [
+          "fields"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "entityType",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Field definitions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "fields": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "entityType": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "text",
+                              "number",
+                              "select",
+                              "date",
+                              "boolean"
+                            ]
+                          },
+                          "options": {
+                            "type": "array",
+                            "nullable": true,
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "position": {
+                            "type": "number"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "entityType",
+                          "name",
+                          "type",
+                          "options",
+                          "position",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "fields"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List fields"
+      },
+      "post": {
+        "tags": [
+          "fields"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "entityType": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "text",
+                      "number",
+                      "select",
+                      "date",
+                      "boolean"
+                    ]
+                  },
+                  "options": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "position": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "entityType",
+                  "name",
+                  "type"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created field",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "field": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "entityType": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "text",
+                            "number",
+                            "select",
+                            "date",
+                            "boolean"
+                          ]
+                        },
+                        "options": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "position": {
+                          "type": "number"
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "entityType",
+                        "name",
+                        "type",
+                        "options",
+                        "position",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "field"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create field"
+      }
+    },
+    "/workspaces/{organizationId}/fields/{fieldId}": {
+      "delete": {
+        "tags": [
+          "fields"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "fieldId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted field",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete field"
+      }
+    },
+    "/workspaces/{organizationId}/fields/values/{entityId}": {
+      "get": {
+        "tags": [
+          "fields"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "entityId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Field values for an entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "values": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "fieldId": {
+                            "type": "string"
+                          },
+                          "entityId": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "value": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "fieldId",
+                          "entityId",
+                          "organizationId",
+                          "value",
+                          "updatedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "values"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get field value"
+      }
+    },
+    "/workspaces/{organizationId}/fields/{fieldId}/value": {
+      "put": {
+        "tags": [
+          "fields"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "fieldId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "entityId": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "entityId",
+                  "value"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Field value set",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Update field value"
+      }
+    },
+    "/public/leads/{organizationId}": {
+      "post": {
+        "tags": [
+          "leads"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "fullName": {
+                    "type": "string"
+                  },
+                  "company": {
+                    "type": "string"
+                  },
+                  "dealName": {
+                    "type": "string"
+                  },
+                  "amountCents": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "currency": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 3
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string",
+                    "default": "form"
+                  }
+                },
+                "required": [
+                  "email"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Lead accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "customerId": {
+                      "type": "string"
+                    },
+                    "dealId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "customerId"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create public lead"
+      }
+    },
+    "/workspaces/{organizationId}/entities/{entityType}/{entityId}/links": {
+      "get": {
+        "tags": [
+          "links"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "entityType",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "entityId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Edges for a node — both directions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "links": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "fromType": {
+                            "type": "string"
+                          },
+                          "fromId": {
+                            "type": "string"
+                          },
+                          "toType": {
+                            "type": "string"
+                          },
+                          "toId": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "fromType",
+                          "fromId",
+                          "toType",
+                          "toId",
+                          "kind",
+                          "label",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "links"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List entity {entityType} links"
+      },
+      "post": {
+        "tags": [
+          "links"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "entityType",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "entityId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "toType": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "toId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "kind": {
+                    "type": "string",
+                    "default": "relates"
+                  },
+                  "label": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "toType",
+                  "toId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Linked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "link": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "fromType": {
+                          "type": "string"
+                        },
+                        "fromId": {
+                          "type": "string"
+                        },
+                        "toType": {
+                          "type": "string"
+                        },
+                        "toId": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "label": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "fromType",
+                        "fromId",
+                        "toType",
+                        "toId",
+                        "kind",
+                        "label",
+                        "createdAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "link"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create entity {entityType} link"
+      }
+    },
+    "/workspaces/{organizationId}/links/{linkId}": {
+      "delete": {
+        "tags": [
+          "links"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "linkId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unlinked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete link"
+      }
+    },
     "/support/unsubscribe": {
       "post": {
         "tags": [
@@ -30190,7 +32623,8 @@
                                 "type": "string"
                               },
                               "name": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "isPrimary": {
                                 "type": "boolean"
@@ -30407,7 +32841,8 @@
                                   "type": "string"
                                 },
                                 "name": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "nullable": true
                                 },
                                 "isPrimary": {
                                   "type": "boolean"
@@ -30603,7 +33038,8 @@
                                 "type": "string"
                               },
                               "name": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "isPrimary": {
                                 "type": "boolean"
@@ -30824,7 +33260,8 @@
                                 "type": "string"
                               },
                               "name": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "isPrimary": {
                                 "type": "boolean"
@@ -31097,7 +33534,8 @@
                                 "type": "string"
                               },
                               "name": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "isPrimary": {
                                 "type": "boolean"
@@ -31338,7 +33776,8 @@
                                 "type": "string"
                               },
                               "name": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "isPrimary": {
                                 "type": "boolean"
@@ -31648,6 +34087,200 @@
           }
         },
         "summary": "List support companies"
+      }
+    },
+    "/workspaces/{organizationId}/support/companies/{companyId}/contacts": {
+      "get": {
+        "tags": [
+          "support-contacts"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "companyId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Contacts in a company",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "contacts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "userId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "externalId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "externalSource": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "phone": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "emailOptOut": {
+                            "type": "boolean"
+                          },
+                          "emailOptOutAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          },
+                          "companies": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "customerId": {
+                                  "type": "string"
+                                },
+                                "companyId": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "isPrimary": {
+                                  "type": "boolean"
+                                },
+                                "createdAt": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "customerId",
+                                "companyId",
+                                "name",
+                                "isPrimary",
+                                "createdAt"
+                              ]
+                            }
+                          },
+                          "identities": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "customerId": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "email",
+                                    "phone",
+                                    "slack",
+                                    "msteams",
+                                    "discord",
+                                    "whatsapp",
+                                    "chat",
+                                    "api",
+                                    "social",
+                                    "custom"
+                                  ]
+                                },
+                                "subType": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "value": {
+                                  "type": "string"
+                                },
+                                "isPrimary": {
+                                  "type": "boolean"
+                                },
+                                "createdAt": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "customerId",
+                                "type",
+                                "subType",
+                                "value",
+                                "isPrimary",
+                                "createdAt"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "userId",
+                          "externalId",
+                          "externalSource",
+                          "email",
+                          "fullName",
+                          "phone",
+                          "emailOptOut",
+                          "emailOptOutAt",
+                          "createdAt",
+                          "updatedAt",
+                          "companies",
+                          "identities"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "contacts"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List support company contacts"
       }
     },
     "/workspaces/{organizationId}/support/companies/{companyId}": {
@@ -32087,7 +34720,8 @@
                                 "type": "string"
                               },
                               "name": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "isPrimary": {
                                 "type": "boolean"
@@ -32493,6 +35127,14 @@
             "required": false,
             "name": "q",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "issueId",
+            "in": "query"
           }
         ],
         "responses": {
@@ -32619,7 +35261,8 @@
                                   "type": "string"
                                 },
                                 "name": {
-                                  "type": "string"
+                                  "type": "string",
+                                  "nullable": true
                                 },
                                 "isPrimary": {
                                   "type": "boolean"
@@ -32909,6 +35552,122 @@
         "summary": "List support tickets"
       }
     },
+    "/workspaces/{organizationId}/support/captures": {
+      "get": {
+        "tags": [
+          "support-tickets"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "type",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 100
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "All capture media across support tickets — the jams gallery: every screenshot, video, log, and artifact joined to its ticket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "captures": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "fileName": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "contentType": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "url": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "size": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "ticket": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "number": {
+                                "type": "number"
+                              },
+                              "title": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "number",
+                              "title"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "fileName",
+                          "contentType",
+                          "url",
+                          "size",
+                          "createdAt",
+                          "ticket"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "captures"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List support captures"
+      }
+    },
     "/workspaces/{organizationId}/support/tickets/{ticketId}": {
       "get": {
         "tags": [
@@ -33054,7 +35813,8 @@
                                 "type": "string"
                               },
                               "name": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "isPrimary": {
                                 "type": "boolean"
@@ -33538,7 +36298,8 @@
                                 "type": "string"
                               },
                               "name": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "isPrimary": {
                                 "type": "boolean"
@@ -34706,7 +37467,8 @@
                                 "type": "string"
                               },
                               "name": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "isPrimary": {
                                 "type": "boolean"
@@ -35135,7 +37897,8 @@
                                 "type": "string"
                               },
                               "name": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "isPrimary": {
                                 "type": "boolean"
@@ -35595,7 +38358,8 @@
                                 "type": "string"
                               },
                               "name": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "isPrimary": {
                                 "type": "boolean"
@@ -36081,7 +38845,8 @@
                                 "type": "string"
                               },
                               "name": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "isPrimary": {
                                 "type": "boolean"
@@ -36530,7 +39295,8 @@
                                 "type": "string"
                               },
                               "name": {
-                                "type": "string"
+                                "type": "string",
+                                "nullable": true
                               },
                               "isPrimary": {
                                 "type": "boolean"
@@ -48426,10 +51192,54 @@
                     "defaultViewId": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "hiddenSurfaces": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "favorites": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "issue",
+                              "document"
+                            ]
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "identifier": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "addedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "id",
+                          "title",
+                          "addedAt"
+                        ]
+                      }
                     }
                   },
                   "required": [
-                    "defaultViewId"
+                    "defaultViewId",
+                    "hiddenSurfaces",
+                    "favorites"
                   ]
                 }
               }
@@ -48461,11 +51271,50 @@
                   "defaultViewId": {
                     "type": "string",
                     "nullable": true
+                  },
+                  "hiddenSurfaces": {
+                    "type": "array",
+                    "nullable": true,
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "favorites": {
+                    "type": "array",
+                    "nullable": true,
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "issue",
+                            "document"
+                          ]
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "identifier": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "addedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "id",
+                        "title",
+                        "addedAt"
+                      ]
+                    }
                   }
-                },
-                "required": [
-                  "defaultViewId"
-                ]
+                }
               }
             }
           }
@@ -48481,10 +51330,18 @@
                     "defaultViewId": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "hiddenSurfaces": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
-                    "defaultViewId"
+                    "defaultViewId",
+                    "hiddenSurfaces"
                   ]
                 }
               }

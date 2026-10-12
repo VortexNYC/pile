@@ -30,6 +30,21 @@ vp run knip
 - **No AI attribution** in commits, PRs, or generated files.
 - **Tests ride with source.** A PR that changes `src/` must change a `*.test.ts`, or carry a `No tests: <reason>` line in its description. The `diff-coverage` workflow enforces this (`vp run diff-coverage` locally, against `origin/main`).
 
+## Frontend scope (apps/web)
+
+The console is a **human collaboration surface, not a control plane**.
+
+- Belongs: reading and browsing workspace data (issues, documents,
+  tickets, customers, notifications), human↔agent coordination
+  (comments, triage, approvals, dispatch review), and light interactive
+  edits a person makes by hand.
+- Does not belong: write-heavy or agent-facing operations — bulk
+  mutations, imports/migrations, automation config, credential plumbing.
+  The API, CLI, SDK, and MCP are the first-class interfaces for those;
+  if the primary user is an agent or a script, it gets no UI surface.
+- UI is Kumo components + Phosphor icons only — no hand-rolled
+  components, minimal pages backed by real API data.
+
 ## Important gotchas
 
 - `WorkspaceDO` is branded as `Rpc.DurableObjectBranded` so `DurableObjectStub<WorkspaceDO>` exposes its methods directly. Do not add `as unknown as` casts to DO stubs.

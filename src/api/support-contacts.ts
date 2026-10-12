@@ -4,23 +4,21 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { createD1 } from "../global/db.js";
 import { anonymizeCustomer } from "../global/deletion.js";
 import {
-  createCompany,
   createCustomer,
-  getCompanyById,
   getCustomerByEmail,
   getCustomerById,
-  listCompanies,
   listCustomers,
-  resolveCompanyByDomain,
   setCustomerCompanies,
   setCustomerIdentities,
   setEmailOptOutByEmail,
   updateCustomer,
 } from "../global/support-contacts.js";
 import { VortexError } from "../platform/errors.js";
+import type { WorkerEnv } from "../platform/middleware.js";
 import type { AppContext } from "../platform/middleware.js";
 import { publicRateLimit } from "../platform/rate-limit.js";
 import { rls } from "../platform/rls.js";
+import { getWorkspaceStub } from "./stub.js";
 
 const identityTypeEnum = z.enum([
   "email",
@@ -39,7 +37,7 @@ const supportCustomerCompanySchema = z.object({
   id: z.string(),
   customerId: z.string(),
   companyId: z.string(),
-  name: z.string(),
+  name: z.string().nullable(),
   isPrimary: z.boolean(),
   createdAt: z.string(),
 });
@@ -81,6 +79,29 @@ const supportCompanySchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
 });
+
+// One company model: support_companies folded into workspace customers.
+// The routes proxy the DO; domain replaces url parsing on the client.
+function customerAsCompany(customer: {
+  id: string;
+  organizationId: string;
+  name: string;
+  domain: string | null;
+  externalId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}) {
+  return {
+    id: customer.id,
+    organizationId: customer.organizationId,
+    name: customer.name,
+    domain: customer.domain,
+    externalId: customer.externalId,
+    externalSource: "workspace",
+    createdAt: customer.createdAt,
+    updatedAt: customer.updatedAt,
+  };
+}
 
 const createCustomerBodySchema = z.object({
   email: z.string().email(),
@@ -189,7 +210,7 @@ const createCustomerRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/customers",
   tags: ["support-contacts"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: orgParam,
     body: {
@@ -214,7 +235,7 @@ const listCustomersRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/customers",
   tags: ["support-contacts"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: {
     params: orgParam,
     query: listCustomersQuerySchema,
@@ -238,7 +259,7 @@ const getCustomerRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/customers/{customerId}",
   tags: ["support-contacts"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: {
     params: customerIdParam,
   },
@@ -258,7 +279,7 @@ const updateCustomerRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/support/customers/{customerId}",
   tags: ["support-contacts"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:edit")],
   request: {
     params: customerIdParam,
     body: {
@@ -283,7 +304,7 @@ const deleteCustomerRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/support/customers/{customerId}",
   tags: ["support-contacts"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:delete")],
   request: {
     params: customerIdParam,
   },
@@ -308,7 +329,7 @@ const setCustomerCompaniesRoute = createRoute({
   method: "put",
   path: "/workspaces/{organizationId}/support/customers/{customerId}/companies",
   tags: ["support-contacts"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:edit")],
   request: {
     params: customerIdParam,
     body: {
@@ -333,7 +354,7 @@ const setCustomerIdentitiesRoute = createRoute({
   method: "put",
   path: "/workspaces/{organizationId}/support/customers/{customerId}/identities",
   tags: ["support-contacts"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:edit")],
   request: {
     params: customerIdParam,
     body: {
@@ -358,7 +379,7 @@ const createCompanyRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/companies",
   tags: ["support-contacts"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: orgParam,
     body: {
@@ -383,7 +404,7 @@ const listCompaniesRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/companies",
   tags: ["support-contacts"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: {
     params: orgParam,
     query: listCompaniesQuerySchema,
@@ -407,7 +428,7 @@ const getCompanyRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/companies/{companyId}",
   tags: ["support-contacts"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: {
     params: companyIdParam,
   },
@@ -417,6 +438,24 @@ const getCompanyRoute = createRoute({
       content: {
         "application/json": {
           schema: z.object({ company: supportCompanySchema }),
+        },
+      },
+    },
+  },
+});
+
+const listCompanyContactsRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/support/companies/{companyId}/contacts",
+  tags: ["support-contacts"],
+  middleware: [rls("ticket:view")],
+  request: { params: companyIdParam },
+  responses: {
+    200: {
+      description: "Contacts in a company",
+      content: {
+        "application/json": {
+          schema: z.object({ contacts: z.array(supportCustomerSchema) }),
         },
       },
     },
@@ -491,8 +530,8 @@ export function registerSupportContactRoutes(app: OpenAPIHono<AppContext>) {
     const companyLinks = body.companies ?? [];
 
     if (companyLinks.length === 0) {
-      const companyId = await resolveCompanyByDomain(
-        db,
+      const companyId = await ensureCustomerByDomain(
+        c.env,
         organizationId,
         customer.email
       );
@@ -502,7 +541,13 @@ export function registerSupportContactRoutes(app: OpenAPIHono<AppContext>) {
     }
 
     if (companyLinks.length > 0) {
-      await setCustomerCompanies(db, organizationId, customer.id, companyLinks);
+      await setCustomerCompanies(
+        db,
+        organizationId,
+        customer.id,
+        companyLinks,
+        c.env
+      );
     }
 
     const identities = body.identities ?? [
@@ -584,7 +629,13 @@ export function registerSupportContactRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId, customerId } = c.req.valid("param");
     const { companies } = c.req.valid("json");
     const db = createD1(c.env.D1);
-    await setCustomerCompanies(db, organizationId, customerId, companies);
+    await setCustomerCompanies(
+      db,
+      organizationId,
+      customerId,
+      companies,
+      c.env
+    );
     const customer = await getCustomerById(db, organizationId, customerId);
     if (!customer) {
       customerNotFound();
@@ -607,30 +658,88 @@ export function registerSupportContactRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(createCompanyRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const body = c.req.valid("json");
-    const db = createD1(c.env.D1);
-    const company = await createCompany(db, { ...body, organizationId });
-    return c.json({ company }, 201);
+    const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
+    const customer = await stub.createCustomer({
+      name: body.name,
+      domain: body.domain ?? null,
+      externalId: body.externalId ?? null,
+    });
+    return c.json({ company: customerAsCompany(customer) }, 201);
   });
 
   app.openapi(listCompaniesRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const query = c.req.valid("query");
-    const db = createD1(c.env.D1);
-    const { companies, nextCursor } = await listCompanies(db, organizationId, {
-      limit: query.limit,
-      cursor: query.cursor,
-      q: query.q,
+    const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
+    const all = await stub.listCustomers();
+    const q = query.q?.toLowerCase();
+    const filtered = q
+      ? all.filter(
+          (row) =>
+            row.name.toLowerCase().includes(q) ||
+            (row.domain ?? "").toLowerCase().includes(q)
+        )
+      : all;
+    return c.json({
+      companies: filtered.map(customerAsCompany),
+      nextCursor: null,
     });
-    return c.json({ companies, nextCursor });
+  });
+
+  app.openapi(listCompanyContactsRoute, async (c) => {
+    const { organizationId, companyId } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const { customers } = await listCustomers(db, organizationId, {
+      limit: 100,
+      companyId,
+    });
+    const contacts = await Promise.all(
+      customers.map((customer) =>
+        getCustomerById(db, organizationId, customer.id)
+      )
+    );
+    return c.json(
+      {
+        contacts: contacts.filter(
+          (customer): customer is NonNullable<typeof customer> =>
+            customer !== null
+        ),
+      },
+      200
+    );
   });
 
   app.openapi(getCompanyRoute, async (c) => {
     const { organizationId, companyId } = c.req.valid("param");
-    const db = createD1(c.env.D1);
-    const company = await getCompanyById(db, organizationId, companyId);
-    if (!company) {
+    const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
+    const customer = await stub.getCustomer(companyId);
+    if (!customer) {
       companyNotFound();
     }
-    return c.json({ company });
+    return c.json({ company: customerAsCompany(customer!) });
   });
+}
+
+/** Domain → workspace customer — find or create the org for a
+ * contact's email domain. One company model: customers. */
+async function ensureCustomerByDomain(
+  env: WorkerEnv,
+  organizationId: string,
+  email: string
+): Promise<string | null> {
+  const domain = email.split("@")[1]?.toLowerCase();
+  if (!domain) return null;
+  const stub = getWorkspaceStub(env, organizationId);
+  await stub.setOrganizationId(organizationId);
+  const existing = await stub.getCustomerByDomain(domain);
+  if (existing) return existing.id;
+  const created = await stub.createCustomer({
+    name: domain.replace(/\.[a-z]+$/, ""),
+    url: `https://${domain}`,
+    domain,
+  });
+  return created?.id ?? null;
 }

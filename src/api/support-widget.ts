@@ -71,7 +71,7 @@ const createWidgetKeyRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/widget-keys",
   tags: ["support-widget"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
@@ -94,7 +94,7 @@ const listWidgetKeysRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/widget-keys",
   tags: ["support-widget"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -114,7 +114,7 @@ const revokeWidgetKeyRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/support/widget-keys/{keyId}",
   tags: ["support-widget"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:delete")],
   request: {
     params: z.object({ organizationId: z.string(), keyId: z.string() }),
   },

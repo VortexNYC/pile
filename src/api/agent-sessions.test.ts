@@ -2906,4 +2906,54 @@ describe("agent sessions API", () => {
       ).toBe(0);
     });
   });
+
+  it("queues a follow-up prompt as an event on externally-managed sessions", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    const issueRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ title: "Local agent loop" }),
+      }),
+      env
+    );
+    expect(issueRes.status).toBe(201);
+    const issue = await issueRes.json<{ id: string }>();
+    // A self-registered local session: no providerSessionId, no live
+    // sandbox for sendPrompt — the prompt must land as a readable event.
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "local-agent",
+      provider: "local-agent",
+      actorId: "user-1",
+      actorType: "agent",
+      status: "running",
+      startedAt: new Date().toISOString(),
+    });
+
+    const res = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/prompt`,
+        {
+          method: "POST",
+          token,
+          body: JSON.stringify({ prompt: "status report please" }),
+        }
+      ),
+      env
+    );
+    expect(res.status).toBe(200);
+
+    const events = await stub.listAgentSessionEvents(session.id, {});
+    const evt = events.find((e) => e.type === "prompt.followup");
+    expect(evt).toBeDefined();
+    const payload = JSON.parse(evt?.payload ?? "{}") as {
+      prompt?: string;
+      delivery?: string;
+    };
+    expect(payload.prompt).toBe("status report please");
+    expect(payload.delivery).toBe("queued");
+  });
 });

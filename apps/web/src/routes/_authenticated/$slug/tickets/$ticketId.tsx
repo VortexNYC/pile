@@ -1,13 +1,14 @@
 import { Badge } from "@cloudflare/kumo/components/badge";
 import { Button } from "@cloudflare/kumo/components/button";
-import { InputArea } from "@cloudflare/kumo/components/input";
-import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 import { Select } from "@cloudflare/kumo/components/select";
 import { Text } from "@cloudflare/kumo/components/text";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
 
+import { Composer } from "@/components/composer";
+import { EntityLinksRail } from "@/components/entity-links";
+import { EntityPage, RailSection } from "@/components/entity-page";
+import { Feed } from "@/components/feed";
 import { Page } from "@/components/page";
 import { ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
@@ -23,7 +24,7 @@ import {
   type IssuePriority,
   type TicketStatus,
 } from "@/lib/labels";
-import { toastError } from "@/lib/toast";
+import { toastError, toastSuccess } from "@/lib/toast";
 
 export const Route = createFileRoute("/_authenticated/$slug/tickets/$ticketId")(
   {
@@ -36,11 +37,60 @@ function TicketDetail() {
   const workspace = useWorkspace();
   const organizationId = workspace.id;
   const queryClient = useQueryClient();
-  const [reply, setReply] = useState("");
-  const [mode, setMode] = useState<"reply" | "note">("reply");
+
+  // Jam's trick — hand the customer a link; they record the bug, a
+  // capture ticket lands back in the workspace. Reuse or mint the
+  // workspace's public key, then create the link.
+  const captureLink = useMutation({
+    mutationFn: async () => {
+      const keys = (
+        await unwrap(
+          api.GET("/workspaces/{organizationId}/support/capture/public-keys", {
+            params: { path: { organizationId: workspace.id } },
+          })
+        )
+      ).publicKeys;
+      const key =
+        keys[0] ??
+        (await unwrap(
+          api.POST("/workspaces/{organizationId}/support/capture/public-keys", {
+            params: { path: { organizationId: workspace.id } },
+            body: { name: "Ticket capture links" },
+          })
+        ));
+      return unwrap(
+        api.POST("/workspaces/{organizationId}/support/capture-links", {
+          params: { path: { organizationId: workspace.id } },
+          body: {
+            publicKeyId: key.id,
+            name: `Ticket ${data.number} — send me the bug`,
+          },
+        })
+      );
+    },
+    onSuccess: (link) => {
+      navigator.clipboard.writeText(link.url);
+      toastSuccess("Capture link copied — send it to the customer");
+    },
+    onError: (error) => toastError(error),
+  });
   const key = wsKey(organizationId, "tickets", ticketId);
   const path = { organizationId, ticketId };
 
+  const tickets = useQuery({
+    queryKey: wsKey(workspace.id, "tickets"),
+    queryFn: async () =>
+      (
+        await unwrap(
+          api.GET("/workspaces/{organizationId}/support/tickets", {
+            params: {
+              path: { organizationId: workspace.id },
+              query: { limit: 100 },
+            },
+          })
+        )
+      ).tickets,
+  });
   const ticket = useQuery({
     queryKey: key,
     queryFn: async () =>
@@ -116,7 +166,6 @@ function TicketDetail() {
         )
       );
     },
-    onSuccess: () => setReply(""),
     onError: (error) => toastError(error),
     onSettled: invalidate,
   });
@@ -134,9 +183,32 @@ function TicketDetail() {
   }
   const data = ticket.data;
   const events = data.events.filter((e) => e.message || e.note);
+  const otherTickets = (tickets.data ?? []).filter(
+    (tt) => tt.customer.id === data.customer.id && tt.id !== data.id
+  );
+  const comms = useQuery({
+    queryKey: wsKey(workspace.id, "comms", { customerId: data.customer.id }),
+    queryFn: async () =>
+      (
+        await unwrap(
+          api.GET(
+            "/workspaces/{organizationId}/support/customers/{customerId}/events",
+            {
+              params: {
+                path: {
+                  organizationId: workspace.id,
+                  customerId: data.customer.id,
+                },
+                query: { limit: 5 },
+              },
+            }
+          )
+        )
+      ).events,
+  });
 
   return (
-    <Page
+    <EntityPage
       title={`#${data.number} ${data.title}`}
       description={
         <>
@@ -151,130 +223,199 @@ function TicketDetail() {
           {formatRelative(data.createdAt)}
         </>
       }
-    >
-      <div className="flex flex-wrap gap-4">
-        <Select
-          label="Status"
-          value={data.status}
-          disabled={update.isPending}
-          onValueChange={(status) => {
-            if (isTicketStatus(status) && status !== data.status)
-              update.mutate({ status });
-          }}
-          renderValue={(v) =>
-            isTicketStatus(v) ? TICKET_STATUS_LABELS[v] : ""
-          }
-        >
-          {TICKET_STATUSES.map((s) => (
-            <Select.Option key={s} value={s}>
-              {TICKET_STATUS_LABELS[s]}
-            </Select.Option>
-          ))}
-        </Select>
-        <Select
-          label="Priority"
-          value={data.priority}
-          disabled={update.isPending}
-          onValueChange={(priority) => {
-            if (isPriority(priority) && priority !== data.priority)
-              update.mutate({ priority });
-          }}
-          renderValue={(v) => (isPriority(v) ? PRIORITY_LABELS[v] : "")}
-        >
-          {PRIORITIES.map((p) => (
-            <Select.Option key={p} value={p}>
-              {PRIORITY_LABELS[p]}
-            </Select.Option>
-          ))}
-        </Select>
-      </div>
-      <section aria-label="Conversation" className="flex flex-col gap-3">
-        {events.length === 0 ? (
-          <Text variant="secondary" size="sm">
-            No messages yet.
-          </Text>
-        ) : (
-          events.map((event) => {
-            const isNote = !!event.note;
-            const inbound = event.message?.direction === "inbound";
-            return (
-              <LayerCard key={event.id} data-testid="ticket-event">
-                <LayerCard.Primary className="flex flex-col gap-1 p-4">
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      variant={isNote ? "orange" : inbound ? "neutral" : "blue"}
-                    >
-                      {isNote
-                        ? "Internal note"
-                        : inbound
-                          ? "Customer"
-                          : "Reply"}
-                    </Badge>
-                    <Text variant="secondary" size="xs">
-                      {formatRelative(event.createdAt)}
-                    </Text>
-                  </div>
-                  <Text>
-                    <span className="whitespace-pre-wrap">
-                      {event.note?.body ?? event.message?.textContent}
-                    </span>
-                  </Text>
-                </LayerCard.Primary>
-              </LayerCard>
-            );
-          })
-        )}
-      </section>
-      <form
-        className="flex flex-col gap-2"
-        onSubmit={(event) => {
-          event.preventDefault();
-          const text = reply.trim();
-          if (text && !send.isPending)
-            send.mutate({ text, mode, channel: data.sourceChannel });
-        }}
-      >
-        <div className="flex gap-2" role="group" aria-label="Message type">
+      actions={
+        <div className="flex items-center gap-2">
+          {captureLink.data ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                navigator.clipboard.writeText(captureLink.data!.url);
+                toastSuccess("Capture link copied");
+              }}
+            >
+              Send capture link
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              loading={captureLink.isPending}
+              onClick={() => captureLink.mutate()}
+            >
+              Send capture link
+            </Button>
+          )}
           <Button
-            type="button"
+            variant="ghost"
             size="sm"
-            variant={mode === "reply" ? "primary" : "ghost"}
-            aria-pressed={mode === "reply"}
-            onClick={() => setMode("reply")}
+            onClick={() =>
+              navigator.clipboard.writeText(
+                `${window.location.origin}/app/share/capture/${ticketId}`
+              )
+            }
           >
-            Reply to customer
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={mode === "note" ? "primary" : "ghost"}
-            aria-pressed={mode === "note"}
-            onClick={() => setMode("note")}
-          >
-            Internal note
+            Copy capture link
           </Button>
         </div>
-        <InputArea
-          aria-label={mode === "note" ? "Internal note" : "Reply"}
-          placeholder={
-            mode === "note" ? "Only your team sees this…" : "Write a reply…"
-          }
-          value={reply}
-          autoResize
-          minRows={3}
-          onValueChange={setReply}
-        />
-        <div>
-          <Button
-            type="submit"
-            variant="primary"
+      }
+      center={
+        <>
+          <div className="flex flex-wrap gap-4">
+            <Select
+              label="Status"
+              value={data.status}
+              disabled={update.isPending}
+              onValueChange={(status) => {
+                if (isTicketStatus(status) && status !== data.status)
+                  update.mutate({ status });
+              }}
+              renderValue={(v) =>
+                isTicketStatus(v) ? TICKET_STATUS_LABELS[v] : ""
+              }
+            >
+              {TICKET_STATUSES.map((s) => (
+                <Select.Option key={s} value={s}>
+                  {TICKET_STATUS_LABELS[s]}
+                </Select.Option>
+              ))}
+            </Select>
+            <Select
+              label="Priority"
+              value={data.priority}
+              disabled={update.isPending}
+              onValueChange={(priority) => {
+                if (isPriority(priority) && priority !== data.priority)
+                  update.mutate({ priority });
+              }}
+              renderValue={(v) => (isPriority(v) ? PRIORITY_LABELS[v] : "")}
+            >
+              {PRIORITIES.map((p) => (
+                <Select.Option key={p} value={p}>
+                  {PRIORITY_LABELS[p]}
+                </Select.Option>
+              ))}
+            </Select>
+          </div>
+          <section aria-label="Conversation">
+            {events.length === 0 ? (
+              <Text variant="secondary" size="sm">
+                No messages yet.
+              </Text>
+            ) : (
+              <Feed>
+                {events.map((event) => {
+                  const isNote = !!event.note;
+                  const inbound = event.message?.direction === "inbound";
+                  return (
+                    <Feed.Row
+                      key={event.id}
+                      marker={
+                        <Badge
+                          variant={
+                            isNote ? "orange" : inbound ? "neutral" : "blue"
+                          }
+                        >
+                          {isNote
+                            ? "Internal note"
+                            : inbound
+                              ? "Customer"
+                              : "Reply"}
+                        </Badge>
+                      }
+                      body={
+                        <span className="whitespace-pre-wrap">
+                          {event.note?.body ?? event.message?.textContent}
+                        </span>
+                      }
+                      timestamp={event.createdAt}
+                    />
+                  );
+                })}
+              </Feed>
+            )}
+          </section>
+          <Composer
+            aria-label="Ticket reply"
             loading={send.isPending}
-            disabled={!reply.trim()}
-          >
-            {mode === "note" ? "Add note" : "Send reply"}
-          </Button>
-        </div>
-      </form>
-    </Page>
+            modes={[
+              {
+                id: "reply",
+                label: "Reply to customer",
+                placeholder: "Write a reply…",
+                submitLabel: "Send reply",
+              },
+              {
+                id: "note",
+                label: "Internal note",
+                placeholder: "Only your team sees this…",
+                submitLabel: "Add note",
+              },
+            ]}
+            onSubmit={(text, m) =>
+              send.mutate({
+                text,
+                mode: (m as "reply" | "note") ?? "reply",
+                channel: data.sourceChannel,
+              })
+            }
+          />
+        </>
+      }
+      rail={
+        <>
+          <RailSection title="Customer">
+            <div>
+              <div className="flex flex-col gap-1 text-sm">
+                <span className="text-kumo-default">
+                  {data.customer.fullName ?? "—"}
+                </span>
+                <span className="text-kumo-subtle">{data.customer.email}</span>
+                {data.customer.phone ? (
+                  <span className="text-kumo-subtle">
+                    {data.customer.phone}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          </RailSection>
+          {otherTickets.length > 0 ? (
+            <RailSection title="Other tickets from them">
+              <ul className="flex flex-col gap-1">
+                {otherTickets.slice(0, 5).map((tt) => (
+                  <li key={tt.id}>
+                    <Link
+                      to="/$slug/tickets/$ticketId"
+                      params={{
+                        slug: workspace.slug,
+                        ticketId: tt.id,
+                      }}
+                      className="text-sm text-kumo-link hover:underline"
+                    >
+                      #{tt.number} {tt.title}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </RailSection>
+          ) : null}
+          {(comms.data?.length ?? 0) > 0 ? (
+            <RailSection title="Recent activity">
+              <ul className="flex flex-col gap-1.5">
+                {(comms.data ?? []).map((event) => (
+                  <li key={event.id} className="text-sm">
+                    <div className="text-kumo-default">{event.summary}</div>
+                    <div className="text-xs text-kumo-subtle">
+                      {event.source} · {event.occurredAt.slice(0, 10)}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </RailSection>
+          ) : null}
+          <EntityLinksRail entityType="ticket" entityId={data.id} />
+        </>
+      }
+    />
   );
 }

@@ -43,7 +43,7 @@ const issueActivityRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/issues/{issueId}/activity",
   tags: ["activities"],
-  middleware: [rls("read")],
+  middleware: [rls("issue:view")],
   request: {
     params: z.object({ organizationId: z.string(), issueId: z.string() }),
   },
@@ -100,7 +100,7 @@ export function registerActivityRoutes(app: OpenAPIHono<AppContext>) {
       ...comments.map((item) => ({
         kind: "comment" as const,
         id: item.id,
-        issueId: item.issueId,
+        issueId: item.entityId,
         body: item.body,
         authorId: item.authorId,
         externalAuthor: item.externalAuthor,

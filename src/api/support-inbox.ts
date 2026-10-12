@@ -72,7 +72,7 @@ const listInboxRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/inbox",
   tags: ["support-inbox"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: {
     params: orgParam,
     query: listInboxOptionsSchema,
@@ -96,7 +96,7 @@ const getInboxCountsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/inbox/counts",
   tags: ["support-inbox"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: { params: orgParam },
   responses: {
     200: {
@@ -122,7 +122,7 @@ const getNextInboxRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/inbox/next",
   tags: ["support-inbox"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: { params: orgParam },
   responses: {
     200: {
@@ -155,7 +155,7 @@ const createSavedViewRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/inbox/views",
   tags: ["support-inbox"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: orgParam,
     body: {
@@ -186,7 +186,7 @@ const listSavedViewsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/inbox/views",
   tags: ["support-inbox"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: { params: orgParam },
   responses: {
     200: {
@@ -204,7 +204,7 @@ const getSavedViewRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/inbox/views/{viewId}",
   tags: ["support-inbox"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: { params: viewIdParam },
   responses: {
     200: {
@@ -223,7 +223,7 @@ const runSavedViewRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/inbox/views/{viewId}/run",
   tags: ["support-inbox"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: { params: viewIdParam },
   responses: {
     200: {

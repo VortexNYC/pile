@@ -33,7 +33,7 @@ const listRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/external-links",
   tags: ["external-links"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
     query: z.object({
@@ -57,7 +57,7 @@ const createRouteDef = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/external-links",
   tags: ["external-links"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:create")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: { content: { "application/json": { schema: bodySchema } } },
@@ -75,7 +75,7 @@ const getRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/external-links/{id}",
   tags: ["external-links"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: { params: z.object({ organizationId: z.string(), id: z.string() }) },
   responses: {
     200: {
@@ -90,7 +90,7 @@ const updateRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/external-links/{id}",
   tags: ["external-links"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:edit")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
     body: { content: { "application/json": { schema: bodySchema.partial() } } },
@@ -108,7 +108,7 @@ const deleteRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/external-links/{id}",
   tags: ["external-links"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:delete")],
   request: { params: z.object({ organizationId: z.string(), id: z.string() }) },
   responses: {
     204: { description: "External link deleted" },

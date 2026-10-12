@@ -43,7 +43,7 @@ const createStateRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/states",
   tags: ["states"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:create")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
@@ -66,7 +66,7 @@ const listStatesRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/states",
   tags: ["states"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -86,7 +86,7 @@ const getStateRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/states/{id}",
   tags: ["states"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -104,7 +104,7 @@ const updateStateRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/states/{id}",
   tags: ["states"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:edit")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
@@ -127,7 +127,7 @@ const deleteStateRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/states/{id}",
   tags: ["states"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:delete")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },

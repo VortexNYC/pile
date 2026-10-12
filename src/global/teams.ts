@@ -1,6 +1,7 @@
 import { and, count, eq, ne, sql } from "drizzle-orm";
 
 import type { AppEnv } from "../platform/env.js";
+import { isAdminIdentity } from "../platform/permissions.js";
 import type { D1Client } from "./db.js";
 import {
   apikey,
@@ -441,7 +442,7 @@ export async function canAccessTeam(
   const record = await getTeamById(db, teamId);
   if (!record) return false;
   if (record.isPublic) return true;
-  if (identity.permissions.includes("admin")) return true;
+  if (isAdminIdentity(identity)) return true;
   return isTeamMember(db, record.id, identity.id);
 }
 
@@ -466,7 +467,7 @@ export async function getVisibleTeamIds(
     ).map((r) => r.teamId)
   );
 
-  const isAdmin = identity.permissions.includes("admin");
+  const isAdmin = isAdminIdentity(identity);
   const visible: string[] = [];
   for (const row of teamRows) {
     const metadata = parseTeamMetadata(row.metadata);

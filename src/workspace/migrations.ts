@@ -867,6 +867,214 @@ CREATE INDEX IF NOT EXISTS customer_intake_items_customer_idx ON customer_intake
 // email_explicit when the caller actually passed `email`.
 const v54 = `ALTER TABLE notification_preferences ADD COLUMN email_explicit INTEGER NOT NULL DEFAULT 1`;
 
+const v55 = `ALTER TABLE user_workspace_preferences ADD COLUMN hidden_surfaces TEXT`;
+const v57 = `ALTER TABLE user_workspace_preferences ADD COLUMN favorites TEXT`;
+const v58 = `ALTER TABLE customers ADD COLUMN booking_url TEXT`;
+
+const v60 = `CREATE TABLE IF NOT EXISTS field_definitions (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL,
+  options TEXT,
+  position INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS field_definitions_org_entity_idx ON field_definitions (organization_id, entity_type)
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS field_definitions_name_idx ON field_definitions (organization_id, entity_type, name)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS field_values (
+  field_id TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  organization_id TEXT NOT NULL,
+  value TEXT,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (field_id, entity_id)
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS field_values_entity_idx ON field_values (organization_id, entity_id)`;
+
+const v70 = `CREATE INDEX IF NOT EXISTS user_workspace_preferences_org_user_idx ON user_workspace_preferences (organization_id, user_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS document_content_history_doc_idx ON document_content_history (organization_id, document_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS notification_preferences_user_idx ON notification_preferences (organization_id, user_id)`;
+
+const v69 = `CREATE TABLE comments_new (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  entity_type TEXT,
+  entity_id TEXT,
+  author_id TEXT,
+  body TEXT NOT NULL,
+  internal INTEGER NOT NULL DEFAULT 0,
+  external_id TEXT,
+  external_source TEXT,
+  external_author TEXT,
+  resolved_at TEXT,
+  resolved_by_id TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)
+--> statement-breakpoint
+INSERT INTO comments_new SELECT
+  id, organization_id,
+  CASE WHEN issue_id IS NOT NULL THEN 'issue' ELSE 'document' END,
+  COALESCE(issue_id, document_id),
+  author_id, body, internal, external_id, external_source,
+  external_author, resolved_at, resolved_by_id, created_at, updated_at
+FROM comments
+--> statement-breakpoint
+DROP TABLE comments
+--> statement-breakpoint
+ALTER TABLE comments_new RENAME TO comments
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS comments_entity_idx ON comments (organization_id, entity_type, entity_id)`;
+
+const v68 = `CREATE TABLE IF NOT EXISTS subscriptions (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS subscriptions_entity_user_idx ON subscriptions (entity_type, entity_id, user_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS subscriptions_entity_idx ON subscriptions (organization_id, entity_type, entity_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS subscriptions_user_idx ON subscriptions (user_id)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS shares (
+  token TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  include_children INTEGER NOT NULL DEFAULT 0,
+  created_by_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  expires_at TEXT
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS shares_entity_idx ON shares (organization_id, entity_type, entity_id)
+--> statement-breakpoint
+INSERT INTO subscriptions (id, organization_id, entity_type, entity_id, user_id, created_at)
+  SELECT id, organization_id, 'issue', issue_id, linear_user_id, created_at FROM issue_subscribers
+--> statement-breakpoint
+INSERT INTO subscriptions (id, organization_id, entity_type, entity_id, user_id, created_at)
+  SELECT id, organization_id, 'document', document_id, user_id, created_at FROM document_watchers
+--> statement-breakpoint
+INSERT INTO shares (token, organization_id, entity_type, entity_id, include_children, created_by_id, created_at, expires_at)
+  SELECT token, organization_id, 'issue', issue_id, 0, created_by_id, created_at, expires_at FROM issue_shares
+--> statement-breakpoint
+INSERT INTO shares (token, organization_id, entity_type, entity_id, include_children, created_by_id, created_at, expires_at)
+  SELECT token, organization_id, 'document', document_id, include_children, created_by_id, created_at, expires_at FROM document_shares
+--> statement-breakpoint
+DROP TABLE issue_subscribers
+--> statement-breakpoint
+DROP TABLE document_watchers
+--> statement-breakpoint
+DROP TABLE issue_shares
+--> statement-breakpoint
+DROP TABLE document_shares`;
+
+const v67 = `ALTER TABLE entity_links ADD COLUMN label TEXT`;
+
+const v66 = `INSERT INTO entity_links (id, organization_id, from_type, from_id, to_type, to_id, kind, created_at)
+  SELECT id, organization_id, 'issue', from_issue_id, 'issue', to_issue_id, type, created_at
+  FROM issue_relations
+--> statement-breakpoint
+DROP TABLE issue_relations`;
+
+const v65 = `ALTER TABLE customers ADD COLUMN domain TEXT
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS customers_domain_idx ON customers (organization_id, domain)`;
+
+const v64 = `INSERT INTO entity_links (id, organization_id, from_type, from_id, to_type, to_id, kind, created_at)
+  SELECT lower(hex(randomblob(16))), d.organization_id, 'deal', d.id, 'contact', dc.contact_id, 'contact', dc.created_at
+  FROM deal_contacts dc JOIN deals d ON d.id = dc.deal_id
+--> statement-breakpoint
+INSERT INTO entity_links (id, organization_id, from_type, from_id, to_type, to_id, kind, created_at)
+  SELECT lower(hex(randomblob(16))), d.organization_id, 'deal', d.id, 'issue', dil.issue_id, 'relates', dil.created_at
+  FROM deal_issue_links dil JOIN deals d ON d.id = dil.deal_id
+--> statement-breakpoint
+DROP TABLE deal_contacts
+--> statement-breakpoint
+DROP TABLE deal_issue_links`;
+
+const v63 = `CREATE TABLE IF NOT EXISTS entity_links (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  from_type TEXT NOT NULL,
+  from_id TEXT NOT NULL,
+  to_type TEXT NOT NULL,
+  to_id TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'relates',
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS entity_links_from_idx ON entity_links (organization_id, from_type, from_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS entity_links_to_idx ON entity_links (organization_id, to_type, to_id)
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS entity_links_unique_idx ON entity_links (organization_id, from_type, from_id, to_type, to_id, kind)`;
+
+const v62 = `ALTER TABLE customers ADD COLUMN notes TEXT`;
+
+const v61 = `ALTER TABLE deals ADD COLUMN description TEXT
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS deal_issue_links (
+  deal_id TEXT NOT NULL,
+  issue_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (deal_id, issue_id)
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS deal_issue_links_issue_idx ON deal_issue_links (issue_id)`;
+
+const v59 = `CREATE TABLE IF NOT EXISTS deals (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  customer_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  stage TEXT NOT NULL,
+  amount_cents INTEGER,
+  currency TEXT,
+  expected_close_at TEXT,
+  closed_at TEXT,
+  archived_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS deals_organization_idx ON deals (organization_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS deals_customer_idx ON deals (customer_id)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS deal_contacts (
+  deal_id TEXT NOT NULL,
+  contact_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (deal_id, contact_id)
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS deal_contacts_contact_idx ON deal_contacts (contact_id)`;
+
+const v56 = `CREATE TABLE IF NOT EXISTS issue_shares (
+  token TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  issue_id TEXT NOT NULL,
+  created_by_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  expires_at TEXT
+);
+CREATE INDEX IF NOT EXISTS issue_shares_issue_idx ON issue_shares (organization_id, issue_id)`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -924,6 +1132,22 @@ export const workspaceMigrations = {
       { idx: 51, when: 51, tag: "v52", breakpoints: true },
       { idx: 52, when: 52, tag: "v53", breakpoints: true },
       { idx: 53, when: 53, tag: "v54", breakpoints: false },
+      { idx: 54, when: 54, tag: "v55", breakpoints: false },
+      { idx: 55, when: 55, tag: "v56", breakpoints: false },
+      { idx: 56, when: 56, tag: "v57", breakpoints: false },
+      { idx: 57, when: 57, tag: "v58", breakpoints: false },
+      { idx: 58, when: 58, tag: "v59", breakpoints: false },
+      { idx: 59, when: 59, tag: "v60", breakpoints: false },
+      { idx: 60, when: 60, tag: "v61", breakpoints: false },
+      { idx: 61, when: 61, tag: "v62", breakpoints: false },
+      { idx: 62, when: 62, tag: "v63", breakpoints: false },
+      { idx: 63, when: 63, tag: "v64", breakpoints: false },
+      { idx: 64, when: 64, tag: "v65", breakpoints: false },
+      { idx: 65, when: 65, tag: "v66", breakpoints: false },
+      { idx: 66, when: 66, tag: "v67", breakpoints: false },
+      { idx: 67, when: 67, tag: "v68", breakpoints: false },
+      { idx: 68, when: 68, tag: "v69", breakpoints: false },
+      { idx: 69, when: 69, tag: "v70", breakpoints: false },
     ],
   },
   migrations: {
@@ -981,5 +1205,21 @@ export const workspaceMigrations = {
     m0051: v52,
     m0052: v53,
     m0053: v54,
+    m0054: v55,
+    m0055: v56,
+    m0056: v57,
+    m0057: v58,
+    m0058: v59,
+    m0059: v60,
+    m0060: v61,
+    m0061: v62,
+    m0062: v63,
+    m0063: v64,
+    m0064: v65,
+    m0065: v66,
+    m0066: v67,
+    m0067: v68,
+    m0068: v69,
+    m0069: v70,
   },
 } satisfies Parameters<typeof migrate>[1];

@@ -509,6 +509,7 @@ export async function dispatchAgent(
             permissions: "read",
             actorType: "agent",
           },
+          permissions: { workspace: ["read"] },
         },
       });
       const parsed = z.object({ key: z.string() }).safeParse(created);

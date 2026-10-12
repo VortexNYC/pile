@@ -23,7 +23,7 @@ const notionUserRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/notion/users",
   tags: ["notion"],
-  middleware: [rls("write")],
+  middleware: [rls("member:create")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
@@ -49,7 +49,7 @@ const notionUsersRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/notion/users",
   tags: ["notion"],
-  middleware: [rls("read")],
+  middleware: [rls("member:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },

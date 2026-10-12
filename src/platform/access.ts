@@ -14,24 +14,79 @@ import { safeJSON, teamMetadataString } from "../global/team-metadata.js";
 // `document` is the org-level doc policy: which actions a *role* may take
 // on documents generally. Per-document instance grants live in the
 // workspace DO (document_permissions) on top of this.
+// Per-resource CRUD statements — the BA org-RBAC model. Every
+// entity type in the product is a resource; roles bundle grants.
+// `rls` checks "resource:action" on each route; `dynamicAccessControl`
+// lets admins mint custom roles into organizationRole rows.
 export const ac = createAccessControl({
   ...defaultStatements,
-  document: ["view", "edit"],
+  issue: ["view", "create", "edit", "delete"],
+  document: ["view", "create", "edit", "delete"],
+  project: ["view", "create", "edit", "delete"],
+  ticket: ["view", "create", "edit", "delete"],
+  contact: ["view", "create", "edit", "delete"],
+  customer: ["view", "create", "edit", "delete"],
+  deal: ["view", "create", "edit", "delete"],
+  session: ["view", "create", "edit", "delete"],
+  comment: ["view", "create", "edit", "delete"],
+  settings: ["view", "edit"],
+  // Coarse legacy actions kept so un-migrated routes and old API
+  // keys keep working while call sites move to resource:action.
+  workspace: ["read", "write", "admin"],
 } as const);
+
+const CONTENT = ["view", "create", "edit", "delete"] as const;
 
 export const ownerRole = ac.newRole({
   ...ownerAc.statements,
-  document: ["view", "edit"],
+  issue: [...CONTENT],
+  document: [...CONTENT],
+  project: [...CONTENT],
+  ticket: [...CONTENT],
+  contact: [...CONTENT],
+  customer: [...CONTENT],
+  deal: [...CONTENT],
+  session: [...CONTENT],
+  comment: [...CONTENT],
+  settings: ["view", "edit"],
+  workspace: ["read", "write", "admin"],
 });
 
 export const adminRole = ac.newRole({
   ...adminAc.statements,
-  document: ["view", "edit"],
+  issue: [...CONTENT],
+  document: [...CONTENT],
+  project: [...CONTENT],
+  ticket: [...CONTENT],
+  contact: [...CONTENT],
+  customer: [...CONTENT],
+  deal: [...CONTENT],
+  session: [...CONTENT],
+  comment: [...CONTENT],
+  settings: ["view", "edit"],
+  workspace: ["read", "write", "admin"],
 });
 
 export const memberRole = ac.newRole({
   ...memberAc.statements,
-  document: ["view", "edit"],
+  issue: ["view", "create", "edit"],
+  document: ["view", "create", "edit"],
+  project: ["view", "create", "edit"],
+  ticket: ["view", "create", "edit"],
+  contact: ["view", "create", "edit"],
+  customer: ["view", "create", "edit"],
+  deal: ["view", "create", "edit"],
+  session: ["view", "create", "edit"],
+  comment: ["view", "create", "edit"],
+  settings: ["view"],
+  workspace: ["read", "write"],
+});
+
+// Guests are org members whose reach stops at the documents
+// surface — they read/write docs (subject to per-doc grants)
+// and nothing else. `rls` path-gates them on top.
+export const guestRole = ac.newRole({
+  document: ["view", "create", "edit"],
 });
 
 const workspaceMetadataSchema = z
@@ -139,6 +194,7 @@ export const organizationOptions = {
     owner: ownerRole,
     admin: adminRole,
     member: memberRole,
+    guest: guestRole,
   },
   dynamicAccessControl: { enabled: true },
 } satisfies OrganizationOptions;

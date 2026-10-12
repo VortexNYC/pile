@@ -1133,6 +1133,9 @@ export const user = sqliteTable("user" as string, {
   role: text("role" as string)
     .notNull()
     .default("admin"),
+  twoFactorEnabled: integer("two_factor_enabled" as string, {
+    mode: "boolean",
+  }).default(false),
   banned: integer("banned" as string, { mode: "boolean" }).default(false),
   banReason: text("ban_reason" as string),
   banExpires: integer("ban_expires" as string, { mode: "timestamp_ms" }),
@@ -1144,6 +1147,27 @@ export const user = sqliteTable("user" as string, {
     .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
     .$onUpdate(() => new Date()),
 });
+
+export const twoFactor = sqliteTable(
+  "two_factor" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    secret: text("secret" as string).notNull(),
+    backupCodes: text("backup_codes" as string).notNull(),
+    userId: text("user_id" as string)
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    verified: integer("verified" as string, { mode: "boolean" }).default(true),
+    failedVerificationCount: integer(
+      "failed_verification_count" as string
+    ).default(0),
+    lockedUntil: integer("locked_until" as string, { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    index("two_factor_user_id_idx" as string).on(table.userId),
+    index("two_factor_secret_idx" as string).on(table.secret),
+  ]
+);
 
 export const session = sqliteTable(
   "session" as string,
@@ -1987,34 +2011,40 @@ export const supportCustomers = sqliteTable(
   ]
 );
 
-export const supportCompanies = sqliteTable(
-  "support_companies" as string,
+// Comms ledger — events streamed IN from external systems (cal.com
+// bookings, calendar meetings, inbound email later). Pile stores the
+// event; it never owns the channel.
+export const supportCustomerEvents = sqliteTable(
+  "support_customer_events" as string,
   {
     id: text("id" as string).primaryKey(),
     organizationId: text("organization_id" as string)
       .notNull()
       .references(() => organization.id),
-    externalId: text("external_id" as string),
-    externalSource: text("external_source" as string)
+    supportCustomerId: text("support_customer_id" as string)
+      .notNull()
+      .references(() => supportCustomers.id, { onDelete: "cascade" }),
+    type: text("type" as string).notNull(),
+    source: text("source" as string)
       .notNull()
       .default("manual"),
-    name: text("name" as string).notNull(),
-    domain: text("domain" as string),
+    externalId: text("external_id" as string),
+    summary: text("summary" as string).notNull(),
+    payload: text("payload" as string),
+    occurredAt: text("occurred_at" as string).notNull(),
     createdAt: text("created_at" as string)
-      .notNull()
-      .default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: text("updated_at" as string)
       .notNull()
       .default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
-    uniqueIndex("support_companies_org_name_idx" as string).on(
-      table.organizationId,
-      table.name
+    index("support_customer_events_customer_idx" as string).on(
+      table.supportCustomerId,
+      table.occurredAt
     ),
-    index("support_companies_org_domain_idx" as string).on(
+    uniqueIndex("support_customer_events_external_idx" as string).on(
       table.organizationId,
-      table.domain
+      table.source,
+      table.externalId
     ),
   ]
 );
@@ -2065,9 +2095,8 @@ export const supportCustomerCompanies = sqliteTable(
     customerId: text("customer_id" as string)
       .notNull()
       .references(() => supportCustomers.id, { onDelete: "cascade" }),
-    companyId: text("company_id" as string)
-      .notNull()
-      .references(() => supportCompanies.id, { onDelete: "cascade" }),
+    companyId: text("company_id" as string).notNull(),
+    companyName: text("company_name" as string),
     isPrimary: integer("is_primary" as string, { mode: "boolean" })
       .notNull()
       .default(false),
@@ -3253,3 +3282,34 @@ export const scimGroupMember = sqliteTable("scimGroupMember" as string, {
     mode: "timestamp_ms",
   }).notNull(),
 });
+
+// Inbound comms integrations — cal.com bookings now, calendar/email
+// later. Each source holds its own webhook secret + config; Pile
+// stores the resulting comms events on support customers.
+export const commsIntegrations = sqliteTable(
+  "comms_integrations" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string)
+      .notNull()
+      .references(() => organization.id),
+    source: text("source" as string).notNull(),
+    webhookSecret: text("webhook_secret" as string),
+    config: text("config" as string),
+    isActive: integer("is_active" as string, { mode: "boolean" })
+      .notNull()
+      .default(true),
+    createdAt: text("created_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at" as string)
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("comms_integrations_org_source_idx" as string).on(
+      table.organizationId,
+      table.source
+    ),
+  ]
+);

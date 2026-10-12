@@ -109,9 +109,9 @@ import {
   workspaceGitIdentities,
   workspaceIssueApprovals,
   workspaceIssueHistory,
-  workspaceIssueRelations,
+  workspaceEntityLinks,
+  workspaceSubscriptions,
   workspaceIssues,
-  workspaceIssueSubscribers,
   workspaceLinearUsers,
   workspaceNotifications,
   workspaceOutboundWebhookDeliveries,
@@ -393,10 +393,30 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       await this.db.insert(workspaceComments).values(commentRows);
     }
     if (subscribers.length > 0) {
-      await this.db.insert(workspaceIssueSubscribers).values(subscribers);
+      await this.db.insert(workspaceSubscriptions).values(
+        subscribers.map((s) => ({
+          id: s.id,
+          organizationId: this.organizationId,
+          entityType: "issue",
+          entityId: s.issueId,
+          userId: s.linearUserId,
+          createdAt: s.createdAt,
+        }))
+      );
     }
     if (relations.length > 0) {
-      await this.db.insert(workspaceIssueRelations).values(relations);
+      await this.db.insert(workspaceEntityLinks).values(
+        relations.map((r) => ({
+          id: r.id,
+          organizationId: this.organizationId,
+          fromType: "issue",
+          fromId: r.fromIssueId,
+          toType: "issue",
+          toId: r.toIssueId,
+          kind: r.type,
+          createdAt: r.createdAt,
+        }))
+      );
     }
     if (approvals.length > 0) {
       await this.db.insert(workspaceIssueApprovals).values(approvals);
@@ -555,7 +575,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       this.db
         .select({
           id: workspaceComments.id,
-          issueId: workspaceComments.issueId,
+          issueId: workspaceComments.entityId,
           body: workspaceComments.body,
           createdAt: workspaceComments.createdAt,
         })
@@ -598,10 +618,19 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     // is tens of seconds of tokenization; one synchronous insertMultiple
     // starves the DO's event loop and every concurrent request hangs past
     // the request budget (issue-create 500s, ~40s).
-    for (let i = 0; i < docs.length; i += 250) {
-      await insertSearchDocs(index, docs.slice(i, i + 250));
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
+    // insertSearchDocs resolves after yielding the event loop, so the
+    // sequential batches never starve concurrent DO requests.
+    const insertBatch = async (start: number) => {
+      await insertSearchDocs(index, docs.slice(start, start + 250));
+      await Promise.resolve();
+    };
+    await docs
+      .map((_, i) => i)
+      .filter((i) => i % 250 === 0)
+      .reduce(
+        (chain, i) => chain.then(() => insertBatch(i)),
+        Promise.resolve()
+      );
 
     this.searchIndex = index;
     return index;
@@ -682,7 +711,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return this.db
       .select()
       .from(workspaceComments)
-      .where(eq(workspaceComments.issueId, issueId))
+      .where(
+        and(
+          eq(workspaceComments.entityType, "issue"),
+          eq(workspaceComments.entityId, issueId)
+        )
+      )
       .all();
   }
 
@@ -691,7 +725,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return this.db
       .select()
       .from(workspaceComments)
-      .where(eq(workspaceComments.documentId, documentId))
+      .where(
+        and(
+          eq(workspaceComments.entityType, "document"),
+          eq(workspaceComments.entityId, documentId)
+        )
+      )
       .all();
   }
 
@@ -763,8 +802,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     await this.db.insert(workspaceComments).values({
       id,
       organizationId: this.organizationId,
-      issueId: values.issueId ?? null,
-      documentId: values.documentId ?? null,
+      entityType: values.issueId ? "issue" : "document",
+      entityId: values.issueId ?? values.documentId ?? null,
       authorId: values.authorId ?? null,
       body: values.body,
       internal: values.internal ?? false,
@@ -882,9 +921,14 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   private async resolveSubscriberUserIds(issueId: string): Promise<string[]> {
     const subscribers = await this.db
-      .select({ linearUserId: workspaceIssueSubscribers.linearUserId })
-      .from(workspaceIssueSubscribers)
-      .where(eq(workspaceIssueSubscribers.issueId, issueId))
+      .select({ linearUserId: workspaceSubscriptions.userId })
+      .from(workspaceSubscriptions)
+      .where(
+        and(
+          eq(workspaceSubscriptions.entityType, "issue"),
+          eq(workspaceSubscriptions.entityId, issueId)
+        )
+      )
       .all();
     if (subscribers.length === 0) return [];
     const linearIds = subscribers.map((sub) => sub.linearUserId);
@@ -1281,7 +1325,11 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   listWorkspaceIssueSubscribers() {
-    return this.db.select().from(workspaceIssueSubscribers).all();
+    return this.db
+      .select()
+      .from(workspaceSubscriptions)
+      .where(eq(workspaceSubscriptions.entityType, "issue"))
+      .all();
   }
 
   // ---- issue relations ----
@@ -1314,7 +1362,17 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   listWorkspaceIssueRelations() {
-    return this.db.select().from(workspaceIssueRelations).all();
+    return this.db
+      .select()
+      .from(workspaceEntityLinks)
+      .where(
+        and(
+          eq(workspaceEntityLinks.organizationId, this.organizationId),
+          eq(workspaceEntityLinks.fromType, "issue"),
+          eq(workspaceEntityLinks.toType, "issue")
+        )
+      )
+      .all();
   }
 
   // ---- issue approvals ----
@@ -1408,6 +1466,104 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   listWorkspaceAttachments() {
     return this.db.select().from(workspaceAttachments).all();
+  }
+
+  // ---- deals ----
+  createDeal(input: Omit<data.DealInput, "organizationId">) {
+    const deal = data.createDeal(this.db, {
+      ...input,
+      organizationId: this.organizationId,
+    });
+    this.audit("deal.created", "deal", deal.id);
+    return deal;
+  }
+
+  listDeals(opts?: { includeArchived?: boolean }) {
+    return data.listDeals(this.db, this.organizationId, opts);
+  }
+
+  getDeal(id: string) {
+    return data.getDeal(this.db, this.organizationId, id);
+  }
+
+  updateDeal(
+    id: string,
+    patch: Partial<Omit<data.DealInput, "organizationId" | "contactIds">> & {
+      contactIds?: string[];
+      archivedAt?: string | null;
+    },
+    actorId?: string
+  ) {
+    const deal = data.updateDeal(this.db, this.organizationId, id, patch);
+    if (deal) this.audit("deal.updated", "deal", id, actorId);
+    return deal;
+  }
+
+  linkDealIssue(dealId: string, issueId: string) {
+    data.linkDealIssue(this.db, this.organizationId, dealId, issueId);
+    return { ok: true };
+  }
+
+  unlinkDealIssue(dealId: string, issueId: string) {
+    data.unlinkDealIssue(this.db, dealId, issueId);
+    return { ok: true };
+  }
+
+  listDealIssueIds(dealId: string) {
+    return data.listDealIssueIds(this.db, dealId);
+  }
+
+  listDealsForIssue(issueId: string) {
+    return data.listDealsForIssue(this.db, this.organizationId, issueId);
+  }
+
+  deleteDeal(id: string, actorId?: string) {
+    const ok = data.deleteDeal(this.db, this.organizationId, id);
+    if (ok) this.audit("deal.deleted", "deal", id, actorId);
+    return ok;
+  }
+
+  // ---- entity links — the graph ----
+  linkEntities(input: Omit<data.EntityLinkInput, "organizationId">) {
+    return data.linkEntities(this.db, {
+      ...input,
+      organizationId: this.organizationId,
+    });
+  }
+
+  unlinkEntities(id: string) {
+    return data.unlinkEntities(this.db, this.organizationId, id);
+  }
+
+  listEntityLinks(type: string, id: string) {
+    return data.listEntityLinks(this.db, this.organizationId, type, id);
+  }
+
+  // ---- custom fields ----
+  createFieldDefinition(
+    input: Omit<data.FieldDefinitionInput, "organizationId">
+  ) {
+    return data.createFieldDefinition(this.db, {
+      ...input,
+      organizationId: this.organizationId,
+    });
+  }
+
+  listFieldDefinitions(entityType?: string) {
+    return data.listFieldDefinitions(this.db, this.organizationId, entityType);
+  }
+
+  deleteFieldDefinition(id: string) {
+    return data.deleteFieldDefinition(this.db, this.organizationId, id);
+  }
+
+  setFieldValue(fieldId: string, entityId: string, value: string | null) {
+    data.setFieldValue(this.db, this.organizationId, fieldId, entityId, value);
+    return { ok: true };
+  }
+
+  listFieldValues(entityId: string) {
+    return data.listFieldValues(this.db, this.organizationId, entityId);
   }
 
   // ---- entity attachments (R2-backed, scoped to entityType + entityId) ----
@@ -1914,6 +2070,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.listCustomers(this.db, this.organizationId);
   }
 
+  getCustomerByDomain(domain: string) {
+    return data.getCustomerByDomain(this.db, this.organizationId, domain);
+  }
+
   getCustomer(id: string) {
     return data.getCustomer(this.db, this.organizationId, id);
   }
@@ -2172,6 +2332,26 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.deleteDocumentSpace(this.db, this.organizationId, id);
   }
 
+  createIssueShare(input: {
+    issueId: string;
+    createdById: string;
+    expiresAt?: string | null;
+  }) {
+    return data.createIssueShare(this.db, this.organizationId, input);
+  }
+
+  getIssueShare(issueId: string) {
+    return data.getIssueShare(this.db, this.organizationId, issueId);
+  }
+
+  getIssueShareByToken(token: string) {
+    return data.getIssueShareByToken(this.db, token);
+  }
+
+  deleteIssueShare(token: string) {
+    return data.deleteIssueShare(this.db, this.organizationId, token);
+  }
+
   createDocumentShare(input: {
     documentId: string;
     includeChildren?: boolean;
@@ -2396,9 +2576,25 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   documentAccessLevel(
     documentId: string,
     actorId: string,
-    teamIds: string[] = []
+    teamIds: string[] = [],
+    defaultDenied = false
   ) {
-    return data.documentAccessLevel(this.db, documentId, actorId, teamIds);
+    return data.documentAccessLevel(
+      this.db,
+      documentId,
+      actorId,
+      teamIds,
+      defaultDenied
+    );
+  }
+
+  listDocumentsForActor(actorId: string, args: data.ListDocumentsArgs = {}) {
+    return data.listDocumentsForActor(
+      this.db,
+      this.organizationId,
+      actorId,
+      args
+    );
   }
 
   // ---- issue permissions (PILE-328) ----
@@ -2456,6 +2652,19 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     args: { documentId?: string; targetType?: string; targetId?: string } = {}
   ) {
     return data.listDocumentLinks(this.db, this.organizationId, args);
+  }
+
+  setHiddenSurfaces(userId: string, hiddenSurfaces: string[] | null) {
+    return data.setHiddenSurfaces(
+      this.db,
+      this.organizationId,
+      userId,
+      hiddenSurfaces
+    );
+  }
+
+  setFavorites(userId: string, favorites: data.EntityFavorite[] | null) {
+    return data.setFavorites(this.db, this.organizationId, userId, favorites);
   }
 
   setDefaultView(userId: string, defaultViewId: string | null) {
@@ -5231,7 +5440,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       await this.db
         .select({ id: workspaceComments.id })
         .from(workspaceComments)
-        .where(eq(workspaceComments.issueId, issueId))
+        .where(
+          and(
+            eq(workspaceComments.entityType, "issue"),
+            eq(workspaceComments.entityId, issueId)
+          )
+        )
         .all()
     ).map((row) => row.id);
     await this.db
@@ -5239,16 +5453,46 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       .where(eq(workspaceIssueHistory.issueId, issueId));
     await this.db
       .delete(workspaceComments)
-      .where(eq(workspaceComments.issueId, issueId));
+      .where(
+        and(
+          eq(workspaceComments.entityType, "issue"),
+          eq(workspaceComments.entityId, issueId)
+        )
+      );
     await this.db
-      .delete(workspaceIssueSubscribers)
-      .where(eq(workspaceIssueSubscribers.issueId, issueId));
+      .delete(workspaceSubscriptions)
+      .where(
+        and(
+          eq(workspaceSubscriptions.entityType, "issue"),
+          eq(workspaceSubscriptions.entityId, issueId)
+        )
+      );
     await this.db
-      .delete(workspaceIssueRelations)
+      .delete(workspaceEntityLinks)
       .where(
         or(
-          eq(workspaceIssueRelations.fromIssueId, issueId),
-          eq(workspaceIssueRelations.toIssueId, issueId)
+          and(
+            eq(workspaceEntityLinks.fromType, "issue"),
+            eq(workspaceEntityLinks.fromId, issueId)
+          ),
+          and(
+            eq(workspaceEntityLinks.toType, "issue"),
+            eq(workspaceEntityLinks.toId, issueId)
+          )
+        )
+      );
+    await this.db
+      .delete(workspaceEntityLinks)
+      .where(
+        or(
+          and(
+            eq(workspaceEntityLinks.fromType, "issue"),
+            eq(workspaceEntityLinks.fromId, issueId)
+          ),
+          and(
+            eq(workspaceEntityLinks.toType, "issue"),
+            eq(workspaceEntityLinks.toId, issueId)
+          )
         )
       );
     await this.db

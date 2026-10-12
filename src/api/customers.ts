@@ -18,6 +18,8 @@ const customerSchema = z.object({
   organizationId: z.string(),
   name: z.string(),
   url: z.string().nullable(),
+  bookingUrl: z.string().nullable(),
+  notes: z.string().nullable(),
   logoUrl: z.string().nullable(),
   externalId: z.string().nullable(),
   tierId: z.string().nullable(),
@@ -30,6 +32,8 @@ const customerSchema = z.object({
 const createCustomerSchema = z.object({
   name: z.string().min(1),
   url: z.string().optional(),
+  bookingUrl: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
   logoUrl: z.string().optional(),
   externalId: z.string().optional(),
   tierId: z.string().optional(),
@@ -82,6 +86,8 @@ const customerAttachmentSchema = z.object({
   size: z.number().int(),
   r2Key: z.string(),
   url: z.string(),
+  bookingUrl: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
   createdById: z.string().nullable(),
   createdAt: z.string(),
 });
@@ -132,7 +138,7 @@ const listCustomersRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/customers",
   tags: ["customers"],
-  middleware: [rls("read")],
+  middleware: [rls("customer:view")],
   request: { params: orgParam },
   responses: {
     200: {
@@ -150,7 +156,7 @@ const createCustomerRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/customers",
   tags: ["customers"],
-  middleware: [rls("write")],
+  middleware: [rls("customer:create")],
   request: {
     params: orgParam,
     body: {
@@ -169,7 +175,7 @@ const getCustomerRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/customers/{id}",
   tags: ["customers"],
-  middleware: [rls("read")],
+  middleware: [rls("customer:view")],
   request: { params: orgIdParam },
   responses: {
     200: {
@@ -184,7 +190,7 @@ const updateCustomerRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/customers/{id}",
   tags: ["customers"],
-  middleware: [rls("write")],
+  middleware: [rls("customer:edit")],
   request: {
     params: orgIdParam,
     body: {
@@ -204,7 +210,7 @@ const deleteCustomerRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/customers/{id}",
   tags: ["customers"],
-  middleware: [rls("write")],
+  middleware: [rls("customer:delete")],
   request: { params: orgIdParam },
   responses: {
     204: { description: "Customer deleted" },
@@ -222,7 +228,7 @@ const listCustomerAttachmentsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/customers/{id}/attachments",
   tags: ["customers"],
-  middleware: [rls("read")],
+  middleware: [rls("customer:view")],
   request: { params: orgIdParam },
   responses: {
     200: {
@@ -243,7 +249,7 @@ const uploadCustomerAttachmentRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/customers/{id}/attachments",
   tags: ["customers"],
-  middleware: [rls("write")],
+  middleware: [rls("customer:create")],
   request: {
     params: orgIdParam,
     body: {
@@ -266,7 +272,7 @@ const getCustomerAttachmentRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/customers/{id}/attachments/{attachmentId}",
   tags: ["customers"],
-  middleware: [rls("read")],
+  middleware: [rls("customer:view")],
   request: { params: attachmentParams },
   responses: {
     200: {
@@ -281,7 +287,7 @@ const getCustomerAttachmentContentRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/customers/{id}/attachments/{attachmentId}/content",
   tags: ["customers"],
-  middleware: [rls("read")],
+  middleware: [rls("customer:view")],
   request: { params: attachmentParams },
   responses: {
     200: { description: "Attachment content" },
@@ -294,7 +300,7 @@ const deleteCustomerAttachmentRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/customers/{id}/attachments/{attachmentId}",
   tags: ["customers"],
-  middleware: [rls("write")],
+  middleware: [rls("customer:delete")],
   request: { params: attachmentParams },
   responses: {
     204: { description: "Attachment deleted" },
@@ -306,7 +312,7 @@ const listTiersRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/customer-tiers",
   tags: ["customers"],
-  middleware: [rls("read")],
+  middleware: [rls("customer:view")],
   request: { params: orgParam },
   responses: {
     200: {
@@ -324,7 +330,7 @@ const createTierRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/customer-tiers",
   tags: ["customers"],
-  middleware: [rls("write")],
+  middleware: [rls("customer:create")],
   request: {
     params: orgParam,
     body: {
@@ -343,7 +349,7 @@ const getTierRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/customer-tiers/{id}",
   tags: ["customers"],
-  middleware: [rls("read")],
+  middleware: [rls("customer:view")],
   request: { params: orgIdParam },
   responses: {
     200: {
@@ -358,7 +364,7 @@ const updateTierRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/customer-tiers/{id}",
   tags: ["customers"],
-  middleware: [rls("write")],
+  middleware: [rls("customer:edit")],
   request: {
     params: orgIdParam,
     body: {
@@ -378,7 +384,7 @@ const deleteTierRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/customer-tiers/{id}",
   tags: ["customers"],
-  middleware: [rls("write")],
+  middleware: [rls("customer:delete")],
   request: { params: orgIdParam },
   responses: {
     204: { description: "Tier deleted" },
@@ -390,7 +396,7 @@ const listStatusesRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/customer-statuses",
   tags: ["customers"],
-  middleware: [rls("read")],
+  middleware: [rls("customer:view")],
   request: { params: orgParam },
   responses: {
     200: {
@@ -408,7 +414,7 @@ const createStatusRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/customer-statuses",
   tags: ["customers"],
-  middleware: [rls("write")],
+  middleware: [rls("customer:create")],
   request: {
     params: orgParam,
     body: {
@@ -427,7 +433,7 @@ const getStatusRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/customer-statuses/{id}",
   tags: ["customers"],
-  middleware: [rls("read")],
+  middleware: [rls("customer:view")],
   request: { params: orgIdParam },
   responses: {
     200: {
@@ -442,7 +448,7 @@ const updateStatusRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/customer-statuses/{id}",
   tags: ["customers"],
-  middleware: [rls("write")],
+  middleware: [rls("customer:edit")],
   request: {
     params: orgIdParam,
     body: {
@@ -462,7 +468,7 @@ const deleteStatusRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/customer-statuses/{id}",
   tags: ["customers"],
-  middleware: [rls("write")],
+  middleware: [rls("customer:delete")],
   request: { params: orgIdParam },
   responses: {
     204: { description: "Status deleted" },
@@ -474,7 +480,7 @@ const listNeedsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/customer-needs",
   tags: ["customers"],
-  middleware: [rls("read")],
+  middleware: [rls("customer:view")],
   request: {
     params: orgParam,
     query: z.object({
@@ -499,7 +505,7 @@ const createNeedRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/customer-needs",
   tags: ["customers"],
-  middleware: [rls("write")],
+  middleware: [rls("customer:create")],
   request: {
     params: orgParam,
     body: {
@@ -518,7 +524,7 @@ const getNeedRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/customer-needs/{id}",
   tags: ["customers"],
-  middleware: [rls("read")],
+  middleware: [rls("customer:view")],
   request: { params: orgIdParam },
   responses: {
     200: {
@@ -533,7 +539,7 @@ const updateNeedRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/customer-needs/{id}",
   tags: ["customers"],
-  middleware: [rls("write")],
+  middleware: [rls("customer:edit")],
   request: {
     params: orgIdParam,
     body: {
@@ -553,7 +559,7 @@ const deleteNeedRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/customer-needs/{id}",
   tags: ["customers"],
-  middleware: [rls("write")],
+  middleware: [rls("customer:delete")],
   request: { params: orgIdParam },
   responses: {
     204: { description: "Need deleted" },
@@ -594,7 +600,7 @@ const listIntakeItemsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/customers/{id}/intake",
   tags: ["customers"],
-  middleware: [rls("read")],
+  middleware: [rls("customer:view")],
   request: { params: orgIdParam },
   responses: {
     200: {

@@ -3,6 +3,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
+import { isAdminIdentity } from "../platform/permissions.js";
 import { rls } from "../platform/rls.js";
 import type { SavedViewRecord } from "../workspace/data/index.js";
 import {
@@ -232,6 +233,14 @@ const unfavoriteRoute = createRoute({
   },
 });
 
+const entityFavoriteSchema = z.object({
+  type: z.enum(["issue", "document"]),
+  id: z.string(),
+  title: z.string(),
+  identifier: z.string().nullable().optional(),
+  addedAt: z.string(),
+});
+
 const viewPreferencesRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/me/view-preferences",
@@ -245,7 +254,11 @@ const viewPreferencesRoute = createRoute({
       description: "Per-user view preferences",
       content: {
         "application/json": {
-          schema: z.object({ defaultViewId: z.string().nullable() }),
+          schema: z.object({
+            defaultViewId: z.string().nullable(),
+            hiddenSurfaces: z.array(z.string()).nullable(),
+            favorites: z.array(entityFavoriteSchema).nullable(),
+          }),
         },
       },
     },
@@ -262,7 +275,11 @@ const updateViewPreferencesRoute = createRoute({
     body: {
       content: {
         "application/json": {
-          schema: z.object({ defaultViewId: z.string().nullable() }),
+          schema: z.object({
+            defaultViewId: z.string().nullable().optional(),
+            hiddenSurfaces: z.array(z.string()).nullable().optional(),
+            favorites: z.array(entityFavoriteSchema).nullable().optional(),
+          }),
         },
       },
     },
@@ -272,7 +289,10 @@ const updateViewPreferencesRoute = createRoute({
       description: "View preferences updated",
       content: {
         "application/json": {
-          schema: z.object({ defaultViewId: z.string().nullable() }),
+          schema: z.object({
+            defaultViewId: z.string().nullable(),
+            hiddenSurfaces: z.array(z.string()).nullable(),
+          }),
         },
       },
     },
@@ -300,7 +320,7 @@ function assertViewAccess(
   if (
     record.ownerId !== identity.id &&
     !record.shared &&
-    !identity.permissions.includes("admin")
+    !isAdminIdentity(identity)
   ) {
     throw new VortexError({
       code: "NOT_FOUND",
@@ -388,15 +408,37 @@ export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
     const identity = getIdentity(c);
     const stub = getWorkspaceStub(c.env, organizationId);
     const prefs = await stub.getUserViewPreferences(identity.id);
-    return c.json({ defaultViewId: prefs?.defaultViewId ?? null });
+    let hiddenSurfaces: string[] | null = null;
+    try {
+      hiddenSurfaces = prefs?.hiddenSurfaces
+        ? (JSON.parse(prefs.hiddenSurfaces) as string[])
+        : null;
+    } catch {
+      hiddenSurfaces = null;
+    }
+    let favorites: z.infer<typeof entityFavoriteSchema>[] | null = null;
+    try {
+      favorites = prefs?.favorites
+        ? (JSON.parse(prefs.favorites) as z.infer<
+            typeof entityFavoriteSchema
+          >[])
+        : null;
+    } catch {
+      favorites = null;
+    }
+    return c.json({
+      defaultViewId: prefs?.defaultViewId ?? null,
+      hiddenSurfaces,
+      favorites,
+    });
   });
 
   app.openapi(updateViewPreferencesRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
-    const { defaultViewId } = c.req.valid("json");
+    const { defaultViewId, hiddenSurfaces, favorites } = c.req.valid("json");
     const identity = getIdentity(c);
     const stub = getWorkspaceStub(c.env, organizationId);
-    if (defaultViewId !== null) {
+    if (defaultViewId !== undefined && defaultViewId !== null) {
       const record = await stub.getSavedView(defaultViewId);
       if (!record) {
         throw new VortexError({
@@ -407,8 +449,39 @@ export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
       }
       assertViewAccess(record, identity);
     }
-    const prefs = await stub.setDefaultView(identity.id, defaultViewId);
-    return c.json({ defaultViewId: prefs?.defaultViewId ?? null });
+    if (defaultViewId !== undefined) {
+      await stub.setDefaultView(identity.id, defaultViewId);
+    }
+    let prefs =
+      hiddenSurfaces !== undefined
+        ? await stub.setHiddenSurfaces(identity.id, hiddenSurfaces)
+        : await stub.getUserViewPreferences(identity.id);
+    if (favorites !== undefined) {
+      prefs = await stub.setFavorites(identity.id, favorites);
+    }
+    let parsed: string[] | null = null;
+    try {
+      parsed = prefs?.hiddenSurfaces
+        ? (JSON.parse(prefs.hiddenSurfaces) as string[])
+        : null;
+    } catch {
+      parsed = null;
+    }
+    let parsedFavs: z.infer<typeof entityFavoriteSchema>[] | null = null;
+    try {
+      parsedFavs = prefs?.favorites
+        ? (JSON.parse(prefs.favorites) as z.infer<
+            typeof entityFavoriteSchema
+          >[])
+        : null;
+    } catch {
+      parsedFavs = null;
+    }
+    return c.json({
+      defaultViewId: prefs?.defaultViewId ?? null,
+      hiddenSurfaces: parsed,
+      favorites: parsedFavs,
+    });
   });
 
   app.openapi(getSavedViewRoute, async (c) => {
@@ -439,10 +512,7 @@ export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
         message: "Saved view not found",
       });
     }
-    if (
-      existing.ownerId !== identity.id &&
-      !identity.permissions.includes("admin")
-    ) {
+    if (existing.ownerId !== identity.id && !isAdminIdentity(identity)) {
       throw new VortexError({
         code: "FORBIDDEN",
         status: 403,
@@ -476,10 +546,7 @@ export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
     if (!existing) {
       return c.body(null, 204);
     }
-    if (
-      existing.ownerId !== identity.id &&
-      !identity.permissions.includes("admin")
-    ) {
+    if (existing.ownerId !== identity.id && !isAdminIdentity(identity)) {
       throw new VortexError({
         code: "FORBIDDEN",
         status: 403,

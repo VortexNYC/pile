@@ -1,16 +1,14 @@
-import { Text } from "@cloudflare/kumo/components/text";
-import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   AuthProvider,
-  isOrganizationAdminRole,
   OrganizationProfile,
   SettingsStack,
 } from "@vortex-api/better-auth-ui";
 
 import { Page } from "@/components/page";
-import { useWorkspace, wsKey } from "@/hooks/use-workspace";
-import { betterAuthClient } from "@/lib/better-auth";
+import { EmptyState, LoadingState } from "@/components/states";
+import { usePermissions } from "@/hooks/use-permissions";
+import { useWorkspace } from "@/hooks/use-workspace";
 import { getBetterAuthUiClient } from "@/lib/better-auth-ui-adapter";
 
 export const Route = createFileRoute("/_authenticated/$slug/settings/")({
@@ -19,17 +17,11 @@ export const Route = createFileRoute("/_authenticated/$slug/settings/")({
 
 function GeneralSettings() {
   const workspace = useWorkspace();
-  const role = useQuery({
-    queryKey: wsKey(workspace.id, "member-role"),
-    queryFn: async () => {
-      await betterAuthClient.organization.setActive({
-        organizationId: workspace.id,
-      });
-      const result = await betterAuthClient.organization.getActiveMemberRole();
-      return result.data?.role ?? null;
-    },
-  });
-  const canManage = isOrganizationAdminRole(role.data ?? undefined);
+  const permissions = usePermissions(workspace.id);
+
+  if (!permissions.isLoaded) {
+    return <LoadingState label="Checking access" />;
+  }
 
   return (
     <AuthProvider client={getBetterAuthUiClient()}>
@@ -37,7 +29,7 @@ function GeneralSettings() {
         title="Workspace"
         description={`Name, URL, and logo for ${workspace.name}.`}
       >
-        {canManage ? (
+        {permissions.isAdmin ? (
           <SettingsStack>
             <OrganizationProfile
               className="w-full max-w-none"
@@ -45,9 +37,10 @@ function GeneralSettings() {
             />
           </SettingsStack>
         ) : (
-          <Text variant="secondary" size="sm">
-            Only workspace admins can change these settings.
-          </Text>
+          <EmptyState
+            title="Admins only"
+            description="Workspace settings are restricted to admins."
+          />
         )}
       </Page>
     </AuthProvider>

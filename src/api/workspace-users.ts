@@ -65,7 +65,7 @@ const availableUsersRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/available-users",
   tags: ["workspace-users"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
     query: z.object({ q: z.string().optional() }),
@@ -86,7 +86,7 @@ const leaveOrganizationRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/leave",
   tags: ["workspace-users"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:create")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },

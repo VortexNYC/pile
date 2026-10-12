@@ -169,9 +169,10 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
 
     const requested = parsePermissionSet(input.permissions ?? "read");
     if (!isAdmin) {
-      const caller = parsePermissionSet(identity.permissions);
+      // Clamp through canAccess so resource:action identities satisfy
+      // bare-verb requests and vice versa.
       for (const p of requested) {
-        if (!caller.has(p)) requested.delete(p);
+        if (!canAccess(identity.permissions, p)) requested.delete(p);
       }
     }
     if (requested.size === 0) {
@@ -222,6 +223,7 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
         name: input.name,
         rateLimitEnabled: false,
         metadata: { organizationId, permissions, actorType },
+        permissions: { workspace: [...requested] },
       },
     });
 

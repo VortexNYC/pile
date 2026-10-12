@@ -107,7 +107,7 @@ const createSnippetRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/snippets",
   tags: ["support-content"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: orgParam,
     body: {
@@ -132,7 +132,7 @@ const listSnippetsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/snippets",
   tags: ["support-content"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: {
     params: orgParam,
   },
@@ -152,7 +152,7 @@ const getSnippetRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/snippets/{snippetId}",
   tags: ["support-content"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: {
     params: snippetParams,
   },
@@ -172,7 +172,7 @@ const patchSnippetRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/support/snippets/{snippetId}",
   tags: ["support-content"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:edit")],
   request: {
     params: snippetParams,
     body: {
@@ -197,7 +197,7 @@ const insertSnippetRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/snippets/{snippetId}/insert",
   tags: ["support-content"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: {
     params: snippetParams,
   },
@@ -220,7 +220,7 @@ const createAutoresponderRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/autoresponders",
   tags: ["support-content"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: orgParam,
     body: {
@@ -245,7 +245,7 @@ const listAutorespondersRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/autoresponders",
   tags: ["support-content"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: {
     params: orgParam,
   },
@@ -267,7 +267,7 @@ const patchAutoresponderRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/support/autoresponders/{autoresponderId}",
   tags: ["support-content"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:edit")],
   request: {
     params: autoresponderParams,
     body: {
@@ -292,7 +292,7 @@ const createLabelRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/labels",
   tags: ["support-content"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: orgParam,
     body: {
@@ -317,7 +317,7 @@ const listLabelsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/labels",
   tags: ["support-content"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: {
     params: orgParam,
   },

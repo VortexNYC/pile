@@ -1,10 +1,10 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 import { consumeUsage } from "../global/billing.js";
 import { createD1 } from "../global/db.js";
-import { supportTicketAttachments } from "../global/schema.js";
+import { supportTicketAttachments, supportTickets } from "../global/schema.js";
 import { getCustomerById } from "../global/support-contacts.js";
 import { maybeEscalate } from "../global/support-escalation.js";
 import {
@@ -86,7 +86,7 @@ const supportCustomerSummarySchema = z.object({
 
 const supportCompanySummarySchema = z.object({
   id: z.string(),
-  name: z.string(),
+  name: z.string().nullable(),
   isPrimary: z.boolean(),
 });
 
@@ -241,6 +241,7 @@ const listTicketsQuerySchema = z.object({
   externalSource: supportTicketSourceEnum.optional(),
   assignedTo: z.string().optional(),
   q: z.string().optional(),
+  issueId: z.string().optional(),
 });
 
 const listEventsQuerySchema = z.object({
@@ -311,7 +312,7 @@ const createTicketRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/tickets",
   tags: ["support-tickets"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: orgParam,
     body: {
@@ -336,7 +337,7 @@ const listTicketsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/tickets",
   tags: ["support-tickets"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: {
     params: orgParam,
     query: listTicketsQuerySchema,
@@ -360,7 +361,7 @@ const getTicketRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/tickets/{ticketId}",
   tags: ["support-tickets"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: {
     params: ticketIdParam,
   },
@@ -391,7 +392,7 @@ const listTicketArtifactsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/tickets/{ticketId}/artifacts",
   tags: ["support-tickets"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: {
     params: ticketIdParam,
   },
@@ -409,11 +410,53 @@ const listTicketArtifactsRoute = createRoute({
   },
 });
 
+const listCapturesRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/support/captures",
+  tags: ["support-tickets"],
+  middleware: [rls("ticket:view")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    query: z.object({
+      type: z.string().optional(),
+      limit: z.coerce.number().int().min(1).max(200).default(100),
+    }),
+  },
+  responses: {
+    200: {
+      description:
+        "All capture media across support tickets — the jams gallery: every screenshot, video, log, and artifact joined to its ticket.",
+      content: {
+        "application/json": {
+          schema: z.object({
+            captures: z.array(
+              z.object({
+                id: z.string(),
+                type: z.string(),
+                fileName: z.string().nullable(),
+                contentType: z.string().nullable(),
+                url: z.string().nullable(),
+                size: z.number().nullable(),
+                createdAt: z.string(),
+                ticket: z.object({
+                  id: z.string(),
+                  number: z.number(),
+                  title: z.string(),
+                }),
+              })
+            ),
+          }),
+        },
+      },
+    },
+  },
+});
+
 const updateTicketRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/support/tickets/{ticketId}",
   tags: ["support-tickets"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:edit")],
   request: {
     params: ticketIdParam,
     body: {
@@ -438,7 +481,7 @@ const addMessageRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/tickets/{ticketId}/messages",
   tags: ["support-tickets"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: ticketIdParam,
     body: {
@@ -463,7 +506,7 @@ const addNoteRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/tickets/{ticketId}/notes",
   tags: ["support-tickets"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: ticketIdParam,
     body: {
@@ -488,7 +531,7 @@ const listEventsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/tickets/{ticketId}/events",
   tags: ["support-tickets"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: {
     params: ticketIdParam,
     query: listEventsQuerySchema,
@@ -512,7 +555,7 @@ const markDoneRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/tickets/{ticketId}/done",
   tags: ["support-tickets"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: ticketIdParam,
   },
@@ -532,7 +575,7 @@ const markTodoRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/tickets/{ticketId}/todo",
   tags: ["support-tickets"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: ticketIdParam,
   },
@@ -552,7 +595,7 @@ const snoozeRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/tickets/{ticketId}/snooze",
   tags: ["support-tickets"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: ticketIdParam,
     body: {
@@ -577,7 +620,7 @@ const setAssigneesRoute = createRoute({
   method: "put",
   path: "/workspaces/{organizationId}/support/tickets/{ticketId}/assignees",
   tags: ["support-tickets"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:edit")],
   request: {
     params: ticketIdParam,
     body: {
@@ -602,7 +645,7 @@ const setLabelsRoute = createRoute({
   method: "put",
   path: "/workspaces/{organizationId}/support/tickets/{ticketId}/labels",
   tags: ["support-tickets"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:edit")],
   request: {
     params: ticketIdParam,
     body: {
@@ -657,7 +700,7 @@ const addVoteRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/tickets/{ticketId}/votes",
   tags: ["support-tickets"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: ticketIdParam,
     body: {
@@ -686,7 +729,7 @@ const removeVoteRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/support/tickets/{ticketId}/votes",
   tags: ["support-tickets"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:delete")],
   request: {
     params: ticketIdParam,
     query: removeVoteQuerySchema,
@@ -707,7 +750,7 @@ const listVotesRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/tickets/{ticketId}/votes",
   tags: ["support-tickets"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: {
     params: ticketIdParam,
   },
@@ -860,6 +903,7 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
       externalSource: query.externalSource,
       assignedTo: query.assignedTo,
       q: query.q,
+      issueId: query.issueId,
     });
 
     const withRelations = await hydrateTicketRelations(
@@ -869,6 +913,57 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
     );
 
     return c.json({ tickets: withRelations, nextCursor });
+  });
+
+  app.openapi(listCapturesRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const { type, limit } = c.req.valid("query");
+    const db = createD1(c.env.D1);
+    const rows = await db
+      .select({
+        id: supportTicketAttachments.id,
+        type: supportTicketAttachments.type,
+        fileName: supportTicketAttachments.fileName,
+        contentType: supportTicketAttachments.contentType,
+        url: supportTicketAttachments.url,
+        size: supportTicketAttachments.size,
+        createdAt: supportTicketAttachments.createdAt,
+        ticketId: supportTickets.id,
+        ticketNumber: supportTickets.number,
+        ticketTitle: supportTickets.title,
+      })
+      .from(supportTicketAttachments)
+      .innerJoin(
+        supportTickets,
+        and(
+          eq(supportTicketAttachments.ticketId, supportTickets.id),
+          eq(supportTicketAttachments.organizationId, organizationId)
+        )
+      )
+      .where(
+        and(
+          eq(supportTicketAttachments.organizationId, organizationId),
+          type ? eq(supportTicketAttachments.type, type as never) : undefined
+        )
+      )
+      .orderBy(desc(supportTicketAttachments.createdAt))
+      .limit(limit);
+    return c.json({
+      captures: rows.map((row) => ({
+        id: row.id,
+        type: row.type,
+        fileName: row.fileName,
+        contentType: row.contentType,
+        url: row.url,
+        size: row.size,
+        createdAt: row.createdAt,
+        ticket: {
+          id: row.ticketId,
+          number: row.ticketNumber,
+          title: row.ticketTitle,
+        },
+      })),
+    });
   });
 
   app.openapi(getTicketRoute, async (c) => {

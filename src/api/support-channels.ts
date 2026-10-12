@@ -224,7 +224,7 @@ export function registerSupportChannelRoutes(app: OpenAPIHono<AppContext>) {
       method: "get",
       path: "/workspaces/{organizationId}/support-channels",
       tags: ["support-channels"],
-      middleware: [rls("read")],
+      middleware: [rls("ticket:view")],
       request: { params: supportChannelParamsSchema },
       responses: {
         200: {
@@ -560,7 +560,7 @@ export function registerSupportChannelRoutes(app: OpenAPIHono<AppContext>) {
       path: "/workspaces/{organizationId}/support/channels/{channelId}/send",
       tags: ["support-channels"],
       summary: "Send an outbound support message",
-      middleware: [rls("write")],
+      middleware: [rls("ticket:create")],
       request: {
         params: z.object({
           organizationId: z.string(),
@@ -639,7 +639,7 @@ export function registerSupportChannelRoutes(app: OpenAPIHono<AppContext>) {
       path: "/workspaces/{organizationId}/support/channels/{channelId}/validate",
       tags: ["support-channels"],
       summary: "Validate a support channel",
-      middleware: [rls("read")],
+      middleware: [rls("ticket:view")],
       request: {
         params: z.object({
           organizationId: z.string(),

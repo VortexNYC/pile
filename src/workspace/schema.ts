@@ -125,8 +125,8 @@ export const workspaceComments = sqliteTable(
   {
     id: text("id" as string).primaryKey(),
     organizationId: text("organization_id" as string).notNull(),
-    issueId: text("issue_id" as string),
-    documentId: text("document_id" as string),
+    entityType: text("entity_type" as string),
+    entityId: text("entity_id" as string),
     authorId: text("author_id" as string),
     body: text("body" as string).notNull(),
     internal: integer("internal" as string, { mode: "boolean" })
@@ -141,57 +141,15 @@ export const workspaceComments = sqliteTable(
     updatedAt: text("updated_at" as string).notNull(),
   },
   (table) => [
-    index("comments_issue_idx" as string).on(
+    index("comments_entity_idx" as string).on(
       table.organizationId,
-      table.issueId
-    ),
-    index("comments_document_idx" as string).on(
-      table.organizationId,
-      table.documentId
+      table.entityType,
+      table.entityId
     ),
     index("comments_external_idx" as string).on(
       table.organizationId,
       table.externalSource,
       table.externalId
-    ),
-  ]
-);
-
-export const workspaceIssueSubscribers = sqliteTable(
-  "issue_subscribers" as string,
-  {
-    id: text("id" as string).primaryKey(),
-    organizationId: text("organization_id" as string).notNull(),
-    issueId: text("issue_id" as string).notNull(),
-    linearUserId: text("linear_user_id" as string).notNull(),
-    createdAt: text("created_at" as string).notNull(),
-  },
-  (table) => [
-    index("issue_subscribers_issue_idx" as string).on(
-      table.organizationId,
-      table.issueId
-    ),
-  ]
-);
-
-export const workspaceIssueRelations = sqliteTable(
-  "issue_relations" as string,
-  {
-    id: text("id" as string).primaryKey(),
-    organizationId: text("organization_id" as string).notNull(),
-    fromIssueId: text("from_issue_id" as string).notNull(),
-    toIssueId: text("to_issue_id" as string).notNull(),
-    type: text("type" as string).notNull(),
-    createdAt: text("created_at" as string).notNull(),
-  },
-  (table) => [
-    index("issue_relations_from_idx" as string).on(
-      table.organizationId,
-      table.fromIssueId
-    ),
-    index("issue_relations_to_idx" as string).on(
-      table.organizationId,
-      table.toIssueId
     ),
   ]
 );
@@ -369,6 +327,8 @@ export const workspaceUserPreferences = sqliteTable(
     organizationId: text("organization_id" as string).notNull(),
     userId: text("user_id" as string).notNull(),
     defaultViewId: text("default_view_id" as string),
+    hiddenSurfaces: text("hidden_surfaces" as string),
+    favorites: text("favorites" as string),
     updatedAt: text("updated_at" as string).notNull(),
   },
   (table) => [primaryKey({ columns: [table.organizationId, table.userId] })]
@@ -387,7 +347,7 @@ export const workspaceDocuments = sqliteTable(
     icon: text("icon" as string),
     // "blocks" = BlockNote JSON; "markdown" = raw markdown (agent-native).
     contentFormat: text("content_format" as string, {
-      enum: ["blocks", "markdown"],
+      enum: ["blocks", "markdown", "canvas"],
     })
       .notNull()
       .default("blocks"),
@@ -451,49 +411,6 @@ export const workspaceDocumentSpaces = sqliteTable(
 );
 
 // Public share links for documents (GitBook/Docmost "publish").
-export const workspaceDocumentShares = sqliteTable(
-  "document_shares" as string,
-  {
-    token: text("token" as string).primaryKey(),
-    organizationId: text("organization_id" as string).notNull(),
-    documentId: text("document_id" as string).notNull(),
-    includeChildren: integer("include_children" as string, {
-      mode: "boolean",
-    })
-      .notNull()
-      .default(false),
-    createdById: text("created_by_id" as string).notNull(),
-    createdAt: text("created_at" as string).notNull(),
-    expiresAt: text("expires_at" as string),
-  },
-  (table) => [
-    index("document_shares_document_idx" as string).on(
-      table.organizationId,
-      table.documentId
-    ),
-  ]
-);
-
-// Watch a document → included in notification fanout on doc changes.
-export const workspaceDocumentWatchers = sqliteTable(
-  "document_watchers" as string,
-  {
-    id: text("id" as string).primaryKey(),
-    organizationId: text("organization_id" as string).notNull(),
-    documentId: text("document_id" as string).notNull(),
-    userId: text("user_id" as string).notNull(),
-    createdAt: text("created_at" as string).notNull(),
-  },
-  (table) => [
-    uniqueIndex("document_watchers_doc_user_idx" as string).on(
-      table.documentId,
-      table.userId
-    ),
-  ]
-);
-
-// Per-document access grants. When a doc has no rows it is open to the
-// workspace; any row restricts it to listed actors (+ workspace admins).
 export const workspaceDocumentPermissions = sqliteTable(
   "document_permissions" as string,
   {
@@ -549,7 +466,7 @@ export const workspaceDocumentHistory = sqliteTable(
     documentId: text("document_id" as string).notNull(),
     content: text("content" as string).notNull(),
     contentFormat: text("content_format" as string, {
-      enum: ["blocks", "markdown"],
+      enum: ["blocks", "markdown", "canvas"],
     })
       .notNull()
       .default("blocks"),
@@ -638,6 +555,9 @@ export const workspaceCustomers = sqliteTable(
     name: text("name" as string).notNull(),
     url: text("url" as string),
     logoUrl: text("logo_url" as string),
+    bookingUrl: text("booking_url" as string),
+    notes: text("notes" as string),
+    domain: text("domain" as string),
     externalId: text("external_id" as string),
     tierId: text("tier_id" as string),
     statusId: text("status_id" as string),
@@ -1243,6 +1163,170 @@ export const workspaceAgentEnvironmentFiles = sqliteTable(
     uniqueIndex("agent_environment_files_path_idx" as string).on(
       table.organizationId,
       table.path
+    ),
+  ]
+);
+
+// Deals: the CRM pipeline — deals belong to customers and link to
+// contacts (support customers), with stage + amount + expected close.
+export const workspaceDeals = sqliteTable(
+  "deals" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    customerId: text("customer_id" as string).notNull(),
+    name: text("name" as string).notNull(),
+    stage: text("stage" as string).notNull(),
+    amountCents: integer("amount_cents" as string),
+    currency: text("currency" as string),
+    expectedCloseAt: text("expected_close_at" as string),
+    description: text("description" as string),
+    closedAt: text("closed_at" as string),
+    archivedAt: text("archived_at" as string),
+    createdAt: text("created_at" as string).notNull(),
+    updatedAt: text("updated_at" as string).notNull(),
+  },
+  (table) => [
+    index("deals_organization_idx" as string).on(table.organizationId),
+    index("deals_customer_idx" as string).on(table.customerId),
+  ]
+);
+
+// Custom fields: field definitions scoped to entity types + their values
+// per entity — the "make it yours" layer on issues, customers, deals.
+export const workspaceFieldDefinitions = sqliteTable(
+  "field_definitions" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    entityType: text("entity_type" as string).notNull(),
+    name: text("name" as string).notNull(),
+    type: text("type" as string).notNull(),
+    options: text("options" as string),
+    position: integer("position" as string)
+      .notNull()
+      .default(0),
+    createdAt: text("created_at" as string).notNull(),
+    updatedAt: text("updated_at" as string).notNull(),
+  },
+  (table) => [
+    index("field_definitions_org_entity_idx" as string).on(
+      table.organizationId,
+      table.entityType
+    ),
+    uniqueIndex("field_definitions_name_idx" as string).on(
+      table.organizationId,
+      table.entityType,
+      table.name
+    ),
+  ]
+);
+
+export const workspaceFieldValues = sqliteTable(
+  "field_values" as string,
+  {
+    fieldId: text("field_id" as string).notNull(),
+    entityId: text("entity_id" as string).notNull(),
+    organizationId: text("organization_id" as string).notNull(),
+    value: text("value" as string),
+    updatedAt: text("updated_at" as string).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.fieldId, table.entityId] }),
+    index("field_values_entity_idx" as string).on(
+      table.organizationId,
+      table.entityId
+    ),
+  ]
+);
+
+export const workspaceEntityLinks = sqliteTable(
+  "entity_links" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    fromType: text("from_type" as string).notNull(),
+    fromId: text("from_id" as string).notNull(),
+    toType: text("to_type" as string).notNull(),
+    toId: text("to_id" as string).notNull(),
+    kind: text("kind" as string)
+      .notNull()
+      .default("relates"),
+    label: text("label" as string),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    index("entity_links_from_idx" as string).on(
+      table.organizationId,
+      table.fromType,
+      table.fromId
+    ),
+    index("entity_links_to_idx" as string).on(
+      table.organizationId,
+      table.toType,
+      table.toId
+    ),
+    uniqueIndex("entity_links_unique_idx" as string).on(
+      table.organizationId,
+      table.fromType,
+      table.fromId,
+      table.toType,
+      table.toId,
+      table.kind
+    ),
+  ]
+);
+
+// One subscriptions model — who watches what. Replaces
+// issue_subscribers + document_watchers.
+export const workspaceSubscriptions = sqliteTable(
+  "subscriptions" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    entityType: text("entity_type" as string).notNull(),
+    entityId: text("entity_id" as string).notNull(),
+    userId: text("user_id" as string).notNull(),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    uniqueIndex("subscriptions_entity_user_idx" as string).on(
+      table.entityType,
+      table.entityId,
+      table.userId
+    ),
+    index("subscriptions_entity_idx" as string).on(
+      table.organizationId,
+      table.entityType,
+      table.entityId
+    ),
+    index("subscriptions_user_idx" as string).on(table.userId),
+  ]
+);
+
+// One shares model — public links on any entity. Replaces
+// issue_shares + document_shares.
+export const workspaceShares = sqliteTable(
+  "shares" as string,
+  {
+    token: text("token" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    entityType: text("entity_type" as string).notNull(),
+    entityId: text("entity_id" as string).notNull(),
+    includeChildren: integer("include_children" as string, {
+      mode: "boolean",
+    })
+      .notNull()
+      .default(false),
+    createdById: text("created_by_id" as string).notNull(),
+    createdAt: text("created_at" as string).notNull(),
+    expiresAt: text("expires_at" as string),
+  },
+  (table) => [
+    index("shares_entity_idx" as string).on(
+      table.organizationId,
+      table.entityType,
+      table.entityId
     ),
   ]
 );

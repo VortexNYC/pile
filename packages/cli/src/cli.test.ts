@@ -1045,6 +1045,9 @@ describe("CLI integration", () => {
     ];
     expect(url.pathname).toBe("/workspaces/ws-1/issues/ISS-1/dispatch");
     expect(init.body).toBeUndefined();
+    expect(spy).toHaveBeenCalledWith(
+      "console: http://127.0.0.1:8787/app/ws-1/sessions/sess-1"
+    );
     expect(spy).toHaveBeenCalledWith("pr: https://github.com/o/r/pull/1");
     spy.mockRestore();
   });

@@ -8,6 +8,7 @@ import { useState } from "react";
 
 import { Page } from "@/components/page";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { betterAuthClient } from "@/lib/better-auth";
 
@@ -28,6 +29,7 @@ interface ApiKeyRow {
 
 function DeveloperSettings() {
   const workspace = useWorkspace();
+  const permissions = usePermissions(workspace.id);
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [createdKey, setCreatedKey] = useState<string | null>(null);
@@ -70,6 +72,20 @@ function DeveloperSettings() {
         queryKey: wsKey(workspace.id, "api-keys"),
       }),
   });
+
+  if (!permissions.isLoaded) {
+    return <LoadingState label="Checking access" />;
+  }
+  if (!permissions.isAdmin) {
+    return (
+      <Page title="Developer">
+        <EmptyState
+          title="Admins only"
+          description="API keys are restricted to workspace admins."
+        />
+      </Page>
+    );
+  }
 
   return (
     <Page

@@ -57,7 +57,7 @@ const listOAuthClientsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/oauth-clients",
   tags: ["oauth-clients"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -100,7 +100,7 @@ const getOAuthClientRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/oauth-clients/{id}",
   tags: ["oauth-clients"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -206,6 +206,12 @@ export function registerOAuthClientRoutes(app: OpenAPIHono<AppContext>) {
           actorType: "oauth-client",
           redirectUris: input.redirectUris,
           scopes: input.scopes,
+        },
+        permissions: {
+          workspace: input.permissions
+            .split(",")
+            .map((p: string) => p.trim())
+            .filter(Boolean),
         },
       },
     });

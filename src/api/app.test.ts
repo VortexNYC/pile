@@ -88,6 +88,20 @@ describe("member console", () => {
     expect(await res.text()).toBe("console.log(1)");
   });
 
+  it("exposes the two-factor endpoints", async () => {
+    // The twoFactor plugin registers TOTP endpoints; unauthenticated
+    // calls should 401 (not 404), proving the plugin is mounted.
+    const res = await app.fetch(
+      new Request("https://example.com/api/auth/two-factor/get-totp-uri", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ password: "x" }),
+      }),
+      env
+    );
+    expect(res.status).toBe(401);
+  });
+
   it("reports an unbuilt console instead of crashing", async () => {
     const res = await app.fetch(new Request("https://example.com/app"), {
       ...env,

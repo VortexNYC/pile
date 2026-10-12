@@ -1,8 +1,8 @@
 import { and, asc, eq, gt, like, or, type SQL } from "drizzle-orm";
 
+import type { WorkerEnv } from "../platform/middleware.js";
 import type { D1Client } from "./db.js";
 import {
-  supportCompanies,
   supportCustomerCompanies,
   supportCustomerIdentities,
   supportCustomers,
@@ -43,7 +43,7 @@ export type SupportCustomerCompany = {
   id: string;
   customerId: string;
   companyId: string;
-  name: string;
+  name: string | null;
   isPrimary: boolean;
   createdAt: string;
 };
@@ -69,31 +69,6 @@ export type SupportCustomerIdentity = {
   isPrimary: boolean;
   createdAt: string;
 };
-
-export type SupportCompanyInput = {
-  id?: string;
-  organizationId: string;
-  name: string;
-  domain?: string | null;
-  externalId?: string | null;
-  externalSource?: string;
-};
-
-export type SupportCompany = {
-  id: string;
-  organizationId: string;
-  name: string;
-  domain: string | null;
-  externalId: string | null;
-  externalSource: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-function domainFromEmail(email: string): string | undefined {
-  const at = email.lastIndexOf("@");
-  return at >= 0 ? email.slice(at + 1).toLowerCase() : undefined;
-}
 
 export async function createCustomer(
   db: D1Client,
@@ -247,19 +222,8 @@ export async function getCustomerById(
 
   const [companies, identities] = await Promise.all([
     db
-      .select({
-        id: supportCustomerCompanies.id,
-        customerId: supportCustomerCompanies.customerId,
-        companyId: supportCustomerCompanies.companyId,
-        name: supportCompanies.name,
-        isPrimary: supportCustomerCompanies.isPrimary,
-        createdAt: supportCustomerCompanies.createdAt,
-      })
+      .select()
       .from(supportCustomerCompanies)
-      .innerJoin(
-        supportCompanies,
-        eq(supportCustomerCompanies.companyId, supportCompanies.id)
-      )
       .where(eq(supportCustomerCompanies.customerId, id)),
     db
       .select()
@@ -273,7 +237,7 @@ export async function getCustomerById(
       id: c.id,
       customerId: c.customerId,
       companyId: c.companyId,
-      name: c.name,
+      name: c.companyName,
       isPrimary: c.isPrimary,
       createdAt: c.createdAt,
     })),
@@ -396,38 +360,15 @@ export async function updateCustomer(
   return updated;
 }
 
-export async function resolveCompanyByDomain(
-  db: D1Client,
-  organizationId: string,
-  email: string
-): Promise<string | null> {
-  const domain = domainFromEmail(email);
-  if (!domain) {
-    return null;
-  }
-
-  const [company] = await db
-    .select({ id: supportCompanies.id })
-    .from(supportCompanies)
-    .where(
-      and(
-        eq(supportCompanies.organizationId, organizationId),
-        eq(supportCompanies.domain, domain)
-      )
-    )
-    .limit(1);
-
-  return company?.id ?? null;
-}
-
 export async function setCustomerCompanies(
   db: D1Client,
   organizationId: string,
   customerId: string,
-  companies: { companyId: string; isPrimary: boolean }[]
+  companies: { companyId: string; isPrimary: boolean }[],
+  env?: WorkerEnv
 ): Promise<void> {
-  const customer = await getCustomerById(db, organizationId, customerId);
-  if (!customer) {
+  const existing = await getCustomerById(db, organizationId, customerId);
+  if (!existing) {
     return;
   }
 
@@ -437,11 +378,32 @@ export async function setCustomerCompanies(
 
   if (companies.length > 0) {
     const now = new Date().toISOString();
+    // Names denormalize at write time — the join reads without
+    // touching the workspace DO. Resolved via the stub when env is
+    // present; falls back to null (the name renders as the id until
+    // the next set call refreshes it).
+    let names = new Map<string, string>();
+    if (env) {
+      const { getWorkspaceStub } = await import("../api/stub.js");
+      const stub = getWorkspaceStub(env, organizationId);
+      await stub.setOrganizationId(organizationId);
+      const rows = await Promise.all(
+        companies.map(async (c) => {
+          const customer = await stub
+            .getCustomer(c.companyId)
+            .catch(() => null);
+          return [c.companyId, customer?.name ?? null] as const;
+        })
+      );
+      names = new Map(rows.filter((r): r is [string, string] => r[1] !== null));
+    }
+
     await db.insert(supportCustomerCompanies).values(
       companies.map((c) => ({
         id: crypto.randomUUID(),
         customerId,
         companyId: c.companyId,
+        companyName: names.get(c.companyId) ?? null,
         isPrimary: c.isPrimary,
         createdAt: now,
       }))
@@ -487,135 +449,35 @@ export async function setCustomerIdentities(
   }
 }
 
-export async function createCompany(
-  db: D1Client,
-  input: SupportCompanyInput
-): Promise<SupportCompany> {
-  const id = input.id ?? crypto.randomUUID();
-  const externalSource = input.externalSource ?? "manual";
-  const now = new Date().toISOString();
-
-  await db.insert(supportCompanies).values({
-    id,
-    organizationId: input.organizationId,
-    name: input.name,
-    domain: input.domain ?? null,
-    externalId: input.externalId ?? null,
-    externalSource,
-    createdAt: now,
-    updatedAt: now,
-  });
-
-  return {
-    id,
-    organizationId: input.organizationId,
-    name: input.name,
-    domain: input.domain ?? null,
-    externalId: input.externalId ?? null,
-    externalSource,
-    createdAt: now,
-    updatedAt: now,
-  };
-}
-
-export async function getCompanyById(
-  db: D1Client,
-  organizationId: string,
-  id: string
-): Promise<SupportCompany | null> {
-  const [company] = await db
-    .select()
-    .from(supportCompanies)
-    .where(
-      and(
-        eq(supportCompanies.id, id),
-        eq(supportCompanies.organizationId, organizationId)
-      )
-    )
-    .limit(1);
-
-  return company ?? null;
-}
-
-export async function findCompanyByExternalId(
-  db: D1Client,
-  organizationId: string,
-  externalId: string,
-  externalSource: string
-): Promise<SupportCompany | null> {
-  const [company] = await db
-    .select()
-    .from(supportCompanies)
-    .where(
-      and(
-        eq(supportCompanies.organizationId, organizationId),
-        eq(supportCompanies.externalId, externalId),
-        eq(supportCompanies.externalSource, externalSource)
-      )
-    )
-    .limit(1);
-  return company ?? null;
-}
-
+/** The single company model — workspace customers. Migration
+ * adapters call this with the workspace stub; it returns the
+ * customer-shaped company row. */
 export async function findOrCreateCompany(
-  db: D1Client,
+  stub: {
+    getCustomerByDomain(
+      domain: string
+    ): Promise<{ id: string; name: string; domain: string | null } | undefined>;
+    createCustomer(input: {
+      name: string;
+      domain?: string | null;
+      externalId?: string | null;
+    }): Promise<{ id: string; name: string; domain: string | null }>;
+  },
   organizationId: string,
-  input: SupportCompanyInput
-): Promise<SupportCompany> {
-  if (input.externalId && input.externalSource) {
-    const existing = await findCompanyByExternalId(
-      db,
-      organizationId,
-      input.externalId,
-      input.externalSource
-    );
+  input: {
+    name: string;
+    domain?: string | null;
+    externalId?: string | null;
+    externalSource?: string;
+  }
+): Promise<{ id: string; name: string; domain: string | null }> {
+  if (input.domain) {
+    const existing = await stub.getCustomerByDomain(input.domain);
     if (existing) return existing;
   }
-  return createCompany(db, input);
-}
-
-export type ListCompaniesOptions = {
-  limit: number;
-  cursor?: string;
-  q?: string;
-};
-
-export async function listCompanies(
-  db: D1Client,
-  organizationId: string,
-  options: ListCompaniesOptions
-): Promise<{ companies: SupportCompany[]; nextCursor: string | null }> {
-  const conditions: (SQL<unknown> | undefined)[] = [
-    eq(supportCompanies.organizationId, organizationId),
-  ];
-
-  if (options.q) {
-    const query = `%${options.q}%`;
-    conditions.push(
-      or(
-        like(supportCompanies.name, query),
-        like(supportCompanies.domain, query)
-      )
-    );
-  }
-
-  if (options.cursor) {
-    conditions.push(gt(supportCompanies.createdAt, options.cursor));
-  }
-
-  const where = conditions.length === 1 ? conditions[0] : and(...conditions);
-  const limit = Math.max(1, Math.min(options.limit, 100));
-
-  const companies = await db
-    .select()
-    .from(supportCompanies)
-    .where(where)
-    .orderBy(asc(supportCompanies.createdAt))
-    .limit(limit + 1);
-
-  const hasMore = companies.length > limit;
-  const sliced = hasMore ? companies.slice(0, -1) : companies;
-  const nextCursor = hasMore ? sliced[sliced.length - 1].createdAt : null;
-
-  return { companies: sliced, nextCursor };
+  return stub.createCustomer({
+    name: input.name,
+    domain: input.domain ?? null,
+    externalId: input.externalId ?? null,
+  });
 }
