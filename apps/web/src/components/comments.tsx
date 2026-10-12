@@ -12,6 +12,7 @@ import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap, unwrapEmpty } from "@/lib/api";
 import { betterAuthClient } from "@/lib/better-auth";
 import { formatRelative } from "@/lib/labels";
+import { mentionTargets as mentionTargetsFor } from "@/lib/mentions";
 import { isPrHistoryField } from "@/lib/pull-request";
 import { toastError } from "@/lib/toast";
 
@@ -102,6 +103,17 @@ export function IssueComments({
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: key });
+
+  const members = useQuery({
+    queryKey: wsKey(organizationId, "members"),
+    queryFn: async () => {
+      const res = await betterAuthClient.organization.listMembers({
+        query: { organizationId },
+      });
+      return res.data?.members ?? [];
+    },
+  });
+  const mentionTargets = mentionTargetsFor(members.data);
 
   const add = useMutation({
     mutationFn: (body: string) =>
@@ -288,6 +300,7 @@ export function IssueComments({
         placeholder="Add a comment…"
         submitLabel="Comment"
         loading={add.isPending}
+        members={mentionTargets}
         onSubmit={(body) => add.mutate(body)}
       />
       <ConfirmDialog
