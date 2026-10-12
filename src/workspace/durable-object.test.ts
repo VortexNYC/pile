@@ -2079,6 +2079,44 @@ describe("listDocumentsVisibleTo", () => {
   });
 });
 
+describe("comment mentions", () => {
+  beforeAll(ensureWorkspace);
+  it("notifies each mentioned user once, excluding the author", async () => {
+    await withWorkspace(getStub(), async (instance) => {
+      const issue = await instance.createIssue({ title: "mention target" });
+      await instance.createComment({
+        issueId: issue.id,
+        authorId: "author-1",
+        body: "cc @mentioned @second",
+        mentions: ["author-1", "mentioned-user", "second-user"],
+      });
+      const mentioned = await instance.listNotificationsForRecipient(
+        "mentioned-user",
+        "user"
+      );
+      expect(
+        mentioned.some(
+          (n) => n.type === "mention" && n.issueId === issue.id
+        )
+      ).toBe(true);
+      const second = await instance.listNotificationsForRecipient(
+        "second-user",
+        "user"
+      );
+      expect(second.some((n) => n.type === "mention")).toBe(true);
+      const authorNotes = await instance.listNotificationsForRecipient(
+        "author-1",
+        "user"
+      );
+      expect(
+        authorNotes.filter(
+          (n) => n.type === "mention" && n.issueId === issue.id
+        )
+      ).toHaveLength(0);
+    });
+  });
+});
+
 describe("grantedOnly issue visibility", () => {
   beforeAll(ensureWorkspace);
   it("hides ungranted issues from default-deny viewers", async () => {
@@ -2097,12 +2135,12 @@ describe("grantedOnly issue visibility", () => {
       expect(hidden.has(mine.id)).toBe(false);
 
       // Direct access mirrors it.
-      expect(
-        await instance.issueVisibleTo(open.id, "c-1", [], true)
-      ).toBe(false);
-      expect(
-        await instance.issueVisibleTo(mine.id, "c-1", [], true)
-      ).toBe(true);
+      expect(await instance.issueVisibleTo(open.id, "c-1", [], true)).toBe(
+        false
+      );
+      expect(await instance.issueVisibleTo(mine.id, "c-1", [], true)).toBe(
+        true
+      );
       // Without the flag, open issues stay open.
       expect(await instance.issueVisibleTo(open.id, "c-1", [])).toBe(true);
 

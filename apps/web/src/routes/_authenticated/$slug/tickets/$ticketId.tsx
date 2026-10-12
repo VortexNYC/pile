@@ -13,6 +13,7 @@ import { Page } from "@/components/page";
 import { ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap } from "@/lib/api";
+import { betterAuthClient } from "@/lib/better-auth";
 import {
   formatRelative,
   isPriority,
@@ -24,6 +25,7 @@ import {
   type IssuePriority,
   type TicketStatus,
 } from "@/lib/labels";
+import { mentionTargets as mentionTargetsFor } from "@/lib/mentions";
 import { toastError, toastSuccess } from "@/lib/toast";
 
 export const Route = createFileRoute("/_authenticated/$slug/tickets/$ticketId")(
@@ -91,6 +93,17 @@ function TicketDetail() {
         )
       ).tickets,
   });
+  const members = useQuery({
+    queryKey: wsKey(organizationId, "members"),
+    queryFn: async () => {
+      const res = await betterAuthClient.organization.listMembers({
+        query: { organizationId },
+      });
+      return res.data?.members ?? [];
+    },
+  });
+  const mentionTargets = mentionTargetsFor(members.data);
+
   const ticket = useQuery({
     queryKey: key,
     queryFn: async () =>
@@ -338,6 +351,7 @@ function TicketDetail() {
           <Composer
             aria-label="Ticket reply"
             loading={send.isPending}
+            members={mentionTargets}
             modes={[
               {
                 id: "reply",

@@ -29,6 +29,8 @@ import type { AppContext } from "../platform/middleware.js";
 import { publicRateLimit } from "../platform/rate-limit.js";
 import { rls } from "../platform/rls.js";
 import { getExecutionCtx } from "./execution-ctx.js";
+import { resolveMentions } from "./mentions.js";
+import { getWorkspaceStub } from "./stub.js";
 
 const supportTicketStatusEnum = z.enum(["todo", "done", "snoozed"]);
 const supportTicketPriorityEnum = z.enum(["low", "medium", "high", "urgent"]);
@@ -1092,6 +1094,26 @@ export function registerSupportTicketRoutes(app: OpenAPIHono<AppContext>) {
       },
       c.env
     );
+    // @mentions in a note page the mentioned member — the same
+    // grammar comments use on issues/documents.
+    const mentions = await resolveMentions(db, organizationId, body.body);
+    const notifyIds = mentions.filter(
+      (m) => m !== actorId && m !== identity?.id
+    );
+    if (notifyIds.length > 0) {
+      const stub = getWorkspaceStub(c.env, organizationId);
+      await Promise.all(
+        notifyIds.map((recipientId) =>
+          stub.createNotification({
+            recipientId,
+            recipientType: "user",
+            issueId: ticketId,
+            type: "mention",
+            metadata: { ticketId, eventId: event.id },
+          })
+        )
+      );
+    }
     return c.json({ event }, 201);
   });
 

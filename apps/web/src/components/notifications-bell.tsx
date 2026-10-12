@@ -132,10 +132,26 @@ export function NotificationsBell() {
                   onClick={() => {
                     if (!item.read) markRead.mutate(item.id);
                     setOpen(false);
-                    void navigate({
-                      to: "/$slug/issues/$issueId",
-                      params: { slug: workspace.slug, issueId: item.issueId },
-                    });
+                    const meta = item.metadata as
+                      | { ticketId?: string }
+                      | undefined;
+                    void navigate(
+                      meta?.ticketId
+                        ? {
+                            to: "/$slug/tickets/$ticketId",
+                            params: {
+                              slug: workspace.slug,
+                              ticketId: meta.ticketId,
+                            },
+                          }
+                        : {
+                            to: "/$slug/issues/$issueId",
+                            params: {
+                              slug: workspace.slug,
+                              issueId: item.issueId,
+                            },
+                          }
+                    );
                   }}
                 >
                   <span className="flex w-full items-center gap-2">
