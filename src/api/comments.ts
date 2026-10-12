@@ -79,7 +79,7 @@ const listCommentsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/issues/{issueId}/comments",
   tags: ["comments"],
-  middleware: [rls("read")],
+  middleware: [rls("issue:view")],
   request: {
     params: z.object({ organizationId: z.string(), issueId: z.string() }),
   },
@@ -99,7 +99,7 @@ const createCommentRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/issues/{issueId}/comments",
   tags: ["comments"],
-  middleware: [rls("write")],
+  middleware: [rls("issue:create")],
   request: {
     params: z.object({ organizationId: z.string(), issueId: z.string() }),
     body: {
@@ -122,7 +122,7 @@ const getCommentRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/issues/{issueId}/comments/{id}",
   tags: ["comments"],
-  middleware: [rls("read")],
+  middleware: [rls("issue:view")],
   request: {
     params: z.object({
       organizationId: z.string(),
@@ -144,7 +144,7 @@ const updateCommentRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/issues/{issueId}/comments/{id}",
   tags: ["comments"],
-  middleware: [rls("write")],
+  middleware: [rls("issue:edit")],
   request: {
     params: z.object({
       organizationId: z.string(),
@@ -171,7 +171,7 @@ const deleteCommentRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/issues/{issueId}/comments/{id}",
   tags: ["comments"],
-  middleware: [rls("write")],
+  middleware: [rls("issue:delete")],
   request: {
     params: z.object({
       organizationId: z.string(),
@@ -188,7 +188,7 @@ const resolveIssueCommentRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/issues/{issueId}/comments/{id}/resolve",
   tags: ["comments"],
-  middleware: [rls("write")],
+  middleware: [rls("issue:create")],
   request: {
     params: z.object({
       organizationId: z.string(),
@@ -209,7 +209,7 @@ const unresolveIssueCommentRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/issues/{issueId}/comments/{id}/unresolve",
   tags: ["comments"],
-  middleware: [rls("write")],
+  middleware: [rls("issue:create")],
   request: {
     params: z.object({
       organizationId: z.string(),

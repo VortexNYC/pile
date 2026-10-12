@@ -213,7 +213,7 @@ const intakeRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/intake",
   tags: ["customers"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:create")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {

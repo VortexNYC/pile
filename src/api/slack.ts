@@ -32,7 +32,7 @@ const slackStatusRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/slack",
   tags: ["slack"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },

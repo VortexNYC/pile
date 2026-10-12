@@ -43,7 +43,7 @@ const issueActivityRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/issues/{issueId}/activity",
   tags: ["activities"],
-  middleware: [rls("read")],
+  middleware: [rls("issue:view")],
   request: {
     params: z.object({ organizationId: z.string(), issueId: z.string() }),
   },

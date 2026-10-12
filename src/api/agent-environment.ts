@@ -31,7 +31,7 @@ const listRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/agent/environment",
   tags: ["agent-environment"],
-  middleware: [rls("read", "agent:read")],
+  middleware: [rls("session:view", "agent:read")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -51,7 +51,7 @@ const getRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/agent/environment/file",
   tags: ["agent-environment"],
-  middleware: [rls("read", "agent:read")],
+  middleware: [rls("session:view", "agent:read")],
   request: {
     params: z.object({ organizationId: z.string() }),
     query: pathQuery,

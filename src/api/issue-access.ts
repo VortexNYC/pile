@@ -7,6 +7,7 @@ import { canAccessTeam } from "../global/teams.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { AppContext } from "../platform/middleware.js";
+import { isAdminIdentity } from "../platform/permissions.js";
 import type { Issue, IssueViewer } from "../types/workspace.js";
 
 type WorkspaceDb = ReturnType<typeof createD1>;
@@ -45,7 +46,7 @@ export async function issueViewer(
   db: WorkspaceDb,
   identity: WorkspaceIdentity
 ): Promise<IssueViewer | undefined> {
-  if (identity.permissions.includes("admin")) return undefined;
+  if (isAdminIdentity(identity)) return undefined;
   return { actorId: identity.id, teamIds: await grantTeamIds(db, identity) };
 }
 
@@ -61,7 +62,7 @@ export async function assertIssueAccess(
   const allowed = await canAccessTeam(db, issue.teamId, identity);
   const visible =
     allowed &&
-    (identity.permissions.includes("admin") ||
+    (isAdminIdentity(identity) ||
       (await stub.issueVisibleTo(
         issue.id,
         identity.id,

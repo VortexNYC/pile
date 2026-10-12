@@ -27,7 +27,7 @@ const listRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/emojis",
   tags: ["emojis"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: { params: z.object({ organizationId: z.string() }) },
   responses: {
     200: {
@@ -45,7 +45,7 @@ const createRouteDef = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/emojis",
   tags: ["emojis"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:create")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: { content: { "application/json": { schema: bodySchema } } },
@@ -62,7 +62,7 @@ const getRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/emojis/{id}",
   tags: ["emojis"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: { params: z.object({ organizationId: z.string(), id: z.string() }) },
   responses: {
     200: {
@@ -77,7 +77,7 @@ const updateRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/emojis/{id}",
   tags: ["emojis"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:edit")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
     body: { content: { "application/json": { schema: bodySchema.partial() } } },
@@ -95,7 +95,7 @@ const deleteRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/emojis/{id}",
   tags: ["emojis"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:delete")],
   request: { params: z.object({ organizationId: z.string(), id: z.string() }) },
   responses: {
     204: { description: "Emoji deleted" },

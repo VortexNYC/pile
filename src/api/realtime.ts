@@ -10,7 +10,7 @@ const realtimeRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/realtime",
   tags: ["realtime"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
     query: z.object({

@@ -68,7 +68,7 @@ const listRulesRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/escalation-rules",
   tags: ["support-escalation"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: { params: orgParam },
   responses: {
     200: {
@@ -86,7 +86,7 @@ const createRuleRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/escalation-rules",
   tags: ["support-escalation"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: orgParam,
     body: {
@@ -109,7 +109,7 @@ const getRuleRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/escalation-rules/{ruleId}",
   tags: ["support-escalation"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: { params: ruleIdParam },
   responses: {
     200: {
@@ -128,7 +128,7 @@ const updateRuleRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/support/escalation-rules/{ruleId}",
   tags: ["support-escalation"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:edit")],
   request: {
     params: ruleIdParam,
     body: {
@@ -152,7 +152,7 @@ const deleteRuleRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/support/escalation-rules/{ruleId}",
   tags: ["support-escalation"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:delete")],
   request: { params: ruleIdParam },
   responses: {
     204: { description: "Deleted" },

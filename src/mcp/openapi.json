@@ -12432,13 +12432,7 @@
                             "type": "string"
                           },
                           "role": {
-                            "type": "string",
-                            "enum": [
-                              "owner",
-                              "admin",
-                              "member",
-                              "guest"
-                            ]
+                            "type": "string"
                           },
                           "createdAt": {
                             "type": "string"
@@ -12489,13 +12483,7 @@
                     "minLength": 1
                   },
                   "role": {
-                    "type": "string",
-                    "enum": [
-                      "owner",
-                      "admin",
-                      "member",
-                      "guest"
-                    ]
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -12523,13 +12511,7 @@
                       "type": "string"
                     },
                     "role": {
-                      "type": "string",
-                      "enum": [
-                        "owner",
-                        "admin",
-                        "member",
-                        "guest"
-                      ]
+                      "type": "string"
                     },
                     "createdAt": {
                       "type": "string"
@@ -21265,13 +21247,7 @@
                     "format": "email"
                   },
                   "role": {
-                    "type": "string",
-                    "enum": [
-                      "owner",
-                      "admin",
-                      "member",
-                      "guest"
-                    ]
+                    "type": "string"
                   },
                   "teamId": {
                     "type": "string"

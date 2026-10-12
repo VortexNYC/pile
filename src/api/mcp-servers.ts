@@ -28,7 +28,7 @@ const listMcpServersRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/mcp/servers",
   tags: ["mcp-servers"],
-  middleware: [rls("read", "agent:read")],
+  middleware: [rls("settings:view", "agent:read")],
   request: {
     params: z.object({ organizationId: z.string() }),
     query: z.object({
@@ -51,7 +51,7 @@ const createMcpServerRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/mcp/servers",
   tags: ["mcp-servers"],
-  middleware: [rls("write", "agent:write")],
+  middleware: [rls("settings:create", "agent:write")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
@@ -83,7 +83,7 @@ const getMcpServerRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/mcp/servers/{id}",
   tags: ["mcp-servers"],
-  middleware: [rls("read", "agent:read")],
+  middleware: [rls("settings:view", "agent:read")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -102,7 +102,7 @@ const deleteMcpServerRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/mcp/servers/{id}",
   tags: ["mcp-servers"],
-  middleware: [rls("write", "agent:write")],
+  middleware: [rls("settings:delete", "agent:write")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },

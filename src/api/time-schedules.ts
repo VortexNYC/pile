@@ -26,7 +26,7 @@ const listRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/time-schedules",
   tags: ["time-schedules"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: { params: orgIdParam },
   responses: {
     200: {
@@ -44,7 +44,7 @@ const createRouteDef = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/time-schedules",
   tags: ["time-schedules"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:create")],
   request: {
     params: orgIdParam,
     body: { content: { "application/json": { schema: bodySchema } } },
@@ -61,7 +61,7 @@ const getRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/time-schedules/{id}",
   tags: ["time-schedules"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: { params: orgIdParam.merge(z.object({ id: z.string() })) },
   responses: {
     200: {
@@ -76,7 +76,7 @@ const updateRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/time-schedules/{id}",
   tags: ["time-schedules"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:edit")],
   request: {
     params: orgIdParam.merge(z.object({ id: z.string() })),
     body: { content: { "application/json": { schema: bodySchema.partial() } } },
@@ -94,7 +94,7 @@ const deleteRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/time-schedules/{id}",
   tags: ["time-schedules"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:delete")],
   request: { params: orgIdParam.merge(z.object({ id: z.string() })) },
   responses: {
     204: { description: "Time schedule deleted" },

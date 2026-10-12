@@ -23,7 +23,7 @@ const listIssueHistoryRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/issues/{issueId}/history",
   tags: ["history"],
-  middleware: [rls("read")],
+  middleware: [rls("issue:view")],
   request: {
     params: z.object({ organizationId: z.string(), issueId: z.string() }),
   },

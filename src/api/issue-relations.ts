@@ -56,7 +56,7 @@ const listRelationsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/issues/{issueId}/relations",
   tags: ["relations"],
-  middleware: [rls("read")],
+  middleware: [rls("issue:view")],
   request: {
     params: z.object({ organizationId: z.string(), issueId: z.string() }),
     query: z.object({ direction: z.enum(["outgoing", "incoming"]).optional() }),
@@ -80,7 +80,7 @@ const createRelationRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/issues/{issueId}/relations",
   tags: ["relations"],
-  middleware: [rls("write")],
+  middleware: [rls("issue:create")],
   request: {
     params: z.object({ organizationId: z.string(), issueId: z.string() }),
     body: {
@@ -103,7 +103,7 @@ const deleteRelationRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/relations/{id}",
   tags: ["relations"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:delete")],
   request: {
     params: z.object({
       organizationId: z.string(),

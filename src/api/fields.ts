@@ -60,7 +60,7 @@ const listRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/fields",
   tags: ["fields"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: orgParam,
     query: z.object({ entityType: z.string().optional() }),
@@ -81,7 +81,7 @@ const createFieldRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/fields",
   tags: ["fields"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:create")],
   request: {
     params: orgParam,
     body: { content: { "application/json": { schema: createFieldSchema } } },
@@ -100,7 +100,7 @@ const deleteFieldRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/fields/{fieldId}",
   tags: ["fields"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:delete")],
   request: { params: fieldIdParam },
   responses: {
     200: {
@@ -116,7 +116,7 @@ const getValuesRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/fields/values/{entityId}",
   tags: ["fields"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({
       organizationId: z.string(),
@@ -139,7 +139,7 @@ const setValueRoute = createRoute({
   method: "put",
   path: "/workspaces/{organizationId}/fields/{fieldId}/value",
   tags: ["fields"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:edit")],
   request: {
     params: fieldIdParam,
     body: { content: { "application/json": { schema: setValueSchema } } },

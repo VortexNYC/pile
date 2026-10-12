@@ -41,7 +41,7 @@ const exportRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/csv-exports",
   tags: ["csv-exports"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: { content: { "application/json": { schema: exportRequestSchema } } },

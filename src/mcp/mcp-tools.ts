@@ -12255,13 +12255,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "format": "email"
             },
             "role": {
-              "type": "string",
-              "enum": [
-                "owner",
-                "admin",
-                "member",
-                "guest"
-              ]
+              "type": "string"
             },
             "teamId": {
               "type": "string"
@@ -13246,13 +13240,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "minLength": 1
             },
             "role": {
-              "type": "string",
-              "enum": [
-                "owner",
-                "admin",
-                "member",
-                "guest"
-              ]
+              "type": "string"
             }
           },
           "required": [

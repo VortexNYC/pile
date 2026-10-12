@@ -35,7 +35,7 @@ const listLinksRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/entities/{entityType}/{entityId}/links",
   tags: ["links"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: { params: entityParam },
   responses: {
     200: {
@@ -53,7 +53,7 @@ const createLinkRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/entities/{entityType}/{entityId}/links",
   tags: ["links"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:create")],
   request: {
     params: entityParam,
     body: { content: { "application/json": { schema: createLinkSchema } } },
@@ -72,7 +72,7 @@ const deleteLinkRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/links/{linkId}",
   tags: ["links"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:delete")],
   request: {
     params: z.object({ organizationId: z.string(), linkId: z.string() }),
   },

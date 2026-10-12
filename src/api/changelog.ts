@@ -89,7 +89,7 @@ const createEntryRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/changelog",
   tags: ["changelog"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:create")],
   request: {
     params: orgParam,
     body: {
@@ -137,7 +137,7 @@ const getEntryRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/changelog/{entryId}",
   tags: ["changelog"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: { params: entryIdParam },
   responses: {
     200: {
@@ -156,7 +156,7 @@ const updateEntryRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/changelog/{entryId}",
   tags: ["changelog"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:edit")],
   request: {
     params: entryIdParam,
     body: {
@@ -180,7 +180,7 @@ const deleteEntryRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/changelog/{entryId}",
   tags: ["changelog"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:delete")],
   request: { params: entryIdParam },
   responses: {
     200: {
@@ -198,7 +198,7 @@ const publishEntryRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/changelog/{entryId}/publish",
   tags: ["changelog"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:create")],
   request: { params: entryIdParam },
   responses: {
     200: {
@@ -221,7 +221,7 @@ const unpublishEntryRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/changelog/{entryId}/unpublish",
   tags: ["changelog"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:create")],
   request: { params: entryIdParam },
   responses: {
     200: {

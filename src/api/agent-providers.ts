@@ -199,7 +199,7 @@ const catalogRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/agent/providers/catalog",
   tags: ["agent-providers"],
-  middleware: [rls("read", "agent:read")],
+  middleware: [rls("session:view", "agent:read")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -220,7 +220,7 @@ const listConfigsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/agent/providers",
   tags: ["agent-providers"],
-  middleware: [rls("read", "agent:read")],
+  middleware: [rls("session:view", "agent:read")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -238,7 +238,7 @@ const setupStatusRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/agent/setup-status",
   tags: ["agent-providers"],
-  middleware: [rls("read", "agent:read")],
+  middleware: [rls("session:view", "agent:read")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -339,7 +339,7 @@ const webhookRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/agent/providers/{agentId}/hooks",
   tags: ["agent-providers"],
-  middleware: [rls("write", "agent:write")],
+  middleware: [rls("session:create", "agent:write")],
   request: {
     params: z.object({
       organizationId: z.string(),

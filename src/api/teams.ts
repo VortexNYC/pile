@@ -19,6 +19,7 @@ import {
 } from "../global/teams.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
+import { isAdminIdentity } from "../platform/permissions.js";
 import { rls } from "../platform/rls.js";
 import { getWorkspaceStub } from "./stub.js";
 
@@ -94,7 +95,7 @@ const listTeamsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/teams",
   tags: ["teams"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -137,7 +138,7 @@ const getTeamRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/teams/{id}",
   tags: ["teams"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -196,7 +197,7 @@ const listTeamMembersRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/teams/{id}/members",
   tags: ["teams"],
-  middleware: [rls("read")],
+  middleware: [rls("member:view")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -289,7 +290,7 @@ const listUserTeamsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/users/{userId}/teams",
   tags: ["teams"],
-  middleware: [rls("read")],
+  middleware: [rls("member:view")],
   request: {
     params: z.object({ organizationId: z.string(), userId: z.string() }),
   },
@@ -312,9 +313,7 @@ function canManageTeam(
     permissions: string[];
   }
 ) {
-  return (
-    record.ownerId === identity.id || identity.permissions.includes("admin")
-  );
+  return record.ownerId === identity.id || isAdminIdentity(identity);
 }
 
 export function registerTeamRoutes(app: OpenAPIHono<AppContext>) {

@@ -30,7 +30,7 @@ const listUsageRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/usage",
   tags: ["usage"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
     query: z.object({

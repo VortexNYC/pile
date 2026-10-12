@@ -106,3 +106,68 @@ describe("guest access", () => {
     expect(docs.status).toBe(200);
   });
 });
+
+describe("custom roles (dynamic access control)", () => {
+  it("a custom role enforces its statements end to end", async () => {
+    const owner = await createSignedInUser("Role Owner");
+    const limited = await createSignedInUser("Role Limited");
+    const onboarded = await onboardWorkspace(owner.cookie, "Role Space");
+    const auth = await createAuth(env);
+    const db = createD1(env.D1);
+
+    // BA-official role creation — statements live on the
+    // organizationRole row.
+    await auth.api.createOrgRole({
+      body: {
+        organizationId: onboarded.workspace.id,
+        role: "viewer",
+        permission: { issue: ["view"] },
+      },
+      headers: new Headers({ Cookie: owner.cookie }),
+    });
+    await createMembership(
+      db,
+      env,
+      onboarded.workspace.id,
+      limited.userId,
+      "viewer"
+    );
+
+    // view allowed
+    const list = await SELF.fetch(
+      `${origin}/workspaces/${onboarded.workspace.id}/issues`,
+      { headers: { Cookie: limited.cookie, Origin: origin } }
+    );
+    expect(list.status).toBe(200);
+
+    // create denied — the role has no issue:create
+    const create = await SELF.fetch(
+      `${origin}/workspaces/${onboarded.workspace.id}/issues`,
+      {
+        method: "POST",
+        headers: {
+          Cookie: limited.cookie,
+          Origin: origin,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ title: "nope" }),
+      }
+    );
+    expect(create.status).toBe(403);
+
+    // different resource denied
+    const docs = await SELF.fetch(
+      `${origin}/workspaces/${onboarded.workspace.id}/documents`,
+      {
+        method: "POST",
+        headers: {
+          Cookie: limited.cookie,
+          Origin: origin,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ title: "nope" }),
+      }
+    );
+    expect(docs.status).toBe(403);
+  });
+});

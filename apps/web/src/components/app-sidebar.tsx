@@ -38,11 +38,18 @@ import { api, unwrap } from "@/lib/api";
 import { betterAuthClient } from "@/lib/better-auth";
 import { appHref } from "@/lib/router-path";
 
+// Nav items carry the resource they surface — the permission check
+// hides any surface the member's role can't view.
 const NAV = [
   { title: "Overview", path: "", icon: House, exact: true },
-  { title: "Issues", path: "issues", icon: ListChecks },
-  { title: "Support", path: "tickets", icon: Headset },
-  { title: "Documents", path: "documents", icon: FileText },
+  { title: "Issues", path: "issues", icon: ListChecks, resource: "issue" },
+  { title: "Support", path: "tickets", icon: Headset, resource: "ticket" },
+  {
+    title: "Documents",
+    path: "documents",
+    icon: FileText,
+    resource: "document",
+  },
   // opt-in surfaces — hidden unless enabled in settings
   { title: "Cycles", path: "cycles", icon: Timer },
   { title: "Initiatives", path: "initiatives", icon: Flag },
@@ -66,7 +73,12 @@ const SETTINGS = [
     icon: Key,
     admin: true,
   },
-  { title: "Account", path: "settings/account", icon: UserCircle },
+  {
+    title: "Account",
+    path: "settings/account",
+    icon: UserCircle,
+    resource: "account",
+  },
 ] as const;
 
 export function AppSidebar({
@@ -287,8 +299,9 @@ export function AppSidebar({
           <Sidebar.Menu>
             {SETTINGS.filter(
               (item) =>
-                (!isGuest || item.path === "settings/account") &&
-                (!("admin" in item && item.admin) || permissions.isAdmin)
+                ("resource" in item && item.resource === "account") ||
+                (permissions.can("settings", "view") &&
+                  (!("admin" in item && item.admin) || permissions.isAdmin))
             ).map((item) => (
               <Sidebar.MenuButton
                 key={item.path}

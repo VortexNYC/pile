@@ -42,7 +42,7 @@ const listReleasesRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/releases",
   tags: ["releases"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
     query: z.object({
@@ -69,7 +69,7 @@ const createReleaseRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/releases",
   tags: ["releases"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:create")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: { content: { "application/json": { schema: releaseBodySchema } } },
@@ -86,7 +86,7 @@ const getReleaseRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/releases/{id}",
   tags: ["releases"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -102,7 +102,7 @@ const updateReleaseRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/releases/{id}",
   tags: ["releases"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:edit")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
@@ -121,7 +121,7 @@ const deleteReleaseRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/releases/{id}",
   tags: ["releases"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:delete")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },

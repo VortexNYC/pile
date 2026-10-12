@@ -3,6 +3,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
+import { isAdminIdentity } from "../platform/permissions.js";
 import { rls } from "../platform/rls.js";
 import type { SavedViewRecord } from "../workspace/data/index.js";
 import {
@@ -117,7 +118,7 @@ const listSavedViewsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/saved-views",
   tags: ["saved-views"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -137,7 +138,7 @@ const createSavedViewRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/saved-views",
   tags: ["saved-views"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:create")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
@@ -160,7 +161,7 @@ const getSavedViewRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/saved-views/{id}",
   tags: ["saved-views"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -179,7 +180,7 @@ const updateSavedViewRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/saved-views/{id}",
   tags: ["saved-views"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:edit")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
@@ -203,7 +204,7 @@ const favoriteRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/saved-views/{id}/favorite",
   tags: ["saved-views"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:create")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -222,7 +223,7 @@ const unfavoriteRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/saved-views/{id}/favorite",
   tags: ["saved-views"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:delete")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -244,7 +245,7 @@ const viewPreferencesRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/me/view-preferences",
   tags: ["saved-views"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -268,7 +269,7 @@ const updateViewPreferencesRoute = createRoute({
   method: "put",
   path: "/workspaces/{organizationId}/me/view-preferences",
   tags: ["saved-views"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:edit")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
@@ -303,7 +304,7 @@ const deleteSavedViewRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/saved-views/{id}",
   tags: ["saved-views"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:delete")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -319,7 +320,7 @@ function assertViewAccess(
   if (
     record.ownerId !== identity.id &&
     !record.shared &&
-    !identity.permissions.includes("admin")
+    !isAdminIdentity(identity)
   ) {
     throw new VortexError({
       code: "NOT_FOUND",
@@ -511,10 +512,7 @@ export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
         message: "Saved view not found",
       });
     }
-    if (
-      existing.ownerId !== identity.id &&
-      !identity.permissions.includes("admin")
-    ) {
+    if (existing.ownerId !== identity.id && !isAdminIdentity(identity)) {
       throw new VortexError({
         code: "FORBIDDEN",
         status: 403,
@@ -548,10 +546,7 @@ export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
     if (!existing) {
       return c.body(null, 204);
     }
-    if (
-      existing.ownerId !== identity.id &&
-      !identity.permissions.includes("admin")
-    ) {
+    if (existing.ownerId !== identity.id && !isAdminIdentity(identity)) {
       throw new VortexError({
         code: "FORBIDDEN",
         status: 403,

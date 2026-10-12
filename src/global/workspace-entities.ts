@@ -409,7 +409,8 @@ export async function deleteState(
 
 // Memberships
 
-const membershipRoleSchema = z.enum(["owner", "admin", "member", "guest"]);
+// Any BA role name is valid — builtins + dynamic organizationRole rows.
+const membershipRoleSchema = z.string();
 
 function mapMember(row: typeof member.$inferSelect) {
   return {
@@ -435,7 +436,7 @@ export async function createMembership(
   env: AppEnv,
   organizationId: string,
   userId: string,
-  role: "owner" | "admin" | "member" | "guest" = "member"
+  role = "member"
 ) {
   const existing = await db
     .select()
@@ -449,7 +450,11 @@ export async function createMembership(
   }
   const auth = await createAuth(env);
   const result = await auth.api.addMember({
-    body: { userId, role, organizationId },
+    body: {
+      userId,
+      role: role as "owner" | "admin" | "member" | "guest",
+      organizationId,
+    },
   });
   const row = z
     .object({

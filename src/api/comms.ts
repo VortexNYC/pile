@@ -43,7 +43,7 @@ const listEventsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/customers/{customerId}/events",
   tags: ["comms"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: {
     params: customerIdParam,
     query: z.object({ limit: z.coerce.number().default(20) }),
@@ -75,7 +75,7 @@ const createEventRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/customers/{customerId}/events",
   tags: ["comms"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: customerIdParam,
     body: { content: { "application/json": { schema: eventSchema } } },
@@ -96,7 +96,7 @@ const upsertIntegrationRoute = createRoute({
   method: "put",
   path: "/workspaces/{organizationId}/comms/integrations/{source}",
   tags: ["comms"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:edit")],
   request: {
     params: z.object({
       organizationId: z.string(),

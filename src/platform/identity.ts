@@ -69,7 +69,7 @@ export function toApiKeyWorkspaceIdentity(input: unknown): WorkspaceIdentity {
 // Better Auth `ac` roles are the single source of truth — a workspace
 // identity's permissions are the `workspace` statements its member role
 // authorizes. Unknown/future roles degrade to member, never wider.
-const roleMap = {
+export const roleMap = {
   owner: ownerRole,
   admin: adminRole,
   member: memberRole,
@@ -77,16 +77,27 @@ const roleMap = {
 } as const;
 
 export function rolePermissionsFor(role: string): readonly string[] {
-  const roleObject = roleMap[role as keyof typeof roleMap] ?? roleMap.member;
-  return [...(roleObject.statements.workspace ?? [])];
+  const roleObject = roleMap[role as keyof typeof roleMap];
+  // Unknown roles are dynamic organizationRole rows — resolve caller-side.
+  if (!roleObject) return [];
+  return flattenStatements(roleObject.statements);
 }
 
-export const workspaceRoleSchema = z.enum([
-  "owner",
-  "admin",
-  "member",
-  "guest",
-]);
+export function flattenStatements(
+  statements: Record<string, readonly string[] | undefined>
+): string[] {
+  const flat: string[] = [];
+  for (const [resource, actions] of Object.entries(statements)) {
+    for (const action of actions ?? []) {
+      flat.push(`${resource}:${action}`);
+    }
+  }
+  return flat;
+}
+
+// Any BA role name is valid — builtins resolve via roleMap,
+// custom roles resolve through the org's organizationRole rows.
+export const workspaceRoleSchema = z.string();
 
 export function toUserWorkspaceIdentity(
   userId: string,

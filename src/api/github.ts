@@ -53,7 +53,7 @@ const githubUserRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/github/users",
   tags: ["github"],
-  middleware: [rls("write")],
+  middleware: [rls("member:create")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
@@ -81,7 +81,7 @@ const githubInstallRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/github/install",
   tags: ["github"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:create")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
@@ -104,7 +104,7 @@ const githubUsersRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/github/users",
   tags: ["github"],
-  middleware: [rls("read")],
+  middleware: [rls("member:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -124,7 +124,7 @@ const githubInstallationsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/github/installations",
   tags: ["github"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -146,7 +146,7 @@ const githubInstallationDeleteRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/github/installations/{id}",
   tags: ["github"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:delete")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },

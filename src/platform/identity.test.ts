@@ -3,15 +3,19 @@ import { describe, expect, it } from "vitest";
 import { rolePermissionsFor, toApiKeyWorkspaceIdentity } from "./identity.js";
 
 describe("rolePermissionsFor", () => {
-  it("maps each role to its permission set", () => {
-    expect(rolePermissionsFor("owner")).toEqual(["read", "write", "admin"]);
-    expect(rolePermissionsFor("admin")).toEqual(["read", "write", "admin"]);
-    expect(rolePermissionsFor("member")).toEqual(["read", "write"]);
+  it("flattens role statements to resource:action permissions", () => {
+    expect(rolePermissionsFor("owner")).toContain("workspace:admin");
+    expect(rolePermissionsFor("owner")).toContain("issue:delete");
+    expect(rolePermissionsFor("member")).toContain("workspace:write");
+    expect(rolePermissionsFor("member")).toContain("issue:edit");
+    expect(rolePermissionsFor("member")).not.toContain("issue:delete");
+    expect(rolePermissionsFor("guest")).toContain("document:view");
+    expect(rolePermissionsFor("guest")).not.toContain("issue:view");
   });
 
-  it("degrades unknown roles to member, never wider", () => {
-    expect(rolePermissionsFor("viewer")).toEqual(["read", "write"]);
-    expect(rolePermissionsFor("")).toEqual(["read", "write"]);
+  it("returns empty for dynamic roles — resolved via organizationRole", () => {
+    expect(rolePermissionsFor("viewer")).toEqual([]);
+    expect(rolePermissionsFor("")).toEqual([]);
   });
 });
 

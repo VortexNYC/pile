@@ -26,7 +26,7 @@ const listIssueSubscribersRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/issues/{issueId}/subscribers",
   tags: ["issue-subscribers"],
-  middleware: [rls("read")],
+  middleware: [rls("issue:view")],
   request: {
     params: z.object({ organizationId: z.string(), issueId: z.string() }),
   },
@@ -46,7 +46,7 @@ const createIssueSubscriberRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/issues/{issueId}/subscribers",
   tags: ["issue-subscribers"],
-  middleware: [rls("write")],
+  middleware: [rls("issue:create")],
   request: {
     params: z.object({ organizationId: z.string(), issueId: z.string() }),
     body: {
@@ -65,7 +65,7 @@ const deleteIssueSubscriberRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/issues/{issueId}/subscribers/{id}",
   tags: ["issue-subscribers"],
-  middleware: [rls("write")],
+  middleware: [rls("issue:delete")],
   request: {
     params: z.object({
       organizationId: z.string(),

@@ -42,7 +42,7 @@ const getMetricsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/observability/metrics",
   tags: ["observability"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },

@@ -210,7 +210,7 @@ const createCustomerRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/customers",
   tags: ["support-contacts"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: orgParam,
     body: {
@@ -235,7 +235,7 @@ const listCustomersRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/customers",
   tags: ["support-contacts"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: {
     params: orgParam,
     query: listCustomersQuerySchema,
@@ -259,7 +259,7 @@ const getCustomerRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/customers/{customerId}",
   tags: ["support-contacts"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: {
     params: customerIdParam,
   },
@@ -279,7 +279,7 @@ const updateCustomerRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/support/customers/{customerId}",
   tags: ["support-contacts"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:edit")],
   request: {
     params: customerIdParam,
     body: {
@@ -304,7 +304,7 @@ const deleteCustomerRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/support/customers/{customerId}",
   tags: ["support-contacts"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:delete")],
   request: {
     params: customerIdParam,
   },
@@ -329,7 +329,7 @@ const setCustomerCompaniesRoute = createRoute({
   method: "put",
   path: "/workspaces/{organizationId}/support/customers/{customerId}/companies",
   tags: ["support-contacts"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:edit")],
   request: {
     params: customerIdParam,
     body: {
@@ -354,7 +354,7 @@ const setCustomerIdentitiesRoute = createRoute({
   method: "put",
   path: "/workspaces/{organizationId}/support/customers/{customerId}/identities",
   tags: ["support-contacts"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:edit")],
   request: {
     params: customerIdParam,
     body: {
@@ -379,7 +379,7 @@ const createCompanyRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/companies",
   tags: ["support-contacts"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: orgParam,
     body: {
@@ -404,7 +404,7 @@ const listCompaniesRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/companies",
   tags: ["support-contacts"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: {
     params: orgParam,
     query: listCompaniesQuerySchema,
@@ -428,7 +428,7 @@ const getCompanyRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/companies/{companyId}",
   tags: ["support-contacts"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: {
     params: companyIdParam,
   },
@@ -448,7 +448,7 @@ const listCompanyContactsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/companies/{companyId}/contacts",
   tags: ["support-contacts"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: { params: companyIdParam },
   responses: {
     200: {

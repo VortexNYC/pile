@@ -5,6 +5,7 @@ import emojiRegex from "emoji-regex";
 import { createD1 } from "../global/db.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
+import { isAdminIdentity } from "../platform/permissions.js";
 import { rls } from "../platform/rls.js";
 import type { Issue } from "../types/workspace.js";
 import { assertIssueAccess } from "./issue-access.js";
@@ -57,7 +58,7 @@ const listIssueReactionsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/issues/{id}/reactions",
   tags: ["reactions"],
-  middleware: [rls("read")],
+  middleware: [rls("issue:view")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -77,7 +78,7 @@ const createIssueReactionRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/issues/{id}/reactions",
   tags: ["reactions"],
-  middleware: [rls("write")],
+  middleware: [rls("issue:create")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
@@ -98,7 +99,7 @@ const listCommentReactionsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/comments/{commentId}/reactions",
   tags: ["reactions"],
-  middleware: [rls("read")],
+  middleware: [rls("comment:view")],
   request: {
     params: z.object({ organizationId: z.string(), commentId: z.string() }),
   },
@@ -118,7 +119,7 @@ const createCommentReactionRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/comments/{commentId}/reactions",
   tags: ["reactions"],
-  middleware: [rls("write")],
+  middleware: [rls("comment:create")],
   request: {
     params: z.object({ organizationId: z.string(), commentId: z.string() }),
     body: {
@@ -139,7 +140,7 @@ const deleteReactionRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/reactions/{reactionId}",
   tags: ["reactions"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:delete")],
   request: {
     params: z.object({ organizationId: z.string(), reactionId: z.string() }),
   },
@@ -252,10 +253,7 @@ export function registerReactionRoutes(app: OpenAPIHono<AppContext>) {
       const issue = await getIssue(stub, targetIssueId);
       await assertIssueAccess(db, stub, issue, identity);
     }
-    if (
-      reaction.actorId !== identity.id &&
-      !identity.permissions.includes("admin")
-    ) {
+    if (reaction.actorId !== identity.id && !isAdminIdentity(identity)) {
       throw new VortexError({
         code: "FORBIDDEN",
         status: 403,

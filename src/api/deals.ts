@@ -74,7 +74,7 @@ const listDealsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/deals",
   tags: ["deals"],
-  middleware: [rls("read")],
+  middleware: [rls("deal:view")],
   request: {
     params: orgParam,
     query: z.object({
@@ -99,7 +99,7 @@ const createDealRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/deals",
   tags: ["deals"],
-  middleware: [rls("write")],
+  middleware: [rls("deal:create")],
   request: {
     params: orgParam,
     body: {
@@ -120,7 +120,7 @@ const getDealRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/deals/{dealId}",
   tags: ["deals"],
-  middleware: [rls("read")],
+  middleware: [rls("deal:view")],
   request: { params: dealIdParam },
   responses: {
     200: {
@@ -136,7 +136,7 @@ const updateDealRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/deals/{dealId}",
   tags: ["deals"],
-  middleware: [rls("write")],
+  middleware: [rls("deal:edit")],
   request: {
     params: dealIdParam,
     body: {
@@ -157,7 +157,7 @@ const deleteDealRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/deals/{dealId}",
   tags: ["deals"],
-  middleware: [rls("write")],
+  middleware: [rls("deal:delete")],
   request: { params: dealIdParam },
   responses: {
     200: {
@@ -247,7 +247,7 @@ const listDealIssuesRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/deals/{dealId}/issues",
   tags: ["deals"],
-  middleware: [rls("read")],
+  middleware: [rls("deal:view")],
   request: { params: dealIdParam },
   responses: {
     200: {
@@ -265,7 +265,7 @@ const linkIssueRoute = createRoute({
   method: "put",
   path: "/workspaces/{organizationId}/deals/{dealId}/issues",
   tags: ["deals"],
-  middleware: [rls("write")],
+  middleware: [rls("deal:edit")],
   request: {
     params: dealIdParam,
     body: { content: { "application/json": { schema: linkSchema } } },
@@ -284,7 +284,7 @@ const unlinkIssueRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/deals/{dealId}/issues/{issueId}",
   tags: ["deals"],
-  middleware: [rls("write")],
+  middleware: [rls("deal:delete")],
   request: { params: dealIssueParam },
   responses: {
     200: {
@@ -323,7 +323,7 @@ const issueDealsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/issues/{issueId}/deals",
   tags: ["deals"],
-  middleware: [rls("read")],
+  middleware: [rls("issue:view")],
   request: {
     params: z.object({
       organizationId: z.string(),

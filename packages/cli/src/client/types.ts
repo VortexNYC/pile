@@ -5725,8 +5725,7 @@ export interface paths {
                                 id: string;
                                 organizationId: string;
                                 userId: string;
-                                /** @enum {string} */
-                                role: "owner" | "admin" | "member" | "guest";
+                                role: string;
                                 createdAt: string;
                             }[];
                         };
@@ -5749,8 +5748,7 @@ export interface paths {
                 content: {
                     "application/json": {
                         userId: string;
-                        /** @enum {string} */
-                        role?: "owner" | "admin" | "member" | "guest";
+                        role?: string;
                     };
                 };
             };
@@ -5765,8 +5763,7 @@ export interface paths {
                             id: string;
                             organizationId: string;
                             userId: string;
-                            /** @enum {string} */
-                            role: "owner" | "admin" | "member" | "guest";
+                            role: string;
                             createdAt: string;
                         };
                     };
@@ -10666,8 +10663,7 @@ export interface paths {
                     "application/json": {
                         /** Format: email */
                         email: string;
-                        /** @enum {string} */
-                        role: "owner" | "admin" | "member" | "guest";
+                        role: string;
                         teamId?: string;
                     };
                 };

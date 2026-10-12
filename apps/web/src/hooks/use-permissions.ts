@@ -6,6 +6,7 @@ import { betterAuthClient } from "@/lib/better-auth";
 /** Workspace role for the signed-in user — owner/admin are admins,
  * everyone else is a member. Mirrors the API's permission model so the
  * UI only surfaces what the backend would let through. */
+
 export function usePermissions(organizationId: string) {
   const role = useQuery({
     queryKey: wsKey(organizationId, "member-role"),
@@ -22,10 +23,35 @@ export function usePermissions(organizationId: string) {
     | "member"
     | "guest"
     | null;
+  const isAdmin = value === "owner" || value === "admin";
+  const can = (
+    resource:
+      | "issue"
+      | "document"
+      | "project"
+      | "ticket"
+      | "contact"
+      | "customer"
+      | "deal"
+      | "session"
+      | "comment"
+      | "settings",
+    action: "view" | "create" | "edit" | "delete"
+  ): boolean => {
+    if (value === null) return false;
+    if (isAdmin) return true;
+    return (
+      betterAuthClient.organization.checkRolePermission({
+        role: value,
+        permissions: { [resource]: [action] },
+      }) === true
+    );
+  };
   return {
     role: value,
-    isAdmin: value === "owner" || value === "admin",
+    isAdmin,
     isGuest: value === "guest",
+    can,
     isLoaded: role.isSuccess,
   };
 }

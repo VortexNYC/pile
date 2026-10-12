@@ -37,7 +37,7 @@ const uploadRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/files",
   tags: ["files"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:create")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: { content: { "application/json": { schema: uploadBodySchema } } },
@@ -55,7 +55,7 @@ const uploadFromUrlRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/images/from-url",
   tags: ["files"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:create")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: { content: { "application/json": { schema: fromUrlBodySchema } } },
@@ -73,7 +73,7 @@ const getFileRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/files",
   tags: ["files"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
     query: z.object({ key: z.string() }),

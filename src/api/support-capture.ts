@@ -141,7 +141,7 @@ const createPublicKeyRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/capture/public-keys",
   tags: ["support-capture"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
@@ -164,7 +164,7 @@ const listPublicKeysRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/capture/public-keys",
   tags: ["support-capture"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -186,7 +186,7 @@ const revokePublicKeyRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/support/capture/public-keys/{keyId}",
   tags: ["support-capture"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:delete")],
   request: {
     params: z.object({ organizationId: z.string(), keyId: z.string() }),
   },
@@ -233,7 +233,7 @@ const createCaptureLinkRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/capture-links",
   tags: ["support-capture"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
@@ -256,7 +256,7 @@ const listCaptureLinksRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/capture-links",
   tags: ["support-capture"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -278,7 +278,7 @@ const revokeCaptureLinkRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/support/capture-links/{linkId}",
   tags: ["support-capture"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:delete")],
   request: {
     params: z.object({ organizationId: z.string(), linkId: z.string() }),
   },
@@ -2284,7 +2284,7 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
     method: "get",
     path: "/workspaces/{organizationId}/support/captures/{ticketId}/console",
     tags: ["support-capture"],
-    middleware: [rls("read")],
+    middleware: [rls("ticket:view")],
     request: {
       params: z.object({
         organizationId: z.string(),
@@ -2314,7 +2314,7 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
     method: "get",
     path: "/workspaces/{organizationId}/support/captures/{ticketId}/network",
     tags: ["support-capture"],
-    middleware: [rls("read")],
+    middleware: [rls("ticket:view")],
     request: {
       params: z.object({
         organizationId: z.string(),
@@ -2344,7 +2344,7 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
     method: "get",
     path: "/workspaces/{organizationId}/support/captures/{ticketId}/events",
     tags: ["support-capture"],
-    middleware: [rls("read")],
+    middleware: [rls("ticket:view")],
     request: {
       params: z.object({
         organizationId: z.string(),
@@ -2369,7 +2369,7 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
     method: "get",
     path: "/workspaces/{organizationId}/support/captures/{ticketId}/frames",
     tags: ["support-capture"],
-    middleware: [rls("read")],
+    middleware: [rls("ticket:view")],
     request: {
       params: z.object({
         organizationId: z.string(),
@@ -2401,7 +2401,7 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
     method: "get",
     path: "/workspaces/{organizationId}/support/captures/{ticketId}/metadata",
     tags: ["support-capture"],
-    middleware: [rls("read")],
+    middleware: [rls("ticket:view")],
     request: {
       params: z.object({
         organizationId: z.string(),

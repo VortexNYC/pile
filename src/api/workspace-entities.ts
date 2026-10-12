@@ -110,13 +110,13 @@ const membershipSchema = z.object({
   id: z.string(),
   organizationId: z.string(),
   userId: z.string(),
-  role: z.enum(["owner", "admin", "member", "guest"]),
+  role: z.string(),
   createdAt: z.string(),
 });
 
 const membershipBodySchema = z.object({
   userId: z.string().min(1),
-  role: z.enum(["owner", "admin", "member", "guest"]).optional(),
+  role: z.string().optional(),
 });
 
 const roadmapSchema = z.object({
@@ -159,7 +159,7 @@ const listProjectsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/projects",
   tags: ["projects"],
-  middleware: [rls("read")],
+  middleware: [rls("project:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -179,7 +179,7 @@ const createProjectRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/projects",
   tags: ["projects"],
-  middleware: [rls("write")],
+  middleware: [rls("project:create")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
@@ -288,7 +288,7 @@ const listCyclesRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/cycles",
   tags: ["cycles"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -308,7 +308,7 @@ const createCycleRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/cycles",
   tags: ["cycles"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:create")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
@@ -331,7 +331,7 @@ const getCycleRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/cycles/{id}",
   tags: ["cycles"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -349,7 +349,7 @@ const updateCycleRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/cycles/{id}",
   tags: ["cycles"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:edit")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
@@ -372,7 +372,7 @@ const cycleCapacityRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/cycles/{id}/capacity",
   tags: ["cycles"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -425,7 +425,7 @@ const shiftCycleRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/cycles/{id}/shift-all",
   tags: ["cycles"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:create")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
@@ -456,7 +456,7 @@ const startTodayCycleRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/cycles/{id}/start-today",
   tags: ["cycles"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:create")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -472,7 +472,7 @@ const archiveCycleRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/cycles/{id}/archive",
   tags: ["cycles"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:create")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -488,7 +488,7 @@ const unarchiveCycleRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/cycles/{id}/unarchive",
   tags: ["cycles"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:create")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -504,7 +504,7 @@ const deleteCycleRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/cycles/{id}",
   tags: ["cycles"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:delete")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -517,7 +517,7 @@ const listLabelsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/labels",
   tags: ["labels"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -537,7 +537,7 @@ const createLabelRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/labels",
   tags: ["labels"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:create")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
@@ -560,7 +560,7 @@ const getLabelRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/labels/{id}",
   tags: ["labels"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -578,7 +578,7 @@ const updateLabelRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/labels/{id}",
   tags: ["labels"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:edit")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
@@ -601,7 +601,7 @@ const deleteLabelRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/labels/{id}",
   tags: ["labels"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:delete")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -614,7 +614,7 @@ const listMembershipsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/memberships",
   tags: ["memberships"],
-  middleware: [rls("read")],
+  middleware: [rls("member:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -657,7 +657,7 @@ const listRoadmapsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/roadmaps",
   tags: ["roadmaps"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -677,7 +677,7 @@ const createRoadmapRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/roadmaps",
   tags: ["roadmaps"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:create")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
@@ -700,7 +700,7 @@ const getRoadmapRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/roadmaps/{id}",
   tags: ["roadmaps"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -718,7 +718,7 @@ const updateRoadmapRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/roadmaps/{id}",
   tags: ["roadmaps"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:edit")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
@@ -741,7 +741,7 @@ const deleteRoadmapRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/roadmaps/{id}",
   tags: ["roadmaps"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:delete")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -754,7 +754,7 @@ const listInitiativesRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/initiatives",
   tags: ["initiatives"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
     query: z.object({
@@ -777,7 +777,7 @@ const listRoadmapInitiativesRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/roadmaps/{id}/initiatives",
   tags: ["roadmaps"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -797,7 +797,7 @@ const createInitiativeRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/initiatives",
   tags: ["initiatives"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:create")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
@@ -820,7 +820,7 @@ const getInitiativeRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/initiatives/{id}",
   tags: ["initiatives"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -838,7 +838,7 @@ const updateInitiativeRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/initiatives/{id}",
   tags: ["initiatives"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:edit")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
@@ -861,7 +861,7 @@ const deleteInitiativeRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/initiatives/{id}",
   tags: ["initiatives"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:delete")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },

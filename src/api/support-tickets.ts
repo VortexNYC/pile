@@ -312,7 +312,7 @@ const createTicketRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/tickets",
   tags: ["support-tickets"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: orgParam,
     body: {
@@ -337,7 +337,7 @@ const listTicketsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/tickets",
   tags: ["support-tickets"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: {
     params: orgParam,
     query: listTicketsQuerySchema,
@@ -361,7 +361,7 @@ const getTicketRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/tickets/{ticketId}",
   tags: ["support-tickets"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: {
     params: ticketIdParam,
   },
@@ -392,7 +392,7 @@ const listTicketArtifactsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/tickets/{ticketId}/artifacts",
   tags: ["support-tickets"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: {
     params: ticketIdParam,
   },
@@ -414,7 +414,7 @@ const listCapturesRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/captures",
   tags: ["support-tickets"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
     query: z.object({
@@ -456,7 +456,7 @@ const updateTicketRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/support/tickets/{ticketId}",
   tags: ["support-tickets"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:edit")],
   request: {
     params: ticketIdParam,
     body: {
@@ -481,7 +481,7 @@ const addMessageRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/tickets/{ticketId}/messages",
   tags: ["support-tickets"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: ticketIdParam,
     body: {
@@ -506,7 +506,7 @@ const addNoteRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/tickets/{ticketId}/notes",
   tags: ["support-tickets"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: ticketIdParam,
     body: {
@@ -531,7 +531,7 @@ const listEventsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/tickets/{ticketId}/events",
   tags: ["support-tickets"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: {
     params: ticketIdParam,
     query: listEventsQuerySchema,
@@ -555,7 +555,7 @@ const markDoneRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/tickets/{ticketId}/done",
   tags: ["support-tickets"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: ticketIdParam,
   },
@@ -575,7 +575,7 @@ const markTodoRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/tickets/{ticketId}/todo",
   tags: ["support-tickets"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: ticketIdParam,
   },
@@ -595,7 +595,7 @@ const snoozeRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/tickets/{ticketId}/snooze",
   tags: ["support-tickets"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: ticketIdParam,
     body: {
@@ -620,7 +620,7 @@ const setAssigneesRoute = createRoute({
   method: "put",
   path: "/workspaces/{organizationId}/support/tickets/{ticketId}/assignees",
   tags: ["support-tickets"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:edit")],
   request: {
     params: ticketIdParam,
     body: {
@@ -645,7 +645,7 @@ const setLabelsRoute = createRoute({
   method: "put",
   path: "/workspaces/{organizationId}/support/tickets/{ticketId}/labels",
   tags: ["support-tickets"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:edit")],
   request: {
     params: ticketIdParam,
     body: {
@@ -700,7 +700,7 @@ const addVoteRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/tickets/{ticketId}/votes",
   tags: ["support-tickets"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: ticketIdParam,
     body: {
@@ -729,7 +729,7 @@ const removeVoteRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/support/tickets/{ticketId}/votes",
   tags: ["support-tickets"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:delete")],
   request: {
     params: ticketIdParam,
     query: removeVoteQuerySchema,
@@ -750,7 +750,7 @@ const listVotesRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/tickets/{ticketId}/votes",
   tags: ["support-tickets"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: {
     params: ticketIdParam,
   },

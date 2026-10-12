@@ -90,7 +90,8 @@ function WorkspaceLayout() {
   );
 }
 
-/** Guests are docs-only — any off-surface path routes to /documents. */
+/** Redirect members to a surface they can view when they land on a
+ * path their role excludes — mirrors the server's rls gates. */
 function GuestGate({
   workspace,
   children,
@@ -103,14 +104,33 @@ function GuestGate({
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!permissions.isGuest) return;
-    const allowed =
-      pathname.startsWith(`/${workspace.slug}/documents`) ||
-      pathname.startsWith(`/${workspace.slug}/settings/account`);
-    if (!allowed) {
-      void navigate({ to: `/${workspace.slug}/documents` });
+    if (!permissions.isLoaded || permissions.role === null) return;
+    if (permissions.isAdmin) return;
+    // First surface the member can see — the redirect target.
+    const home = permissions.can("document", "view")
+      ? `/${workspace.slug}/documents`
+      : `/${workspace.slug}`;
+    const SURFACE_RESOURCES: Array<
+      [string, Parameters<typeof permissions.can>[0]]
+    > = [
+      ["/issues", "issue"],
+      ["/tickets", "ticket"],
+      ["/documents", "document"],
+      ["/customers", "customer"],
+      ["/contacts", "contact"],
+      ["/deals", "deal"],
+      ["/projects", "project"],
+      ["/sessions", "session"],
+      ["/settings", "settings"],
+    ];
+    const rel = pathname.slice(`/${workspace.slug}`.length);
+    const match = SURFACE_RESOURCES.find(([prefix]) => rel.startsWith(prefix));
+    // Account settings are always allowed; other settings need the role.
+    if (rel.startsWith("/settings/account")) return;
+    if (match && !permissions.can(match[1], "view")) {
+      void navigate({ to: home });
     }
-  }, [pathname, permissions.isGuest, workspace.slug, navigate]);
+  }, [pathname, permissions, workspace.slug, navigate]);
 
   return <>{children}</>;
 }

@@ -57,7 +57,7 @@ const listOAuthClientsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/oauth-clients",
   tags: ["oauth-clients"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -100,7 +100,7 @@ const getOAuthClientRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/oauth-clients/{id}",
   tags: ["oauth-clients"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },

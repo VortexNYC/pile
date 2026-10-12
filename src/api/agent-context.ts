@@ -73,7 +73,7 @@ const getAgentContextRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/agent-context",
   tags: ["agent-context"],
-  middleware: [rls("read")],
+  middleware: [rls("session:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -92,7 +92,7 @@ const putAgentContextRoute = createRoute({
   method: "put",
   path: "/workspaces/{organizationId}/agent-context",
   tags: ["agent-context"],
-  middleware: [rls("write")],
+  middleware: [rls("session:edit")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
@@ -115,7 +115,7 @@ const listAgentRulesRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/agent-context/rules",
   tags: ["agent-context"],
-  middleware: [rls("read")],
+  middleware: [rls("session:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -135,7 +135,7 @@ const listAgentSkillsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/agent-context/skills",
   tags: ["agent-context"],
-  middleware: [rls("read")],
+  middleware: [rls("session:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },

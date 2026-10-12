@@ -79,7 +79,9 @@ export function rls(...allowed: string[]) {
       return;
     }
 
-    const projectAllowed = allowed.filter((p) => p.startsWith("project:"));
+    const projectAllowed = allowed.filter(
+      (p) => p === "project:lead" || p === "project:member"
+    );
     if (projectAllowed.length > 0) {
       const organizationId = c.req.param("organizationId");
       const projectId = c.req.param("projectId") ?? c.req.param("id");
@@ -109,7 +111,15 @@ export function rls(...allowed: string[]) {
       });
     }
 
-    const has = allowed.some((p) => canAccess(identity.permissions, p));
+    // "resource:action" specs (issue:view, document:edit, …) check the
+    // resource statement; bare legacy verbs (read/write/admin) check
+    // the workspace statement.
+    const has = allowed.some((p) => {
+      const [resource, action] = p.includes(":")
+        ? (p.split(":", 2) as [string, string])
+        : (["workspace", p] as const);
+      return canAccess(identity.permissions, action, resource);
+    });
     if (!has) {
       throw new VortexError({
         code: "FORBIDDEN",

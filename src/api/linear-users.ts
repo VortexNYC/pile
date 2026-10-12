@@ -25,7 +25,7 @@ const createLinearUserRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/linear-users",
   tags: ["linear-users"],
-  middleware: [rls("write")],
+  middleware: [rls("settings:create")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
@@ -48,7 +48,7 @@ const listLinearUsersRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/linear-users",
   tags: ["linear-users"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -68,7 +68,7 @@ const getLinearUserRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/linear-users/{linearId}",
   tags: ["linear-users"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string(), linearId: z.string() }),
   },

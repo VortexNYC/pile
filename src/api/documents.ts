@@ -4,10 +4,11 @@ import { eq } from "drizzle-orm";
 
 import { createD1 } from "../global/db.js";
 import { teamMember } from "../global/schema.js";
-import { adminRole, memberRole, ownerRole } from "../platform/access.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
+import { canAccess } from "../platform/permissions.js";
+import { isAdminIdentity } from "../platform/permissions.js";
 import { rls } from "../platform/rls.js";
 import { assertIssueAccess } from "./issue-access.js";
 import { resolveMentions } from "./mentions.js";
@@ -138,19 +139,15 @@ async function assertDocAccess(
   required: "view" | "edit"
 ) {
   const identity = c.get("workspaceIdentity");
-  if (identity.permissions.includes("admin")) return;
+  if (isAdminIdentity(identity)) return;
   // Type-level ceiling: the member's Better Auth role (incl. dynamic
   // organizationRole rows) must allow the action on `document`. Agents
   // authenticate by org-scoped API key, not session — instance grants only.
+  // Type-level ceiling: the identity's resolved permissions (built-in
+  // or dynamic organizationRole) must allow the action on `document`.
+  // Agents authenticate by org-scoped API key — instance grants only.
   if (identity.type === "user" && identity.role) {
-    const role =
-      identity.role === "owner"
-        ? ownerRole
-        : identity.role === "admin"
-          ? adminRole
-          : memberRole;
-    const authorization = role.authorize({ document: [required] });
-    if (!authorization.success) {
+    if (!canAccess(identity.permissions, required, "document")) {
       throw new VortexError({
         code: "FORBIDDEN",
         status: 403,
@@ -174,7 +171,7 @@ async function assertDocAccess(
     documentId,
     identity.id,
     teamIds,
-    identity.role === "guest"
+    !canAccess(identity.permissions, "read")
   );
   if (level === null || (required === "edit" && level === "view")) {
     if (level === null) return notFound();
@@ -190,7 +187,7 @@ const listRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/documents",
   tags: ["documents"],
-  middleware: [rls("read")],
+  middleware: [rls("document:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
     query: z.object({
@@ -225,7 +222,7 @@ const createRouteDef = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/documents",
   tags: ["documents"],
-  middleware: [rls("write")],
+  middleware: [rls("document:create")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
@@ -244,7 +241,7 @@ const getRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/documents/{id}",
   tags: ["documents"],
-  middleware: [rls("read")],
+  middleware: [rls("document:view")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -261,7 +258,7 @@ const updateRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/documents/{id}",
   tags: ["documents"],
-  middleware: [rls("write")],
+  middleware: [rls("document:edit")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
@@ -281,7 +278,7 @@ const deleteRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/documents/{id}",
   tags: ["documents"],
-  middleware: [rls("write")],
+  middleware: [rls("document:delete")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -295,7 +292,7 @@ const restoreRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/documents/{id}/restore",
   tags: ["documents"],
-  middleware: [rls("write")],
+  middleware: [rls("document:create")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -312,7 +309,7 @@ const historyRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/documents/{id}/history",
   tags: ["documents"],
-  middleware: [rls("read")],
+  middleware: [rls("document:view")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -365,7 +362,7 @@ const listSpacesRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/document-spaces",
   tags: ["documents"],
-  middleware: [rls("read")],
+  middleware: [rls("document:view")],
   request: { params: z.object({ organizationId: z.string() }) },
   responses: {
     200: {
@@ -383,7 +380,7 @@ const createSpaceRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/document-spaces",
   tags: ["documents"],
-  middleware: [rls("write")],
+  middleware: [rls("document:create")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
@@ -411,7 +408,7 @@ const updateSpaceRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/document-spaces/{id}",
   tags: ["documents"],
-  middleware: [rls("write")],
+  middleware: [rls("document:edit")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
@@ -440,7 +437,7 @@ const deleteSpaceRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/document-spaces/{id}",
   tags: ["documents"],
-  middleware: [rls("write")],
+  middleware: [rls("document:delete")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -454,7 +451,7 @@ const listDocumentCommentsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/documents/{id}/comments",
   tags: ["documents"],
-  middleware: [rls("read")],
+  middleware: [rls("document:view")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -475,7 +472,7 @@ const createDocumentCommentRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/documents/{id}/comments",
   tags: ["documents"],
-  middleware: [rls("write")],
+  middleware: [rls("document:create")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
@@ -497,7 +494,7 @@ const resolveCommentRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/comments/{commentId}/resolve",
   tags: ["documents"],
-  middleware: [rls("write")],
+  middleware: [rls("comment:create")],
   request: {
     params: z.object({ organizationId: z.string(), commentId: z.string() }),
   },
@@ -514,7 +511,7 @@ const unresolveCommentRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/comments/{commentId}/unresolve",
   tags: ["documents"],
-  middleware: [rls("write")],
+  middleware: [rls("comment:create")],
   request: {
     params: z.object({ organizationId: z.string(), commentId: z.string() }),
   },
@@ -531,7 +528,7 @@ const createShareRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/documents/{id}/share",
   tags: ["documents"],
-  middleware: [rls("write")],
+  middleware: [rls("document:create")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
@@ -558,7 +555,7 @@ const getShareRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/documents/{id}/share",
   tags: ["documents"],
-  middleware: [rls("read")],
+  middleware: [rls("document:view")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -576,7 +573,7 @@ const deleteShareRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/documents/{id}/share/{token}",
   tags: ["documents"],
-  middleware: [rls("write")],
+  middleware: [rls("document:delete")],
   request: {
     params: z.object({
       organizationId: z.string(),
@@ -618,7 +615,7 @@ const watchRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/documents/{id}/watch",
   tags: ["documents"],
-  middleware: [rls("write")],
+  middleware: [rls("document:create")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -632,7 +629,7 @@ const unwatchRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/documents/{id}/watch",
   tags: ["documents"],
-  middleware: [rls("write")],
+  middleware: [rls("document:delete")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -645,7 +642,7 @@ const searchRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/documents/search",
   tags: ["documents"],
-  middleware: [rls("read")],
+  middleware: [rls("document:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
     query: z.object({ q: z.string().min(1) }),
@@ -673,7 +670,7 @@ const setPermissionRoute = createRoute({
   method: "put",
   path: "/workspaces/{organizationId}/documents/{id}/permissions",
   tags: ["documents"],
-  middleware: [rls("write")],
+  middleware: [rls("document:edit")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
     body: { content: { "application/json": { schema: permissionSchema } } },
@@ -688,7 +685,7 @@ const revokePermissionRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/documents/{id}/permissions/{actorId}",
   tags: ["documents"],
-  middleware: [rls("write")],
+  middleware: [rls("document:delete")],
   request: {
     params: z.object({
       organizationId: z.string(),
@@ -705,7 +702,7 @@ const listLinksRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/documents/{id}/links",
   tags: ["documents"],
-  middleware: [rls("read")],
+  middleware: [rls("document:view")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -732,7 +729,7 @@ const listBacklinksRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/documents/{id}/backlinks",
   tags: ["documents"],
-  middleware: [rls("read")],
+  middleware: [rls("document:view")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -752,7 +749,7 @@ const issueDocumentsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/issues/{issueId}/documents",
   tags: ["documents"],
-  middleware: [rls("read")],
+  middleware: [rls("issue:view")],
   request: {
     params: z.object({ organizationId: z.string(), issueId: z.string() }),
   },
@@ -772,7 +769,7 @@ const restoreVersionRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/documents/{id}/history/{entryId}/restore",
   tags: ["documents"],
-  middleware: [rls("write")],
+  middleware: [rls("document:create")],
   request: {
     params: z.object({
       organizationId: z.string(),
@@ -823,10 +820,9 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
       isTemplate: query.isTemplate,
       includeTrashed: query.includeTrashed,
     };
-    const rows =
-      identity.role === "guest"
-        ? await stub.listDocumentsForActor(identity.id, args)
-        : await stub.listDocuments(args);
+    const rows = !canAccess(identity.permissions, "read")
+      ? await stub.listDocumentsForActor(identity.id, args)
+      : await stub.listDocuments(args);
     return c.json({ documents: rows.map(toResponse) });
   });
 

@@ -23,7 +23,7 @@ const searchRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/search",
   tags: ["search"],
-  middleware: [rls("read")],
+  middleware: [rls("settings:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: { content: { "application/json": { schema: searchBodySchema } } },

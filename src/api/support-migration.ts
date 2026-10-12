@@ -57,7 +57,7 @@ const startImportRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/imports",
   tags: ["support-migration"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
@@ -80,7 +80,7 @@ const getImportRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/support/imports/{importId}",
   tags: ["support-migration"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: {
     params: importIdParam,
   },
@@ -101,7 +101,7 @@ const resumeImportRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/imports/{importId}/resume",
   tags: ["support-migration"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: importIdParam,
     body: {
@@ -127,7 +127,7 @@ const cancelImportRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/imports/{importId}/cancel",
   tags: ["support-migration"],
-  middleware: [rls("write")],
+  middleware: [rls("ticket:create")],
   request: {
     params: importIdParam,
   },
@@ -150,7 +150,7 @@ const validateImportRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/support/imports/validate",
   tags: ["support-migration"],
-  middleware: [rls("read")],
+  middleware: [rls("ticket:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {

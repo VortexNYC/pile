@@ -28,7 +28,7 @@ const listRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/issues/{issueId}/external-links",
   tags: ["issue-external-links"],
-  middleware: [rls("read")],
+  middleware: [rls("issue:view")],
   request: {
     params: z.object({ organizationId: z.string(), issueId: z.string() }),
   },
@@ -48,7 +48,7 @@ const createRouteDef = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/issues/{issueId}/external-links",
   tags: ["issue-external-links"],
-  middleware: [rls("write")],
+  middleware: [rls("issue:create")],
   request: {
     params: z.object({ organizationId: z.string(), issueId: z.string() }),
     body: { content: { "application/json": { schema: bodySchema } } },
@@ -65,7 +65,7 @@ const getRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/issues/{issueId}/external-links/{id}",
   tags: ["issue-external-links"],
-  middleware: [rls("read")],
+  middleware: [rls("issue:view")],
   request: {
     params: z.object({
       organizationId: z.string(),
@@ -86,7 +86,7 @@ const updateRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/issues/{issueId}/external-links/{id}",
   tags: ["issue-external-links"],
-  middleware: [rls("write")],
+  middleware: [rls("issue:edit")],
   request: {
     params: z.object({
       organizationId: z.string(),
@@ -108,7 +108,7 @@ const deleteRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/issues/{issueId}/external-links/{id}",
   tags: ["issue-external-links"],
-  middleware: [rls("write")],
+  middleware: [rls("issue:delete")],
   request: {
     params: z.object({
       organizationId: z.string(),
