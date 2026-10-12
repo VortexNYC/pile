@@ -12,11 +12,12 @@ import {
   isNotNull,
   isNull,
   lte,
-  ne,
   notInArray,
+  ne,
   or,
   sql,
 } from "drizzle-orm";
+import type { SQL, SQLWrapper } from "drizzle-orm";
 import type { DrizzleSqliteDODatabase } from "drizzle-orm/durable-sqlite";
 
 import type { AgentSessionStatus } from "../../types/workspace.js";
@@ -885,7 +886,7 @@ export async function getNotificationsForRecipient(
     limit?: number;
     // Restricted issues the recipient isn't granted — their events stay out
     // of the feed entirely (issue_permissions).
-    excludeIssueIds?: string[];
+    excludeIssueCondition?: SQL;
   } = {}
 ) {
   const nowIso = new Date().toISOString();
@@ -894,10 +895,8 @@ export async function getNotificationsForRecipient(
     eq(workspaceNotifications.recipientId, recipientId),
     eq(workspaceNotifications.recipientType, recipientType),
   ];
-  if (options.excludeIssueIds && options.excludeIssueIds.length > 0) {
-    conditions.push(
-      notInArray(workspaceNotifications.issueId, options.excludeIssueIds)
-    );
+  if (options.excludeIssueCondition) {
+    conditions.push(options.excludeIssueCondition);
   }
   if (options.unreadOnly) {
     conditions.push(eq(workspaceNotifications.read, false));
@@ -924,7 +923,7 @@ export async function getUnreadNotificationCount(
   organizationId: string,
   recipientId: string,
   recipientType: RecipientType,
-  excludeIssueIds: string[] = []
+  excludeIssueCondition?: SQL
 ) {
   const nowIso = new Date().toISOString();
   const result = await db
@@ -936,9 +935,7 @@ export async function getUnreadNotificationCount(
         eq(workspaceNotifications.recipientId, recipientId),
         eq(workspaceNotifications.recipientType, recipientType),
         eq(workspaceNotifications.read, false),
-        ...(excludeIssueIds.length > 0
-          ? [notInArray(workspaceNotifications.issueId, excludeIssueIds)]
-          : []),
+        ...(excludeIssueCondition ? [excludeIssueCondition] : []),
         or(
           isNull(workspaceNotifications.snoozedUntil),
           lte(workspaceNotifications.snoozedUntil, nowIso)
@@ -1175,7 +1172,7 @@ type ListAgentSessionsOptions = {
   limit?: number;
   // Restricted issues the caller isn't granted (issue_permissions) —
   // session rows carry lane results that can embed issue content.
-  excludeIssueIds?: string[];
+  excludeIssueCondition?: SQL;
 };
 
 function agentSessionListConditions(
@@ -1188,10 +1185,8 @@ function agentSessionListConditions(
   if (options.issueId) {
     conditions.push(eq(workspaceAgentSessions.issueId, options.issueId));
   }
-  if (options.excludeIssueIds && options.excludeIssueIds.length > 0) {
-    conditions.push(
-      notInArray(workspaceAgentSessions.issueId, options.excludeIssueIds)
-    );
+  if (options.excludeIssueCondition) {
+    conditions.push(options.excludeIssueCondition);
   }
   if (options.status) {
     conditions.push(eq(workspaceAgentSessions.status, options.status));
@@ -2595,17 +2590,17 @@ export function listAuditLog(
     limit?: number;
     // Restricted issues the caller isn't granted — their entries carry
     // field diffs (titles) and stay out of the feed.
-    excludeIssueIds?: string[];
+    excludeIssueCondition?: SQL;
   } = {}
 ) {
   const conditions = [eq(workspaceAuditLog.organizationId, organizationId)];
   if (args.entityType !== undefined) {
     conditions.push(eq(workspaceAuditLog.entityType, args.entityType));
   }
-  if (args.excludeIssueIds && args.excludeIssueIds.length > 0) {
+  if (args.excludeIssueCondition) {
     const hiddenFilter = or(
       ne(workspaceAuditLog.entityType, "issue"),
-      notInArray(workspaceAuditLog.entityId, args.excludeIssueIds)
+      args.excludeIssueCondition
     );
     if (hiddenFilter) {
       conditions.push(hiddenFilter);
@@ -3556,7 +3551,7 @@ export function listExternalLinks(
     entityId?: string;
     // Restricted issues the caller isn't granted — links carry their
     // entity ids, so hide them rather than leaking existence.
-    excludeIssueIds?: string[];
+    excludeIssueCondition?: SQL;
   } = {}
 ) {
   const conditions = [eq(externalLinks.organizationId, organizationId)];
@@ -3564,10 +3559,10 @@ export function listExternalLinks(
     conditions.push(eq(externalLinks.entityType, args.entityType));
   if (args.entityId !== undefined)
     conditions.push(eq(externalLinks.entityId, args.entityId));
-  if (args.excludeIssueIds && args.excludeIssueIds.length > 0) {
+  if (args.excludeIssueCondition) {
     const hiddenFilter = or(
       ne(externalLinks.entityType, "issue"),
-      notInArray(externalLinks.entityId, args.excludeIssueIds)
+      args.excludeIssueCondition
     );
     if (hiddenFilter) {
       conditions.push(hiddenFilter);
@@ -5154,6 +5149,35 @@ export function hasIssueAccess(
 // Ids of every restricted issue the actor cannot see — restricted issues
 // minus the ones their grants cover. List/search/analytics queries exclude
 // this set.
+// SQL-side exclusion for issue visibility — the JS list variant
+// (hiddenIssueIds) is fine for small grant sets, but `grantedOnly`
+// enumerates every issue id and overflows SQLite's variable cap in the
+// notInArray predicate. The subquery keeps the predicate inside SQL.
+export function hiddenIssueCondition(
+  db: WorkspaceDb,
+  col: SQLWrapper,
+  actorId: string,
+  teamIds: string[] = [],
+  grantedOnly = false
+): SQL | undefined {
+  const grantForViewer = or(
+    eq(workspaceIssuePermissions.actorId, actorId),
+    teamIds.length > 0
+      ? and(
+          eq(workspaceIssuePermissions.actorType, "team"),
+          inArray(workspaceIssuePermissions.actorId, teamIds)
+        )
+      : undefined
+  );
+  if (grantedOnly) {
+    // Visible = granted to the viewer — keep the grant-matching ids.
+    return sql`${col} IN (SELECT ${workspaceIssuePermissions.issueId} FROM ${workspaceIssuePermissions} WHERE ${grantForViewer})`;
+  }
+  // Visible = unrestricted OR granted — hide ids that carry a grant
+  // row at all but none for this viewer.
+  return sql`(${col} NOT IN (SELECT ${workspaceIssuePermissions.issueId} FROM ${workspaceIssuePermissions}) OR ${col} IN (SELECT ${workspaceIssuePermissions.issueId} FROM ${workspaceIssuePermissions} WHERE ${grantForViewer}))`;
+}
+
 export function hiddenIssueIds(
   db: WorkspaceDb,
   actorId: string,

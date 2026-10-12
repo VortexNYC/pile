@@ -110,6 +110,8 @@ import {
   workspaceIssueApprovals,
   workspaceIssueHistory,
   workspaceEntityLinks,
+  workspaceAuditLog,
+  externalLinks,
   workspaceSubscriptions,
   workspaceIssues,
   workspaceLinearUsers,
@@ -1229,7 +1231,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       this.organizationId,
       recipientId,
       recipientType,
-      { ...options, excludeIssueIds: this.hiddenIssueIdsFor(viewer) }
+      {
+        ...options,
+        excludeIssueCondition: this.hiddenIssueConditionFor(
+          viewer,
+          workspaceNotifications.issueId
+        ),
+      }
     );
   }
 
@@ -1243,7 +1251,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       this.organizationId,
       recipientId,
       recipientType,
-      this.hiddenIssueIdsFor(viewer)
+      this.hiddenIssueConditionFor(viewer, workspaceNotifications.issueId)
     );
   }
 
@@ -1994,7 +2002,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   ) {
     return data.listExternalLinks(this.db, this.organizationId, {
       ...args,
-      excludeIssueIds: this.hiddenIssueIdsFor(viewer),
+      excludeIssueCondition: this.hiddenIssueConditionFor(
+        viewer,
+        externalLinks.entityId
+      ),
     });
   }
 
@@ -2659,19 +2670,29 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     teamIds: string[] = [],
     grantedOnly = false
   ) {
-    return data.hasIssueAccess(
-      this.db,
-      issueId,
-      actorId,
-      teamIds,
-      grantedOnly
-    );
+    return data.hasIssueAccess(this.db, issueId, actorId, teamIds, grantedOnly);
   }
 
   hiddenIssueIdsFor(viewer?: IssueViewer): string[] {
     if (!viewer) return [];
     return data.hiddenIssueIds(
       this.db,
+      viewer.actorId,
+      viewer.teamIds,
+      viewer.grantedOnly
+    );
+  }
+
+  // SQL-side exclusion predicate — grantedOnly enumerates every issue
+  // and overflows the SQLite variable cap when inlined as ids.
+  hiddenIssueConditionFor(
+    viewer: IssueViewer | undefined,
+    col: Parameters<typeof data.hiddenIssueCondition>[1]
+  ) {
+    if (!viewer) return undefined;
+    return data.hiddenIssueCondition(
+      this.db,
+      col,
       viewer.actorId,
       viewer.teamIds,
       viewer.grantedOnly
@@ -2804,7 +2825,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const { viewer, ...rest } = options;
     return data.listAgentSessions(this.db, this.organizationId, {
       ...rest,
-      excludeIssueIds: this.hiddenIssueIdsFor(viewer),
+      excludeIssueCondition: this.hiddenIssueConditionFor(
+        viewer,
+        workspaceAgentSessions.issueId
+      ),
     });
   }
 
@@ -2820,7 +2844,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const { viewer, ...rest } = options;
     return data.listAgentSessionSummaries(this.db, this.organizationId, {
       ...rest,
-      excludeIssueIds: this.hiddenIssueIdsFor(viewer),
+      excludeIssueCondition: this.hiddenIssueConditionFor(
+        viewer,
+        workspaceAgentSessions.issueId
+      ),
     });
   }
 
@@ -4033,7 +4060,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     await this.ready;
     return data.listAuditLog(this.db, this.organizationId, {
       ...args,
-      excludeIssueIds: this.hiddenIssueIdsFor(viewer),
+      excludeIssueCondition: this.hiddenIssueConditionFor(
+        viewer,
+        workspaceAuditLog.entityId
+      ),
     });
   }
 
@@ -4658,10 +4688,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const conditions = teamIds
       ? [inArray(workspaceIssues.teamId, teamIds)]
       : [];
-    const hiddenIssueIds = this.hiddenIssueIdsFor(viewer);
-    if (hiddenIssueIds.length > 0) {
-      conditions.push(notInArray(workspaceIssues.id, hiddenIssueIds));
-    }
+    const exclude = this.hiddenIssueConditionFor(viewer, workspaceIssues.id);
+    if (exclude) conditions.push(exclude);
     return this.db
       .select({
         group: column,
@@ -4692,10 +4720,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (teamIds) {
       conditions.push(inArray(workspaceIssues.teamId, teamIds));
     }
-    const hiddenIssueIds = this.hiddenIssueIdsFor(viewer);
-    if (hiddenIssueIds.length > 0) {
-      conditions.push(notInArray(workspaceIssues.id, hiddenIssueIds));
-    }
+    const exclude = this.hiddenIssueConditionFor(viewer, workspaceIssues.id);
+    if (exclude) conditions.push(exclude);
     const rows = await this.db
       .select({
         id: workspaceIssues.id,
@@ -4868,10 +4894,11 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (visibleTeamIds) {
       conditions.push(inArray(workspaceIssues.teamId, visibleTeamIds));
     }
-    const hiddenIssueIds = this.hiddenIssueIdsFor(args.viewer);
-    if (hiddenIssueIds.length > 0) {
-      conditions.push(notInArray(workspaceIssues.id, hiddenIssueIds));
-    }
+    const exclude = this.hiddenIssueConditionFor(
+      args.viewer,
+      workspaceIssues.id
+    );
+    if (exclude) conditions.push(exclude);
     if (args.teamId) {
       conditions.push(eq(workspaceIssues.teamId, args.teamId));
     }
