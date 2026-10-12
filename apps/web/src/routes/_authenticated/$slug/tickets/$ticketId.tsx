@@ -1,11 +1,14 @@
 import { Badge } from "@cloudflare/kumo/components/badge";
 import { Button } from "@cloudflare/kumo/components/button";
+import { InputArea } from "@cloudflare/kumo/components/input";
 import { Select } from "@cloudflare/kumo/components/select";
 import { Text } from "@cloudflare/kumo/components/text";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
 
 import { Composer } from "@/components/composer";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EntityLinksRail } from "@/components/entity-links";
 import { EntityPage, RailSection } from "@/components/entity-page";
 import { Feed } from "@/components/feed";
@@ -135,6 +138,34 @@ function TicketDetail() {
     onError: (error) => toastError(error),
     onSettled: invalidate,
   });
+
+  const editNote = useMutation({
+    mutationFn: ({ eventId, body }: { eventId: string; body: string }) =>
+      unwrap(
+        api.PATCH(
+          "/workspaces/{organizationId}/support/tickets/{ticketId}/notes/{eventId}",
+          { params: { path: { ...path, eventId } }, body: { body } }
+        )
+      ),
+    onError: (error) => toastError(error),
+    onSettled: invalidate,
+  });
+  const deleteNote = useMutation({
+    mutationFn: (eventId: string) =>
+      unwrap(
+        api.DELETE(
+          "/workspaces/{organizationId}/support/tickets/{ticketId}/notes/{eventId}",
+          { params: { path: { ...path, eventId } } }
+        )
+      ),
+    onError: (error) => toastError(error),
+    onSettled: invalidate,
+  });
+  const [editingNote, setEditingNote] = useState<{
+    id: string;
+    body: string;
+  } | null>(null);
+  const [deletingNote, setDeletingNote] = useState<string | null>(null);
 
   const send = useMutation({
     mutationFn: async (input: {
@@ -337,17 +368,88 @@ function TicketDetail() {
                         </Badge>
                       }
                       body={
-                        <span className="whitespace-pre-wrap">
-                          {event.note?.body ?? event.message?.textContent}
-                        </span>
+                        isNote && editingNote?.id === event.id ? (
+                          <form
+                            className="flex items-center gap-2"
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              editNote.mutate({
+                                eventId: event.id,
+                                body: editingNote.body,
+                              });
+                              setEditingNote(null);
+                            }}
+                          >
+                            <InputArea
+                              aria-label="Edit note"
+                              value={editingNote.body}
+                              autoResize
+                              minRows={1}
+                              onValueChange={(v) =>
+                                setEditingNote({ id: event.id, body: v })
+                              }
+                            />
+                            <Button type="submit" size="xs" variant="primary">
+                              Save
+                            </Button>
+                            <Button
+                              type="button"
+                              size="xs"
+                              variant="ghost"
+                              onClick={() => setEditingNote(null)}
+                            >
+                              Cancel
+                            </Button>
+                          </form>
+                        ) : (
+                          <span className="whitespace-pre-wrap">
+                            {event.note?.body ?? event.message?.textContent}
+                          </span>
+                        )
                       }
                       timestamp={event.createdAt}
+                      actions={
+                        isNote ? (
+                          <>
+                            <Button
+                              size="xs"
+                              variant="ghost"
+                              onClick={() =>
+                                setEditingNote({
+                                  id: event.id,
+                                  body: event.note?.body ?? "",
+                                })
+                              }
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              size="xs"
+                              variant="ghost"
+                              onClick={() => setDeletingNote(event.id)}
+                            >
+                              Delete
+                            </Button>
+                          </>
+                        ) : undefined
+                      }
                     />
                   );
                 })}
               </Feed>
             )}
           </section>
+          <ConfirmDialog
+            open={deletingNote !== null}
+            onOpenChange={(o) => !o && setDeletingNote(null)}
+            title="Delete note"
+            description="This can't be undone."
+            loading={deleteNote.isPending}
+            onConfirm={() => {
+              if (deletingNote) deleteNote.mutate(deletingNote);
+              setDeletingNote(null);
+            }}
+          />
           <Composer
             aria-label="Ticket reply"
             loading={send.isPending}
