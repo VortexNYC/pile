@@ -36,10 +36,21 @@ jobs:
       - name: Install
         run: vp install --frozen-lockfile
 
+      - name: Resolve PR body
+        # merge_group carries no PR body — pull it via the API using the
+        # queue branch name (…pr-<N>-<sha>).
+        if: github.event_name == 'merge_group'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUM=$(echo "${{ github.event.merge_group.head_ref }}" | grep -oE 'pr-[0-9]+' | cut -d- -f2)
+          BODY=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}" --jq .body)
+          echo "PR_BODY<<__EOF__" >> "$GITHUB_ENV"
+          echo "$BODY" >> "$GITHUB_ENV"
+          echo "__EOF__" >> "$GITHUB_ENV"
+
       - name: Diff coverage
         env:
           DIFF_COVERAGE_BASE: HEAD^1
-          # merge_group commits embed the PR title + body in the message;
-          # pull_request events read it directly.
-          PR_BODY: ${{ github.event.pull_request.body || github.event.merge_group.head_commit.message }}
+          PR_BODY: ${{ github.event.pull_request.body || env.PR_BODY }}
         run: vp run diff-coverage
