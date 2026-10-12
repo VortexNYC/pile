@@ -227,7 +227,7 @@ const ASSET_FILE = /\/[^/]+\.[a-z0-9]+$/i;
  * with no CORS. Asset files resolve directly; every other /app path falls
  * back to index.html for client-side routing.
  */
-function serveConsole(c: Context<AppContext>): Response | Promise<Response> {
+export function serveConsole(c: Context<AppContext>): Response | Promise<Response> {
   const assets = c.env.ASSETS;
   if (!assets) {
     return c.text(
