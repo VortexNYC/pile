@@ -21,6 +21,7 @@ import { PrChip } from "@/components/pr-chip";
 import { ShareButton } from "@/components/share-button";
 import { ErrorState, LoadingState } from "@/components/states";
 import { useFavorites } from "@/hooks/use-favorites";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useTeams } from "@/hooks/use-teams";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap, unwrapEmpty } from "@/lib/api";
@@ -54,6 +55,8 @@ function IssueDetail() {
   const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const permissions = usePermissions(workspace.id);
+  const canDelete = permissions.can("issue", "delete");
   const key = wsKey(organizationId, "issues", issueId);
   const path = { organizationId, id: issueId };
   const teams = useTeams(organizationId);

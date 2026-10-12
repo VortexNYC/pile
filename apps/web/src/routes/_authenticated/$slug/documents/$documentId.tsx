@@ -19,6 +19,7 @@ import { Page } from "@/components/page";
 import { ShareButton } from "@/components/share-button";
 import { ErrorState, LoadingState } from "@/components/states";
 import { useFavorites } from "@/hooks/use-favorites";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap, unwrapEmpty } from "@/lib/api";
 import { markdownHeadings } from "@/lib/headings";
@@ -41,6 +42,8 @@ function DocumentDetail() {
   const [editingContent, setEditingContent] = useState(false);
   const [draft, setDraft] = useState({ title: "", content: "" });
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const permissions = usePermissions(workspace.id);
+  const canDelete = permissions.can("document", "delete");
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const canvasSave = useRef<number | null>(null);
   const key = wsKey(organizationId, "documents", documentId);

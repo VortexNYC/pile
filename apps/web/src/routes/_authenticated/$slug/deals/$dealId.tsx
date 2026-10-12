@@ -15,6 +15,7 @@ import { EntityPage, RailLink, RailSection } from "@/components/entity-page";
 import { FieldMenu } from "@/components/field-menu";
 import { Markdown } from "@/components/markdown";
 import { ErrorState, LoadingState } from "@/components/states";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap } from "@/lib/api";
 import { formatRelative } from "@/lib/labels";
@@ -55,6 +56,8 @@ function DealDetail() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const permissions = usePermissions(workspace.id);
+  const canDelete = permissions.can("deal", "delete");
   const [editingDesc, setEditingDesc] = useState(false);
   const [desc, setDesc] = useState("");
   const key = wsKey(workspace.id, "deals", dealId);

@@ -12,6 +12,7 @@ import { EntityLinksRail } from "@/components/entity-links";
 import { EntityPage, RailLink, RailSection } from "@/components/entity-page";
 import { Page } from "@/components/page";
 import { ErrorState, LoadingState } from "@/components/states";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap, unwrapEmpty } from "@/lib/api";
 import { formatRelative } from "@/lib/labels";
@@ -84,6 +85,8 @@ function CustomerEditor({
   });
   const [name, setName] = useState(customer.name);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const permissions = usePermissions(workspace.id);
+  const canDelete = permissions.can("customer", "delete");
   const [url, setUrl] = useState(customer.url ?? "");
   const [bookingUrl, setBookingUrl] = useState(customer.bookingUrl ?? "");
   const [notes, setNotes] = useState(customer.notes ?? "");

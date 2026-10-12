@@ -118,7 +118,7 @@ const listSavedViewsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/saved-views",
   tags: ["saved-views"],
-  middleware: [rls("settings:view")],
+  middleware: [rls("read")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -138,7 +138,7 @@ const createSavedViewRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/saved-views",
   tags: ["saved-views"],
-  middleware: [rls("settings:create")],
+  middleware: [rls("write")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
@@ -161,7 +161,7 @@ const getSavedViewRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/saved-views/{id}",
   tags: ["saved-views"],
-  middleware: [rls("settings:view")],
+  middleware: [rls("read")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -180,7 +180,7 @@ const updateSavedViewRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/saved-views/{id}",
   tags: ["saved-views"],
-  middleware: [rls("settings:edit")],
+  middleware: [rls("write")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
@@ -204,7 +204,7 @@ const favoriteRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/saved-views/{id}/favorite",
   tags: ["saved-views"],
-  middleware: [rls("settings:create")],
+  middleware: [rls("write")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -223,7 +223,7 @@ const unfavoriteRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/saved-views/{id}/favorite",
   tags: ["saved-views"],
-  middleware: [rls("settings:delete")],
+  middleware: [rls("write")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -245,7 +245,7 @@ const viewPreferencesRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/me/view-preferences",
   tags: ["saved-views"],
-  middleware: [rls("settings:view")],
+  middleware: [rls("read")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -269,7 +269,7 @@ const updateViewPreferencesRoute = createRoute({
   method: "put",
   path: "/workspaces/{organizationId}/me/view-preferences",
   tags: ["saved-views"],
-  middleware: [rls("settings:edit")],
+  middleware: [rls("write")],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
@@ -304,7 +304,7 @@ const deleteSavedViewRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/saved-views/{id}",
   tags: ["saved-views"],
-  middleware: [rls("settings:delete")],
+  middleware: [rls("write")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },

@@ -65,6 +65,12 @@ const SETTINGS = [
     admin: true,
   },
   { title: "Members", path: "settings/members", icon: UsersThree },
+  {
+    title: "Roles",
+    path: "settings/roles",
+    icon: UsersThree,
+    admin: true,
+  },
   { title: "Surfaces", path: "settings/surfaces", icon: Layout },
   { title: "Fields", path: "settings/fields", icon: Layout },
   {
@@ -180,49 +186,61 @@ export function AppSidebar({
               }
             />
             <DropdownMenu.Content className="min-w-40">
-              <DropdownMenu.Item
-                icon={<ListChecks />}
-                onClick={() =>
-                  window.dispatchEvent(new CustomEvent("pile:create-issue"))
-                }
-              >
-                New issue
-              </DropdownMenu.Item>
-              <DropdownMenu.Item
-                icon={<Headset />}
-                onClick={() =>
-                  window.dispatchEvent(new CustomEvent("pile:create-ticket"))
-                }
-              >
-                New ticket
-              </DropdownMenu.Item>
-              <DropdownMenu.Item
-                icon={<FileText />}
-                onClick={() =>
-                  void navigate({
-                    to: "/$slug/documents/new",
-                    params: { slug: workspace.slug },
-                  })
-                }
-              >
-                New document
-              </DropdownMenu.Item>
-              <DropdownMenu.Item
-                icon={<Buildings />}
-                onClick={() =>
-                  window.dispatchEvent(new CustomEvent("pile:create-customer"))
-                }
-              >
-                New customer
-              </DropdownMenu.Item>
-              <DropdownMenu.Item
-                icon={<TrendUp />}
-                onClick={() =>
-                  window.dispatchEvent(new CustomEvent("pile:create-deal"))
-                }
-              >
-                New deal
-              </DropdownMenu.Item>
+              {permissions.can("issue", "create") ? (
+                <DropdownMenu.Item
+                  icon={<ListChecks />}
+                  onClick={() =>
+                    window.dispatchEvent(new CustomEvent("pile:create-issue"))
+                  }
+                >
+                  New issue
+                </DropdownMenu.Item>
+              ) : null}
+              {permissions.can("ticket", "create") ? (
+                <DropdownMenu.Item
+                  icon={<Headset />}
+                  onClick={() =>
+                    window.dispatchEvent(new CustomEvent("pile:create-ticket"))
+                  }
+                >
+                  New ticket
+                </DropdownMenu.Item>
+              ) : null}
+              {permissions.can("document", "create") ? (
+                <DropdownMenu.Item
+                  icon={<FileText />}
+                  onClick={() =>
+                    void navigate({
+                      to: "/$slug/documents/new",
+                      params: { slug: workspace.slug },
+                    })
+                  }
+                >
+                  New document
+                </DropdownMenu.Item>
+              ) : null}
+              {permissions.can("customer", "create") ? (
+                <DropdownMenu.Item
+                  icon={<Buildings />}
+                  onClick={() =>
+                    window.dispatchEvent(
+                      new CustomEvent("pile:create-customer")
+                    )
+                  }
+                >
+                  New customer
+                </DropdownMenu.Item>
+              ) : null}
+              {permissions.can("deal", "create") ? (
+                <DropdownMenu.Item
+                  icon={<TrendUp />}
+                  onClick={() =>
+                    window.dispatchEvent(new CustomEvent("pile:create-deal"))
+                  }
+                >
+                  New deal
+                </DropdownMenu.Item>
+              ) : null}
             </DropdownMenu.Content>
           </DropdownMenu>
           <button
