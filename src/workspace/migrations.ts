@@ -898,6 +898,12 @@ CREATE TABLE IF NOT EXISTS field_values (
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS field_values_entity_idx ON field_values (organization_id, entity_id)`;
 
+const v70 = `CREATE INDEX IF NOT EXISTS user_workspace_preferences_org_user_idx ON user_workspace_preferences (organization_id, user_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS document_content_history_doc_idx ON document_content_history (organization_id, document_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS notification_preferences_user_idx ON notification_preferences (organization_id, user_id)`;
+
 const v69 = `CREATE TABLE comments_new (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -1141,6 +1147,7 @@ export const workspaceMigrations = {
       { idx: 66, when: 66, tag: "v67", breakpoints: false },
       { idx: 67, when: 67, tag: "v68", breakpoints: false },
       { idx: 68, when: 68, tag: "v69", breakpoints: false },
+      { idx: 69, when: 69, tag: "v70", breakpoints: false },
     ],
   },
   migrations: {
@@ -1213,5 +1220,6 @@ export const workspaceMigrations = {
     m0066: v67,
     m0067: v68,
     m0068: v69,
+    m0069: v70,
   },
 } satisfies Parameters<typeof migrate>[1];

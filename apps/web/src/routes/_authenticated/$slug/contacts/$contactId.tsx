@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 
 import { EntityLinksRail } from "@/components/entity-links";
+import { EntityHover } from "@/components/entity-hover";
 import { EntityPage, RailLink, RailSection } from "@/components/entity-page";
 import { ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";

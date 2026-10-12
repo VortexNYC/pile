@@ -5,6 +5,8 @@ import { Text } from "@cloudflare/kumo/components/text";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 
+import { EntityLinksRail } from "@/components/entity-links";
+import { EntityHover } from "@/components/entity-hover";
 import { EntityPage, RailSection } from "@/components/entity-page";
 import { Markdown } from "@/components/markdown";
 import { Page } from "@/components/page";
@@ -143,18 +145,35 @@ function ProjectDetail() {
                   {projectIssues.map((issue) => (
                     <Table.Row key={issue.id}>
                       <Table.Cell>
-                        <Link
-                          to="/$slug/issues/$issueId"
-                          params={{ slug: workspace.slug, issueId: issue.id }}
-                          className="text-kumo-link hover:underline"
+                        <EntityHover
+                          meta={
+                            <Badge variant={issueStatusVariant(issue.status)}>
+                              {issue.status}
+                            </Badge>
+                          }
+                          title={
+                            issue.identifier
+                              ? `${issue.identifier} ${issue.title}`
+                              : issue.title
+                          }
+                          description={issue.description ?? null}
                         >
-                          {issue.identifier ? (
-                            <span className="text-kumo-subtle mr-2">
-                              {issue.identifier}
-                            </span>
-                          ) : null}
-                          {issue.title}
-                        </Link>
+                          <Link
+                            to="/$slug/issues/$issueId"
+                            params={{
+                              slug: workspace.slug,
+                              issueId: issue.id,
+                            }}
+                            className="text-kumo-link hover:underline"
+                          >
+                            {issue.identifier ? (
+                              <span className="text-kumo-subtle mr-2">
+                                {issue.identifier}
+                              </span>
+                            ) : null}
+                            {issue.title}
+                          </Link>
+                        </EntityHover>
                       </Table.Cell>
                       <Table.Cell>
                         <Badge variant={issueStatusVariant(issue.status)}>
@@ -214,6 +233,8 @@ function ProjectDetail() {
         </>
       }
       rail={
+        <>
+        <EntityLinksRail entityType="project" entityId={data.id} />
         <RailSection title="Properties">
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant={projectStatusVariant(data.status)}>
@@ -230,6 +251,7 @@ function ProjectDetail() {
             </div>
           ) : null}
         </RailSection>
+        </>
       }
     />
   );
