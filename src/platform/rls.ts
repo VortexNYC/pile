@@ -130,3 +130,12 @@ export function rls(...allowed: string[]) {
     await next();
   });
 }
+
+/** Member self-service — the workspace identity middleware has already
+ * bound a member-scoped identity; handlers key everything to
+ * identity.id, so no resource statement applies. Used for
+ * notifications and own view-preferences where rls("read") would
+ * wrongly require workspace:read. */
+export const selfService = createMiddleware<AppContext>(async (_c, next) => {
+  await next();
+});

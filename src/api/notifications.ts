@@ -3,7 +3,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 
 import { createD1 } from "../global/db.js";
 import type { AppContext } from "../platform/middleware.js";
-import { rls } from "../platform/rls.js";
+import { selfService } from "../platform/rls.js";
 import { issueViewer } from "./issue-access.js";
 import { getWorkspaceStub } from "./stub.js";
 
@@ -25,7 +25,7 @@ const listNotificationsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/notifications",
   tags: ["notifications"],
-  middleware: [rls("read")],
+  middleware: [selfService],
   request: {
     params: z.object({ organizationId: z.string() }),
     query: z.object({
@@ -63,7 +63,7 @@ const unreadCountRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/notifications/unread-count",
   tags: ["notifications"],
-  middleware: [rls("read")],
+  middleware: [selfService],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -83,7 +83,7 @@ const markReadRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/notifications/{id}/read",
   tags: ["notifications"],
-  middleware: [rls("write")],
+  middleware: [selfService],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -104,7 +104,7 @@ const markUnreadRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/notifications/{id}/unread",
   tags: ["notifications"],
-  middleware: [rls("write")],
+  middleware: [selfService],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -125,7 +125,7 @@ const snoozeRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/notifications/{id}/snooze",
   tags: ["notifications"],
-  middleware: [rls("write")],
+  middleware: [selfService],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
@@ -157,7 +157,7 @@ const markAllReadRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/notifications/mark-all-read",
   tags: ["notifications"],
-  middleware: [rls("write")],
+  middleware: [selfService],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -209,7 +209,7 @@ const getPreferencesRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/notification-preferences",
   tags: ["notifications"],
-  middleware: [rls("read")],
+  middleware: [selfService],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -227,7 +227,7 @@ const putPreferencesRoute = createRoute({
   method: "put",
   path: "/workspaces/{organizationId}/notification-preferences",
   tags: ["notifications"],
-  middleware: [rls("write")],
+  middleware: [selfService],
   request: {
     params: z.object({ organizationId: z.string() }),
     body: {
