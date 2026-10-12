@@ -275,6 +275,11 @@ export function AppSidebar({
             </Sidebar.MenuButton>
             {nav
               .filter((item) => !surfaces.hidden.has(item.path))
+              .filter(
+                (item) =>
+                  !("resource" in item) ||
+                  permissions.can(item.resource as never, "view")
+              )
               .map((item) => (
                 <Sidebar.MenuButton
                   key={item.path}

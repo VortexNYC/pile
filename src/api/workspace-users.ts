@@ -205,7 +205,36 @@ async function findInvitation(
     .get();
 }
 
+const myPermissionsRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/me/permissions",
+  tags: ["memberships"],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "The caller's flattened permissions for the workspace",
+      content: {
+        "application/json": {
+          schema: z.object({
+            role: z.string().nullable(),
+            permissions: z.array(z.string()),
+          }),
+        },
+      },
+    },
+  },
+});
+
 export function registerWorkspaceUserRoutes(app: OpenAPIHono<AppContext>) {
+  app.openapi(myPermissionsRoute, async (c) => {
+    const identity = c.var.workspaceIdentity;
+    return c.json({
+      role: identity.role ?? null,
+      permissions: identity.permissions,
+    });
+  });
   app.openapi(availableUsersRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const { q } = c.req.valid("query");
