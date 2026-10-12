@@ -109,6 +109,29 @@ export function DealsList() {
   }
 
   const open = (deals.data ?? []).filter((d) => !d.archivedAt);
+  const openDeals = open.filter((d) => d.stage !== "won" && d.stage !== "lost");
+  const openValue = openDeals.reduce((s, d) => s + (d.amountCents ?? 0), 0);
+  const weighted = openDeals.reduce(
+    (s, d) =>
+      s +
+      (d.amountCents ?? 0) *
+        ({ lead: 0.1, qualified: 0.25, proposal: 0.5, negotiation: 0.75 }[
+          d.stage as string
+        ] ?? 0),
+    0
+  );
+  const cur = open.find((d) => d.currency)?.currency ?? "USD";
+  const total = new Intl.NumberFormat("en", {
+    style: "currency",
+    currency: cur,
+    maximumFractionDigits: 0,
+  }).format(openValue / 100);
+  const weightedTotal = new Intl.NumberFormat("en", {
+    style: "currency",
+    currency: cur,
+    maximumFractionDigits: 0,
+  }).format(weighted / 100);
+
   if (open.length === 0) {
     return (
       <EmptyState
@@ -121,7 +144,14 @@ export function DealsList() {
 
   return (
     <>
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between">
+        <div className="flex items-baseline gap-3 text-sm">
+          <span className="font-medium text-kumo-default">{total} open</span>
+          <span className="text-kumo-subtle">·</span>
+          <span className="text-kumo-subtle">
+            {weightedTotal} weighted · {openDeals.length} deals
+          </span>
+        </div>
         <Button
           variant="ghost"
           size="sm"

@@ -898,6 +898,8 @@ CREATE TABLE IF NOT EXISTS field_values (
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS field_values_entity_idx ON field_values (organization_id, entity_id)`;
 
+const v62 = `ALTER TABLE customers ADD COLUMN notes TEXT`;
+
 const v61 = `ALTER TABLE deals ADD COLUMN description TEXT
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS deal_issue_links (
@@ -1011,6 +1013,7 @@ export const workspaceMigrations = {
       { idx: 58, when: 58, tag: "v59", breakpoints: false },
       { idx: 59, when: 59, tag: "v60", breakpoints: false },
       { idx: 60, when: 60, tag: "v61", breakpoints: false },
+      { idx: 61, when: 61, tag: "v62", breakpoints: false },
     ],
   },
   migrations: {
@@ -1075,5 +1078,6 @@ export const workspaceMigrations = {
     m0058: v59,
     m0059: v60,
     m0060: v61,
+    m0061: v62,
   },
 } satisfies Parameters<typeof migrate>[1];

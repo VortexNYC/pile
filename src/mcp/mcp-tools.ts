@@ -5028,6 +5028,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdSupportCompaniesCompanyIdContacts",
+    "description": "List support company contacts (GET /workspaces/{organizationId}/support/companies/{companyId}/contacts) Path params (top-level, required): organizationId, companyId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/companies/{companyId}/contacts",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "companyId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "companyId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdSupportCustomers",
     "description": "List support customers (GET /workspaces/{organizationId}/support/customers) Path params (top-level, required): organizationId. Query params (top-level, optional): limit, cursor, companyId, q.",
     "method": "GET",
@@ -6321,7 +6342,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdCustomersId",
-    "description": "Update customer (PATCH /workspaces/{organizationId}/customers/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, url, bookingUrl, logoUrl, externalId, tierId, statusId, ownerId.",
+    "description": "Update customer (PATCH /workspaces/{organizationId}/customers/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, url, bookingUrl, notes, logoUrl, externalId, tierId, statusId, ownerId.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/customers/{id}",
     "inputSchema": {
@@ -6344,6 +6365,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "bookingUrl": {
+              "type": "string",
+              "nullable": true
+            },
+            "notes": {
               "type": "string",
               "nullable": true
             },
@@ -10599,7 +10624,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdCustomers",
-    "description": "Create customer (POST /workspaces/{organizationId}/customers) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, url, bookingUrl, logoUrl, externalId, tierId, statusId, ownerId (* = required).",
+    "description": "Create customer (POST /workspaces/{organizationId}/customers) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, url, bookingUrl, notes, logoUrl, externalId, tierId, statusId, ownerId (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/customers",
     "inputSchema": {
@@ -10619,6 +10644,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "bookingUrl": {
+              "type": "string",
+              "nullable": true
+            },
+            "notes": {
               "type": "string",
               "nullable": true
             },

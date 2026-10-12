@@ -8,7 +8,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { EntityPage, RailSection } from "@/components/entity-page";
+import { EntityPage, RailLink, RailSection } from "@/components/entity-page";
 import { Page } from "@/components/page";
 import { ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
@@ -61,6 +61,7 @@ function CustomerEditor({
     name: string;
     url: string | null;
     bookingUrl: string | null;
+    notes: string | null;
   };
 }) {
   const workspace = useWorkspace();
@@ -84,6 +85,44 @@ function CustomerEditor({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [url, setUrl] = useState(customer.url ?? "");
   const [bookingUrl, setBookingUrl] = useState(customer.bookingUrl ?? "");
+  const [notes, setNotes] = useState(customer.notes ?? "");
+  const companyContacts = useQuery({
+    queryKey: wsKey(workspace.id, "customers", customer.id, "contacts"),
+    queryFn: async () => {
+      const domain = customer.url
+        ?.replace(/^https?:\/\//, "")
+        .replace(/\/.*$/, "")
+        .toLowerCase();
+      if (!domain) return [];
+      const { companies } = await unwrap(
+        api.GET("/workspaces/{organizationId}/support/companies", {
+          params: {
+            path: { organizationId: workspace.id },
+            query: { q: domain },
+          },
+        })
+      );
+      const company = companies.find((c) => c.domain === domain);
+      if (!company) return [];
+      return (
+        await unwrap(
+          api.GET(
+            "/workspaces/{organizationId}/support/companies/{companyId}/contacts",
+            {
+              params: {
+                path: {
+                  organizationId: workspace.id,
+                  companyId: company.id,
+                },
+              },
+            }
+          )
+        )
+      ).contacts;
+    },
+    enabled: !!customer.url,
+  });
+
   const deals = useQuery({
     queryKey: wsKey(workspace.id, "deals", { customerId: customer.id }),
     queryFn: async () =>
@@ -110,6 +149,7 @@ function CustomerEditor({
             name: name.trim(),
             url: url.trim() || undefined,
             bookingUrl: bookingUrl.trim() || undefined,
+            notes: notes.trim() || null,
           },
         })
       ),
@@ -228,6 +268,13 @@ function CustomerEditor({
                     required={false}
                     onChange={(e) => setBookingUrl(e.target.value)}
                   />
+                  <Input
+                    label="Notes"
+                    placeholder="Context on this account"
+                    value={notes}
+                    required={false}
+                    onChange={(e) => setNotes(e.target.value)}
+                  />
                   <div>
                     <Button
                       type="submit"
@@ -269,8 +316,31 @@ function CustomerEditor({
                 ) : (
                   <span className="text-kumo-subtle">No website</span>
                 )}
+                {customer.notes ? (
+                  <p className="text-xs text-kumo-subtle whitespace-pre-wrap border-t border-kumo-line pt-2">
+                    {customer.notes}
+                  </p>
+                ) : null}
               </div>
             </RailSection>
+            {(companyContacts.data?.length ?? 0) > 0 ? (
+              <RailSection title="Contacts">
+                <div className="flex flex-col gap-1.5">
+                  {companyContacts.data!.map((contact) => (
+                    <RailLink
+                      key={contact.id}
+                      to="/$slug/contacts/$contactId"
+                      params={{
+                        slug: workspace.slug,
+                        contactId: contact.id,
+                      }}
+                    >
+                      {contact.fullName ?? contact.email}
+                    </RailLink>
+                  ))}
+                </div>
+              </RailSection>
+            ) : null}
             {(deals.data?.length ?? 0) > 0 ? (
               <RailSection title="Deals">
                 <div className="flex flex-col gap-1.5 text-sm">

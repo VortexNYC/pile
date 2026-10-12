@@ -19,6 +19,7 @@ const customerSchema = z.object({
   name: z.string(),
   url: z.string().nullable(),
   bookingUrl: z.string().nullable(),
+  notes: z.string().nullable(),
   logoUrl: z.string().nullable(),
   externalId: z.string().nullable(),
   tierId: z.string().nullable(),
@@ -32,6 +33,7 @@ const createCustomerSchema = z.object({
   name: z.string().min(1),
   url: z.string().optional(),
   bookingUrl: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
   logoUrl: z.string().optional(),
   externalId: z.string().optional(),
   tierId: z.string().optional(),
@@ -85,6 +87,7 @@ const customerAttachmentSchema = z.object({
   r2Key: z.string(),
   url: z.string(),
   bookingUrl: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
   createdById: z.string().nullable(),
   createdAt: z.string(),
 });

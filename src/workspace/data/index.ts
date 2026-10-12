@@ -2630,6 +2630,7 @@ export interface CustomerInput {
   url?: string | null;
   logoUrl?: string | null;
   bookingUrl?: string | null;
+  notes?: string | null;
   externalId?: string | null;
   tierId?: string | null;
   statusId?: string | null;
@@ -2648,6 +2649,7 @@ export function createCustomer(db: WorkspaceDb, input: CustomerInput) {
       url: input.url ?? null,
       logoUrl: input.logoUrl ?? null,
       bookingUrl: input.bookingUrl ?? null,
+      notes: input.notes ?? null,
       externalId: input.externalId ?? null,
       tierId: input.tierId ?? null,
       statusId: input.statusId ?? null,
@@ -2698,6 +2700,7 @@ export function updateCustomer(
     "url",
     "logoUrl",
     "bookingUrl",
+    "notes",
     "externalId",
     "tierId",
     "statusId",

@@ -28555,6 +28555,10 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "notes": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "logoUrl": {
                             "type": "string",
                             "nullable": true
@@ -28588,6 +28592,7 @@
                           "name",
                           "url",
                           "bookingUrl",
+                          "notes",
                           "logoUrl",
                           "externalId",
                           "tierId",
@@ -28640,6 +28645,10 @@
                     "type": "string",
                     "nullable": true
                   },
+                  "notes": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "logoUrl": {
                     "type": "string"
                   },
@@ -28688,6 +28697,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "notes": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "logoUrl": {
                       "type": "string",
                       "nullable": true
@@ -28721,6 +28734,7 @@
                     "name",
                     "url",
                     "bookingUrl",
+                    "notes",
                     "logoUrl",
                     "externalId",
                     "tierId",
@@ -28785,6 +28799,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "notes": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "logoUrl": {
                       "type": "string",
                       "nullable": true
@@ -28818,6 +28836,7 @@
                     "name",
                     "url",
                     "bookingUrl",
+                    "notes",
                     "logoUrl",
                     "externalId",
                     "tierId",
@@ -28875,6 +28894,10 @@
                     "type": "string",
                     "nullable": true
                   },
+                  "notes": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "logoUrl": {
                     "type": "string"
                   },
@@ -28920,6 +28943,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "notes": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "logoUrl": {
                       "type": "string",
                       "nullable": true
@@ -28953,6 +28980,7 @@
                     "name",
                     "url",
                     "bookingUrl",
+                    "notes",
                     "logoUrl",
                     "externalId",
                     "tierId",
@@ -29065,6 +29093,10 @@
                             "type": "string"
                           },
                           "bookingUrl": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "notes": {
                             "type": "string",
                             "nullable": true
                           },
@@ -29188,6 +29220,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "notes": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "createdById": {
                       "type": "string",
                       "nullable": true
@@ -29286,6 +29322,10 @@
                       "type": "string"
                     },
                     "bookingUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "notes": {
                       "type": "string",
                       "nullable": true
                     },
@@ -33794,6 +33834,199 @@
           }
         },
         "summary": "List support companies"
+      }
+    },
+    "/workspaces/{organizationId}/support/companies/{companyId}/contacts": {
+      "get": {
+        "tags": [
+          "support-contacts"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "companyId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Contacts in a company",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "contacts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "userId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "externalId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "externalSource": {
+                            "type": "string"
+                          },
+                          "email": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "phone": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "emailOptOut": {
+                            "type": "boolean"
+                          },
+                          "emailOptOutAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          },
+                          "companies": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "customerId": {
+                                  "type": "string"
+                                },
+                                "companyId": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "isPrimary": {
+                                  "type": "boolean"
+                                },
+                                "createdAt": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "customerId",
+                                "companyId",
+                                "name",
+                                "isPrimary",
+                                "createdAt"
+                              ]
+                            }
+                          },
+                          "identities": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "customerId": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "email",
+                                    "phone",
+                                    "slack",
+                                    "msteams",
+                                    "discord",
+                                    "whatsapp",
+                                    "chat",
+                                    "api",
+                                    "social",
+                                    "custom"
+                                  ]
+                                },
+                                "subType": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "value": {
+                                  "type": "string"
+                                },
+                                "isPrimary": {
+                                  "type": "boolean"
+                                },
+                                "createdAt": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "customerId",
+                                "type",
+                                "subType",
+                                "value",
+                                "isPrimary",
+                                "createdAt"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "userId",
+                          "externalId",
+                          "externalSource",
+                          "email",
+                          "fullName",
+                          "phone",
+                          "emailOptOut",
+                          "emailOptOutAt",
+                          "createdAt",
+                          "updatedAt",
+                          "companies",
+                          "identities"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "contacts"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List support company contacts"
       }
     },
     "/workspaces/{organizationId}/support/companies/{companyId}": {

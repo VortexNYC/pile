@@ -14817,6 +14817,7 @@ export interface paths {
                                 name: string;
                                 url: string | null;
                                 bookingUrl: string | null;
+                                notes: string | null;
                                 logoUrl: string | null;
                                 externalId: string | null;
                                 tierId: string | null;
@@ -14847,6 +14848,7 @@ export interface paths {
                         name: string;
                         url?: string;
                         bookingUrl?: string | null;
+                        notes?: string | null;
                         logoUrl?: string;
                         externalId?: string;
                         tierId?: string;
@@ -14868,6 +14870,7 @@ export interface paths {
                             name: string;
                             url: string | null;
                             bookingUrl: string | null;
+                            notes: string | null;
                             logoUrl: string | null;
                             externalId: string | null;
                             tierId: string | null;
@@ -14918,6 +14921,7 @@ export interface paths {
                             name: string;
                             url: string | null;
                             bookingUrl: string | null;
+                            notes: string | null;
                             logoUrl: string | null;
                             externalId: string | null;
                             tierId: string | null;
@@ -14987,6 +14991,7 @@ export interface paths {
                         name?: string;
                         url?: string;
                         bookingUrl?: string | null;
+                        notes?: string | null;
                         logoUrl?: string;
                         externalId?: string;
                         tierId?: string;
@@ -15008,6 +15013,7 @@ export interface paths {
                             name: string;
                             url: string | null;
                             bookingUrl: string | null;
+                            notes: string | null;
                             logoUrl: string | null;
                             externalId: string | null;
                             tierId: string | null;
@@ -15066,6 +15072,7 @@ export interface paths {
                                 r2Key: string;
                                 url: string;
                                 bookingUrl?: string | null;
+                                notes?: string | null;
                                 createdById: string | null;
                                 createdAt: string;
                             }[];
@@ -15119,6 +15126,7 @@ export interface paths {
                             r2Key: string;
                             url: string;
                             bookingUrl?: string | null;
+                            notes?: string | null;
                             createdById: string | null;
                             createdAt: string;
                         };
@@ -15183,6 +15191,7 @@ export interface paths {
                             r2Key: string;
                             url: string;
                             bookingUrl?: string | null;
+                            notes?: string | null;
                             createdById: string | null;
                             createdAt: string;
                         };
@@ -17353,6 +17362,78 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/companies/{companyId}/contacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List support company contacts */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    companyId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Contacts in a company */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            contacts: {
+                                id: string;
+                                organizationId: string;
+                                userId: string | null;
+                                externalId: string | null;
+                                externalSource: string;
+                                email: string;
+                                fullName: string | null;
+                                phone: string | null;
+                                emailOptOut: boolean;
+                                emailOptOutAt: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                companies: {
+                                    id: string;
+                                    customerId: string;
+                                    companyId: string;
+                                    name: string;
+                                    isPrimary: boolean;
+                                    createdAt: string;
+                                }[];
+                                identities: {
+                                    id: string;
+                                    customerId: string;
+                                    /** @enum {string} */
+                                    type: "email" | "phone" | "slack" | "msteams" | "discord" | "whatsapp" | "chat" | "api" | "social" | "custom";
+                                    subType: string | null;
+                                    value: string;
+                                    isPrimary: boolean;
+                                    createdAt: string;
+                                }[];
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;

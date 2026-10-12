@@ -423,6 +423,24 @@ const getCompanyRoute = createRoute({
   },
 });
 
+const listCompanyContactsRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/support/companies/{companyId}/contacts",
+  tags: ["support-contacts"],
+  middleware: [rls("read")],
+  request: { params: companyIdParam },
+  responses: {
+    200: {
+      description: "Contacts in a company",
+      content: {
+        "application/json": {
+          schema: z.object({ contacts: z.array(supportCustomerSchema) }),
+        },
+      },
+    },
+  },
+});
+
 export function registerSupportContactRoutes(app: OpenAPIHono<AppContext>) {
   // Public unsubscribe — always returns ok whether or not the email exists
   // (no existence oracle). Per-IP hourly cap.
@@ -622,6 +640,29 @@ export function registerSupportContactRoutes(app: OpenAPIHono<AppContext>) {
       q: query.q,
     });
     return c.json({ companies, nextCursor });
+  });
+
+  app.openapi(listCompanyContactsRoute, async (c) => {
+    const { organizationId, companyId } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const { customers } = await listCustomers(db, organizationId, {
+      limit: 100,
+      companyId,
+    });
+    const contacts = await Promise.all(
+      customers.map((customer) =>
+        getCustomerById(db, organizationId, customer.id)
+      )
+    );
+    return c.json(
+      {
+        contacts: contacts.filter(
+          (customer): customer is NonNullable<typeof customer> =>
+            customer !== null
+        ),
+      },
+      200
+    );
   });
 
   app.openapi(getCompanyRoute, async (c) => {
