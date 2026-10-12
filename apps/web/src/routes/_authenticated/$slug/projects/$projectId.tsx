@@ -5,8 +5,8 @@ import { Text } from "@cloudflare/kumo/components/text";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 
-import { EntityLinksRail } from "@/components/entity-links";
 import { EntityHover } from "@/components/entity-hover";
+import { EntityLinksRail } from "@/components/entity-links";
 import { EntityPage, RailSection } from "@/components/entity-page";
 import { Markdown } from "@/components/markdown";
 import { Page } from "@/components/page";
@@ -234,23 +234,23 @@ function ProjectDetail() {
       }
       rail={
         <>
-        <EntityLinksRail entityType="project" entityId={data.id} />
-        <RailSection title="Properties">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={projectStatusVariant(data.status)}>
-              {data.status}
-            </Badge>
-            <Badge variant={projectHealthVariant(data.health)}>
-              {data.health.replace("_", " ")}
-            </Badge>
-          </div>
-          {data.startDate ? (
-            <div className="text-sm text-kumo-subtle">
-              {data.startDate.slice(0, 10)} →{" "}
-              {data.endDate?.slice(0, 10) ?? "—"}
+          <EntityLinksRail entityType="project" entityId={data.id} />
+          <RailSection title="Properties">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant={projectStatusVariant(data.status)}>
+                {data.status}
+              </Badge>
+              <Badge variant={projectHealthVariant(data.health)}>
+                {data.health.replace("_", " ")}
+              </Badge>
             </div>
-          ) : null}
-        </RailSection>
+            {data.startDate ? (
+              <div className="text-sm text-kumo-subtle">
+                {data.startDate.slice(0, 10)} →{" "}
+                {data.endDate?.slice(0, 10) ?? "—"}
+              </div>
+            ) : null}
+          </RailSection>
         </>
       }
     />

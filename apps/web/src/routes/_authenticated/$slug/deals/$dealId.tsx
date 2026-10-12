@@ -10,8 +10,8 @@ import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { CustomFieldsRail } from "@/components/custom-fields-rail";
-import { EntityLinksRail } from "@/components/entity-links";
 import { EntityHover } from "@/components/entity-hover";
+import { EntityLinksRail } from "@/components/entity-links";
 import { EntityPage, RailLink, RailSection } from "@/components/entity-page";
 import { FieldMenu } from "@/components/field-menu";
 import { Markdown } from "@/components/markdown";
