@@ -1,5 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
+
+import { Button } from "@cloudflare/kumo/components/button";
+import { Select } from "@cloudflare/kumo/components/select";
 import {
   AuthProvider,
   InviteMemberForm,
@@ -53,8 +57,56 @@ function MembersSettings() {
             canManageMembers={canManage}
             roleOptions={roleOptions}
           />
+          {canManage ? <ViewAs workspaceId={workspace.id} /> : null}
         </div>
       </Page>
     </AuthProvider>
+  );
+}
+
+
+/** Admin "view as" — swap the session for a member's via BA's
+ * impersonateUser; the banner in the shell offers the way back. */
+function ViewAs({ workspaceId }: { workspaceId: string }) {
+  const [userId, setUserId] = useState("");
+  const members = useQuery({
+    queryKey: wsKey(workspaceId, "impersonate-members"),
+    queryFn: async () => {
+      const result = await betterAuthClient.organization.listMembers({
+        query: { organizationId: workspaceId },
+      });
+      return (result.data?.members ?? []) as {
+        userId: string;
+        user: { name?: string | null; email?: string | null };
+      }[];
+    },
+  });
+  const impersonate = useMutation({
+    mutationFn: async () => {
+      await betterAuthClient.admin.impersonateUser({ userId });
+      window.location.href = "/app";
+    },
+  });
+  return (
+    <div className="flex items-center gap-3">
+      <Select
+        value={userId}
+        onValueChange={(v) => setUserId(v ?? "")}
+        placeholder="View as member…"
+      >
+        {(members.data ?? []).map((m) => (
+          <Select.Option key={m.userId} value={m.userId}>
+            {m.user.name ?? m.user.email ?? m.userId}
+          </Select.Option>
+        ))}
+      </Select>
+      <Button
+        variant="secondary"
+        onClick={() => impersonate.mutate()}
+        disabled={!userId || impersonate.isPending}
+      >
+        View as
+      </Button>
+    </div>
   );
 }
