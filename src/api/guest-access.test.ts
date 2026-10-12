@@ -77,7 +77,7 @@ describe("guest access", () => {
       env,
       onboarded.workspace.id,
       guest.userId,
-      "guest"
+      "guest" as "member"
     );
 
     // sanity: the guest session resolves

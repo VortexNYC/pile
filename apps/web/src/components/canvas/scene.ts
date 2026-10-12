@@ -68,14 +68,6 @@ export function screenToScene(
   return [sx / vp.zoom + vp.scrollX, sy / vp.zoom + vp.scrollY];
 }
 
-export function sceneToScreen(
-  x: number,
-  y: number,
-  vp: Viewport
-): [number, number] {
-  return [(x - vp.scrollX) * vp.zoom, (y - vp.scrollY) * vp.zoom];
-}
-
 /** Axis-aligned bounds of an element (points expand it). */
 export function bounds(el: CanvasElement): {
   x: number;

@@ -435,7 +435,7 @@ export async function createMembership(
   env: AppEnv,
   organizationId: string,
   userId: string,
-  role: "owner" | "admin" | "member" = "member"
+  role: "owner" | "admin" | "member" | "guest" = "member"
 ) {
   const existing = await db
     .select()

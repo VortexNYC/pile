@@ -110,13 +110,13 @@ const membershipSchema = z.object({
   id: z.string(),
   organizationId: z.string(),
   userId: z.string(),
-  role: z.enum(["owner", "admin", "member"]),
+  role: z.enum(["owner", "admin", "member", "guest"]),
   createdAt: z.string(),
 });
 
 const membershipBodySchema = z.object({
   userId: z.string().min(1),
-  role: z.enum(["owner", "admin", "member"]).optional(),
+  role: z.enum(["owner", "admin", "member", "guest"]).optional(),
 });
 
 const roadmapSchema = z.object({

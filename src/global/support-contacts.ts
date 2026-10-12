@@ -70,26 +70,6 @@ export type SupportCustomerIdentity = {
   createdAt: string;
 };
 
-export type SupportCompanyInput = {
-  id?: string;
-  organizationId: string;
-  name: string;
-  domain?: string | null;
-  externalId?: string | null;
-  externalSource?: string;
-};
-
-export type SupportCompany = {
-  id: string;
-  organizationId: string;
-  name: string;
-  domain: string | null;
-  externalId: string | null;
-  externalSource: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
 export async function createCustomer(
   db: D1Client,
   input: SupportCustomerInput
