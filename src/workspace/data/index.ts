@@ -2344,6 +2344,29 @@ export function listDocuments(
     .all();
 }
 
+/** List scope: open docs plus docs the actor is granted on —
+ * restricted docs disappear from the list for ungranted members. */
+export function listDocumentsVisibleTo(
+  db: WorkspaceDb,
+  organizationId: string,
+  actorId: string,
+  teamIds: string[] = [],
+  args: ListDocumentsArgs = {}
+) {
+  const all = listDocuments(db, organizationId, args);
+  const grants = db
+    .select()
+    .from(workspaceDocumentPermissions)
+    .where(eq(workspaceDocumentPermissions.organizationId, organizationId))
+    .all();
+  const restricted = new Set(grants.map((g) => g.documentId));
+  const actorSet = new Set([actorId, ...teamIds]);
+  const granted = new Set(
+    grants.filter((g) => actorSet.has(g.actorId)).map((g) => g.documentId)
+  );
+  return all.filter((d) => !restricted.has(d.id) || granted.has(d.id));
+}
+
 /** Guest-scope: docs visible iff the actor holds an explicit grant —
  * default-deny, matching "shared with me" semantics. */
 export function listDocumentsForActor(
@@ -4945,6 +4968,14 @@ export function listDocumentWatchers(
 
 // ---- document permissions & links ----
 
+export function listDocumentPermissions(db: WorkspaceDb, documentId: string) {
+  return db
+    .select()
+    .from(workspaceDocumentPermissions)
+    .where(eq(workspaceDocumentPermissions.documentId, documentId))
+    .all();
+}
+
 export function setDocumentPermission(
   db: WorkspaceDb,
   organizationId: string,
@@ -5002,14 +5033,6 @@ export function revokeDocumentPermission(
       .returning()
       .all().length > 0
   );
-}
-
-export function listDocumentPermissions(db: WorkspaceDb, documentId: string) {
-  return db
-    .select()
-    .from(workspaceDocumentPermissions)
-    .where(eq(workspaceDocumentPermissions.documentId, documentId))
-    .all();
 }
 
 // Returns the effective level for an actor, or null when the doc is
