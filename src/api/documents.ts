@@ -834,11 +834,21 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
       isTemplate: query.isTemplate,
       includeTrashed: query.includeTrashed,
     };
+    const teamIds =
+      identity.type === "user"
+        ? (
+            await createD1(c.env.D1)
+              .select({ teamId: teamMember.teamId })
+              .from(teamMember)
+              .where(eq(teamMember.userId, identity.id))
+              .all()
+          ).map((r: { teamId: string }) => r.teamId)
+        : [];
     const rows = isAdminIdentity(identity)
       ? await stub.listDocuments(args)
       : !canAccess(identity.permissions, "read")
         ? await stub.listDocumentsForActor(identity.id, args)
-        : await stub.listDocumentsVisibleTo(identity.id, args);
+        : await stub.listDocumentsVisibleTo(identity.id, teamIds, args);
     return c.json({ documents: rows.map(toResponse) });
   });
 

@@ -2590,12 +2590,14 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   listDocumentsVisibleTo(
     actorId: string,
+    teamIds: string[] = [],
     args: data.ListDocumentsArgs = {}
   ) {
     return data.listDocumentsVisibleTo(
       this.db,
       this.organizationId,
       actorId,
+      teamIds,
       args
     );
   }

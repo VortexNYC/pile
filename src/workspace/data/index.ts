@@ -2350,20 +2350,19 @@ export function listDocumentsVisibleTo(
   db: WorkspaceDb,
   organizationId: string,
   actorId: string,
+  teamIds: string[] = [],
   args: ListDocumentsArgs = {}
 ) {
   const all = listDocuments(db, organizationId, args);
   const grants = db
-    .select({
-      documentId: workspaceDocumentPermissions.documentId,
-      actorId: workspaceDocumentPermissions.actorId,
-    })
+    .select()
     .from(workspaceDocumentPermissions)
     .where(eq(workspaceDocumentPermissions.organizationId, organizationId))
     .all();
   const restricted = new Set(grants.map((g) => g.documentId));
+  const actorSet = new Set([actorId, ...teamIds]);
   const granted = new Set(
-    grants.filter((g) => g.actorId === actorId).map((g) => g.documentId)
+    grants.filter((g) => actorSet.has(g.actorId)).map((g) => g.documentId)
   );
   return all.filter((d) => !restricted.has(d.id) || granted.has(d.id));
 }
@@ -4969,10 +4968,7 @@ export function listDocumentWatchers(
 
 // ---- document permissions & links ----
 
-export function listDocumentPermissions(
-  db: WorkspaceDb,
-  documentId: string
-) {
+export function listDocumentPermissions(db: WorkspaceDb, documentId: string) {
   return db
     .select()
     .from(workspaceDocumentPermissions)
