@@ -192,8 +192,8 @@ export function registerReactionRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     const stub = await getStub(c.env, organizationId);
-    if (comment.issueId) {
-      const issue = await getIssue(stub, comment.issueId);
+    if (comment.entityId) {
+      const issue = await getIssue(stub, comment.entityId);
       await assertIssueAccess(db, stub, issue, identity);
     }
     const rows = await stub.listReactions("comment", commentId);
@@ -216,8 +216,8 @@ export function registerReactionRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     const stub = await getStub(c.env, organizationId);
-    if (comment.issueId) {
-      const issue = await getIssue(stub, comment.issueId);
+    if (comment.entityId) {
+      const issue = await getIssue(stub, comment.entityId);
       await assertIssueAccess(db, stub, issue, identity);
     }
     const reaction = await stub.createReaction({
@@ -246,7 +246,7 @@ export function registerReactionRoutes(app: OpenAPIHono<AppContext>) {
       reaction.targetType === "issue"
         ? reaction.targetId
         : reaction.targetType === "comment"
-          ? (await stub.getComment(reaction.targetId))?.issueId
+          ? (await stub.getComment(reaction.targetId))?.entityId
           : undefined;
     if (targetIssueId) {
       const issue = await getIssue(stub, targetIssueId);

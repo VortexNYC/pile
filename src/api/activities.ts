@@ -100,7 +100,7 @@ export function registerActivityRoutes(app: OpenAPIHono<AppContext>) {
       ...comments.map((item) => ({
         kind: "comment" as const,
         id: item.id,
-        issueId: item.issueId,
+        issueId: item.entityId,
         body: item.body,
         authorId: item.authorId,
         externalAuthor: item.externalAuthor,

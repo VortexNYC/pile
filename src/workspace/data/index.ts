@@ -30,10 +30,7 @@ import {
   workspaceDocumentLinks,
   workspaceDocumentPermissions,
   workspaceDocuments,
-  workspaceDocumentShares,
-  workspaceIssueShares,
   workspaceDocumentSpaces,
-  workspaceDocumentWatchers,
   workspaceEntityAttachments,
   workspaceEntityLinks,
   workspaceAgentProviderConfigs,
@@ -51,8 +48,9 @@ import {
   workspaceCustomerTiers,
   workspaceIssueApprovals,
   workspaceIssuePermissions,
+  workspaceShares,
+  workspaceSubscriptions,
   workspaceIssues,
-  workspaceIssueSubscribers,
   workspaceLinearUsers,
   workspaceNotificationPreferences,
   workspaceNotifications,
@@ -74,6 +72,22 @@ export type WorkspaceDb = DrizzleSqliteDODatabase<typeof workspaceSchema>;
 
 // ---- issue_subscribers ----
 
+function subscriptionAsIssueSubscriber(row: {
+  id: string;
+  organizationId: string;
+  entityId: string;
+  userId: string;
+  createdAt: string;
+}) {
+  return {
+    id: row.id,
+    organizationId: row.organizationId,
+    issueId: row.entityId,
+    linearUserId: row.userId,
+    createdAt: row.createdAt,
+  };
+}
+
 export function listIssueSubscribers(
   db: WorkspaceDb,
   organizationId: string,
@@ -81,14 +95,16 @@ export function listIssueSubscribers(
 ) {
   return db
     .select()
-    .from(workspaceIssueSubscribers)
+    .from(workspaceSubscriptions)
     .where(
       and(
-        eq(workspaceIssueSubscribers.organizationId, organizationId),
-        eq(workspaceIssueSubscribers.issueId, issueId)
+        eq(workspaceSubscriptions.organizationId, organizationId),
+        eq(workspaceSubscriptions.entityType, "issue"),
+        eq(workspaceSubscriptions.entityId, issueId)
       )
     )
-    .all();
+    .all()
+    .map(subscriptionAsIssueSubscriber);
 }
 
 export function getIssueSubscriber(
@@ -96,16 +112,17 @@ export function getIssueSubscriber(
   organizationId: string,
   id: string
 ) {
-  return db
+  const row = db
     .select()
-    .from(workspaceIssueSubscribers)
+    .from(workspaceSubscriptions)
     .where(
       and(
-        eq(workspaceIssueSubscribers.organizationId, organizationId),
-        eq(workspaceIssueSubscribers.id, id)
+        eq(workspaceSubscriptions.organizationId, organizationId),
+        eq(workspaceSubscriptions.id, id)
       )
     )
     .get();
+  return row ? subscriptionAsIssueSubscriber(row) : undefined;
 }
 
 export async function deleteIssueSubscriber(
@@ -114,11 +131,11 @@ export async function deleteIssueSubscriber(
   id: string
 ) {
   await db
-    .delete(workspaceIssueSubscribers)
+    .delete(workspaceSubscriptions)
     .where(
       and(
-        eq(workspaceIssueSubscribers.organizationId, organizationId),
-        eq(workspaceIssueSubscribers.id, id)
+        eq(workspaceSubscriptions.organizationId, organizationId),
+        eq(workspaceSubscriptions.id, id)
       )
     );
 }
@@ -130,23 +147,25 @@ export async function createIssueSubscriber(
 ) {
   const existing = await db
     .select()
-    .from(workspaceIssueSubscribers)
+    .from(workspaceSubscriptions)
     .where(
       and(
-        eq(workspaceIssueSubscribers.organizationId, organizationId),
-        eq(workspaceIssueSubscribers.issueId, values.issueId),
-        eq(workspaceIssueSubscribers.linearUserId, values.linearUserId)
+        eq(workspaceSubscriptions.organizationId, organizationId),
+        eq(workspaceSubscriptions.entityType, "issue"),
+        eq(workspaceSubscriptions.entityId, values.issueId),
+        eq(workspaceSubscriptions.userId, values.linearUserId)
       )
     )
     .get();
-  if (existing) return existing;
+  if (existing) return subscriptionAsIssueSubscriber(existing);
   const id = crypto.randomUUID();
   const ts = new Date().toISOString();
-  await db.insert(workspaceIssueSubscribers).values({
+  await db.insert(workspaceSubscriptions).values({
     id,
     organizationId,
-    issueId: values.issueId,
-    linearUserId: values.linearUserId,
+    entityType: "issue",
+    entityId: values.issueId,
+    userId: values.linearUserId,
     createdAt: ts,
   });
   return getIssueSubscriber(db, organizationId, id);
@@ -4649,6 +4668,44 @@ export function deleteDocumentSpace(
   );
 }
 
+function shareAsIssueShare(row: {
+  token: string;
+  organizationId: string;
+  entityId: string;
+  createdById: string;
+  createdAt: string;
+  expiresAt: string | null;
+}) {
+  return {
+    token: row.token,
+    organizationId: row.organizationId,
+    issueId: row.entityId,
+    createdById: row.createdById,
+    createdAt: row.createdAt,
+    expiresAt: row.expiresAt,
+  };
+}
+
+function shareAsDocumentShare(row: {
+  token: string;
+  organizationId: string;
+  entityId: string;
+  includeChildren: boolean;
+  createdById: string;
+  createdAt: string;
+  expiresAt: string | null;
+}) {
+  return {
+    token: row.token,
+    organizationId: row.organizationId,
+    documentId: row.entityId,
+    includeChildren: row.includeChildren,
+    createdById: row.createdById,
+    createdAt: row.createdAt,
+    expiresAt: row.expiresAt,
+  };
+}
+
 export function createIssueShare(
   db: WorkspaceDb,
   organizationId: string,
@@ -4658,18 +4715,20 @@ export function createIssueShare(
     expiresAt?: string | null;
   }
 ) {
-  return db
-    .insert(workspaceIssueShares)
+  const row = db
+    .insert(workspaceShares)
     .values({
       token: crypto.randomUUID().replace(/-/g, ""),
       organizationId,
-      issueId: input.issueId,
+      entityType: "issue",
+      entityId: input.issueId,
       createdById: input.createdById,
       createdAt: new Date().toISOString(),
       expiresAt: input.expiresAt ?? null,
     })
     .returning()
     .get();
+  return row ? shareAsIssueShare(row) : undefined;
 }
 
 export function getIssueShare(
@@ -4677,24 +4736,27 @@ export function getIssueShare(
   organizationId: string,
   issueId: string
 ) {
-  return db
+  const row = db
     .select()
-    .from(workspaceIssueShares)
+    .from(workspaceShares)
     .where(
       and(
-        eq(workspaceIssueShares.issueId, issueId),
-        eq(workspaceIssueShares.organizationId, organizationId)
+        eq(workspaceShares.entityType, "issue"),
+        eq(workspaceShares.entityId, issueId),
+        eq(workspaceShares.organizationId, organizationId)
       )
     )
     .get();
+  return row ? shareAsIssueShare(row) : undefined;
 }
 
 export function getIssueShareByToken(db: WorkspaceDb, token: string) {
-  return db
+  const row = db
     .select()
-    .from(workspaceIssueShares)
-    .where(eq(workspaceIssueShares.token, token))
+    .from(workspaceShares)
+    .where(eq(workspaceShares.token, token))
     .get();
+  return row ? shareAsIssueShare(row) : undefined;
 }
 
 export function deleteIssueShare(
@@ -4703,11 +4765,11 @@ export function deleteIssueShare(
   token: string
 ) {
   return db
-    .delete(workspaceIssueShares)
+    .delete(workspaceShares)
     .where(
       and(
-        eq(workspaceIssueShares.token, token),
-        eq(workspaceIssueShares.organizationId, organizationId)
+        eq(workspaceShares.token, token),
+        eq(workspaceShares.organizationId, organizationId)
       )
     )
     .run();
@@ -4723,12 +4785,13 @@ export function createDocumentShare(
     expiresAt?: string | null;
   }
 ) {
-  return db
-    .insert(workspaceDocumentShares)
+  const row = db
+    .insert(workspaceShares)
     .values({
       token: crypto.randomUUID().replace(/-/g, ""),
       organizationId,
-      documentId: input.documentId,
+      entityType: "document",
+      entityId: input.documentId,
       includeChildren: input.includeChildren ?? false,
       createdById: input.createdById,
       createdAt: new Date().toISOString(),
@@ -4736,6 +4799,7 @@ export function createDocumentShare(
     })
     .returning()
     .get();
+  return row ? shareAsDocumentShare(row) : undefined;
 }
 
 export function getDocumentShare(
@@ -4743,24 +4807,27 @@ export function getDocumentShare(
   organizationId: string,
   documentId: string
 ) {
-  return db
+  const row = db
     .select()
-    .from(workspaceDocumentShares)
+    .from(workspaceShares)
     .where(
       and(
-        eq(workspaceDocumentShares.documentId, documentId),
-        eq(workspaceDocumentShares.organizationId, organizationId)
+        eq(workspaceShares.entityType, "document"),
+        eq(workspaceShares.entityId, documentId),
+        eq(workspaceShares.organizationId, organizationId)
       )
     )
     .get();
+  return row ? shareAsDocumentShare(row) : undefined;
 }
 
 export function getDocumentShareByToken(db: WorkspaceDb, token: string) {
-  return db
+  const row = db
     .select()
-    .from(workspaceDocumentShares)
-    .where(eq(workspaceDocumentShares.token, token))
+    .from(workspaceShares)
+    .where(eq(workspaceShares.token, token))
     .get();
+  return row ? shareAsDocumentShare(row) : undefined;
 }
 
 export function deleteDocumentShare(
@@ -4770,11 +4837,11 @@ export function deleteDocumentShare(
 ) {
   return (
     db
-      .delete(workspaceDocumentShares)
+      .delete(workspaceShares)
       .where(
         and(
-          eq(workspaceDocumentShares.token, token),
-          eq(workspaceDocumentShares.organizationId, organizationId)
+          eq(workspaceShares.token, token),
+          eq(workspaceShares.organizationId, organizationId)
         )
       )
       .returning()
@@ -4790,21 +4857,23 @@ export function watchDocument(
 ) {
   const existing = db
     .select()
-    .from(workspaceDocumentWatchers)
+    .from(workspaceSubscriptions)
     .where(
       and(
-        eq(workspaceDocumentWatchers.documentId, documentId),
-        eq(workspaceDocumentWatchers.userId, userId)
+        eq(workspaceSubscriptions.entityType, "document"),
+        eq(workspaceSubscriptions.entityId, documentId),
+        eq(workspaceSubscriptions.userId, userId)
       )
     )
     .get();
   if (existing) return existing;
   return db
-    .insert(workspaceDocumentWatchers)
+    .insert(workspaceSubscriptions)
     .values({
       id: crypto.randomUUID(),
       organizationId,
-      documentId,
+      entityType: "document",
+      entityId: documentId,
       userId,
       createdAt: new Date().toISOString(),
     })
@@ -4819,11 +4888,12 @@ export function unwatchDocument(
 ) {
   return (
     db
-      .delete(workspaceDocumentWatchers)
+      .delete(workspaceSubscriptions)
       .where(
         and(
-          eq(workspaceDocumentWatchers.documentId, documentId),
-          eq(workspaceDocumentWatchers.userId, userId)
+          eq(workspaceSubscriptions.entityType, "document"),
+          eq(workspaceSubscriptions.entityId, documentId),
+          eq(workspaceSubscriptions.userId, userId)
         )
       )
       .returning()
@@ -4836,9 +4906,14 @@ export function listDocumentWatchers(
   documentId: string
 ): string[] {
   return db
-    .select({ userId: workspaceDocumentWatchers.userId })
-    .from(workspaceDocumentWatchers)
-    .where(eq(workspaceDocumentWatchers.documentId, documentId))
+    .select({ userId: workspaceSubscriptions.userId })
+    .from(workspaceSubscriptions)
+    .where(
+      and(
+        eq(workspaceSubscriptions.entityType, "document"),
+        eq(workspaceSubscriptions.entityId, documentId)
+      )
+    )
     .all()
     .map((row) => row.userId);
 }

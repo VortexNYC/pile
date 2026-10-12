@@ -125,8 +125,8 @@ export const workspaceComments = sqliteTable(
   {
     id: text("id" as string).primaryKey(),
     organizationId: text("organization_id" as string).notNull(),
-    issueId: text("issue_id" as string),
-    documentId: text("document_id" as string),
+    entityType: text("entity_type" as string),
+    entityId: text("entity_id" as string),
     authorId: text("author_id" as string),
     body: text("body" as string).notNull(),
     internal: integer("internal" as string, { mode: "boolean" })
@@ -141,35 +141,15 @@ export const workspaceComments = sqliteTable(
     updatedAt: text("updated_at" as string).notNull(),
   },
   (table) => [
-    index("comments_issue_idx" as string).on(
+    index("comments_entity_idx" as string).on(
       table.organizationId,
-      table.issueId
-    ),
-    index("comments_document_idx" as string).on(
-      table.organizationId,
-      table.documentId
+      table.entityType,
+      table.entityId
     ),
     index("comments_external_idx" as string).on(
       table.organizationId,
       table.externalSource,
       table.externalId
-    ),
-  ]
-);
-
-export const workspaceIssueSubscribers = sqliteTable(
-  "issue_subscribers" as string,
-  {
-    id: text("id" as string).primaryKey(),
-    organizationId: text("organization_id" as string).notNull(),
-    issueId: text("issue_id" as string).notNull(),
-    linearUserId: text("linear_user_id" as string).notNull(),
-    createdAt: text("created_at" as string).notNull(),
-  },
-  (table) => [
-    index("issue_subscribers_issue_idx" as string).on(
-      table.organizationId,
-      table.issueId
     ),
   ]
 );
@@ -431,67 +411,6 @@ export const workspaceDocumentSpaces = sqliteTable(
 );
 
 // Public share links for documents (GitBook/Docmost "publish").
-export const workspaceIssueShares = sqliteTable(
-  "issue_shares" as string,
-  {
-    token: text("token" as string).primaryKey(),
-    organizationId: text("organization_id" as string).notNull(),
-    issueId: text("issue_id" as string).notNull(),
-    createdById: text("created_by_id" as string).notNull(),
-    createdAt: text("created_at" as string).notNull(),
-    expiresAt: text("expires_at" as string),
-  },
-  (table) => [
-    index("issue_shares_issue_idx" as string).on(
-      table.organizationId,
-      table.issueId
-    ),
-  ]
-);
-
-export const workspaceDocumentShares = sqliteTable(
-  "document_shares" as string,
-  {
-    token: text("token" as string).primaryKey(),
-    organizationId: text("organization_id" as string).notNull(),
-    documentId: text("document_id" as string).notNull(),
-    includeChildren: integer("include_children" as string, {
-      mode: "boolean",
-    })
-      .notNull()
-      .default(false),
-    createdById: text("created_by_id" as string).notNull(),
-    createdAt: text("created_at" as string).notNull(),
-    expiresAt: text("expires_at" as string),
-  },
-  (table) => [
-    index("document_shares_document_idx" as string).on(
-      table.organizationId,
-      table.documentId
-    ),
-  ]
-);
-
-// Watch a document → included in notification fanout on doc changes.
-export const workspaceDocumentWatchers = sqliteTable(
-  "document_watchers" as string,
-  {
-    id: text("id" as string).primaryKey(),
-    organizationId: text("organization_id" as string).notNull(),
-    documentId: text("document_id" as string).notNull(),
-    userId: text("user_id" as string).notNull(),
-    createdAt: text("created_at" as string).notNull(),
-  },
-  (table) => [
-    uniqueIndex("document_watchers_doc_user_idx" as string).on(
-      table.documentId,
-      table.userId
-    ),
-  ]
-);
-
-// Per-document access grants. When a doc has no rows it is open to the
-// workspace; any row restricts it to listed actors (+ workspace admins).
 export const workspaceDocumentPermissions = sqliteTable(
   "document_permissions" as string,
   {
@@ -1354,6 +1273,60 @@ export const workspaceEntityLinks = sqliteTable(
       table.toType,
       table.toId,
       table.kind
+    ),
+  ]
+);
+
+// One subscriptions model — who watches what. Replaces
+// issue_subscribers + document_watchers.
+export const workspaceSubscriptions = sqliteTable(
+  "subscriptions" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    entityType: text("entity_type" as string).notNull(),
+    entityId: text("entity_id" as string).notNull(),
+    userId: text("user_id" as string).notNull(),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    uniqueIndex("subscriptions_entity_user_idx" as string).on(
+      table.entityType,
+      table.entityId,
+      table.userId
+    ),
+    index("subscriptions_entity_idx" as string).on(
+      table.organizationId,
+      table.entityType,
+      table.entityId
+    ),
+    index("subscriptions_user_idx" as string).on(table.userId),
+  ]
+);
+
+// One shares model — public links on any entity. Replaces
+// issue_shares + document_shares.
+export const workspaceShares = sqliteTable(
+  "shares" as string,
+  {
+    token: text("token" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    entityType: text("entity_type" as string).notNull(),
+    entityId: text("entity_id" as string).notNull(),
+    includeChildren: integer("include_children" as string, {
+      mode: "boolean",
+    })
+      .notNull()
+      .default(false),
+    createdById: text("created_by_id" as string).notNull(),
+    createdAt: text("created_at" as string).notNull(),
+    expiresAt: text("expires_at" as string),
+  },
+  (table) => [
+    index("shares_entity_idx" as string).on(
+      table.organizationId,
+      table.entityType,
+      table.entityId
     ),
   ]
 );

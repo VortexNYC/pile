@@ -898,6 +898,85 @@ CREATE TABLE IF NOT EXISTS field_values (
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS field_values_entity_idx ON field_values (organization_id, entity_id)`;
 
+const v69 = `CREATE TABLE comments_new (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  entity_type TEXT,
+  entity_id TEXT,
+  author_id TEXT,
+  body TEXT NOT NULL,
+  internal INTEGER NOT NULL DEFAULT 0,
+  external_id TEXT,
+  external_source TEXT,
+  external_author TEXT,
+  resolved_at TEXT,
+  resolved_by_id TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)
+--> statement-breakpoint
+INSERT INTO comments_new SELECT
+  id, organization_id,
+  CASE WHEN issue_id IS NOT NULL THEN 'issue' ELSE 'document' END,
+  COALESCE(issue_id, document_id),
+  author_id, body, internal, external_id, external_source,
+  external_author, resolved_at, resolved_by_id, created_at, updated_at
+FROM comments
+--> statement-breakpoint
+DROP TABLE comments
+--> statement-breakpoint
+ALTER TABLE comments_new RENAME TO comments
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS comments_entity_idx ON comments (organization_id, entity_type, entity_id)`;
+
+const v68 = `CREATE TABLE IF NOT EXISTS subscriptions (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS subscriptions_entity_user_idx ON subscriptions (entity_type, entity_id, user_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS subscriptions_entity_idx ON subscriptions (organization_id, entity_type, entity_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS subscriptions_user_idx ON subscriptions (user_id)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS shares (
+  token TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  include_children INTEGER NOT NULL DEFAULT 0,
+  created_by_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  expires_at TEXT
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS shares_entity_idx ON shares (organization_id, entity_type, entity_id)
+--> statement-breakpoint
+INSERT INTO subscriptions (id, organization_id, entity_type, entity_id, user_id, created_at)
+  SELECT id, organization_id, 'issue', issue_id, linear_user_id, created_at FROM issue_subscribers
+--> statement-breakpoint
+INSERT INTO subscriptions (id, organization_id, entity_type, entity_id, user_id, created_at)
+  SELECT id, organization_id, 'document', document_id, user_id, created_at FROM document_watchers
+--> statement-breakpoint
+INSERT INTO shares (token, organization_id, entity_type, entity_id, include_children, created_by_id, created_at, expires_at)
+  SELECT token, organization_id, 'issue', issue_id, 0, created_by_id, created_at, expires_at FROM issue_shares
+--> statement-breakpoint
+INSERT INTO shares (token, organization_id, entity_type, entity_id, include_children, created_by_id, created_at, expires_at)
+  SELECT token, organization_id, 'document', document_id, include_children, created_by_id, created_at, expires_at FROM document_shares
+--> statement-breakpoint
+DROP TABLE issue_subscribers
+--> statement-breakpoint
+DROP TABLE document_watchers
+--> statement-breakpoint
+DROP TABLE issue_shares
+--> statement-breakpoint
+DROP TABLE document_shares`;
+
 const v67 = `ALTER TABLE entity_links ADD COLUMN label TEXT`;
 
 const v66 = `INSERT INTO entity_links (id, organization_id, from_type, from_id, to_type, to_id, kind, created_at)
@@ -1060,6 +1139,8 @@ export const workspaceMigrations = {
       { idx: 64, when: 64, tag: "v65", breakpoints: false },
       { idx: 65, when: 65, tag: "v66", breakpoints: false },
       { idx: 66, when: 66, tag: "v67", breakpoints: false },
+      { idx: 67, when: 67, tag: "v68", breakpoints: false },
+      { idx: 68, when: 68, tag: "v69", breakpoints: false },
     ],
   },
   migrations: {
@@ -1130,5 +1211,7 @@ export const workspaceMigrations = {
     m0064: v65,
     m0065: v66,
     m0066: v67,
+    m0067: v68,
+    m0068: v69,
   },
 } satisfies Parameters<typeof migrate>[1];

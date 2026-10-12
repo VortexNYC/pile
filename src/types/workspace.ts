@@ -179,8 +179,8 @@ export interface Issue {
 export interface Comment {
   id: Id;
   organizationId: Id;
-  issueId: Id | null;
-  documentId: Id | null;
+  entityType: string | null;
+  entityId: Id | null;
   authorId: Id | null;
   body: string;
   internal: boolean;
