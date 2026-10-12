@@ -618,11 +618,19 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     // is tens of seconds of tokenization; one synchronous insertMultiple
     // starves the DO's event loop and every concurrent request hangs past
     // the request budget (issue-create 500s, ~40s).
-    for (let i = 0; i < docs.length; i += 250) {
-      await insertSearchDocs(index, docs.slice(i, i + 250));
-      // yield to the event loop between batches
+    // insertSearchDocs resolves after yielding the event loop, so the
+    // sequential batches never starve concurrent DO requests.
+    const insertBatch = async (start: number) => {
+      await insertSearchDocs(index, docs.slice(start, start + 250));
       await Promise.resolve();
-    }
+    };
+    await docs
+      .map((_, i) => i)
+      .filter((i) => i % 250 === 0)
+      .reduce(
+        (chain, i) => chain.then(() => insertBatch(i)),
+        Promise.resolve()
+      );
 
     this.searchIndex = index;
     return index;

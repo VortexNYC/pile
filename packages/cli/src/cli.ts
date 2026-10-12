@@ -1396,6 +1396,7 @@ async function sessionWatchCommand(
     }
     if (timedOut()) return 124;
     await sleep();
+    continue;
   }
 }
 
