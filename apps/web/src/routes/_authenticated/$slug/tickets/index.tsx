@@ -15,6 +15,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { CapturesGrid } from "@/components/captures-grid";
+import { ContactsList } from "@/components/contacts-list";
 import { CustomersList } from "@/components/customers-list";
 import { DealsList } from "@/components/deals-list";
 import { EntityHover } from "@/components/entity-hover";
@@ -270,6 +271,10 @@ function TicketsList() {
       <div className="flex flex-col gap-2">
         <h2 className="text-sm font-medium text-kumo-subtle px-1">Customers</h2>
         <CustomersList />
+      </div>
+      <div className="flex flex-col gap-2">
+        <h2 className="text-sm font-medium text-kumo-subtle px-1">Contacts</h2>
+        <ContactsList />
       </div>
       <div className="flex flex-col gap-2">
         <h2 className="text-sm font-medium text-kumo-subtle px-1">Captures</h2>

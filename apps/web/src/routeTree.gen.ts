@@ -25,6 +25,7 @@ import { Route as AuthenticatedSlugInboxRouteImport } from './routes/_authentica
 import { Route as ShareCaptureTicketIdRouteImport } from './routes/share/capture/$ticketId'
 import { Route as AuthenticatedSlugCapturesIndexRouteImport } from './routes/_authenticated/$slug/captures/index'
 import { Route as AuthenticatedSlugChangelogIndexRouteImport } from './routes/_authenticated/$slug/changelog/index'
+import { Route as AuthenticatedSlugContactsContactIdRouteImport } from './routes/_authenticated/$slug/contacts/$contactId'
 import { Route as AuthenticatedSlugCustomersIndexRouteImport } from './routes/_authenticated/$slug/customers/index'
 import { Route as AuthenticatedSlugCustomersCustomerIdRouteImport } from './routes/_authenticated/$slug/customers/$customerId'
 import { Route as AuthenticatedSlugCyclesIndexRouteImport } from './routes/_authenticated/$slug/cycles/index'
@@ -130,6 +131,12 @@ const AuthenticatedSlugChangelogIndexRoute =
   AuthenticatedSlugChangelogIndexRouteImport.update({
     id: '/changelog/',
     path: '/changelog/',
+    getParentRoute: () => AuthenticatedSlugRoute,
+  } as any)
+const AuthenticatedSlugContactsContactIdRoute =
+  AuthenticatedSlugContactsContactIdRouteImport.update({
+    id: '/contacts/$contactId',
+    path: '/contacts/$contactId',
     getParentRoute: () => AuthenticatedSlugRoute,
   } as any)
 const AuthenticatedSlugCustomersIndexRoute =
@@ -300,6 +307,7 @@ export interface FileRoutesByFullPath {
   '/$slug/inbox': typeof AuthenticatedSlugInboxRoute
   '/share/capture/$ticketId': typeof ShareCaptureTicketIdRoute
   '/$slug/': typeof AuthenticatedSlugIndexRoute
+  '/$slug/contacts/$contactId': typeof AuthenticatedSlugContactsContactIdRoute
   '/$slug/customers/$customerId': typeof AuthenticatedSlugCustomersCustomerIdRoute
   '/$slug/deals/$dealId': typeof AuthenticatedSlugDealsDealIdRoute
   '/$slug/documents/$documentId': typeof AuthenticatedSlugDocumentsDocumentIdRoute
@@ -341,6 +349,7 @@ export interface FileRoutesByTo {
   '/$slug/inbox': typeof AuthenticatedSlugInboxRoute
   '/share/capture/$ticketId': typeof ShareCaptureTicketIdRoute
   '/$slug': typeof AuthenticatedSlugIndexRoute
+  '/$slug/contacts/$contactId': typeof AuthenticatedSlugContactsContactIdRoute
   '/$slug/customers/$customerId': typeof AuthenticatedSlugCustomersCustomerIdRoute
   '/$slug/deals/$dealId': typeof AuthenticatedSlugDealsDealIdRoute
   '/$slug/documents/$documentId': typeof AuthenticatedSlugDocumentsDocumentIdRoute
@@ -386,6 +395,7 @@ export interface FileRoutesById {
   '/_authenticated/$slug/inbox': typeof AuthenticatedSlugInboxRoute
   '/share/capture/$ticketId': typeof ShareCaptureTicketIdRoute
   '/_authenticated/$slug/': typeof AuthenticatedSlugIndexRoute
+  '/_authenticated/$slug/contacts/$contactId': typeof AuthenticatedSlugContactsContactIdRoute
   '/_authenticated/$slug/customers/$customerId': typeof AuthenticatedSlugCustomersCustomerIdRoute
   '/_authenticated/$slug/deals/$dealId': typeof AuthenticatedSlugDealsDealIdRoute
   '/_authenticated/$slug/documents/$documentId': typeof AuthenticatedSlugDocumentsDocumentIdRoute
@@ -430,6 +440,7 @@ export interface FileRouteTypes {
     | '/$slug/inbox'
     | '/share/capture/$ticketId'
     | '/$slug/'
+    | '/$slug/contacts/$contactId'
     | '/$slug/customers/$customerId'
     | '/$slug/deals/$dealId'
     | '/$slug/documents/$documentId'
@@ -471,6 +482,7 @@ export interface FileRouteTypes {
     | '/$slug/inbox'
     | '/share/capture/$ticketId'
     | '/$slug'
+    | '/$slug/contacts/$contactId'
     | '/$slug/customers/$customerId'
     | '/$slug/deals/$dealId'
     | '/$slug/documents/$documentId'
@@ -515,6 +527,7 @@ export interface FileRouteTypes {
     | '/_authenticated/$slug/inbox'
     | '/share/capture/$ticketId'
     | '/_authenticated/$slug/'
+    | '/_authenticated/$slug/contacts/$contactId'
     | '/_authenticated/$slug/customers/$customerId'
     | '/_authenticated/$slug/deals/$dealId'
     | '/_authenticated/$slug/documents/$documentId'
@@ -666,6 +679,13 @@ declare module '@tanstack/react-router' {
       path: '/changelog'
       fullPath: '/$slug/changelog/'
       preLoaderRoute: typeof AuthenticatedSlugChangelogIndexRouteImport
+      parentRoute: typeof AuthenticatedSlugRoute
+    }
+    '/_authenticated/$slug/contacts/$contactId': {
+      id: '/_authenticated/$slug/contacts/$contactId'
+      path: '/contacts/$contactId'
+      fullPath: '/$slug/contacts/$contactId'
+      preLoaderRoute: typeof AuthenticatedSlugContactsContactIdRouteImport
       parentRoute: typeof AuthenticatedSlugRoute
     }
     '/_authenticated/$slug/customers/': {
@@ -876,6 +896,7 @@ const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
 interface AuthenticatedSlugRouteChildren {
   AuthenticatedSlugInboxRoute: typeof AuthenticatedSlugInboxRoute
   AuthenticatedSlugIndexRoute: typeof AuthenticatedSlugIndexRoute
+  AuthenticatedSlugContactsContactIdRoute: typeof AuthenticatedSlugContactsContactIdRoute
   AuthenticatedSlugCustomersCustomerIdRoute: typeof AuthenticatedSlugCustomersCustomerIdRoute
   AuthenticatedSlugDealsDealIdRoute: typeof AuthenticatedSlugDealsDealIdRoute
   AuthenticatedSlugDocumentsDocumentIdRoute: typeof AuthenticatedSlugDocumentsDocumentIdRoute
@@ -907,6 +928,8 @@ interface AuthenticatedSlugRouteChildren {
 const AuthenticatedSlugRouteChildren: AuthenticatedSlugRouteChildren = {
   AuthenticatedSlugInboxRoute: AuthenticatedSlugInboxRoute,
   AuthenticatedSlugIndexRoute: AuthenticatedSlugIndexRoute,
+  AuthenticatedSlugContactsContactIdRoute:
+    AuthenticatedSlugContactsContactIdRoute,
   AuthenticatedSlugCustomersCustomerIdRoute:
     AuthenticatedSlugCustomersCustomerIdRoute,
   AuthenticatedSlugDealsDealIdRoute: AuthenticatedSlugDealsDealIdRoute,

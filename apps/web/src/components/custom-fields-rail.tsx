@@ -1,4 +1,3 @@
-import { Input } from "@cloudflare/kumo/components/input";
 import { Select } from "@cloudflare/kumo/components/select";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 

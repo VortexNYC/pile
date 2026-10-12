@@ -79,6 +79,7 @@ const listDealsRoute = createRoute({
     params: orgParam,
     query: z.object({
       customerId: z.string().optional(),
+      contactId: z.string().optional(),
       includeArchived: z.string().optional(),
     }),
   },

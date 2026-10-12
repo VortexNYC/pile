@@ -82,6 +82,18 @@ function DealDetail() {
       ).customers,
   });
 
+  const contacts = useQuery({
+    queryKey: wsKey(workspace.id, "contacts"),
+    queryFn: async () =>
+      (
+        await unwrap(
+          api.GET("/workspaces/{organizationId}/support/customers", {
+            params: { path: { organizationId: workspace.id }, query: {} },
+          })
+        )
+      ).customers,
+  });
+
   const allIssues = useQuery({
     queryKey: wsKey(workspace.id, "issues"),
     queryFn: async () =>
@@ -372,6 +384,45 @@ function DealDetail() {
                 ) : null}
               </div>
             </RailSection>
+            <RailSection title="Contacts">
+              <div className="flex flex-col gap-1.5">
+                {data.contactIds.map((id) => {
+                  const contact = contacts.data?.find((c) => c.id === id);
+                  return (
+                    <div key={id} className="flex items-center gap-2">
+                      <RailLink
+                        to="/$slug/contacts/$contactId"
+                        params={{ slug: workspace.slug, contactId: id }}
+                      >
+                        {contact?.fullName ?? contact?.email ?? id.slice(0, 8)}
+                      </RailLink>
+                      <button
+                        type="button"
+                        aria-label="Remove contact"
+                        onClick={() =>
+                          patch.mutate({
+                            contactIds: data.contactIds.filter((c) => c !== id),
+                          })
+                        }
+                        className="text-kumo-subtle hover:text-kumo-default"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  );
+                })}
+                <AddDealContact
+                  contacts={(contacts.data ?? []).filter(
+                    (c) => !data.contactIds.includes(c.id)
+                  )}
+                  onAdd={(id) =>
+                    patch.mutate({
+                      contactIds: [...data.contactIds, id],
+                    })
+                  }
+                />
+              </div>
+            </RailSection>
             <CustomFieldsRail entityType="deal" entityId={data.id} />
           </>
         }
@@ -436,6 +487,47 @@ function LinkIssues({
         onClick={() => setOpen(false)}
         loading={pending}
       >
+        Cancel
+      </Button>
+    </div>
+  );
+}
+
+function AddDealContact({
+  contacts,
+  onAdd,
+}: {
+  contacts: { id: string; fullName: string | null; email: string }[];
+  onAdd: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  if (contacts.length === 0) return null;
+  if (!open) {
+    return (
+      <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
+        Add contact…
+      </Button>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <Select
+        aria-label="Add contact"
+        value=""
+        onValueChange={(v) => {
+          if (v) {
+            onAdd(v);
+            setOpen(false);
+          }
+        }}
+      >
+        {contacts.map((c) => (
+          <Select.Option key={c.id} value={c.id}>
+            {c.fullName ?? c.email}
+          </Select.Option>
+        ))}
+      </Select>
+      <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
         Cancel
       </Button>
     </div>

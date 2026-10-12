@@ -160,7 +160,7 @@ describe("deals", () => {
     const { deal } = (await create.json()) as {
       deal: { id: string; contactIds: string[] };
     };
-    expect([...deal.contactIds].sort()).toEqual(["contact-a", "contact-b"]);
+    expect(deal.contactIds.toSorted()).toEqual(["contact-a", "contact-b"]);
 
     const patch = await fetch(
       `/workspaces/${organizationId}/deals/${deal.id}`,

@@ -2646,7 +2646,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdDeals",
-    "description": "List deals (GET /workspaces/{organizationId}/deals) Path params (top-level, required): organizationId. Query params (top-level, optional): customerId, includeArchived.",
+    "description": "List deals (GET /workspaces/{organizationId}/deals) Path params (top-level, required): organizationId. Query params (top-level, optional): customerId, contactId, includeArchived.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/deals",
     "inputSchema": {
@@ -2656,6 +2656,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "type": "string"
         },
         "customerId": {
+          "type": "string"
+        },
+        "contactId": {
           "type": "string"
         },
         "includeArchived": {

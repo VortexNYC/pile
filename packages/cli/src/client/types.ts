@@ -16014,6 +16014,7 @@ export interface paths {
             parameters: {
                 query?: {
                     customerId?: string;
+                    contactId?: string;
                     includeArchived?: string;
                 };
                 header?: never;

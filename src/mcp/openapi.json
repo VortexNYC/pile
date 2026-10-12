@@ -30689,6 +30689,14 @@
               "type": "string"
             },
             "required": false,
+            "name": "contactId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
             "name": "includeArchived",
             "in": "query"
           }
