@@ -42,10 +42,7 @@ test("customers: add, rename, delete", async ({ page, signedIn }) => {
   await expect(page.getByText("No customers yet")).toBeVisible();
 });
 
-test("support: open a ticket, reply, add a note, resolve", async ({
-  page,
-  signedIn,
-}) => {
+test("support: open a ticket and add a note", async ({ page, signedIn }) => {
   await page.goto(`/app/${signedIn.slug}/tickets`);
   await page.getByRole("button", { name: "New ticket" }).click();
   await page
@@ -57,12 +54,10 @@ test("support: open a ticket, reply, add a note, resolve", async ({
   await expect(
     page.getByRole("heading", { name: /Order never arrived/, level: 1 })
   ).toBeVisible();
-  await page.getByLabel("Reply").fill("Looking into it now.");
-  await page.getByRole("button", { name: "Send reply" }).click();
+  // No reply channel is connected in a fresh workspace, so only notes work.
   await expect(
-    page.getByTestId("ticket-event").filter({ hasText: "Looking into it now." })
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Internal note" }).click();
+    page.getByRole("button", { name: "Reply to customer" })
+  ).toBeDisabled();
   await page.getByLabel("Internal note").fill("Carrier says delayed.");
   await page.getByRole("button", { name: "Add note" }).click();
   await expect(

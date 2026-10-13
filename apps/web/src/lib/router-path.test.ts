@@ -13,8 +13,17 @@ describe("toRouterPath", () => {
     expect(toRouterPath("mailto:a@b.co")).toBeNull();
     expect(toRouterPath("//evil.com")).toBeNull();
   });
-  it("keeps already-relative router paths", () => {
-    expect(toRouterPath("/sign-in")).toBe("/sign-in");
+  it("leaves same-page anchors and query-only hrefs alone", () => {
+    expect(toRouterPath("#members")).toBeNull();
+    expect(toRouterPath("?tab=2")).toBeNull();
+    expect(toRouterPath("")).toBeNull();
+  });
+  it("leaves same-origin paths outside the console alone", () => {
+    expect(toRouterPath("/api/auth/sign-out")).toBeNull();
+    expect(toRouterPath("/agents")).toBeNull();
+    expect(toRouterPath("/apple")).toBeNull();
+  });
+  it("keeps relative router paths", () => {
     expect(toRouterPath("sign-up")).toBe("/sign-up");
   });
 });

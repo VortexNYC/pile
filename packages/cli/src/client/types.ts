@@ -15054,7 +15054,7 @@ export interface paths {
                 content: {
                     "application/json": {
                         name?: string;
-                        url?: string;
+                        url?: string | null;
                         bookingUrl?: string | null;
                         notes?: string | null;
                         logoUrl?: string;

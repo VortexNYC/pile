@@ -6408,7 +6408,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "minLength": 1
             },
             "url": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             },
             "bookingUrl": {
               "type": "string",

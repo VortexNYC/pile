@@ -319,6 +319,11 @@ function DocumentDetail() {
                       );
                     }}
                   />
+                ) : !isEditable(data.contentFormat) ? (
+                  <Text variant="secondary">
+                    This document uses rich formatting — edit it from the
+                    CLI so its structure is kept.
+                  </Text>
                 ) : editingContent ? (
                   <div className="flex flex-col gap-2">
                     <InputArea
@@ -460,4 +465,10 @@ function DocumentDetail() {
       />
     </>
   );
+}
+
+// Plain text and markdown round-trip through the inline editor; block
+// documents would lose their structure, so they stay read-only here.
+function isEditable(format: string): boolean {
+  return format === "text" || format === "markdown" || format === "canvas";
 }

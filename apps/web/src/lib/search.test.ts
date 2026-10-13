@@ -12,4 +12,16 @@ describe("safeRedirect", () => {
     expect(safeRedirect("/admin")).toBeUndefined();
     expect(safeRedirect(42)).toBeUndefined();
   });
+  it("rejects look-alike prefixes and paths that escape /app", () => {
+    expect(safeRedirect("/apple")).toBeUndefined();
+    expect(safeRedirect("/app/../admin")).toBeUndefined();
+    expect(safeRedirect("/app/./x")).toBeUndefined();
+    expect(safeRedirect("/app\\..\\x")).toBeUndefined();
+  });
+  it("keeps the query string", () => {
+    expect(safeRedirect("/app")).toBe("/app");
+    expect(safeRedirect("/app/acme/issues?status=todo")).toBe(
+      "/app/acme/issues?status=todo"
+    );
+  });
 });

@@ -152,7 +152,7 @@ function CustomerEditor({
           params: { path },
           body: {
             name: name.trim(),
-            url: url.trim() || undefined,
+            url: url.trim() || null,
             bookingUrl: bookingUrl.trim() || undefined,
             notes: notes.trim() || null,
           },
