@@ -31,8 +31,9 @@ export function IssueDisplayMenu({
         }
       />
       <DropdownMenu.Content className="min-w-44">
-        <DropdownMenu.Label>Order by</DropdownMenu.Label>
-        <DropdownMenu.RadioGroup
+        <DropdownMenu.Group>
+          <DropdownMenu.Label>Order by</DropdownMenu.Label>
+          <DropdownMenu.RadioGroup
           value={value.ordering}
           onValueChange={(v) =>
             onChange({
@@ -47,10 +48,11 @@ export function IssueDisplayMenu({
           <DropdownMenu.RadioItem value="created">
             Created
           </DropdownMenu.RadioItem>
-          <DropdownMenu.RadioItem value="priority">
-            Priority
-          </DropdownMenu.RadioItem>
-        </DropdownMenu.RadioGroup>
+            <DropdownMenu.RadioItem value="priority">
+              Priority
+            </DropdownMenu.RadioItem>
+          </DropdownMenu.RadioGroup>
+        </DropdownMenu.Group>
         <DropdownMenu.Separator />
         <DropdownMenu.CheckboxItem
           checked={value.showEmptyGroups}

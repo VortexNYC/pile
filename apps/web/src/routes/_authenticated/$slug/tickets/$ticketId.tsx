@@ -215,6 +215,29 @@ function TicketDetail() {
     onSettled: invalidate,
   });
 
+  const customerId = ticket.data?.customer.id;
+  const comms = useQuery({
+    queryKey: wsKey(workspace.id, "comms", { customerId }),
+    queryFn: async () =>
+      (
+        await unwrap(
+          api.GET(
+            "/workspaces/{organizationId}/support/customers/{customerId}/events",
+            {
+              params: {
+                path: {
+                  organizationId: workspace.id,
+                  customerId: customerId ?? "",
+                },
+                query: { limit: 5 },
+              },
+            }
+          )
+        )
+      ).events,
+    enabled: customerId !== undefined,
+  });
+
   if (ticket.isPending) return <LoadingState label="Loading ticket" />;
   if (ticket.isError) {
     return (
@@ -231,26 +254,6 @@ function TicketDetail() {
   const otherTickets = (tickets.data ?? []).filter(
     (tt) => tt.customer.id === data.customer.id && tt.id !== data.id
   );
-  const comms = useQuery({
-    queryKey: wsKey(workspace.id, "comms", { customerId: data.customer.id }),
-    queryFn: async () =>
-      (
-        await unwrap(
-          api.GET(
-            "/workspaces/{organizationId}/support/customers/{customerId}/events",
-            {
-              params: {
-                path: {
-                  organizationId: workspace.id,
-                  customerId: data.customer.id,
-                },
-                query: { limit: 5 },
-              },
-            }
-          )
-        )
-      ).events,
-  });
 
   return (
     <EntityPage
