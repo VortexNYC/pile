@@ -23,6 +23,7 @@ const SURFACES = [
   { path: "documents", label: "Documents" },
   { path: "tickets", label: "Support" },
   { path: "customers", label: "Customers" },
+  { path: "deals", label: "Deals" },
   { path: "changelog", label: "Changelog" },
   { path: "cycles", label: "Cycles" },
   { path: "initiatives", label: "Initiatives" },

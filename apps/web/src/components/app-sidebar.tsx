@@ -57,6 +57,7 @@ const NAV = [
   { title: "Sessions", path: "sessions", icon: Robot },
   { title: "Projects", path: "projects", icon: Folder },
   { title: "Customers", path: "customers", icon: Storefront },
+  { title: "Deals", path: "deals", icon: TrendUp },
   { title: "Changelog", path: "changelog", icon: Newspaper },
   // opt-in surfaces — hidden unless enabled in settings
   { title: "Cycles", path: "cycles", icon: Timer },
