@@ -48,7 +48,8 @@ function normalizePhone(raw: string): string {
 export async function getSmsThread(
   db: D1Client,
   organizationId: string,
-  phone: string
+  phone: string,
+  groupId?: string | null
 ) {
   const normalized = normalizePhone(phone);
   const [row] = await db
@@ -57,7 +58,9 @@ export async function getSmsThread(
     .where(
       and(
         eq(supportSmsThreads.organizationId, organizationId),
-        eq(supportSmsThreads.phone, normalized)
+        groupId
+          ? eq(supportSmsThreads.groupId, groupId)
+          : eq(supportSmsThreads.phone, normalized)
       )
     )
     .limit(1);
@@ -171,6 +174,82 @@ export async function sendSms(
     });
   }
   return res.json();
+}
+
+export async function sendGroupSms(
+  env: SmsWorkerEnv,
+  groupId: string,
+  content: string
+) {
+  const apiKey = env.SENDBLUE_API_KEY;
+  const apiSecret = env.SENDBLUE_API_SECRET;
+  const fromNumber = env.SENDBLUE_FROM_NUMBER;
+  if (!apiKey || !apiSecret || !fromNumber) {
+    throw new VortexError({
+      code: "CONFIG_ERROR",
+      status: 500,
+      message: "Sendblue credentials are not configured",
+    });
+  }
+  const res = await fetch("https://api.sendblue.co/api/send-group-message", {
+    method: "POST",
+    headers: {
+      "sb-api-key-id": apiKey,
+      "sb-api-secret-key": apiSecret,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      group_id: groupId,
+      from_number: fromNumber,
+      content,
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new VortexError({
+      code: "AGENT_ERROR",
+      status: 502,
+      message: `Sendblue group send failed: ${res.status} ${body}`,
+    });
+  }
+  return res.json();
+}
+
+export async function sendTyping(
+  env: SmsWorkerEnv,
+  toNumber: string
+): Promise<void> {
+  const apiKey = env.SENDBLUE_API_KEY;
+  const apiSecret = env.SENDBLUE_API_SECRET;
+  const fromNumber = env.SENDBLUE_FROM_NUMBER;
+  if (!apiKey || !apiSecret || !fromNumber) return;
+  await fetch("https://api.sendblue.co/api/typing", {
+    method: "POST",
+    headers: {
+      "sb-api-key-id": apiKey,
+      "sb-api-secret-key": apiSecret,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ number: toNumber, from_number: fromNumber }),
+  }).catch(() => {});
+}
+
+export async function addSmsContact(
+  env: SmsWorkerEnv,
+  number: string
+): Promise<void> {
+  const apiKey = env.SENDBLUE_API_KEY;
+  const apiSecret = env.SENDBLUE_API_SECRET;
+  if (!apiKey || !apiSecret) return;
+  await fetch("https://api.sendblue.co/api/contacts", {
+    method: "POST",
+    headers: {
+      "sb-api-key-id": apiKey,
+      "sb-api-secret-key": apiSecret,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ number }),
+  }).catch(() => {});
 }
 
 /** The workspace concierge prompt — the agent's entire world is the
@@ -344,7 +423,13 @@ async function sendDevinMessage(
 export async function handleInboundSms(
   db: D1Client,
   env: SmsWorkerEnv,
-  input: { organizationId: string; fromNumber: string; body: string }
+  input: {
+    organizationId: string;
+    fromNumber: string;
+    body: string;
+    groupId?: string | null;
+    mediaUrl?: string | null;
+  }
 ): Promise<{ threadId: string; ticketId: string }> {
   const phone = normalizePhone(input.fromNumber);
   const org = await db
@@ -357,22 +442,31 @@ export async function handleInboundSms(
     input.organizationId,
     phone
   );
-  let thread = await getSmsThread(db, input.organizationId, phone);
+  await addSmsContact(env, phone);
+  let thread = await getSmsThread(
+    db,
+    input.organizationId,
+    phone,
+    input.groupId ?? null
+  );
   const now = new Date().toISOString();
 
   if (!thread) {
     const ticket = await createTicket(db, {
       organizationId: input.organizationId,
       customerId: customer.id,
-      title: `SMS — ${phone}`,
+      title: input.groupId
+        ? `SMS group — ${input.groupId.slice(0, 10)}`
+        : `SMS — ${phone}`,
       sourceChannel: "sms",
       externalSource: "sms",
-      externalId: `sms:${phone}`,
+      externalId: input.groupId ? `sms-group:${input.groupId}` : `sms:${phone}`,
     });
     await addTicketMessage(db, input.organizationId, ticket.id, {
       direction: "inbound",
       textContent: input.body,
       channel: "sms",
+      ...(input.mediaUrl ? { metadata: { mediaUrl: input.mediaUrl } } : {}),
     });
     const threadId = crypto.randomUUID();
     await db
@@ -381,6 +475,7 @@ export async function handleInboundSms(
         id: threadId,
         organizationId: input.organizationId,
         phone,
+        groupId: input.groupId ?? null,
         customerId: customer.id,
         ticketId: ticket.id,
         createdAt: now,
@@ -391,6 +486,7 @@ export async function handleInboundSms(
       id: threadId,
       organizationId: input.organizationId,
       phone,
+      groupId: input.groupId ?? null,
       customerId: customer.id,
       ticketId: ticket.id,
       devinSessionId: null,
@@ -404,6 +500,7 @@ export async function handleInboundSms(
       direction: "inbound",
       textContent: input.body,
       channel: "sms",
+      ...(input.mediaUrl ? { metadata: { mediaUrl: input.mediaUrl } } : {}),
     });
   }
 
@@ -411,6 +508,7 @@ export async function handleInboundSms(
     /\/$/,
     ""
   );
+  await sendTyping(env, thread.groupId ? `group:${thread.groupId}` : phone);
   if (thread.devinSessionId) {
     await sendDevinMessage(env, thread.devinSessionId, input.body);
   } else {
@@ -467,7 +565,11 @@ export async function deliverSmsReply(
       message: "SMS thread not found",
     });
   }
-  await sendSms(env, thread.phone, input.body);
+  if (thread.groupId) {
+    await sendGroupSms(env, thread.groupId, input.body);
+  } else {
+    await sendSms(env, thread.phone, input.body);
+  }
   const message = thread.ticketId
     ? await addTicketMessage(db, input.organizationId, thread.ticketId, {
         direction: "outbound",

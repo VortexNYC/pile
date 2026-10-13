@@ -3329,6 +3329,7 @@ export const supportSmsThreads = sqliteTable(
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     phone: text("phone" as string).notNull(),
+    groupId: text("group_id" as string),
     customerId: text("customer_id" as string).references(
       () => supportCustomers.id,
       { onDelete: "set null" }
