@@ -12,7 +12,9 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { CommandMenu } from "@/components/command-menu";
 import { CreateCustomerDialog } from "@/components/create-customer-dialog";
 import { CreateDealDialog } from "@/components/create-deal-dialog";
+import { CreateInitiativeDialog } from "@/components/create-initiative-dialog";
 import { CreateIssueDialog } from "@/components/create-issue-dialog";
+import { CreateRoadmapDialog } from "@/components/create-roadmap-dialog";
 import { CreateTicketDialog } from "@/components/create-ticket-dialog";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
@@ -74,6 +76,8 @@ function WorkspaceLayout() {
         <CreateTicketDialog />
         <CreateCustomerDialog />
         <CreateDealDialog />
+        <CreateInitiativeDialog />
+        <CreateRoadmapDialog />
         <AppSidebar workspace={workspace} workspaces={workspaces.data} />
         <div className="flex h-dvh min-h-0 min-w-0 flex-1 flex-col">
           <header className="border-kumo-hairline flex h-14 shrink-0 items-center justify-between gap-2 border-b px-4">
