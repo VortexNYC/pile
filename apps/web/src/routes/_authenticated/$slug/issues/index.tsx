@@ -18,6 +18,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useDeferredValue, useState } from "react";
 
+import { PeekHeader } from "@/components/entity-peek";
 import { IssueContextMenu } from "@/components/issue-context-menu";
 import {
   DEFAULT_DISPLAY,
@@ -348,21 +349,24 @@ function IssuesList() {
             onOpenChange={(o) => !o && setPeekedId(null)}
           >
             <div className="flex flex-col gap-4">
-              <div className="flex items-center gap-2">
-                {peeked.identifier ? (
-                  <span className="text-xs font-medium text-kumo-subtle">
-                    {peeked.identifier}
-                  </span>
-                ) : null}
-                <IssueStatusIcon status={peeked.status} />
-                <Badge variant={priorityVariant(peeked.priority)}>
-                  {PRIORITY_LABELS[peeked.priority]}
-                </Badge>
-                <PrChip issue={peeked} />
-              </div>
-              <h2 className="text-xl font-semibold text-kumo-default">
-                {peeked.title}
-              </h2>
+              <PeekHeader
+                meta={
+                  <>
+                    {peeked.identifier ? (
+                      <span className="text-xs font-medium text-kumo-subtle">
+                        {peeked.identifier}
+                      </span>
+                    ) : null}
+                    <IssueStatusIcon status={peeked.status} />
+                    <Badge variant={priorityVariant(peeked.priority)}>
+                      {PRIORITY_LABELS[peeked.priority]}
+                    </Badge>
+                    <PrChip issue={peeked} />
+                  </>
+                }
+                title={peeked.title}
+                href={`/${workspace.slug}/issues/${peeked.id}`}
+              />
               {peeked.description ? (
                 <Markdown
                   workspaceSlug={workspace.slug}
@@ -371,13 +375,6 @@ function IssuesList() {
               ) : (
                 <p className="text-sm text-kumo-subtle">No description.</p>
               )}
-              <Link
-                to="/$slug/issues/$issueId"
-                params={{ slug: workspace.slug, issueId: peeked.id }}
-                className="text-sm text-kumo-link hover:underline"
-              >
-                Open full issue →
-              </Link>
             </div>
           </PeekDrawer>
         ) : null}
