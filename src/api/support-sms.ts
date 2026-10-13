@@ -69,6 +69,7 @@ export function registerSupportSmsRoutes(app: OpenAPIHono<AppContext>) {
           from: body.from_number,
           organizationId,
           err: err instanceof Error ? err.message : String(err),
+          stack: err instanceof Error ? err.stack?.slice(0, 600) : null,
         });
       });
       const ctx = getExecutionCtx(c);
