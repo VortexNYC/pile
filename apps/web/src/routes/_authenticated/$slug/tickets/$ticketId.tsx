@@ -81,6 +81,16 @@ function TicketDetail() {
   });
   const key = wsKey(organizationId, "tickets", ticketId);
   const path = { organizationId, ticketId };
+  const sharedCapture = useQuery({
+    queryKey: wsKey(organizationId, "shared-capture", ticketId),
+    staleTime: 60_000,
+    queryFn: async () => {
+      const res = await api.GET("/support/capture/public/{ticketId}", {
+        params: { path: { ticketId } },
+      });
+      return res.response.ok;
+    },
+  });
 
   const tickets = useQuery({
     queryKey: wsKey(workspace.id, "tickets"),
@@ -294,17 +304,20 @@ function TicketDetail() {
               Send capture link
             </Button>
           )}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() =>
-              navigator.clipboard.writeText(
-                `${window.location.origin}/app/share/capture/${ticketId}`
-              )
-            }
-          >
-            Copy capture link
-          </Button>
+          {sharedCapture.data === true ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                navigator.clipboard.writeText(
+                  `${window.location.origin}/app/share/capture/${ticketId}`
+                );
+                toastSuccess("Shared capture link copied");
+              }}
+            >
+              Copy shared capture link
+            </Button>
+          ) : null}
         </div>
       }
       center={
