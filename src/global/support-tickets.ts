@@ -436,6 +436,30 @@ function groupBy<T>(
   return map;
 }
 
+/** WHERE-side equivalent — chunk an inArray over an unbounded list
+ * into OR'd 50-id clauses (D1 caps bound params at 100). */
+function inArrayChunked(
+  column: { _: { data: unknown } },
+  ids: string[]
+) {
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += 50) chunks.push(ids.slice(i, i + 50));
+  return or(...chunks.map((chunk) => inArray(column as never, chunk)));
+}
+
+/** D1 caps bound params at 100 — run the query per 50-id chunk and
+ * merge. Any inArray over a request-shaped id list goes through this. */
+async function selectInChunks<TRow>(
+  ids: string[],
+  run: (chunk: string[]) => Promise<TRow[]>
+): Promise<TRow[]> {
+  const out: TRow[] = [];
+  for (let i = 0; i < ids.length; i += 50) {
+    out.push(...(await run(ids.slice(i, i + 50))));
+  }
+  return out;
+}
+
 async function loadTicketEventsForTickets(
   db: D1Client,
   ticketIds: string[],
@@ -443,24 +467,30 @@ async function loadTicketEventsForTickets(
 ): Promise<Map<string, SupportTicketEventWithDetails[]>> {
   if (ticketIds.length === 0) return new Map();
 
-  const events = await db
-    .select()
-    .from(supportTicketEvents)
-    .where(inArray(supportTicketEvents.ticketId, ticketIds))
-    .orderBy(asc(supportTicketEvents.createdAt));
+  const events = await selectInChunks(ticketIds, (chunk) =>
+    db
+      .select()
+      .from(supportTicketEvents)
+      .where(inArray(supportTicketEvents.ticketId, chunk))
+      .orderBy(asc(supportTicketEvents.createdAt))
+  );
 
   if (events.length === 0) return new Map();
 
   const eventIds = events.map((e) => e.id);
   const [messages, notes] = await Promise.all([
-    db
-      .select()
-      .from(supportTicketMessages)
-      .where(inArray(supportTicketMessages.eventId, eventIds)),
-    db
-      .select()
-      .from(supportTicketNotes)
-      .where(inArray(supportTicketNotes.eventId, eventIds)),
+    selectInChunks(eventIds, (chunk) =>
+      db
+        .select()
+        .from(supportTicketMessages)
+        .where(inArray(supportTicketMessages.eventId, chunk))
+    ),
+    selectInChunks(eventIds, (chunk) =>
+      db
+        .select()
+        .from(supportTicketNotes)
+        .where(inArray(supportTicketNotes.eventId, chunk))
+    ),
   ]);
 
   const messageMap = new Map(messages.map((m) => [m.eventId, m]));
@@ -499,53 +529,63 @@ export async function hydrateTicketRelations(
     assigneeRows,
     events,
   ] = await Promise.all([
-    db
-      .select({
-        id: supportCustomers.id,
-        email: supportCustomers.email,
-        fullName: supportCustomers.fullName,
-        phone: supportCustomers.phone,
-      })
-      .from(supportCustomers)
-      .where(inArray(supportCustomers.id, customerIds)),
-    db
-      .select({
-        id: supportCustomerCompanies.id,
-        name: supportCustomerCompanies.companyName,
-        isPrimary: supportCustomerCompanies.isPrimary,
-        customerId: supportCustomerCompanies.customerId,
-      })
-      .from(supportCustomerCompanies)
-      .where(inArray(supportCustomerCompanies.customerId, customerIds)),
-    db
-      .select()
-      .from(supportCustomerIdentities)
-      .where(inArray(supportCustomerIdentities.customerId, customerIds)),
-    db
-      .select({
-        id: supportTicketLabels.id,
-        labelId: supportTicketLabels.labelId,
-        name: labels.name,
-        color: labels.color,
-        ticketId: supportTicketLabels.ticketId,
-      })
-      .from(supportTicketLabels)
-      .innerJoin(labels, eq(supportTicketLabels.labelId, labels.id))
-      .where(inArray(supportTicketLabels.ticketId, ticketIds)),
-    db
-      .select({
-        id: supportTicketAssignments.id,
-        userId: supportTicketAssignments.userId,
-        teamId: supportTicketAssignments.teamId,
-        userName: user.name,
-        teamName: team.name,
-        isPrimary: supportTicketAssignments.isPrimary,
-        ticketId: supportTicketAssignments.ticketId,
-      })
-      .from(supportTicketAssignments)
-      .leftJoin(user, eq(supportTicketAssignments.userId, user.id))
-      .leftJoin(team, eq(supportTicketAssignments.teamId, team.id))
-      .where(inArray(supportTicketAssignments.ticketId, ticketIds)),
+    selectInChunks(customerIds, (chunk) =>
+      db
+        .select({
+          id: supportCustomers.id,
+          email: supportCustomers.email,
+          fullName: supportCustomers.fullName,
+          phone: supportCustomers.phone,
+        })
+        .from(supportCustomers)
+        .where(inArray(supportCustomers.id, chunk))
+    ),
+    selectInChunks(customerIds, (chunk) =>
+      db
+        .select({
+          id: supportCustomerCompanies.id,
+          name: supportCustomerCompanies.companyName,
+          isPrimary: supportCustomerCompanies.isPrimary,
+          customerId: supportCustomerCompanies.customerId,
+        })
+        .from(supportCustomerCompanies)
+        .where(inArray(supportCustomerCompanies.customerId, chunk))
+    ),
+    selectInChunks(customerIds, (chunk) =>
+      db
+        .select()
+        .from(supportCustomerIdentities)
+        .where(inArray(supportCustomerIdentities.customerId, chunk))
+    ),
+    selectInChunks(ticketIds, (chunk) =>
+      db
+        .select({
+          id: supportTicketLabels.id,
+          labelId: supportTicketLabels.labelId,
+          name: labels.name,
+          color: labels.color,
+          ticketId: supportTicketLabels.ticketId,
+        })
+        .from(supportTicketLabels)
+        .innerJoin(labels, eq(supportTicketLabels.labelId, labels.id))
+        .where(inArray(supportTicketLabels.ticketId, chunk))
+    ),
+    selectInChunks(ticketIds, (chunk) =>
+      db
+        .select({
+          id: supportTicketAssignments.id,
+          userId: supportTicketAssignments.userId,
+          teamId: supportTicketAssignments.teamId,
+          userName: user.name,
+          teamName: team.name,
+          isPrimary: supportTicketAssignments.isPrimary,
+          ticketId: supportTicketAssignments.ticketId,
+        })
+        .from(supportTicketAssignments)
+        .leftJoin(user, eq(supportTicketAssignments.userId, user.id))
+        .leftJoin(team, eq(supportTicketAssignments.teamId, team.id))
+        .where(inArray(supportTicketAssignments.ticketId, chunk))
+    ),
     loadTicketEventsForTickets(db, ticketIds, options?.eventsLimit ?? 20),
   ]);
 
@@ -659,7 +699,7 @@ export async function listTickets(
     }
 
     conditions.push(
-      inArray(
+      inArrayChunked(
         supportTickets.id,
         ticketIds.map((t) => t.ticketId)
       )
@@ -674,7 +714,7 @@ export async function listTickets(
       return { tickets: [], nextCursor: null };
     }
     conditions.push(
-      inArray(
+      inArrayChunked(
         supportTickets.id,
         labelTicketIds.map((t) => t.ticketId)
       )
@@ -697,7 +737,7 @@ export async function listTickets(
     const customerSearch =
       customerIds.length > 0
         ? [
-            inArray(
+            inArrayChunked(
               supportTickets.customerId,
               customerIds.map((c) => c.id)
             ),
