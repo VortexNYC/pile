@@ -1,5 +1,6 @@
 import { Button } from "@cloudflare/kumo/components/button";
 import { Sidebar } from "@cloudflare/kumo/components/sidebar";
+import { MagnifyingGlass, Newspaper } from "@phosphor-icons/react";
 import {
   createFileRoute,
   Outlet,
@@ -14,6 +15,7 @@ import { CreateCustomerDialog } from "@/components/create-customer-dialog";
 import { CreateDealDialog } from "@/components/create-deal-dialog";
 import { CreateInitiativeDialog } from "@/components/create-initiative-dialog";
 import { CreateIssueDialog } from "@/components/create-issue-dialog";
+import { CreateMenu } from "@/components/create-menu";
 import { CreateRoadmapDialog } from "@/components/create-roadmap-dialog";
 import { CreateTicketDialog } from "@/components/create-ticket-dialog";
 import { NotificationsBell } from "@/components/notifications-bell";
@@ -28,6 +30,7 @@ export const Route = createFileRoute("/_authenticated/$slug")({
 
 function WorkspaceLayout() {
   const { slug } = Route.useParams();
+  const navigate = useNavigate();
   const workspaces = useWorkspaces();
   // Accept the org id too — CLI-side links (pile.nyc/app/<org>/...) carry
   // the organizationId, not the slug.
@@ -80,9 +83,38 @@ function WorkspaceLayout() {
         <CreateRoadmapDialog />
         <AppSidebar workspace={workspace} workspaces={workspaces.data} />
         <div className="flex h-dvh min-h-0 min-w-0 flex-1 flex-col">
-          <header className="border-kumo-hairline flex h-14 shrink-0 items-center justify-between gap-2 border-b px-4">
+          <header className="border-kumo-hairline flex h-14 shrink-0 items-center gap-2 border-b px-4">
             <Sidebar.Trigger />
-            <NotificationsBell />
+            <div className="flex min-w-0 flex-1 justify-center px-2">
+              <button
+                type="button"
+                aria-label="Search"
+                onClick={() =>
+                  window.dispatchEvent(new CustomEvent("pile:command-menu"))
+                }
+                className="flex w-full max-w-md items-center gap-2 rounded-md border border-kumo-line px-3 py-1.5 text-left text-sm text-kumo-subtle hover:bg-kumo-tint"
+              >
+                <MagnifyingGlass size={16} />
+                <span className="min-w-0 flex-1">Search…</span>
+                <span className="text-[10px] font-mono">⌘K</span>
+              </button>
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              <CreateMenu />
+              <Button
+                shape="square"
+                variant="ghost"
+                icon={<Newspaper size={18} />}
+                aria-label="Changelog"
+                onClick={() =>
+                  void navigate({
+                    to: "/$slug/changelog",
+                    params: { slug: workspace.slug },
+                  })
+                }
+              />
+              <NotificationsBell />
+            </div>
           </header>
           <ImpersonationBanner />
           <main className="min-h-0 flex-1 overflow-y-auto">
@@ -125,6 +157,7 @@ function GuestGate({
       ["/customers", "customer"],
       ["/contacts", "contact"],
       ["/deals", "deal"],
+      ["/sales", "customer"],
       ["/projects", "project"],
       ["/sessions", "session"],
       ["/settings", "settings"],

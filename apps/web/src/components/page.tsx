@@ -13,7 +13,7 @@ export function Page({
   children: ReactNode;
 }) {
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-6 py-8">
+    <div className="flex w-full flex-col gap-6 px-6 py-8">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-1">
           <Text variant="heading" as="h1" size="lg">

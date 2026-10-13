@@ -113,6 +113,7 @@ export function CommandMenu() {
       { key: "nav-sessions", label: "Go to Sessions", href: "/sessions" },
       { key: "nav-docs", label: "Go to Documents", href: "/documents" },
       { key: "nav-support", label: "Go to Support", href: "/tickets" },
+      { key: "nav-sales", label: "Go to Sales", href: "/sales" },
       {
         key: "nav-changelog",
         label: "Go to Changelog",

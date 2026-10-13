@@ -138,6 +138,16 @@ export function DealsList() {
         icon={<TrendUp size={40} />}
         title="No deals yet"
         description="Track opportunities against customers — stage, amount, and close date."
+        action={
+          <Button
+            icon={<Plus />}
+            onClick={() =>
+              window.dispatchEvent(new CustomEvent("pile:create-deal"))
+            }
+          >
+            New deal
+          </Button>
+        }
       />
     );
   }

@@ -1,16 +1,18 @@
-import { createFileRoute } from "@tanstack/react-router";
-
-import { DealsList } from "@/components/deals-list";
-import { Page } from "@/components/page";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_authenticated/$slug/deals/")({
-  component: Deals,
+  component: DealsRedirect,
 });
 
-function Deals() {
+// Deals moved under Sales — keep the old URL landing on the pipeline tab.
+function DealsRedirect() {
+  const { slug } = Route.useParams();
   return (
-    <Page title="Deals" description="Opportunities across the workspace.">
-      <DealsList />
-    </Page>
+    <Navigate
+      to="/$slug/sales"
+      params={{ slug }}
+      search={{ tab: "deals" }}
+      replace
+    />
   );
 }
