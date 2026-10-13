@@ -1,6 +1,8 @@
+import { Button } from "@cloudflare/kumo/components/button";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 import { Table } from "@cloudflare/kumo/components/table";
 import { useQuery } from "@tanstack/react-query";
+import { Plus } from "@phosphor-icons/react";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { Page } from "@/components/page";
@@ -32,7 +34,15 @@ function Roadmaps() {
   if (roadmaps.isPending) return <LoadingState label="Loading roadmaps" />;
   if (roadmaps.isError) {
     return (
-      <Page title="Roadmaps">
+      <Page title="Roadmaps" actions={
+        <Button
+          variant="primary"
+          icon={<Plus />}
+          onClick={() => window.dispatchEvent(new CustomEvent("pile:create-roadmap"))}
+        >
+          New roadmap
+        </Button>
+      }>
         <ErrorState
           error={roadmaps.error}
           onRetry={() => void roadmaps.refetch()}
