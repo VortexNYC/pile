@@ -45,7 +45,22 @@ type Action = (typeof ACTIONS)[number];
 interface OrgRole {
   id: string;
   role: string;
-  permission: string;
+  // BA returns the permission column as parsed JSON; older code paths and
+  // API responses can still surface it as a string — normalize before use.
+  permission: string | Record<string, string[]>;
+}
+
+function permissionStatements(
+  permission: OrgRole["permission"]
+): Record<string, string[]> {
+  if (typeof permission === "string") {
+    try {
+      return JSON.parse(permission) as Record<string, string[]>;
+    } catch {
+      return {};
+    }
+  }
+  return permission;
 }
 
 function Roles() {
@@ -173,9 +188,7 @@ function Roles() {
                     <Badge variant="secondary">Custom</Badge>
                   </Table.Cell>
                   <Table.Cell className="text-kumo-mute">
-                    {Object.entries(
-                      JSON.parse(r.permission) as Record<string, string[]>
-                    )
+                    {Object.entries(permissionStatements(r.permission))
                       .map(([res, actions]) => `${res}: ${actions.join(", ")}`)
                       .join(" · ")}
                   </Table.Cell>
@@ -189,10 +202,7 @@ function Roles() {
                             setEditingId(r.id);
                             setName(r.role);
                             const next = new Set<string>();
-                            const parsed = JSON.parse(r.permission) as Record<
-                              string,
-                              string[]
-                            >;
+                            const parsed = permissionStatements(r.permission);
                             for (const [res, actions] of Object.entries(
                               parsed
                             )) {
