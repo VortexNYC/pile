@@ -10,22 +10,13 @@ import { Page } from "@/components/page";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
-import { betterAuthClient } from "@/lib/better-auth";
+import { api, unwrap } from "@/lib/api";
 
 export const Route = createFileRoute(
   "/_authenticated/$slug/settings/developer"
 )({
   component: DeveloperSettings,
 });
-
-interface ApiKeyRow {
-  id: string;
-  name: string | null;
-  start: string | null;
-  enabled: boolean;
-  expiresAt: string | null;
-  createdAt: string;
-}
 
 function DeveloperSettings() {
   const workspace = useWorkspace();
@@ -36,25 +27,29 @@ function DeveloperSettings() {
 
   const keys = useQuery({
     queryKey: wsKey(workspace.id, "api-keys"),
-    queryFn: async () => {
-      const { data, error } = await betterAuthClient.$fetch<{
-        keys: ApiKeyRow[];
-      }>("/api-key/list", { method: "GET" });
-      if (error) throw new Error(error.message ?? "Failed to load API keys");
-      return data.keys;
-    },
+    queryFn: async () =>
+      (
+        await unwrap(
+          api.GET("/workspaces/{organizationId}/tokens", {
+            params: { path: { organizationId: workspace.id } },
+          })
+        )
+      ).tokens,
   });
 
   const create = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await betterAuthClient.apiKey.create({
-        name: name.trim() || undefined,
-      });
-      if (error) throw new Error(error.message ?? "Failed to create key");
-      return data;
-    },
+    mutationFn: async () =>
+      unwrap(
+        api.POST("/workspaces/{organizationId}/tokens", {
+          params: { path: { organizationId: workspace.id } },
+          body: {
+            name: name.trim() || "api key",
+            permissions: "member",
+          },
+        })
+      ),
     onSuccess: (data) => {
-      setCreatedKey(data?.key ?? null);
+      setCreatedKey(data?.token ?? null);
       setName("");
       void queryClient.invalidateQueries({
         queryKey: wsKey(workspace.id, "api-keys"),
@@ -64,8 +59,11 @@ function DeveloperSettings() {
 
   const revoke = useMutation({
     mutationFn: async (keyId: string) => {
-      const { error } = await betterAuthClient.apiKey.delete({ keyId });
-      if (error) throw new Error(error.message ?? "Failed to delete key");
+      await unwrap(
+        api.DELETE("/workspaces/{organizationId}/tokens/{id}", {
+          params: { path: { organizationId: workspace.id, id: keyId } },
+        })
+      );
     },
     onSuccess: () =>
       queryClient.invalidateQueries({
@@ -158,14 +156,11 @@ function DeveloperSettings() {
               >
                 <div className="flex min-w-0 flex-col gap-0.5">
                   <Text as="span" size="sm">
-                    {k.name ?? k.start ?? k.id.slice(0, 8)}
+                    {k.name || k.id.slice(0, 8)}
                   </Text>
                   <Text variant="secondary" size="xs">
                     Created {new Date(k.createdAt).toLocaleDateString()}
-                    {k.expiresAt
-                      ? ` · expires ${new Date(k.expiresAt).toLocaleDateString()}`
-                      : ""}
-                    {k.enabled === false ? " · disabled" : ""}
+                    {k.permissions ? ` · ${k.permissions}` : ""}
                   </Text>
                 </div>
                 <Button
