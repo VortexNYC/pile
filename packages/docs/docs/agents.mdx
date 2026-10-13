@@ -45,6 +45,25 @@ pile issues list --workspace org_vortex_main
 pile support tickets list --workspace org_vortex_main
 ```
 
+## Workspace-scoped tokens
+
+Agents authenticate with API keys whose metadata pins them to one
+organization and one permission set — a key cannot act outside its
+workspace. Mint them from **Settings → Developer** in the app, or via
+`POST /workspaces/{organizationId}/tokens`.
+
+## The SMS concierge
+
+A workspace can run a conversational agent over SMS (Sendblue). A team
+member texts the workspace number; the agent keeps a per-sender thread,
+does workspace work through the same scoped API any other agent uses —
+CRM, tickets, issues — and replies by text. The full transcript lands on a
+support ticket (`sourceChannel: "sms"`).
+
+- `POST /support/sms/inbound` — Sendblue webhook (public)
+- `GET /workspaces/{org}/support/sms/status` — `{enabled, number}` for the UI
+- `POST /workspaces/{org}/support/sms/threads/{id}/reply` — the agent's outbound path
+
 ## SDK
 
 The `@vortex-api/pile` package is an `openapi-fetch` client typed against the Pile OpenAPI spec.
