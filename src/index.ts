@@ -1,19 +1,7 @@
 import { ne } from "drizzle-orm";
 
-import { sweepAgentSessions } from "./agents/sweep.js";
-import app from "./api/index.js";
-import { handleIncomingEmail } from "./channels/email.js";
 import { createD1 } from "./global/db.js";
 import { cycles } from "./global/schema.js";
-import {
-  expireStaleCaptureSessions,
-  sweepExpiredCaptureArtifacts,
-} from "./global/support-capture.js";
-import { webhookProcessors } from "./global/webhook-processors.js";
-import {
-  processWebhookQueueBatch,
-  reprocessStuckDeliveries,
-} from "./global/webhook-queue.js";
 import type { WorkerEnv } from "./platform/middleware.js";
 
 export { WorkspaceDO } from "./workspace/durable-object.js";
@@ -26,18 +14,34 @@ export class DevinSandbox extends Sandbox {}
 export class CodexSandbox extends Sandbox {}
 export { Sandbox };
 
+// The API graph is ~80 route modules — importing it at module init blows the
+// 400ms startup cap. Defer evaluation to the first request; the promise caches
+// per isolate so steady-state requests pay nothing.
+type AppModule = typeof import("./api/index.js");
+let appPromise: Promise<AppModule["default"]> | undefined;
+function loadApp() {
+  appPromise ??= import("./api/index.js").then((m) => m.default);
+  return appPromise;
+}
+
 async function scheduled(
   _event: ScheduledController,
   env: WorkerEnv,
   ctx: ExecutionContext
 ) {
   ctx.waitUntil(
-    sweepAgentSessions(env, ctx).catch((err) =>
-      console.error("agent session sweep failed", err)
+    import("./agents/sweep.js").then(({ sweepAgentSessions }) =>
+      sweepAgentSessions(env, ctx).catch((err) =>
+        console.error("agent session sweep failed", err)
+      )
     )
   );
   ctx.waitUntil(
     (async () => {
+      const { expireStaleCaptureSessions, sweepExpiredCaptureArtifacts } =
+        await import("./global/support-capture.js");
+      const { reprocessStuckDeliveries } =
+        await import("./global/webhook-queue.js");
       const d1 = createD1(env.D1);
       await expireStaleCaptureSessions(d1);
       const retentionDays = Number(env.CAPTURE_ARTIFACT_RETENTION_DAYS ?? "30");
@@ -94,6 +98,7 @@ async function email(
   _ctx: ExecutionContext
 ) {
   try {
+    const { handleIncomingEmail } = await import("./channels/email.js");
     await handleIncomingEmail(message, env);
   } catch (err) {
     console.error("incoming email processing failed", {
@@ -110,6 +115,11 @@ async function queue(
   _ctx: ExecutionContext
 ) {
   try {
+    const [{ processWebhookQueueBatch }, { webhookProcessors }] =
+      await Promise.all([
+        import("./global/webhook-queue.js"),
+        import("./global/webhook-processors.js"),
+      ]);
     await processWebhookQueueBatch(batch, env, webhookProcessors);
   } catch (err) {
     console.error("webhook queue batch failed", {
@@ -120,7 +130,10 @@ async function queue(
 }
 
 export default {
-  fetch: app.fetch.bind(app),
+  async fetch(request: Request, env: WorkerEnv, ctx?: ExecutionContext) {
+    const app = await loadApp();
+    return app.fetch(request, env, ctx);
+  },
   scheduled,
   email,
   queue,
