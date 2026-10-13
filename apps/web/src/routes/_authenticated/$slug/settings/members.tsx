@@ -53,6 +53,7 @@ function MembersSettings() {
           ) : null}
           <OrganizationMembers
             className="w-full max-w-none"
+            membersLabel="Everyone with access"
             canManageMembers={canManage}
             roleOptions={roleOptions}
           />
