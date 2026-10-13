@@ -322,7 +322,7 @@ async function mintAgentKey(
   const key = await auth.api.createApiKey({
     body: {
       userId: owner.userId,
-      name: `sms-agent:${threadId}`,
+      name: `sms:${threadId.slice(0, 8)}`,
       rateLimitEnabled: false,
       metadata: { organizationId, actorType: "agent" },
       permissions: {
