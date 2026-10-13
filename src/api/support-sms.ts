@@ -1,6 +1,6 @@
 import { createRoute } from "@hono/zod-openapi";
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { createD1 } from "../global/db.js";
@@ -31,6 +31,8 @@ export function registerSupportSmsRoutes(app: OpenAPIHono<AppContext>) {
                 media_url: z.string().optional(),
                 service: z.string().optional(),
                 date_sent: z.string().optional(),
+                group_id: z.string().optional(),
+                participants: z.array(z.string()).optional(),
               }),
             },
           },
@@ -60,6 +62,8 @@ export function registerSupportSmsRoutes(app: OpenAPIHono<AppContext>) {
         organizationId,
         fromNumber: body.from_number,
         body: body.content,
+        groupId: body.group_id ?? null,
+        mediaUrl: body.media_url ?? null,
       }).catch((err) => {
         console.error("sms inbound failed", {
           from: body.from_number,
