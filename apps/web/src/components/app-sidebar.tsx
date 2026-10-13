@@ -18,10 +18,14 @@ import {
   Layout,
   ListChecks,
   MapTrifold,
+  Robot,
   SignOut,
+  Storefront,
   Timer,
   UserCircle,
   UsersThree,
+  Newspaper,
+  Folder,
 } from "@phosphor-icons/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "@tanstack/react-router";
@@ -50,6 +54,10 @@ const NAV = [
     icon: FileText,
     resource: "document",
   },
+  { title: "Sessions", path: "sessions", icon: Robot },
+  { title: "Projects", path: "projects", icon: Folder },
+  { title: "Customers", path: "customers", icon: Storefront },
+  { title: "Changelog", path: "changelog", icon: Newspaper },
   // opt-in surfaces — hidden unless enabled in settings
   { title: "Cycles", path: "cycles", icon: Timer },
   { title: "Initiatives", path: "initiatives", icon: Flag },
