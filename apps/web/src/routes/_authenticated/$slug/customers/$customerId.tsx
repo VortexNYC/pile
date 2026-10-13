@@ -7,10 +7,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
+import { CompanyLogo } from "@/components/company-logo";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { EntityLinksRail } from "@/components/entity-links";
 import { EntityPage, RailLink, RailSection } from "@/components/entity-page";
 import { Page } from "@/components/page";
+import { RecordNotes } from "@/components/record-notes";
 import { ErrorState, LoadingState } from "@/components/states";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
@@ -42,7 +44,7 @@ function CustomerDetail() {
   if (customer.isPending) return <LoadingState label="Loading customer" />;
   if (customer.isError) {
     return (
-      <Page title="Customer">
+      <Page title="Company">
         <ErrorState
           error={customer.error}
           onRetry={() => void customer.refetch()}
@@ -64,6 +66,7 @@ function CustomerEditor({
     url: string | null;
     bookingUrl: string | null;
     notes: string | null;
+    logoUrl: string | null;
   };
 }) {
   const workspace = useWorkspace();
@@ -158,7 +161,7 @@ function CustomerEditor({
           },
         })
       ),
-    onSuccess: () => toastSuccess("Customer saved"),
+    onSuccess: () => toastSuccess("Company saved"),
     onError: (error) => toastError(error),
     onSettled: () => queryClient.invalidateQueries({ queryKey: listKey }),
   });
@@ -175,7 +178,7 @@ function CustomerEditor({
         queryKey: wsKey(workspace.id, "customers", customer.id),
       });
       await queryClient.invalidateQueries({ queryKey: listKey });
-      toastSuccess("Customer deleted");
+      toastSuccess("Company deleted");
       await navigate({
         to: "/$slug/customers",
         params: { slug: workspace.slug },
@@ -187,14 +190,24 @@ function CustomerEditor({
   return (
     <>
       <EntityPage
-        title={customer.name}
+        title={
+          <span className="flex items-center gap-3">
+            <CompanyLogo
+              name={customer.name}
+              logoUrl={customer.logoUrl}
+              url={customer.url}
+              size={28}
+            />
+            {customer.name}
+          </span>
+        }
         description={
           <Link
             to="/$slug/customers"
             params={{ slug: workspace.slug }}
             className="text-kumo-link"
           >
-            Customers
+            Companies
           </Link>
         }
         actions={
@@ -296,6 +309,7 @@ function CustomerEditor({
                 </form>
               </LayerCard.Primary>
             </LayerCard>
+            <RecordNotes entityType="customer" entityId={customer.id} />
           </>
         }
         rail={

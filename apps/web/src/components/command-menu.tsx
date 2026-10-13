@@ -156,7 +156,7 @@ export function CommandMenu() {
       .map((c) => ({
         key: `customer-${c.id}`,
         label: c.name,
-        hint: "customer",
+        hint: "company",
         href: `/customers/${c.id}`,
       }));
     const filtered = query

@@ -11,6 +11,7 @@ import { useEffect } from "react";
 
 import { AppSidebar } from "@/components/app-sidebar";
 import { CommandMenu } from "@/components/command-menu";
+import { ContactDialog } from "@/components/create-contact-dialog";
 import { CreateCustomerDialog } from "@/components/create-customer-dialog";
 import { CreateDealDialog } from "@/components/create-deal-dialog";
 import { CreateInitiativeDialog } from "@/components/create-initiative-dialog";
@@ -77,6 +78,7 @@ function WorkspaceLayout() {
         <CommandMenu />
         <CreateIssueDialog />
         <CreateTicketDialog />
+        <ContactDialog />
         <CreateCustomerDialog />
         <CreateDealDialog />
         <CreateInitiativeDialog />

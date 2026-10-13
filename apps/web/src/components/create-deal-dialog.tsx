@@ -108,10 +108,10 @@ export function CreateDealDialog({
           />
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-kumo-subtle">
-              Customer
+              Company
             </label>
             <Select
-              aria-label="Customer"
+              aria-label="Company"
               value={customerId}
               onValueChange={(v) => v && setCustomerId(v)}
             >

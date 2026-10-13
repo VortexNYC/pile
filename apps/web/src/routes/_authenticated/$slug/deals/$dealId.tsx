@@ -14,6 +14,7 @@ import { EntityLinksRail } from "@/components/entity-links";
 import { EntityPage, RailLink, RailSection } from "@/components/entity-page";
 import { FieldMenu } from "@/components/field-menu";
 import { Markdown } from "@/components/markdown";
+import { RecordNotes } from "@/components/record-notes";
 import { ErrorState, LoadingState } from "@/components/states";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
@@ -353,11 +354,12 @@ function DealDetail() {
                 </div>
               ))}
             </div>
+            <RecordNotes entityType="deal" entityId={data.id} />
           </>
         }
         rail={
           <>
-            <RailSection title="Customer">
+            <RailSection title="Company">
               <RailLink
                 to="/$slug/customers/$customerId"
                 params={{

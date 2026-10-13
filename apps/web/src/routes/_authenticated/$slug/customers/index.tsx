@@ -11,7 +11,7 @@ function CustomersRedirect() {
     <Navigate
       to="/$slug/sales"
       params={{ slug }}
-      search={{ tab: "customers" }}
+      search={{ tab: "companies" }}
       replace
     />
   );

@@ -5,6 +5,7 @@ import { Buildings, Plus } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
+import { CompanyLogo } from "@/components/company-logo";
 import { EntityHover } from "@/components/entity-hover";
 import { PeekHeader, usePeek } from "@/components/entity-peek";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
@@ -12,7 +13,7 @@ import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap } from "@/lib/api";
 import { formatRelative } from "@/lib/labels";
 
-/** Customer list + inline add — reused by the customers route and
+/** Company list + inline add — reused by the Sales tab and
  * the Support tab. */
 export function CustomersList() {
   const workspace = useWorkspace();
@@ -42,11 +43,11 @@ export function CustomersList() {
             window.dispatchEvent(new CustomEvent("pile:create-customer"))
           }
         >
-          Add customer
+          Add company
         </Button>
       </div>
       {customers.isPending ? (
-        <LoadingState label="Loading customers" />
+        <LoadingState label="Loading companies" />
       ) : customers.isError ? (
         <ErrorState
           error={customers.error}
@@ -55,12 +56,12 @@ export function CustomersList() {
       ) : customers.data.length === 0 ? (
         <EmptyState
           icon={<Buildings size={40} />}
-          title="No customers yet"
+          title="No companies yet"
           description="Add the companies you work with."
         />
       ) : (
         <LayerCard className="p-0">
-          <Table aria-label="Customers">
+          <Table aria-label="Companies">
             <Table.Header>
               <Table.Row>
                 <Table.Head>Name</Table.Head>
@@ -85,7 +86,14 @@ export function CustomersList() {
                         onClick={peek.peekOnClick(customer)}
                         className="text-kumo-link hover:underline"
                       >
-                        {customer.name}
+                        <span className="flex items-center gap-2">
+                          <CompanyLogo
+                            name={customer.name}
+                            logoUrl={customer.logoUrl}
+                            url={customer.url}
+                          />
+                          {customer.name}
+                        </span>
                       </Link>
                     </EntityHover>
                   </Table.Cell>

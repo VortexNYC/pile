@@ -11,7 +11,7 @@ import { useWorkspace } from "@/hooks/use-workspace";
 
 const TABS = [
   ["deals", "Pipeline", "deal"],
-  ["customers", "Customers", "customer"],
+  ["companies", "Companies", "customer"],
   ["contacts", "Contacts", "contact"],
 ] as const;
 type SalesTab = (typeof TABS)[number][0];
@@ -22,9 +22,11 @@ function isSalesTab(value: unknown): value is SalesTab {
 
 export const Route = createFileRoute("/_authenticated/$slug/sales/")({
   component: Sales,
-  validateSearch: (search: Record<string, unknown>): { tab?: SalesTab } => ({
-    tab: isSalesTab(search.tab) ? search.tab : undefined,
-  }),
+  validateSearch: (search: Record<string, unknown>): { tab?: SalesTab } => {
+    // "customers" shipped first — pre-rename links still land on Companies.
+    const tab = search.tab === "customers" ? "companies" : search.tab;
+    return { tab: isSalesTab(tab) ? tab : undefined };
+  },
 });
 
 /** Attio-style CRM home — one surface for the pipeline, the companies
@@ -43,14 +45,14 @@ function Sales() {
       <Page title="Sales">
         <EmptyState
           title="No sales surfaces"
-          description="Your role can't view deals, customers, or contacts."
+          description="Your role can't view deals, companies, or contacts."
         />
       </Page>
     );
   }
 
   return (
-    <Page title="Sales" description="Pipeline, customers, and contacts.">
+    <Page title="Sales" description="Pipeline, companies, and contacts.">
       <div className="flex flex-col gap-4">
         <div>
           <Tabs
@@ -66,7 +68,7 @@ function Sales() {
         </div>
         {active === "deals" ? (
           <DealsList />
-        ) : active === "customers" ? (
+        ) : active === "companies" ? (
           <CustomersList />
         ) : (
           <ContactsList />

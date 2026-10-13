@@ -240,7 +240,7 @@ export function EntityLinksRail({
               <Select.Option value="issue">Issue</Select.Option>
               <Select.Option value="ticket">Ticket</Select.Option>
               <Select.Option value="deal">Deal</Select.Option>
-              <Select.Option value="customer">Customer</Select.Option>
+              <Select.Option value="customer">Company</Select.Option>
               <Select.Option value="contact">Contact</Select.Option>
               <Select.Option value="document">Document</Select.Option>
               <Select.Option value="session">Session</Select.Option>
