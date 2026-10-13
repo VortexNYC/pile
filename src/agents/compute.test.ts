@@ -371,6 +371,54 @@ describe("CloudflareBackend lane cache mount (PILE-306)", () => {
     expect(mountBucket).not.toHaveBeenCalled();
   });
 
+  it("reuses a live sandbox's existing mount on follow-ups", async () => {
+    const { handle } = mountHandle(() =>
+      Promise.reject(
+        new Error(`Mount path already in use: ${LANE_CACHE_MOUNT}`)
+      )
+    );
+    const backend = new CloudflareBackend(
+      () => Promise.resolve(handle),
+      cacheEnv()
+    );
+    expect(
+      await backend.mountCache(sandboxRecord, {
+        organizationId: "org-1",
+        repo: "acme/widgets",
+        readOnly: false,
+      })
+    ).toBe(LANE_CACHE_MOUNT);
+  });
+
+  it("remounts read-only when a reused mount must not stay writable", async () => {
+    const mountBucket = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new Error(`Mount path already in use: ${LANE_CACHE_MOUNT}`)
+      )
+      .mockResolvedValueOnce(undefined);
+    const unmountBucket = vi.fn(() => Promise.resolve());
+    const handle = { mountBucket, unmountBucket } as unknown as SandboxHandle;
+    const backend = new CloudflareBackend(
+      () => Promise.resolve(handle),
+      cacheEnv()
+    );
+    expect(
+      await backend.mountCache(sandboxRecord, {
+        organizationId: "org-1",
+        repo: "acme/widgets",
+        readOnly: true,
+      })
+    ).toBe(LANE_CACHE_MOUNT);
+    expect(unmountBucket).toHaveBeenCalledWith(LANE_CACHE_MOUNT);
+    expect(mountBucket).toHaveBeenCalledTimes(2);
+    expect(mountBucket).toHaveBeenLastCalledWith(
+      "LANE_CACHE_BUCKET",
+      LANE_CACHE_MOUNT,
+      { prefix: "/org-1/acme/widgets/", readOnly: true }
+    );
+  });
+
   it("fails open when s3fs cannot mount", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const { handle } = mountHandle(() =>
