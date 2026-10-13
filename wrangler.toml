@@ -153,7 +153,7 @@ CF_ADMISSION_URL = "https://cloudflare-ci.shlomo-31b.workers.dev"
 [[env.production.d1_databases]]
 binding = "D1"
 database_name = "pile-global"
-database_id = "c4f71628-3f93-4be1-ac11-48b5611f5934"
+database_id = "222e823e-3594-457d-add1-1827064d4bc8"
 migrations_dir = "migrations"
 
 [[env.production.r2_buckets]]
@@ -194,25 +194,25 @@ class_name = "CodexSandbox"
 # digest a pushed tag landed on.
 [[env.production.containers]]
 class_name = "Sandbox"
-image = "registry.cloudflare.com/31bfc2c14a28e0a39e8b9e3c556a18be/pile-sandbox-production@sha256:177e408e62062b025a6e9a75a659eb88bd271a4dcd0e4a8e8d40bdaaa5fae5b4"
+image = "registry.cloudflare.com/953346ce1b4f27fa04a76d83aeccab28/pile-sandbox-production@sha256:177e408e62062b025a6e9a75a659eb88bd271a4dcd0e4a8e8d40bdaaa5fae5b4"
 max_instances = 20
 instance_type = "standard-1"
 
 [[env.production.containers]]
 class_name = "CursorSandbox"
-image = "registry.cloudflare.com/31bfc2c14a28e0a39e8b9e3c556a18be/pile-cursorsandbox-production@sha256:28a55370d583c03721d6dc9b52e7b908c27e148cf860ca5ba63000e99cc4a87c"
+image = "registry.cloudflare.com/953346ce1b4f27fa04a76d83aeccab28/pile-cursorsandbox-production@sha256:28a55370d583c03721d6dc9b52e7b908c27e148cf860ca5ba63000e99cc4a87c"
 max_instances = 20
 instance_type = "standard-1"
 
 [[env.production.containers]]
 class_name = "DevinSandbox"
-image = "registry.cloudflare.com/31bfc2c14a28e0a39e8b9e3c556a18be/pile-devinsandbox-production@sha256:c9b3773bf482587377c71c8c84511aa7530de19745b7c7ca0ab83ff3a0e4cf73"
+image = "registry.cloudflare.com/953346ce1b4f27fa04a76d83aeccab28/pile-devinsandbox-production@sha256:c9b3773bf482587377c71c8c84511aa7530de19745b7c7ca0ab83ff3a0e4cf73"
 max_instances = 20
 instance_type = "standard-1"
 
 [[env.production.containers]]
 class_name = "CodexSandbox"
-image = "registry.cloudflare.com/31bfc2c14a28e0a39e8b9e3c556a18be/pile-codexsandbox-production@sha256:a88dcb498f92a2cdb53b7f9480a83cbd4be92966a05c0fb133bc63204596e4c6"
+image = "registry.cloudflare.com/953346ce1b4f27fa04a76d83aeccab28/pile-codexsandbox-production@sha256:a88dcb498f92a2cdb53b7f9480a83cbd4be92966a05c0fb133bc63204596e4c6"
 max_instances = 20
 instance_type = "standard-1"
 
@@ -267,7 +267,7 @@ CF_ADMISSION_URL = "https://cloudflare-ci.shlomo-31b.workers.dev"
 [[env.staging.d1_databases]]
 binding = "D1"
 database_name = "pile-global"
-database_id = "c4f71628-3f93-4be1-ac11-48b5611f5934"
+database_id = "222e823e-3594-457d-add1-1827064d4bc8"
 migrations_dir = "migrations"
 
 [[env.staging.r2_buckets]]
@@ -306,25 +306,25 @@ class_name = "CodexSandbox"
 
 [[env.staging.containers]]
 class_name = "Sandbox"
-image = "registry.cloudflare.com/31bfc2c14a28e0a39e8b9e3c556a18be/pile-sandbox-production@sha256:177e408e62062b025a6e9a75a659eb88bd271a4dcd0e4a8e8d40bdaaa5fae5b4"
+image = "registry.cloudflare.com/953346ce1b4f27fa04a76d83aeccab28/pile-sandbox-production@sha256:177e408e62062b025a6e9a75a659eb88bd271a4dcd0e4a8e8d40bdaaa5fae5b4"
 max_instances = 20
 instance_type = "standard-1"
 
 [[env.staging.containers]]
 class_name = "CursorSandbox"
-image = "registry.cloudflare.com/31bfc2c14a28e0a39e8b9e3c556a18be/pile-cursorsandbox-production@sha256:28a55370d583c03721d6dc9b52e7b908c27e148cf860ca5ba63000e99cc4a87c"
+image = "registry.cloudflare.com/953346ce1b4f27fa04a76d83aeccab28/pile-cursorsandbox-production@sha256:28a55370d583c03721d6dc9b52e7b908c27e148cf860ca5ba63000e99cc4a87c"
 max_instances = 20
 instance_type = "standard-1"
 
 [[env.staging.containers]]
 class_name = "DevinSandbox"
-image = "registry.cloudflare.com/31bfc2c14a28e0a39e8b9e3c556a18be/pile-devinsandbox-production@sha256:c9b3773bf482587377c71c8c84511aa7530de19745b7c7ca0ab83ff3a0e4cf73"
+image = "registry.cloudflare.com/953346ce1b4f27fa04a76d83aeccab28/pile-devinsandbox-production@sha256:c9b3773bf482587377c71c8c84511aa7530de19745b7c7ca0ab83ff3a0e4cf73"
 max_instances = 20
 instance_type = "standard-1"
 
 [[env.staging.containers]]
 class_name = "CodexSandbox"
-image = "registry.cloudflare.com/31bfc2c14a28e0a39e8b9e3c556a18be/pile-codexsandbox-production@sha256:a88dcb498f92a2cdb53b7f9480a83cbd4be92966a05c0fb133bc63204596e4c6"
+image = "registry.cloudflare.com/953346ce1b4f27fa04a76d83aeccab28/pile-codexsandbox-production@sha256:a88dcb498f92a2cdb53b7f9480a83cbd4be92966a05c0fb133bc63204596e4c6"
 max_instances = 20
 instance_type = "standard-1"
 
