@@ -1,16 +1,18 @@
-import { createFileRoute } from "@tanstack/react-router";
-
-import { CustomersList } from "@/components/customers-list";
-import { Page } from "@/components/page";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_authenticated/$slug/customers/")({
-  component: Customers,
+  component: CustomersRedirect,
 });
 
-function Customers() {
+// Customers moved under Sales — keep the old URL landing on the right tab.
+function CustomersRedirect() {
+  const { slug } = Route.useParams();
   return (
-    <Page title="Customers" description="Companies you work with.">
-      <CustomersList />
-    </Page>
+    <Navigate
+      to="/$slug/sales"
+      params={{ slug }}
+      search={{ tab: "customers" }}
+      replace
+    />
   );
 }

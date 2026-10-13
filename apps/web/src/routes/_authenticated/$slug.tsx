@@ -157,6 +157,7 @@ function GuestGate({
       ["/customers", "customer"],
       ["/contacts", "contact"],
       ["/deals", "deal"],
+      ["/sales", "customer"],
       ["/projects", "project"],
       ["/sessions", "session"],
       ["/settings", "settings"],

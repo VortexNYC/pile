@@ -14,7 +14,6 @@ import {
   Layout,
   ListChecks,
   SignOut,
-  Storefront,
   UserCircle,
   UsersThree,
 } from "@phosphor-icons/react";
@@ -40,8 +39,7 @@ const NAV = [
     icon: FileText,
     resource: "document",
   },
-  { title: "Customers", path: "customers", icon: Storefront },
-  { title: "Deals", path: "deals", icon: TrendUp },
+  { title: "Sales", path: "sales", icon: TrendUp },
 ] as const;
 
 const SETTINGS = [

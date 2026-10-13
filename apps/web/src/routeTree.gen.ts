@@ -42,6 +42,7 @@ import { Route as AuthenticatedSlugIssuesNewRouteImport } from './routes/_authen
 import { Route as AuthenticatedSlugProjectsIndexRouteImport } from './routes/_authenticated/$slug/projects/index'
 import { Route as AuthenticatedSlugProjectsProjectIdRouteImport } from './routes/_authenticated/$slug/projects/$projectId'
 import { Route as AuthenticatedSlugRoadmapsIndexRouteImport } from './routes/_authenticated/$slug/roadmaps/index'
+import { Route as AuthenticatedSlugSalesIndexRouteImport } from './routes/_authenticated/$slug/sales/index'
 import { Route as AuthenticatedSlugSessionsIndexRouteImport } from './routes/_authenticated/$slug/sessions/index'
 import { Route as AuthenticatedSlugSessionsSessionIdRouteImport } from './routes/_authenticated/$slug/sessions/$sessionId'
 import { Route as AuthenticatedSlugSettingsIndexRouteImport } from './routes/_authenticated/$slug/settings/index'
@@ -238,6 +239,12 @@ const AuthenticatedSlugRoadmapsIndexRoute =
     path: '/roadmaps/',
     getParentRoute: () => AuthenticatedSlugRoute,
   } as any)
+const AuthenticatedSlugSalesIndexRoute =
+  AuthenticatedSlugSalesIndexRouteImport.update({
+    id: '/sales/',
+    path: '/sales/',
+    getParentRoute: () => AuthenticatedSlugRoute,
+  } as any)
 const AuthenticatedSlugSessionsIndexRoute =
   AuthenticatedSlugSessionsIndexRouteImport.update({
     id: '/sessions/',
@@ -357,6 +364,7 @@ export interface FileRoutesByFullPath {
   '/$slug/issues/': typeof AuthenticatedSlugIssuesIndexRoute
   '/$slug/projects/': typeof AuthenticatedSlugProjectsIndexRoute
   '/$slug/roadmaps/': typeof AuthenticatedSlugRoadmapsIndexRoute
+  '/$slug/sales/': typeof AuthenticatedSlugSalesIndexRoute
   '/$slug/sessions/': typeof AuthenticatedSlugSessionsIndexRoute
   '/$slug/settings/': typeof AuthenticatedSlugSettingsIndexRoute
   '/$slug/tickets/': typeof AuthenticatedSlugTicketsIndexRoute
@@ -402,6 +410,7 @@ export interface FileRoutesByTo {
   '/$slug/issues': typeof AuthenticatedSlugIssuesIndexRoute
   '/$slug/projects': typeof AuthenticatedSlugProjectsIndexRoute
   '/$slug/roadmaps': typeof AuthenticatedSlugRoadmapsIndexRoute
+  '/$slug/sales': typeof AuthenticatedSlugSalesIndexRoute
   '/$slug/sessions': typeof AuthenticatedSlugSessionsIndexRoute
   '/$slug/settings': typeof AuthenticatedSlugSettingsIndexRoute
   '/$slug/tickets': typeof AuthenticatedSlugTicketsIndexRoute
@@ -451,6 +460,7 @@ export interface FileRoutesById {
   '/_authenticated/$slug/issues/': typeof AuthenticatedSlugIssuesIndexRoute
   '/_authenticated/$slug/projects/': typeof AuthenticatedSlugProjectsIndexRoute
   '/_authenticated/$slug/roadmaps/': typeof AuthenticatedSlugRoadmapsIndexRoute
+  '/_authenticated/$slug/sales/': typeof AuthenticatedSlugSalesIndexRoute
   '/_authenticated/$slug/sessions/': typeof AuthenticatedSlugSessionsIndexRoute
   '/_authenticated/$slug/settings/': typeof AuthenticatedSlugSettingsIndexRoute
   '/_authenticated/$slug/tickets/': typeof AuthenticatedSlugTicketsIndexRoute
@@ -499,6 +509,7 @@ export interface FileRouteTypes {
     | '/$slug/issues/'
     | '/$slug/projects/'
     | '/$slug/roadmaps/'
+    | '/$slug/sales/'
     | '/$slug/sessions/'
     | '/$slug/settings/'
     | '/$slug/tickets/'
@@ -544,6 +555,7 @@ export interface FileRouteTypes {
     | '/$slug/issues'
     | '/$slug/projects'
     | '/$slug/roadmaps'
+    | '/$slug/sales'
     | '/$slug/sessions'
     | '/$slug/settings'
     | '/$slug/tickets'
@@ -592,6 +604,7 @@ export interface FileRouteTypes {
     | '/_authenticated/$slug/issues/'
     | '/_authenticated/$slug/projects/'
     | '/_authenticated/$slug/roadmaps/'
+    | '/_authenticated/$slug/sales/'
     | '/_authenticated/$slug/sessions/'
     | '/_authenticated/$slug/settings/'
     | '/_authenticated/$slug/tickets/'
@@ -839,6 +852,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSlugRoadmapsIndexRouteImport
       parentRoute: typeof AuthenticatedSlugRoute
     }
+    '/_authenticated/$slug/sales/': {
+      id: '/_authenticated/$slug/sales/'
+      path: '/sales'
+      fullPath: '/$slug/sales/'
+      preLoaderRoute: typeof AuthenticatedSlugSalesIndexRouteImport
+      parentRoute: typeof AuthenticatedSlugRoute
+    }
     '/_authenticated/$slug/sessions/': {
       id: '/_authenticated/$slug/sessions/'
       path: '/sessions'
@@ -982,6 +1002,7 @@ interface AuthenticatedSlugRouteChildren {
   AuthenticatedSlugIssuesIndexRoute: typeof AuthenticatedSlugIssuesIndexRoute
   AuthenticatedSlugProjectsIndexRoute: typeof AuthenticatedSlugProjectsIndexRoute
   AuthenticatedSlugRoadmapsIndexRoute: typeof AuthenticatedSlugRoadmapsIndexRoute
+  AuthenticatedSlugSalesIndexRoute: typeof AuthenticatedSlugSalesIndexRoute
   AuthenticatedSlugSessionsIndexRoute: typeof AuthenticatedSlugSessionsIndexRoute
   AuthenticatedSlugSettingsIndexRoute: typeof AuthenticatedSlugSettingsIndexRoute
   AuthenticatedSlugTicketsIndexRoute: typeof AuthenticatedSlugTicketsIndexRoute
@@ -1024,6 +1045,7 @@ const AuthenticatedSlugRouteChildren: AuthenticatedSlugRouteChildren = {
   AuthenticatedSlugIssuesIndexRoute: AuthenticatedSlugIssuesIndexRoute,
   AuthenticatedSlugProjectsIndexRoute: AuthenticatedSlugProjectsIndexRoute,
   AuthenticatedSlugRoadmapsIndexRoute: AuthenticatedSlugRoadmapsIndexRoute,
+  AuthenticatedSlugSalesIndexRoute: AuthenticatedSlugSalesIndexRoute,
   AuthenticatedSlugSessionsIndexRoute: AuthenticatedSlugSessionsIndexRoute,
   AuthenticatedSlugSettingsIndexRoute: AuthenticatedSlugSettingsIndexRoute,
   AuthenticatedSlugTicketsIndexRoute: AuthenticatedSlugTicketsIndexRoute,
