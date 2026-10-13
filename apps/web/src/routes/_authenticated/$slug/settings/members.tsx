@@ -15,6 +15,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { betterAuthClient } from "@/lib/better-auth";
 import { getBetterAuthUiClient } from "@/lib/better-auth-ui-adapter";
+import { toastError } from "@/lib/toast";
 
 export const Route = createFileRoute("/_authenticated/$slug/settings/members")({
   component: MembersSettings,
@@ -105,9 +106,17 @@ function ViewAs({ workspaceId }: { workspaceId: string }) {
   });
   const impersonate = useMutation({
     mutationFn: async () => {
-      await betterAuthClient.admin.impersonateUser({ userId });
+      const result = await betterAuthClient.admin.impersonateUser({
+        userId,
+      });
+      if (result.error) {
+        throw new Error(
+          result.error.message ?? "Impersonation failed"
+        );
+      }
       window.location.href = "/app";
     },
+    onError: (error) => toastError(error),
   });
   return (
     <div className="flex items-center gap-3">
