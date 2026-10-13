@@ -9,8 +9,8 @@
     "deploy": "wrangler deploy --name pile-docs --config dist/server/wrangler.json"
   },
   "dependencies": {
-    "@astrojs/cloudflare": "^14.3.3",
+    "@astrojs/cloudflare": "^14.3.4",
     "@openrouter/ai-sdk-provider": "^3.1.0",
-    "blume": "^2.1.1"
+    "blume": "^2.2.2"
   }
 }
