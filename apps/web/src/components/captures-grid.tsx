@@ -2,6 +2,7 @@ import { Badge } from "@cloudflare/kumo/components/badge";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 import { Image as ImageIcon } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
@@ -20,6 +21,7 @@ function formatSize(bytes: number | null): string {
  * and the Support tab. */
 export function CapturesGrid() {
   const workspace = useWorkspace();
+  const [broken, setBroken] = useState<Set<string>>(new Set());
   const captures = useQuery({
     queryKey: wsKey(workspace.id, "captures"),
     queryFn: async () =>
@@ -66,12 +68,16 @@ export function CapturesGrid() {
             <div className="bg-kumo-tint flex aspect-video items-center justify-center overflow-hidden">
               {capture.type === "screenshot" &&
               capture.contentType?.startsWith("image/") &&
-              capture.url ? (
+              capture.url &&
+              !broken.has(capture.id) ? (
                 <img
                   src={capture.url}
                   alt={capture.fileName ?? "Capture"}
                   className="h-full w-full object-cover"
                   loading="lazy"
+                  onError={() =>
+                    setBroken((prev) => new Set(prev).add(capture.id))
+                  }
                 />
               ) : (
                 <ImageIcon size={28} className="text-kumo-subtle" />
