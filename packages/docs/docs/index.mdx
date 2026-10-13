@@ -13,6 +13,16 @@ Pile is an open-source, agent-native issue tracker designed to replace Linear op
 - **Workspace-isolated real-time state**: one Durable Object per organization coordinates state, with D1 for metadata and R2 for attachments.
 - **OpenAPI-first**: every route is typed with `@hono/zod-openapi` and exposed as an MCP tool, with a generated TypeScript client.
 
+## Core surfaces
+
+- **Issues** — teams, projects, statuses, priorities, relations, subscribers, and per-issue activity.
+- **Support** — customer conversations across email, chat, capture links, and SMS, all landing in one ticket inbox.
+- **Documents** — markdown specs and notes, linkable to issues and tickets.
+- **Mentions** — `@name` in a comment or ticket note notifies the member (in-app + email).
+- **Roles** — built-in member/admin/owner/guest plus custom roles with per-resource statements (`issue:view`, `ticket:create`, …).
+- **View as** — admins can impersonate a member to see exactly what their role sees.
+- **Agent sessions** — dispatch coding lanes or conversational agents against a workspace-scoped token.
+
 ## Explore the API
 
 The full HTTP API reference is generated from the OpenAPI spec and lives at [`/api`](/api).

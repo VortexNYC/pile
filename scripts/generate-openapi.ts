@@ -58,6 +58,15 @@ function makeSummary(method: string, path: string): string {
   if (path === "/workspaces" && m === "post") return "Create workspace";
   if (path === "/workspaces/slug/{slug}" && m === "get")
     return "Get workspace by slug";
+  // Plural action paths carry different semantics than their singular
+  // twins — without these the generated summaries collide and the docs
+  // site emits duplicate nav labels.
+  if (path === "/api/auth/revoke-session") return "Revoke session";
+  if (path === "/api/auth/revoke-sessions") return "Revoke all sessions";
+  if (path === "/api/auth/admin/revoke-user-session")
+    return "Revoke user session";
+  if (path === "/api/auth/admin/revoke-user-sessions")
+    return "Revoke all user sessions";
   if (path === "/workspaces/{id}" && m === "get") return "Get workspace";
   if (path === "/workspaces/{id}" && m === "patch") return "Update workspace";
   if (path === "/workspaces/{id}" && m === "delete") return "Delete workspace";

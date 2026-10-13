@@ -54498,7 +54498,7 @@
             }
           }
         },
-        "summary": "Create api auth revoke session"
+        "summary": "Revoke session"
       }
     },
     "/api/auth/revoke-sessions": {
@@ -54533,7 +54533,7 @@
             }
           }
         },
-        "summary": "Create api auth revoke session"
+        "summary": "Revoke all sessions"
       }
     },
     "/api/auth/request-password-reset": {
@@ -55226,7 +55226,7 @@
             }
           }
         },
-        "summary": "Create api auth admin revoke user session"
+        "summary": "Revoke user session"
       }
     },
     "/api/auth/admin/revoke-user-sessions": {
@@ -55261,7 +55261,7 @@
             }
           }
         },
-        "summary": "Create api auth admin revoke user session"
+        "summary": "Revoke all user sessions"
       }
     },
     "/api/auth/admin/remove-user": {
