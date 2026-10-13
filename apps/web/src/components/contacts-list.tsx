@@ -89,10 +89,16 @@ export function ContactsList() {
       </LayerCard>
       <peek.Drawer>
         {peek.peeked ? (
-          <PeekHeader
-            title={peek.peeked.fullName ?? peek.peeked.email}
-            href={`/${workspace.slug}/contacts/${peek.peeked.id}`}
-          />
+          <>
+            <PeekHeader
+              title={peek.peeked.fullName ?? peek.peeked.email}
+              href={`/${workspace.slug}/contacts/${peek.peeked.id}`}
+            />
+            <div className="mt-4 flex flex-col gap-2 text-sm text-kumo-subtle">
+              {peek.peeked.fullName ? <div>{peek.peeked.email}</div> : null}
+              <div>Added {formatRelative(peek.peeked.createdAt)}</div>
+            </div>
+          </>
         ) : null}
       </peek.Drawer>
     </>
