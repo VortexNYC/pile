@@ -123,6 +123,7 @@ new_sqlite_classes = ["CursorSandbox", "DevinSandbox", "CodexSandbox"]
 
 [env.production]
 name = "pile"
+minify = true
 
 routes = [
   { pattern = "pile.nyc", custom_domain = true },
