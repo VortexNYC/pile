@@ -121,16 +121,29 @@ export function DealsList() {
     0
   );
   const cur = open.find((d) => d.currency)?.currency ?? "USD";
-  const total = new Intl.NumberFormat("en", {
-    style: "currency",
-    currency: cur,
-    maximumFractionDigits: 0,
-  }).format(openValue / 100);
-  const weightedTotal = new Intl.NumberFormat("en", {
-    style: "currency",
-    currency: cur,
-    maximumFractionDigits: 0,
-  }).format(weighted / 100);
+  const fmt = (cents: number) =>
+    new Intl.NumberFormat("en", {
+      style: "currency",
+      currency: cur,
+      maximumFractionDigits: 0,
+    }).format(cents / 100);
+  const total = fmt(openValue);
+  const weightedTotal = fmt(weighted);
+  // Reporting strip — win rate over closed deals, 90-day forecast over
+  // open ones, the same math Attio shows on a pipeline header.
+  const wonDeals = open.filter((d) => d.stage === "won");
+  const lostDeals = open.filter((d) => d.stage === "lost");
+  const closed = wonDeals.length + lostDeals.length;
+  const winRate =
+    closed > 0 ? Math.round((wonDeals.length / closed) * 100) : null;
+  const horizon = Date.now() + 90 * 24 * 3600 * 1000;
+  const forecast = fmt(
+    openDeals
+      .filter(
+        (d) => d.expectedCloseAt && Date.parse(d.expectedCloseAt) <= horizon
+      )
+      .reduce((s, d) => s + (d.amountCents ?? 0), 0)
+  );
 
   if (open.length === 0) {
     return (
@@ -159,7 +172,9 @@ export function DealsList() {
           <span className="font-medium text-kumo-default">{total} open</span>
           <span className="text-kumo-subtle">·</span>
           <span className="text-kumo-subtle">
-            {weightedTotal} weighted · {openDeals.length} deals
+            {weightedTotal} weighted · {openDeals.length} open
+            {winRate !== null ? ` · ${winRate}% win rate` : ""} · {forecast}{" "}
+            closing 90d
           </span>
         </div>
         <Button

@@ -21,7 +21,7 @@ export const Route = createFileRoute("/_authenticated/$slug/settings/fields")({
 
 const ENTITY_TYPES = [
   ["issue", "Issues"],
-  ["customer", "Customers"],
+  ["customer", "Companies"],
   ["deal", "Deals"],
 ] as const;
 const FIELD_TYPES = [

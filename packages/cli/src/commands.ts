@@ -4316,6 +4316,18 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "me permissions list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/me/permissions",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "available users list": {
     method: "GET",
     path: "/workspaces/{organizationId}/available-users",
@@ -5158,6 +5170,69 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "customers comments": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/{id}/comments",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "body",
+        flag: "body",
+      },
+    ],
+  },
+  "deals comments": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/deals/{dealId}/comments",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "dealId",
+        flag: "deal-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "body",
+        flag: "body",
+      },
+    ],
+  },
+  "support customers comments": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/customers/{customerId}/comments",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "customerId",
+        flag: "customer-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "body",
+        flag: "body",
+      },
+    ],
+  },
   "documents list": {
     method: "GET",
     path: "/workspaces/{organizationId}/documents",
@@ -5648,6 +5723,22 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "q",
       },
     ],
+    body: [],
+  },
+  "documents permissions list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/documents/{id}/permissions",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
     body: [],
   },
   "documents permissions update": {
@@ -7694,6 +7785,51 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "support tickets notes update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/support/tickets/{ticketId}/notes/{eventId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ticketId",
+        flag: "ticket-id",
+      },
+      {
+        name: "eventId",
+        flag: "event-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "body",
+        flag: "body",
+      },
+    ],
+  },
+  "support tickets notes delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/support/tickets/{ticketId}/notes/{eventId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ticketId",
+        flag: "ticket-id",
+      },
+      {
+        name: "eventId",
+        flag: "event-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "support tickets events list": {
     method: "GET",
     path: "/workspaces/{organizationId}/support/tickets/{ticketId}/events",
@@ -8615,6 +8751,79 @@ export const COMMANDS: Record<string, CommandDef> = {
     ],
     query: [],
     body: [],
+  },
+  "support sms inbound create": {
+    method: "POST",
+    path: "/support/sms/inbound",
+    params: [],
+    query: [],
+    body: [
+      {
+        name: "from_number",
+        flag: "from_number",
+      },
+      {
+        name: "to_number",
+        flag: "to_number",
+      },
+      {
+        name: "content",
+        flag: "content",
+      },
+      {
+        name: "media_url",
+        flag: "media_url",
+      },
+      {
+        name: "service",
+        flag: "service",
+      },
+      {
+        name: "date_sent",
+        flag: "date_sent",
+      },
+      {
+        name: "group_id",
+        flag: "group_id",
+      },
+      {
+        name: "participants",
+        flag: "participants",
+      },
+    ],
+  },
+  "support sms status list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/support/sms/status",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support sms threads reply create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/support/sms/threads/{threadId}/reply",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "threadId",
+        flag: "thread-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "body",
+        flag: "body",
+      },
+    ],
   },
   "support users status create": {
     method: "POST",

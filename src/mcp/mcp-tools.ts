@@ -1403,6 +1403,31 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdSupportTicketsTicketIdNotesEventId",
+    "description": "Delete support ticket note (DELETE /workspaces/{organizationId}/support/tickets/{ticketId}/notes/{eventId}) Path params (top-level, required): organizationId, ticketId, eventId.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/support/tickets/{ticketId}/notes/{eventId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "ticketId": {
+          "type": "string"
+        },
+        "eventId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "eventId",
+        "organizationId",
+        "ticketId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdSupportTicketsTicketIdVotes",
     "description": "Delete support ticket vote (DELETE /workspaces/{organizationId}/support/tickets/{ticketId}/votes) Path params (top-level, required): organizationId, ticketId. Query params (top-level, optional): voteId, email.",
     "method": "DELETE",
@@ -2510,6 +2535,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdCustomersIdComments",
+    "description": "List customer comments (GET /workspaces/{organizationId}/customers/{id}/comments) Path params (top-level, required): organizationId, id.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/customers/{id}/comments",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdCustomersIdIntake",
     "description": "List customer intake (GET /workspaces/{organizationId}/customers/{id}/intake) Path params (top-level, required): organizationId, id.",
     "method": "GET",
@@ -2713,6 +2759,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdDealsDealIdComments",
+    "description": "List deal comments (GET /workspaces/{organizationId}/deals/{dealId}/comments) Path params (top-level, required): organizationId, dealId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/deals/{dealId}/comments",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "dealId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "dealId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdDealsDealIdIssues",
     "description": "List deal issues (GET /workspaces/{organizationId}/deals/{dealId}/issues) Path params (top-level, required): organizationId, dealId.",
     "method": "GET",
@@ -2860,6 +2927,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "List document links (GET /workspaces/{organizationId}/documents/{id}/links) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/documents/{id}/links",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdDocumentsIdPermissions",
+    "description": "List document permissions (GET /workspaces/{organizationId}/documents/{id}/permissions) Path params (top-level, required): organizationId, id.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/documents/{id}/permissions",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -4177,6 +4265,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdMePermissions",
+    "description": "List me permissions (GET /workspaces/{organizationId}/me/permissions) Path params (top-level, required): organizationId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/me/permissions",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdMeViewpreferences",
     "description": "List me view preferences (GET /workspaces/{organizationId}/me/view-preferences) Path params (top-level, required): organizationId.",
     "method": "GET",
@@ -5148,6 +5253,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdSupportCustomersCustomerIdComments",
+    "description": "List support customer comments (GET /workspaces/{organizationId}/support/customers/{customerId}/comments) Path params (top-level, required): organizationId, customerId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/customers/{customerId}/comments",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "customerId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "customerId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdSupportCustomersCustomerIdEvents",
     "description": "List support customer events (GET /workspaces/{organizationId}/support/customers/{customerId}/events) Path params (top-level, required): organizationId, customerId. Query params (top-level, optional): limit.",
     "method": "GET",
@@ -5413,6 +5539,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdSupportSmsStatus",
+    "description": "List support sm status (GET /workspaces/{organizationId}/support/sms/status) Path params (top-level, required): organizationId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/support/sms/status",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdSupportSnippets",
     "description": "List support snippets (GET /workspaces/{organizationId}/support/snippets) Path params (top-level, required): organizationId.",
     "method": "GET",
@@ -5503,7 +5646,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "intercom",
             "zendesk",
             "plain",
-            "linear"
+            "linear",
+            "sms"
           ]
         },
         "externalSource": {
@@ -8137,6 +8281,43 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "patchWorkspacesOrganizationIdSupportTicketsTicketIdNotesEventId",
+    "description": "Update support ticket note (PATCH /workspaces/{organizationId}/support/tickets/{ticketId}/notes/{eventId}) Path params (top-level, required): organizationId, ticketId, eventId. Request body goes in the \"body\" object; fields: body* (* = required).",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/support/tickets/{ticketId}/notes/{eventId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "ticketId": {
+          "type": "string"
+        },
+        "eventId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "body": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "body"
+          ]
+        }
+      },
+      "required": [
+        "eventId",
+        "organizationId",
+        "ticketId"
+      ]
+    }
+  },
+  {
     "name": "patchWorkspacesOrganizationIdSupportTiersTierId",
     "description": "Update support tier (PATCH /workspaces/{organizationId}/support/tiers/{tierId}) Path params (top-level, required): organizationId, tierId. Request body goes in the \"body\" object; fields: name, level.",
     "method": "PATCH",
@@ -8813,6 +8994,54 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "channelId"
       ]
+    }
+  },
+  {
+    "name": "postSupportSmsInbound",
+    "description": "Create support sm inbound (POST /support/sms/inbound) Request body goes in the \"body\" object; fields: from_number*, to_number, content, media_url, service, date_sent, group_id, participants (* = required).",
+    "method": "POST",
+    "path": "/support/sms/inbound",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": "object",
+          "properties": {
+            "from_number": {
+              "type": "string",
+              "minLength": 4
+            },
+            "to_number": {
+              "type": "string"
+            },
+            "content": {
+              "type": "string",
+              "maxLength": 10000
+            },
+            "media_url": {
+              "type": "string"
+            },
+            "service": {
+              "type": "string"
+            },
+            "date_sent": {
+              "type": "string"
+            },
+            "group_id": {
+              "type": "string"
+            },
+            "participants": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "from_number"
+          ]
+        }
+      }
     }
   },
   {
@@ -10766,6 +10995,39 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdCustomersIdComments",
+    "description": "Create customer comment (POST /workspaces/{organizationId}/customers/{id}/comments) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: body* (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers/{id}/comments",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "body": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "body"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdCustomerstatuses",
     "description": "Create customer statuse (POST /workspaces/{organizationId}/customer-statuses) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, color, position (* = required).",
     "method": "POST",
@@ -11065,6 +11327,39 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdDealsDealIdComments",
+    "description": "Create deal comment (POST /workspaces/{organizationId}/deals/{dealId}/comments) Path params (top-level, required): organizationId, dealId. Request body goes in the \"body\" object; fields: body* (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/deals/{dealId}/comments",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "dealId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "body": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "body"
+          ]
+        }
+      },
+      "required": [
+        "dealId",
         "organizationId"
       ]
     }
@@ -14471,6 +14766,39 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdSupportCustomersCustomerIdComments",
+    "description": "Create support customer comment (POST /workspaces/{organizationId}/support/customers/{customerId}/comments) Path params (top-level, required): organizationId, customerId. Request body goes in the \"body\" object; fields: body* (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/customers/{customerId}/comments",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "customerId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "body": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "body"
+          ]
+        }
+      },
+      "required": [
+        "customerId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdSupportCustomersCustomerIdEvents",
     "description": "Create support customer event (POST /workspaces/{organizationId}/support/customers/{customerId}/events) Path params (top-level, required): organizationId, customerId. Request body goes in the \"body\" object; fields: type*, summary*, externalId, payload, occurredAt (* = required).",
     "method": "POST",
@@ -15572,6 +15900,40 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdSupportSmsThreadsThreadIdReply",
+    "description": "Create support sm thread reply (POST /workspaces/{organizationId}/support/sms/threads/{threadId}/reply) Path params (top-level, required): organizationId, threadId. Request body goes in the \"body\" object; fields: body* (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/sms/threads/{threadId}/reply",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "body": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 10000
+            }
+          },
+          "required": [
+            "body"
+          ]
+        }
+      },
+      "required": [
+        "organizationId",
+        "threadId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdSupportSnippets",
     "description": "Create support snippet (POST /workspaces/{organizationId}/support/snippets) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, textContent*, markdownContent (* = required).",
     "method": "POST",
@@ -15661,7 +16023,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "intercom",
                 "zendesk",
                 "plain",
-                "linear"
+                "linear",
+                "sms"
               ]
             },
             "priority": {
@@ -15727,7 +16090,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                     "intercom",
                     "zendesk",
                     "plain",
-                    "linear"
+                    "linear",
+                    "sms"
                   ],
                   "default": "chat"
                 }
@@ -15813,7 +16177,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "intercom",
                 "zendesk",
                 "plain",
-                "linear"
+                "linear",
+                "sms"
               ]
             },
             "customerId": {
@@ -17329,7 +17694,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "revokeSession",
-    "description": "Create api auth revoke session (POST /api/auth/revoke-session) Request body goes in the \"body\" object.",
+    "description": "Revoke session (POST /api/auth/revoke-session) Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/api/auth/revoke-session",
     "inputSchema": {
@@ -17347,7 +17712,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "revokeSessions",
-    "description": "Create api auth revoke session (POST /api/auth/revoke-sessions) Request body goes in the \"body\" object.",
+    "description": "Revoke all sessions (POST /api/auth/revoke-sessions) Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/api/auth/revoke-sessions",
     "inputSchema": {
@@ -17365,7 +17730,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "revokeUserSession",
-    "description": "Create api auth admin revoke user session (POST /api/auth/admin/revoke-user-session) Request body goes in the \"body\" object.",
+    "description": "Revoke user session (POST /api/auth/admin/revoke-user-session) Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/api/auth/admin/revoke-user-session",
     "inputSchema": {
@@ -17383,7 +17748,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "revokeUserSessions",
-    "description": "Create api auth admin revoke user session (POST /api/auth/admin/revoke-user-sessions) Request body goes in the \"body\" object.",
+    "description": "Revoke all user sessions (POST /api/auth/admin/revoke-user-sessions) Request body goes in the \"body\" object.",
     "method": "POST",
     "path": "/api/auth/admin/revoke-user-sessions",
     "inputSchema": {

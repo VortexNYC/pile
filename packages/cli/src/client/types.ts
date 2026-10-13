@@ -12711,6 +12711,348 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/customers/{id}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List customer comments */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Record comments */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            comments: {
+                                id: string;
+                                organizationId: string;
+                                entityType: string | null;
+                                entityId: string | null;
+                                authorId: string | null;
+                                body: string;
+                                internal: boolean;
+                                externalId: string | null;
+                                externalSource: string | null;
+                                externalAuthor: string | null;
+                                resolvedAt: string | null;
+                                resolvedById: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Record not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        /** Create customer comment */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        body: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Comment created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            entityType: string | null;
+                            entityId: string | null;
+                            authorId: string | null;
+                            body: string;
+                            internal: boolean;
+                            externalId: string | null;
+                            externalSource: string | null;
+                            externalAuthor: string | null;
+                            resolvedAt: string | null;
+                            resolvedById: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Record not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/deals/{dealId}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List deal comments */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    dealId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Record comments */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            comments: {
+                                id: string;
+                                organizationId: string;
+                                entityType: string | null;
+                                entityId: string | null;
+                                authorId: string | null;
+                                body: string;
+                                internal: boolean;
+                                externalId: string | null;
+                                externalSource: string | null;
+                                externalAuthor: string | null;
+                                resolvedAt: string | null;
+                                resolvedById: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Record not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        /** Create deal comment */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    dealId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        body: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Comment created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            entityType: string | null;
+                            entityId: string | null;
+                            authorId: string | null;
+                            body: string;
+                            internal: boolean;
+                            externalId: string | null;
+                            externalSource: string | null;
+                            externalAuthor: string | null;
+                            resolvedAt: string | null;
+                            resolvedById: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Record not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/support/customers/{customerId}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List support customer comments */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    customerId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Record comments */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            comments: {
+                                id: string;
+                                organizationId: string;
+                                entityType: string | null;
+                                entityId: string | null;
+                                authorId: string | null;
+                                body: string;
+                                internal: boolean;
+                                externalId: string | null;
+                                externalSource: string | null;
+                                externalAuthor: string | null;
+                                resolvedAt: string | null;
+                                resolvedById: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Record not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        /** Create support customer comment */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    customerId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        body: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Comment created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            entityType: string | null;
+                            entityId: string | null;
+                            authorId: string | null;
+                            body: string;
+                            internal: boolean;
+                            externalId: string | null;
+                            externalSource: string | null;
+                            externalAuthor: string | null;
+                            resolvedAt: string | null;
+                            resolvedById: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Record not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/documents": {
         parameters: {
             query?: never;
@@ -21691,6 +22033,8 @@ export interface paths {
                         media_url?: string;
                         service?: string;
                         date_sent?: string;
+                        group_id?: string;
+                        participants?: string[];
                     };
                 };
             };
@@ -27174,7 +27518,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create api auth revoke session */
+        /** Revoke session */
         post: operations["revokeSession"];
         delete?: never;
         options?: never;
@@ -27191,7 +27535,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create api auth revoke session */
+        /** Revoke all sessions */
         post: operations["revokeSessions"];
         delete?: never;
         options?: never;
@@ -27548,7 +27892,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create api auth admin revoke user session */
+        /** Revoke user session */
         post: operations["revokeUserSession"];
         delete?: never;
         options?: never;
@@ -27565,7 +27909,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create api auth admin revoke user session */
+        /** Revoke all user sessions */
         post: operations["revokeUserSessions"];
         delete?: never;
         options?: never;

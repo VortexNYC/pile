@@ -13,7 +13,7 @@ import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap } from "@/lib/api";
 import { toastError, toastSuccess } from "@/lib/toast";
 
-/** Add-customer dialog — matches the issue/ticket create grammar. */
+/** Add-company dialog — matches the issue/ticket create grammar. */
 export function CreateCustomerDialog({
   open: openProp,
   onOpenChange: onOpenChangeProp,
@@ -47,7 +47,7 @@ export function CreateCustomerDialog({
       setName("");
       setUrl("");
       onOpenChange(false);
-      toastSuccess("Customer added");
+      toastSuccess("Company added");
     },
     onError: (error) => toastError(error),
     onSettled: () => queryClient.invalidateQueries({ queryKey: key }),
@@ -56,7 +56,7 @@ export function CreateCustomerDialog({
   return (
     <DialogRoot open={open} onOpenChange={onOpenChange}>
       <Dialog className="max-w-sm p-6">
-        <DialogTitle>Add customer</DialogTitle>
+        <DialogTitle>Add company</DialogTitle>
         <form
           aria-label="Add customer"
           className="mt-4 flex flex-col gap-4"

@@ -736,6 +736,21 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       .all();
   }
 
+  // CRM notes — same comments table, keyed by the record's own type.
+  async listEntityComments(entityType: string, entityId: string) {
+    await this.ready;
+    return this.db
+      .select()
+      .from(workspaceComments)
+      .where(
+        and(
+          eq(workspaceComments.entityType, entityType),
+          eq(workspaceComments.entityId, entityId)
+        )
+      )
+      .all();
+  }
+
   async resolveComment(id: string, actorId: string) {
     await this.ready;
     await this.db
@@ -788,6 +803,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   async createComment(values: {
     issueId?: string | null;
     documentId?: string | null;
+    entityType?: string | null;
+    entityId?: string | null;
     mentions?: string[];
     authorId?: string | null;
     body: string;
@@ -804,8 +821,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     await this.db.insert(workspaceComments).values({
       id,
       organizationId: this.organizationId,
-      entityType: values.issueId ? "issue" : "document",
-      entityId: values.issueId ?? values.documentId ?? null,
+      entityType: values.entityType ?? (values.issueId ? "issue" : "document"),
+      entityId: values.entityId ?? values.issueId ?? values.documentId ?? null,
       authorId: values.authorId ?? null,
       body: values.body,
       internal: values.internal ?? false,

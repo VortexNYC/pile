@@ -7,6 +7,7 @@ import {
   ListChecks,
   Plus,
   TrendUp,
+  User,
 } from "@phosphor-icons/react";
 import { useNavigate } from "@tanstack/react-router";
 
@@ -65,7 +66,18 @@ export function CreateMenu() {
           window.dispatchEvent(new CustomEvent("pile:create-customer"))
         }
       >
-        New customer
+        New company
+      </DropdownMenu.Item>
+    ),
+    permissions.can("ticket", "create") && (
+      <DropdownMenu.Item
+        key="contact"
+        icon={<User />}
+        onClick={() =>
+          window.dispatchEvent(new CustomEvent("pile:create-contact"))
+        }
+      >
+        New contact
       </DropdownMenu.Item>
     ),
     permissions.can("deal", "create") && (

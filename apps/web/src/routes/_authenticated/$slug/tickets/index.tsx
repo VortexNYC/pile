@@ -296,7 +296,7 @@ function TicketsList() {
       {(
         [
           ["deal", "Deals", "DealsList"],
-          ["customer", "Customers", "CustomersList"],
+          ["customer", "Companies", "CustomersList"],
           ["contact", "Contacts", "ContactsList"],
           ["ticket", "Captures", "CapturesGrid"],
         ] as const

@@ -24654,6 +24654,741 @@
         "summary": "Create issue comment unresolve"
       }
     },
+    "/workspaces/{organizationId}/customers/{id}/comments": {
+      "get": {
+        "tags": [
+          "customers"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Record comments",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "comments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "entityType": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "entityId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "authorId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "body": {
+                            "type": "string"
+                          },
+                          "internal": {
+                            "type": "boolean"
+                          },
+                          "externalId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "externalSource": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "externalAuthor": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "resolvedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "resolvedById": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "entityType",
+                          "entityId",
+                          "authorId",
+                          "body",
+                          "internal",
+                          "externalId",
+                          "externalSource",
+                          "externalAuthor",
+                          "resolvedAt",
+                          "resolvedById",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "comments"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Record not found"
+          }
+        },
+        "summary": "List customer comments"
+      },
+      "post": {
+        "tags": [
+          "customers"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "body": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "body"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Comment created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "entityType": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "entityId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "authorId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "body": {
+                      "type": "string"
+                    },
+                    "internal": {
+                      "type": "boolean"
+                    },
+                    "externalId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "externalSource": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "externalAuthor": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resolvedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resolvedById": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "entityType",
+                    "entityId",
+                    "authorId",
+                    "body",
+                    "internal",
+                    "externalId",
+                    "externalSource",
+                    "externalAuthor",
+                    "resolvedAt",
+                    "resolvedById",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Record not found"
+          }
+        },
+        "summary": "Create customer comment"
+      }
+    },
+    "/workspaces/{organizationId}/deals/{dealId}/comments": {
+      "get": {
+        "tags": [
+          "deals"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "dealId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Record comments",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "comments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "entityType": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "entityId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "authorId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "body": {
+                            "type": "string"
+                          },
+                          "internal": {
+                            "type": "boolean"
+                          },
+                          "externalId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "externalSource": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "externalAuthor": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "resolvedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "resolvedById": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "entityType",
+                          "entityId",
+                          "authorId",
+                          "body",
+                          "internal",
+                          "externalId",
+                          "externalSource",
+                          "externalAuthor",
+                          "resolvedAt",
+                          "resolvedById",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "comments"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Record not found"
+          }
+        },
+        "summary": "List deal comments"
+      },
+      "post": {
+        "tags": [
+          "deals"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "dealId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "body": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "body"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Comment created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "entityType": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "entityId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "authorId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "body": {
+                      "type": "string"
+                    },
+                    "internal": {
+                      "type": "boolean"
+                    },
+                    "externalId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "externalSource": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "externalAuthor": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resolvedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resolvedById": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "entityType",
+                    "entityId",
+                    "authorId",
+                    "body",
+                    "internal",
+                    "externalId",
+                    "externalSource",
+                    "externalAuthor",
+                    "resolvedAt",
+                    "resolvedById",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Record not found"
+          }
+        },
+        "summary": "Create deal comment"
+      }
+    },
+    "/workspaces/{organizationId}/support/customers/{customerId}/comments": {
+      "get": {
+        "tags": [
+          "support-contacts"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "customerId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Record comments",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "comments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "entityType": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "entityId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "authorId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "body": {
+                            "type": "string"
+                          },
+                          "internal": {
+                            "type": "boolean"
+                          },
+                          "externalId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "externalSource": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "externalAuthor": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "resolvedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "resolvedById": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "entityType",
+                          "entityId",
+                          "authorId",
+                          "body",
+                          "internal",
+                          "externalId",
+                          "externalSource",
+                          "externalAuthor",
+                          "resolvedAt",
+                          "resolvedById",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "comments"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Record not found"
+          }
+        },
+        "summary": "List support customer comments"
+      },
+      "post": {
+        "tags": [
+          "support-contacts"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "customerId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "body": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "body"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Comment created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "entityType": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "entityId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "authorId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "body": {
+                      "type": "string"
+                    },
+                    "internal": {
+                      "type": "boolean"
+                    },
+                    "externalId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "externalSource": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "externalAuthor": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resolvedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resolvedById": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "entityType",
+                    "entityId",
+                    "authorId",
+                    "body",
+                    "internal",
+                    "externalId",
+                    "externalSource",
+                    "externalAuthor",
+                    "resolvedAt",
+                    "resolvedById",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Record not found"
+          }
+        },
+        "summary": "Create support customer comment"
+      }
+    },
     "/workspaces/{organizationId}/documents": {
       "get": {
         "tags": [
@@ -45160,6 +45895,15 @@
                   },
                   "date_sent": {
                     "type": "string"
+                  },
+                  "group_id": {
+                    "type": "string"
+                  },
+                  "participants": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 },
                 "required": [
