@@ -118,4 +118,32 @@ describe("support-sms", () => {
     );
     expect(res.status).toBe(202);
   });
+  it("groups inbound texts on group_id into one thread", async () => {
+    const post = (groupId: string) =>
+      app.fetch(
+        new Request(`${ORIGIN}/support/sms/inbound`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            from_number: "+15550007777",
+            to_number: "+15040001111",
+            content: "group ping",
+            group_id: groupId,
+          }),
+        }),
+        env
+      );
+    const r1 = await post("g_abc123");
+    expect(r1.status).toBe(202);
+    const r2 = await post("g_abc123");
+    expect(r2.status).toBe(202);
+    await new Promise((r) => setTimeout(r, 400));
+    const db = createD1(env.D1);
+    const threads = await db
+      .select()
+      .from(supportSmsThreads)
+      .where(eq(supportSmsThreads.groupId, "g_abc123"))
+      .all();
+    expect(threads).toHaveLength(1);
+  });
 });
