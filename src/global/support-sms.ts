@@ -17,7 +17,12 @@ export interface SmsEnv {
 }
 type SmsWorkerEnv = WorkerEnv & SmsEnv;
 import { VortexError } from "../platform/errors.js";
-import { organization, supportCustomers, supportSmsThreads } from "./schema.js";
+import {
+  member as memberTable,
+  organization,
+  supportCustomers,
+  supportSmsThreads,
+} from "./schema.js";
 import { findOrCreateCustomerByEmail } from "./support-contacts.js";
 import {
   addTicketMessage,
@@ -295,12 +300,28 @@ async function mintAgentKey(
 ): Promise<{ keyId: string; key: string }> {
   const { createAuth } = await import("../platform/auth.js");
   const auth = await createAuth(env);
+  // apikey rows FK to user — attribute the thread's key to the org's
+  // first owner so revocation stays member-scoped, like tokens.ts does.
+  const [owner] = await db
+    .select({ userId: memberTable.userId })
+    .from(memberTable)
+    .where(
+      and(
+        eq(memberTable.organizationId, organizationId),
+        eq(memberTable.role, "owner")
+      )
+    )
+    .limit(1);
+  if (!owner) {
+    throw new VortexError({
+      code: "CONFIG_ERROR",
+      status: 500,
+      message: "Workspace has no owner member to attribute sms keys to",
+    });
+  }
   const key = await auth.api.createApiKey({
     body: {
-      // The service user — createApiKey resolves referenceId through the
-      // session when userId is absent; minting under the thread id keeps
-      // each key revocable per phone.
-      userId: threadId,
+      userId: owner.userId,
       name: `sms-agent:${threadId}`,
       rateLimitEnabled: false,
       metadata: { organizationId, actorType: "agent" },
