@@ -2,6 +2,7 @@ import { DropdownMenu } from "@cloudflare/kumo/components/dropdown";
 import { Sidebar } from "@cloudflare/kumo/components/sidebar";
 import { Text } from "@cloudflare/kumo/components/text";
 import {
+  Camera,
   CaretUpDown,
   Folder,
   Robot,
@@ -37,6 +38,7 @@ const NAV = [
   { title: "Support", path: "tickets", icon: Headset, resource: "ticket" },
   { title: "Sessions", path: "sessions", icon: Robot, resource: "session" },
   { title: "Projects", path: "projects", icon: Folder, resource: "project" },
+  { title: "Captures", path: "captures", icon: Camera, resource: "ticket" },
   {
     title: "Documents",
     path: "documents",
