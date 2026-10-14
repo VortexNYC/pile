@@ -203,11 +203,12 @@ function CustomerEditor({
         }
         description={
           <Link
-            to="/$slug/customers"
+            to="/$slug/sales"
             params={{ slug: workspace.slug }}
+            search={{ tab: "companies" }}
             className="text-kumo-link"
           >
-            Companies
+            Sales / Customers
           </Link>
         }
         actions={

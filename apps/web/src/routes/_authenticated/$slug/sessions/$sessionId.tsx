@@ -138,9 +138,20 @@ function SessionDetail() {
   const derivedVariant = derivedStatusVariant(s?.derivedStatus);
 
   return (
-    <Page
+    <EntityPage
       title={s?.label ?? "Agent session"}
-      description={s ? `${s.provider} · ${sessionId.slice(0, 8)}` : undefined}
+      description={
+        <>
+          <Link
+            to="/$slug/sessions"
+            params={{ slug: workspace.slug }}
+            className="text-kumo-link"
+          >
+            Sessions
+          </Link>
+          {s ? ` · ${s.provider} · ${s.id.slice(0, 8)}` : ""}
+        </>
+      }
       actions={
         <div className="flex items-center gap-2">
           {s?.url ? (
@@ -164,20 +175,16 @@ function SessionDetail() {
           ) : null}
         </div>
       }
-    >
-      {session.isPending ? (
-        <LoadingState label="Loading session" />
-      ) : session.isError || !s ? (
-        <ErrorState
-          error={session.error}
-          onRetry={() => void session.refetch()}
-        />
-      ) : (
-        <EntityPage
-          title={s.label ?? "Session"}
-          description={`${s.provider} · ${s.id.slice(0, 8)}`}
-          center={
-            <>
+      center={
+        session.isPending ? (
+          <LoadingState label="Loading session" />
+        ) : session.isError || !s ? (
+          <ErrorState
+            error={session.error}
+            onRetry={() => void session.refetch()}
+          />
+        ) : (
+          <>
               {s.status === "completed" && s.result ? (
                 <LayerCard>
                   <p className="text-sm whitespace-pre-wrap">{s.result}</p>
@@ -283,8 +290,10 @@ function SessionDetail() {
                 </p>
               ) : null}
             </>
-          }
-          rail={
+          )
+        }
+        rail={
+          s ? (
             <>
               <EntityLinksRail entityType="session" entityId={sessionId} />
               <RailSection title="Properties">
@@ -324,9 +333,8 @@ function SessionDetail() {
                 </div>
               </RailSection>
             </>
-          }
-        />
-      )}
-    </Page>
-  );
-}
+          ) : undefined
+        }
+      />
+    );
+  }

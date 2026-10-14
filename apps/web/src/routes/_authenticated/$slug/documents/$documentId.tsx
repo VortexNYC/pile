@@ -7,7 +7,7 @@ import { Text } from "@cloudflare/kumo/components/text";
 import { LinkSimple, Star, Trash } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useRef, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 
 import { CanvasEditor } from "@/components/canvas-editor";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -191,8 +191,22 @@ function DocumentDetail() {
               className="text-kumo-link"
             >
               Documents
-            </Link>{" "}
-            · updated {formatRelative(data.updatedAt)}
+            </Link>
+            {ancestors.map((parent) => (
+              <Fragment key={parent.id}>
+                {" / "}
+                <Link
+                  to="/$slug/documents/$documentId"
+                  params={{ slug: workspace.slug, documentId: parent.id }}
+                  className="text-kumo-link"
+                >
+                  {parent.icon ? `${parent.icon} ` : ""}
+                  {parent.title}
+                </Link>
+              </Fragment>
+            ))}
+            {" · updated "}
+            {formatRelative(data.updatedAt)}
           </>
         }
         actions={
@@ -321,8 +335,8 @@ function DocumentDetail() {
                   />
                 ) : !isEditable(data.contentFormat) ? (
                   <Text variant="secondary">
-                    This document uses rich formatting — edit it from the
-                    CLI so its structure is kept.
+                    This document uses rich formatting — edit it from the CLI so
+                    its structure is kept.
                   </Text>
                 ) : editingContent ? (
                   <div className="flex flex-col gap-2">

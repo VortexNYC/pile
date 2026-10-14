@@ -225,11 +225,12 @@ function DealDetail() {
         description={
           <>
             <Link
-              to="/$slug/tickets"
+              to="/$slug/sales"
               params={{ slug: workspace.slug }}
+              search={{ tab: "deals" }}
               className="text-kumo-link"
             >
-              Deals
+              Sales / Deals
             </Link>
             {" · updated "}
             {formatRelative(data.updatedAt)}

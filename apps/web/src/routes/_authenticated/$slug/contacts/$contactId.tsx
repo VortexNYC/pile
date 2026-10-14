@@ -118,11 +118,12 @@ function ContactDetail() {
         description={
           <>
             <Link
-              to="/$slug/tickets"
+              to="/$slug/sales"
               params={{ slug: workspace.slug }}
+              search={{ tab: "contacts" }}
               className="text-kumo-link"
             >
-              Contacts
+              Sales / Contacts
             </Link>
             {" · added "}
             {formatRelative(c.createdAt)}
