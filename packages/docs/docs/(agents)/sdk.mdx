@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ---
 title: SDK
 description: Type-safe TypeScript client generated from the OpenAPI spec.
@@ -36,3 +37,47 @@ const created = await client.POST("/workspaces/{organizationId}/documents", {
 | HTTP    | Everything else                                                |
 
 All four authenticate identically and see the same entities, links, and comments — a doc created via MCP shows up in the SDK and the app.
+||||||| e66b625
+=======
+---
+title: SDK
+description: Type-safe TypeScript client generated from the OpenAPI spec.
+---
+
+# SDK
+
+`@vortex-api/pile` exports an `openapi-fetch` client typed against the same `openapi.json` that generates MCP tools and CLI commands — paths, params, request bodies, and responses are all typechecked.
+
+```typescript
+import { createPileClient } from "@vortex-api/pile";
+
+const client = createPileClient({
+  baseUrl: process.env.PILE_BASE_URL!, // https://<host>
+  apiKey: process.env.PILE_API_KEY!,   // workspace-scoped key
+});
+
+const { data, error } = await client.GET(
+  "/workspaces/{organizationId}/issues",
+  { params: { path: { organizationId: "org_..." } } }
+);
+
+const created = await client.POST(
+  "/workspaces/{organizationId}/documents",
+  {
+    params: { path: { organizationId: "org_..." } },
+    body: { title: "Release notes", content: "…", contentFormat: "markdown" },
+  }
+);
+```
+
+## When to use which surface
+
+| Surface | Best for |
+| --- | --- |
+| SDK | Long-running TypeScript services, scheduled jobs, integrations |
+| CLI | Humans, shell scripts, quick probes |
+| MCP | Coding/ops agents already speaking MCP |
+| HTTP | Everything else |
+
+All four authenticate identically and see the same entities, links, and comments — a doc created via MCP shows up in the SDK and the app.
+>>>>>>> origin/main

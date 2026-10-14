@@ -3,6 +3,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { eq, inArray } from "drizzle-orm";
 
 import { createD1 } from "../global/db.js";
+<<<<<<< HEAD
 import {
   apikey,
   team,
@@ -10,6 +11,12 @@ import {
   user as userTable,
 } from "../global/schema.js";
 import { addTeamMember } from "../global/teams.js";
+||||||| e66b625
+import { apikey, user as userTable } from "../global/schema.js";
+=======
+import { apikey, team, user as userTable } from "../global/schema.js";
+import { addTeamMember } from "../global/teams.js";
+>>>>>>> origin/main
 import { createMembership } from "../global/workspace-entities.js";
 import { getWorkspaceById } from "../global/workspaces.js";
 import { createAuth } from "../platform/auth.js";
