@@ -3,7 +3,7 @@ import { Button } from "@cloudflare/kumo/components/button";
 import { DropdownMenu } from "@cloudflare/kumo/components/dropdown";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 import { Text } from "@cloudflare/kumo/components/text";
-import { LinkSimple, PencilSimple, Star, Trash } from "@phosphor-icons/react";
+import { LinkSimple, PencilSimple, Plus, Star, Trash } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
@@ -197,6 +197,27 @@ function IssueDetail() {
         })
       ),
     enabled: !!issue.data?.parentId,
+  });
+
+  const createSubIssue = useMutation({
+    mutationFn: async () =>
+      unwrap(
+        api.POST("/workspaces/{organizationId}/issues", {
+          params: { path: { organizationId } },
+          body: {
+            title: "New sub-issue",
+            parentId: issueId,
+            teamId: data?.teamId,
+          },
+        })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: wsKey(organizationId, "issues", "children-of", issueId),
+      });
+      toastSuccess("Sub-issue created");
+    },
+    onError: (error) => toastError(error),
   });
 
   const children = useQuery({
@@ -531,6 +552,17 @@ function IssueDetail() {
                       {subIssues.length}
                     </span>
                   </h3>
+                  {canEdit ? (
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      icon={<Plus />}
+                      loading={createSubIssue.isPending}
+                      onClick={() => createSubIssue.mutate()}
+                    >
+                      New sub-issue
+                    </Button>
+                  ) : null}
                   <div
                     role="progressbar"
                     aria-label="Sub-issue progress"
