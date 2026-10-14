@@ -1,0 +1,30 @@
+---
+title: Sales
+description: Customers, deals, and contacts — the CRM surface linked into the same graph.
+---
+
+# Sales
+
+Sales lives in the same workspace as everything else — customers, deals, contacts as entities that link to tickets, issues, documents, and sessions.
+
+## Entities
+
+- **Customers** — `GET/POST /workspaces/{org}/customers` — company records with statuses, needs, attachments, comments
+- **Deals** — `…/deals` — opportunities with amounts, stages, comments
+- **Contacts** — `…/contacts` — people, linked to customers and deals
+
+```bash
+# New deal on a customer
+pile request POST "/workspaces/{org}/deals" \
+  -d '{"title":"Acme expansion","customerId":"<customer-uuid>","amount":50000}'
+
+# Link the field-sales playbook doc to the deal
+pile request POST "/workspaces/{org}/entities/document/{doc}/links" \
+  -d '{"targetEntityType":"deal","targetEntityId":"<deal-uuid>"}'
+```
+
+## How it connects
+
+- A customer's support history is visible by linking their contacts to tickets.
+- Call transcripts and field notes live as documents linked to the customer and deal — same durable-notes convention as agent sessions.
+- Strategy docs (playbooks, pricing) link to the Sales project and the deals they govern.

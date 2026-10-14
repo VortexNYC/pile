@@ -1,0 +1,53 @@
+---
+title: CLI
+description: The pile CLI — typed commands for every API operation, plus `request` for anything not generated.
+---
+
+# CLI
+
+`@vortex-api/pile` ships the `pile` binary — generated commands for every OpenAPI operation plus auth/config helpers.
+
+## Setup
+
+```bash
+pnpm add -g @vortex-api/pile   # or run via pnpm dlx
+
+pile config set --base-url https://<host>
+pile config set --api-key <workspace-key>
+```
+
+Or use env vars — they override stored config:
+
+```bash
+export PILE_BASE_URL=https://<host>
+export PILE_API_KEY=<workspace-key>
+```
+
+Config lives in `~/.pile/config.json`.
+
+## Everyday commands
+
+```bash
+pile issues list --workspace org_...
+pile issues create --workspace org_... --title "Fix login redirect" --team VTX
+pile issues update ISS-12 --status in_progress
+pile documents create --workspace org_... --title "Q4 plan" --content-format markdown --project <project-id>
+pile support tickets list --workspace org_...
+```
+
+## `pile request` — the escape hatch
+
+Any route the generated commands don't cover:
+
+```bash
+pile request GET "/workspaces/org_.../activity?limit=20"
+pile request POST "/workspaces/org_.../documents" -d '{"title":"note","content":"..."}'
+pile request PATCH "/workspaces/org_.../issues/<uuid>" -d '{"status":"in_progress"}'
+```
+
+Body flags: `-d`, `--data`, `--body`, `--body-json` — all take a JSON string. `Content-Type: application/json` is set automatically when a body is present. Extra positional arguments are rejected — a typo fails loudly instead of sending a bodiless request.
+
+## Scripting
+
+- Output is pretty-printed JSON on success; non-2xx prints the error body and exits 1.
+- Pipe to `jq` for fields: `pile issues list --workspace org_... | jq '.issues[].identifier'`

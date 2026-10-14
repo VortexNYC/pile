@@ -1,0 +1,24 @@
+---
+title: GitHub
+description: GitHub app installation, PR reconcile, and git automation — issues tied to code.
+---
+
+# GitHub
+
+## App install
+
+`GET /workspaces/{org}/github/installations` lists installs; `POST …/github/install` starts the flow. The app watches pushes and PR events.
+
+## PR ↔ issue reconcile
+
+`POST /workspaces/{org}/issues/{id}/reconcile` attaches a PR to an issue and syncs state — opening the PR moves the issue, merging completes it (configurable). PR references in issue titles/descriptions are picked up too.
+
+## Git automation
+
+`…/git-automation` — rules that fire on git events (e.g. "PR opened → issue to `in review`", "merged → `completed`"). Target branches configured per workspace at `…/git-automation/target-branches`.
+
+## Git identities
+
+`GET /workspaces/{org}/git-identities` — maps commit authors to workspace members so PR events attribute correctly.
+
+GitLab support exists at `…/gitlab` with the same install flow.

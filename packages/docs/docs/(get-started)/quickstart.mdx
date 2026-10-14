@@ -1,0 +1,59 @@
+---
+title: Quickstart
+description: Create a workspace, mint an API key, and file your first issue — in a few API calls.
+---
+
+# Quickstart
+
+This walks the hosted path. Self-hosting on your own Cloudflare account is in [Self-hosting](./self-hosting).
+
+<Steps>
+  <Step title="Create an account and workspace">
+    Sign up at `https://<your-pile-host>`. The onboarding flow creates your first workspace; grab its ID from **Settings**, or list workspaces:
+
+    ```bash
+    curl -s https://<host>/workspaces \
+      -H "Authorization: Bearer $PILE_API_KEY"
+    ```
+  </Step>
+  <Step title="Mint a workspace API key">
+    Agents and scripts authenticate with API keys pinned to one organization.
+    Create one in **Settings → Developer**, or:
+
+    ```bash
+    curl -s -X POST https://<host>/api/auth/api-keys \
+      -H "Cookie: <session>" \
+      -H "Content-Type: application/json" \
+      -d '{"name":"ci-agent","metadata":{"organizationId":"org_..."}}'
+    ```
+
+    A key cannot act outside its workspace — it is the only credential an agent needs.
+  </Step>
+  <Step title="File your first issue">
+    ```bash
+    curl -s -X POST "https://<host>/workspaces/org_.../issues" \
+      -H "Authorization: Bearer $PILE_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{"title":"Hello Pile","description":"filed by the API"}'
+    ```
+  </Step>
+  <Step title="Connect it to something">
+    The point of Pile is the graph. Link the issue to a document, a customer, a deal:
+
+    ```bash
+    curl -s -X POST \
+      "https://<host>/workspaces/org_.../entities/document/<doc-id>/links" \
+      -H "Authorization: Bearer $PILE_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{"targetEntityType":"issue","targetEntityId":"<issue-id>"}'
+    ```
+
+    See [Entity links](./entity-links) for the full model.
+  </Step>
+</Steps>
+
+## Where next
+
+- **An agent, not curl?** [Agent setup](./agent-setup) — MCP, CLI, SDK.
+- **What can I link?** [Data model](./data-model).
+- **The whole API?** [API reference](/api).

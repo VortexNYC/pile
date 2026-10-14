@@ -1,0 +1,25 @@
+---
+title: Projects
+description: Projects, milestones, initiatives, and roadmaps — the layer above issues.
+---
+
+# Projects
+
+A project groups issues and documents around a body of work — a launch, a quarter's focus, or an ongoing stream like "Sales" or "Marketing".
+
+## Shape
+
+- `GET/POST /workspaces/{org}/projects` — create with `teamId` optional (a project can live on a team or on the workspace itself).
+- **Milestones** — `…/projects/{id}/milestones` — dated checkpoints.
+- **Members** — `…/projects/{id}/members` — who's on it.
+- **Updates** — `…/projects/{id}/updates` — written status updates over time.
+- **Comments** — `…/projects/{id}/comments` — same comment surface as every entity.
+- **Reminder** — `…/projects/{id}/reminder` — scheduled status nudge.
+
+## Initiatives and roadmaps
+
+Above projects: **initiatives** (`/initiatives`) group several projects under a strategic theme, and **roadmaps** (`/roadmaps`) lay them out over time.
+
+## Teams vs projects
+
+Teams own issue identifiers and engineering states; projects own a body of work. Marketing and Sales are projects inside the workspace — they don't need teams because they don't produce `KEY-NN` issues. Engineering work that supports them files issues under the engineering team and links the project.

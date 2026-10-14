@@ -1,0 +1,39 @@
+---
+title: Documents
+description: Nested markdown pages — strategy, specs, and agent notes — linkable to every entity in the workspace.
+---
+
+# Documents
+
+Documents are Notion-style nested pages. They carry strategy and specs — anything that isn't a ticket but needs to live with the work — and they link to the issues, projects, teams, and customers they concern.
+
+## Nesting and organization
+
+- `parentId` on create nests a page under another — breadcrumbs and the document tree follow.
+- `projectId`, `issueId`, `teamId` attach a doc to its work context directly.
+- Document spaces (`GET /workspaces/{org}/document-spaces`) group trees.
+
+## Create
+
+```bash
+curl -s -X POST "https://<host>/workspaces/{org}/documents" \
+  -H "Authorization: Bearer $KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Q4 field-sales playbook",
+    "content": "# Goals\n…",
+    "contentFormat": "markdown",
+    "parentId": "<parent-doc-uuid>",
+    "projectId": "<project-uuid>"
+  }'
+```
+
+## Links and comments
+
+- `GET /workspaces/{org}/documents/{id}/links` — every edge; create more via [entity links](./entity-links).
+- `…/documents/{id}/comments` — discussion on the page itself.
+- `GET /workspaces/{org}/documents/{id}/share` — public share link state.
+
+## What goes in a doc vs a ticket
+
+Engineering effort → **issue** inside the right team/project. Strategy, specs, playbooks, meeting notes, agent session notes → **document**, always linked back to the entities it concerns. The rule of thumb: if nobody will close it as "done", it's a doc.

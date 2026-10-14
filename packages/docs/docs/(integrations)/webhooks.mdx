@@ -1,0 +1,22 @@
+---
+title: Webhooks
+description: Outbound webhook subscriptions and inbound webhook endpoints — Intercom, providers, custom.
+---
+
+# Webhooks
+
+## Outbound subscriptions
+
+`GET/POST /workspaces/{org}/webhook-subscriptions` — subscribe a URL to workspace events (issue created/updated, ticket events, deal changes). Each subscription has a signing secret; deliveries are retried on failure.
+
+Verify signatures the standard way: `HMAC-SHA256(secret, timestamp + "." + body)` in the `X-Pile-Signature` header.
+
+## Inbound endpoints
+
+Provider webhooks mount at root, publicly routed but signature-verified:
+
+- `POST /intercom/{organizationId}` — Intercom events → tickets
+- `POST /support/sms/inbound` — Sendblue SMS → the SMS concierge thread
+- `POST /gitlab` — GitLab events
+
+Custom inbound automation uses the same pattern: verify signature → create ticket/event → let the workspace feed take it from there.
