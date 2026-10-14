@@ -1,0 +1,14 @@
+---
+title: Email
+description: Email inboxes and inbound mail — support tickets from customer mail.
+---
+
+# Email
+
+Email inboxes (`GET/POST /workspaces/{org}/email-inboxes`) give the workspace inbound addresses — mail to an inbox becomes a support ticket on the right channel, threaded by sender.
+
+The worker's inbound email route is configured on the Cloudflare side (Email Routing → worker). Replies from the app or API go back out through the configured send provider; missing provider credentials just disable outbound.
+
+## SMS concierge
+
+Related: `…/support/sms` — a workspace can run a conversational agent over SMS (Sendblue). Team members text the workspace number; the agent works through the same scoped API and replies by text, with the transcript on a support ticket.

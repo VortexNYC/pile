@@ -1,0 +1,10 @@
+---
+title: Slack
+description: Slack workspace connection — notifications and ticket events in channels.
+---
+
+# Slack
+
+`GET /workspaces/{org}/slack` returns the connection status. The OAuth connect flow is started from **Settings → Integrations** in the app.
+
+Once connected, Pile posts workspace events (issue assigned, ticket replied, notification mentions) to the channels/users you configure. The Slack signing secret is set via `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET`, `SLACK_SIGNING_SECRET` on the worker.

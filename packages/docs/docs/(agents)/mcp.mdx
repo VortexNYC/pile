@@ -1,0 +1,46 @@
+---
+title: MCP server
+description: The Pile MCP server exposes every OpenAPI operation as a typed tool — 600+ tools for issues, documents, support, CRM, links, and comments.
+---
+
+# MCP server
+
+`https://<host>/mcp` speaks Streamable HTTP MCP. Every OpenAPI operation is generated into a tool — over 600 of them — so the MCP surface and the REST surface never drift.
+
+## Connect a client
+
+```json
+{
+  "mcpServers": {
+    "pile": {
+      "url": "https://<host>/mcp",
+      "headers": { "Authorization": "Bearer <workspace-api-key>" }
+    }
+  }
+}
+```
+
+That config works in Cursor; Claude Code, Devin, and other MCP clients take the same shape (URL + bearer header). The key's workspace scope applies to every tool call.
+
+## Tool shape
+
+Tools are named after their operation: `getWorkspacesOrganizationIdIssues` (list issues), `postWorkspacesOrganizationIdIssues` (create), `patchWorkspacesOrganizationIdIssuesId` (update). Friendly aliases exist for the hot paths: `list_issues`, `create_issue`, `list_documents`, `create_document`, `search`.
+
+Useful groups:
+
+- **Issues** — list/get/create/update/delete, comments, subscribers, sub-issues
+- **Documents** — list/get/create/update/delete, document links, spaces
+- **Search** — `search` across every entity type
+- **Entities** — `getWorkspacesOrganizationIdEntitiesEntityTypeEntityIdLinks` (list), `postWorkspacesOrganizationIdEntitiesEntityTypeEntityIdLinks` (create link)
+- **Comments** — `…IssuesIssueIdComments`, `…DocumentsIdComments`, `…CustomersIdComments`, `…DealsDealIdComments`, `…ProjectsIdComments`, `…AgentSessionsIdComments`
+- **Activity** — `getWorkspacesOrganizationIdActivity` — the unified feed
+- **Support** — tickets, inbox, channels, captures, contacts
+- **Sales** — customers, deals, contacts
+- **Agent sessions** — list/get/create sessions, session activities, comments
+- **Workspaces/teams/projects/cycles** — the organizational layer
+
+## Tips for agents
+
+- `tools/list` returns ~600 tools; client search is over names — prefix with the entity (`…Documents`, `…Issues`) to narrow.
+- Prefer `search` for "find the thing about X" — it's one call instead of listing each type.
+- Create links immediately after creating a record; the graph is only useful if edges are written as you go.

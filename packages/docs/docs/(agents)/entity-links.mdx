@@ -1,0 +1,45 @@
+---
+title: Entity links
+description: The link graph — connect any entity to any other entity so humans and agents can follow the complete story.
+---
+
+# Entity links
+
+Links are the product. Every record in a workspace can carry directed edges to any other record — the set of allowed pairs is open.
+
+## Create a link
+
+```bash
+curl -s -X POST \
+  "https://<host>/workspaces/{org}/entities/{entityType}/{entityId}/links" \
+  -H "Authorization: Bearer $KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "targetEntityType": "issue",
+    "targetEntityId": "<issue-uuid>",
+    "linkType": "related",
+    "title": "Optional label"
+  }'
+```
+
+`linkType` is free-form — `related`, `blocks`, `implements`, `caused_by`, whatever makes the story readable. `title` gives the edge a human label.
+
+## Read links
+
+```bash
+curl -s "https://<host>/workspaces/{org}/entities/{type}/{id}/links" \
+  -H "Authorization: Bearer $KEY"
+```
+
+Returns both directions: edges this entity points to, and edges pointing at it — the web app renders them as its Relations panel.
+
+## Conventions that make the graph legible
+
+- **Strategy doc → tickets**: a doc describing a plan links the issues that implement it, plus the project and team.
+- **Deal ↔ customer**: deals link to their customer (the API also fills `customerId`, but the link makes the edge visible everywhere).
+- **Support ticket → issue**: the ticket that reported the bug links the engineering issue fixing it.
+- **Agent session → issue**: a session records which issue it worked; the issue's activity feed then shows the agent's run.
+
+## Link hygiene for agents
+
+Link as you create. A document created for issue `ISS-12` should immediately link `ISS-12`, its project, and the customer or ticket that motivated it — later readers (human or agent) should never have to reconstruct why something exists.

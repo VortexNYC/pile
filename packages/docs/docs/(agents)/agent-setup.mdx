@@ -1,0 +1,52 @@
+---
+title: Agent setup
+description: Connect a coding or ops agent to a Pile workspace through MCP, the CLI, or the SDK — one API key, every surface.
+---
+
+# Agent setup
+
+Humans and agents use the same API. An agent that can call the API can do anything a workspace member can: file and update issues, write documents, link entities, comment, read the activity feed.
+
+<Steps>
+  <Step title="Get a workspace API key">
+    In the app: **Settings → Developer → New key**, scoped to the workspace. Or `POST /workspaces/{organizationId}/tokens`. Save the raw secret — it's shown once.
+  </Step>
+  <Step title="Pick a surface">
+    - **MCP** — best for coding agents (Cursor, Claude Code, Devin). Every API operation is a tool. `https://<host>/mcp`
+    - **CLI** — `@vortex-api/pile`, typed commands for every route
+    - **SDK** — `openapi-fetch` client for TypeScript apps
+    - **HTTP** — plain `Authorization: Bearer` for anything else
+  </Step>
+  <Step title="Verify">
+    ```bash
+    curl -s https://<host>/workspaces -H "Authorization: Bearer $KEY"
+    ```
+  </Step>
+</Steps>
+
+## The model an agent needs to know
+
+1. Everything hangs off `org_*` workspace IDs: `/workspaces/{org}/...` — routes mount at the root, there is **no `/api` prefix** on API calls.
+2. Entities link freely: `POST /workspaces/{org}/entities/{type}/{id}/links` — see [Entity links](./entity-links).
+3. Write JSON bodies under a `body` wrapper is only needed for specific SDK calls — raw JSON works over HTTP and MCP.
+4. Durable notes go in documents, not repo files: `POST /workspaces/{org}/documents` with `issueId`/`projectId` links the note to the work it covers.
+
+## Per-surface guides
+
+<CardGroup cols={2}>
+  <Card title="MCP server" href="./mcp" icon="plug">
+    Every OpenAPI operation as a typed tool.
+  </Card>
+  <Card title="CLI" href="./cli" icon="terminal">
+    `pile` — commands for humans and scripts.
+  </Card>
+  <Card title="SDK" href="./sdk" icon="code">
+    Type-safe `openapi-fetch` client.
+  </Card>
+  <Card title="Entity links" href="./entity-links" icon="link">
+    The graph API — connect anything to anything.
+  </Card>
+  <Card title="Agent sessions" href="./agent-sessions" icon="activity">
+    How agents record runs, plans, and artifacts.
+  </Card>
+</CardGroup>

@@ -1,0 +1,31 @@
+---
+title: Activity & search
+description: The unified activity feed, notifications, search, and saved views.
+---
+
+# Activity & search
+
+## Unified activity feed
+
+`GET /workspaces/{org}/activity` merges every event source in the workspace into one feed:
+
+- Issue history (state changes, edits, assignments)
+- Comments on every entity type
+- Support ticket events
+- Agent session activity
+
+Query params: `entityType` (filter to one kind), `limit` (bounded). Each item carries `kind`, `entityType`, `entityId`, `action`, `actor`, `createdAt`, and a `summary`.
+
+Per-issue history alone: `GET /workspaces/{org}/issues/{id}/activity`.
+
+## Notifications
+
+`GET /workspaces/{org}/notifications` — mentions, assignments, subscriber updates. Unread count at `…/notifications/unread-count`.
+
+## Search
+
+`GET /workspaces/{org}/search?q=...` (MCP: `search`) — full-text across issues, documents, tickets, customers, deals, sessions. One call instead of listing each type.
+
+## Saved views
+
+`GET/POST /workspaces/{org}/saved-views` — named filter sets (by entity, state, assignee, label) that humans pin in the app sidebar and agents can read for "show me what's in my queue" queries. Favorite/unfavorite via `…/saved-views/{id}/favorite`.

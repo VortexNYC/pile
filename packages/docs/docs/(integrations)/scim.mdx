@@ -1,0 +1,10 @@
+---
+title: SCIM
+description: SCIM provisioning — sync users and groups from your IdP.
+---
+
+# SCIM
+
+`GET/POST /workspaces/{org}/scim/connections` creates an IdP connection (Okta, Entra, etc.) — it returns a base URL and token for the IdP's provisioning config.
+
+SCIM-managed users and groups flow into workspace memberships; deprovisioning in the IdP removes access. SCIM bearer tokens are verified by the SCIM plugin separately from API keys — they can't call the workspace API.

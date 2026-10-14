@@ -1,0 +1,28 @@
+---
+title: Export & backup
+description: Chunked workspace export/import — Durable Object state plus D1 records.
+---
+
+# Export & backup
+
+A workspace's Durable Object state can be large — the export API is chunked so no single response hits limits.
+
+## Export
+
+- `GET /workspaces/{org}/export/meta` — manifest: table list, row counts, KV key list
+- `GET /workspaces/{org}/export/table/{table}?cursor=…&limit=…` — paged table rows
+- `GET /workspaces/{org}/export/kv?cursor=…` — paged key-value entries
+
+Walk each table with the returned cursor until empty; the result is a complete snapshot of the workspace DO.
+
+## Import
+
+`POST /workspaces/{org}/export/table` with a chunk of rows applies them to the DO — the same chunking as export, so a full restore is just replay.
+
+D1 records (tickets, sessions, CRM entities) are exportable via their list endpoints; operators with D1 access can `wrangler d1 export` for a full account-level backup.
+
+## What this is for
+
+- Self-hosters snapshotting workspaces before risky operations
+- Migrating a workspace between deployments/accounts
+- Compliance exports — the full record of issues, comments, and history

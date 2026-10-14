@@ -1,0 +1,36 @@
+---
+title: Support
+description: Tickets, inbox, channels, captures, and escalation — the helpdesk surface.
+---
+
+# Support
+
+Support is a first-class surface: tickets from email, widget, SMS, and API land in one inbox, triage to owners, and link to engineering issues.
+
+## Ticket lifecycle
+
+```bash
+# Create (API agents can file tickets for customers)
+pile request POST "/workspaces/{org}/support/tickets" \
+  -d '{"title":"Cannot log in","description":"…","customerId":"<uuid>"}'
+
+# Reply / note
+pile request POST "/workspaces/{org}/support/tickets/{id}/messages" \
+  -d '{"body":"Looking into it now"}'
+```
+
+- **Inbox** — `GET /workspaces/{org}/support/inbox/next` — the triage queue
+- **Contacts** — `…/support/customers` — end-user records with comments
+- **Channels** — `…/support/channels` — inbound routes (email, widget, SMS)
+- **Captures** — `…/support/captures/{ticketId}` — console logs/video attached to a ticket
+- **Escalation** — `…/support/escalation` — on-call routing
+- **Team** — `…/support/tiers` — tiers and members
+- **Content** — `…/support/snippets` — saved replies
+
+## The engineering bridge
+
+The support ticket that reported a bug links the issue that fixes it — `POST /entities/support_ticket/{id}/links` → issue. When the issue closes, the activity feed shows the ticket→issue edge and a human (or the support agent) knows to close the customer loop.
+
+## Widget
+
+Embeddable support widget for customer apps — see [Support widget](./support-widget).

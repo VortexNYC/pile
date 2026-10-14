@@ -1,28 +1,53 @@
 ---
 title: Introduction
-description: Pile is an open-source, agent-native issue tracker built on Cloudflare Workers, Durable Objects, and D1.
+description: Pile is an open-source, agent-native workspace — issues, documents, support, and CRM on Cloudflare Workers, Durable Objects, and D1.
 ---
 
-# Pile
-
-Pile is an open-source, agent-native issue tracker designed to replace Linear operationally. It is backend-first: HTTP, MCP, OpenAPI, and a generated client, with workspace-isolated real-time state.
+Pile is an open-source, agent-native workspace: issues, documents, projects, support tickets, customers, deals, and agent sessions in one entity graph. Humans work in the web app; agents work through the same API — every route is an MCP tool and a CLI command.
 
 ## What makes it different
 
-- **Agent-native from day one**: scoped API tokens, MCP tools, agent sessions, and outbound webhooks so agents can read and mutate state reliably.
-- **Workspace-isolated real-time state**: one Durable Object per organization coordinates state, with D1 for metadata and R2 for attachments.
-- **OpenAPI-first**: every route is typed with `@hono/zod-openapi` and exposed as an MCP tool, with a generated TypeScript client.
+- **One entity graph.** Every record — issue, document, ticket, customer, deal, session — can link to any other record, comment, and appear in the unified activity feed. The links are the product.
+- **Same API for humans and agents.** Agents create, update, link, and comment through the identical workspace-scoped surface the app uses. No shadow admin API.
+- **Backend-first.** Hono + zod-openapi generates the OpenAPI spec; the MCP server, TypeScript SDK, and CLI are generated from it. The contract can't drift.
+- **Workspace isolation.** Each workspace's mutable state lives in its own Durable Object with SQLite storage; global metadata lives in D1.
+
+If you are new here, follow this order:
+
+<Steps>
+  <Step title="Quickstart" href="./quickstart">
+    Create a workspace, mint an API key, and file your first issue.
+  </Step>
+  <Step title="Understand the data model" href="./data-model">
+    Entities, links, comments, and the activity feed — the graph everything plugs into.
+  </Step>
+  <Step title="Connect an agent" href="./agent-setup">
+    Point an MCP client at `/mcp`, or install the CLI/SDK with a workspace key.
+  </Step>
+  <Step title="Self-host" href="./self-hosting">
+    Deploy the worker, run migrations, and set secrets on your own Cloudflare account.
+  </Step>
+</Steps>
 
 ## Core surfaces
 
-- **Issues** — teams, projects, statuses, priorities, relations, subscribers, and per-issue activity.
-- **Support** — customer conversations across email, chat, capture links, and SMS, all landing in one ticket inbox.
-- **Documents** — markdown specs and notes, linkable to issues and tickets.
-- **Mentions** — `@name` in a comment or ticket note notifies the member (in-app + email).
-- **Roles** — built-in member/admin/owner/guest plus custom roles with per-resource statements (`issue:view`, `ticket:create`, …).
-- **View as** — admins can impersonate a member to see exactly what their role sees.
-- **Agent sessions** — dispatch coding lanes or conversational agents against a workspace-scoped token.
-
-## Explore the API
-
-The full HTTP API reference is generated from the OpenAPI spec and lives at [`/api`](/api).
+<CardGroup cols={2}>
+  <Card title="Issues" href="./issues" icon="circle-dot">
+    Teams, states, labels, cycles, sub-issues — Linear-compatible workflow.
+  </Card>
+  <Card title="Documents" href="./documents" icon="file-text">
+    Nested pages, markdown, entity links, sharing — Notion-style docs.
+  </Card>
+  <Card title="Support" href="./support" icon="headset">
+    Tickets, inbox, channels, captures, escalation — the helpdesk side.
+  </Card>
+  <Card title="Sales" href="./sales" icon="handshake">
+    Customers, deals, contacts — the CRM side, linked to everything else.
+  </Card>
+  <Card title="For agents" href="./agent-setup" icon="bot">
+    MCP server, CLI, SDK, and workspace-scoped API keys.
+  </Card>
+  <Card title="API reference" href="/api" icon="code">
+    Every route, typed from the OpenAPI spec — 380+ operations.
+  </Card>
+</CardGroup>

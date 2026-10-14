@@ -1,0 +1,40 @@
+---
+title: Issues
+description: Teams, states, labels, cycles, and sub-issues — Linear-compatible issue workflow.
+---
+
+# Issues
+
+Issues are the unit of engineering work. They belong to a team, carry a state machine, and nest into trees.
+
+## Core concepts
+
+- **Teams** — `GET/POST /workspaces/{org}/teams`. Each team has a key (`ISS`, `VTX`) that prefixes issue identifiers (`ISS-12`).
+- **States** — per-team status workflow: `backlog`, `unstarted`, `started`/`in_progress`, `completed`, `canceled`. `GET/POST /workspaces/{org}/states`.
+- **Labels** — `GET/POST /workspaces/{org}/labels`, attach with issue create/update.
+- **Sub-issues** — set `parentId` on create to nest; the parent renders children with a progress roll-up.
+- **Cycles** — `GET/POST /workspaces/{org}/cycles` — timeboxed sprints with capacity stats and rollover (`POST /cycles/rollover`).
+
+## Working with issues
+
+```bash
+# Create
+pile issues create --workspace org_... --title "Title" --team VTX \
+  --state in_progress --parent <parent-uuid>
+
+# Update
+pile request PATCH "/workspaces/org_.../issues/<uuid>" \
+  -d '{"status":"completed"}'
+
+# Comment
+pile request POST "/workspaces/org_.../issues/<uuid>/comments" \
+  -d '{"content":"fixed in 33f876d"}'
+```
+
+## Around an issue
+
+- **Subscribers** — `…/issues/{id}/subscribers` for notifications
+- **External links** — `…/issues/{id}/external-links` for PRs and URLs
+- **Documents** — `GET /workspaces/{org}/issues/{identifier}/documents` returns every note attached to the ticket
+- **Relations** — `…/issues/{id}/relations` plus the open entity-links graph
+- **Analytics** — `GET /workspaces/{org}/issue-analytics/burndown`

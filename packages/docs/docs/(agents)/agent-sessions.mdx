@@ -1,0 +1,34 @@
+---
+title: Agent sessions
+description: Agent session entities — a run's plan, activities, and artifacts as first-class workspace records.
+---
+
+# Agent sessions
+
+A coding or ops agent can register its own run as a **session** — a first-class entity with status, activities, comments, and links. Humans see the session in the app's Sessions list; other agents can read what a prior run did.
+
+## Lifecycle
+
+1. **Create** — `POST /workspaces/{org}/agent/sessions` with a title and the agent/provider identity. Statuses: `planning → running → paused/completed/failed`.
+2. **Report activities** — `POST .../agent/sessions/{id}/activities` appends structured events (tool calls, milestones, errors).
+3. **Annotate** — `POST .../agent/sessions/{id}/comments` for notes a human should read.
+4. **Link** — `POST /workspaces/{org}/entities/session/{id}/links` to the issues, documents, and PRs the run touched.
+5. **Complete** — `PATCH .../agent/sessions/{id}` with the terminal status and a summary.
+
+## The durable-notes convention
+
+Session transcripts are ephemeral; findings should land in a **document** linked to the work:
+
+```bash
+curl -s -X POST "https://<host>/workspaces/{org}/documents" \
+  -H "Authorization: Bearer $KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "ISS-12 — investigation notes",
+    "contentFormat": "markdown",
+    "content": "# Findings\n…",
+    "issueId": "<issue-uuid>"
+  }'
+```
+
+`GET /workspaces/{org}/issues/ISS-12/documents` then returns every note for that ticket — the next session picks up where this one left off.
