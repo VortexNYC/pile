@@ -360,18 +360,7 @@ function DealDetail() {
         }
         rail={
           <>
-            <RailSection title="Company">
-              <RailLink
-                to="/$slug/customers/$customerId"
-                params={{
-                  slug: workspace.slug,
-                  customerId: data.customerId,
-                }}
-              >
-                {customer?.name ?? data.customerId.slice(0, 8)}
-              </RailLink>
-            </RailSection>
-            <RailSection title="Deal">
+            <RailSection title="Properties">
               <div className="flex flex-col gap-2 text-sm text-kumo-subtle">
                 <div className="flex items-center justify-between">
                   <span>Amount</span>
@@ -394,48 +383,60 @@ function DealDetail() {
                   </div>
                 ) : null}
               </div>
+              <CustomFieldsRail entityType="deal" entityId={data.id} />
             </RailSection>
-            <RailSection title="Contacts">
-              <div className="flex flex-col gap-1.5">
-                {data.contactIds.map((id) => {
-                  const contact = contacts.data?.find((c) => c.id === id);
-                  return (
-                    <div key={id} className="flex items-center gap-2">
-                      <RailLink
-                        to="/$slug/contacts/$contactId"
-                        params={{ slug: workspace.slug, contactId: id }}
-                      >
-                        {contact?.fullName ?? contact?.email ?? id.slice(0, 8)}
-                      </RailLink>
-                      <button
-                        type="button"
-                        aria-label="Remove contact"
-                        onClick={() =>
-                          patch.mutate({
-                            contactIds: data.contactIds.filter((c) => c !== id),
-                          })
-                        }
-                        className="text-kumo-subtle hover:text-kumo-default"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  );
-                })}
-                <AddDealContact
-                  contacts={(contacts.data ?? []).filter(
-                    (c) => !data.contactIds.includes(c.id)
-                  )}
-                  onAdd={(id) =>
-                    patch.mutate({
-                      contactIds: [...data.contactIds, id],
-                    })
-                  }
-                />
-              </div>
+
+            <RailSection title="Relations">
+              <RailLink
+                to="/$slug/customers/$customerId"
+                params={{
+                  slug: workspace.slug,
+                  customerId: data.customerId,
+                }}
+              >
+                {customer?.name ?? data.customerId.slice(0, 8)}
+              </RailLink>
+              {data.contactIds.length > 0 ? (
+                <div className="flex flex-col gap-1.5">
+                  {data.contactIds.map((id) => {
+                    const contact = contacts.data?.find((c) => c.id === id);
+                    return (
+                      <div key={id} className="flex items-center gap-2">
+                        <RailLink
+                          to="/$slug/contacts/$contactId"
+                          params={{ slug: workspace.slug, contactId: id }}
+                        >
+                          {contact?.fullName ?? contact?.email ?? id.slice(0, 8)}
+                        </RailLink>
+                        <button
+                          type="button"
+                          aria-label="Remove contact"
+                          onClick={() =>
+                            patch.mutate({
+                              contactIds: data.contactIds.filter((c) => c !== id),
+                            })
+                          }
+                          className="text-kumo-subtle hover:text-kumo-default"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+              <AddDealContact
+                contacts={(contacts.data ?? []).filter(
+                  (c) => !data.contactIds.includes(c.id)
+                )}
+                onAdd={(id) =>
+                  patch.mutate({
+                    contactIds: [...data.contactIds, id],
+                  })
+                }
+              />
+              <EntityLinksRail entityType="deal" entityId={data.id} />
             </RailSection>
-            <EntityLinksRail entityType="deal" entityId={data.id} />
-            <CustomFieldsRail entityType="deal" entityId={data.id} />
           </>
         }
       />

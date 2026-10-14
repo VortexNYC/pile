@@ -170,15 +170,17 @@ function ContactDetail() {
         }
         rail={
           <>
-            <RailSection title="Contact">
+            <RailSection title="Properties">
               <div className="flex flex-col gap-1 text-sm text-kumo-subtle">
                 <span>{c.email}</span>
                 {c.phone ? <span>{c.phone}</span> : null}
               </div>
             </RailSection>
-            {(deals.data?.length ?? 0) > 0 ? (
-              <RailSection title="Deals">
+
+            <RailSection title="Relations">
+              {(deals.data?.length ?? 0) > 0 ? (
                 <div className="flex flex-col gap-1.5">
+                  <span className="text-xs text-kumo-subtle">Deals</span>
                   {deals.data!.map((deal) => (
                     <div key={deal.id} className="flex items-center gap-2">
                       <RailLink
@@ -201,11 +203,10 @@ function ContactDetail() {
                     </div>
                   ))}
                 </div>
-              </RailSection>
-            ) : null}
-            {(tickets.data?.length ?? 0) > 0 ? (
-              <RailSection title="Tickets">
+              ) : null}
+              {(tickets.data?.length ?? 0) > 0 ? (
                 <div className="flex flex-col gap-1.5">
+                  <span className="text-xs text-kumo-subtle">Tickets</span>
                   {tickets.data!.slice(0, 8).map((ticket) => (
                     <div key={ticket.id} className="flex items-center gap-2">
                       <RailLink
@@ -220,9 +221,9 @@ function ContactDetail() {
                     </div>
                   ))}
                 </div>
-              </RailSection>
-            ) : null}
-            <EntityLinksRail entityType="contact" entityId={c.id} />
+              ) : null}
+              <EntityLinksRail entityType="contact" entityId={c.id} />
+            </RailSection>
           </>
         }
       />

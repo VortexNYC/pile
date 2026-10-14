@@ -300,7 +300,6 @@ function SessionDetail() {
         rail={
           s ? (
             <>
-              <EntityLinksRail entityType="session" entityId={sessionId} />
               <RailSection title="Properties">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant={sessionStatusVariant(s.status)}>
@@ -313,29 +312,40 @@ function SessionDetail() {
                   ) : null}
                 </div>
               </RailSection>
-              <RailSection title="Context">
-                <div className="flex flex-col gap-1.5 text-sm">
-                  <Link
-                    to="/$slug/issues/$issueId"
-                    params={{ slug: workspace.slug, issueId: s.issueId }}
-                    className="text-kumo-link hover:underline"
-                  >
-                    Issue
-                  </Link>
-                  {s.prUrl ? (
+
+              <RailSection title="Relations">
+                {s.issueId ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-kumo-subtle">Issue</span>
+                    <Link
+                      to="/$slug/issues/$issueId"
+                      params={{ slug: workspace.slug, issueId: s.issueId }}
+                      className="text-kumo-link hover:underline"
+                    >
+                      View issue
+                    </Link>
+                  </div>
+                ) : null}
+                {s.prUrl ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-kumo-subtle">PR</span>
                     <a
                       href={s.prUrl}
                       target="_blank"
                       rel="noreferrer"
                       className="text-kumo-link hover:underline"
                     >
-                      PR {s.prState ? `(${s.prState})` : ""}
+                      {s.prState ? `(${s.prState})` : "View"}
                     </a>
-                  ) : null}
-                  {s.branch ? (
+                  </div>
+                ) : null}
+                {s.branch ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-kumo-subtle">Branch</span>
                     <span className="text-kumo-subtle">{s.branch}</span>
-                  ) : null}
-                </div>
+                  </div>
+                ) : null}
+                <EntityLinksRail entityType="session" entityId={sessionId} />
               </RailSection>
             </>
           ) : undefined

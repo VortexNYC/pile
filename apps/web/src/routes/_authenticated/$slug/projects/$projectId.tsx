@@ -241,7 +241,6 @@ function ProjectDetail() {
       }
       rail={
         <>
-          <EntityLinksRail entityType="project" entityId={data.id} />
           <RailSection title="Properties">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant={projectStatusVariant(data.status)}>
@@ -257,6 +256,10 @@ function ProjectDetail() {
                 {data.endDate?.slice(0, 10) ?? "—"}
               </div>
             ) : null}
+          </RailSection>
+
+          <RailSection title="Relations">
+            <EntityLinksRail entityType="project" entityId={data.id} />
           </RailSection>
         </>
       }

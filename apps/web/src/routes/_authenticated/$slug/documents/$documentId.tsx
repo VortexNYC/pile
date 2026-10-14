@@ -452,32 +452,38 @@ function DocumentDetail() {
         }
         rail={
           <>
-            {data.parentDocumentId && ancestors.length > 0 ? (
-              <RailSection title="Parent">
-                <RailLink
-                  to="/$slug/documents/$documentId"
-                  params={{
-                    slug: workspace.slug,
-                    documentId: ancestors[ancestors.length - 1]!.id,
-                  }}
-                >
-                  {ancestors[ancestors.length - 1]!.icon
-                    ? `${ancestors[ancestors.length - 1]!.icon} `
-                    : ""}
-                  {ancestors[ancestors.length - 1]!.title}
-                </RailLink>
-              </RailSection>
-            ) : null}
-            {data.issueId ? (
-              <RailSection title="Linked issue">
-                <RailLink
-                  to="/$slug/issues/$issueId"
-                  params={{ slug: workspace.slug, issueId: data.issueId }}
-                >
-                  View issue
-                </RailLink>
-              </RailSection>
-            ) : null}
+            <RailSection title="Relations">
+              {data.parentDocumentId && ancestors.length > 0 ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-kumo-subtle">Parent</span>
+                  <RailLink
+                    to="/$slug/documents/$documentId"
+                    params={{
+                      slug: workspace.slug,
+                      documentId: ancestors[ancestors.length - 1]!.id,
+                    }}
+                  >
+                    {ancestors[ancestors.length - 1]!.icon
+                      ? `${ancestors[ancestors.length - 1]!.icon} `
+                      : ""}
+                    {ancestors[ancestors.length - 1]!.title}
+                  </RailLink>
+                </div>
+              ) : null}
+              {data.issueId ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-kumo-subtle">Linked issue</span>
+                  <RailLink
+                    to="/$slug/issues/$issueId"
+                    params={{ slug: workspace.slug, issueId: data.issueId }}
+                  >
+                    View issue
+                  </RailLink>
+                </div>
+              ) : null}
+              <EntityLinksRail entityType="document" entityId={data.id} />
+            </RailSection>
+
             {headings.length >= 3 ? (
               <RailSection title="On this page">
                 <TableOfContents>
@@ -495,7 +501,6 @@ function DocumentDetail() {
                 </TableOfContents>
               </RailSection>
             ) : null}
-            <EntityLinksRail entityType="document" entityId={data.id} />
           </>
         }
       />
