@@ -116,6 +116,35 @@ async function visibleTeamCount(
 }
 
 describe("agent tokens", () => {
+  it("lists installs with actorType, provider, and joined teams", async () => {
+    const { organizationId, adminToken } = await seed();
+    await mintAgent(organizationId, adminToken, {
+      name: "grok-bot",
+      actorType: "agent",
+      provider: "grok",
+      permissions: "read,write",
+    });
+    const res = await fetch(
+      `/workspaces/${organizationId}/tokens`,
+      {},
+      adminToken
+    );
+    const { tokens } = z
+      .object({
+        tokens: z.array(
+          z.object({
+            actorType: z.string().optional(),
+            provider: z.string().optional(),
+            teamIds: z.array(z.string()).optional(),
+          })
+        ),
+      })
+      .parse(await res.json());
+    const agent = tokens.find((t) => t.actorType === "agent");
+    expect(agent?.provider).toBe("grok");
+    expect(agent?.teamIds?.length).toBe(2);
+  });
+
   it("joins every team by default so the agent sees workspace data", async () => {
     const { organizationId, adminToken } = await seed();
     const { res, key } = await mintAgent(organizationId, adminToken, {

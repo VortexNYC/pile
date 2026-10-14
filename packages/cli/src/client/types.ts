@@ -468,6 +468,10 @@ export interface paths {
                                 organizationId: string;
                                 name: string;
                                 permissions: string;
+                                /** @enum {string} */
+                                actorType?: "user" | "agent";
+                                provider?: string;
+                                teamIds?: string[];
                                 createdAt: string;
                             }[];
                         };
@@ -511,6 +515,9 @@ export interface paths {
                             name: string;
                             token: string;
                             permissions: string;
+                            /** @enum {string} */
+                            actorType?: "user" | "agent";
+                            provider?: string;
                             createdAt: string;
                         };
                     };

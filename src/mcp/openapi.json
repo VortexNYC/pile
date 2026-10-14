@@ -1025,6 +1025,22 @@
                           "permissions": {
                             "type": "string"
                           },
+                          "actorType": {
+                            "type": "string",
+                            "enum": [
+                              "user",
+                              "agent"
+                            ]
+                          },
+                          "provider": {
+                            "type": "string"
+                          },
+                          "teamIds": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
                           "createdAt": {
                             "type": "string"
                           }
@@ -1131,6 +1147,16 @@
                       "type": "string"
                     },
                     "permissions": {
+                      "type": "string"
+                    },
+                    "actorType": {
+                      "type": "string",
+                      "enum": [
+                        "user",
+                        "agent"
+                      ]
+                    },
+                    "provider": {
                       "type": "string"
                     },
                     "createdAt": {
