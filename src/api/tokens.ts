@@ -3,20 +3,8 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { eq, inArray } from "drizzle-orm";
 
 import { createD1 } from "../global/db.js";
-<<<<<<< HEAD
-import {
-  apikey,
-  team,
-  teamMember,
-  user as userTable,
-} from "../global/schema.js";
+import { apikey, team, teamMember, user as userTable } from "../global/schema.js";
 import { addTeamMember } from "../global/teams.js";
-||||||| e66b625
-import { apikey, user as userTable } from "../global/schema.js";
-=======
-import { apikey, team, user as userTable } from "../global/schema.js";
-import { addTeamMember } from "../global/teams.js";
->>>>>>> origin/main
 import { createMembership } from "../global/workspace-entities.js";
 import { getWorkspaceById } from "../global/workspaces.js";
 import { createAuth } from "../platform/auth.js";
@@ -179,22 +167,23 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
       list.push(teamId);
       teamsByUser.set(userId, list);
     }
-    const tokens = filtered.map(({ row, parsed }) => ({
-      id: row.id,
-      organizationId: parsed!.organizationId,
-      name: row.name ?? "",
-      permissions: parsed!.permissions,
-      actorType: parsed!.actorType ?? "user",
-      provider: parsed!.provider,
-      teamIds:
-        parsed!.actorType === "agent"
-          ? (teamsByUser.get(row.referenceId) ?? [])
-          : undefined,
-      createdAt:
-        row.createdAt instanceof Date
-          ? row.createdAt.toISOString()
-          : String(row.createdAt),
-    }));
+    const tokens = filtered
+      .map(({ row, parsed }) => ({
+        id: row.id,
+        organizationId: parsed!.organizationId,
+        name: row.name ?? "",
+        permissions: parsed!.permissions,
+        actorType: parsed!.actorType ?? "user",
+        provider: parsed!.provider,
+        teamIds:
+          parsed!.actorType === "agent"
+            ? (teamsByUser.get(row.referenceId) ?? [])
+            : undefined,
+        createdAt:
+          row.createdAt instanceof Date
+            ? row.createdAt.toISOString()
+            : String(row.createdAt),
+      }));
     return c.json({ tokens });
   });
 
@@ -272,12 +261,7 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
         userId,
         name: input.name,
         rateLimitEnabled: false,
-        metadata: {
-          organizationId,
-          permissions,
-          actorType,
-          provider: input.provider,
-        },
+        metadata: { organizationId, permissions, actorType, provider: input.provider },
         permissions: { workspace: [...requested] },
       },
     });

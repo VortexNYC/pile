@@ -7,35 +7,6 @@ Pile is an open-source, agent-native workspace: issues, documents, projects, sup
 
 ## What makes it different
 
-<<<<<<< HEAD
-- **One entity graph.** Every record — issue, document, ticket, customer, deal, session — can link to any other record, comment, and appear in the unified activity feed. The links are the product.
-- **Same API for humans and agents.** Agents create, update, link, and comment through the identical workspace-scoped surface the app uses. No shadow admin API.
-- **Backend-first.** Hono + zod-openapi generates the OpenAPI spec; the MCP server, TypeScript SDK, and CLI are generated from it. The contract can't drift.
-- **Workspace isolation.** Each workspace's mutable state lives in its own Durable Object with SQLite storage; global metadata lives in D1.
-
-If you are new here, follow this order:
-
-<Steps>
-  <Step title="Quickstart" href="./quickstart">
-    Create a workspace, mint an API key, and file your first issue.
-  </Step>
-  <Step title="Understand the data model" href="./data-model">
-    Entities, links, comments, and the activity feed — the graph everything
-    plugs into.
-  </Step>
-  <Step title="Connect an agent" href="./agent-setup">
-    Point an MCP client at `/mcp`, or install the CLI/SDK with a workspace key.
-  </Step>
-  <Step title="Self-host" href="./self-hosting">
-    Deploy the worker, run migrations, and set secrets on your own Cloudflare
-    account.
-  </Step>
-</Steps>
-||||||| e66b625
-- **Agent-native from day one**: scoped API tokens, MCP tools, agent sessions, and outbound webhooks so agents can read and mutate state reliably.
-- **Workspace-isolated real-time state**: one Durable Object per organization coordinates state, with D1 for metadata and R2 for attachments.
-- **OpenAPI-first**: every route is typed with `@hono/zod-openapi` and exposed as an MCP tool, with a generated TypeScript client.
-=======
 - **One entity graph.** Every record — issue, document, ticket, customer, deal, session — can link to any other record, comment, and appear in the unified activity feed. The links are the product.
 - **Same API for humans and agents.** Agents create, update, link, and comment through the identical workspace-scoped surface the app uses. No shadow admin API.
 - **Backend-first.** Hono + zod-openapi generates the OpenAPI spec; the MCP server, TypeScript SDK, and CLI are generated from it. The contract can't drift.
@@ -57,7 +28,6 @@ If you are new here, follow this order:
     Deploy the worker, run migrations, and set secrets on your own Cloudflare account.
   </Step>
 </Steps>
->>>>>>> origin/main
 
 ## Core surfaces
 

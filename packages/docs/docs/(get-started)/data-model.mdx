@@ -1,47 +1,3 @@
-<<<<<<< HEAD
----
-title: Data model
-description: Workspaces, entities, links, comments, and the unified activity feed — the graph every surface shares.
----
-
-# Data model
-
-Pile has one rule: **every data type links to every other data type**, so a human or an agent can walk the complete story of any record.
-
-## The entities
-
-| Entity               | What it is                                             | Where it lives       |
-| -------------------- | ------------------------------------------------------ | -------------------- |
-| Issue                | Engineering work — states, cycles, labels, sub-issues  | Team                 |
-| Document             | Strategy, specs, notes — nested markdown pages         | Workspace or project |
-| Project              | A body of work across issues and docs                  | Team or workspace    |
-| Initiative / Roadmap | Multi-project strategy layer                           | Workspace            |
-| Support ticket       | A customer-facing thread                               | Support              |
-| Customer             | A company you sell to or support                       | Sales                |
-| Deal                 | An opportunity on a customer                           | Sales                |
-| Contact              | A person — support contact or sales contact            | Sales / Support      |
-| Agent session        | A coding/ops agent's run — plan, activities, artifacts | Workspace            |
-| Comment              | Notes on any entity                                    | Any entity           |
-| Link                 | A directed edge between any two entities               | Entity graph         |
-
-## Links are first-class
-
-`POST /workspaces/{org}/entities/{type}/{id}/links` creates a directed edge to any entity type — `issue`, `document`, `project`, `customer`, `deal`, `session`, `ticket`, `contact`, and more. `GET .../links` returns everything attached. There is no closed set of "allowed" relationships: a strategy doc can link its tickets, team, project, and the deal that motivated it.
-
-## Comments and activity are shared
-
-- **Comments**: `/{entity}/{id}/comments` exists on issues, documents, projects, customers, deals, sessions, and support contacts. Agent comments and human comments land in the same list.
-- **Activity**: `GET /workspaces/{org}/activity` is the unified feed — issue history, entity comments, ticket events, and agent session activity merged and filterable by `entityType` and `limit`.
-
-## IDs and identifiers
-
-Every record has a UUID plus a human identifier where it makes sense (`ISS-12` issues, `VTX-501` issues). API paths take the UUID; humans and agent notes use the identifier.
-
-## Workspaces
-
-A workspace (`org_*`) is the security boundary: API keys, links, comments, and activity are all scoped to it. A key minted for one workspace cannot read another.
-||||||| e66b625
-=======
 ---
 title: Data model
 description: Workspaces, entities, links, comments, and the unified activity feed — the graph every surface shares.
@@ -83,4 +39,3 @@ Every record has a UUID plus a human identifier where it makes sense (`ISS-12` i
 ## Workspaces
 
 A workspace (`org_*`) is the security boundary: API keys, links, comments, and activity are all scoped to it. A key minted for one workspace cannot read another.
->>>>>>> origin/main

@@ -1,57 +1,3 @@
-<<<<<<< HEAD
----
-title: Architecture
-description: How Pile is built — Hono + zod-openapi on Workers, Durable Objects for workspace state, D1 for global metadata.
----
-
-# Architecture
-
-```
-HTTP/MCP/CLI ──► Hono app (zod-openapi)
-                    │
-                    ├──► D1 (Drizzle) ── workspaces, users, tickets, sessions, CRM
-                    │
-                    └──► WorkspaceDO (SQLite) ── issues, comments, history, links
-                           one instance per workspace
-```
-
-## The contract pipeline
-
-Route definitions are the single source of truth:
-
-```
-src/api/*.ts (Hono + zod-openapi)
-        │
-        ├──► src/mcp/openapi.json   — generated spec
-        ├──► src/mcp/mcp-tools.ts   — generated MCP tools
-        └──► packages/cli/src/      — generated client + commands
-```
-
-`pnpm run contract` regenerates all three; `contract:check` fails a PR if they drift. New routes automatically become API + MCP + CLI surface — that is why the tool count is 600+ and always in sync.
-
-## State split
-
-- **D1 / Drizzle** — global metadata: workspaces, users, support tickets, agent sessions, customers, deals. Queryable across workspaces by operators.
-- **WorkspaceDO** — per-workspace mutable state: issues, comments, issue history, entity links. One Durable Object instance per workspace keeps writes strongly consistent and fast.
-
-## Auth
-
-- **Humans**: Better Auth (sessions, orgs, SCIM).
-- **Agents**: workspace-scoped API keys (better-auth `apiKey` plugin) — metadata pins `organizationId`; the key can't act outside it.
-
-## Where code lives
-
-| Path                              | What                                     |
-| --------------------------------- | ---------------------------------------- |
-| `src/api/`                        | Route definitions + handlers             |
-| `src/workspace/durable-object.ts` | WorkspaceDO + its migrations             |
-| `src/global/schema.ts`            | D1 schema                                |
-| `src/mcp/`                        | MCP server + generated artifacts         |
-| `apps/web/`                       | Member console (React + TanStack Router) |
-| `packages/cli/`                   | `pile` CLI + SDK client                  |
-| `packages/docs/`                  | This site (blume)                        |
-||||||| e66b625
-=======
 ---
 title: Architecture
 description: How Pile is built — Hono + zod-openapi on Workers, Durable Objects for workspace state, D1 for global metadata.
@@ -103,4 +49,3 @@ src/api/*.ts (Hono + zod-openapi)
 | `apps/web/` | Member console (React + TanStack Router) |
 | `packages/cli/` | `pile` CLI + SDK client |
 | `packages/docs/` | This site (blume) |
->>>>>>> origin/main
