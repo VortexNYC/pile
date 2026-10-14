@@ -6,7 +6,6 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 
 import { EntityHover } from "@/components/entity-hover";
-import { PeekHeader, usePeek } from "@/components/entity-peek";
 import { Page } from "@/components/page";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
@@ -51,7 +50,6 @@ function DocumentsList() {
       });
     },
   });
-  const peek = usePeek<NonNullable<typeof documents.data>[number]>();
   const create = () =>
     void navigate({
       to: "/$slug/documents/new",
@@ -112,7 +110,7 @@ function DocumentsList() {
                       <Link
                         to="/$slug/documents/$documentId"
                         params={{ slug: workspace.slug, documentId: doc.id }}
-                        onClick={peek.peekOnClick(doc)}
+                        
                         className="text-kumo-link hover:underline"
                       >
                         {doc.icon ? `${doc.icon} ` : ""}
@@ -127,15 +125,6 @@ function DocumentsList() {
           </Table>
         </LayerCard>
       )}
-      <peek.Drawer>
-        {peek.peeked ? (
-          <PeekHeader
-            meta={peek.peeked.icon ? <span>{peek.peeked.icon}</span> : null}
-            title={peek.peeked.title}
-            href={`/${workspace.slug}/documents/${peek.peeked.id}`}
-          />
-        ) : null}
-      </peek.Drawer>
     </Page>
   );
 }

@@ -20,7 +20,6 @@ import { ContactsList } from "@/components/contacts-list";
 import { CustomersList } from "@/components/customers-list";
 import { DealsList } from "@/components/deals-list";
 import { EntityHover } from "@/components/entity-hover";
-import { PeekHeader, usePeek } from "@/components/entity-peek";
 import { FieldMenu } from "@/components/field-menu";
 import { Page } from "@/components/page";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
@@ -84,7 +83,7 @@ function TicketsList() {
   });
   const queryClient = useQueryClient();
   type TicketRow = (typeof allTickets)[number];
-  const peek = usePeek<TicketRow>();
+  
   const patch = useMutation({
     mutationFn: (args: { id: string; body: Record<string, string> }) =>
       unwrap(
@@ -231,7 +230,7 @@ function TicketsList() {
                         <Link
                           to="/$slug/tickets/$ticketId"
                           params={{ slug: workspace.slug, ticketId: ticket.id }}
-                          onClick={peek.peekOnClick(ticket)}
+                          
                           className="text-kumo-link hover:underline"
                         >
                           <span className="text-kumo-subtle mr-2">
@@ -322,36 +321,6 @@ function TicketsList() {
           </div>
         ))}
 
-      <peek.Drawer>
-        {peek.peeked ? (
-          <>
-            <PeekHeader
-              meta={
-                <Badge
-                  variant={
-                    peek.peeked.status === "done"
-                      ? "green"
-                      : peek.peeked.status === "snoozed"
-                        ? "neutral"
-                        : "blue"
-                  }
-                >
-                  {TICKET_STATUS_LABELS[peek.peeked.status]}
-                </Badge>
-              }
-              title={`#${peek.peeked.number} ${peek.peeked.title}`}
-              href={`/${workspace.slug}/tickets/${peek.peeked.id}`}
-            />
-            <div className="mt-4 flex flex-col gap-2 text-sm text-kumo-subtle">
-              <div>
-                Customer:{" "}
-                {peek.peeked.customer.fullName ?? peek.peeked.customer.email}
-              </div>
-              <div>Updated {formatRelative(peek.peeked.updatedAt)}</div>
-            </div>
-          </>
-        ) : null}
-      </peek.Drawer>
 
       {tickets.hasNextPage ? (
         <div className="mt-4 flex justify-center">

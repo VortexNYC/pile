@@ -6,7 +6,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
 import { EntityHover } from "@/components/entity-hover";
-import { PeekHeader, usePeek } from "@/components/entity-peek";
 import { FieldMenu } from "@/components/field-menu";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
@@ -35,7 +34,6 @@ const STATUS_LABELS: Record<string, string> = {
 export function ProjectsList() {
   const workspace = useWorkspace();
   const queryClient = useQueryClient();
-  const peek = usePeek<NonNullable<typeof projects.data>[number]>();
   const patch = useMutation({
     mutationFn: (args: { id: string; body: Record<string, string> }) =>
       unwrap(
@@ -114,7 +112,7 @@ export function ProjectsList() {
                       slug: workspace.slug,
                       projectId: project.id,
                     }}
-                    onClick={peek.peekOnClick(project)}
+                    
                     className="text-kumo-link hover:underline"
                   >
                     {project.name}
@@ -165,26 +163,6 @@ export function ProjectsList() {
           ))}
         </Table.Body>
       </Table>
-      <peek.Drawer>
-        {peek.peeked ? (
-          <>
-            <PeekHeader
-              meta={
-                <Badge variant={projectStatusVariant(peek.peeked.status)}>
-                  {peek.peeked.status}
-                </Badge>
-              }
-              title={peek.peeked.name}
-              href={`/${workspace.slug}/projects/${peek.peeked.id}`}
-            />
-            {peek.peeked.description ? (
-              <div className="mt-4 text-sm text-kumo-subtle">
-                {peek.peeked.description}
-              </div>
-            ) : null}
-          </>
-        ) : null}
-      </peek.Drawer>
     </LayerCard>
   );
 }

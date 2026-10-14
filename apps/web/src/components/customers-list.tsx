@@ -7,7 +7,6 @@ import { Link } from "@tanstack/react-router";
 
 import { CompanyLogo } from "@/components/company-logo";
 import { EntityHover } from "@/components/entity-hover";
-import { PeekHeader, usePeek } from "@/components/entity-peek";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap } from "@/lib/api";
@@ -17,7 +16,6 @@ import { formatRelative } from "@/lib/labels";
  * the Support tab. */
 export function CustomersList() {
   const workspace = useWorkspace();
-  const peek = usePeek<NonNullable<typeof customers.data>[number]>();
   const key = wsKey(workspace.id, "customers");
 
   const customers = useQuery({
@@ -83,7 +81,7 @@ export function CustomersList() {
                           slug: workspace.slug,
                           customerId: customer.id,
                         }}
-                        onClick={peek.peekOnClick(customer)}
+                        
                         className="text-kumo-link hover:underline"
                       >
                         <span className="flex items-center gap-2">
@@ -105,20 +103,6 @@ export function CustomersList() {
           </Table>
         </LayerCard>
       )}
-      <peek.Drawer>
-        {peek.peeked ? (
-          <>
-            <PeekHeader
-              title={peek.peeked.name}
-              href={`/${workspace.slug}/customers/${peek.peeked.id}`}
-            />
-            <div className="mt-4 flex flex-col gap-2 text-sm text-kumo-subtle">
-              {peek.peeked.url ? <div>{peek.peeked.url}</div> : null}
-              <div>Added {formatRelative(peek.peeked.createdAt)}</div>
-            </div>
-          </>
-        ) : null}
-      </peek.Drawer>
     </div>
   );
 }
