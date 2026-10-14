@@ -12,10 +12,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 
+import { RecordNotes } from "@/components/record-notes";
 import { EntityLinksRail } from "@/components/entity-links";
 import { EntityPage, RailSection } from "@/components/entity-page";
 import { Feed } from "@/components/feed";
-import { Page } from "@/components/page";
 import { ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap, type paths } from "@/lib/api";
@@ -289,6 +289,11 @@ function SessionDetail() {
                   a cold session.
                 </p>
               ) : null}
+              <LayerCard>
+                <div className="px-4 py-4">
+                  <RecordNotes entityType="session" entityId={sessionId} />
+                </div>
+              </LayerCard>
             </>
           )
         }

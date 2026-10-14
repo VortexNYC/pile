@@ -5,6 +5,7 @@ import { Text } from "@cloudflare/kumo/components/text";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 
+import { RecordNotes } from "@/components/record-notes";
 import { EntityHover } from "@/components/entity-hover";
 import { EntityLinksRail } from "@/components/entity-links";
 import { EntityPage, RailSection } from "@/components/entity-page";
@@ -230,6 +231,12 @@ function ProjectDetail() {
               </div>
             </LayerCard>
           ) : null}
+
+          <LayerCard>
+            <div className="px-4 py-4">
+              <RecordNotes entityType="project" entityId={data.id} />
+            </div>
+          </LayerCard>
         </>
       }
       rail={
