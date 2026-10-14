@@ -18,8 +18,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useDeferredValue, useState } from "react";
 
-import { PeekHeader } from "@/components/entity-peek";
 import { IssueContextMenu } from "@/components/issue-context-menu";
+import { IssuePeek } from "@/components/peek";
 import {
   DEFAULT_DISPLAY,
   IssueDisplayMenu,
@@ -28,8 +28,6 @@ import { IssueFieldMenu } from "@/components/issue-field-menu";
 import { EMPTY_FILTER, IssueFilter } from "@/components/issue-filter";
 import { Markdown } from "@/components/markdown";
 import { Page } from "@/components/page";
-import { IssuePeek } from "@/components/peek";
-import { PeekDrawer } from "@/components/peek-drawer";
 import { PrChip } from "@/components/pr-chip";
 import { ProjectsList } from "@/components/projects-list";
 import { SessionsList } from "@/components/sessions-list";
@@ -81,7 +79,6 @@ function IssuesList() {
 
   const [filter, setFilter] = useState(EMPTY_FILTER);
   const [display, setDisplay] = useState(DEFAULT_DISPLAY);
-  const [peekedId, setPeekedId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
   const bulk = useMutation({
@@ -146,8 +143,7 @@ function IssuesList() {
     placeholderData: keepPreviousData,
   });
   const allIssues = issues.data?.pages.flatMap((page) => page.issues) ?? [];
-  const peeked = allIssues.find((i) => i.id === peekedId) ?? null;
-
+  
   return (
     <Page
       title="Issues"
@@ -266,14 +262,7 @@ function IssuesList() {
                                       slug: workspace.slug,
                                       issueId: issue.id,
                                     }}
-                                    onClick={(e) => {
-                                      // modified clicks keep native nav — plain
-                                      // click opens the peek drawer instead.
-                                      if (e.metaKey || e.ctrlKey || e.shiftKey)
-                                        return;
-                                      e.preventDefault();
-                                      setPeekedId(issue.id);
-                                    }}
+
                                     className={`group flex h-11 items-center gap-3 px-4 hover:bg-kumo-tint ${
                                       selected.has(issue.id)
                                         ? "bg-kumo-tint"
@@ -343,41 +332,7 @@ function IssuesList() {
             </div>
           </DndContext>
         )}
-        {peeked ? (
-          <PeekDrawer
-            open={!!peeked}
-            onOpenChange={(o) => !o && setPeekedId(null)}
-          >
-            <div className="flex flex-col gap-4">
-              <PeekHeader
-                meta={
-                  <>
-                    {peeked.identifier ? (
-                      <span className="text-xs font-medium text-kumo-subtle">
-                        {peeked.identifier}
-                      </span>
-                    ) : null}
-                    <IssueStatusIcon status={peeked.status} />
-                    <Badge variant={priorityVariant(peeked.priority)}>
-                      {PRIORITY_LABELS[peeked.priority]}
-                    </Badge>
-                    <PrChip issue={peeked} />
-                  </>
-                }
-                title={peeked.title}
-                href={`/${workspace.slug}/issues/${peeked.id}`}
-              />
-              {peeked.description ? (
-                <Markdown
-                  workspaceSlug={workspace.slug}
-                  content={peeked.description}
-                />
-              ) : (
-                <p className="text-sm text-kumo-subtle">No description.</p>
-              )}
-            </div>
-          </PeekDrawer>
-        ) : null}
+
         {issues.hasNextPage ? (
           <div className="mt-4 flex justify-center">
             <Button

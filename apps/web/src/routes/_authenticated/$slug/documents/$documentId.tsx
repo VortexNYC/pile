@@ -4,7 +4,7 @@ import { InputArea } from "@cloudflare/kumo/components/input";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 import { TableOfContents } from "@cloudflare/kumo/components/table-of-contents";
 import { Text } from "@cloudflare/kumo/components/text";
-import { LinkSimple, Star, Trash } from "@phosphor-icons/react";
+import { LinkSimple, Plus, Star, Trash } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Fragment, useRef, useState } from "react";
@@ -58,6 +58,29 @@ function DocumentDetail() {
           params: { path },
         })
       ),
+  });
+
+  const createSubPage = useMutation({
+    mutationFn: async () =>
+      unwrap(
+        api.POST("/workspaces/{organizationId}/documents", {
+          params: { path: { organizationId } },
+          body: {
+            title: "Untitled",
+            parentDocumentId: documentId,
+          },
+        })
+      ),
+    onSuccess: (doc) => {
+      void queryClient.invalidateQueries({
+        queryKey: wsKey(organizationId, "documents", documentId, "children"),
+      });
+      void navigate({
+        to: "/$slug/documents/$documentId",
+        params: { slug: workspace.slug, documentId: doc.id },
+      });
+    },
+    onError: (error) => toastError(error),
   });
 
   const save = useMutation({
@@ -211,6 +234,15 @@ function DocumentDetail() {
         }
         actions={
           <>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Plus />}
+              loading={createSubPage.isPending}
+              onClick={() => createSubPage.mutate()}
+            >
+              New sub-page
+            </Button>
             <ShareButton
               organizationId={workspace.id}
               kind="document"
