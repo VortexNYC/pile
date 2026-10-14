@@ -186,6 +186,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "provider",
         flag: "provider",
       },
+      {
+        name: "teamIds",
+        flag: "team-ids",
+      },
     ],
   },
   "tokens delete": {

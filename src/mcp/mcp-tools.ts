@@ -16865,7 +16865,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdTokens",
-    "description": "Create token (POST /workspaces/{organizationId}/tokens) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, permissions, actorType, provider (* = required).",
+    "description": "Create token (POST /workspaces/{organizationId}/tokens) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, permissions, actorType, provider, teamIds (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/tokens",
     "inputSchema": {
@@ -16903,6 +16903,12 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "provider": {
               "type": "string"
+            },
+            "teamIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             }
           },
           "required": [

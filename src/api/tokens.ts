@@ -3,7 +3,8 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { eq } from "drizzle-orm";
 
 import { createD1 } from "../global/db.js";
-import { apikey, user as userTable } from "../global/schema.js";
+import { apikey, team, user as userTable } from "../global/schema.js";
+import { addTeamMember } from "../global/teams.js";
 import { createMembership } from "../global/workspace-entities.js";
 import { getWorkspaceById } from "../global/workspaces.js";
 import { createAuth } from "../platform/auth.js";
@@ -46,6 +47,10 @@ const tokenBodySchema = z.object({
     .transform(normalizeTokenPermissions),
   actorType: z.enum(["user", "agent"]).optional(),
   provider: z.string().optional(),
+  // Linear-style agent install: teams the agent can see. Omitted = all
+  // teams in the workspace — an agent token with no team access reads
+  // nothing because every team is private.
+  teamIds: z.array(z.string()).optional(),
 });
 
 const listTokensRoute = createRoute({
@@ -234,6 +239,38 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
       createdAt: z.union([z.date(), z.string()]),
     });
     const parsed = resultSchema.parse(result);
+
+    if (actorType === "agent") {
+      const teams = await db
+        .select({ id: team.id })
+        .from(team)
+        .where(eq(team.organizationId, organizationId))
+        .all();
+      const known = new Set(teams.map((t) => t.id));
+      const requestedTeams = input.teamIds ?? teams.map((t) => t.id);
+      const unknown = requestedTeams.filter((id) => !known.has(id));
+      if (unknown.length > 0) {
+        throw new VortexError({
+          code: "BAD_REQUEST",
+          status: 400,
+          message: `Unknown team ids: ${unknown.join(", ")}`,
+        });
+      }
+      await Promise.all(
+        requestedTeams.map((teamId) =>
+          addTeamMember(
+            db,
+            c.env,
+            c.req.raw.headers,
+            organizationId,
+            teamId,
+            parsed.id,
+            "agent",
+            "member"
+          )
+        )
+      );
+    }
 
     await emitWorkspaceAudit(
       c,

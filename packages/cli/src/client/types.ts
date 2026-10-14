@@ -494,6 +494,7 @@ export interface paths {
                         /** @enum {string} */
                         actorType?: "user" | "agent";
                         provider?: string;
+                        teamIds?: string[];
                     };
                 };
             };

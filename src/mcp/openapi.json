@@ -1095,6 +1095,12 @@
                   },
                   "provider": {
                     "type": "string"
+                  },
+                  "teamIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 },
                 "required": [
