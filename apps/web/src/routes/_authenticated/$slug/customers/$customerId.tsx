@@ -315,7 +315,7 @@ function CustomerEditor({
         }
         rail={
           <>
-            <RailSection title="Contact">
+            <RailSection title="Properties">
               <div className="flex flex-col gap-1.5 text-sm">
                 {customer.bookingUrl ? (
                   <a
@@ -346,9 +346,11 @@ function CustomerEditor({
                 ) : null}
               </div>
             </RailSection>
-            {(companyContacts.data?.length ?? 0) > 0 ? (
-              <RailSection title="Contacts">
+
+            <RailSection title="Relations">
+              {(companyContacts.data?.length ?? 0) > 0 ? (
                 <div className="flex flex-col gap-1.5">
+                  <span className="text-xs text-kumo-subtle">Contacts</span>
                   {companyContacts.data!.map((contact) => (
                     <RailLink
                       key={contact.id}
@@ -362,11 +364,10 @@ function CustomerEditor({
                     </RailLink>
                   ))}
                 </div>
-              </RailSection>
-            ) : null}
-            {(deals.data?.length ?? 0) > 0 ? (
-              <RailSection title="Deals">
-                <div className="flex flex-col gap-1.5 text-sm">
+              ) : null}
+              {(deals.data?.length ?? 0) > 0 ? (
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-xs text-kumo-subtle">Deals</span>
                   {deals.data!.map((deal) => (
                     <div key={deal.id} className="flex items-center gap-2">
                       <Badge
@@ -380,24 +381,21 @@ function CustomerEditor({
                       >
                         {deal.stage}
                       </Badge>
-                      <span className="min-w-0 flex-1 truncate text-kumo-default">
+                      <RailLink
+                        to="/$slug/deals/$dealId"
+                        params={{
+                          slug: workspace.slug,
+                          dealId: deal.id,
+                        }}
+                      >
                         {deal.name}
-                      </span>
-                      {deal.amountCents !== null ? (
-                        <span className="text-xs text-kumo-subtle">
-                          {new Intl.NumberFormat("en", {
-                            style: "currency",
-                            currency: deal.currency ?? "USD",
-                            maximumFractionDigits: 0,
-                          }).format(deal.amountCents / 100)}
-                        </span>
-                      ) : null}
+                      </RailLink>
                     </div>
                   ))}
                 </div>
-              </RailSection>
-            ) : null}
-            <EntityLinksRail entityType="customer" entityId={customer.id} />
+              ) : null}
+              <EntityLinksRail entityType="customer" entityId={customer.id} />
+            </RailSection>
           </>
         }
       />
