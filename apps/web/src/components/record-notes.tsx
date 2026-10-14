@@ -10,10 +10,10 @@ import { betterAuthClient } from "@/lib/better-auth";
 import { formatRelative } from "@/lib/labels";
 import { toastError } from "@/lib/toast";
 
-type RecordEntity = "customer" | "deal" | "contact";
+type RecordEntity = "customer" | "deal" | "contact" | "session" | "project";
 
-/** Attio-style record notes — comment threads on CRM entities. Same
- * comments table issues/documents share, scoped by entityType+entityId. */
+/** Record notes — comment threads on any entity. Same comments table
+ * issues/documents share, scoped by entityType+entityId. */
 export function RecordNotes({
   entityType,
   entityId,
@@ -30,42 +30,72 @@ export function RecordNotes({
   const key = wsKey(organizationId, "notes", entityType, entityId);
 
   const list = (orgId: string, id: string) => {
-    if (entityType === "customer") {
-      return api.GET("/workspaces/{organizationId}/customers/{id}/comments", {
-        params: { path: { organizationId: orgId, id } },
-      });
+    switch (entityType) {
+      case "customer":
+        return api.GET("/workspaces/{organizationId}/customers/{id}/comments", {
+          params: { path: { organizationId: orgId, id } },
+        });
+      case "deal":
+        return api.GET("/workspaces/{organizationId}/deals/{dealId}/comments", {
+          params: { path: { organizationId: orgId, dealId: id } },
+        });
+      case "contact":
+        return api.GET(
+          "/workspaces/{organizationId}/support/customers/{customerId}/comments",
+          { params: { path: { organizationId: orgId, customerId: id } } }
+        );
+      case "session":
+        return api.GET(
+          "/workspaces/{organizationId}/agent/sessions/{id}/comments",
+          { params: { path: { organizationId: orgId, id } } }
+        );
+      case "project":
+        return api.GET("/workspaces/{organizationId}/projects/{id}/comments", {
+          params: { path: { organizationId: orgId, id } },
+        });
     }
-    if (entityType === "deal") {
-      return api.GET("/workspaces/{organizationId}/deals/{dealId}/comments", {
-        params: { path: { organizationId: orgId, dealId: id } },
-      });
-    }
-    return api.GET(
-      "/workspaces/{organizationId}/support/customers/{customerId}/comments",
-      { params: { path: { organizationId: orgId, customerId: id } } }
-    );
   };
   const create = (orgId: string, id: string, body: string) => {
     const json = { body };
-    if (entityType === "customer") {
-      return api.POST("/workspaces/{organizationId}/customers/{id}/comments", {
-        params: { path: { organizationId: orgId, id } },
-        body: json,
-      });
+    switch (entityType) {
+      case "customer":
+        return api.POST(
+          "/workspaces/{organizationId}/customers/{id}/comments",
+          {
+            params: { path: { organizationId: orgId, id } },
+            body: json,
+          }
+        );
+      case "deal":
+        return api.POST(
+          "/workspaces/{organizationId}/deals/{dealId}/comments",
+          {
+            params: { path: { organizationId: orgId, dealId: id } },
+            body: json,
+          }
+        );
+      case "contact":
+        return api.POST(
+          "/workspaces/{organizationId}/support/customers/{customerId}/comments",
+          {
+            params: { path: { organizationId: orgId, customerId: id } },
+            body: json,
+          }
+        );
+      case "session":
+        return api.POST(
+          "/workspaces/{organizationId}/agent/sessions/{id}/comments",
+          {
+            params: { path: { organizationId: orgId, id } },
+            body: json,
+          }
+        );
+      case "project":
+        return api.POST("/workspaces/{organizationId}/projects/{id}/comments", {
+          params: { path: { organizationId: orgId, id } },
+          body: json,
+        });
     }
-    if (entityType === "deal") {
-      return api.POST("/workspaces/{organizationId}/deals/{dealId}/comments", {
-        params: { path: { organizationId: orgId, dealId: id } },
-        body: json,
-      });
-    }
-    return api.POST(
-      "/workspaces/{organizationId}/support/customers/{customerId}/comments",
-      {
-        params: { path: { organizationId: orgId, customerId: id } },
-        body: json,
-      }
-    );
   };
 
   const comments = useQuery({

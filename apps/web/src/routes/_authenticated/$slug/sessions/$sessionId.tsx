@@ -15,7 +15,7 @@ import { useState } from "react";
 import { EntityLinksRail } from "@/components/entity-links";
 import { EntityPage, RailSection } from "@/components/entity-page";
 import { Feed } from "@/components/feed";
-import { Page } from "@/components/page";
+import { RecordNotes } from "@/components/record-notes";
 import { ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap, type paths } from "@/lib/api";
@@ -138,9 +138,24 @@ function SessionDetail() {
   const derivedVariant = derivedStatusVariant(s?.derivedStatus);
 
   return (
-    <Page
+    <EntityPage
       title={s?.label ?? "Agent session"}
-      description={s ? `${s.provider} · ${sessionId.slice(0, 8)}` : undefined}
+      description={
+        <>
+          {s?.issueId ? (
+            <Link
+              to="/$slug/issues/$issueId"
+              params={{ slug: workspace.slug, issueId: s.issueId }}
+              className="text-kumo-link"
+            >
+              Issue
+            </Link>
+          ) : (
+            <span>Sessions</span>
+          )}
+          {s ? ` · ${s.provider} · ${s.id.slice(0, 8)}` : ""}
+        </>
+      }
       actions={
         <div className="flex items-center gap-2">
           {s?.url ? (
@@ -164,169 +179,181 @@ function SessionDetail() {
           ) : null}
         </div>
       }
-    >
-      {session.isPending ? (
-        <LoadingState label="Loading session" />
-      ) : session.isError || !s ? (
-        <ErrorState
-          error={session.error}
-          onRetry={() => void session.refetch()}
-        />
-      ) : (
-        <EntityPage
-          title={s.label ?? "Session"}
-          description={`${s.provider} · ${s.id.slice(0, 8)}`}
-          center={
-            <>
-              {s.status === "completed" && s.result ? (
-                <LayerCard>
-                  <p className="text-sm whitespace-pre-wrap">{s.result}</p>
-                </LayerCard>
-              ) : null}
-              <Feed>
-                {(() => {
-                  // Human-facing view: agent activities + the user's own
-                  // prompts. session.* lifecycle rows, `activity` mirror
-                  // events, and prompt bookkeeping (followup_skipped etc.)
-                  // are plumbing — the terminal has those.
-                  const feed = (events.data ?? []).filter(
-                    (e) => e.kind === "activity" || e.type === "prompt.followup"
+      center={
+        session.isPending ? (
+          <LoadingState label="Loading session" />
+        ) : session.isError || !s ? (
+          <ErrorState
+            error={session.error}
+            onRetry={() => void session.refetch()}
+          />
+        ) : (
+          <>
+            {s.status === "completed" && s.result ? (
+              <LayerCard>
+                <p className="text-sm whitespace-pre-wrap">{s.result}</p>
+              </LayerCard>
+            ) : null}
+            <Feed>
+              {(() => {
+                // Human-facing view: agent activities + the user's own
+                // prompts. session.* lifecycle rows, `activity` mirror
+                // events, and prompt bookkeeping (followup_skipped etc.)
+                // are plumbing — the terminal has those.
+                const feed = (events.data ?? []).filter(
+                  (e) => e.kind === "activity" || e.type === "prompt.followup"
+                );
+                if (feed.length === 0) {
+                  return (
+                    <p className="p-4 text-sm text-kumo-subtle">
+                      No activity yet.
+                    </p>
                   );
-                  if (feed.length === 0) {
-                    return (
-                      <p className="p-4 text-sm text-kumo-subtle">
-                        No activity yet.
-                      </p>
-                    );
-                  }
-                  return feed.map((event) => {
-                    // `action` rows are tool/progress traces — compact,
-                    // quieter chrome, like axiom's "used X" rows.
-                    if (event.type === "action") {
-                      return (
-                        <Feed.Row
-                          key={event.id}
-                          compact
-                          marker={<Wrench size={13} />}
-                          body={event.message}
-                          timestamp={event.createdAt}
-                          workspaceSlug={workspace.slug}
-                        />
-                      );
-                    }
+                }
+                return feed.map((event) => {
+                  // `action` rows are tool/progress traces — compact,
+                  // quieter chrome, like axiom's "used X" rows.
+                  if (event.type === "action") {
                     return (
                       <Feed.Row
                         key={event.id}
-                        marker={
-                          <Badge
-                            variant={
-                              event.type === "error"
-                                ? "red"
-                                : event.type === "elicitation"
-                                  ? "purple"
-                                  : event.type.startsWith("prompt.")
-                                    ? "green"
-                                    : event.type === "response"
-                                      ? "blue"
-                                      : "neutral"
-                            }
-                          >
-                            {event.type.startsWith("prompt.")
-                              ? "you"
-                              : event.type}
-                          </Badge>
-                        }
-                        body={promptText(event) ?? event.message}
+                        compact
+                        marker={<Wrench size={13} />}
+                        body={event.message}
                         timestamp={event.createdAt}
                         workspaceSlug={workspace.slug}
                       />
                     );
-                  });
-                })()}
-              </Feed>
-              <form
-                className="flex gap-2"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const text = prompt.trim();
-                  if (text.length > 0) void sendPrompt.mutateAsync(text);
-                }}
-              >
-                <div className="flex-1">
-                  <Input
-                    aria-label="Prompt the agent"
-                    placeholder={
-                      live
-                        ? "Send a follow-up to this session"
-                        : "Session is finished"
-                    }
-                    value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
-                    disabled={!live || sendPrompt.isPending}
-                  />
-                </div>
-                <Button
-                  type="submit"
-                  variant="primary"
-                  icon={<PaperPlaneRight />}
-                  disabled={
-                    !live || prompt.trim().length === 0 || sendPrompt.isPending
                   }
-                >
-                  Send
-                </Button>
-              </form>
-              {sendPrompt.isError ? (
-                <p className="text-sm text-kumo-danger">
-                  Follow-up failed — the sandbox may be gone. Retry dispatch for
-                  a cold session.
-                </p>
-              ) : null}
-            </>
-          }
-          rail={
-            <>
-              <EntityLinksRail entityType="session" entityId={sessionId} />
-              <RailSection title="Properties">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant={sessionStatusVariant(s.status)}>
-                    {s.status}
+                  return (
+                    <Feed.Row
+                      key={event.id}
+                      marker={
+                        <Badge
+                          variant={
+                            event.type === "error"
+                              ? "red"
+                              : event.type === "elicitation"
+                                ? "purple"
+                                : event.type.startsWith("prompt.")
+                                  ? "green"
+                                  : event.type === "response"
+                                    ? "blue"
+                                    : "neutral"
+                          }
+                        >
+                          {event.type.startsWith("prompt.")
+                            ? "you"
+                            : event.type}
+                        </Badge>
+                      }
+                      body={promptText(event) ?? event.message}
+                      timestamp={event.createdAt}
+                      workspaceSlug={workspace.slug}
+                    />
+                  );
+                });
+              })()}
+            </Feed>
+            <form
+              className="flex gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const text = prompt.trim();
+                if (text.length > 0) void sendPrompt.mutateAsync(text);
+              }}
+            >
+              <div className="flex-1">
+                <Input
+                  aria-label="Prompt the agent"
+                  placeholder={
+                    live
+                      ? "Send a follow-up to this session"
+                      : "Session is finished"
+                  }
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  disabled={!live || sendPrompt.isPending}
+                />
+              </div>
+              <Button
+                type="submit"
+                variant="primary"
+                icon={<PaperPlaneRight />}
+                disabled={
+                  !live || prompt.trim().length === 0 || sendPrompt.isPending
+                }
+              >
+                Send
+              </Button>
+            </form>
+            {sendPrompt.isError ? (
+              <p className="text-sm text-kumo-danger">
+                Follow-up failed — the sandbox may be gone. Retry dispatch for a
+                cold session.
+              </p>
+            ) : null}
+            <LayerCard>
+              <div className="px-4 py-4">
+                <RecordNotes entityType="session" entityId={sessionId} />
+              </div>
+            </LayerCard>
+          </>
+        )
+      }
+      rail={
+        s ? (
+          <>
+            <RailSection title="Properties">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant={sessionStatusVariant(s.status)}>
+                  {s.status}
+                </Badge>
+                {derivedVariant ? (
+                  <Badge variant={derivedVariant}>
+                    {s.derivedStatus?.replace("_", " ")}
                   </Badge>
-                  {derivedVariant ? (
-                    <Badge variant={derivedVariant}>
-                      {s.derivedStatus?.replace("_", " ")}
-                    </Badge>
-                  ) : null}
-                </div>
-              </RailSection>
-              <RailSection title="Context">
-                <div className="flex flex-col gap-1.5 text-sm">
+                ) : null}
+              </div>
+            </RailSection>
+
+            <RailSection title="Relations">
+              {s.issueId ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-kumo-subtle">Issue</span>
                   <Link
                     to="/$slug/issues/$issueId"
                     params={{ slug: workspace.slug, issueId: s.issueId }}
                     className="text-kumo-link hover:underline"
                   >
-                    Issue
+                    View issue
                   </Link>
-                  {s.prUrl ? (
-                    <a
-                      href={s.prUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-kumo-link hover:underline"
-                    >
-                      PR {s.prState ? `(${s.prState})` : ""}
-                    </a>
-                  ) : null}
-                  {s.branch ? (
-                    <span className="text-kumo-subtle">{s.branch}</span>
-                  ) : null}
                 </div>
-              </RailSection>
-            </>
-          }
-        />
-      )}
-    </Page>
+              ) : null}
+              {s.prUrl ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-kumo-subtle">PR</span>
+                  <a
+                    href={s.prUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-kumo-link hover:underline"
+                  >
+                    {s.prState ? `(${s.prState})` : "View"}
+                  </a>
+                </div>
+              ) : null}
+              {s.branch ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-kumo-subtle">Branch</span>
+                  <span className="text-kumo-subtle">{s.branch}</span>
+                </div>
+              ) : null}
+              <EntityLinksRail entityType="session" entityId={sessionId} />
+            </RailSection>
+          </>
+        ) : undefined
+      }
+    />
   );
 }

@@ -1,8 +1,8 @@
 import { Button } from "@cloudflare/kumo/components/button";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 import { Table } from "@cloudflare/kumo/components/table";
-import { useQuery } from "@tanstack/react-query";
 import { Plus } from "@phosphor-icons/react";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { Page } from "@/components/page";
@@ -35,15 +35,20 @@ function Initiatives() {
     return <LoadingState label="Loading initiatives" />;
   if (initiatives.isError) {
     return (
-      <Page title="Initiatives" actions={
-        <Button
-          variant="primary"
-          icon={<Plus />}
-          onClick={() => window.dispatchEvent(new CustomEvent("pile:create-initiative"))}
-        >
-          New initiative
-        </Button>
-      }>
+      <Page
+        title="Initiatives"
+        actions={
+          <Button
+            variant="primary"
+            icon={<Plus />}
+            onClick={() =>
+              window.dispatchEvent(new CustomEvent("pile:create-initiative"))
+            }
+          >
+            New initiative
+          </Button>
+        }
+      >
         <ErrorState
           error={initiatives.error}
           onRetry={() => void initiatives.refetch()}

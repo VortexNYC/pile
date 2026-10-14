@@ -5,7 +5,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
 import { EntityHover } from "@/components/entity-hover";
-import { PeekHeader, usePeek } from "@/components/entity-peek";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap } from "@/lib/api";
@@ -14,7 +13,6 @@ import { formatRelative } from "@/lib/labels";
 /** The people — support customers as first-class contacts. */
 export function ContactsList() {
   const workspace = useWorkspace();
-  const peek = usePeek<NonNullable<typeof contacts.data>[number]>();
   const contacts = useQuery({
     queryKey: wsKey(workspace.id, "contacts"),
     queryFn: async () =>
@@ -71,7 +69,7 @@ export function ContactsList() {
                         slug: workspace.slug,
                         contactId: contact.id,
                       }}
-                      onClick={peek.peekOnClick(contact)}
+
                       className="text-kumo-link hover:underline"
                     >
                       {contact.fullName ?? contact.email}
@@ -87,20 +85,6 @@ export function ContactsList() {
           </Table.Body>
         </Table>
       </LayerCard>
-      <peek.Drawer>
-        {peek.peeked ? (
-          <>
-            <PeekHeader
-              title={peek.peeked.fullName ?? peek.peeked.email}
-              href={`/${workspace.slug}/contacts/${peek.peeked.id}`}
-            />
-            <div className="mt-4 flex flex-col gap-2 text-sm text-kumo-subtle">
-              {peek.peeked.fullName ? <div>{peek.peeked.email}</div> : null}
-              <div>Added {formatRelative(peek.peeked.createdAt)}</div>
-            </div>
-          </>
-        ) : null}
-      </peek.Drawer>
     </>
   );
 }

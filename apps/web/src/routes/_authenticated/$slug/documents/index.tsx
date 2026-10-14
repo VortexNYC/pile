@@ -6,7 +6,6 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 
 import { EntityHover } from "@/components/entity-hover";
-import { PeekHeader, usePeek } from "@/components/entity-peek";
 import { Page } from "@/components/page";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
@@ -51,7 +50,6 @@ function DocumentsList() {
       });
     },
   });
-  const peek = usePeek<NonNullable<typeof documents.data>[number]>();
   const create = () =>
     void navigate({
       to: "/$slug/documents/new",
@@ -101,41 +99,68 @@ function DocumentsList() {
               </Table.Row>
             </Table.Header>
             <Table.Body>
-              {documents.data.map((doc) => (
-                <Table.Row key={doc.id}>
-                  <Table.Cell>
-                    <EntityHover
-                      meta={doc.icon ? <span>{doc.icon}</span> : null}
-                      title={doc.title}
-                      description={`Updated ${formatRelative(doc.updatedAt)}`}
-                    >
-                      <Link
-                        to="/$slug/documents/$documentId"
-                        params={{ slug: workspace.slug, documentId: doc.id }}
-                        onClick={peek.peekOnClick(doc)}
-                        className="text-kumo-link hover:underline"
-                      >
-                        {doc.icon ? `${doc.icon} ` : ""}
-                        {doc.title}
-                      </Link>
-                    </EntityHover>
-                  </Table.Cell>
-                  <Table.Cell>{formatRelative(doc.updatedAt)}</Table.Cell>
-                </Table.Row>
-              ))}
+              {documents.data
+                .filter((doc) => !doc.parentDocumentId)
+                .map((doc) => (
+                  <div key={doc.id}>
+                    <Table.Row>
+                      <Table.Cell>
+                        <EntityHover
+                          meta={doc.icon ? <span>{doc.icon}</span> : null}
+                          title={doc.title}
+                          description={`Updated ${formatRelative(doc.updatedAt)}`}
+                        >
+                          <Link
+                            to="/$slug/documents/$documentId"
+                            params={{
+                              slug: workspace.slug,
+                              documentId: doc.id,
+                            }}
+                            className="text-kumo-link hover:underline"
+                          >
+                            {doc.icon ? `${doc.icon} ` : ""}
+                            {doc.title}
+                          </Link>
+                        </EntityHover>
+                      </Table.Cell>
+                      <Table.Cell>{formatRelative(doc.updatedAt)}</Table.Cell>
+                    </Table.Row>
+                    {documents.data
+                      .filter((d) => d.parentDocumentId === doc.id)
+                      .map((child) => (
+                        <Table.Row key={child.id}>
+                          <Table.Cell className="pl-8">
+                            <EntityHover
+                              meta={
+                                child.icon ? <span>{child.icon}</span> : null
+                              }
+                              title={child.title}
+                              description={`Updated ${formatRelative(child.updatedAt)}`}
+                            >
+                              <Link
+                                to="/$slug/documents/$documentId"
+                                params={{
+                                  slug: workspace.slug,
+                                  documentId: child.id,
+                                }}
+                                className="text-kumo-link hover:underline"
+                              >
+                                {child.icon ? `${child.icon} ` : ""}
+                                {child.title}
+                              </Link>
+                            </EntityHover>
+                          </Table.Cell>
+                          <Table.Cell>
+                            {formatRelative(child.updatedAt)}
+                          </Table.Cell>
+                        </Table.Row>
+                      ))}
+                  </div>
+                ))}
             </Table.Body>
           </Table>
         </LayerCard>
       )}
-      <peek.Drawer>
-        {peek.peeked ? (
-          <PeekHeader
-            meta={peek.peeked.icon ? <span>{peek.peeked.icon}</span> : null}
-            title={peek.peeked.title}
-            href={`/${workspace.slug}/documents/${peek.peeked.id}`}
-          />
-        ) : null}
-      </peek.Drawer>
     </Page>
   );
 }

@@ -1898,6 +1898,27 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  activity: {
+    method: "GET",
+    path: "/workspaces/{organizationId}/activity",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "limit",
+        flag: "limit",
+      },
+      {
+        name: "entityType",
+        flag: "entity-type",
+      },
+    ],
+    body: [],
+  },
   "projects list": {
     method: "GET",
     path: "/workspaces/{organizationId}/projects",
@@ -5223,6 +5244,48 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "customerId",
         flag: "customer-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "body",
+        flag: "body",
+      },
+    ],
+  },
+  "agent sessions comments": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/agent/sessions/{id}/comments",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "body",
+        flag: "body",
+      },
+    ],
+  },
+  "projects comments": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/projects/{id}/comments",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
       },
     ],
     query: [],

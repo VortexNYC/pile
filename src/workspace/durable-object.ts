@@ -6165,6 +6165,89 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       await this.ctx.storage.put(kvEntries);
     }
   }
+
+  /** Chunked export for large stores — exportState's single RPC blob exceeds
+   * workerd's response cap once a workspace's SQLite has real data. Callers
+   * enumerate tables, then pull rows + kv keys in bounded slices. */
+  async exportMeta(): Promise<{ tables: string[]; kvKeys: string[] }> {
+    await this.ready;
+    const tables = this.ctx.storage.sql
+      .exec(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'"
+      )
+      .toArray()
+      .map((r) => String(r.name));
+    const kvKeys: string[] = [];
+    for (const [key] of await this.ctx.storage.list()) kvKeys.push(key);
+    return { tables, kvKeys };
+  }
+
+  async exportTableChunk(
+    table: string,
+    offset: number,
+    limit: number
+  ): Promise<Record<string, StateJson>[]> {
+    await this.ready;
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/u.test(table)) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: `Invalid table name: ${table}`,
+      });
+    }
+    return this.ctx.storage.sql
+      .exec(
+        `SELECT * FROM "${table}" LIMIT ${Math.min(limit, 500)} OFFSET ${offset}`
+      )
+      .toArray()
+      .map((row) => encodeStateRow(row));
+  }
+
+  async exportKvChunk(keys: string[]): Promise<Record<string, StateJson>> {
+    await this.ready;
+    const out: Record<string, StateJson> = {};
+    for (const key of keys.slice(0, 200)) {
+      out[key] = encodeStateValue(await this.ctx.storage.get(key));
+    }
+    return out;
+  }
+
+  async importTableChunk(
+    table: string,
+    rows: Record<string, StateJson>[]
+  ): Promise<void> {
+    await this.ready;
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/u.test(table)) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: `Invalid table name: ${table}`,
+      });
+    }
+    for (const row of rows) {
+      const columns = Object.keys(row);
+      if (columns.length === 0) continue;
+      const columnList = columns.map((c) => `"${c}"`).join(", ");
+      const placeholders = columns.map(() => "?").join(", ");
+      const values = columns.map(
+        (c) => decodeStateValue(row[c]) as SqlStorageValue
+      );
+      this.ctx.storage.sql.exec(
+        `INSERT OR REPLACE INTO "${table}" (${columnList}) VALUES (${placeholders})`,
+        ...values
+      );
+    }
+  }
+
+  async importKvChunk(kv: Record<string, StateJson>): Promise<void> {
+    await this.ready;
+    const entries = Object.fromEntries(
+      Object.entries(kv).map(([key, value]) => [key, decodeStateValue(value)])
+    );
+    if (Object.keys(entries).length > 0) {
+      await this.ctx.storage.put(entries);
+    }
+  }
 }
 
 const STATE_BLOB_TAG = "__pileStateBlob";

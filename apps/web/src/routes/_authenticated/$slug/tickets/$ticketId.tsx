@@ -138,7 +138,11 @@ function TicketDetail() {
     ]);
 
   const update = useMutation({
-    mutationFn: (body: { status?: TicketStatus; priority?: IssuePriority }) =>
+    mutationFn: (body: {
+      status?: TicketStatus;
+      priority?: IssuePriority;
+      issueId?: string | null;
+    }) =>
       unwrap(
         api.PATCH("/workspaces/{organizationId}/support/tickets/{ticketId}", {
           params: { path },
@@ -176,6 +180,21 @@ function TicketDetail() {
     body: string;
   } | null>(null);
   const [deletingNote, setDeletingNote] = useState<string | null>(null);
+
+  const issues = useQuery({
+    queryKey: wsKey(organizationId, "issues", "all"),
+    queryFn: async () =>
+      (
+        await unwrap(
+          api.GET("/workspaces/{organizationId}/issues", {
+            params: {
+              path: { organizationId },
+              query: { limit: 100 },
+            },
+          })
+        )
+      ).issues,
+  });
 
   const send = useMutation({
     mutationFn: async (input: {
@@ -497,56 +516,76 @@ function TicketDetail() {
       }
       rail={
         <>
-          <RailSection title="Customer">
-            <div>
-              <div className="flex flex-col gap-1 text-sm">
-                <span className="text-kumo-default">
-                  {data.customer.fullName ?? "—"}
-                </span>
-                <span className="text-kumo-subtle">{data.customer.email}</span>
-                {data.customer.phone ? (
-                  <span className="text-kumo-subtle">
-                    {data.customer.phone}
-                  </span>
-                ) : null}
-              </div>
+          <RailSection title="Properties">
+            <div className="flex flex-col gap-1 text-sm">
+              <span className="text-kumo-default">
+                {data.customer.fullName ?? "—"}
+              </span>
+              <span className="text-kumo-subtle">{data.customer.email}</span>
+              {data.customer.phone ? (
+                <span className="text-kumo-subtle">{data.customer.phone}</span>
+              ) : null}
             </div>
+            <Select
+              aria-label="Linked issue"
+              value={data.issueId ?? ""}
+              onValueChange={(v) => v && update.mutate({ issueId: v || null })}
+            >
+              <Select.Option value="">No issue</Select.Option>
+              {(issues.data ?? []).map((issue) => (
+                <Select.Option key={issue.id} value={issue.id}>
+                  {issue.identifier ? `${issue.identifier} ` : ""}
+                  {issue.title}
+                </Select.Option>
+              ))}
+            </Select>
+            {data.issueId ? (
+              <Link
+                to="/$slug/issues/$issueId"
+                params={{ slug: workspace.slug, issueId: data.issueId }}
+                className="text-sm text-kumo-link hover:underline"
+              >
+                Linked issue
+              </Link>
+            ) : null}
           </RailSection>
-          {otherTickets.length > 0 ? (
-            <RailSection title="Other tickets from them">
-              <ul className="flex flex-col gap-1">
+
+          <RailSection title="Relations">
+            {otherTickets.length > 0 ? (
+              <div className="flex flex-col gap-1.5">
+                <span className="text-xs text-kumo-subtle">Other tickets</span>
                 {otherTickets.slice(0, 5).map((tt) => (
-                  <li key={tt.id}>
-                    <Link
-                      to="/$slug/tickets/$ticketId"
-                      params={{
-                        slug: workspace.slug,
-                        ticketId: tt.id,
-                      }}
-                      className="text-sm text-kumo-link hover:underline"
-                    >
-                      #{tt.number} {tt.title}
-                    </Link>
-                  </li>
+                  <Link
+                    key={tt.id}
+                    to="/$slug/tickets/$ticketId"
+                    params={{
+                      slug: workspace.slug,
+                      ticketId: tt.id,
+                    }}
+                    className="text-sm text-kumo-link hover:underline"
+                  >
+                    #{tt.number} {tt.title}
+                  </Link>
                 ))}
-              </ul>
-            </RailSection>
-          ) : null}
-          {(comms.data?.length ?? 0) > 0 ? (
-            <RailSection title="Recent activity">
-              <ul className="flex flex-col gap-1.5">
+              </div>
+            ) : null}
+            {(comms.data?.length ?? 0) > 0 ? (
+              <div className="flex flex-col gap-1.5">
+                <span className="text-xs text-kumo-subtle">
+                  Recent activity
+                </span>
                 {(comms.data ?? []).map((event) => (
-                  <li key={event.id} className="text-sm">
+                  <div key={event.id} className="text-sm">
                     <div className="text-kumo-default">{event.summary}</div>
                     <div className="text-xs text-kumo-subtle">
                       {event.source} · {event.occurredAt.slice(0, 10)}
                     </div>
-                  </li>
+                  </div>
                 ))}
-              </ul>
-            </RailSection>
-          ) : null}
-          <EntityLinksRail entityType="ticket" entityId={data.id} />
+              </div>
+            ) : null}
+            <EntityLinksRail entityType="ticket" entityId={data.id} />
+          </RailSection>
         </>
       }
     />

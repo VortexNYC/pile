@@ -58,7 +58,10 @@ function MembersSettings() {
   if (active.isError) {
     return (
       <Page title="Members">
-        <ErrorState error={active.error} onRetry={() => void active.refetch()} />
+        <ErrorState
+          error={active.error}
+          onRetry={() => void active.refetch()}
+        />
       </Page>
     );
   }
@@ -110,9 +113,7 @@ function ViewAs({ workspaceId }: { workspaceId: string }) {
         userId,
       });
       if (result.error) {
-        throw new Error(
-          result.error.message ?? "Impersonation failed"
-        );
+        throw new Error(result.error.message ?? "Impersonation failed");
       }
       window.location.href = "/app";
     },

@@ -1879,6 +1879,31 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdActivity",
+    "description": "List activity (GET /workspaces/{organizationId}/activity) Path params (top-level, required): organizationId. Query params (top-level, optional): limit, entityType.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/activity",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "number",
+          "nullable": true,
+          "default": 50
+        },
+        "entityType": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdAgentAutomations",
     "description": "List agent automations (GET /workspaces/{organizationId}/agent/automations) Path params (top-level, required): organizationId.",
     "method": "GET",
@@ -2058,6 +2083,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdAgentSessionsIdComments",
+    "description": "List agent session comments (GET /workspaces/{organizationId}/agent/sessions/{id}/comments) Path params (top-level, required): organizationId, id.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/agent/sessions/{id}/comments",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
         "organizationId"
       ]
     }
@@ -4459,6 +4505,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "Get project (GET /workspaces/{organizationId}/projects/{id}) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/projects/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdProjectsIdComments",
+    "description": "List project comments (GET /workspaces/{organizationId}/projects/{id}/comments) Path params (top-level, required): organizationId, id.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/projects/{id}/comments",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -10081,6 +10148,39 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdAgentSessionsIdComments",
+    "description": "Create agent session comment (POST /workspaces/{organizationId}/agent/sessions/{id}/comments) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: body* (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/agent/sessions/{id}/comments",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "body": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "body"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdAgentSessionsRegister",
     "description": "Create agent session register (POST /workspaces/{organizationId}/agent/sessions/register) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: issueId*, provider*, providerSessionId, status, url, branch, prUrl (* = required).",
     "method": "POST",
@@ -13715,6 +13815,39 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         },
         "id": {
           "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdProjectsIdComments",
+    "description": "Create project comment (POST /workspaces/{organizationId}/projects/{id}/comments) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: body* (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/projects/{id}/comments",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "body": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "body"
+          ]
         }
       },
       "required": [

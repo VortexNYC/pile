@@ -19,6 +19,7 @@ import {
 import { observabilityMiddleware } from "../platform/observability.js";
 import { securityMiddleware } from "../platform/security.js";
 import { registerActivityRoutes } from "./activities.js";
+import { registerActivityFeedRoutes } from "./activity-feed.js";
 import { registerAgentContextRoutes } from "./agent-context.js";
 import { registerAgentEnvironmentRoutes } from "./agent-environment.js";
 import { registerAgentProviderRoutes } from "./agent-providers.js";
@@ -222,6 +223,7 @@ registerAgentProviderRoutes(app);
 registerAgentEnvironmentRoutes(app);
 registerApprovalRoutes(app);
 registerActivityRoutes(app);
+registerActivityFeedRoutes(app);
 registerWorkspaceEntityRoutes(app);
 registerExternalLinkRoutes(app);
 registerProjectDetailRoutes(app);
@@ -414,7 +416,14 @@ registerAppRoute(app);
 registerIntakeRoutes(app);
 
 app.all("/api/auth/*", async (c) => {
-  return (await createAuth(c.env)).handler(c.req.raw);
+  try {
+    return await (await createAuth(c.env)).handler(c.req.raw);
+  } catch (err) {
+    console.error("better-auth handler failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return c.json({ code: "INTERNAL_ERROR", message: "Internal error" }, 500);
+  }
 });
 
 app.get("/", (c) => {

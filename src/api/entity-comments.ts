@@ -3,6 +3,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 
 import { createD1 } from "../global/db.js";
 import { getCustomerById } from "../global/support-contacts.js";
+import { getProject } from "../global/workspace-entities.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import type { WorkerEnv } from "../platform/middleware.js";
@@ -47,9 +48,9 @@ type EntityDef = {
   // API surface — where the comments live and which gate guards them.
   path: string;
   idParam: "id" | "dealId" | "customerId";
-  entityType: "customer" | "deal" | "contact";
-  view: "customer:view" | "deal:view" | "ticket:view";
-  edit: "customer:edit" | "deal:edit" | "ticket:edit";
+  entityType: "customer" | "deal" | "contact" | "session" | "project";
+  view: string;
+  edit: string;
   tag: string;
   exists: (args: {
     stub: ReturnType<typeof getWorkspaceStub>;
@@ -89,6 +90,25 @@ const ENTITIES: EntityDef[] = [
     // workspace DO's comments table.
     exists: async ({ env, organizationId, id }) =>
       (await getCustomerById(createD1(env.D1), organizationId, id)) !== null,
+  },
+  {
+    path: "/workspaces/{organizationId}/agent/sessions/{id}/comments",
+    idParam: "id",
+    entityType: "session",
+    view: "session:view",
+    edit: "session:edit",
+    tag: "sessions",
+    exists: async ({ stub, id }) => (await stub.getAgentSession(id)) != null,
+  },
+  {
+    path: "/workspaces/{organizationId}/projects/{id}/comments",
+    idParam: "id",
+    entityType: "project",
+    view: "project:view",
+    edit: "project:edit",
+    tag: "projects",
+    exists: async ({ env, organizationId, id }) =>
+      (await getProject(createD1(env.D1), organizationId, id)) !== null,
   },
 ];
 

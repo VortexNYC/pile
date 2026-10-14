@@ -3,6 +3,8 @@ import { Sidebar } from "@cloudflare/kumo/components/sidebar";
 import { Text } from "@cloudflare/kumo/components/text";
 import {
   CaretUpDown,
+  Folder,
+  Robot,
   TrendUp,
   GearSix,
   Buildings,
@@ -32,13 +34,15 @@ import { appHref } from "@/lib/router-path";
 const NAV = [
   { title: "Overview", path: "", icon: House, exact: true },
   { title: "Issues", path: "issues", icon: ListChecks, resource: "issue" },
-  { title: "Support", path: "tickets", icon: Headset, resource: "ticket" },
   {
     title: "Documents",
     path: "documents",
     icon: FileText,
     resource: "document",
   },
+  { title: "Sessions", path: "sessions", icon: Robot, resource: "session" },
+  { title: "Projects", path: "projects", icon: Folder, resource: "project" },
+  { title: "Support", path: "tickets", icon: Headset, resource: "ticket" },
   { title: "Sales", path: "sales", icon: TrendUp },
 ] as const;
 

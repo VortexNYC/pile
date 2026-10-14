@@ -3,7 +3,13 @@ import { Button } from "@cloudflare/kumo/components/button";
 import { DropdownMenu } from "@cloudflare/kumo/components/dropdown";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 import { Text } from "@cloudflare/kumo/components/text";
-import { LinkSimple, PencilSimple, Star, Trash } from "@phosphor-icons/react";
+import {
+  LinkSimple,
+  PencilSimple,
+  Plus,
+  Star,
+  Trash,
+} from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
@@ -197,6 +203,27 @@ function IssueDetail() {
         })
       ),
     enabled: !!issue.data?.parentId,
+  });
+
+  const createSubIssue = useMutation({
+    mutationFn: async () =>
+      unwrap(
+        api.POST("/workspaces/{organizationId}/issues", {
+          params: { path: { organizationId } },
+          body: {
+            title: "New sub-issue",
+            parentId: issueId,
+            teamId: data?.teamId,
+          },
+        })
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: wsKey(organizationId, "issues", "children-of", issueId),
+      });
+      toastSuccess("Sub-issue created");
+    },
+    onError: (error) => toastError(error),
   });
 
   const children = useQuery({
@@ -531,6 +558,17 @@ function IssueDetail() {
                       {subIssues.length}
                     </span>
                   </h3>
+                  {canEdit ? (
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      icon={<Plus />}
+                      loading={createSubIssue.isPending}
+                      onClick={() => createSubIssue.mutate()}
+                    >
+                      New sub-issue
+                    </Button>
+                  ) : null}
                   <div
                     role="progressbar"
                     aria-label="Sub-issue progress"
@@ -673,16 +711,7 @@ function IssueDetail() {
                   <span>{cycle.name}</span>
                 </div>
               ) : null}
-            </RailSection>
-
-            {prChip(data) ? (
-              <RailSection title="Pull request">
-                <PrChip issue={data} link />
-              </RailSection>
-            ) : null}
-
-            {issueLabels.length > 0 ? (
-              <RailSection title="Labels">
+              {issueLabels.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5">
                   {issueLabels.map((label) => (
                     <Badge key={label.id} variant="neutral">
@@ -690,159 +719,162 @@ function IssueDetail() {
                     </Badge>
                   ))}
                 </div>
-              </RailSection>
-            ) : null}
-
-            {parent.data ? (
-              <RailSection title="Parent">
-                <RailLink
-                  to="/$slug/issues/$issueId"
-                  params={{
-                    slug: workspace.slug,
-                    issueId: parent.data.id,
-                  }}
-                >
-                  {parent.data.identifier
-                    ? `${parent.data.identifier} ${parent.data.title}`
-                    : parent.data.title}
-                </RailLink>
-              </RailSection>
-            ) : null}
-
-            {approvalRows.length > 0 ? (
-              <RailSection title="Approvals">
-                {approvalRows.map((a) => (
-                  <div key={a.id} className="flex items-center gap-2">
-                    <Badge
-                      variant={
-                        a.status === "approved"
-                          ? "green"
-                          : a.status === "rejected"
-                            ? "red"
-                            : "orange"
-                      }
-                    >
-                      {a.status}
-                    </Badge>
-                    <span className="text-xs text-kumo-subtle truncate">
-                      {a.comment ?? "requested"} · {formatRelative(a.createdAt)}
-                    </span>
+              ) : null}
+              {watchers.length > 0 ? (
+                <div className="text-sm flex items-center gap-2">
+                  <span className="text-kumo-subtle">Subscribers</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {watchers.map((w) => (
+                      <Badge key={w.id} variant="neutral">
+                        {w.linearUserId}
+                      </Badge>
+                    ))}
                   </div>
-                ))}
-              </RailSection>
-            ) : null}
+                </div>
+              ) : null}
+              <CustomFieldsRail entityType="issue" entityId={data.id} />
+            </RailSection>
 
-            {linkedTickets.length > 0 ? (
-              <RailSection title="Support tickets">
-                {linkedTickets.map((ticket) => (
-                  <div key={ticket.id} className="flex items-center gap-2">
-                    <Badge variant={ticketStatusVariant(ticket.status)}>
-                      {isTicketStatus(ticket.status)
-                        ? TICKET_STATUS_LABELS[ticket.status]
-                        : ticket.status}
-                    </Badge>
-                    <RailLink
-                      to="/$slug/tickets/$ticketId"
-                      params={{
-                        slug: workspace.slug,
-                        ticketId: ticket.id,
-                      }}
-                    >
-                      {ticket.title}
-                    </RailLink>
-                  </div>
-                ))}
-              </RailSection>
-            ) : null}
-
-            {allRelations.length > 0 ? (
-              <RailSection title="Related">
-                {allRelations.map((rel) => {
-                  const otherId =
-                    rel.fromIssueId === issueId
-                      ? rel.toIssueId
-                      : rel.fromIssueId;
-                  return (
-                    <div key={rel.id} className="flex items-center gap-2">
-                      <Badge variant="neutral">{rel.type}</Badge>
-                      <RailLink
-                        to="/$slug/issues/$issueId"
-                        params={{ slug: workspace.slug, issueId: otherId }}
-                      >
-                        View issue
-                      </RailLink>
-                    </div>
-                  );
-                })}
-              </RailSection>
-            ) : null}
-
-            {docs.length > 0 ? (
-              <RailSection title="Documents">
-                {docs.map((doc) => (
+            <RailSection title="Relations">
+              {parent.data ? (
+                <div className="text-sm flex items-center gap-2">
+                  <span className="text-kumo-subtle">Parent</span>
                   <RailLink
-                    key={doc.id}
-                    to="/$slug/documents/$documentId"
-                    params={{ slug: workspace.slug, documentId: doc.id }}
+                    to="/$slug/issues/$issueId"
+                    params={{
+                      slug: workspace.slug,
+                      issueId: parent.data.id,
+                    }}
                   >
-                    {doc.title}
+                    {parent.data.identifier
+                      ? `${parent.data.identifier} ${parent.data.title}`
+                      : parent.data.title}
                   </RailLink>
-                ))}
-              </RailSection>
-            ) : null}
-
-            {links.length > 0 ? (
-              <RailSection title="Links">
-                {links.map((link) => (
-                  <a
-                    key={link.id}
-                    href={link.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-sm text-kumo-link hover:underline truncate"
-                  >
-                    {link.label ?? link.url}
-                  </a>
-                ))}
-              </RailSection>
-            ) : null}
-
-            {issueSessions.length > 0 ? (
-              <RailSection title="Sessions">
-                {issueSessions.slice(0, 5).map((s) => (
-                  <div key={s.id} className="flex items-center gap-2">
-                    <Badge variant={sessionStatusVariant(s.status)}>
-                      {s.derivedStatus?.replace("_", " ") ?? s.status}
-                    </Badge>
-                    <RailLink
-                      to="/$slug/sessions/$sessionId"
-                      params={{ slug: workspace.slug, sessionId: s.id }}
-                    >
-                      {s.label ?? s.id.slice(0, 8)}
-                    </RailLink>
-                  </div>
-                ))}
-                {issueSessions.length > 5 ? (
-                  <span className="text-xs text-kumo-subtle">
-                    +{issueSessions.length - 5} more
-                  </span>
-                ) : null}
-              </RailSection>
-            ) : null}
-
-            {watchers.length > 0 ? (
-              <RailSection title="Subscribers">
-                <div className="flex flex-wrap gap-1.5">
-                  {watchers.map((w) => (
-                    <Badge key={w.id} variant="neutral">
-                      {w.linearUserId}
-                    </Badge>
+                </div>
+              ) : null}
+              {prChip(data) ? (
+                <div className="text-sm flex items-center gap-2">
+                  <span className="text-kumo-subtle">PR</span>
+                  <PrChip issue={data} link />
+                </div>
+              ) : null}
+              {approvalRows.length > 0 ? (
+                <div className="flex flex-col gap-1.5">
+                  {approvalRows.map((a) => (
+                    <div key={a.id} className="flex items-center gap-2">
+                      <Badge
+                        variant={
+                          a.status === "approved"
+                            ? "green"
+                            : a.status === "rejected"
+                              ? "red"
+                              : "orange"
+                        }
+                      >
+                        {a.status}
+                      </Badge>
+                      <span className="text-xs text-kumo-subtle truncate">
+                        {a.comment ?? "requested"} ·{" "}
+                        {formatRelative(a.createdAt)}
+                      </span>
+                    </div>
                   ))}
                 </div>
-              </RailSection>
-            ) : null}
-            {(deals.data?.length ?? 0) > 0 ? (
-              <RailSection title="Deals">
+              ) : null}
+              {linkedTickets.length > 0 ? (
+                <div className="flex flex-col gap-1.5">
+                  {linkedTickets.map((ticket) => (
+                    <div key={ticket.id} className="flex items-center gap-2">
+                      <Badge variant={ticketStatusVariant(ticket.status)}>
+                        {isTicketStatus(ticket.status)
+                          ? TICKET_STATUS_LABELS[ticket.status]
+                          : ticket.status}
+                      </Badge>
+                      <RailLink
+                        to="/$slug/tickets/$ticketId"
+                        params={{
+                          slug: workspace.slug,
+                          ticketId: ticket.id,
+                        }}
+                      >
+                        {ticket.title}
+                      </RailLink>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {allRelations.length > 0 ? (
+                <div className="flex flex-col gap-1.5">
+                  {allRelations.map((rel) => {
+                    const otherId =
+                      rel.fromIssueId === issueId
+                        ? rel.toIssueId
+                        : rel.fromIssueId;
+                    return (
+                      <div key={rel.id} className="flex items-center gap-2">
+                        <Badge variant="neutral">{rel.type}</Badge>
+                        <RailLink
+                          to="/$slug/issues/$issueId"
+                          params={{ slug: workspace.slug, issueId: otherId }}
+                        >
+                          View issue
+                        </RailLink>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+              {docs.length > 0 ? (
+                <div className="flex flex-col gap-1.5">
+                  {docs.map((doc) => (
+                    <RailLink
+                      key={doc.id}
+                      to="/$slug/documents/$documentId"
+                      params={{ slug: workspace.slug, documentId: doc.id }}
+                    >
+                      {doc.title}
+                    </RailLink>
+                  ))}
+                </div>
+              ) : null}
+              {links.length > 0 ? (
+                <div className="flex flex-col gap-1.5">
+                  {links.map((link) => (
+                    <a
+                      key={link.id}
+                      href={link.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-sm text-kumo-link hover:underline truncate"
+                    >
+                      {link.label ?? link.url}
+                    </a>
+                  ))}
+                </div>
+              ) : null}
+              {issueSessions.length > 0 ? (
+                <div className="flex flex-col gap-1.5">
+                  {issueSessions.slice(0, 5).map((s) => (
+                    <div key={s.id} className="flex items-center gap-2">
+                      <Badge variant={sessionStatusVariant(s.status)}>
+                        {s.derivedStatus?.replace("_", " ") ?? s.status}
+                      </Badge>
+                      <RailLink
+                        to="/$slug/sessions/$sessionId"
+                        params={{ slug: workspace.slug, sessionId: s.id }}
+                      >
+                        {s.label ?? s.id.slice(0, 8)}
+                      </RailLink>
+                    </div>
+                  ))}
+                  {issueSessions.length > 5 ? (
+                    <span className="text-xs text-kumo-subtle">
+                      +{issueSessions.length - 5} more
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+              {(deals.data?.length ?? 0) > 0 ? (
                 <div className="flex flex-col gap-1.5">
                   {deals.data!.map((deal) => (
                     <RailLink
@@ -854,10 +886,9 @@ function IssueDetail() {
                     </RailLink>
                   ))}
                 </div>
-              </RailSection>
-            ) : null}
-            <EntityLinksRail entityType="issue" entityId={data.id} />
-            <CustomFieldsRail entityType="issue" entityId={data.id} />
+              ) : null}
+              <EntityLinksRail entityType="issue" entityId={data.id} />
+            </RailSection>
           </>
         }
       />

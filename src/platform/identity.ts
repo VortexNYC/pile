@@ -98,18 +98,3 @@ export function flattenStatements(
 // Any BA role name is valid — builtins resolve via roleMap,
 // custom roles resolve through the org's organizationRole rows.
 export const workspaceRoleSchema = z.string();
-
-export function toUserWorkspaceIdentity(
-  userId: string,
-  organizationId: string,
-  role: string
-): WorkspaceIdentity {
-  const parsedRole = workspaceRoleSchema.parse(role);
-  return workspaceIdentitySchema.parse({
-    id: userId,
-    organizationId,
-    type: "user",
-    role: parsedRole,
-    permissions: [...rolePermissionsFor(parsedRole)],
-  });
-}

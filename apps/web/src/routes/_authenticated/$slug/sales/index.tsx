@@ -10,8 +10,8 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useWorkspace } from "@/hooks/use-workspace";
 
 const TABS = [
-  ["deals", "Pipeline", "deal"],
-  ["companies", "Companies", "customer"],
+  ["deals", "Deals", "deal"],
+  ["companies", "Customers", "customer"],
   ["contacts", "Contacts", "contact"],
 ] as const;
 type SalesTab = (typeof TABS)[number][0];

@@ -10,6 +10,7 @@ import { EntityLinksRail } from "@/components/entity-links";
 import { EntityPage, RailSection } from "@/components/entity-page";
 import { Markdown } from "@/components/markdown";
 import { Page } from "@/components/page";
+import { RecordNotes } from "@/components/record-notes";
 import { ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap } from "@/lib/api";
@@ -230,11 +231,16 @@ function ProjectDetail() {
               </div>
             </LayerCard>
           ) : null}
+
+          <LayerCard>
+            <div className="px-4 py-4">
+              <RecordNotes entityType="project" entityId={data.id} />
+            </div>
+          </LayerCard>
         </>
       }
       rail={
         <>
-          <EntityLinksRail entityType="project" entityId={data.id} />
           <RailSection title="Properties">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant={projectStatusVariant(data.status)}>
@@ -250,6 +256,10 @@ function ProjectDetail() {
                 {data.endDate?.slice(0, 10) ?? "—"}
               </div>
             ) : null}
+          </RailSection>
+
+          <RailSection title="Relations">
+            <EntityLinksRail entityType="project" entityId={data.id} />
           </RailSection>
         </>
       }

@@ -15,7 +15,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
 import { EntityHover } from "@/components/entity-hover";
-import { PeekHeader, usePeek } from "@/components/entity-peek";
 import { FieldMenu } from "@/components/field-menu";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
@@ -51,7 +50,6 @@ function money(cents: number | null, currency: string | null): string {
 export function DealsList() {
   const workspace = useWorkspace();
   const queryClient = useQueryClient();
-  const peek = usePeek<NonNullable<typeof deals.data>[number]>();
   const customers = useQuery({
     queryKey: wsKey(workspace.id, "customers"),
     queryFn: async () =>
@@ -237,7 +235,7 @@ export function DealsList() {
                             <Link
                               to="/$slug/deals/$dealId"
                               params={{ slug: workspace.slug, dealId: deal.id }}
-                              onClick={peek.peekOnClick(deal)}
+
                               className="flex h-11 items-center gap-3 px-4 hover:bg-kumo-tint"
                             >
                               <span className="min-w-0 flex-1 truncate text-sm font-medium text-kumo-default">
@@ -293,49 +291,6 @@ export function DealsList() {
           })}
         </div>
       </DndContext>
-      <peek.Drawer>
-        {peek.peeked ? (
-          <>
-            <PeekHeader
-              meta={
-                <Badge
-                  variant={
-                    peek.peeked.stage === "won"
-                      ? "green"
-                      : peek.peeked.stage === "lost"
-                        ? "neutral"
-                        : "blue"
-                  }
-                >
-                  {STAGE_LABELS[peek.peeked.stage]}
-                </Badge>
-              }
-              title={peek.peeked.name}
-              href={`/${workspace.slug}/deals/${peek.peeked.id}`}
-            />
-            <div className="mt-4 flex flex-col gap-2 text-sm text-kumo-subtle">
-              <Link
-                to="/$slug/customers/$customerId"
-                params={{
-                  slug: workspace.slug,
-                  customerId: peek.peeked.customerId,
-                }}
-                className="text-kumo-link hover:underline"
-              >
-                {customerName(peek.peeked.customerId)}
-              </Link>
-              {peek.peeked.amountCents !== null ? (
-                <div>
-                  {money(peek.peeked.amountCents, peek.peeked.currency)}
-                </div>
-              ) : null}
-              {peek.peeked.expectedCloseAt ? (
-                <div>Expected {peek.peeked.expectedCloseAt.slice(0, 10)}</div>
-              ) : null}
-            </div>
-          </>
-        ) : null}
-      </peek.Drawer>
     </>
   );
 }

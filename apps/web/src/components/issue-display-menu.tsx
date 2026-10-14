@@ -34,20 +34,20 @@ export function IssueDisplayMenu({
         <DropdownMenu.Group>
           <DropdownMenu.Label>Order by</DropdownMenu.Label>
           <DropdownMenu.RadioGroup
-          value={value.ordering}
-          onValueChange={(v) =>
-            onChange({
-              ...value,
-              ordering: v as DisplayOptions["ordering"],
-            })
-          }
-        >
-          <DropdownMenu.RadioItem value="updated">
-            Updated
-          </DropdownMenu.RadioItem>
-          <DropdownMenu.RadioItem value="created">
-            Created
-          </DropdownMenu.RadioItem>
+            value={value.ordering}
+            onValueChange={(v) =>
+              onChange({
+                ...value,
+                ordering: v as DisplayOptions["ordering"],
+              })
+            }
+          >
+            <DropdownMenu.RadioItem value="updated">
+              Updated
+            </DropdownMenu.RadioItem>
+            <DropdownMenu.RadioItem value="created">
+              Created
+            </DropdownMenu.RadioItem>
             <DropdownMenu.RadioItem value="priority">
               Priority
             </DropdownMenu.RadioItem>
