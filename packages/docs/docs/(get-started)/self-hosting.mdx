@@ -22,6 +22,7 @@ Pile is a single Cloudflare Worker with a D1 database for global metadata and a 
     ```
 
     Put the returned `database_id` into `wrangler.toml` under `[[env.production.d1_databases]]`.
+
   </Step>
   <Step title="Apply migrations">
     ```bash
@@ -30,6 +31,7 @@ Pile is a single Cloudflare Worker with a D1 database for global metadata and a 
 
     Durable Object SQLite needs `new_sqlite_classes` in the `[[migrations]]`
     block — the repo's `wrangler.toml` already has it.
+
   </Step>
   <Step title="Set secrets">
     ```bash
@@ -40,6 +42,7 @@ Pile is a single Cloudflare Worker with a D1 database for global metadata and a 
     Integration secrets (Slack, GitHub, email providers) are optional — a
     missing key just disables that capability. Check `wrangler.toml` and
     `.dev.vars.example` for the full list.
+
   </Step>
   <Step title="Build and deploy">
     ```bash
