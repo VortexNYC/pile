@@ -143,6 +143,16 @@ function IssuesList() {
     placeholderData: keepPreviousData,
   });
   const allIssues = issues.data?.pages.flatMap((page) => page.issues) ?? [];
+
+  // Group issues by parent — children render indented under their parent
+  const issueById = new Map(allIssues.map((i) => [i.id, i]));
+  const childrenOf = new Map<string | null, typeof allIssues>();
+  for (const issue of allIssues) {
+    const parentId = issue.parentId ?? null;
+    const children = childrenOf.get(parentId) ?? [];
+    children.push(issue);
+    childrenOf.set(parentId, children);
+  }
   
   return (
     <Page
@@ -252,9 +262,12 @@ function IssuesList() {
                       </div>
                       <LayerCard className="p-0">
                         <div className="divide-y divide-kumo-line">
-                          {rows.map((issue) => (
-                            <DraggableRow key={issue.id} id={issue.id}>
-                              <IssueContextMenu issue={issue}>
+                          {rows
+                            .filter((issue) => !issue.parentId)
+                            .map((issue) => (
+                            <div key={issue.id} className="flex flex-col">
+                              <DraggableRow id={issue.id}>
+                                <IssueContextMenu issue={issue}>
                                 <IssuePeek issue={issue}>
                                   <Link
                                     to="/$slug/issues/$issueId"
@@ -320,8 +333,35 @@ function IssuesList() {
                                     </span>
                                   </Link>
                                 </IssuePeek>
-                              </IssueContextMenu>
-                            </DraggableRow>
+                                </IssueContextMenu>
+                              </DraggableRow>
+                              {(childrenOf.get(issue.id) ?? []).map(
+                                (child) => (
+                                  <div key={child.id} className="pl-8">
+                                    <Link
+                                      to="/$slug/issues/$issueId"
+                                      params={{
+                                        slug: workspace.slug,
+                                        issueId: child.id,
+                                      }}
+                                      className="group flex h-11 items-center gap-3 px-4 hover:bg-kumo-tint"
+                                    >
+                                      <IssueStatusIcon
+                                        status={child.status}
+                                      />
+                                      {child.identifier ? (
+                                        <span className="w-16 shrink-0 truncate text-sm font-medium text-kumo-subtle">
+                                          {child.identifier}
+                                        </span>
+                                      ) : null}
+                                      <span className="min-w-0 flex-1 truncate text-sm font-medium text-kumo-default">
+                                        {child.title}
+                                      </span>
+                                    </Link>
+                                  </div>
+                                )
+                              )}
+                            </div>
                           ))}
                         </div>
                       </LayerCard>
