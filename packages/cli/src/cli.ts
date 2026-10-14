@@ -106,6 +106,17 @@ function parseArgs(args: readonly string[]): ParsedArgs {
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (!arg.startsWith("--")) {
+      // Short flags: `-d <json>` for request bodies (curl parity).
+      if (arg === "-d") {
+        const next = args[index + 1];
+        if (next !== undefined && !next.startsWith("-")) {
+          record("d", next);
+          index += 1;
+        } else {
+          record("d", true);
+        }
+        continue;
+      }
       positionals.push(arg);
       continue;
     }
@@ -217,8 +228,13 @@ async function requestCommand(
   }
   const method = methodRaw;
   const path = positionals[2];
-  if (path === undefined) {
-    throw new Error("Usage: pile request METHOD PATH [--body-json ...]");
+  if (path === undefined || positionals.length > 3) {
+    throw new Error(
+      "Usage: pile request METHOD PATH [--body-json ...|-d <json>]" +
+        (positionals.length > 3
+          ? ` — unexpected extra arguments: ${positionals.slice(3).join(" ")}`
+          : "")
+    );
   }
 
   const config = resolveConfig();
@@ -230,7 +246,9 @@ async function requestCommand(
 
   const body =
     parseJsonObjectFlag(flags, "body-json") ??
-    parseJsonObjectFlag(flags, "body");
+    parseJsonObjectFlag(flags, "body") ??
+    parseJsonObjectFlag(flags, "data") ??
+    parseJsonObjectFlag(flags, "d");
 
   const targetUrl = new URL(path, config.baseUrl.replace(/\/$/u, ""));
   const headers = new Headers();
