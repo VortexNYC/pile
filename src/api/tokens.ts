@@ -151,9 +151,16 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
       .filter(({ parsed }) => parsed?.organizationId === organizationId);
     // Agent keys' team installs live on teamMember keyed by the apikey's
     // referenceId (the agent's synthetic user).
-    const agentIds = filtered
-      .filter(({ parsed }) => parsed?.actorType === "agent")
-      .map(({ row }) => row.referenceId);
+    // Lane sessions mint one key per run; all share the dispatching
+    // owner's referenceId — dedupe or the IN() clause exceeds SQLite's
+    // parameter cap on workspaces with many agent keys.
+    const agentIds = [
+      ...new Set(
+        filtered
+          .filter(({ parsed }) => parsed?.actorType === "agent")
+          .map(({ row }) => row.referenceId)
+      ),
+    ];
     const teamRows = agentIds.length
       ? await db
           .select({ userId: teamMember.userId, teamId: teamMember.teamId })
