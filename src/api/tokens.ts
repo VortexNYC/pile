@@ -1,9 +1,9 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import { createD1 } from "../global/db.js";
-import { apikey, team, user as userTable } from "../global/schema.js";
+import { apikey, team, teamMember, user as userTable } from "../global/schema.js";
 import { addTeamMember } from "../global/teams.js";
 import { createMembership } from "../global/workspace-entities.js";
 import { getWorkspaceById } from "../global/workspaces.js";
@@ -19,6 +19,9 @@ const tokenSchema = z.object({
   organizationId: z.string(),
   name: z.string(),
   permissions: z.string(),
+  actorType: z.enum(["user", "agent"]).optional(),
+  provider: z.string().optional(),
+  teamIds: z.array(z.string()).optional(),
   createdAt: z.string(),
 });
 
@@ -28,6 +31,8 @@ const tokenWithSecretSchema = z.object({
   name: z.string(),
   token: z.string(),
   permissions: z.string(),
+  actorType: z.enum(["user", "agent"]).optional(),
+  provider: z.string().optional(),
   createdAt: z.string(),
 });
 
@@ -115,11 +120,15 @@ const deleteTokenRoute = createRoute({
 const apiKeyMetadataSchema = z.object({
   organizationId: z.string(),
   permissions: z.string(),
+  actorType: z.enum(["user", "agent"]).optional(),
+  provider: z.string().optional(),
 });
 
 function parseApiKeyMetadata(metadata: string | null | undefined): {
   organizationId: string;
   permissions: string;
+  actorType?: "user" | "agent";
+  provider?: string;
 } | null {
   if (!metadata) return null;
   try {
@@ -134,17 +143,42 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId } = c.req.valid("param");
     const db = createD1(c.env.D1);
     const rows = await db.select().from(apikey).all();
-    const tokens = rows
+    const filtered = rows
       .map((row) => ({
         row,
         parsed: parseApiKeyMetadata(row.metadata),
       }))
-      .filter(({ parsed }) => parsed?.organizationId === organizationId)
+      .filter(({ parsed }) => parsed?.organizationId === organizationId);
+    // Agent keys' team installs live on teamMember keyed by the apikey's
+    // referenceId (the agent's synthetic user).
+    const agentIds = filtered
+      .filter(({ parsed }) => parsed?.actorType === "agent")
+      .map(({ row }) => row.referenceId);
+    const teamRows = agentIds.length
+      ? await db
+          .select({ userId: teamMember.userId, teamId: teamMember.teamId })
+          .from(teamMember)
+          .where(inArray(teamMember.userId, agentIds))
+          .all()
+      : [];
+    const teamsByUser = new Map<string, string[]>();
+    for (const { userId, teamId } of teamRows) {
+      const list = teamsByUser.get(userId) ?? [];
+      list.push(teamId);
+      teamsByUser.set(userId, list);
+    }
+    const tokens = filtered
       .map(({ row, parsed }) => ({
         id: row.id,
         organizationId: parsed!.organizationId,
         name: row.name ?? "",
         permissions: parsed!.permissions,
+        actorType: parsed!.actorType ?? "user",
+        provider: parsed!.provider,
+        teamIds:
+          parsed!.actorType === "agent"
+            ? (teamsByUser.get(row.referenceId) ?? [])
+            : undefined,
         createdAt:
           row.createdAt instanceof Date
             ? row.createdAt.toISOString()
@@ -227,7 +261,7 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
         userId,
         name: input.name,
         rateLimitEnabled: false,
-        metadata: { organizationId, permissions, actorType },
+        metadata: { organizationId, permissions, actorType, provider: input.provider },
         permissions: { workspace: [...requested] },
       },
     });
@@ -291,6 +325,8 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
         name: parsed.name ?? input.name,
         token: parsed.key,
         permissions,
+        actorType,
+        provider: input.provider,
         createdAt:
           parsed.createdAt instanceof Date
             ? parsed.createdAt.toISOString()

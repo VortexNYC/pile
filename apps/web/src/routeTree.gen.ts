@@ -47,6 +47,7 @@ import { Route as AuthenticatedSlugSessionsIndexRouteImport } from './routes/_au
 import { Route as AuthenticatedSlugSessionsSessionIdRouteImport } from './routes/_authenticated/$slug/sessions/$sessionId'
 import { Route as AuthenticatedSlugSettingsIndexRouteImport } from './routes/_authenticated/$slug/settings/index'
 import { Route as AuthenticatedSlugSettingsAccountRouteImport } from './routes/_authenticated/$slug/settings/account'
+import { Route as AuthenticatedSlugSettingsAgentsRouteImport } from './routes/_authenticated/$slug/settings/agents'
 import { Route as AuthenticatedSlugSettingsDeveloperRouteImport } from './routes/_authenticated/$slug/settings/developer'
 import { Route as AuthenticatedSlugSettingsFieldsRouteImport } from './routes/_authenticated/$slug/settings/fields'
 import { Route as AuthenticatedSlugSettingsMembersRouteImport } from './routes/_authenticated/$slug/settings/members'
@@ -269,6 +270,12 @@ const AuthenticatedSlugSettingsAccountRoute =
     path: '/settings/account',
     getParentRoute: () => AuthenticatedSlugRoute,
   } as any)
+const AuthenticatedSlugSettingsAgentsRoute =
+  AuthenticatedSlugSettingsAgentsRouteImport.update({
+    id: '/settings/agents',
+    path: '/settings/agents',
+    getParentRoute: () => AuthenticatedSlugRoute,
+  } as any)
 const AuthenticatedSlugSettingsDeveloperRoute =
   AuthenticatedSlugSettingsDeveloperRouteImport.update({
     id: '/settings/developer',
@@ -346,6 +353,7 @@ export interface FileRoutesByFullPath {
   '/$slug/projects/$projectId': typeof AuthenticatedSlugProjectsProjectIdRoute
   '/$slug/sessions/$sessionId': typeof AuthenticatedSlugSessionsSessionIdRoute
   '/$slug/settings/account': typeof AuthenticatedSlugSettingsAccountRoute
+  '/$slug/settings/agents': typeof AuthenticatedSlugSettingsAgentsRoute
   '/$slug/settings/developer': typeof AuthenticatedSlugSettingsDeveloperRoute
   '/$slug/settings/fields': typeof AuthenticatedSlugSettingsFieldsRoute
   '/$slug/settings/members': typeof AuthenticatedSlugSettingsMembersRoute
@@ -392,6 +400,7 @@ export interface FileRoutesByTo {
   '/$slug/projects/$projectId': typeof AuthenticatedSlugProjectsProjectIdRoute
   '/$slug/sessions/$sessionId': typeof AuthenticatedSlugSessionsSessionIdRoute
   '/$slug/settings/account': typeof AuthenticatedSlugSettingsAccountRoute
+  '/$slug/settings/agents': typeof AuthenticatedSlugSettingsAgentsRoute
   '/$slug/settings/developer': typeof AuthenticatedSlugSettingsDeveloperRoute
   '/$slug/settings/fields': typeof AuthenticatedSlugSettingsFieldsRoute
   '/$slug/settings/members': typeof AuthenticatedSlugSettingsMembersRoute
@@ -442,6 +451,7 @@ export interface FileRoutesById {
   '/_authenticated/$slug/projects/$projectId': typeof AuthenticatedSlugProjectsProjectIdRoute
   '/_authenticated/$slug/sessions/$sessionId': typeof AuthenticatedSlugSessionsSessionIdRoute
   '/_authenticated/$slug/settings/account': typeof AuthenticatedSlugSettingsAccountRoute
+  '/_authenticated/$slug/settings/agents': typeof AuthenticatedSlugSettingsAgentsRoute
   '/_authenticated/$slug/settings/developer': typeof AuthenticatedSlugSettingsDeveloperRoute
   '/_authenticated/$slug/settings/fields': typeof AuthenticatedSlugSettingsFieldsRoute
   '/_authenticated/$slug/settings/members': typeof AuthenticatedSlugSettingsMembersRoute
@@ -491,6 +501,7 @@ export interface FileRouteTypes {
     | '/$slug/projects/$projectId'
     | '/$slug/sessions/$sessionId'
     | '/$slug/settings/account'
+    | '/$slug/settings/agents'
     | '/$slug/settings/developer'
     | '/$slug/settings/fields'
     | '/$slug/settings/members'
@@ -537,6 +548,7 @@ export interface FileRouteTypes {
     | '/$slug/projects/$projectId'
     | '/$slug/sessions/$sessionId'
     | '/$slug/settings/account'
+    | '/$slug/settings/agents'
     | '/$slug/settings/developer'
     | '/$slug/settings/fields'
     | '/$slug/settings/members'
@@ -586,6 +598,7 @@ export interface FileRouteTypes {
     | '/_authenticated/$slug/projects/$projectId'
     | '/_authenticated/$slug/sessions/$sessionId'
     | '/_authenticated/$slug/settings/account'
+    | '/_authenticated/$slug/settings/agents'
     | '/_authenticated/$slug/settings/developer'
     | '/_authenticated/$slug/settings/fields'
     | '/_authenticated/$slug/settings/members'
@@ -887,6 +900,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSlugSettingsAccountRouteImport
       parentRoute: typeof AuthenticatedSlugRoute
     }
+    '/_authenticated/$slug/settings/agents': {
+      id: '/_authenticated/$slug/settings/agents'
+      path: '/settings/agents'
+      fullPath: '/$slug/settings/agents'
+      preLoaderRoute: typeof AuthenticatedSlugSettingsAgentsRouteImport
+      parentRoute: typeof AuthenticatedSlugRoute
+    }
     '/_authenticated/$slug/settings/developer': {
       id: '/_authenticated/$slug/settings/developer'
       path: '/settings/developer'
@@ -986,6 +1006,7 @@ interface AuthenticatedSlugRouteChildren {
   AuthenticatedSlugProjectsProjectIdRoute: typeof AuthenticatedSlugProjectsProjectIdRoute
   AuthenticatedSlugSessionsSessionIdRoute: typeof AuthenticatedSlugSessionsSessionIdRoute
   AuthenticatedSlugSettingsAccountRoute: typeof AuthenticatedSlugSettingsAccountRoute
+  AuthenticatedSlugSettingsAgentsRoute: typeof AuthenticatedSlugSettingsAgentsRoute
   AuthenticatedSlugSettingsDeveloperRoute: typeof AuthenticatedSlugSettingsDeveloperRoute
   AuthenticatedSlugSettingsFieldsRoute: typeof AuthenticatedSlugSettingsFieldsRoute
   AuthenticatedSlugSettingsMembersRoute: typeof AuthenticatedSlugSettingsMembersRoute
@@ -1026,6 +1047,7 @@ const AuthenticatedSlugRouteChildren: AuthenticatedSlugRouteChildren = {
   AuthenticatedSlugSessionsSessionIdRoute:
     AuthenticatedSlugSessionsSessionIdRoute,
   AuthenticatedSlugSettingsAccountRoute: AuthenticatedSlugSettingsAccountRoute,
+  AuthenticatedSlugSettingsAgentsRoute: AuthenticatedSlugSettingsAgentsRoute,
   AuthenticatedSlugSettingsDeveloperRoute:
     AuthenticatedSlugSettingsDeveloperRoute,
   AuthenticatedSlugSettingsFieldsRoute: AuthenticatedSlugSettingsFieldsRoute,

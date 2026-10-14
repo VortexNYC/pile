@@ -69,6 +69,12 @@ const SETTINGS = [
     icon: Key,
     admin: true,
   },
+  {
+    title: "Agents",
+    path: "settings/agents",
+    icon: Robot,
+    admin: true,
+  },
 ] as const;
 
 export function AppSidebar({
