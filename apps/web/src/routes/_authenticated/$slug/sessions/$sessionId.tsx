@@ -142,13 +142,17 @@ function SessionDetail() {
       title={s?.label ?? "Agent session"}
       description={
         <>
-          <Link
-            to="/$slug/sessions"
-            params={{ slug: workspace.slug }}
-            className="text-kumo-link"
-          >
-            Sessions
-          </Link>
+          {s?.issueId ? (
+            <Link
+              to="/$slug/issues/$issueId"
+              params={{ slug: workspace.slug, issueId: s.issueId }}
+              className="text-kumo-link"
+            >
+              Issue
+            </Link>
+          ) : (
+            <span>Sessions</span>
+          )}
           {s ? ` · ${s.provider} · ${s.id.slice(0, 8)}` : ""}
         </>
       }
