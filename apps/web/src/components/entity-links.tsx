@@ -3,9 +3,11 @@ import { Select } from "@cloudflare/kumo/components/select";
 import {
   Buildings,
   FileText,
+  Folder,
   Headset,
   LinkSimple,
   ListChecks,
+  Robot,
   TrendUp,
   User,
 } from "@phosphor-icons/react";
@@ -29,6 +31,7 @@ const ROUTES: Record<string, (slug: string, id: string) => string> = {
   contact: (slug, id) => `/${slug}/contacts/${id}`,
   document: (slug, id) => `/${slug}/documents/${id}`,
   session: (slug, id) => `/${slug}/sessions/${id}`,
+  project: (slug, id) => `/${slug}/projects/${id}`,
 };
 
 const TYPE_ICONS: Record<string, React.ReactNode> = {
@@ -38,6 +41,8 @@ const TYPE_ICONS: Record<string, React.ReactNode> = {
   customer: <Buildings size={14} />,
   contact: <User size={14} />,
   document: <FileText size={14} />,
+  session: <Robot size={14} />,
+  project: <Folder size={14} />,
 };
 
 type EntityOption = { id: string; label: string };
@@ -117,6 +122,28 @@ function useEntitySearch(toType: string, q: string) {
             id: d.id,
             label: d.title || "Untitled",
           }));
+      }
+      if (toType === "session") {
+        const data = await unwrap(
+          api.GET("/workspaces/{organizationId}/agent/sessions", {
+            params: { path: { organizationId: org } },
+          })
+        );
+        return data.sessions
+          .filter((s) => !q || (s.label ?? "").toLowerCase().includes(q.toLowerCase()))
+          .slice(0, 8)
+          .map((s) => ({ id: s.id, label: s.label ?? s.id.slice(0, 8) }));
+      }
+      if (toType === "project") {
+        const data = await unwrap(
+          api.GET("/workspaces/{organizationId}/projects", {
+            params: { path: { organizationId: org } },
+          })
+        );
+        return data.projects
+          .filter((p) => !q || p.name.toLowerCase().includes(q.toLowerCase()))
+          .slice(0, 8)
+          .map((p) => ({ id: p.id, label: p.name }));
       }
       return [];
     },
@@ -244,6 +271,7 @@ export function EntityLinksRail({
               <Select.Option value="contact">Contact</Select.Option>
               <Select.Option value="document">Document</Select.Option>
               <Select.Option value="session">Session</Select.Option>
+              <Select.Option value="project">Project</Select.Option>
             </Select>
             <input
               aria-label="Search"
