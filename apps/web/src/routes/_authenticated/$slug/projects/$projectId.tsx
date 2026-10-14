@@ -5,12 +5,12 @@ import { Text } from "@cloudflare/kumo/components/text";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 
-import { RecordNotes } from "@/components/record-notes";
 import { EntityHover } from "@/components/entity-hover";
 import { EntityLinksRail } from "@/components/entity-links";
 import { EntityPage, RailSection } from "@/components/entity-page";
 import { Markdown } from "@/components/markdown";
 import { Page } from "@/components/page";
+import { RecordNotes } from "@/components/record-notes";
 import { ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap } from "@/lib/api";

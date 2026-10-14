@@ -30,19 +30,6 @@ import {
   type SupportTicketEventWithDetails,
 } from "./support-tickets.js";
 
-export type SmsInboundBody = {
-  from_number: string;
-  to_number?: string;
-  content?: string;
-  media_url?: string;
-  service?: string;
-  date_sent?: string;
-};
-
-export function normalizePhoneForApi(raw: string): string {
-  return normalizePhone(raw);
-}
-
 function normalizePhone(raw: string): string {
   const digits = raw.replace(/[^+0-9]/g, "");
   return digits;

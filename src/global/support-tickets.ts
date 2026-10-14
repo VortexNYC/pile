@@ -438,10 +438,7 @@ function groupBy<T>(
 
 /** WHERE-side equivalent — chunk an inArray over an unbounded list
  * into OR'd 50-id clauses (D1 caps bound params at 100). */
-function inArrayChunked(
-  column: { _: { data: unknown } },
-  ids: string[]
-) {
+function inArrayChunked(column: { _: { data: unknown } }, ids: string[]) {
   const chunks: string[][] = [];
   for (let i = 0; i < ids.length; i += 50) chunks.push(ids.slice(i, i + 50));
   return or(...chunks.map((chunk) => inArray(column as never, chunk)));

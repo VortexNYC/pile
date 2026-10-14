@@ -81,7 +81,7 @@ export function CustomersList() {
                           slug: workspace.slug,
                           customerId: customer.id,
                         }}
-                        
+
                         className="text-kumo-link hover:underline"
                       >
                         <span className="flex items-center gap-2">

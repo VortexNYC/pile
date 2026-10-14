@@ -99,28 +99,64 @@ function DocumentsList() {
               </Table.Row>
             </Table.Header>
             <Table.Body>
-              {documents.data.map((doc) => (
-                <Table.Row key={doc.id}>
-                  <Table.Cell>
-                    <EntityHover
-                      meta={doc.icon ? <span>{doc.icon}</span> : null}
-                      title={doc.title}
-                      description={`Updated ${formatRelative(doc.updatedAt)}`}
-                    >
-                      <Link
-                        to="/$slug/documents/$documentId"
-                        params={{ slug: workspace.slug, documentId: doc.id }}
-                        
-                        className="text-kumo-link hover:underline"
-                      >
-                        {doc.icon ? `${doc.icon} ` : ""}
-                        {doc.title}
-                      </Link>
-                    </EntityHover>
-                  </Table.Cell>
-                  <Table.Cell>{formatRelative(doc.updatedAt)}</Table.Cell>
-                </Table.Row>
-              ))}
+              {documents.data
+                .filter((doc) => !doc.parentDocumentId)
+                .map((doc) => (
+                  <div key={doc.id}>
+                    <Table.Row>
+                      <Table.Cell>
+                        <EntityHover
+                          meta={doc.icon ? <span>{doc.icon}</span> : null}
+                          title={doc.title}
+                          description={`Updated ${formatRelative(doc.updatedAt)}`}
+                        >
+                          <Link
+                            to="/$slug/documents/$documentId"
+                            params={{
+                              slug: workspace.slug,
+                              documentId: doc.id,
+                            }}
+                            className="text-kumo-link hover:underline"
+                          >
+                            {doc.icon ? `${doc.icon} ` : ""}
+                            {doc.title}
+                          </Link>
+                        </EntityHover>
+                      </Table.Cell>
+                      <Table.Cell>{formatRelative(doc.updatedAt)}</Table.Cell>
+                    </Table.Row>
+                    {documents.data
+                      .filter((d) => d.parentDocumentId === doc.id)
+                      .map((child) => (
+                        <Table.Row key={child.id}>
+                          <Table.Cell className="pl-8">
+                            <EntityHover
+                              meta={
+                                child.icon ? <span>{child.icon}</span> : null
+                              }
+                              title={child.title}
+                              description={`Updated ${formatRelative(child.updatedAt)}`}
+                            >
+                              <Link
+                                to="/$slug/documents/$documentId"
+                                params={{
+                                  slug: workspace.slug,
+                                  documentId: child.id,
+                                }}
+                                className="text-kumo-link hover:underline"
+                              >
+                                {child.icon ? `${child.icon} ` : ""}
+                                {child.title}
+                              </Link>
+                            </EntityHover>
+                          </Table.Cell>
+                          <Table.Cell>
+                            {formatRelative(child.updatedAt)}
+                          </Table.Cell>
+                        </Table.Row>
+                      ))}
+                  </div>
+                ))}
             </Table.Body>
           </Table>
         </LayerCard>

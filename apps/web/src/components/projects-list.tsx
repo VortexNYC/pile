@@ -112,7 +112,7 @@ export function ProjectsList() {
                       slug: workspace.slug,
                       projectId: project.id,
                     }}
-                    
+
                     className="text-kumo-link hover:underline"
                   >
                     {project.name}

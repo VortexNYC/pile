@@ -571,7 +571,9 @@ function TicketDetail() {
             ) : null}
             {(comms.data?.length ?? 0) > 0 ? (
               <div className="flex flex-col gap-1.5">
-                <span className="text-xs text-kumo-subtle">Recent activity</span>
+                <span className="text-xs text-kumo-subtle">
+                  Recent activity
+                </span>
                 {(comms.data ?? []).map((event) => (
                   <div key={event.id} className="text-sm">
                     <div className="text-kumo-default">{event.summary}</div>

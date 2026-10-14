@@ -130,7 +130,7 @@ routes = [
   { pattern = "app.pile.nyc", custom_domain = true },
 ]
 # Required for `wrangler versions upload --preview-alias` branch previews
-# (<alias>-pile.shlomo-31b.workers.dev) — cloudflare-ci runs that on
+# (<alias>-pile.vortex-nyc.workers.dev) — cloudflare-ci runs that on
 # non-main artifact pushes.
 workers_dev = true
 
@@ -148,7 +148,7 @@ FEEDBACK_CHANNEL_ID = "cc2f808d-007e-48a1-870f-bd4c68ae0cd6"
 # Shared container admission ledger (PILE-302) — lanes reserve a slot before
 # spawning; CF_ADMISSION_TOKEN is a wrangler secret matching cloudflare-ci's
 # ADMIN_TOKEN.
-CF_ADMISSION_URL = "https://cloudflare-ci.shlomo-31b.workers.dev"
+CF_ADMISSION_URL = "https://cloudflare-ci.vortex-nyc.workers.dev"
 
 [[env.production.d1_databases]]
 binding = "D1"
@@ -262,7 +262,7 @@ EMAIL_FROM = "notifications@pile.nyc"
 COMPUTE_PROVIDER = "cloudflare"
 PUBLIC_API_URL = "https://staging.pile.nyc"
 FEEDBACK_CHANNEL_ID = "cc2f808d-007e-48a1-870f-bd4c68ae0cd6"
-CF_ADMISSION_URL = "https://cloudflare-ci.shlomo-31b.workers.dev"
+CF_ADMISSION_URL = "https://cloudflare-ci.vortex-nyc.workers.dev"
 
 [[env.staging.d1_databases]]
 binding = "D1"

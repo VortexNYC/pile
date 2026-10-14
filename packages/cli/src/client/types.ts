@@ -4643,6 +4643,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List activity */
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number | null;
+                    entityType?: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Unified workspace activity feed — all entity events */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            activity: {
+                                kind: string;
+                                entityType: string;
+                                entityId: string;
+                                entityTitle: string | null;
+                                actorId: string | null;
+                                actorName: string | null;
+                                action: string;
+                                detail: string | null;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/projects": {
         parameters: {
             query?: never;

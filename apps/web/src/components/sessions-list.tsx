@@ -130,7 +130,7 @@ export function SessionsList() {
                         slug: workspace.slug,
                         sessionId: session.id,
                       }}
-                      
+
                       className="flex h-11 items-center gap-3 px-4 hover:bg-kumo-tint"
                     >
                       <Badge variant={sessionStatusVariant(session.status)}>

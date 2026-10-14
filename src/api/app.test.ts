@@ -31,6 +31,9 @@ describe("member console", () => {
       }
       return new Response("missing", { status: 404 });
     },
+    connect: () => {
+      throw new Error("connect is not implemented in tests");
+    },
   };
   const withAssets = { ...env, ASSETS: assets };
 
@@ -82,7 +85,15 @@ describe("member console", () => {
     });
     const res = await app.fetch(
       new Request("https://example.com/app/assets/index.js"),
-      { ...env, ASSETS: { fetch: async () => immutableAsset } }
+      {
+        ...env,
+        ASSETS: {
+          fetch: async () => immutableAsset,
+          connect: () => {
+            throw new Error("connect is not implemented in tests");
+          },
+        },
+      }
     );
     expect(res.status).toBe(200);
     expect(await res.text()).toBe("console.log(1)");

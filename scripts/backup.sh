@@ -7,7 +7,7 @@ set -euo pipefail
 
 DIR="${1:-backups/$(date +%Y%m%d-%H%M%S)}"
 WRANGLER="$(dirname "$0")/../node_modules/.bin/wrangler"
-ACCOUNT_ID="31bfc2c14a28e0a39e8b9e3c556a18be"
+ACCOUNT_ID="${CLOUDFLARE_ACCOUNT_ID:-953346ce1b4f27fa04a76d83aeccab28}"
 API="https://pile.nyc"
 mkdir -p "$DIR"
 

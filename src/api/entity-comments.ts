@@ -48,9 +48,9 @@ type EntityDef = {
   // API surface — where the comments live and which gate guards them.
   path: string;
   idParam: "id" | "dealId" | "customerId";
-  entityType: "customer" | "deal" | "contact";
-  view: "customer:view" | "deal:view" | "ticket:view";
-  edit: "customer:edit" | "deal:edit" | "ticket:edit";
+  entityType: "customer" | "deal" | "contact" | "session" | "project";
+  view: string;
+  edit: string;
   tag: string;
   exists: (args: {
     stub: ReturnType<typeof getWorkspaceStub>;

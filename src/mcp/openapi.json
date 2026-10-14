@@ -10373,6 +10373,109 @@
         "summary": "List issue activity"
       }
     },
+    "/workspaces/{organizationId}/activity": {
+      "get": {
+        "tags": [
+          "activities"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "number",
+              "nullable": true,
+              "default": 50
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "entityType",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unified workspace activity feed — all entity events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "activity": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string"
+                          },
+                          "entityType": {
+                            "type": "string"
+                          },
+                          "entityId": {
+                            "type": "string"
+                          },
+                          "entityTitle": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "actorId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "actorName": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "action": {
+                            "type": "string"
+                          },
+                          "detail": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "entityType",
+                          "entityId",
+                          "entityTitle",
+                          "actorId",
+                          "actorName",
+                          "action",
+                          "detail",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "activity"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List activity"
+      }
+    },
     "/workspaces/{organizationId}/projects": {
       "get": {
         "tags": [

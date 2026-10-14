@@ -71,13 +71,13 @@ function DocumentDetail() {
           },
         })
       ),
-    onSuccess: (doc) => {
+    onSuccess: (created) => {
       void queryClient.invalidateQueries({
         queryKey: wsKey(organizationId, "documents", documentId, "children"),
       });
       void navigate({
         to: "/$slug/documents/$documentId",
-        params: { slug: workspace.slug, documentId: doc.id },
+        params: { slug: workspace.slug, documentId: created.id },
       });
     },
     onError: (error) => toastError(error),

@@ -1879,6 +1879,31 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdActivity",
+    "description": "List activity (GET /workspaces/{organizationId}/activity) Path params (top-level, required): organizationId. Query params (top-level, optional): limit, entityType.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/activity",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "number",
+          "nullable": true,
+          "default": 50
+        },
+        "entityType": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdAgentAutomations",
     "description": "List agent automations (GET /workspaces/{organizationId}/agent/automations) Path params (top-level, required): organizationId.",
     "method": "GET",

@@ -235,7 +235,7 @@ export function DealsList() {
                             <Link
                               to="/$slug/deals/$dealId"
                               params={{ slug: workspace.slug, dealId: deal.id }}
-                              
+
                               className="flex h-11 items-center gap-3 px-4 hover:bg-kumo-tint"
                             >
                               <span className="min-w-0 flex-1 truncate text-sm font-medium text-kumo-default">

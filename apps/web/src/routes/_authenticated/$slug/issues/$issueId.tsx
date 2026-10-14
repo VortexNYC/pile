@@ -3,7 +3,13 @@ import { Button } from "@cloudflare/kumo/components/button";
 import { DropdownMenu } from "@cloudflare/kumo/components/dropdown";
 import { LayerCard } from "@cloudflare/kumo/components/layer-card";
 import { Text } from "@cloudflare/kumo/components/text";
-import { LinkSimple, PencilSimple, Plus, Star, Trash } from "@phosphor-icons/react";
+import {
+  LinkSimple,
+  PencilSimple,
+  Plus,
+  Star,
+  Trash,
+} from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
@@ -768,7 +774,8 @@ function IssueDetail() {
                         {a.status}
                       </Badge>
                       <span className="text-xs text-kumo-subtle truncate">
-                        {a.comment ?? "requested"} · {formatRelative(a.createdAt)}
+                        {a.comment ?? "requested"} ·{" "}
+                        {formatRelative(a.createdAt)}
                       </span>
                     </div>
                   ))}

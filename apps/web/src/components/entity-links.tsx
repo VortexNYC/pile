@@ -130,7 +130,9 @@ function useEntitySearch(toType: string, q: string) {
           })
         );
         return data.sessions
-          .filter((s) => !q || (s.label ?? "").toLowerCase().includes(q.toLowerCase()))
+          .filter(
+            (s) => !q || (s.label ?? "").toLowerCase().includes(q.toLowerCase())
+          )
           .slice(0, 8)
           .map((s) => ({ id: s.id, label: s.label ?? s.id.slice(0, 8) }));
       }

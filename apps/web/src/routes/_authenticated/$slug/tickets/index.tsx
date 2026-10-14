@@ -82,8 +82,7 @@ function TicketsList() {
     placeholderData: keepPreviousData,
   });
   const queryClient = useQueryClient();
-  type TicketRow = (typeof allTickets)[number];
-  
+
   const patch = useMutation({
     mutationFn: (args: { id: string; body: Record<string, string> }) =>
       unwrap(
@@ -230,7 +229,7 @@ function TicketsList() {
                         <Link
                           to="/$slug/tickets/$ticketId"
                           params={{ slug: workspace.slug, ticketId: ticket.id }}
-                          
+
                           className="text-kumo-link hover:underline"
                         >
                           <span className="text-kumo-subtle mr-2">
@@ -320,7 +319,6 @@ function TicketsList() {
             )}
           </div>
         ))}
-
 
       {tickets.hasNextPage ? (
         <div className="mt-4 flex justify-center">

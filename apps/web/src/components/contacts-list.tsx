@@ -69,7 +69,7 @@ export function ContactsList() {
                         slug: workspace.slug,
                         contactId: contact.id,
                       }}
-                      
+
                       className="text-kumo-link hover:underline"
                     >
                       {contact.fullName ?? contact.email}

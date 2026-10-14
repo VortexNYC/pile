@@ -417,14 +417,18 @@ function DealDetail() {
                           to="/$slug/contacts/$contactId"
                           params={{ slug: workspace.slug, contactId: id }}
                         >
-                          {contact?.fullName ?? contact?.email ?? id.slice(0, 8)}
+                          {contact?.fullName ??
+                            contact?.email ??
+                            id.slice(0, 8)}
                         </RailLink>
                         <button
                           type="button"
                           aria-label="Remove contact"
                           onClick={() =>
                             patch.mutate({
-                              contactIds: data.contactIds.filter((c) => c !== id),
+                              contactIds: data.contactIds.filter(
+                                (c) => c !== id
+                              ),
                             })
                           }
                           className="text-kumo-subtle hover:text-kumo-default"

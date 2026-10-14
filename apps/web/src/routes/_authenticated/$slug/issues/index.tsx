@@ -19,15 +19,14 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useDeferredValue, useState } from "react";
 
 import { IssueContextMenu } from "@/components/issue-context-menu";
-import { IssuePeek } from "@/components/peek";
 import {
   DEFAULT_DISPLAY,
   IssueDisplayMenu,
 } from "@/components/issue-display-menu";
 import { IssueFieldMenu } from "@/components/issue-field-menu";
 import { EMPTY_FILTER, IssueFilter } from "@/components/issue-filter";
-import { Markdown } from "@/components/markdown";
 import { Page } from "@/components/page";
+import { IssuePeek } from "@/components/peek";
 import { PrChip } from "@/components/pr-chip";
 import { ProjectsList } from "@/components/projects-list";
 import { SessionsList } from "@/components/sessions-list";
@@ -145,7 +144,6 @@ function IssuesList() {
   const allIssues = issues.data?.pages.flatMap((page) => page.issues) ?? [];
 
   // Group issues by parent — children render indented under their parent
-  const issueById = new Map(allIssues.map((i) => [i.id, i]));
   const childrenOf = new Map<string | null, typeof allIssues>();
   for (const issue of allIssues) {
     const parentId = issue.parentId ?? null;
@@ -153,7 +151,7 @@ function IssuesList() {
     children.push(issue);
     childrenOf.set(parentId, children);
   }
-  
+
   return (
     <Page
       title="Issues"
@@ -265,104 +263,106 @@ function IssuesList() {
                           {rows
                             .filter((issue) => !issue.parentId)
                             .map((issue) => (
-                            <div key={issue.id} className="flex flex-col">
-                              <DraggableRow id={issue.id}>
-                                <IssueContextMenu issue={issue}>
-                                <IssuePeek issue={issue}>
-                                  <Link
-                                    to="/$slug/issues/$issueId"
-                                    params={{
-                                      slug: workspace.slug,
-                                      issueId: issue.id,
-                                    }}
+                              <div key={issue.id} className="flex flex-col">
+                                <DraggableRow id={issue.id}>
+                                  <IssueContextMenu issue={issue}>
+                                    <IssuePeek issue={issue}>
+                                      <Link
+                                        to="/$slug/issues/$issueId"
+                                        params={{
+                                          slug: workspace.slug,
+                                          issueId: issue.id,
+                                        }}
 
-                                    className={`group flex h-11 items-center gap-3 px-4 hover:bg-kumo-tint ${
-                                      selected.has(issue.id)
-                                        ? "bg-kumo-tint"
-                                        : ""
-                                    }`}
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      aria-label={`Select ${issue.title}`}
-                                      checked={selected.has(issue.id)}
-                                      onClick={(e) => {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        toggleSelected(issue.id);
-                                      }}
-                                      onChange={() => undefined}
-                                      className={`accent-kumo-brand size-4 shrink-0 ${
-                                        selected.size === 0
-                                          ? "opacity-0 transition-opacity group-hover:opacity-100"
-                                          : ""
-                                      }`}
-                                    />
-                                    <IssueStatusIcon status={issue.status} />
-                                    {issue.identifier ? (
-                                      <span className="w-16 shrink-0 truncate text-sm font-medium text-kumo-subtle">
-                                        {issue.identifier}
-                                      </span>
-                                    ) : null}
-                                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-kumo-default">
-                                      {issue.title}
-                                    </span>
-                                    <PrChip issue={issue} />
-                                    <IssueFieldMenu
-                                      issue={issue}
-                                      field="priority"
-                                      options={PRIORITIES}
-                                      labels={PRIORITY_LABELS}
-                                    >
-                                      <button
-                                        type="button"
-                                        onClick={(e) => e.preventDefault()}
-                                        className="cursor-pointer"
+                                        className={`group flex h-11 items-center gap-3 px-4 hover:bg-kumo-tint ${
+                                          selected.has(issue.id)
+                                            ? "bg-kumo-tint"
+                                            : ""
+                                        }`}
                                       >
-                                        <Badge
-                                          variant={priorityVariant(
-                                            issue.priority
-                                          )}
-                                        >
-                                          {PRIORITY_LABELS[issue.priority]}
-                                        </Badge>
-                                      </button>
-                                    </IssueFieldMenu>
-                                    <span className="w-16 shrink-0 text-right text-xs text-kumo-subtle">
-                                      {formatRelative(issue.updatedAt)}
-                                    </span>
-                                  </Link>
-                                </IssuePeek>
-                                </IssueContextMenu>
-                              </DraggableRow>
-                              {(childrenOf.get(issue.id) ?? []).map(
-                                (child) => (
-                                  <div key={child.id} className="pl-8">
-                                    <Link
-                                      to="/$slug/issues/$issueId"
-                                      params={{
-                                        slug: workspace.slug,
-                                        issueId: child.id,
-                                      }}
-                                      className="group flex h-11 items-center gap-3 px-4 hover:bg-kumo-tint"
-                                    >
-                                      <IssueStatusIcon
-                                        status={child.status}
-                                      />
-                                      {child.identifier ? (
-                                        <span className="w-16 shrink-0 truncate text-sm font-medium text-kumo-subtle">
-                                          {child.identifier}
+                                        <input
+                                          type="checkbox"
+                                          aria-label={`Select ${issue.title}`}
+                                          checked={selected.has(issue.id)}
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            toggleSelected(issue.id);
+                                          }}
+                                          onChange={() => undefined}
+                                          className={`accent-kumo-brand size-4 shrink-0 ${
+                                            selected.size === 0
+                                              ? "opacity-0 transition-opacity group-hover:opacity-100"
+                                              : ""
+                                          }`}
+                                        />
+                                        <IssueStatusIcon
+                                          status={issue.status}
+                                        />
+                                        {issue.identifier ? (
+                                          <span className="w-16 shrink-0 truncate text-sm font-medium text-kumo-subtle">
+                                            {issue.identifier}
+                                          </span>
+                                        ) : null}
+                                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-kumo-default">
+                                          {issue.title}
                                         </span>
-                                      ) : null}
-                                      <span className="min-w-0 flex-1 truncate text-sm font-medium text-kumo-default">
-                                        {child.title}
-                                      </span>
-                                    </Link>
-                                  </div>
-                                )
-                              )}
-                            </div>
-                          ))}
+                                        <PrChip issue={issue} />
+                                        <IssueFieldMenu
+                                          issue={issue}
+                                          field="priority"
+                                          options={PRIORITIES}
+                                          labels={PRIORITY_LABELS}
+                                        >
+                                          <button
+                                            type="button"
+                                            onClick={(e) => e.preventDefault()}
+                                            className="cursor-pointer"
+                                          >
+                                            <Badge
+                                              variant={priorityVariant(
+                                                issue.priority
+                                              )}
+                                            >
+                                              {PRIORITY_LABELS[issue.priority]}
+                                            </Badge>
+                                          </button>
+                                        </IssueFieldMenu>
+                                        <span className="w-16 shrink-0 text-right text-xs text-kumo-subtle">
+                                          {formatRelative(issue.updatedAt)}
+                                        </span>
+                                      </Link>
+                                    </IssuePeek>
+                                  </IssueContextMenu>
+                                </DraggableRow>
+                                {(childrenOf.get(issue.id) ?? []).map(
+                                  (child) => (
+                                    <div key={child.id} className="pl-8">
+                                      <Link
+                                        to="/$slug/issues/$issueId"
+                                        params={{
+                                          slug: workspace.slug,
+                                          issueId: child.id,
+                                        }}
+                                        className="group flex h-11 items-center gap-3 px-4 hover:bg-kumo-tint"
+                                      >
+                                        <IssueStatusIcon
+                                          status={child.status}
+                                        />
+                                        {child.identifier ? (
+                                          <span className="w-16 shrink-0 truncate text-sm font-medium text-kumo-subtle">
+                                            {child.identifier}
+                                          </span>
+                                        ) : null}
+                                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-kumo-default">
+                                          {child.title}
+                                        </span>
+                                      </Link>
+                                    </div>
+                                  )
+                                )}
+                              </div>
+                            ))}
                         </div>
                       </LayerCard>
                     </div>

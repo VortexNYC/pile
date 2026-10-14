@@ -10,12 +10,7 @@ import { betterAuthClient } from "@/lib/better-auth";
 import { formatRelative } from "@/lib/labels";
 import { toastError } from "@/lib/toast";
 
-type RecordEntity =
-  | "customer"
-  | "deal"
-  | "contact"
-  | "session"
-  | "project";
+type RecordEntity = "customer" | "deal" | "contact" | "session" | "project";
 
 /** Record notes — comment threads on any entity. Same comments table
  * issues/documents share, scoped by entityType+entityId. */
@@ -64,15 +59,21 @@ export function RecordNotes({
     const json = { body };
     switch (entityType) {
       case "customer":
-        return api.POST("/workspaces/{organizationId}/customers/{id}/comments", {
-          params: { path: { organizationId: orgId, id } },
-          body: json,
-        });
+        return api.POST(
+          "/workspaces/{organizationId}/customers/{id}/comments",
+          {
+            params: { path: { organizationId: orgId, id } },
+            body: json,
+          }
+        );
       case "deal":
-        return api.POST("/workspaces/{organizationId}/deals/{dealId}/comments", {
-          params: { path: { organizationId: orgId, dealId: id } },
-          body: json,
-        });
+        return api.POST(
+          "/workspaces/{organizationId}/deals/{dealId}/comments",
+          {
+            params: { path: { organizationId: orgId, dealId: id } },
+            body: json,
+          }
+        );
       case "contact":
         return api.POST(
           "/workspaces/{organizationId}/support/customers/{customerId}/comments",
