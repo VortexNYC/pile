@@ -415,6 +415,41 @@ describe("CLI integration", () => {
     spy.mockRestore();
   });
 
+  it("sends -d as the JSON request body", async () => {
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), { status: 201 })
+    );
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    const exitCode = await runCli(
+      ["request", "POST", "/workspaces/ws-1/documents", "-d", '{"title":"x"}'],
+      { fetch: mockFetch }
+    );
+
+    expect(exitCode).toBe(0);
+    const [, init] = mockFetch.mock.calls[0] as [
+      URL,
+      { method: string; body: string; headers: Headers },
+    ];
+    expect(init.method).toBe("POST");
+    expect(init.body).toBe('{"title":"x"}');
+    expect(init.headers.get("Content-Type")).toBe("application/json");
+    mockFetch.mockRestore();
+  });
+
+  it("rejects extra positional arguments on request", async () => {
+    const mockFetch = vi.fn();
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const exitCode = await runCli(
+      ["request", "GET", "/workspaces", "stray-arg"],
+      { fetch: mockFetch }
+    );
+
+    expect(exitCode).toBe(1);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
   it("runs capture run, uploads console logs and video, and finalizes", async () => {
     const artifactsDir = mkdtempSync(join(tmpdir(), "pile-capture-"));
     writeFileSync(
