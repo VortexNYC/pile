@@ -361,6 +361,17 @@ function DealDetail() {
         rail={
           <>
             <RailSection title="Properties">
+              <Select
+                aria-label="Company"
+                value={data.customerId}
+                onValueChange={(v) => v && patch.mutate({ customerId: v })}
+              >
+                {(customers.data ?? []).map((c) => (
+                  <Select.Option key={c.id} value={c.id}>
+                    {c.name}
+                  </Select.Option>
+                ))}
+              </Select>
               <div className="flex flex-col gap-2 text-sm text-kumo-subtle">
                 <div className="flex items-center justify-between">
                   <span>Amount</span>

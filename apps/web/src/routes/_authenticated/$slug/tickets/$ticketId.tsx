@@ -138,7 +138,11 @@ function TicketDetail() {
     ]);
 
   const update = useMutation({
-    mutationFn: (body: { status?: TicketStatus; priority?: IssuePriority }) =>
+    mutationFn: (body: {
+      status?: TicketStatus;
+      priority?: IssuePriority;
+      issueId?: string | null;
+    }) =>
       unwrap(
         api.PATCH("/workspaces/{organizationId}/support/tickets/{ticketId}", {
           params: { path },
@@ -176,6 +180,21 @@ function TicketDetail() {
     body: string;
   } | null>(null);
   const [deletingNote, setDeletingNote] = useState<string | null>(null);
+
+  const issues = useQuery({
+    queryKey: wsKey(organizationId, "issues", "all"),
+    queryFn: async () =>
+      (
+        await unwrap(
+          api.GET("/workspaces/{organizationId}/issues", {
+            params: {
+              path: { organizationId },
+              query: { limit: 100 },
+            },
+          })
+        )
+      ).issues,
+  });
 
   const send = useMutation({
     mutationFn: async (input: {
@@ -507,6 +526,28 @@ function TicketDetail() {
                 <span className="text-kumo-subtle">{data.customer.phone}</span>
               ) : null}
             </div>
+            <Select
+              aria-label="Linked issue"
+              value={data.issueId ?? ""}
+              onValueChange={(v) => v && update.mutate({ issueId: v || null })}
+            >
+              <Select.Option value="">No issue</Select.Option>
+              {(issues.data ?? []).map((issue) => (
+                <Select.Option key={issue.id} value={issue.id}>
+                  {issue.identifier ? `${issue.identifier} ` : ""}
+                  {issue.title}
+                </Select.Option>
+              ))}
+            </Select>
+            {data.issueId ? (
+              <Link
+                to="/$slug/issues/$issueId"
+                params={{ slug: workspace.slug, issueId: data.issueId }}
+                className="text-sm text-kumo-link hover:underline"
+              >
+                Linked issue
+              </Link>
+            ) : null}
           </RailSection>
 
           <RailSection title="Relations">
