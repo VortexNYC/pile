@@ -27080,6 +27080,9 @@
                           "publicSharing": {
                             "type": "boolean"
                           },
+                          "restricted": {
+                            "type": "boolean"
+                          },
                           "createdById": {
                             "type": "string"
                           },
@@ -27094,6 +27097,7 @@
                           "description",
                           "icon",
                           "publicSharing",
+                          "restricted",
                           "createdById",
                           "createdAt"
                         ]
@@ -27142,6 +27146,9 @@
                   },
                   "publicSharing": {
                     "type": "boolean"
+                  },
+                  "restricted": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -27179,6 +27186,9 @@
                     "publicSharing": {
                       "type": "boolean"
                     },
+                    "restricted": {
+                      "type": "boolean"
+                    },
                     "createdById": {
                       "type": "string"
                     },
@@ -27193,6 +27203,7 @@
                     "description",
                     "icon",
                     "publicSharing",
+                    "restricted",
                     "createdById",
                     "createdAt"
                   ]
@@ -27247,6 +27258,9 @@
                   },
                   "publicSharing": {
                     "type": "boolean"
+                  },
+                  "restricted": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -27281,6 +27295,9 @@
                     "publicSharing": {
                       "type": "boolean"
                     },
+                    "restricted": {
+                      "type": "boolean"
+                    },
                     "createdById": {
                       "type": "string"
                     },
@@ -27295,6 +27312,7 @@
                     "description",
                     "icon",
                     "publicSharing",
+                    "restricted",
                     "createdById",
                     "createdAt"
                   ]

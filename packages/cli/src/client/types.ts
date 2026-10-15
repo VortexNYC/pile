@@ -13799,6 +13799,7 @@ export interface paths {
                                 description: string | null;
                                 icon: string | null;
                                 publicSharing: boolean;
+                                restricted: boolean;
                                 createdById: string;
                                 createdAt: string;
                             }[];
@@ -13825,6 +13826,7 @@ export interface paths {
                         description?: string;
                         icon?: string;
                         publicSharing?: boolean;
+                        restricted?: boolean;
                     };
                 };
             };
@@ -13842,6 +13844,7 @@ export interface paths {
                             description: string | null;
                             icon: string | null;
                             publicSharing: boolean;
+                            restricted: boolean;
                             createdById: string;
                             createdAt: string;
                         };
@@ -13914,6 +13917,7 @@ export interface paths {
                         description?: string | null;
                         icon?: string | null;
                         publicSharing?: boolean;
+                        restricted?: boolean;
                     };
                 };
             };
@@ -13931,6 +13935,7 @@ export interface paths {
                             description: string | null;
                             icon: string | null;
                             publicSharing: boolean;
+                            restricted: boolean;
                             createdById: string;
                             createdAt: string;
                         };
