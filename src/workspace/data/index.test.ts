@@ -10,6 +10,7 @@ import { workspaceIssues } from "../schema.js";
 import {
   hiddenIssueCondition,
   type AgentSessionInput,
+  createAgentHandoff,
   createAgentSession,
   createGuidancePack,
   createDeal,
@@ -31,7 +32,9 @@ import {
   getGuidancePack,
   customerUrlHost,
   fileCustomerIntakeItem,
+  getAgentHandoff,
   getAgentSession,
+  getHandoffForSession,
   getEntityAttachment,
   getNotificationPreferences,
   hasIssueAccess,
@@ -39,6 +42,7 @@ import {
   listIssuePermissions,
   setIssuePermission,
   revokeIssuePermission,
+  listAgentHandoffs,
   listAgentSessions,
   listDocumentLinks,
   listEntityAttachments,
@@ -997,12 +1001,131 @@ describe("guidance packs (PILE-423)", () => {
       );
       expect(session.stepKey).toBe("contacted");
       const refs = JSON.stringify([
-        { id: "p1", name: "P", scope: "step", scopeKey: "contacted", version: 2 },
+        {
+          id: "p1",
+          name: "P",
+          scope: "step",
+          scopeKey: "contacted",
+          version: 2,
+        },
       ]);
       const updated = await updateAgentSession(db, org, session.id, {
         guidance: refs,
       });
       expect(updated?.guidance).toBe(refs);
+    });
+  });
+});
+
+describe("agent handoffs (PILE-421)", () => {
+  it("creates and lists handoffs by parent issue and step_key", async () => {
+    await withDb(async (db) => {
+      const parentId = crypto.randomUUID();
+      const s1 = await createAgentSession(
+        db,
+        sessionInput({ stepKey: "sourced" })
+      );
+      const s2 = await createAgentSession(
+        db,
+        sessionInput({ stepKey: "profiled" })
+      );
+      const h1 = await createAgentHandoff(db, {
+        organizationId: WORKSPACE_ID,
+        issueId: parentId,
+        fromIssueId: s1.issueId,
+        sessionId: s1.id,
+        stepKey: "sourced",
+        nextAgent: "profiler",
+        outputs: JSON.stringify({ score: 0.8 }),
+        evidence: JSON.stringify([
+          { type: "url", ref: "https://example.com/p", label: "Profile" },
+        ]),
+      });
+      await createAgentHandoff(db, {
+        organizationId: WORKSPACE_ID,
+        issueId: parentId,
+        sessionId: s2.id,
+        stepKey: "profiled",
+        outputs: JSON.stringify({ title: "vp" }),
+      });
+      // Another org's handoff on the same parent id stays isolated.
+      const foreign = await createAgentSession(db, {
+        ...sessionInput({}),
+        organizationId: "other-org",
+      });
+      await createAgentHandoff(db, {
+        organizationId: "other-org",
+        issueId: parentId,
+        sessionId: foreign.id,
+        stepKey: "sourced",
+        outputs: "{}",
+      });
+
+      const all = listAgentHandoffs(db, WORKSPACE_ID, { issueId: parentId });
+      expect(all).toHaveLength(2);
+      expect(all.map((h) => h.stepKey)).toEqual(["sourced", "profiled"]);
+      expect(all[0]?.outputs).toBe(JSON.stringify({ score: 0.8 }));
+      expect(all[0]?.fromIssueId).toBe(s1.issueId);
+
+      const filtered = listAgentHandoffs(db, WORKSPACE_ID, {
+        issueId: parentId,
+        stepKey: "profiled",
+      });
+      expect(filtered).toHaveLength(1);
+      expect(filtered[0]?.sessionId).toBe(s2.id);
+
+      expect(await getHandoffForSession(db, WORKSPACE_ID, s1.id)).toMatchObject(
+        { id: h1.id }
+      );
+      expect(await getHandoffForSession(db, WORKSPACE_ID, s2.id)).toBeTruthy();
+      expect(await getAgentHandoff(db, WORKSPACE_ID, h1.id)).toMatchObject({
+        stepKey: "sourced",
+        nextAgent: "profiler",
+      });
+      expect(
+        await getHandoffForSession(db, "other-org", s1.id)
+      ).toBeUndefined();
+    });
+  });
+
+  it("enforces one handoff per session (unique session_id)", async () => {
+    await withDb(async (db) => {
+      const session = await createAgentSession(
+        db,
+        sessionInput({ stepKey: "sourced" })
+      );
+      await createAgentHandoff(db, {
+        organizationId: WORKSPACE_ID,
+        issueId: crypto.randomUUID(),
+        sessionId: session.id,
+        stepKey: "sourced",
+        outputs: "{}",
+      });
+      await expect(
+        createAgentHandoff(db, {
+          organizationId: WORKSPACE_ID,
+          issueId: crypto.randomUUID(),
+          sessionId: session.id,
+          stepKey: "sourced",
+          outputs: "{}",
+        })
+      ).rejects.toThrow();
+    });
+  });
+
+  it("persists handoffRequired on agent sessions", async () => {
+    await withDb(async (db) => {
+      const required = await createAgentSession(
+        db,
+        sessionInput({ stepKey: "sourced", handoffRequired: 1 })
+      );
+      expect(
+        (await getAgentSession(db, WORKSPACE_ID, required.id))?.handoffRequired
+      ).toBe(1);
+      const plain = await createAgentSession(db, sessionInput({}));
+      expect(
+        (await getAgentSession(db, WORKSPACE_ID, plain.id))?.handoffRequired
+      ).toBe(0);
     });
   });
 });

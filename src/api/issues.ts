@@ -899,6 +899,9 @@ const dispatchRoute = createRoute({
               // step_key). Step-scoped guidance packs resolve against it;
               // persisted on the session.
               stepKey: z.string().min(1).optional(),
+              // PILE-421 — completing this lane requires a posted handoff
+              // record (stage templates set it on required sub-steps).
+              requireHandoff: z.boolean().optional(),
               // VTX-209 — when true, dispatch a repo-less planner-critique
               // session on the target provider instead of the task lane. It
               // reports missing/ambiguous context back onto the issue thread.
@@ -2109,6 +2112,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       branch,
       instructions,
       stepKey,
+      requireHandoff,
       preflight,
       mode,
       effort,
@@ -2263,6 +2267,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
             maxDurationMinutes: maxDuration,
             resultSchema,
             stepKey,
+            requireHandoff,
           }
         )
       : preflight
@@ -2288,6 +2293,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
               maxDurationMinutes: maxDuration,
               resultSchema,
               stepKey,
+              requireHandoff,
             }
           )
         : await dispatchAgent(
@@ -2306,6 +2312,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
               maxDurationMinutes: maxDuration,
               resultSchema,
               stepKey,
+              requireHandoff,
             }
           );
 

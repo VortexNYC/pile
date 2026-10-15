@@ -1026,6 +1026,37 @@ CREATE UNIQUE INDEX IF NOT EXISTS guidance_pack_versions_pack_idx ON guidance_pa
 ALTER TABLE agent_sessions ADD COLUMN guidance TEXT
 --> statement-breakpoint
 ALTER TABLE agent_sessions ADD COLUMN step_key TEXT`;
+
+// PILE-421 — structured handoffs between sub-step agents (OpenAI Agents SDK
+// handoffs / Salesforce Flow step outputs). A completing sub-step lane posts
+// one agent_handoffs row: typed `outputs` (JSON object), suggested
+// `next_agent`, and `evidence` links to docs/attachments/records. Rows anchor
+// on `issue_id` — the parent issue the sub-steps hang off — so the timeline
+// and the next step's context assembly share one query key; `from_issue_id`
+// is the sub-step issue the session worked. `session_id` is unique (one
+// handoff per completing lane) — that uniqueness doubles as the
+// `handoff_required` completion gate's existence check.
+const v78 = `CREATE TABLE IF NOT EXISTS agent_handoffs (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  issue_id TEXT NOT NULL,
+  from_issue_id TEXT,
+  session_id TEXT NOT NULL,
+  step_key TEXT NOT NULL,
+  next_agent TEXT,
+  outputs TEXT NOT NULL,
+  evidence TEXT,
+  created_by TEXT,
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS agent_handoffs_session_idx ON agent_handoffs (session_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS agent_handoffs_issue_idx ON agent_handoffs (organization_id, issue_id, created_at)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS agent_handoffs_step_idx ON agent_handoffs (organization_id, issue_id, step_key)
+--> statement-breakpoint
+ALTER TABLE agent_sessions ADD COLUMN handoff_required INTEGER NOT NULL DEFAULT 0`;
 const v69 = `CREATE TABLE comments_new (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -1277,6 +1308,7 @@ export const workspaceMigrations = {
       { idx: 74, when: 74, tag: "v75", breakpoints: false },
       { idx: 75, when: 75, tag: "v76", breakpoints: true },
       { idx: 76, when: 76, tag: "v77", breakpoints: true },
+      { idx: 77, when: 77, tag: "v78", breakpoints: true },
     ],
   },
   migrations: {
@@ -1357,5 +1389,6 @@ export const workspaceMigrations = {
     m0074: v75,
     m0075: v76,
     m0076: v77,
+    m0077: v78,
   },
 } satisfies Parameters<typeof migrate>[1];

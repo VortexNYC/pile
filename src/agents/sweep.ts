@@ -529,6 +529,8 @@ async function retryDeadLane(
         queueAfter: session.queuedAfter ?? undefined,
         // PILE-423 — retries resolve the same step scope as the original.
         stepKey: session.stepKey ?? undefined,
+        // PILE-421 — a retried required sub-step keeps the handoff gate.
+        requireHandoff: session.handoffRequired === 1,
         secondaryRepos: parseStoredSecondaryRepos(session.secondaryRepos),
         effort: session.effort ?? undefined,
         maxDurationMinutes: session.maxDurationMinutes ?? undefined,

@@ -2,6 +2,7 @@ import { getTableConfig } from "drizzle-orm/sqlite-core";
 import { describe, expect, it } from "vitest";
 
 import {
+  workspaceAgentHandoffs,
   workspaceAgentSessions,
   workspaceCustomers,
   workspaceDeals,
@@ -187,11 +188,52 @@ describe("workspaceGuidancePacks schema (PILE-423)", () => {
   });
 
   it("keeps agent_sessions' guidance + step_key nullable", () => {
-    const byName = (name: string) =>
-      getTableConfig(workspaceAgentSessions).columns.find(
-        (c) => c.name === name
-      );
-    expect(byName("guidance")?.notNull).toBe(false);
-    expect(byName("step_key")?.notNull).toBe(false);
+    expect(sessionColumn("guidance")?.notNull).toBe(false);
+    expect(sessionColumn("step_key")?.notNull).toBe(false);
+  });
+});
+
+function sessionColumn(name: string) {
+  return getTableConfig(workspaceAgentSessions).columns.find(
+    (c) => c.name === name
+  );
+}
+
+describe("workspaceAgentHandoffs schema (PILE-421)", () => {
+  it("anchors on the parent issue with a unique session row", () => {
+    const config = getTableConfig(workspaceAgentHandoffs);
+    expect(config.name).toBe("agent_handoffs");
+    const names = config.columns.map((c) => c.name);
+    for (const col of [
+      "id",
+      "organization_id",
+      "issue_id",
+      "from_issue_id",
+      "session_id",
+      "step_key",
+      "next_agent",
+      "outputs",
+      "evidence",
+      "created_by",
+      "created_at",
+    ]) {
+      expect(names).toContain(col);
+    }
+    // One handoff per completing lane — the unique session index doubles as
+    // the handoff_required completion gate's existence check.
+    expect(
+      config.indexes.some((idx) =>
+        idx.config.columns.some(
+          (col) =>
+            "name" in col && col.name === "session_id" && idx.config.unique
+        )
+      )
+    ).toBe(true);
+  });
+
+  it("defaults agent_sessions.handoff_required to 0", () => {
+    const col = sessionColumn("handoff_required");
+    expect(col?.notNull).toBe(true);
+    expect(col?.default).toBe(0);
   });
 });

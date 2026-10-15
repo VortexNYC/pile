@@ -144,10 +144,7 @@ describe("guidance packs API", () => {
       env
     );
     expect(del.status).toBe(200);
-    const gone = await app.fetch(
-      request(`${base}/${pack.id}`, { token }),
-      env
-    );
+    const gone = await app.fetch(request(`${base}/${pack.id}`, { token }), env);
     expect(gone.status).toBe(404);
     // Version history survives delete — sessions reference it.
     const versionsAfter = await app.fetch(

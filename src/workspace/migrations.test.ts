@@ -119,3 +119,35 @@ describe("v77 guidance packs", () => {
     );
   });
 });
+
+describe("v78 agent handoffs", () => {
+  it("creates agent_handoffs and the session handoff_required flag", () => {
+    const sql = workspaceMigrations.migrations.m0077;
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS agent_handoffs");
+    for (const col of [
+      "organization_id",
+      "issue_id",
+      "from_issue_id",
+      "session_id",
+      "step_key",
+      "next_agent",
+      "outputs",
+      "evidence",
+      "created_by",
+    ]) {
+      expect(sql).toContain(col);
+    }
+    expect(sql).toContain(
+      "CREATE UNIQUE INDEX IF NOT EXISTS agent_handoffs_session_idx ON agent_handoffs (session_id)"
+    );
+    expect(sql).toContain(
+      "CREATE INDEX IF NOT EXISTS agent_handoffs_issue_idx ON agent_handoffs (organization_id, issue_id, created_at)"
+    );
+    expect(sql).toContain(
+      "CREATE INDEX IF NOT EXISTS agent_handoffs_step_idx ON agent_handoffs (organization_id, issue_id, step_key)"
+    );
+    expect(sql).toContain(
+      "ALTER TABLE agent_sessions ADD COLUMN handoff_required INTEGER NOT NULL DEFAULT 0"
+    );
+  });
+});

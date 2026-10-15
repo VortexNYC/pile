@@ -135,6 +135,22 @@ describe("API integration", () => {
     expect(res.status).toBe(401);
   });
 
+  // PILE-421 — the handoff POST takes workspace auth or the lane's own
+  // session token; a bare request is rejected.
+  it("requires auth to post a session handoff", async () => {
+    const res = await app.fetch(
+      request(
+        `/workspaces/${await seedWorkspace()}/agent/sessions/${crypto.randomUUID()}/handoffs`,
+        {
+          method: "POST",
+          body: JSON.stringify({ outputs: {} }),
+        }
+      ),
+      env
+    );
+    expect(res.status).toBe(403);
+  });
+
   it("manages workspace states", async () => {
     const organizationId = await seedWorkspace();
     const token = await adminToken(organizationId);
@@ -3719,10 +3735,15 @@ describe("API integration", () => {
   // PILE-423 — the guidance routes must be wired into the app so the
   // generated OpenAPI contract (and the MCP tools derived from it) ship.
   it("exposes guidance pack routes in the OpenAPI document", async () => {
-    const res = await app.fetch(new Request("http://localhost/openapi.json"), env);
+    const res = await app.fetch(
+      new Request("http://localhost/openapi.json"),
+      env
+    );
     expect(res.status).toBe(200);
     const doc = await res.json<{ paths: Record<string, unknown> }>();
-    expect(doc.paths["/workspaces/{organizationId}/agent/guidance"]).toBeDefined();
+    expect(
+      doc.paths["/workspaces/{organizationId}/agent/guidance"]
+    ).toBeDefined();
     expect(
       doc.paths["/workspaces/{organizationId}/agent/guidance/{id}/versions"]
     ).toBeDefined();

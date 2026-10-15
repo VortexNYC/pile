@@ -56,6 +56,7 @@ import { registerGitIdentityRoutes } from "./git-identities.js";
 import { registerGithubRoutes } from "./github.js";
 import { registerGitlabRoutes } from "./gitlab.js";
 import { registerGuidanceRoutes } from "./guidance.js";
+import { registerHandoffRoutes } from "./handoffs.js";
 import { registerHardeningRoutes } from "./hardening.js";
 import { registerImportRoutes } from "./import.js";
 import { registerIntakeRoutes } from "./intake.js";
@@ -187,7 +188,7 @@ app.use("/workspaces/:organizationId/*", async (c, next) => {
   // session — everyone else falls through to workspace auth as usual.
   const laneGet =
     c.req.method === "GET" &&
-    /^\/workspaces\/([^/]+)\/agent\/sessions\/([^/]+)(\/(events|checks))?$/.exec(
+    /^\/workspaces\/([^/]+)\/agent\/sessions\/([^/]+)(\/(events|checks|handoffs))?$/.exec(
       c.req.path
     );
   if (
@@ -210,6 +211,33 @@ app.use("/workspaces/:organizationId/*", async (c, next) => {
     await next();
     return;
   }
+  // PILE-421 — lane-token handoff post: a completing sub-step lane emits its
+  // handoff record with the same per-session HMAC bearer as /report. The
+  // verified token becomes a session-bound `lane:<sessionId>` identity with
+  // agent:write; the route handler rejects posts for any other session.
+  const laneHandoff =
+    c.req.method === "POST" &&
+    /^\/workspaces\/([^/]+)\/agent\/sessions\/([^/]+)\/handoffs$/.exec(
+      c.req.path
+    );
+  if (
+    laneHandoff &&
+    (await verifySessionToken(
+      c.env,
+      c.req.header("authorization"),
+      laneHandoff[1]!,
+      laneHandoff[2]!
+    ))
+  ) {
+    c.set("workspaceIdentity", {
+      id: `lane:${laneHandoff[2]}`,
+      organizationId: laneHandoff[1]!,
+      type: "agent",
+      permissions: ["agent:write"],
+    });
+    await next();
+    return;
+  }
   await workspaceAuthMiddleware(c, next);
 });
 registerWorkspaceRoutes(app);
@@ -220,6 +248,7 @@ registerOAuthClientRoutes(app);
 registerIssueRoutes(app);
 registerAgentSessionRoutes(app);
 registerGuidanceRoutes(app);
+registerHandoffRoutes(app);
 registerLaneMcpRoutes(app);
 registerAgentProviderRoutes(app);
 registerAgentEnvironmentRoutes(app);

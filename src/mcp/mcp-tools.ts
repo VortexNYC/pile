@@ -2335,6 +2335,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdAgentSessionsSessionIdHandoffs",
+    "description": "List agent session handoffs — Handoffs the session posted (at most one — session_id is unique). (GET /workspaces/{organizationId}/agent/sessions/{sessionId}/handoffs) Path params (top-level, required): organizationId, sessionId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}/handoffs",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId",
+        "sessionId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdAgentSessionsSessionIdState",
     "description": "List agent session state (GET /workspaces/{organizationId}/agent/sessions/{sessionId}/state) Path params (top-level, required): organizationId, sessionId.",
     "method": "GET",
@@ -4269,6 +4290,30 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       },
       "required": [
         "id",
+        "issueId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdIssuesIssueIdHandoffs",
+    "description": "List issue handoffs — The handoff timeline for a parent issue — sub-step records in post order, optionally narrowed to one stepKey. (GET /workspaces/{organizationId}/issues/{issueId}/handoffs) Path params (top-level, required): organizationId, issueId. Query params (top-level, optional): stepKey.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/issues/{issueId}/handoffs",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "issueId": {
+          "type": "string"
+        },
+        "stepKey": {
+          "type": "string"
+        }
+      },
+      "required": [
         "issueId",
         "organizationId"
       ]
@@ -10348,6 +10393,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                     "type": "string",
                     "minLength": 1
                   },
+                  "requireHandoff": {
+                    "type": "boolean"
+                  },
                   "queuedAfter": {
                     "type": "string"
                   },
@@ -10774,7 +10822,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdAgentSessionsSessionIdChildren",
-    "description": "Create agent session children (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/children) Path params (top-level, required): organizationId, sessionId. Request body goes in the \"body\" object; fields: title*, description, agentId, model, repo, effort, maxDuration, stepKey (* = required).",
+    "description": "Create agent session children (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/children) Path params (top-level, required): organizationId, sessionId. Request body goes in the \"body\" object; fields: title*, description, agentId, model, repo, effort, maxDuration, stepKey, requireHandoff (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}/children",
     "inputSchema": {
@@ -10823,11 +10871,81 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "stepKey": {
               "type": "string",
               "minLength": 1
+            },
+            "requireHandoff": {
+              "type": "boolean"
             }
           },
           "required": [
             "title"
           ]
+        }
+      },
+      "required": [
+        "organizationId",
+        "sessionId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdAgentSessionsSessionIdHandoffs",
+    "description": "Create agent session handoff — Post the completing sub-step's handoff record — step_key, typed outputs, next_agent, evidence links. Anchors on the session's issue's parent unless issueId overrides. One per session: an identical retry returns the existing record, a divergent one 409s. (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/handoffs) Path params (top-level, required): organizationId, sessionId. Request body goes in the \"body\" object; fields: stepKey, issueId, nextAgent, outputs*, evidence (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}/handoffs",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "stepKey": {
+              "type": "string",
+              "minLength": 1
+            },
+            "issueId": {
+              "type": "string"
+            },
+            "nextAgent": {
+              "type": "string"
+            },
+            "outputs": {
+              "type": "object",
+              "additionalProperties": {
+                "nullable": true
+              }
+            },
+            "evidence": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string"
+                  },
+                  "ref": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "label": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "ref"
+                ]
+              }
+            }
+          },
+          "required": [
+            "outputs"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -13591,7 +13709,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssuesIdDispatch",
-    "description": "Dispatch issue (POST /workspaces/{organizationId}/issues/{id}/dispatch) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: agentId, provider, model, repo, branch, instructions, stepKey, preflight, secondaryRepos, mode, effort, maxDuration, resultSchema.",
+    "description": "Dispatch issue (POST /workspaces/{organizationId}/issues/{id}/dispatch) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: agentId, provider, model, repo, branch, instructions, stepKey, requireHandoff, preflight, secondaryRepos, mode, effort, maxDuration, resultSchema.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues/{id}/dispatch",
     "inputSchema": {
@@ -13629,6 +13747,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "stepKey": {
               "type": "string",
               "minLength": 1
+            },
+            "requireHandoff": {
+              "type": "boolean"
             },
             "preflight": {
               "type": "boolean"

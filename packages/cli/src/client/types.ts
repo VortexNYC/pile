@@ -1829,6 +1829,7 @@ export interface paths {
                         branch?: string | null;
                         instructions?: string;
                         stepKey?: string;
+                        requireHandoff?: boolean;
                         preflight?: boolean;
                         secondaryRepos?: {
                             repo: string;
@@ -1894,6 +1895,7 @@ export interface paths {
                             awaitingEscalatedAt?: string | null;
                             paused?: number;
                             stepKey?: string | null;
+                            handoffRequired?: number;
                             guidance?: {
                                 id: string;
                                 name: string;
@@ -2006,6 +2008,7 @@ export interface paths {
                                 awaitingEscalatedAt?: string | null;
                                 paused?: number;
                                 stepKey?: string | null;
+                                handoffRequired?: number;
                                 guidance?: {
                                     id: string;
                                     name: string;
@@ -2229,6 +2232,7 @@ export interface paths {
                                 awaitingEscalatedAt?: string | null;
                                 paused?: number;
                                 stepKey?: string | null;
+                                handoffRequired?: number;
                                 guidance?: {
                                     id: string;
                                     name: string;
@@ -2304,6 +2308,7 @@ export interface paths {
                                 awaitingEscalatedAt?: string | null;
                                 paused?: number;
                                 stepKey?: string | null;
+                                handoffRequired?: number;
                                 guidance?: {
                                     id: string;
                                     name: string;
@@ -2379,6 +2384,7 @@ export interface paths {
                             branch?: string | null;
                             instructions?: string;
                             stepKey?: string;
+                            requireHandoff?: boolean;
                             queuedAfter?: string;
                             secondaryRepos?: {
                                 repo: string;
@@ -2493,6 +2499,7 @@ export interface paths {
                                 awaitingEscalatedAt?: string | null;
                                 paused?: number;
                                 stepKey?: string | null;
+                                handoffRequired?: number;
                                 guidance?: {
                                     id: string;
                                     name: string;
@@ -2715,6 +2722,7 @@ export interface paths {
                                 awaitingEscalatedAt?: string | null;
                                 paused?: number;
                                 stepKey?: string | null;
+                                handoffRequired?: number;
                                 guidance?: {
                                     id: string;
                                     name: string;
@@ -2831,6 +2839,7 @@ export interface paths {
                             awaitingEscalatedAt?: string | null;
                             paused?: number;
                             stepKey?: string | null;
+                            handoffRequired?: number;
                             guidance?: {
                                 id: string;
                                 name: string;
@@ -2957,6 +2966,7 @@ export interface paths {
                             awaitingEscalatedAt?: string | null;
                             paused?: number;
                             stepKey?: string | null;
+                            handoffRequired?: number;
                             guidance?: {
                                 id: string;
                                 name: string;
@@ -3354,6 +3364,7 @@ export interface paths {
                             awaitingEscalatedAt?: string | null;
                             paused?: number;
                             stepKey?: string | null;
+                            handoffRequired?: number;
                             guidance?: {
                                 id: string;
                                 name: string;
@@ -3466,6 +3477,7 @@ export interface paths {
                             awaitingEscalatedAt?: string | null;
                             paused?: number;
                             stepKey?: string | null;
+                            handoffRequired?: number;
                             guidance?: {
                                 id: string;
                                 name: string;
@@ -3704,6 +3716,7 @@ export interface paths {
                             awaitingEscalatedAt?: string | null;
                             paused?: number;
                             stepKey?: string | null;
+                            handoffRequired?: number;
                             guidance?: {
                                 id: string;
                                 name: string;
@@ -3809,6 +3822,7 @@ export interface paths {
                                 awaitingEscalatedAt?: string | null;
                                 paused?: number;
                                 stepKey?: string | null;
+                                handoffRequired?: number;
                                 guidance?: {
                                     id: string;
                                     name: string;
@@ -3896,6 +3910,7 @@ export interface paths {
                         /** @description Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue */
                         maxDuration?: number;
                         stepKey?: string;
+                        requireHandoff?: boolean;
                     };
                 };
             };
@@ -3943,6 +3958,7 @@ export interface paths {
                                 awaitingEscalatedAt?: string | null;
                                 paused?: number;
                                 stepKey?: string | null;
+                                handoffRequired?: number;
                                 guidance?: {
                                     id: string;
                                     name: string;
@@ -4083,6 +4099,7 @@ export interface paths {
                             awaitingEscalatedAt?: string | null;
                             paused?: number;
                             stepKey?: string | null;
+                            handoffRequired?: number;
                             guidance?: {
                                 id: string;
                                 name: string;
@@ -4202,6 +4219,7 @@ export interface paths {
                             awaitingEscalatedAt?: string | null;
                             paused?: number;
                             stepKey?: string | null;
+                            handoffRequired?: number;
                             guidance?: {
                                 id: string;
                                 name: string;
@@ -4327,6 +4345,7 @@ export interface paths {
                             awaitingEscalatedAt?: string | null;
                             paused?: number;
                             stepKey?: string | null;
+                            handoffRequired?: number;
                             guidance?: {
                                 id: string;
                                 name: string;
@@ -4856,6 +4875,247 @@ export interface paths {
                             }[];
                         };
                     };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/agent/sessions/{sessionId}/handoffs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List agent session handoffs
+         * @description Handoffs the session posted (at most one — session_id is unique).
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    sessionId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Session handoffs */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            handoffs: {
+                                id: string;
+                                organizationId: string;
+                                issueId: string;
+                                fromIssueId: string | null;
+                                sessionId: string;
+                                stepKey: string;
+                                nextAgent: string | null;
+                                outputs: {
+                                    [key: string]: unknown;
+                                } | null;
+                                evidence: {
+                                    type?: string;
+                                    ref: string;
+                                    label?: string;
+                                }[] | null;
+                                createdBy: string | null;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Session not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Create agent session handoff
+         * @description Post the completing sub-step's handoff record — step_key, typed outputs, next_agent, evidence links. Anchors on the session's issue's parent unless issueId overrides. One per session: an identical retry returns the existing record, a divergent one 409s.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    sessionId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        stepKey?: string;
+                        issueId?: string;
+                        nextAgent?: string;
+                        outputs: {
+                            [key: string]: unknown;
+                        };
+                        evidence?: {
+                            type?: string;
+                            ref: string;
+                            label?: string;
+                        }[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Identical handoff already recorded (idempotent replay) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            issueId: string;
+                            fromIssueId: string | null;
+                            sessionId: string;
+                            stepKey: string;
+                            nextAgent: string | null;
+                            outputs: {
+                                [key: string]: unknown;
+                            } | null;
+                            evidence: {
+                                type?: string;
+                                ref: string;
+                                label?: string;
+                            }[] | null;
+                            createdBy: string | null;
+                            createdAt: string;
+                        };
+                    };
+                };
+                /** @description Handoff recorded */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            issueId: string;
+                            fromIssueId: string | null;
+                            sessionId: string;
+                            stepKey: string;
+                            nextAgent: string | null;
+                            outputs: {
+                                [key: string]: unknown;
+                            } | null;
+                            evidence: {
+                                type?: string;
+                                ref: string;
+                                label?: string;
+                            }[] | null;
+                            createdBy: string | null;
+                            createdAt: string;
+                        };
+                    };
+                };
+                /** @description Session or anchor issue not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Session already posted a different handoff */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/issues/{issueId}/handoffs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List issue handoffs
+         * @description The handoff timeline for a parent issue — sub-step records in post order, optionally narrowed to one stepKey.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    stepKey?: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                    issueId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Issue handoff timeline */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            handoffs: {
+                                id: string;
+                                organizationId: string;
+                                issueId: string;
+                                fromIssueId: string | null;
+                                sessionId: string;
+                                stepKey: string;
+                                nextAgent: string | null;
+                                outputs: {
+                                    [key: string]: unknown;
+                                } | null;
+                                evidence: {
+                                    type?: string;
+                                    ref: string;
+                                    label?: string;
+                                }[] | null;
+                                createdBy: string | null;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Issue not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
                 };
             };
         };

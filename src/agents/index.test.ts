@@ -1093,3 +1093,93 @@ describe("guidance pack injection (PILE-423)", () => {
     expect(recorded.stepKey).toBe("contacted");
   });
 });
+
+describe("step handoff context (PILE-421)", () => {
+  it("feeds a step-scoped lane the parent thread + prior handoffs, not the sub-issue transcript", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
+    );
+    await stub.setOrganizationId(actor.organizationId);
+
+    const parent = await stub.createIssue({
+      title: "Deal: Acme",
+      description: "Merchant pipeline parent",
+    });
+    await stub.createComment({
+      issueId: parent.id,
+      body: "parent thread note",
+      externalAuthor: "human",
+    });
+    const priorSession = await stub.createAgentSession({
+      issueId: parent.id,
+      agentId: "mock",
+      provider: "mock",
+      actorId: actor.id,
+      actorType: "user",
+      status: "completed",
+      stepKey: "sourced",
+    });
+    await stub.createHandoff(
+      priorSession.id,
+      {
+        stepKey: "sourced",
+        nextAgent: "courier",
+        outputs: { domain: "acme.com" },
+        evidence: [{ type: "document", ref: "doc-9" }],
+      },
+      { actorId: actor.id }
+    );
+
+    const sub = await stub.createIssue({
+      title: "Profiled",
+      parentId: parent.id,
+    });
+    await stub.createComment({
+      issueId: sub.id,
+      body: "sub-issue transcript noise",
+      externalAuthor: "agent",
+    });
+
+    let captured: AgentDispatchContext | undefined;
+    const agentId = `mock-handoff-${crypto.randomUUID().slice(0, 8)}`;
+    registerAgentProvider(
+      agentId,
+      () =>
+        new MockAgentProvider(agentId, {
+          dispatch: (_o, _i, _m, ctx) => {
+            captured = ctx;
+            return { id: "h-1", agentId, status: "created" as const };
+          },
+        })
+    );
+
+    const session = await dispatchAgent(
+      env,
+      agentId,
+      actor.organizationId,
+      sub,
+      actor,
+      undefined,
+      undefined,
+      { stepKey: "profiled", requireHandoff: true }
+    );
+
+    const instructions = captured?.instructions ?? "";
+    expect(instructions).toContain("## Parent issue");
+    expect(instructions).toContain("Deal: Acme");
+    expect(instructions).toContain("Merchant pipeline parent");
+    expect(instructions).toContain("## Prior step handoffs");
+    expect(instructions).toContain('"domain": "acme.com"');
+    expect(instructions).toContain("Next agent: courier");
+
+    // Comments come from the parent thread — the sub-issue's own
+    // transcript stays out of the next step's context.
+    const bodies = (captured?.comments ?? []).map((c) => c.body);
+    expect(bodies).toContain("parent thread note");
+    expect(bodies).not.toContain("sub-issue transcript noise");
+
+    const recorded = (await stub.getAgentSession(session.id)) ?? session;
+    expect(recorded.stepKey).toBe("profiled");
+    expect(recorded.handoffRequired).toBe(1);
+  });
+});

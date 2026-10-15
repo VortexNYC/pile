@@ -26,6 +26,7 @@ import type { workspaceSchema } from "../schema-map.js";
 import {
   workspaceAgentActivities,
   workspaceAgentAutomations,
+  workspaceAgentHandoffs,
   workspaceAgentPauses,
   workspaceAgentSessionEvents,
   workspaceDocumentHistory,
@@ -1097,6 +1098,9 @@ export interface AgentSessionInput {
   /** PILE-423 — JSON [{id, name, scope, scopeKey, version}] of the guidance
    *  packs injected into this lane's dispatch prompt. */
   guidance?: string | null;
+  /** PILE-421 — 1 when completing this lane requires an agent_handoffs row
+   *  first (stage templates dispatch required sub-steps with it set). */
+  handoffRequired?: number;
 }
 
 export async function createAgentSession(
@@ -1134,6 +1138,7 @@ export async function createAgentSession(
     resultSchema: input.resultSchema ?? null,
     stepKey: input.stepKey ?? null,
     guidance: input.guidance ?? null,
+    handoffRequired: input.handoffRequired ?? 0,
     updatedAt: ts,
   });
   const row = await db
@@ -1787,7 +1792,11 @@ const GUIDANCE_SCOPE_ORDER: Record<GuidanceScope, number> = {
 export async function resolveGuidancePacks(
   db: WorkspaceDb,
   organizationId: string,
-  keys: { teamId?: string | null; status?: string | null; stepKey?: string | null }
+  keys: {
+    teamId?: string | null;
+    status?: string | null;
+    stepKey?: string | null;
+  }
 ): Promise<GuidancePack[]> {
   const rows = await db
     .select()
@@ -1819,12 +1828,115 @@ export async function resolveGuidancePacks(
       )
     )
     .all();
-  return rows.sort(
+  return rows.toSorted(
     (a, b) =>
       GUIDANCE_SCOPE_ORDER[a.scope] - GUIDANCE_SCOPE_ORDER[b.scope] ||
       a.createdAt.localeCompare(b.createdAt) ||
       a.id.localeCompare(b.id)
   );
+}
+
+// ---- agent_handoffs (PILE-421) ----
+
+export interface AgentHandoffInput {
+  organizationId: string;
+  /** The parent issue the handoff timeline anchors on (the deal the
+   *  sub-steps serve). */
+  issueId: string;
+  /** The sub-step issue the emitting session worked, when it differs. */
+  fromIssueId?: string | null;
+  sessionId: string;
+  stepKey: string;
+  nextAgent?: string | null;
+  /** Serialized JSON object — the step's typed outputs. */
+  outputs: string;
+  /** Serialized JSON array of {type?, ref, label?} evidence links. */
+  evidence?: string | null;
+  createdBy?: string | null;
+}
+
+export type AgentHandoff = typeof workspaceAgentHandoffs.$inferSelect;
+
+export async function createAgentHandoff(
+  db: WorkspaceDb,
+  input: AgentHandoffInput
+) {
+  const id = crypto.randomUUID();
+  await db.insert(workspaceAgentHandoffs).values({
+    id,
+    organizationId: input.organizationId,
+    issueId: input.issueId,
+    fromIssueId: input.fromIssueId ?? null,
+    sessionId: input.sessionId,
+    stepKey: input.stepKey,
+    nextAgent: input.nextAgent ?? null,
+    outputs: input.outputs,
+    evidence: input.evidence ?? null,
+    createdBy: input.createdBy ?? null,
+    createdAt: new Date().toISOString(),
+  });
+  const row = await getAgentHandoff(db, input.organizationId, id);
+  if (!row) throw new Error("Failed to create agent handoff");
+  return row;
+}
+
+export function getAgentHandoff(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return db
+    .select()
+    .from(workspaceAgentHandoffs)
+    .where(
+      and(
+        eq(workspaceAgentHandoffs.organizationId, organizationId),
+        eq(workspaceAgentHandoffs.id, id)
+      )
+    )
+    .get();
+}
+
+/** The handoff a session posted, if any — at most one row per session
+ *  (session_id unique). Doubles as the handoff_required completion gate's
+ *  existence check. */
+export function getHandoffForSession(
+  db: WorkspaceDb,
+  organizationId: string,
+  sessionId: string
+) {
+  return db
+    .select()
+    .from(workspaceAgentHandoffs)
+    .where(
+      and(
+        eq(workspaceAgentHandoffs.organizationId, organizationId),
+        eq(workspaceAgentHandoffs.sessionId, sessionId)
+      )
+    )
+    .get();
+}
+
+/** Handoff timeline for a parent issue, oldest first — optionally narrowed
+ *  to one step_key. */
+export function listAgentHandoffs(
+  db: WorkspaceDb,
+  organizationId: string,
+  filter: { issueId: string; stepKey?: string }
+) {
+  const conditions = [
+    eq(workspaceAgentHandoffs.organizationId, organizationId),
+    eq(workspaceAgentHandoffs.issueId, filter.issueId),
+  ];
+  if (filter.stepKey !== undefined) {
+    conditions.push(eq(workspaceAgentHandoffs.stepKey, filter.stepKey));
+  }
+  return db
+    .select()
+    .from(workspaceAgentHandoffs)
+    .where(and(...conditions))
+    .orderBy(workspaceAgentHandoffs.createdAt, workspaceAgentHandoffs.id)
+    .all();
 }
 
 /** Re-point still-waiting dependents of a dead session onto its retry —

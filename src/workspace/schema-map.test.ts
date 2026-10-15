@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { workspaceSchema } from "./schema-map.js";
 import {
+  workspaceAgentHandoffs,
   workspaceEntityAttachments,
   workspaceGuidancePacks,
   workspaceGuidancePackVersions,
@@ -27,5 +28,10 @@ describe("workspaceSchema map", () => {
     expect(getTableName(workspaceGuidancePackVersions)).toBe(
       "guidance_pack_versions"
     );
+  });
+
+  it("registers agent_handoffs (PILE-421)", () => {
+    expect(workspaceSchema.workspaceAgentHandoffs).toBe(workspaceAgentHandoffs);
+    expect(getTableName(workspaceAgentHandoffs)).toBe("agent_handoffs");
   });
 });
