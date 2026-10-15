@@ -3715,4 +3715,16 @@ describe("API integration", () => {
       expect(body.ok).toBe(true);
     });
   });
+
+  // PILE-423 — the guidance routes must be wired into the app so the
+  // generated OpenAPI contract (and the MCP tools derived from it) ship.
+  it("exposes guidance pack routes in the OpenAPI document", async () => {
+    const res = await app.fetch(new Request("http://localhost/openapi.json"), env);
+    expect(res.status).toBe(200);
+    const doc = await res.json<{ paths: Record<string, unknown> }>();
+    expect(doc.paths["/workspaces/{organizationId}/agent/guidance"]).toBeDefined();
+    expect(
+      doc.paths["/workspaces/{organizationId}/agent/guidance/{id}/versions"]
+    ).toBeDefined();
+  });
 });

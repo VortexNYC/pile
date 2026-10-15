@@ -6,6 +6,7 @@ import {
   workspaceCustomers,
   workspaceDeals,
   workspaceEntityAttachments,
+  workspaceGuidancePacks,
   workspaceIssues,
   workspaceNotificationPreferences,
 } from "./schema.js";
@@ -156,5 +157,41 @@ describe("workspaceIssues schema", () => {
     const epoch = byName("claim_epoch");
     expect(epoch?.notNull).toBe(true);
     expect(epoch?.hasDefault).toBe(true);
+  });
+});
+
+describe("workspaceGuidancePacks schema (PILE-423)", () => {
+  it("scopes packs by level + key and versions every edit", () => {
+    const config = getTableConfig(workspaceGuidancePacks);
+    expect(config.name).toBe("guidance_packs");
+    const names = config.columns.map((c) => c.name);
+    for (const col of [
+      "id",
+      "organization_id",
+      "name",
+      "scope",
+      "scope_key",
+      "body",
+      "links",
+      "version",
+      "created_by",
+      "updated_by",
+      "created_at",
+      "updated_at",
+    ]) {
+      expect(names).toContain(col);
+    }
+    // scope_key stays nullable — workspace packs have no key.
+    expect(workspaceGuidancePacks.scopeKey.notNull).toBe(false);
+    expect(workspaceGuidancePacks.version.notNull).toBe(true);
+  });
+
+  it("keeps agent_sessions' guidance + step_key nullable", () => {
+    const byName = (name: string) =>
+      getTableConfig(workspaceAgentSessions).columns.find(
+        (c) => c.name === name
+      );
+    expect(byName("guidance")?.notNull).toBe(false);
+    expect(byName("step_key")?.notNull).toBe(false);
   });
 });

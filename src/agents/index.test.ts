@@ -987,3 +987,109 @@ describe("inheritTeamDefaultRepo (PILE-321)", () => {
     expect(resolved.repo).toBeNull();
   });
 });
+
+describe("guidance pack injection (PILE-423)", () => {
+  it("injects applicable packs into dispatch instructions, most specific last, and records versions", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
+    );
+    await stub.setOrganizationId(actor.organizationId);
+    const issue = await stub.createIssue({
+      title: "Guidance dispatch test",
+    });
+
+    await stub.createGuidancePack(
+      {
+        name: "Workspace rules",
+        scope: "workspace",
+        body: "Always be terse.",
+      },
+      { actorId: actor.id }
+    );
+    const stagePack = await stub.createGuidancePack(
+      {
+        name: "Backlog stage",
+        scope: "status",
+        scopeKey: "backlog",
+        body: "No rate or savings numbers.",
+        links: JSON.stringify([
+          { label: "Playbook", url: "https://example.com/pb" },
+        ]),
+      },
+      { actorId: actor.id }
+    );
+    await stub.createGuidancePack(
+      {
+        name: "Contacted step",
+        scope: "step",
+        scopeKey: "contacted",
+        body: "Human approval required.",
+      },
+      { actorId: actor.id }
+    );
+    // Non-matching packs stay out.
+    await stub.createGuidancePack(
+      {
+        name: "Done stage",
+        scope: "status",
+        scopeKey: "done",
+        body: "should not appear",
+      },
+      { actorId: actor.id }
+    );
+
+    let captured: AgentDispatchContext | undefined;
+    const agentId = `mock-guidance-${crypto.randomUUID().slice(0, 8)}`;
+    registerAgentProvider(
+      agentId,
+      () =>
+        new MockAgentProvider(agentId, {
+          dispatch: (_o, _i, _m, ctx) => {
+            captured = ctx;
+            return { id: "g-1", agentId, status: "created" as const };
+          },
+        })
+    );
+
+    const session = await dispatchAgent(
+      env,
+      agentId,
+      actor.organizationId,
+      issue,
+      actor,
+      undefined,
+      undefined,
+      { instructions: "Caller note.", stepKey: "contacted" }
+    );
+
+    const instructions = captured?.instructions ?? "";
+    expect(instructions).toContain("## Guidance");
+    expect(instructions).toContain("Always be terse.");
+    expect(instructions).toContain("No rate or savings numbers.");
+    expect(instructions).toContain("Human approval required.");
+    expect(instructions).not.toContain("should not appear");
+    // Least specific first; caller instructions land last.
+    expect(instructions.indexOf("Always be terse.")).toBeLessThan(
+      instructions.indexOf("No rate or savings numbers.")
+    );
+    expect(instructions.indexOf("No rate or savings numbers.")).toBeLessThan(
+      instructions.indexOf("Human approval required.")
+    );
+    expect(instructions.indexOf("Human approval required.")).toBeLessThan(
+      instructions.indexOf("Caller note.")
+    );
+
+    // The session records the pack versions it used.
+    const recorded = (await stub.getAgentSession(session.id)) ?? session;
+    const refs = JSON.parse(recorded.guidance ?? "[]") as Array<{
+      id: string;
+      scope: string;
+      version: number;
+    }>;
+    expect(refs).toHaveLength(3);
+    expect(refs.map((r) => r.scope)).toEqual(["workspace", "status", "step"]);
+    const stageRef = refs.find((r) => r.id === stagePack.id);
+    expect(stageRef?.version).toBe(1);
+    expect(recorded.stepKey).toBe("contacted");
+  });
+});

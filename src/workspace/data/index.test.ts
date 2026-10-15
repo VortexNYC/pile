@@ -11,6 +11,7 @@ import {
   hiddenIssueCondition,
   type AgentSessionInput,
   createAgentSession,
+  createGuidancePack,
   createDeal,
   createDocument,
   createDocumentSpace,
@@ -26,6 +27,8 @@ import {
   createEntityAttachment,
   deleteCustomer,
   deleteEntityAttachment,
+  deleteGuidancePack,
+  getGuidancePack,
   customerUrlHost,
   fileCustomerIntakeItem,
   getAgentSession,
@@ -41,10 +44,13 @@ import {
   listEntityAttachments,
   listCustomerIntakeItems,
   listCustomers,
+  listGuidancePackVersions,
   reanchorQueuedDependents,
   replaceDocumentLinks,
+  resolveGuidancePacks,
   resolveCustomerForEmail,
   updateAgentSession,
+  updateGuidancePack,
   upsertNotificationPreferences,
   type WorkspaceDb,
 } from "./index.js";
@@ -892,6 +898,111 @@ describe("pipeline record hygiene + externalId dedupe", () => {
         })
       ).map((d) => d.id);
       expect(dueDeals).toEqual([working.id]);
+    });
+  });
+});
+
+describe("guidance packs (PILE-423)", () => {
+  it("creates, versions, and resolves packs least-specific first", async () => {
+    await withDb(async (db) => {
+      const org = WORKSPACE_ID;
+      const teamId = "team-x";
+      const ws = await createGuidancePack(db, {
+        organizationId: org,
+        name: "Workspace rules",
+        scope: "workspace",
+        body: "Be terse.",
+      });
+      expect(ws.version).toBe(1);
+      expect(ws.scopeKey).toBeNull();
+
+      const team = await createGuidancePack(db, {
+        organizationId: org,
+        name: "Team rules",
+        scope: "team",
+        scopeKey: teamId,
+        body: "Prefer pnpm.",
+      });
+      const status = await createGuidancePack(db, {
+        organizationId: org,
+        name: "Outreach",
+        scope: "status",
+        scopeKey: "in_progress",
+        body: "No rate numbers.",
+      });
+      const step = await createGuidancePack(db, {
+        organizationId: org,
+        name: "Contacted step",
+        scope: "step",
+        scopeKey: "contacted",
+        body: "Human approves.",
+      });
+      // Non-matching packs stay out of resolution.
+      await createGuidancePack(db, {
+        organizationId: org,
+        name: "Other team",
+        scope: "team",
+        scopeKey: "team-other",
+        body: "irrelevant",
+      });
+      await createGuidancePack(db, {
+        organizationId: org,
+        name: "Other status",
+        scope: "status",
+        scopeKey: "done",
+        body: "irrelevant",
+      });
+
+      const resolved = await resolveGuidancePacks(db, org, {
+        teamId,
+        status: "in_progress",
+        stepKey: "contacted",
+      });
+      expect(resolved.map((p) => p.id)).toEqual([
+        ws.id,
+        team.id,
+        status.id,
+        step.id,
+      ]);
+
+      // Edits bump version and snapshot the revision.
+      const updated = await updateGuidancePack(
+        db,
+        org,
+        status.id,
+        { body: "No rate or savings numbers." },
+        "user-1"
+      );
+      expect(updated?.version).toBe(2);
+      expect(updated?.body).toBe("No rate or savings numbers.");
+      const versions = listGuidancePackVersions(db, org, status.id);
+      expect(versions.map((v) => v.version)).toEqual([1, 2]);
+      expect(versions[0]?.body).toBe("No rate numbers.");
+      expect(versions[1]?.body).toBe("No rate or savings numbers.");
+
+      // Delete keeps the version history for sessions that ran with it.
+      expect(await deleteGuidancePack(db, org, ws.id)).toBe(true);
+      expect(await getGuidancePack(db, org, ws.id)).toBeUndefined();
+      expect(listGuidancePackVersions(db, org, ws.id)).toHaveLength(1);
+      expect(await deleteGuidancePack(db, org, ws.id)).toBe(false);
+    });
+  });
+
+  it("persists stepKey and guidance refs on agent sessions", async () => {
+    await withDb(async (db) => {
+      const org = WORKSPACE_ID;
+      const session = await createAgentSession(
+        db,
+        sessionInput({ stepKey: "contacted" })
+      );
+      expect(session.stepKey).toBe("contacted");
+      const refs = JSON.stringify([
+        { id: "p1", name: "P", scope: "step", scopeKey: "contacted", version: 2 },
+      ]);
+      const updated = await updateAgentSession(db, org, session.id, {
+        guidance: refs,
+      });
+      expect(updated?.guidance).toBe(refs);
     });
   });
 });

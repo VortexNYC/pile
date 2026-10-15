@@ -1916,4 +1916,36 @@ describe("grant-only issue visibility (scoped keys)", () => {
       .issues.map((i) => i.id);
     expect(ids).toEqual([open.id]);
   });
+
+  // PILE-423 — the dispatch body's stepKey lands on the session row so
+  // step-scoped guidance resolves and the value survives promote/retry.
+  it("persists the dispatch stepKey on the created session", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const agentId = `mock-step-${crypto.randomUUID().slice(0, 8)}`;
+    registerAgentProvider(agentId, () => new MockAgentProvider(agentId));
+
+    const issueRes = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      {
+        method: "POST",
+        body: JSON.stringify({ title: "stepKey dispatch" }),
+      },
+      token
+    );
+    const issue = z.object({ id: z.string() }).parse(await issueRes.json());
+
+    const dispatchRes = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}/dispatch`,
+      {
+        method: "POST",
+        body: JSON.stringify({ agentId, stepKey: "contacted" }),
+      },
+      token
+    );
+    expect(dispatchRes.status).toBe(201);
+    const session = z
+      .object({ stepKey: z.string().nullable() })
+      .parse(await dispatchRes.json());
+    expect(session.stepKey).toBe("contacted");
+  });
 });

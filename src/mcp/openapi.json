@@ -3662,6 +3662,10 @@
                   "instructions": {
                     "type": "string"
                   },
+                  "stepKey": {
+                    "type": "string",
+                    "minLength": 1
+                  },
                   "preflight": {
                     "type": "boolean"
                   },
@@ -3873,6 +3877,48 @@
                     },
                     "paused": {
                       "type": "number"
+                    },
+                    "stepKey": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "guidance": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "scope": {
+                            "type": "string",
+                            "enum": [
+                              "workspace",
+                              "team",
+                              "status",
+                              "step"
+                            ]
+                          },
+                          "scopeKey": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "version": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "scope",
+                          "scopeKey",
+                          "version"
+                        ]
+                      }
                     },
                     "derivedStatus": {
                       "type": "string",
@@ -4182,6 +4228,48 @@
                         },
                         "paused": {
                           "type": "number"
+                        },
+                        "stepKey": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "guidance": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "scope": {
+                                "type": "string",
+                                "enum": [
+                                  "workspace",
+                                  "team",
+                                  "status",
+                                  "step"
+                                ]
+                              },
+                              "scopeKey": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "version": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "scope",
+                              "scopeKey",
+                              "version"
+                            ]
+                          }
                         },
                         "derivedStatus": {
                           "type": "string",
@@ -4632,6 +4720,48 @@
                         "paused": {
                           "type": "number"
                         },
+                        "stepKey": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "guidance": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "scope": {
+                                "type": "string",
+                                "enum": [
+                                  "workspace",
+                                  "team",
+                                  "status",
+                                  "step"
+                                ]
+                              },
+                              "scopeKey": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "version": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "scope",
+                              "scopeKey",
+                              "version"
+                            ]
+                          }
+                        },
                         "derivedStatus": {
                           "type": "string",
                           "nullable": true,
@@ -4897,6 +5027,48 @@
                         "paused": {
                           "type": "number"
                         },
+                        "stepKey": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "guidance": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "scope": {
+                                "type": "string",
+                                "enum": [
+                                  "workspace",
+                                  "team",
+                                  "status",
+                                  "step"
+                                ]
+                              },
+                              "scopeKey": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "version": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "scope",
+                              "scopeKey",
+                              "version"
+                            ]
+                          }
+                        },
                         "derivedStatus": {
                           "type": "string",
                           "nullable": true,
@@ -5068,6 +5240,10 @@
                         },
                         "instructions": {
                           "type": "string"
+                        },
+                        "stepKey": {
+                          "type": "string",
+                          "minLength": 1
                         },
                         "queuedAfter": {
                           "type": "string"
@@ -5393,6 +5569,48 @@
                               },
                               "paused": {
                                 "type": "number"
+                              },
+                              "stepKey": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "guidance": {
+                                "type": "array",
+                                "nullable": true,
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "scope": {
+                                      "type": "string",
+                                      "enum": [
+                                        "workspace",
+                                        "team",
+                                        "status",
+                                        "step"
+                                      ]
+                                    },
+                                    "scopeKey": {
+                                      "type": "string",
+                                      "nullable": true
+                                    },
+                                    "version": {
+                                      "type": "integer"
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "name",
+                                    "scope",
+                                    "scopeKey",
+                                    "version"
+                                  ]
+                                }
                               },
                               "derivedStatus": {
                                 "type": "string",
@@ -5931,6 +6149,48 @@
                         "paused": {
                           "type": "number"
                         },
+                        "stepKey": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "guidance": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "scope": {
+                                "type": "string",
+                                "enum": [
+                                  "workspace",
+                                  "team",
+                                  "status",
+                                  "step"
+                                ]
+                              },
+                              "scopeKey": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "version": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "scope",
+                              "scopeKey",
+                              "version"
+                            ]
+                          }
+                        },
                         "derivedStatus": {
                           "type": "string",
                           "nullable": true,
@@ -6279,6 +6539,48 @@
                         },
                         "paused": {
                           "type": "number"
+                        },
+                        "stepKey": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "guidance": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "scope": {
+                                "type": "string",
+                                "enum": [
+                                  "workspace",
+                                  "team",
+                                  "status",
+                                  "step"
+                                ]
+                              },
+                              "scopeKey": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "version": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "scope",
+                              "scopeKey",
+                              "version"
+                            ]
+                          }
                         },
                         "derivedStatus": {
                           "type": "string",
@@ -6670,6 +6972,48 @@
                     },
                     "paused": {
                       "type": "number"
+                    },
+                    "stepKey": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "guidance": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "scope": {
+                            "type": "string",
+                            "enum": [
+                              "workspace",
+                              "team",
+                              "status",
+                              "step"
+                            ]
+                          },
+                          "scopeKey": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "version": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "scope",
+                          "scopeKey",
+                          "version"
+                        ]
+                      }
                     },
                     "derivedStatus": {
                       "type": "string",
@@ -7500,6 +7844,48 @@
                     "paused": {
                       "type": "number"
                     },
+                    "stepKey": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "guidance": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "scope": {
+                            "type": "string",
+                            "enum": [
+                              "workspace",
+                              "team",
+                              "status",
+                              "step"
+                            ]
+                          },
+                          "scopeKey": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "version": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "scope",
+                          "scopeKey",
+                          "version"
+                        ]
+                      }
+                    },
                     "derivedStatus": {
                       "type": "string",
                       "nullable": true,
@@ -7783,6 +8169,48 @@
                     "paused": {
                       "type": "number"
                     },
+                    "stepKey": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "guidance": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "scope": {
+                            "type": "string",
+                            "enum": [
+                              "workspace",
+                              "team",
+                              "status",
+                              "step"
+                            ]
+                          },
+                          "scopeKey": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "version": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "scope",
+                          "scopeKey",
+                          "version"
+                        ]
+                      }
+                    },
                     "derivedStatus": {
                       "type": "string",
                       "nullable": true,
@@ -7814,6 +8242,7 @@
                               "response",
                               "error",
                               "elicitation",
+                              "prompt",
                               "action",
                               "status",
                               "artifact"
@@ -8247,8 +8676,58 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "awaitingActivityId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "awaitingEscalatedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "paused": {
                       "type": "number"
+                    },
+                    "stepKey": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "guidance": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "scope": {
+                            "type": "string",
+                            "enum": [
+                              "workspace",
+                              "team",
+                              "status",
+                              "step"
+                            ]
+                          },
+                          "scopeKey": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "version": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "scope",
+                          "scopeKey",
+                          "version"
+                        ]
+                      }
                     },
                     "derivedStatus": {
                       "type": "string",
@@ -8521,6 +9000,48 @@
                         "paused": {
                           "type": "number"
                         },
+                        "stepKey": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "guidance": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "scope": {
+                                "type": "string",
+                                "enum": [
+                                  "workspace",
+                                  "team",
+                                  "status",
+                                  "step"
+                                ]
+                              },
+                              "scopeKey": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "version": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "scope",
+                              "scopeKey",
+                              "version"
+                            ]
+                          }
+                        },
                         "derivedStatus": {
                           "type": "string",
                           "nullable": true,
@@ -8701,6 +9222,10 @@
                     "minimum": 1,
                     "maximum": 1440,
                     "description": "Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue"
+                  },
+                  "stepKey": {
+                    "type": "string",
+                    "minLength": 1
                   }
                 },
                 "required": [
@@ -8850,6 +9375,48 @@
                         },
                         "paused": {
                           "type": "number"
+                        },
+                        "stepKey": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "guidance": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "scope": {
+                                "type": "string",
+                                "enum": [
+                                  "workspace",
+                                  "team",
+                                  "status",
+                                  "step"
+                                ]
+                              },
+                              "scopeKey": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "version": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "scope",
+                              "scopeKey",
+                              "version"
+                            ]
+                          }
                         },
                         "derivedStatus": {
                           "type": "string",
@@ -9206,6 +9773,48 @@
                     "paused": {
                       "type": "number"
                     },
+                    "stepKey": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "guidance": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "scope": {
+                            "type": "string",
+                            "enum": [
+                              "workspace",
+                              "team",
+                              "status",
+                              "step"
+                            ]
+                          },
+                          "scopeKey": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "version": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "scope",
+                          "scopeKey",
+                          "version"
+                        ]
+                      }
+                    },
                     "derivedStatus": {
                       "type": "string",
                       "nullable": true,
@@ -9396,6 +10005,7 @@
                       "enum": [
                         "created",
                         "running",
+                        "stale",
                         "waiting",
                         "completed",
                         "failed",
@@ -9491,6 +10101,51 @@
                     "awaitingEscalatedAt": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "paused": {
+                      "type": "number"
+                    },
+                    "stepKey": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "guidance": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "scope": {
+                            "type": "string",
+                            "enum": [
+                              "workspace",
+                              "team",
+                              "status",
+                              "step"
+                            ]
+                          },
+                          "scopeKey": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "version": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "scope",
+                          "scopeKey",
+                          "version"
+                        ]
+                      }
                     },
                     "derivedStatus": {
                       "type": "string",
@@ -9798,6 +10453,48 @@
                     },
                     "paused": {
                       "type": "number"
+                    },
+                    "stepKey": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "guidance": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "scope": {
+                            "type": "string",
+                            "enum": [
+                              "workspace",
+                              "team",
+                              "status",
+                              "step"
+                            ]
+                          },
+                          "scopeKey": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "version": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "scope",
+                          "scopeKey",
+                          "version"
+                        ]
+                      }
                     },
                     "derivedStatus": {
                       "type": "string",
@@ -10200,6 +10897,746 @@
           }
         },
         "summary": "Delete agent automation"
+      }
+    },
+    "/workspaces/{organizationId}/agent/guidance": {
+      "get": {
+        "tags": [
+          "agents"
+        ],
+        "description": "List guidance packs for the workspace. Optional scope/scopeKey filters narrow to one attachment level.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "workspace",
+                "team",
+                "status",
+                "step"
+              ]
+            },
+            "required": false,
+            "name": "scope",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "scopeKey",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Guidance packs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "packs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "scope": {
+                            "type": "string",
+                            "enum": [
+                              "workspace",
+                              "team",
+                              "status",
+                              "step"
+                            ]
+                          },
+                          "scopeKey": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "body": {
+                            "type": "string"
+                          },
+                          "links": {
+                            "type": "array",
+                            "nullable": true,
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "label": {
+                                  "type": "string"
+                                },
+                                "url": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "url"
+                              ]
+                            }
+                          },
+                          "version": {
+                            "type": "integer"
+                          },
+                          "createdBy": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "updatedBy": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "name",
+                          "scope",
+                          "scopeKey",
+                          "body",
+                          "links",
+                          "version",
+                          "createdBy",
+                          "updatedBy",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "packs"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List agent guidance"
+      },
+      "post": {
+        "tags": [
+          "agents"
+        ],
+        "description": "Create a guidance pack. scope=workspace applies to every lane; team/status/step packs match scopeKey against the issue's teamId, its workflow status, and the session's stepKey.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "scope": {
+                    "type": "string",
+                    "enum": [
+                      "workspace",
+                      "team",
+                      "status",
+                      "step"
+                    ]
+                  },
+                  "scopeKey": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1
+                  },
+                  "body": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "links": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "label": {
+                          "type": "string"
+                        },
+                        "url": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "url"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "name",
+                  "scope",
+                  "body"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Guidance pack created (version 1)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "scope": {
+                      "type": "string",
+                      "enum": [
+                        "workspace",
+                        "team",
+                        "status",
+                        "step"
+                      ]
+                    },
+                    "scopeKey": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "body": {
+                      "type": "string"
+                    },
+                    "links": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "label": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "url"
+                        ]
+                      }
+                    },
+                    "version": {
+                      "type": "integer"
+                    },
+                    "createdBy": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "updatedBy": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "name",
+                    "scope",
+                    "scopeKey",
+                    "body",
+                    "links",
+                    "version",
+                    "createdBy",
+                    "updatedBy",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create agent guidance"
+      }
+    },
+    "/workspaces/{organizationId}/agent/guidance/{id}": {
+      "get": {
+        "tags": [
+          "agents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Guidance pack",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "scope": {
+                      "type": "string",
+                      "enum": [
+                        "workspace",
+                        "team",
+                        "status",
+                        "step"
+                      ]
+                    },
+                    "scopeKey": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "body": {
+                      "type": "string"
+                    },
+                    "links": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "label": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "url"
+                        ]
+                      }
+                    },
+                    "version": {
+                      "type": "integer"
+                    },
+                    "createdBy": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "updatedBy": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "name",
+                    "scope",
+                    "scopeKey",
+                    "body",
+                    "links",
+                    "version",
+                    "createdBy",
+                    "updatedBy",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Guidance pack not found"
+          }
+        },
+        "summary": "Get agent guidance"
+      },
+      "patch": {
+        "tags": [
+          "agents"
+        ],
+        "description": "Edit a guidance pack — bumps version and snapshots the revision. Sessions dispatched afterwards pick up the new version; existing sessions keep the refs they recorded.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "scope": {
+                    "type": "string",
+                    "enum": [
+                      "workspace",
+                      "team",
+                      "status",
+                      "step"
+                    ]
+                  },
+                  "scopeKey": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1
+                  },
+                  "body": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "links": {
+                    "type": "array",
+                    "nullable": true,
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "label": {
+                          "type": "string"
+                        },
+                        "url": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "url"
+                      ]
+                    }
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Guidance pack updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "scope": {
+                      "type": "string",
+                      "enum": [
+                        "workspace",
+                        "team",
+                        "status",
+                        "step"
+                      ]
+                    },
+                    "scopeKey": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "body": {
+                      "type": "string"
+                    },
+                    "links": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "label": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "url"
+                        ]
+                      }
+                    },
+                    "version": {
+                      "type": "integer"
+                    },
+                    "createdBy": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "updatedBy": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "name",
+                    "scope",
+                    "scopeKey",
+                    "body",
+                    "links",
+                    "version",
+                    "createdBy",
+                    "updatedBy",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Guidance pack not found"
+          }
+        },
+        "summary": "Update agent guidance"
+      },
+      "delete": {
+        "tags": [
+          "agents"
+        ],
+        "description": "Delete a guidance pack. Version snapshots are kept so sessions that ran with it still resolve their recorded refs.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Guidance pack deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Guidance pack not found"
+          }
+        },
+        "summary": "Delete agent guidance"
+      }
+    },
+    "/workspaces/{organizationId}/agent/guidance/{id}/versions": {
+      "get": {
+        "tags": [
+          "agents"
+        ],
+        "description": "Revision history of a pack — one row per version, including versions recorded on sessions dispatched before a delete.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Guidance pack versions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "versions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "packId": {
+                            "type": "string"
+                          },
+                          "version": {
+                            "type": "integer"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "body": {
+                            "type": "string"
+                          },
+                          "links": {
+                            "type": "array",
+                            "nullable": true,
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "label": {
+                                  "type": "string"
+                                },
+                                "url": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "url"
+                              ]
+                            }
+                          },
+                          "actorId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "packId",
+                          "version",
+                          "name",
+                          "body",
+                          "links",
+                          "actorId",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "versions"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List agent guidance versions"
       }
     },
     "/workspaces/{organizationId}/agent/providers/catalog": {

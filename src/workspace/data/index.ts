@@ -46,6 +46,8 @@ import {
   workspaceDeals,
   workspaceFieldDefinitions,
   workspaceFieldValues,
+  workspaceGuidancePacks,
+  workspaceGuidancePackVersions,
   workspaceCustomerStatuses,
   workspaceCustomerTiers,
   workspaceIssueApprovals,
@@ -1089,6 +1091,12 @@ export interface AgentSessionInput {
   effort?: "low" | "medium" | "high" | "max" | null;
   label?: string | null;
   resultSchema?: string | null;
+  /** PILE-423 — pipeline sub-step this lane works; drives step-scoped
+   *  guidance resolution on promote/retry. */
+  stepKey?: string | null;
+  /** PILE-423 — JSON [{id, name, scope, scopeKey, version}] of the guidance
+   *  packs injected into this lane's dispatch prompt. */
+  guidance?: string | null;
 }
 
 export async function createAgentSession(
@@ -1124,6 +1132,8 @@ export async function createAgentSession(
     effort: input.effort ?? null,
     label: input.label ?? null,
     resultSchema: input.resultSchema ?? null,
+    stepKey: input.stepKey ?? null,
+    guidance: input.guidance ?? null,
     updatedAt: ts,
   });
   const row = await db
@@ -1348,6 +1358,9 @@ export async function updateAgentSession(
     /** PILE-420 — operator pause hold marker. Cleared when the row leaves
      *  `waiting` (promotion, resume drain, terminal), or set explicitly. */
     paused: number;
+    /** PILE-423 — JSON guidance-pack refs recorded at dispatch. */
+    guidance: string | null;
+    stepKey: string | null;
   }>
 ) {
   const existing = await getAgentSession(db, organizationId, id);
@@ -1411,6 +1424,8 @@ export async function updateAgentSession(
     set.awaitingActivityId = input.awaitingActivityId;
   if (input.awaitingEscalatedAt !== undefined)
     set.awaitingEscalatedAt = input.awaitingEscalatedAt;
+  if (input.guidance !== undefined) set.guidance = input.guidance;
+  if (input.stepKey !== undefined) set.stepKey = input.stepKey;
   // A retry/redispatch lane inherits the review history of the lane it
   // replaces, so the next review still range-diffs from the last verdict.
   if (
@@ -1569,6 +1584,247 @@ export async function deleteAgentPause(
     .returning({ id: workspaceAgentPauses.id })
     .all();
   return rows.length > 0;
+}
+
+// ---- guidance_packs (PILE-423 — scoped agent instruction packs) ----
+
+export type GuidanceScope = "workspace" | "team" | "status" | "step";
+
+export interface GuidancePackInput {
+  organizationId: string;
+  name: string;
+  scope: GuidanceScope;
+  /** Team id / status value / step key; null for workspace scope. */
+  scopeKey?: string | null;
+  body: string;
+  /** JSON array of {label?, url} reference links rendered with the body. */
+  links?: string | null;
+  createdBy?: string | null;
+}
+
+export type GuidancePack = typeof workspaceGuidancePacks.$inferSelect;
+export type GuidancePackVersion =
+  typeof workspaceGuidancePackVersions.$inferSelect;
+
+async function recordGuidancePackVersion(
+  db: WorkspaceDb,
+  pack: GuidancePack,
+  actorId: string | null
+) {
+  await db.insert(workspaceGuidancePackVersions).values({
+    id: crypto.randomUUID(),
+    organizationId: pack.organizationId,
+    packId: pack.id,
+    version: pack.version,
+    name: pack.name,
+    body: pack.body,
+    links: pack.links,
+    actorId,
+    createdAt: new Date().toISOString(),
+  });
+}
+
+export async function createGuidancePack(
+  db: WorkspaceDb,
+  input: GuidancePackInput
+) {
+  const id = crypto.randomUUID();
+  const ts = new Date().toISOString();
+  await db.insert(workspaceGuidancePacks).values({
+    id,
+    organizationId: input.organizationId,
+    name: input.name,
+    scope: input.scope,
+    scopeKey: input.scope === "workspace" ? null : (input.scopeKey ?? null),
+    body: input.body,
+    links: input.links ?? null,
+    version: 1,
+    createdBy: input.createdBy ?? null,
+    updatedBy: input.createdBy ?? null,
+    createdAt: ts,
+    updatedAt: ts,
+  });
+  const pack = await getGuidancePack(db, input.organizationId, id);
+  if (!pack) throw new Error("Failed to create guidance pack");
+  await recordGuidancePackVersion(db, pack, input.createdBy ?? null);
+  return pack;
+}
+
+export function getGuidancePack(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return db
+    .select()
+    .from(workspaceGuidancePacks)
+    .where(
+      and(
+        eq(workspaceGuidancePacks.organizationId, organizationId),
+        eq(workspaceGuidancePacks.id, id)
+      )
+    )
+    .get();
+}
+
+export function listGuidancePacks(
+  db: WorkspaceDb,
+  organizationId: string,
+  filter: { scope?: GuidanceScope; scopeKey?: string } = {}
+) {
+  const conditions = [
+    eq(workspaceGuidancePacks.organizationId, organizationId),
+  ];
+  if (filter.scope) {
+    conditions.push(eq(workspaceGuidancePacks.scope, filter.scope));
+  }
+  if (filter.scopeKey !== undefined) {
+    conditions.push(eq(workspaceGuidancePacks.scopeKey, filter.scopeKey));
+  }
+  return db
+    .select()
+    .from(workspaceGuidancePacks)
+    .where(and(...conditions))
+    .orderBy(workspaceGuidancePacks.createdAt, workspaceGuidancePacks.id)
+    .all();
+}
+
+/** Every edit bumps `version` and snapshots the new revision into
+ *  guidance_pack_versions — a session's recorded {packId, version} refs
+ *  always resolve to the exact text the lane was dispatched with.
+ *  Returns null when the pack is gone. */
+export async function updateGuidancePack(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string,
+  input: {
+    name?: string;
+    scope?: GuidanceScope;
+    scopeKey?: string | null;
+    body?: string;
+    links?: string | null;
+  },
+  actorId: string | null
+) {
+  const existing = await getGuidancePack(db, organizationId, id);
+  if (!existing) return null;
+  const scope = input.scope ?? existing.scope;
+  const scopeKey =
+    scope === "workspace"
+      ? null
+      : input.scopeKey !== undefined
+        ? input.scopeKey
+        : existing.scopeKey;
+  const next = {
+    name: input.name ?? existing.name,
+    scope,
+    scopeKey,
+    body: input.body ?? existing.body,
+    links: input.links !== undefined ? input.links : existing.links,
+    version: existing.version + 1,
+    updatedBy: actorId,
+    updatedAt: new Date().toISOString(),
+  };
+  await db
+    .update(workspaceGuidancePacks)
+    .set(next)
+    .where(eq(workspaceGuidancePacks.id, id));
+  const pack = await getGuidancePack(db, organizationId, id);
+  if (pack) await recordGuidancePackVersion(db, pack, actorId);
+  return pack;
+}
+
+export async function deleteGuidancePack(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+): Promise<boolean> {
+  const rows = await db
+    .delete(workspaceGuidancePacks)
+    .where(
+      and(
+        eq(workspaceGuidancePacks.organizationId, organizationId),
+        eq(workspaceGuidancePacks.id, id)
+      )
+    )
+    .returning({ id: workspaceGuidancePacks.id })
+    .all();
+  if (rows.length === 0) return false;
+  // Versions are the audit trail for sessions that ran with this pack —
+  // deleting a pack must not orphan the history its sessions reference, so
+  // the snapshots stay even though the live row is gone.
+  return true;
+}
+
+export function listGuidancePackVersions(
+  db: WorkspaceDb,
+  organizationId: string,
+  packId: string
+) {
+  return db
+    .select()
+    .from(workspaceGuidancePackVersions)
+    .where(
+      and(
+        eq(workspaceGuidancePackVersions.organizationId, organizationId),
+        eq(workspaceGuidancePackVersions.packId, packId)
+      )
+    )
+    .orderBy(workspaceGuidancePackVersions.version)
+    .all();
+}
+
+/** Injection order: least specific first so the most specific pack's text
+ *  lands last in the prompt (workspace → team → status → step), ties broken
+ *  by creation order within a scope. */
+const GUIDANCE_SCOPE_ORDER: Record<GuidanceScope, number> = {
+  workspace: 0,
+  team: 1,
+  status: 2,
+  step: 3,
+};
+
+export async function resolveGuidancePacks(
+  db: WorkspaceDb,
+  organizationId: string,
+  keys: { teamId?: string | null; status?: string | null; stepKey?: string | null }
+): Promise<GuidancePack[]> {
+  const rows = await db
+    .select()
+    .from(workspaceGuidancePacks)
+    .where(
+      and(
+        eq(workspaceGuidancePacks.organizationId, organizationId),
+        or(
+          eq(workspaceGuidancePacks.scope, "workspace"),
+          keys.teamId
+            ? and(
+                eq(workspaceGuidancePacks.scope, "team"),
+                eq(workspaceGuidancePacks.scopeKey, keys.teamId)
+              )
+            : undefined,
+          keys.status
+            ? and(
+                eq(workspaceGuidancePacks.scope, "status"),
+                eq(workspaceGuidancePacks.scopeKey, keys.status)
+              )
+            : undefined,
+          keys.stepKey
+            ? and(
+                eq(workspaceGuidancePacks.scope, "step"),
+                eq(workspaceGuidancePacks.scopeKey, keys.stepKey)
+              )
+            : undefined
+        )
+      )
+    )
+    .all();
+  return rows.sort(
+    (a, b) =>
+      GUIDANCE_SCOPE_ORDER[a.scope] - GUIDANCE_SCOPE_ORDER[b.scope] ||
+      a.createdAt.localeCompare(b.createdAt) ||
+      a.id.localeCompare(b.id)
+  );
 }
 
 /** Re-point still-waiting dependents of a dead session onto its retry —

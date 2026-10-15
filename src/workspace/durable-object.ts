@@ -3081,6 +3081,162 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return ok;
   }
 
+  // ---- guidance packs (PILE-423 — scoped instruction packs injected into
+  // the dispatch prompt envelope, most specific last) ----
+
+  listGuidancePacks(filter?: { scope?: data.GuidanceScope; scopeKey?: string }) {
+    return data.listGuidancePacks(this.db, this.organizationId, filter);
+  }
+
+  getGuidancePack(id: string) {
+    return data.getGuidancePack(this.db, this.organizationId, id);
+  }
+
+  listGuidancePackVersions(packId: string) {
+    return data.listGuidancePackVersions(
+      this.db,
+      this.organizationId,
+      packId
+    );
+  }
+
+  /** Packs a lane should see for (teamId, status, stepKey) — least specific
+   *  first, so dispatch renders the most specific pack last. */
+  resolveGuidancePacks(keys: {
+    teamId?: string | null;
+    status?: string | null;
+    stepKey?: string | null;
+  }) {
+    return data.resolveGuidancePacks(this.db, this.organizationId, keys);
+  }
+
+  async createGuidancePack(
+    input: Omit<data.GuidancePackInput, "organizationId">,
+    actor: { actorId?: string | null; actorType?: string | null }
+  ) {
+    await this.ready;
+    if (input.scope !== "workspace" && !input.scopeKey) {
+      throw VortexError.fromCode(
+        "BAD_REQUEST",
+        `scopeKey is required for ${input.scope}-scoped packs`
+      );
+    }
+    const pack = await data.createGuidancePack(this.db, {
+      ...input,
+      organizationId: this.organizationId,
+      createdBy: actor.actorId,
+    });
+    this.audit(
+      "guidance_pack.created",
+      "guidance_pack",
+      pack.id,
+      actor.actorId,
+      {
+        scope: { from: null, to: pack.scope },
+        scopeKey: { from: null, to: pack.scopeKey },
+        name: { from: null, to: pack.name },
+      },
+      { actorType: actor.actorType }
+    );
+    return pack;
+  }
+
+  async updateGuidancePack(
+    id: string,
+    input: {
+      name?: string;
+      scope?: data.GuidanceScope;
+      scopeKey?: string | null;
+      body?: string;
+      links?: string | null;
+    },
+    actor: { actorId?: string | null; actorType?: string | null }
+  ) {
+    await this.ready;
+    const existing = await data.getGuidancePack(
+      this.db,
+      this.organizationId,
+      id
+    );
+    if (!existing) return null;
+    // Scope changes re-validate the key: a non-workspace pack needs one
+    // (carried over or explicit), and a workspace pack must not keep one.
+    const nextScope = input.scope ?? existing.scope;
+    const nextKey =
+      nextScope === "workspace"
+        ? null
+        : input.scopeKey !== undefined
+          ? input.scopeKey
+          : existing.scopeKey;
+    if (nextScope !== "workspace" && !nextKey) {
+      throw VortexError.fromCode(
+        "BAD_REQUEST",
+        `scopeKey is required for ${nextScope}-scoped packs`
+      );
+    }
+    if (nextScope === "workspace" && input.scopeKey) {
+      throw VortexError.fromCode(
+        "BAD_REQUEST",
+        "scopeKey is not valid for workspace-scoped packs"
+      );
+    }
+    const pack = await data.updateGuidancePack(
+      this.db,
+      this.organizationId,
+      id,
+      input,
+      actor.actorId ?? null
+    );
+    if (!pack) return null;
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    if (pack.name !== existing.name)
+      changes.name = { from: existing.name, to: pack.name };
+    if (pack.scope !== existing.scope)
+      changes.scope = { from: existing.scope, to: pack.scope };
+    if (pack.scopeKey !== existing.scopeKey)
+      changes.scopeKey = { from: existing.scopeKey, to: pack.scopeKey };
+    if (pack.body !== existing.body)
+      changes.body = {
+        from: existing.body.slice(0, 200),
+        to: pack.body.slice(0, 200),
+      };
+    if (pack.links !== existing.links)
+      changes.links = { from: existing.links, to: pack.links };
+    changes.version = { from: existing.version, to: pack.version };
+    this.audit(
+      "guidance_pack.updated",
+      "guidance_pack",
+      id,
+      actor.actorId,
+      changes,
+      { actorType: actor.actorType }
+    );
+    return pack;
+  }
+
+  async deleteGuidancePack(
+    id: string,
+    actor: { actorId?: string | null; actorType?: string | null }
+  ): Promise<boolean> {
+    await this.ready;
+    const ok = await data.deleteGuidancePack(
+      this.db,
+      this.organizationId,
+      id
+    );
+    if (ok) {
+      this.audit(
+        "guidance_pack.deleted",
+        "guidance_pack",
+        id,
+        actor.actorId,
+        null,
+        { actorType: actor.actorType }
+      );
+    }
+    return ok;
+  }
+
   /** PILE-420 — minutes of silence (no activity, no heartbeat) before a
    *  live lane is marked `stale` and the alert fires. Org metadata
    *  `sessionStaleAfterMinutes`; default 15 — below the 20m inactivity

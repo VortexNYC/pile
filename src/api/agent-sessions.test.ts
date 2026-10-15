@@ -3443,4 +3443,88 @@ describe("agent sessions API", () => {
     );
     expect(absent.status).toBe(404);
   });
+
+  it("batch dispatch persists stepKey and the session response carries guidance refs", async () => {
+    const agentId = `mock-batch-${crypto.randomUUID().slice(0, 8)}`;
+    registerAgentProvider(agentId, () => new MockAgentProvider(agentId));
+
+    // The workspace-wide lane ceiling (25 live lanes) trips on the shared
+    // test org's accumulated sessions — clear them so this item dispatches.
+    const sweepStub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await sweepStub.setOrganizationId(organizationId);
+    for (const s of await sweepStub.listAgentSessions({ limit: 200 })) {
+      if (!["completed", "failed", "canceled"].includes(s.status)) {
+        await sweepStub.applyAgentSessionResult(
+          s.id,
+          { status: "canceled" },
+          "user-1"
+        );
+      }
+    }
+
+    // A step-scoped pack that only matches the dispatch's stepKey.
+    const packRes = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/guidance`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          name: "Contacted step",
+          scope: "step",
+          scopeKey: "contacted",
+          body: "Human approval required.",
+        }),
+      }),
+      env
+    );
+    expect(packRes.status).toBe(201);
+
+    const issueRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ title: "Batch stepKey dispatch" }),
+      }),
+      env
+    );
+    const issue = await issueRes.json<{ id: string }>();
+
+    const batchRes = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/dispatch-batch`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          items: [{ issueId: issue.id, agentId, stepKey: "contacted" }],
+        }),
+      }),
+      env
+    );
+    expect(batchRes.status).toBe(200);
+    const batch = await batchRes.json<{
+      results: Array<{ sessionId: string | null; error: string | null }>;
+    }>();
+    expect(batch.results[0]?.error).toBeNull();
+    const sessionId = batch.results[0]!.sessionId;
+    expect(sessionId).toBeTruthy();
+
+    const getRes = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/sessions/${sessionId}`, {
+        token,
+      }),
+      env
+    );
+    expect(getRes.status).toBe(200);
+    const session = await getRes.json<{
+      status: string;
+      stepKey: string | null;
+      guidance: Array<{ name: string; scope: string; scopeKey: string | null }> | null;
+    }>();
+    expect(session.stepKey).toBe("contacted");
+    expect(
+      session.guidance?.some(
+        (g) => g.name === "Contacted step" && g.scope === "step"
+      )
+    ).toBe(true);
+  });
 });

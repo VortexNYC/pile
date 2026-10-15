@@ -896,6 +896,14 @@ export const workspaceAgentSessions = sqliteTable(
     paused: integer("paused" as string)
       .notNull()
       .default(0),
+    // PILE-423 — the guidance packs this lane was dispatched with, as JSON
+    // [{id, name, scope, scopeKey, version}] in injection order (least
+    // specific first). Versions resolve against guidance_pack_versions.
+    guidance: text("guidance" as string),
+    // Pipeline sub-step this lane works (Salesforce-style stage step —
+    // drives step-scoped guidance resolution). Persisted so promotion and
+    // retries resolve the same scope.
+    stepKey: text("step_key" as string),
   },
   (table) => [
     index("agent_sessions_organization_idx" as string).on(
@@ -987,6 +995,64 @@ export const workspaceAgentPauses = sqliteTable(
     uniqueIndex("agent_pauses_org_agent_idx" as string).on(
       table.organizationId,
       table.agentId
+    ),
+  ]
+);
+
+// PILE-423 — guidance packs (Linear's "Guidance"): markdown instruction
+// blocks injected into the dispatch prompt envelope. `scope` picks the level
+// — workspace applies to every lane, team matches the issue's teamId, status
+// matches the issue's workflow status, step matches the session's stepKey
+// (scope_key NULL for workspace). `links` is a JSON array of
+// {label?, url} references rendered with the body. `version` bumps on every
+// update; guidance_pack_versions keeps each revision so a session's recorded
+// refs resolve to the exact text it was dispatched with.
+export const workspaceGuidancePacks = sqliteTable(
+  "guidance_packs" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    name: text("name" as string).notNull(),
+    scope: text("scope" as string, {
+      enum: ["workspace", "team", "status", "step"],
+    }).notNull(),
+    scopeKey: text("scope_key" as string),
+    body: text("body" as string).notNull(),
+    links: text("links" as string),
+    version: integer("version" as string)
+      .notNull()
+      .default(1),
+    createdBy: text("created_by" as string),
+    updatedBy: text("updated_by" as string),
+    createdAt: text("created_at" as string).notNull(),
+    updatedAt: text("updated_at" as string).notNull(),
+  },
+  (table) => [
+    index("guidance_packs_scope_idx" as string).on(
+      table.organizationId,
+      table.scope,
+      table.scopeKey
+    ),
+  ]
+);
+
+export const workspaceGuidancePackVersions = sqliteTable(
+  "guidance_pack_versions" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    packId: text("pack_id" as string).notNull(),
+    version: integer("version" as string).notNull(),
+    name: text("name" as string).notNull(),
+    body: text("body" as string).notNull(),
+    links: text("links" as string),
+    actorId: text("actor_id" as string),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    uniqueIndex("guidance_pack_versions_pack_idx" as string).on(
+      table.packId,
+      table.version
     ),
   ]
 );

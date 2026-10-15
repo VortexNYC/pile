@@ -2585,4 +2585,40 @@ describe("pipeline hygiene via DO RPC", () => {
     );
     expect(due.map((d) => d.id)).toContain(deal.id);
   });
+
+  it("manages guidance packs with audit + version history", async () => {
+    const stub = getStub();
+    const pack = await stub.createGuidancePack(
+      {
+        name: "Outreach rules",
+        scope: "status",
+        scopeKey: "in_progress",
+        body: "No rate or savings numbers.",
+      },
+      { actorId: "user-1", actorType: "user" }
+    );
+    expect(pack.version).toBe(1);
+
+    const updated = await stub.updateGuidancePack(
+      pack.id,
+      { body: "No rate, savings, or ROI numbers." },
+      { actorId: "user-1" }
+    );
+    expect(updated?.version).toBe(2);
+    const versions = await stub.listGuidancePackVersions(pack.id);
+    expect(versions.map((v) => v.version)).toEqual([1, 2]);
+
+    const resolved = await stub.resolveGuidancePacks({
+      status: "in_progress",
+    });
+    expect(resolved.some((p) => p.id === pack.id)).toBe(true);
+    const other = await stub.resolveGuidancePacks({ status: "done" });
+    expect(other.some((p) => p.id === pack.id)).toBe(false);
+
+    expect(
+      await stub.deleteGuidancePack(pack.id, { actorId: "user-1" })
+    ).toBe(true);
+    // Deleted pack still resolves its recorded version history.
+    expect((await stub.listGuidancePackVersions(pack.id)).length).toBe(2);
+  });
 });

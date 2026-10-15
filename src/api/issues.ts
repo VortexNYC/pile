@@ -895,6 +895,10 @@ const dispatchRoute = createRoute({
               // pushed by the runner) — not the base. PILE-241.
               branch: z.string().nullable().optional(),
               instructions: z.string().optional(),
+              // PILE-423 — pipeline sub-step key (e.g. a stage template's
+              // step_key). Step-scoped guidance packs resolve against it;
+              // persisted on the session.
+              stepKey: z.string().min(1).optional(),
               // VTX-209 — when true, dispatch a repo-less planner-critique
               // session on the target provider instead of the task lane. It
               // reports missing/ambiguous context back onto the issue thread.
@@ -2104,6 +2108,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       repo,
       branch,
       instructions,
+      stepKey,
       preflight,
       mode,
       effort,
@@ -2257,6 +2262,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
             effort: resolvedEffort,
             maxDurationMinutes: maxDuration,
             resultSchema,
+            stepKey,
           }
         )
       : preflight
@@ -2281,6 +2287,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
               effort: resolvedEffort,
               maxDurationMinutes: maxDuration,
               resultSchema,
+              stepKey,
             }
           )
         : await dispatchAgent(
@@ -2298,6 +2305,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
               effort: resolvedEffort,
               maxDurationMinutes: maxDuration,
               resultSchema,
+              stepKey,
             }
           );
 
