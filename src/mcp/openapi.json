@@ -90,6 +90,17 @@
             "type": "string",
             "nullable": true
           },
+          "claimedBy": {
+            "type": "string",
+            "nullable": true
+          },
+          "claimedLeaseExpiresAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "claimEpoch": {
+            "type": "number"
+          },
           "projectId": {
             "type": "string",
             "nullable": true
@@ -154,6 +165,9 @@
           "snoozedUntil",
           "assigneeId",
           "delegateId",
+          "claimedBy",
+          "claimedLeaseExpiresAt",
+          "claimEpoch",
           "projectId",
           "cycleId",
           "labelIds",
@@ -4250,6 +4264,143 @@
           }
         },
         "summary": "Create issue assign"
+      }
+    },
+    "/workspaces/{organizationId}/issues/{id}/claim": {
+      "post": {
+        "tags": [
+          "issues"
+        ],
+        "description": "Atomically claim this issue. Succeeds when the issue is unclaimed, its lease expired, or the caller already holds it (renew extends the lease and bumps the epoch). A live claim held by another actor answers 409 with the holder and expiry — do not steal.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "actorId": {
+                    "type": "string"
+                  },
+                  "agentId": {
+                    "type": "string"
+                  },
+                  "leaseSeconds": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Issue claimed (or lease renewed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "issueId": {
+                      "type": "string"
+                    },
+                    "claimedBy": {
+                      "type": "string"
+                    },
+                    "leaseExpiresAt": {
+                      "type": "string"
+                    },
+                    "epoch": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "issueId",
+                    "claimedBy",
+                    "leaseExpiresAt",
+                    "epoch"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Issue not found"
+          },
+          "409": {
+            "description": "Issue already claimed — details carry claimedBy and leaseExpiresAt"
+          }
+        },
+        "summary": "Create issue claim"
+      },
+      "delete": {
+        "tags": [
+          "issues"
+        ],
+        "description": "Release this issue's claim. Only the live holder may release (403 otherwise); an already-expired lease clears for anyone — the same reclaim rule POST applies.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "actorId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "agentId",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Claim released"
+          },
+          "403": {
+            "description": "Claim held by another actor"
+          },
+          "404": {
+            "description": "Issue not found"
+          }
+        },
+        "summary": "Delete issue claim"
       }
     },
     "/workspaces/{organizationId}/agent/sessions/register": {

@@ -774,6 +774,170 @@ describe("WorkspaceDO", () => {
     expect(done?.assigneeId).toBe("user-1");
   });
 
+  it("claims, renews with an epoch bump, conflicts, and releases (PILE-430)", async () => {
+    const stub = getStub();
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Claim me" })
+    );
+    expect(issue.claimedBy).toBeNull();
+    expect(issue.claimEpoch).toBe(0);
+
+    const first = await withWorkspace(stub, (instance) =>
+      instance.claimIssue(issue.id, "agent-a", 120, "user-1")
+    );
+    expect(first.issueId).toBe(issue.id);
+    expect(first.claimedBy).toBe("agent-a");
+    expect(first.epoch).toBe(1);
+    const claimed = await withWorkspace(stub, (instance) =>
+      instance.getIssue(issue.id)
+    );
+    expect(claimed?.claimedBy).toBe("agent-a");
+    expect(claimed?.claimedLeaseExpiresAt).toBe(first.leaseExpiresAt);
+    expect(claimed?.claimEpoch).toBe(1);
+
+    // Renew (heartbeat): same claimant extends the expiry and bumps epoch.
+    const renewed = await withWorkspace(stub, (instance) =>
+      instance.claimIssue(issue.id, "agent-a", 300, "user-1")
+    );
+    expect(renewed.epoch).toBe(2);
+    expect(renewed.leaseExpiresAt > first.leaseExpiresAt).toBe(true);
+
+    // Conflict: another claimant gets a CONFLICT-coded error carrying the
+    // live holder — the caller must not steal.
+    const conflict: unknown = await withWorkspace(stub, (instance) =>
+      instance.claimIssue(issue.id, "agent-b", 300)
+    ).then(
+      () => undefined,
+      (e: unknown) => e
+    );
+    expect(conflict).toBeInstanceOf(Error);
+    expect((conflict as { code?: unknown }).code).toBe("CONFLICT");
+    const conflictDetails = (
+      conflict as { details?: { claimedBy?: string; leaseExpiresAt?: string } }
+    ).details;
+    expect(conflictDetails?.claimedBy).toBe("agent-a");
+    expect(conflictDetails?.leaseExpiresAt).toBe(renewed.leaseExpiresAt);
+
+    // A non-holder cannot release a live claim.
+    const forbidden: unknown = await withWorkspace(stub, (instance) =>
+      instance.releaseClaim(issue.id, "agent-b")
+    ).then(
+      () => undefined,
+      (e: unknown) => e
+    );
+    expect(forbidden).toBeInstanceOf(Error);
+    expect((forbidden as { code?: unknown }).code).toBe("FORBIDDEN");
+
+    // The holder releases; the epoch keeps fencing.
+    await withWorkspace(stub, (instance) =>
+      instance.releaseClaim(issue.id, "agent-a", "user-1")
+    );
+    const freed = await withWorkspace(stub, (instance) =>
+      instance.getIssue(issue.id)
+    );
+    expect(freed?.claimedBy).toBeNull();
+    expect(freed?.claimedLeaseExpiresAt).toBeNull();
+    expect(freed?.claimEpoch).toBe(3);
+
+    // Releasing an unclaimed issue is a no-op.
+    await withWorkspace(stub, (instance) =>
+      instance.releaseClaim(issue.id, "agent-b")
+    );
+
+    const history = await withWorkspace(stub, (instance) =>
+      instance.listIssueHistory(issue.id)
+    );
+    expect(history).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "claimed_by",
+          fromValue: null,
+          toValue: "agent-a",
+        }),
+        expect.objectContaining({
+          field: "claimed_by",
+          fromValue: "agent-a",
+          toValue: null,
+        }),
+      ])
+    );
+    // The renew must NOT add a history row — heartbeats stay silent.
+    expect(history.filter((h) => h.field === "claimed_by")).toHaveLength(2);
+  });
+
+  it("lets anyone reclaim or clear an expired lease", async () => {
+    const stub = getStub();
+    const issue = await withWorkspace(stub, async (instance, ctx) => {
+      const created = await instance.createIssue({ title: "Lease lapses" });
+      await instance.claimIssue(created.id, "agent-a", 60);
+      // Backdate the lease — the holder never heartbeated. DO storage is
+      // the same SQLite the drizzle schema maps, so a raw write lands.
+      ctx.storage.sql.exec(
+        "UPDATE issues SET claimed_lease_expires_at = ? WHERE id = ?",
+        new Date(Date.now() - 1000).toISOString(),
+        created.id
+      );
+      return created;
+    });
+
+    // An expired lease clears on release by any actor, not just the holder.
+    await withWorkspace(stub, (instance) =>
+      instance.releaseClaim(issue.id, "cleanup")
+    );
+    const cleared = await withWorkspace(stub, (instance) =>
+      instance.getIssue(issue.id)
+    );
+    expect(cleared?.claimedBy).toBeNull();
+
+    // Reclaim while expired: the new holder wins the check-and-set.
+    const claim = await withWorkspace(stub, async (instance, ctx) => {
+      const result = await instance.claimIssue(issue.id, "agent-b", 60);
+      ctx.storage.sql.exec(
+        "UPDATE issues SET claimed_lease_expires_at = ? WHERE id = ?",
+        new Date(Date.now() - 1000).toISOString(),
+        issue.id
+      );
+      return result;
+    });
+    expect(claim.claimedBy).toBe("agent-b");
+
+    const stolen = await withWorkspace(stub, (instance) =>
+      instance.claimIssue(issue.id, "agent-c", 60)
+    );
+    expect(stolen.claimedBy).toBe("agent-c");
+    expect(stolen.epoch).toBe(claim.epoch + 1);
+
+    // The stale holder's release can no longer clear a live claim.
+    const staleRelease: unknown = await withWorkspace(stub, (instance) =>
+      instance.releaseClaim(issue.id, "agent-b")
+    ).then(
+      () => undefined,
+      (e: unknown) => e
+    );
+    expect((staleRelease as { code?: unknown }).code).toBe("FORBIDDEN");
+  });
+
+  it("clamps lease seconds to the 60..3600 window", async () => {
+    const stub = getStub();
+    const before = Date.now();
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Clamp lease" })
+    );
+    const low = await withWorkspace(stub, (instance) =>
+      instance.claimIssue(issue.id, "agent-a", 1)
+    );
+    const lowExpiry = new Date(low.leaseExpiresAt).getTime();
+    expect(lowExpiry - before).toBeGreaterThanOrEqual(60_000);
+    await withWorkspace(stub, (instance) =>
+      instance.releaseClaim(issue.id, "agent-a")
+    );
+    const high = await withWorkspace(stub, (instance) =>
+      instance.claimIssue(issue.id, "agent-a", 999_999)
+    );
+    const highExpiry = new Date(high.leaseExpiresAt).getTime();
+    expect(highExpiry - Date.now()).toBeLessThanOrEqual(3_600_000);
+  });
+
   it("clears and validates resolution on status change", async () => {
     const stub = getStub();
     const issue = await withWorkspace(stub, (instance) =>

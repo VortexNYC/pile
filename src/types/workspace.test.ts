@@ -8,7 +8,7 @@ import {
   ISSUE_RESOLUTIONS,
   ISSUE_STATUSES,
 } from "./workspace.js";
-import type { IssueInput, IssuePatch } from "./workspace.js";
+import type { Issue, IssueClaim, IssueInput, IssuePatch } from "./workspace.js";
 
 describe("workspace shared types", () => {
   it("keeps the issue picklist constants stable", () => {
@@ -72,6 +72,36 @@ describe("workspace shared types", () => {
 
     const patch = { delegateId: null } satisfies IssuePatch;
     expect(patch.delegateId).toBeNull();
+  });
+
+  it("exposes claim fields on Issue but keeps them off IssuePatch (PILE-430)", () => {
+    // Claims are a state machine, not an editable field: PATCH can never
+    // write claimedBy/lease/epoch directly — only claimIssue/releaseClaim
+    // do, so the fencing epoch can't be forged through updateIssue.
+    const claim: IssueClaim = {
+      issueId: "issue-1",
+      claimedBy: "agent-a",
+      leaseExpiresAt: "2026-10-16T00:00:00.000Z",
+      epoch: 3,
+    };
+    expect(claim.epoch).toBe(3);
+
+    type ClaimKeys = "claimedBy" | "claimedLeaseExpiresAt" | "claimEpoch";
+    const onIssue: ClaimKeys[] = [
+      "claimedBy",
+      "claimedLeaseExpiresAt",
+      "claimEpoch",
+    ];
+    const probe: Pick<Issue, ClaimKeys> = {
+      claimedBy: null,
+      claimedLeaseExpiresAt: null,
+      claimEpoch: 0,
+    };
+    expect(onIssue.every((k) => k in probe)).toBe(true);
+
+    type PatchLeak = Extract<keyof IssuePatch, ClaimKeys>;
+    const leaks: PatchLeak[] = [];
+    expect(leaks).toEqual([]);
   });
 
   it("keeps prUrl/prState off IssueInput (patch-only)", () => {

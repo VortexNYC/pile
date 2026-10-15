@@ -1124,6 +1124,60 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "issues claim create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/issues/{id}/claim",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "actorId",
+        flag: "actor",
+      },
+      {
+        name: "agentId",
+        flag: "agent-id",
+      },
+      {
+        name: "leaseSeconds",
+        flag: "lease-seconds",
+      },
+    ],
+  },
+  "issues claim delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/issues/{id}/claim",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [
+      {
+        name: "actorId",
+        flag: "actor",
+      },
+      {
+        name: "agentId",
+        flag: "agent-id",
+      },
+    ],
+    body: [],
+  },
   "agent sessions register create": {
     method: "POST",
     path: "/workspaces/{organizationId}/agent/sessions/register",

@@ -352,6 +352,9 @@ const issueApiSchema = z
     snoozedUntil: z.string().nullable(),
     assigneeId: z.string().nullable(),
     delegateId: z.string().nullable(),
+    claimedBy: z.string().nullable(),
+    claimedLeaseExpiresAt: z.string().nullable(),
+    claimEpoch: z.number(),
     projectId: z.string().nullable(),
     cycleId: z.string().nullable(),
     labelIds: z.string().nullable(),
@@ -946,6 +949,75 @@ const assignIssueSchema = z.object({
 const assignIssueResponseSchema = z.object({
   issue: issueApiSchema,
   session: agentSessionSchema.optional(),
+});
+
+// PILE-430 — atomic claim/lease. claimantId defaults to the caller's
+// identity; an explicit actorId/agentId claims as that actor (e.g. a
+// triage worker claiming on behalf of an agent). leaseSeconds clamps to
+// 60..3600 in the DO (default 300) — renewing is a POST with the same
+// claimant, which extends the expiry and bumps the fencing epoch.
+const claimIssueSchema = z.object({
+  actorId: z.string().optional(),
+  agentId: z.string().optional(),
+  leaseSeconds: z.number().int().optional(),
+});
+
+const claimIssueResponseSchema = z.object({
+  issueId: z.string(),
+  claimedBy: z.string(),
+  leaseExpiresAt: z.string(),
+  epoch: z.number(),
+});
+
+const claimIssueRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/issues/{id}/claim",
+  tags: ["issues"],
+  middleware: [rls("issue:edit")],
+  description:
+    "Atomically claim this issue. Succeeds when the issue is unclaimed, its lease expired, or the caller already holds it (renew extends the lease and bumps the epoch). A live claim held by another actor answers 409 with the holder and expiry — do not steal.",
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+    body: {
+      content: {
+        "application/json": { schema: claimIssueSchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Issue claimed (or lease renewed)",
+      content: {
+        "application/json": { schema: claimIssueResponseSchema },
+      },
+    },
+    404: { description: "Issue not found" },
+    409: {
+      description:
+        "Issue already claimed — details carry claimedBy and leaseExpiresAt",
+    },
+  },
+});
+
+const releaseClaimRoute = createRoute({
+  method: "delete",
+  path: "/workspaces/{organizationId}/issues/{id}/claim",
+  tags: ["issues"],
+  middleware: [rls("issue:edit")],
+  description:
+    "Release this issue's claim. Only the live holder may release (403 otherwise); an already-expired lease clears for anyone — the same reclaim rule POST applies.",
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+    query: z.object({
+      actorId: z.string().optional(),
+      agentId: z.string().optional(),
+    }),
+  },
+  responses: {
+    204: { description: "Claim released" },
+    403: { description: "Claim held by another actor" },
+    404: { description: "Issue not found" },
+  },
 });
 
 // Per-issue access grants (PILE-328): no rows = open to the workspace; any
@@ -2350,5 +2422,50 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       { issue, session: session ? toSessionResponse(session) : undefined },
       200
     );
+  });
+
+  app.openapi(claimIssueRoute, async (c) => {
+    const input = c.req.valid("json");
+    const { organizationId, id } = c.req.valid("param");
+    const identity = c.get("workspaceIdentity");
+    const db = createD1(c.env.D1);
+    const stub = await getStub(c.env, organizationId);
+    const existing = await stub.getIssue(id);
+    if (!existing) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Issue not found",
+      });
+    }
+    await assertIssueAccess(db, stub, existing, identity);
+    const claimantId = input.agentId ?? input.actorId ?? identity.id;
+    const claim = await stub.claimIssue(
+      existing.id,
+      claimantId,
+      input.leaseSeconds,
+      identity.id
+    );
+    return c.json(claim, 200);
+  });
+
+  app.openapi(releaseClaimRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const query = c.req.valid("query");
+    const identity = c.get("workspaceIdentity");
+    const db = createD1(c.env.D1);
+    const stub = await getStub(c.env, organizationId);
+    const existing = await stub.getIssue(id);
+    if (!existing) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Issue not found",
+      });
+    }
+    await assertIssueAccess(db, stub, existing, identity);
+    const claimantId = query.agentId ?? query.actorId ?? identity.id;
+    await stub.releaseClaim(existing.id, claimantId, identity.id);
+    return c.body(null, 204);
   });
 }
