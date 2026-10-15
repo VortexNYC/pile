@@ -30,6 +30,13 @@ describe("workspaceAgentSessions schema", () => {
     const infra = config.columns.find((c) => c.name === "infra_failure");
     expect(infra?.hasDefault).toBe(true);
   });
+
+  it("keeps plan nullable — most sessions never publish a checklist (PILE-426)", () => {
+    const column = workspaceAgentSessions.plan;
+    expect(column.name).toBe("plan");
+    expect(column.notNull).toBe(false);
+    expect(column.dataType).toBe("string");
+  });
 });
 
 describe("workspaceEntityAttachments schema", () => {
