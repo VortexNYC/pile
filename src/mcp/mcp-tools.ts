@@ -783,6 +783,33 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdIssuesIdClaim",
+    "description": "Delete issue claim — Release this issue's claim. Only the live holder may release (403 otherwise); an already-expired lease clears for anyone — the same reclaim rule POST applies. (DELETE /workspaces/{organizationId}/issues/{id}/claim) Path params (top-level, required): organizationId, id. Query params (top-level, optional): actorId, agentId.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/issues/{id}/claim",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "actorId": {
+          "type": "string"
+        },
+        "agentId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdIssuesIdPermissionsActorId",
     "description": "Delete issue permission — Revoke an actor's access grant. When the last grant is removed the issue is open to the workspace again. (DELETE /workspaces/{organizationId}/issues/{id}/permissions/{actorId}) Path params (top-level, required): organizationId, id, actorId.",
     "method": "DELETE",
@@ -13180,6 +13207,41 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "required": [
             "assigneeId"
           ]
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdIssuesIdClaim",
+    "description": "Create issue claim — Atomically claim this issue. Succeeds when the issue is unclaimed, its lease expired, or the caller already holds it (renew extends the lease and bumps the epoch). A live claim held by another actor answers 409 with the holder and expiry — do not steal. (POST /workspaces/{organizationId}/issues/{id}/claim) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: actorId, agentId, leaseSeconds.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/issues/{id}/claim",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "actorId": {
+              "type": "string"
+            },
+            "agentId": {
+              "type": "string"
+            },
+            "leaseSeconds": {
+              "type": "integer"
+            }
+          }
         }
       },
       "required": [

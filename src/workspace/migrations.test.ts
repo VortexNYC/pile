@@ -73,3 +73,16 @@ describe("v73 delegate", () => {
     );
   });
 });
+
+describe("v74 claim lease", () => {
+  it("adds claimed_by, lease expiry, and a non-null epoch to issues", () => {
+    const sql = workspaceMigrations.migrations.m0073;
+    expect(sql).toContain("ALTER TABLE issues ADD COLUMN claimed_by TEXT");
+    expect(sql).toContain(
+      "ALTER TABLE issues ADD COLUMN claimed_lease_expires_at TEXT"
+    );
+    expect(sql).toContain(
+      "ALTER TABLE issues ADD COLUMN claim_epoch INTEGER NOT NULL DEFAULT 0"
+    );
+  });
+});

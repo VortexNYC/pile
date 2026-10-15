@@ -143,4 +143,18 @@ describe("workspaceIssues schema", () => {
       config.indexes.some((i) => i.config.name === "idx_issues_delegate")
     ).toBe(true);
   });
+
+  it("carries the claim/lease columns (PILE-430)", () => {
+    const config = getTableConfig(workspaceIssues);
+    const byName = (name: string) =>
+      config.columns.find((c) => c.name === name);
+    // Holder + expiry stay nullable — an unclaimed issue is the common case.
+    expect(byName("claimed_by")?.notNull).toBe(false);
+    expect(byName("claimed_lease_expires_at")?.notNull).toBe(false);
+    // The epoch is a fencing token: non-null with a 0 default so migrated
+    // rows start unclaimed at epoch 0.
+    const epoch = byName("claim_epoch");
+    expect(epoch?.notNull).toBe(true);
+    expect(epoch?.hasDefault).toBe(true);
+  });
 });

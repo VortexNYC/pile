@@ -118,6 +118,16 @@ export interface IssueCursor {
   id: Id;
 }
 
+// PILE-430 — claim/lease primitive. Result of POST /issues/{id}/claim:
+// the lease grant with its fencing epoch. A conflicting claim answers 409
+// carrying the current holder instead.
+export interface IssueClaim {
+  issueId: Id;
+  claimedBy: string;
+  leaseExpiresAt: string;
+  epoch: number;
+}
+
 // Per-issue visibility (issue_permissions): undefined viewer = unrestricted
 // (workspace admin); otherwise list/search/analytics queries exclude
 // restricted issues the viewer isn't granted.
@@ -168,6 +178,12 @@ export interface Issue {
   snoozedUntil: string | null;
   assigneeId: Id | null;
   delegateId: Id | null;
+  /** Current claim holder (agent or actor id); null when unclaimed. */
+  claimedBy: string | null;
+  /** ISO deadline of the active claim lease; null when unclaimed. */
+  claimedLeaseExpiresAt: string | null;
+  /** Fencing token bumped on every claim-state write (PILE-430). */
+  claimEpoch: number;
   projectId: Id | null;
   cycleId: Id | null;
   labelIds: string | null;

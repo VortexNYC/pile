@@ -1701,6 +1701,156 @@ describe("possible duplicates on create (PILE-163)", () => {
   });
 });
 
+describe("issue claim/lease (PILE-430)", () => {
+  it("claims, renews, conflicts, and releases via the API", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const createRes = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      { method: "POST", body: JSON.stringify({ title: "Claim target" }) },
+      token
+    );
+    expect(createRes.status).toBe(201);
+    const issue = z
+      .object({
+        id: z.string(),
+        claimedBy: z.string().nullable(),
+        claimedLeaseExpiresAt: z.string().nullable(),
+        claimEpoch: z.number(),
+      })
+      .parse(await createRes.json());
+    expect(issue.claimedBy).toBeNull();
+    expect(issue.claimEpoch).toBe(0);
+
+    const claimSchema = z.object({
+      issueId: z.string(),
+      claimedBy: z.string(),
+      leaseExpiresAt: z.string(),
+      epoch: z.number(),
+    });
+
+    const claimRes = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}/claim`,
+      {
+        method: "POST",
+        body: JSON.stringify({ agentId: "agent-a", leaseSeconds: 120 }),
+      },
+      token
+    );
+    expect(claimRes.status).toBe(200);
+    const claim = claimSchema.parse(await claimRes.json());
+    expect(claim).toMatchObject({
+      issueId: issue.id,
+      claimedBy: "agent-a",
+      epoch: 1,
+    });
+
+    // The claim state rides the issue resource.
+    const getRes = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}`,
+      {},
+      token
+    );
+    const fetched = z
+      .object({ claimedBy: z.string().nullable(), claimEpoch: z.number() })
+      .parse(await getRes.json());
+    expect(fetched.claimedBy).toBe("agent-a");
+    expect(fetched.claimEpoch).toBe(1);
+
+    // Heartbeat: same claimant renews and bumps the epoch.
+    const renewRes = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}/claim`,
+      { method: "POST", body: JSON.stringify({ agentId: "agent-a" }) },
+      token
+    );
+    expect(renewRes.status).toBe(200);
+    const renewed = claimSchema.parse(await renewRes.json());
+    expect(renewed.epoch).toBe(2);
+    expect(renewed.leaseExpiresAt >= claim.leaseExpiresAt).toBe(true);
+
+    // Another actor cannot steal a live claim — 409 carries the holder.
+    const stealRes = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}/claim`,
+      { method: "POST", body: JSON.stringify({ agentId: "agent-b" }) },
+      token
+    );
+    expect(stealRes.status).toBe(409);
+    const stealBody = z
+      .object({
+        code: z.string(),
+        details: z.object({
+          claimedBy: z.string(),
+          leaseExpiresAt: z.string(),
+        }),
+      })
+      .parse(await stealRes.json());
+    expect(stealBody.code).toBe("CONFLICT");
+    expect(stealBody.details.claimedBy).toBe("agent-a");
+
+    // Only the holder may release.
+    const wrongRelease = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}/claim?agentId=agent-b`,
+      { method: "DELETE" },
+      token
+    );
+    expect(wrongRelease.status).toBe(403);
+    const releaseRes = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}/claim?agentId=agent-a`,
+      { method: "DELETE" },
+      token
+    );
+    expect(releaseRes.status).toBe(204);
+
+    // Released issues are claimable again.
+    const reclaimRes = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}/claim`,
+      { method: "POST", body: JSON.stringify({ agentId: "agent-b" }) },
+      token
+    );
+    expect(reclaimRes.status).toBe(200);
+    const reclaim = claimSchema.parse(await reclaimRes.json());
+    expect(reclaim.claimedBy).toBe("agent-b");
+    // claim(1) → renew(2) → release(3) → reclaim(4): the epoch fences
+    // every claim-state write.
+    expect(reclaim.epoch).toBe(4);
+  });
+
+  it("defaults the claimant to the caller identity and 404s unknown issues", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const createRes = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      { method: "POST", body: JSON.stringify({ title: "Self claim" }) },
+      token
+    );
+    const issue = z.object({ id: z.string() }).parse(await createRes.json());
+
+    const claimRes = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}/claim`,
+      { method: "POST", body: JSON.stringify({}) },
+      token
+    );
+    expect(claimRes.status).toBe(200);
+    const claim = z
+      .object({ claimedBy: z.string(), epoch: z.number() })
+      .parse(await claimRes.json());
+    expect(claim.claimedBy.length).toBeGreaterThan(0);
+
+    // The same caller releases as themselves without an explicit actor.
+    const releaseRes = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}/claim`,
+      { method: "DELETE" },
+      token
+    );
+    expect(releaseRes.status).toBe(204);
+
+    const missing = await fetch(
+      `/workspaces/${organizationId}/issues/${crypto.randomUUID()}/claim`,
+      { method: "POST", body: JSON.stringify({}) },
+      token
+    );
+    expect(missing.status).toBe(404);
+  });
+});
+
 describe("grant-only issue visibility (scoped keys)", () => {
   it("an issue:view key sees only explicitly granted issues", async () => {
     const { organizationId, token } = await seedWorkspace();

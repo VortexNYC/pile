@@ -87,6 +87,7 @@ import {
   type Comment,
   type GitIdentity,
   type Issue,
+  type IssueClaim,
   type IssueInput,
   type IssuePatch,
   type IssueResolution,
@@ -5582,6 +5583,160 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       );
     }
     await this.closeChildrenSequentially(children, index + 1, actorId);
+  }
+
+  // PILE-430 — atomic claim/lease ("this issue is mine"). The DO is
+  // single-threaded, so the read-check-write below cannot race: a claim
+  // wins only while the issue is unclaimed, its lease has expired, or the
+  // caller already holds it. A same-holder claim is the heartbeat — it
+  // extends the expiry and bumps the epoch. `claimEpoch` is the fencing
+  // token auto-delegation (PILE-427) uses to notice it lost the issue.
+  // Lease seconds clamp to [60, 3600], default 300; timestamps are ISO.
+  async claimIssue(
+    id: string,
+    claimantId: string,
+    leaseSeconds = 300,
+    actorId?: string
+  ): Promise<IssueClaim> {
+    await this.ready;
+    const issue = await this.getIssue(id);
+    if (!issue) {
+      throw VortexError.fromCode("NOT_FOUND", "Issue not found");
+    }
+    const seconds = Math.min(3600, Math.max(60, Math.floor(leaseSeconds)));
+    const now = new Date();
+    const nowIso = now.toISOString();
+    // A missing expiry with a holder means a pre-lease write — treat it as
+    // expired so the issue is reclaimable rather than locked forever.
+    const expired =
+      issue.claimedLeaseExpiresAt === null ||
+      issue.claimedLeaseExpiresAt <= nowIso;
+    if (
+      issue.claimedBy !== null &&
+      issue.claimedBy !== claimantId &&
+      !expired
+    ) {
+      throw new VortexError({
+        code: "CONFLICT",
+        status: 409,
+        message: "Issue already claimed",
+        hint: `Held by ${issue.claimedBy} until ${issue.claimedLeaseExpiresAt}`,
+        details: {
+          claimedBy: issue.claimedBy,
+          leaseExpiresAt: issue.claimedLeaseExpiresAt,
+        },
+      });
+    }
+    const leaseExpiresAt = new Date(
+      now.getTime() + seconds * 1000
+    ).toISOString();
+    const epoch = issue.claimEpoch + 1;
+    const updated = await this.db
+      .update(workspaceIssues)
+      .set({
+        claimedBy: claimantId,
+        claimedLeaseExpiresAt: leaseExpiresAt,
+        claimEpoch: epoch,
+      })
+      .where(eq(workspaceIssues.id, issue.id))
+      .returning()
+      .get();
+    if (!updated) {
+      throw VortexError.fromCode("NOT_FOUND", "Issue not found");
+    }
+    // History/audit only on a holder change — a heartbeat renew happens
+    // every lease and must not flood either stream.
+    const holderChanged = issue.claimedBy !== claimantId;
+    if (holderChanged) {
+      await this.recordIssueHistory(
+        issue.id,
+        [
+          {
+            field: "claimed_by",
+            fromValue: issue.claimedBy,
+            toValue: claimantId,
+          },
+        ],
+        actorId
+      );
+      this.audit("issue.claimed", "issue", issue.id, actorId, {
+        claimedBy: { from: issue.claimedBy, to: claimantId },
+      });
+    }
+    await this.emit({
+      type: "issue.updated",
+      organizationId: this.organizationId,
+      issue: updated,
+    });
+    return {
+      issueId: issue.id,
+      claimedBy: claimantId,
+      leaseExpiresAt,
+      epoch,
+    };
+  }
+
+  // Release is the holder's own door: a live lease can only be released by
+  // its claimant (403 otherwise). An already-expired lease clears for
+  // anyone — it is dead weight, and POST reclaim treats it the same way.
+  async releaseClaim(
+    id: string,
+    claimantId: string,
+    actorId?: string
+  ): Promise<void> {
+    await this.ready;
+    const issue = await this.getIssue(id);
+    if (!issue) {
+      throw VortexError.fromCode("NOT_FOUND", "Issue not found");
+    }
+    if (issue.claimedBy === null) return;
+    const expired =
+      issue.claimedLeaseExpiresAt === null ||
+      issue.claimedLeaseExpiresAt <= new Date().toISOString();
+    if (issue.claimedBy !== claimantId && !expired) {
+      throw new VortexError({
+        code: "FORBIDDEN",
+        status: 403,
+        message: "Only the claim holder may release this issue",
+        hint: `Held by ${issue.claimedBy}`,
+        details: {
+          claimedBy: issue.claimedBy,
+          leaseExpiresAt: issue.claimedLeaseExpiresAt,
+        },
+      });
+    }
+    const updated = await this.db
+      .update(workspaceIssues)
+      .set({
+        claimedBy: null,
+        claimedLeaseExpiresAt: null,
+        claimEpoch: issue.claimEpoch + 1,
+      })
+      .where(eq(workspaceIssues.id, issue.id))
+      .returning()
+      .get();
+    if (!updated) {
+      throw VortexError.fromCode("NOT_FOUND", "Issue not found");
+    }
+    await this.recordIssueHistory(
+      issue.id,
+      [
+        {
+          field: "claimed_by",
+          fromValue: issue.claimedBy,
+          toValue: null,
+        },
+      ],
+      actorId
+    );
+    this.audit("issue.claim_released", "issue", issue.id, actorId, {
+      claimedBy: { from: issue.claimedBy, to: null },
+    });
+    await this.emit({
+      type: "issue.updated",
+      organizationId: this.organizationId,
+      issue: updated,
+    });
   }
 
   async deleteIssue(id: string, actorId?: string): Promise<boolean> {

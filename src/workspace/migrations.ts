@@ -947,6 +947,16 @@ CREATE INDEX IF NOT EXISTS deals_next_step_due_idx ON deals (organization_id, ne
 const v73 = `ALTER TABLE issues ADD COLUMN delegate_id TEXT
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS idx_issues_delegate ON issues (delegate_id)`;
+
+// PILE-430 — atomic claim/lease primitive: claimed_by holds the claimant
+// (agent or actor id), claimed_lease_expires_at the lease deadline, and
+// claim_epoch is the fencing token bumped on every claim-state write so a
+// holder can detect it lost the issue. Expired leases are reclaimable.
+const v74 = `ALTER TABLE issues ADD COLUMN claimed_by TEXT
+--> statement-breakpoint
+ALTER TABLE issues ADD COLUMN claimed_lease_expires_at TEXT
+--> statement-breakpoint
+ALTER TABLE issues ADD COLUMN claim_epoch INTEGER NOT NULL DEFAULT 0`;
 const v69 = `CREATE TABLE comments_new (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -1194,6 +1204,7 @@ export const workspaceMigrations = {
       { idx: 70, when: 70, tag: "v71", breakpoints: true },
       { idx: 71, when: 71, tag: "v72", breakpoints: false },
       { idx: 72, when: 72, tag: "v73", breakpoints: true },
+      { idx: 73, when: 73, tag: "v74", breakpoints: true },
     ],
   },
   migrations: {
@@ -1270,5 +1281,6 @@ export const workspaceMigrations = {
     m0070: v71,
     m0071: v72,
     m0072: v73,
+    m0073: v74,
   },
 } satisfies Parameters<typeof migrate>[1];

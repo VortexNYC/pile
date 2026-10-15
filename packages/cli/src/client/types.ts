@@ -2017,6 +2017,116 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/issues/{id}/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create issue claim
+         * @description Atomically claim this issue. Succeeds when the issue is unclaimed, its lease expired, or the caller already holds it (renew extends the lease and bumps the epoch). A live claim held by another actor answers 409 with the holder and expiry — do not steal.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        actorId?: string;
+                        agentId?: string;
+                        leaseSeconds?: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Issue claimed (or lease renewed) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            issueId: string;
+                            claimedBy: string;
+                            leaseExpiresAt: string;
+                            epoch: number;
+                        };
+                    };
+                };
+                /** @description Issue not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Issue already claimed — details carry claimedBy and leaseExpiresAt */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        /**
+         * Delete issue claim
+         * @description Release this issue's claim. Only the live holder may release (403 otherwise); an already-expired lease clears for anyone — the same reclaim rule POST applies.
+         */
+        delete: {
+            parameters: {
+                query?: {
+                    actorId?: string;
+                    agentId?: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Claim released */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Claim held by another actor */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Issue not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/agent/sessions/register": {
         parameters: {
             query?: never;
@@ -28756,6 +28866,9 @@ export interface components {
             snoozedUntil: string | null;
             assigneeId: string | null;
             delegateId: string | null;
+            claimedBy: string | null;
+            claimedLeaseExpiresAt: string | null;
+            claimEpoch: number;
             projectId: string | null;
             cycleId: string | null;
             labelIds: string | null;

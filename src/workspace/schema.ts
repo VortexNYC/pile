@@ -44,6 +44,15 @@ export const workspaceIssues = sqliteTable(
     // PILE-417 — Linear's delegate model: assigneeId is the accountable
     // human; delegateId is the agent acting on their behalf.
     delegateId: text("delegate_id" as string),
+    // PILE-430 — atomic claim/lease: claimedBy is the holder,
+    // claimedLeaseExpiresAt the lease deadline (ISO), claimEpoch the
+    // fencing token bumped on every claim-state write. Claims go through
+    // claimIssue/releaseClaim only — never the PATCH path.
+    claimedBy: text("claimed_by" as string),
+    claimedLeaseExpiresAt: text("claimed_lease_expires_at" as string),
+    claimEpoch: integer("claim_epoch" as string)
+      .notNull()
+      .default(0),
     projectId: text("project_id" as string),
     cycleId: text("cycle_id" as string),
     labelIds: text("label_ids" as string),
