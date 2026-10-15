@@ -15,14 +15,14 @@ curl -s -X POST \
   -H "Authorization: Bearer $KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "targetEntityType": "issue",
-    "targetEntityId": "<issue-uuid>",
-    "linkType": "related",
-    "title": "Optional label"
+    "toType": "issue",
+    "toId": "<issue-uuid>",
+    "kind": "relates",
+    "label": "Optional label"
   }'
 ```
 
-`linkType` is free-form — `related`, `blocks`, `implements`, `caused_by`, whatever makes the story readable. `title` gives the edge a human label.
+`kind` is free-form — `relates`, `blocks`, `implements`, `caused_by`, whatever makes the story readable. `label` gives the edge a human label. The body fields are `toType`/`toId`/`kind`/`label` — unknown fields are silently dropped, so a wrong key name leaves `kind` at its `relates` default.
 
 ## Read links
 
