@@ -326,3 +326,192 @@ describe("lead intake", () => {
     expect(created?.name).toBe("Acme inbound");
   });
 });
+
+describe("deal hygiene fields + externalId dedupe", () => {
+  let organizationId = "";
+  let token = "";
+  let customerId = "";
+
+  const dealShape = z.object({
+    id: z.string(),
+    name: z.string(),
+    externalId: z.string().nullable(),
+    nextStepText: z.string().nullable(),
+    nextStepDueAt: z.string().nullable(),
+    needsHuman: z.boolean().nullable(),
+    needsHumanReason: z.string().nullable(),
+    priorityScore: z.number().nullable(),
+    stage: z.string(),
+  });
+
+  async function postDeal(body: Record<string, unknown>, query = "") {
+    return fetch(
+      `/workspaces/${organizationId}/deals${query}`,
+      { method: "POST", body: JSON.stringify(body) },
+      token
+    );
+  }
+
+  beforeAll(async () => {
+    ({ organizationId, token } = await seedWorkspace());
+    const res = await fetch(
+      `/workspaces/${organizationId}/customers`,
+      { method: "POST", body: JSON.stringify({ name: "Hygiene Co" }) },
+      token
+    );
+    customerId = ((await res.json()) as { id: string }).id;
+  });
+
+  it("writes and patches hygiene fields", async () => {
+    const create = await postDeal({
+      customerId,
+      name: "Scout import",
+      externalId: "gplace:abc123",
+      nextStepText: "Call owner re: terminal",
+      nextStepDueAt: "2026-10-20T00:00:00.000Z",
+      needsHuman: true,
+      needsHumanReason: "owner asked for a person",
+      priorityScore: 87.5,
+    });
+    expect(create.status).toBe(201);
+    const { deal } = (await create.json()) as { deal: unknown };
+    const parsed = dealShape.parse(deal);
+    expect(parsed.externalId).toBe("gplace:abc123");
+    expect(parsed.nextStepText).toBe("Call owner re: terminal");
+    expect(parsed.nextStepDueAt).toBe("2026-10-20T00:00:00.000Z");
+    expect(parsed.needsHuman).toBe(true);
+    expect(parsed.needsHumanReason).toBe("owner asked for a person");
+    expect(parsed.priorityScore).toBe(87.5);
+
+    const patch = await fetch(
+      `/workspaces/${organizationId}/deals/${parsed.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          nextStepText: null,
+          nextStepDueAt: "2026-10-22T00:00:00.000Z",
+          needsHuman: false,
+          priorityScore: 40,
+        }),
+      },
+      token
+    );
+    expect(patch.status).toBe(200);
+    const patched = dealShape.parse(
+      ((await patch.json()) as { deal: unknown }).deal
+    );
+    expect(patched.nextStepText).toBeNull();
+    expect(patched.nextStepDueAt).toBe("2026-10-22T00:00:00.000Z");
+    expect(patched.needsHuman).toBe(false);
+    expect(patched.priorityScore).toBe(40);
+  });
+
+  it("dedupes create on externalId — replay returns the same record", async () => {
+    const first = await postDeal(
+      { customerId, name: "Dedupe me", externalId: "gplace:dedup-1" },
+      ""
+    );
+    expect(first.status).toBe(201);
+    const firstDeal = dealShape.parse(
+      ((await first.json()) as { deal: unknown }).deal
+    );
+
+    // Same key, different name — import replay returns the existing record.
+    const replay = await postDeal(
+      { customerId, name: "Dedupe me AGAIN", externalId: "gplace:dedup-1" },
+      ""
+    );
+    expect(replay.status).toBe(200);
+    const replayDeal = dealShape.parse(
+      ((await replay.json()) as { deal: unknown }).deal
+    );
+    expect(replayDeal.id).toBe(firstDeal.id);
+    expect(replayDeal.name).toBe("Dedupe me");
+
+    // dedupe=block turns the collision into a hard 409.
+    const blocked = await postDeal(
+      { customerId, name: "Third", externalId: "gplace:dedup-1" },
+      "?dedupe=block"
+    );
+    expect(blocked.status).toBe(409);
+    const err = (await blocked.json()) as {
+      details?: { deal?: { id: string } };
+    };
+    expect(err.details?.deal?.id).toBe(firstDeal.id);
+
+    // Different key still creates.
+    const other = await postDeal(
+      { customerId, name: "Other", externalId: "gplace:dedup-2" },
+      "?dedupe=block"
+    );
+    expect(other.status).toBe(201);
+  });
+
+  const mk = async (body: Record<string, unknown>) => {
+    const res = await postDeal(body);
+    expect(res.status).toBe(201);
+    return dealShape.parse(((await res.json()) as { deal: unknown }).deal);
+  };
+
+  const list = async (query: string) => {
+    const res = await fetch(
+      `/workspaces/${organizationId}/deals?${query}`,
+      {},
+      token
+    );
+    expect(res.status).toBe(200);
+    return ((await res.json()) as { deals: { id: string }[] }).deals.map(
+      (d) => d.id
+    );
+  };
+
+  it("filters lists by stage, dueBefore, cold, and needsHuman", async () => {
+    const openNoStep = await mk({
+      customerId,
+      name: "Cold lead",
+      stage: "lead",
+    });
+    const openWithStep = await mk({
+      customerId,
+      name: "Working",
+      stage: "qualified",
+      nextStepText: "Send proposal",
+      nextStepDueAt: "2026-10-18T00:00:00.000Z",
+    });
+    const flagged = await mk({
+      customerId,
+      name: "Needs human",
+      stage: "lead",
+      needsHuman: true,
+      needsHumanReason: "vip",
+      nextStepText: "x",
+      nextStepDueAt: "2026-11-30T00:00:00.000Z",
+    });
+    const closed = await mk({
+      customerId,
+      name: "Old won",
+      stage: "won",
+    });
+
+    const stageLead = await list("stage=lead");
+    expect(stageLead).toContain(openNoStep.id);
+    expect(stageLead).toContain(flagged.id);
+    expect(stageLead).not.toContain(openWithStep.id);
+
+    const dueSoon = await list("dueBefore=2026-10-25T00:00:00.000Z");
+    expect(dueSoon).toContain(openWithStep.id);
+    expect(dueSoon).not.toContain(openNoStep.id);
+    expect(dueSoon).not.toContain(flagged.id);
+
+    // Cold = open + no next step + no due date. Won/lost deals aren't leads.
+    const cold = await list("cold=true");
+    expect(cold).toContain(openNoStep.id);
+    expect(cold).not.toContain(openWithStep.id);
+    expect(cold).not.toContain(flagged.id);
+    expect(cold).not.toContain(closed.id);
+
+    const human = await list("needsHuman=true");
+    expect(human).toContain(flagged.id);
+    expect(human).not.toContain(openNoStep.id);
+  });
+});

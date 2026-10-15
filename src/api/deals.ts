@@ -21,6 +21,7 @@ const dealSchema = z.object({
   organizationId: z.string(),
   customerId: z.string(),
   name: z.string(),
+  externalId: z.string().nullable(),
   stage: stageEnum,
   amountCents: z.number().nullable(),
   currency: z.string().nullable(),
@@ -28,6 +29,11 @@ const dealSchema = z.object({
   description: z.string().nullable(),
   closedAt: z.string().nullable(),
   archivedAt: z.string().nullable(),
+  nextStepText: z.string().nullable(),
+  nextStepDueAt: z.string().nullable(),
+  needsHuman: z.boolean().nullable(),
+  needsHumanReason: z.string().nullable(),
+  priorityScore: z.number().nullable(),
   contactIds: z.array(z.string()),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -36,17 +42,24 @@ const dealSchema = z.object({
 const createDealSchema = z.object({
   customerId: z.string(),
   name: z.string().min(1),
+  externalId: z.string().min(1).max(255).optional(),
   stage: stageEnum.default("lead"),
   amountCents: z.number().int().nonnegative().nullable().optional(),
   currency: z.string().length(3).nullable().optional(),
   expectedCloseAt: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
   contactIds: z.array(z.string()).optional(),
+  nextStepText: z.string().nullable().optional(),
+  nextStepDueAt: z.string().nullable().optional(),
+  needsHuman: z.boolean().nullable().optional(),
+  needsHumanReason: z.string().nullable().optional(),
+  priorityScore: z.number().nullable().optional(),
 });
 
 const updateDealSchema = z.object({
   customerId: z.string().optional(),
   name: z.string().min(1).optional(),
+  externalId: z.string().min(1).max(255).nullable().optional(),
   stage: stageEnum.optional(),
   amountCents: z.number().int().nonnegative().nullable().optional(),
   currency: z.string().length(3).nullable().optional(),
@@ -54,6 +67,11 @@ const updateDealSchema = z.object({
   archivedAt: z.string().nullable().optional(),
   contactIds: z.array(z.string()).optional(),
   issueIds: z.array(z.string()).optional(),
+  nextStepText: z.string().nullable().optional(),
+  nextStepDueAt: z.string().nullable().optional(),
+  needsHuman: z.boolean().nullable().optional(),
+  needsHumanReason: z.string().nullable().optional(),
+  priorityScore: z.number().nullable().optional(),
 });
 
 function notFound(): never {
@@ -81,6 +99,16 @@ const listDealsRoute = createRoute({
       customerId: z.string().optional(),
       contactId: z.string().optional(),
       includeArchived: z.string().optional(),
+      stage: stageEnum.optional(),
+      dueBefore: z.string().optional().openapi({
+        description:
+          "Only deals whose nextStepDueAt is on/before this ISO timestamp",
+      }),
+      cold: z.string().optional().openapi({
+        description:
+          "cold=true → open deals with no nextStepText and no nextStepDueAt",
+      }),
+      needsHuman: z.string().optional(),
     }),
   },
   responses: {
@@ -100,8 +128,13 @@ const createDealRoute = createRoute({
   path: "/workspaces/{organizationId}/deals",
   tags: ["deals"],
   middleware: [rls("deal:create")],
+  description:
+    "externalId is a hard dedupe key (same contract as issues' externalRef): when a deal with the same externalId exists the call returns that deal with 200 instead of creating a duplicate. Pass dedupe=block to get 409 with the existing record in details.deal instead — the hard guarantee importers need.",
   request: {
     params: orgParam,
+    query: z.object({
+      dedupe: z.enum(["warn", "block"]).optional(),
+    }),
     body: {
       content: { "application/json": { schema: createDealSchema } },
     },
@@ -112,6 +145,15 @@ const createDealRoute = createRoute({
       content: {
         "application/json": { schema: z.object({ deal: dealSchema }) },
       },
+    },
+    200: {
+      description: "Existing deal with the same externalId (idempotent create)",
+      content: {
+        "application/json": { schema: z.object({ deal: dealSchema }) },
+      },
+    },
+    409: {
+      description: "dedupe=block and externalId is already used",
     },
   },
 });
@@ -172,10 +214,15 @@ const deleteDealRoute = createRoute({
 export function registerDealRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listDealsRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
-    const { customerId, includeArchived } = c.req.valid("query");
+    const { customerId, includeArchived, stage, dueBefore, cold, needsHuman } =
+      c.req.valid("query");
     const stub = getWorkspaceStub(c.env, organizationId);
     const all = await stub.listDeals({
       includeArchived: includeArchived === "true",
+      stage,
+      dueBefore,
+      cold: cold === "true",
+      needsHuman: needsHuman === "true",
     });
     const deals = customerId
       ? all.filter((d) => d.customerId === customerId)
@@ -185,16 +232,39 @@ export function registerDealRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(createDealRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
+    const { dedupe } = c.req.valid("query");
     const body = c.req.valid("json");
     const stub = getWorkspaceStub(c.env, organizationId);
+    if (body.externalId) {
+      const existing = await stub.getDealByExternalId(body.externalId);
+      if (existing) {
+        if (dedupe === "block") {
+          throw new VortexError({
+            code: "CONFLICT",
+            status: 409,
+            message: "externalId already used",
+            hint: `Update deal ${existing.id} instead, or retry without dedupe=block`,
+            details: { deal: existing },
+          });
+        }
+        return c.json({ deal: existing }, 200);
+      }
+    }
     const deal = await stub.createDeal({
       customerId: body.customerId,
       name: body.name,
+      externalId: body.externalId ?? null,
       stage: body.stage as DealStage,
       amountCents: body.amountCents ?? null,
       currency: body.currency ?? null,
       expectedCloseAt: body.expectedCloseAt ?? null,
+      description: body.description ?? null,
       contactIds: body.contactIds,
+      nextStepText: body.nextStepText ?? null,
+      nextStepDueAt: body.nextStepDueAt ?? null,
+      needsHuman: body.needsHuman ?? null,
+      needsHumanReason: body.needsHumanReason ?? null,
+      priorityScore: body.priorityScore ?? null,
     });
     return c.json({ deal }, 201);
   });
@@ -214,12 +284,18 @@ export function registerDealRoutes(app: OpenAPIHono<AppContext>) {
     const deal = await stub.updateDeal(dealId, {
       name: body.name,
       customerId: body.customerId,
+      externalId: body.externalId,
       stage: body.stage as DealStage | undefined,
       amountCents: body.amountCents,
       currency: body.currency,
       expectedCloseAt: body.expectedCloseAt,
       archivedAt: body.archivedAt,
       contactIds: body.contactIds,
+      nextStepText: body.nextStepText,
+      nextStepDueAt: body.nextStepDueAt,
+      needsHuman: body.needsHuman,
+      needsHumanReason: body.needsHumanReason,
+      priorityScore: body.priorityScore,
     });
     if (!deal) notFound();
     return c.json({ deal }, 200);

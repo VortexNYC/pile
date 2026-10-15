@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   workspaceAgentSessions,
+  workspaceCustomers,
+  workspaceDeals,
   workspaceEntityAttachments,
   workspaceNotificationPreferences,
 } from "./schema.js";
@@ -79,4 +81,52 @@ describe("workspaceNotificationPreferences schema", () => {
     const explicit = config.columns.find((c) => c.name === "email_explicit");
     expect(explicit?.hasDefault).toBe(true);
   });
+});
+
+describe("pipeline hygiene columns (PILE-402)", () => {
+  const hygiene = [
+    "next_step_text",
+    "next_step_due_at",
+    "needs_human",
+    "needs_human_reason",
+    "priority_score",
+  ];
+
+  it.each`
+    table
+    ${"customers"}
+    ${"deals"}
+  `("keeps hygiene + external_id columns nullable on $table", ({ table }) => {
+    const schema = table === "customers" ? workspaceCustomers : workspaceDeals;
+    const config = getTableConfig(schema);
+    const names = config.columns.map((c) => c.name);
+    for (const col of ["external_id", ...hygiene]) {
+      const column = config.columns.find((c) => c.name === col);
+      expect(names).toContain(col);
+      // Every new column must be nullable — existing rows carry no value
+      // and ingest may legitimately leave them unset.
+      expect(column?.notNull).toBe(false);
+    }
+  });
+
+  it.each`
+    table
+    ${"customers"}
+    ${"deals"}
+  `(
+    "indexes (org, external_id) for the dedupe lookup on $table",
+    ({ table }) => {
+      const schema =
+        table === "customers" ? workspaceCustomers : workspaceDeals;
+      const config = getTableConfig(schema);
+      const idx = config.indexes.find(
+        (i) => i.config.name === `${table}_external_id_idx`
+      );
+      expect(idx).toBeDefined();
+      const columns = idx?.config.columns.map((c) =>
+        "name" in c ? c.name : String(c)
+      );
+      expect(columns).toEqual(["organization_id", "external_id"]);
+    }
+  );
 });

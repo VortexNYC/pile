@@ -2176,3 +2176,59 @@ describe("grantedOnly issue visibility", () => {
     });
   });
 });
+
+describe("pipeline hygiene via DO RPC", () => {
+  it("createCustomer/createDeal dedupe on externalId inside the DO", async () => {
+    const stub = getStub();
+    const first = await withWorkspace(stub, (instance) =>
+      instance.createCustomer({
+        name: "RPC customer",
+        externalId: "rpc-c-1",
+        priorityScore: 7,
+      })
+    );
+    const replay = await withWorkspace(stub, (instance) =>
+      instance.createCustomer({ name: "Replay", externalId: "rpc-c-1" })
+    );
+    expect(replay.id).toBe(first.id);
+    expect(
+      await withWorkspace(stub, (instance) =>
+        instance.getCustomerByExternalId("rpc-c-1")
+      )
+    ).toMatchObject({ id: first.id, priorityScore: 7 });
+
+    const deal = await withWorkspace(stub, (instance) =>
+      instance.createDeal({
+        customerId: first.id,
+        name: "RPC deal",
+        stage: "lead",
+        externalId: "rpc-d-1",
+        nextStepDueAt: "2026-10-20T00:00:00.000Z",
+      })
+    );
+    const dealReplay = await withWorkspace(stub, (instance) =>
+      instance.createDeal({
+        customerId: first.id,
+        name: "Dup",
+        stage: "won",
+        externalId: "rpc-d-1",
+      })
+    );
+    expect(dealReplay.id).toBe(deal.id);
+    expect(dealReplay.stage).toBe("lead");
+    expect(
+      await withWorkspace(stub, (instance) =>
+        instance.getDealByExternalId("rpc-d-1")
+      )
+    ).toMatchObject({ id: deal.id });
+
+    const cold = await withWorkspace(stub, (instance) =>
+      instance.listDeals({ cold: true })
+    );
+    expect(cold.map((d) => d.id)).not.toContain(deal.id);
+    const due = await withWorkspace(stub, (instance) =>
+      instance.listDeals({ dueBefore: "2026-10-25T00:00:00.000Z" })
+    );
+    expect(due.map((d) => d.id)).toContain(deal.id);
+  });
+});

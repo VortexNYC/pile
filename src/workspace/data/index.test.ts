@@ -11,9 +11,13 @@ import {
   hiddenIssueCondition,
   type AgentSessionInput,
   createAgentSession,
+  createDeal,
   createDocument,
   createDocumentSpace,
   documentAccessLevel,
+  getCustomerByExternalId,
+  getDealByExternalId,
+  listDeals,
   listDocumentsVisibleTo,
   setDocumentPermission,
   updateDocument,
@@ -743,6 +747,151 @@ describe("hiddenIssueCondition", () => {
       expect(new Set(visible2.map((r) => r.id))).toEqual(
         new Set([open.id, mine.id])
       );
+    });
+  });
+});
+
+describe("pipeline record hygiene + externalId dedupe", () => {
+  beforeAll(async () => {
+    await getStub().listWorkspaceComments();
+  });
+
+  it("createCustomer is idempotent on externalId", async () => {
+    await withDb(async (db) => {
+      const first = await createCustomer(db, {
+        organizationId: WORKSPACE_ID,
+        name: "First",
+        externalId: "gplace:c-1",
+        nextStepText: "visit",
+        needsHuman: true,
+        priorityScore: 55,
+      });
+      const replay = await createCustomer(db, {
+        organizationId: WORKSPACE_ID,
+        name: "Second name ignored",
+        externalId: "gplace:c-1",
+      });
+      expect(replay.id).toBe(first.id);
+      expect(replay.name).toBe("First");
+      expect(
+        await getCustomerByExternalId(db, WORKSPACE_ID, "gplace:c-1")
+      ).toMatchObject({ id: first.id });
+      // externalId is scoped per workspace — the same key in another org
+      // must not collide.
+      const other = await createCustomer(db, {
+        organizationId: "other-workspace",
+        name: "Other org same key",
+        externalId: "gplace:c-1",
+      });
+      expect(other.id).not.toBe(first.id);
+    });
+  });
+
+  it("createDeal is idempotent on externalId and stores hygiene fields", async () => {
+    await withDb(async (db) => {
+      const customer = await createCustomer(db, {
+        organizationId: WORKSPACE_ID,
+        name: "Deal holder",
+      });
+      const first = await createDeal(db, {
+        organizationId: WORKSPACE_ID,
+        customerId: customer.id,
+        name: "Import deal",
+        stage: "lead",
+        externalId: "gplace:d-1",
+        nextStepText: "pitch",
+        nextStepDueAt: "2026-10-20T00:00:00.000Z",
+        priorityScore: 12.5,
+      });
+      const replay = await createDeal(db, {
+        organizationId: WORKSPACE_ID,
+        customerId: customer.id,
+        name: "Duplicate name",
+        stage: "proposal",
+        externalId: "gplace:d-1",
+      });
+      expect(replay.id).toBe(first.id);
+      expect(replay.stage).toBe("lead");
+      expect(
+        await getDealByExternalId(db, WORKSPACE_ID, "gplace:d-1")
+      ).toMatchObject({ id: first.id, nextStepText: "pitch" });
+    });
+  });
+
+  it("cold/dueBefore/needsHuman filters drive the sweep views", async () => {
+    await withDb(async (db) => {
+      const org = "filter-org";
+      await createCustomer(db, {
+        organizationId: org,
+        name: "Cold one",
+      });
+      const warm = await createCustomer(db, {
+        organizationId: org,
+        name: "Warm",
+        nextStepDueAt: "2026-10-18T00:00:00.000Z",
+      });
+      const escalated = await createCustomer(db, {
+        organizationId: org,
+        name: "Escalated",
+        needsHuman: true,
+        nextStepText: "x",
+      });
+
+      const coldIds = (await listCustomers(db, org, { cold: true })).map(
+        (c) => c.id
+      );
+      expect(coldIds).not.toContain(warm.id);
+      expect(coldIds).not.toContain(escalated.id);
+
+      const due = (
+        await listCustomers(db, org, { dueBefore: "2026-10-25T00:00:00.000Z" })
+      ).map((c) => c.id);
+      expect(due).toEqual([warm.id]);
+
+      const human = (await listCustomers(db, org, { needsHuman: true })).map(
+        (c) => c.id
+      );
+      expect(human).toEqual([escalated.id]);
+
+      const customer = await createCustomer(db, {
+        organizationId: org,
+        name: "Holder",
+      });
+      const open = await createDeal(db, {
+        organizationId: org,
+        customerId: customer.id,
+        name: "Open no step",
+        stage: "lead",
+      });
+      const won = await createDeal(db, {
+        organizationId: org,
+        customerId: customer.id,
+        name: "Won no step",
+        stage: "won",
+      });
+      const working = await createDeal(db, {
+        organizationId: org,
+        customerId: customer.id,
+        name: "Working",
+        stage: "qualified",
+        nextStepDueAt: "2026-10-19T00:00:00.000Z",
+      });
+
+      const coldDeals = (await listDeals(db, org, { cold: true })).map(
+        (d) => d.id
+      );
+      expect(coldDeals).toContain(open.id);
+      // A closed deal without a next step is not a cold lead.
+      expect(coldDeals).not.toContain(won.id);
+      expect(coldDeals).not.toContain(working.id);
+
+      const dueDeals = (
+        await listDeals(db, org, {
+          stage: "qualified",
+          dueBefore: "2026-10-25T00:00:00.000Z",
+        })
+      ).map((d) => d.id);
+      expect(dueDeals).toEqual([working.id]);
     });
   });
 });

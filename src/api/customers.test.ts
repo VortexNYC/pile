@@ -331,3 +331,137 @@ describe("customers API", () => {
     expect(content.status).toBe(404);
   });
 });
+
+describe("customer hygiene fields + externalId dedupe", () => {
+  let organizationId = "";
+  let token = "";
+
+  const customerShape = z.object({
+    id: z.string(),
+    name: z.string(),
+    externalId: z.string().nullable(),
+    nextStepText: z.string().nullable(),
+    nextStepDueAt: z.string().nullable(),
+    needsHuman: z.boolean().nullable(),
+    needsHumanReason: z.string().nullable(),
+    priorityScore: z.number().nullable(),
+  });
+
+  async function postCustomer(body: Record<string, unknown>, query = "") {
+    return fetch(
+      `/workspaces/${organizationId}/customers${query}`,
+      { method: "POST", body: JSON.stringify(body) },
+      token
+    );
+  }
+
+  beforeAll(async () => {
+    ({ organizationId, token } = await seedWorkspace());
+  });
+
+  it("writes and patches hygiene fields", async () => {
+    const create = await postCustomer({
+      name: "Scout merchant",
+      externalId: "gplace:m-1",
+      nextStepText: "Verify POS compatibility",
+      nextStepDueAt: "2026-10-19T00:00:00.000Z",
+      needsHuman: true,
+      needsHumanReason: "language barrier",
+      priorityScore: 91.25,
+    });
+    expect(create.status).toBe(201);
+    const created = customerShape.parse(await create.json());
+    expect(created.externalId).toBe("gplace:m-1");
+    expect(created.nextStepText).toBe("Verify POS compatibility");
+    expect(created.needsHuman).toBe(true);
+    expect(created.needsHumanReason).toBe("language barrier");
+    expect(created.priorityScore).toBe(91.25);
+
+    const patch = await fetch(
+      `/workspaces/${organizationId}/customers/${created.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ needsHuman: false, priorityScore: null }),
+      },
+      token
+    );
+    expect(patch.status).toBe(200);
+    const patched = customerShape.parse(await patch.json());
+    expect(patched.needsHuman).toBe(false);
+    expect(patched.priorityScore).toBeNull();
+  });
+
+  it("dedupes create on externalId — replay returns the same record", async () => {
+    const first = await postCustomer({
+      name: "Dedup Cafe",
+      externalId: "gplace:cafe-1",
+    });
+    expect(first.status).toBe(201);
+    const firstCustomer = customerShape.parse(await first.json());
+
+    const replay = await postCustomer({
+      name: "Dedup Cafe (second run)",
+      externalId: "gplace:cafe-1",
+    });
+    expect(replay.status).toBe(200);
+    const replayed = customerShape.parse(await replay.json());
+    expect(replayed.id).toBe(firstCustomer.id);
+    expect(replayed.name).toBe("Dedup Cafe");
+
+    const blocked = await postCustomer(
+      { name: "Third", externalId: "gplace:cafe-1" },
+      "?dedupe=block"
+    );
+    expect(blocked.status).toBe(409);
+    const err = (await blocked.json()) as {
+      details?: { customer?: { id: string } };
+    };
+    expect(err.details?.customer?.id).toBe(firstCustomer.id);
+  });
+
+  const mk = async (body: Record<string, unknown>) => {
+    const res = await postCustomer(body);
+    expect(res.status).toBe(201);
+    return customerShape.parse(await res.json());
+  };
+
+  const list = async (query: string) => {
+    const res = await fetch(
+      `/workspaces/${organizationId}/customers?${query}`,
+      {},
+      token
+    );
+    expect(res.status).toBe(200);
+    return (
+      (await res.json()) as { customers: { id: string }[] }
+    ).customers.map((c) => c.id);
+  };
+
+  it("filters lists by cold, dueBefore, and needsHuman", async () => {
+    const cold = await mk({ name: "No next step" });
+    const warm = await mk({
+      name: "Scheduled",
+      nextStepDueAt: "2026-10-18T00:00:00.000Z",
+    });
+    const flagged = await mk({
+      name: "Escalated",
+      needsHuman: true,
+      nextStepText: "call back",
+      nextStepDueAt: "2026-11-30T00:00:00.000Z",
+    });
+
+    const coldIds = await list("cold=true");
+    expect(coldIds).toContain(cold.id);
+    expect(coldIds).not.toContain(warm.id);
+    expect(coldIds).not.toContain(flagged.id);
+
+    const dueSoon = await list("dueBefore=2026-10-25T00:00:00.000Z");
+    expect(dueSoon).toContain(warm.id);
+    expect(dueSoon).not.toContain(cold.id);
+    expect(dueSoon).not.toContain(flagged.id);
+
+    const human = await list("needsHuman=true");
+    expect(human).toContain(flagged.id);
+    expect(human).not.toContain(cold.id);
+  });
+});

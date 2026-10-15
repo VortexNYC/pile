@@ -29959,6 +29959,34 @@
             "required": true,
             "name": "organizationId",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Only customers whose nextStepDueAt is on/before this ISO timestamp"
+            },
+            "required": false,
+            "description": "Only customers whose nextStepDueAt is on/before this ISO timestamp",
+            "name": "dueBefore",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "cold=true → customers with no nextStepText and no nextStepDueAt"
+            },
+            "required": false,
+            "description": "cold=true → customers with no nextStepText and no nextStepDueAt",
+            "name": "cold",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "needsHuman",
+            "in": "query"
           }
         ],
         "responses": {
@@ -30015,6 +30043,26 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "nextStepText": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "nextStepDueAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "needsHuman": {
+                            "type": "boolean",
+                            "nullable": true
+                          },
+                          "needsHumanReason": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "priorityScore": {
+                            "type": "number",
+                            "nullable": true
+                          },
                           "createdAt": {
                             "type": "string"
                           },
@@ -30034,6 +30082,11 @@
                           "tierId",
                           "statusId",
                           "ownerId",
+                          "nextStepText",
+                          "nextStepDueAt",
+                          "needsHuman",
+                          "needsHumanReason",
+                          "priorityScore",
                           "createdAt",
                           "updatedAt"
                         ]
@@ -30054,6 +30107,7 @@
         "tags": [
           "customers"
         ],
+        "description": "externalId is a hard dedupe key (same contract as issues' externalRef): when a customer with the same externalId exists the call returns that customer with 200 instead of creating a duplicate. Pass dedupe=block to get 409 with the existing record in details.customer instead — the hard guarantee importers need.",
         "parameters": [
           {
             "schema": {
@@ -30062,6 +30116,18 @@
             "required": true,
             "name": "organizationId",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "warn",
+                "block"
+              ]
+            },
+            "required": false,
+            "name": "dedupe",
+            "in": "query"
           }
         ],
         "requestBody": {
@@ -30089,7 +30155,9 @@
                     "type": "string"
                   },
                   "externalId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
                   },
                   "tierId": {
                     "type": "string"
@@ -30099,6 +30167,26 @@
                   },
                   "ownerId": {
                     "type": "string"
+                  },
+                  "nextStepText": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "nextStepDueAt": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "needsHuman": {
+                    "type": "boolean",
+                    "nullable": true
+                  },
+                  "needsHumanReason": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "priorityScore": {
+                    "type": "number",
+                    "nullable": true
                   }
                 },
                 "required": [
@@ -30109,6 +30197,105 @@
           }
         },
         "responses": {
+          "200": {
+            "description": "Existing customer with the same externalId (idempotent create)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "bookingUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "notes": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "logoUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "externalId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "tierId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "statusId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "ownerId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "nextStepText": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "nextStepDueAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "needsHuman": {
+                      "type": "boolean",
+                      "nullable": true
+                    },
+                    "needsHumanReason": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "priorityScore": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "name",
+                    "url",
+                    "bookingUrl",
+                    "notes",
+                    "logoUrl",
+                    "externalId",
+                    "tierId",
+                    "statusId",
+                    "ownerId",
+                    "nextStepText",
+                    "nextStepDueAt",
+                    "needsHuman",
+                    "needsHumanReason",
+                    "priorityScore",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
           "201": {
             "description": "Customer created",
             "content": {
@@ -30157,6 +30344,26 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "nextStepText": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "nextStepDueAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "needsHuman": {
+                      "type": "boolean",
+                      "nullable": true
+                    },
+                    "needsHumanReason": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "priorityScore": {
+                      "type": "number",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -30176,12 +30383,20 @@
                     "tierId",
                     "statusId",
                     "ownerId",
+                    "nextStepText",
+                    "nextStepDueAt",
+                    "needsHuman",
+                    "needsHumanReason",
+                    "priorityScore",
                     "createdAt",
                     "updatedAt"
                   ]
                 }
               }
             }
+          },
+          "409": {
+            "description": "dedupe=block and externalId is already used"
           }
         },
         "summary": "Create customer"
@@ -30259,6 +30474,26 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "nextStepText": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "nextStepDueAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "needsHuman": {
+                      "type": "boolean",
+                      "nullable": true
+                    },
+                    "needsHumanReason": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "priorityScore": {
+                      "type": "number",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -30278,6 +30513,11 @@
                     "tierId",
                     "statusId",
                     "ownerId",
+                    "nextStepText",
+                    "nextStepDueAt",
+                    "needsHuman",
+                    "needsHumanReason",
+                    "priorityScore",
                     "createdAt",
                     "updatedAt"
                   ]
@@ -30339,7 +30579,9 @@
                     "type": "string"
                   },
                   "externalId": {
-                    "type": "string"
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
                   },
                   "tierId": {
                     "type": "string"
@@ -30349,6 +30591,26 @@
                   },
                   "ownerId": {
                     "type": "string"
+                  },
+                  "nextStepText": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "nextStepDueAt": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "needsHuman": {
+                    "type": "boolean",
+                    "nullable": true
+                  },
+                  "needsHumanReason": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "priorityScore": {
+                    "type": "number",
+                    "nullable": true
                   }
                 }
               }
@@ -30404,6 +30666,26 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "nextStepText": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "nextStepDueAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "needsHuman": {
+                      "type": "boolean",
+                      "nullable": true
+                    },
+                    "needsHumanReason": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "priorityScore": {
+                      "type": "number",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -30423,6 +30705,11 @@
                     "tierId",
                     "statusId",
                     "ownerId",
+                    "nextStepText",
+                    "nextStepDueAt",
+                    "needsHuman",
+                    "needsHumanReason",
+                    "priorityScore",
                     "createdAt",
                     "updatedAt"
                   ]
@@ -32176,6 +32463,50 @@
             "required": false,
             "name": "includeArchived",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "lead",
+                "qualified",
+                "proposal",
+                "negotiation",
+                "won",
+                "lost"
+              ]
+            },
+            "required": false,
+            "name": "stage",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Only deals whose nextStepDueAt is on/before this ISO timestamp"
+            },
+            "required": false,
+            "description": "Only deals whose nextStepDueAt is on/before this ISO timestamp",
+            "name": "dueBefore",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "cold=true → open deals with no nextStepText and no nextStepDueAt"
+            },
+            "required": false,
+            "description": "cold=true → open deals with no nextStepText and no nextStepDueAt",
+            "name": "cold",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "needsHuman",
+            "in": "query"
           }
         ],
         "responses": {
@@ -32202,6 +32533,10 @@
                           },
                           "name": {
                             "type": "string"
+                          },
+                          "externalId": {
+                            "type": "string",
+                            "nullable": true
                           },
                           "stage": {
                             "type": "string",
@@ -32238,6 +32573,26 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "nextStepText": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "nextStepDueAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "needsHuman": {
+                            "type": "boolean",
+                            "nullable": true
+                          },
+                          "needsHumanReason": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "priorityScore": {
+                            "type": "number",
+                            "nullable": true
+                          },
                           "contactIds": {
                             "type": "array",
                             "items": {
@@ -32256,6 +32611,7 @@
                           "organizationId",
                           "customerId",
                           "name",
+                          "externalId",
                           "stage",
                           "amountCents",
                           "currency",
@@ -32263,6 +32619,11 @@
                           "description",
                           "closedAt",
                           "archivedAt",
+                          "nextStepText",
+                          "nextStepDueAt",
+                          "needsHuman",
+                          "needsHumanReason",
+                          "priorityScore",
                           "contactIds",
                           "createdAt",
                           "updatedAt"
@@ -32284,6 +32645,7 @@
         "tags": [
           "deals"
         ],
+        "description": "externalId is a hard dedupe key (same contract as issues' externalRef): when a deal with the same externalId exists the call returns that deal with 200 instead of creating a duplicate. Pass dedupe=block to get 409 with the existing record in details.deal instead — the hard guarantee importers need.",
         "parameters": [
           {
             "schema": {
@@ -32292,6 +32654,18 @@
             "required": true,
             "name": "organizationId",
             "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "warn",
+                "block"
+              ]
+            },
+            "required": false,
+            "name": "dedupe",
+            "in": "query"
           }
         ],
         "requestBody": {
@@ -32306,6 +32680,11 @@
                   "name": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "externalId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
                   },
                   "stage": {
                     "type": "string",
@@ -32343,6 +32722,26 @@
                     "items": {
                       "type": "string"
                     }
+                  },
+                  "nextStepText": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "nextStepDueAt": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "needsHuman": {
+                    "type": "boolean",
+                    "nullable": true
+                  },
+                  "needsHumanReason": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "priorityScore": {
+                    "type": "number",
+                    "nullable": true
                   }
                 },
                 "required": [
@@ -32354,8 +32753,8 @@
           }
         },
         "responses": {
-          "201": {
-            "description": "Created deal",
+          "200": {
+            "description": "Existing deal with the same externalId (idempotent create)",
             "content": {
               "application/json": {
                 "schema": {
@@ -32375,6 +32774,10 @@
                         },
                         "name": {
                           "type": "string"
+                        },
+                        "externalId": {
+                          "type": "string",
+                          "nullable": true
                         },
                         "stage": {
                           "type": "string",
@@ -32411,6 +32814,26 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "nextStepText": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "nextStepDueAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "needsHuman": {
+                          "type": "boolean",
+                          "nullable": true
+                        },
+                        "needsHumanReason": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "priorityScore": {
+                          "type": "number",
+                          "nullable": true
+                        },
                         "contactIds": {
                           "type": "array",
                           "items": {
@@ -32429,6 +32852,7 @@
                         "organizationId",
                         "customerId",
                         "name",
+                        "externalId",
                         "stage",
                         "amountCents",
                         "currency",
@@ -32436,6 +32860,11 @@
                         "description",
                         "closedAt",
                         "archivedAt",
+                        "nextStepText",
+                        "nextStepDueAt",
+                        "needsHuman",
+                        "needsHumanReason",
+                        "priorityScore",
                         "contactIds",
                         "createdAt",
                         "updatedAt"
@@ -32448,6 +32877,134 @@
                 }
               }
             }
+          },
+          "201": {
+            "description": "Created deal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deal": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "customerId": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "externalId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "stage": {
+                          "type": "string",
+                          "enum": [
+                            "lead",
+                            "qualified",
+                            "proposal",
+                            "negotiation",
+                            "won",
+                            "lost"
+                          ]
+                        },
+                        "amountCents": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "currency": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "expectedCloseAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "description": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "closedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "archivedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "nextStepText": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "nextStepDueAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "needsHuman": {
+                          "type": "boolean",
+                          "nullable": true
+                        },
+                        "needsHumanReason": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "priorityScore": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "contactIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "customerId",
+                        "name",
+                        "externalId",
+                        "stage",
+                        "amountCents",
+                        "currency",
+                        "expectedCloseAt",
+                        "description",
+                        "closedAt",
+                        "archivedAt",
+                        "nextStepText",
+                        "nextStepDueAt",
+                        "needsHuman",
+                        "needsHumanReason",
+                        "priorityScore",
+                        "contactIds",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "deal"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "dedupe=block and externalId is already used"
           }
         },
         "summary": "Create deal"
@@ -32499,6 +33056,10 @@
                         "name": {
                           "type": "string"
                         },
+                        "externalId": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "stage": {
                           "type": "string",
                           "enum": [
@@ -32534,6 +33095,26 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "nextStepText": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "nextStepDueAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "needsHuman": {
+                          "type": "boolean",
+                          "nullable": true
+                        },
+                        "needsHumanReason": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "priorityScore": {
+                          "type": "number",
+                          "nullable": true
+                        },
                         "contactIds": {
                           "type": "array",
                           "items": {
@@ -32552,6 +33133,7 @@
                         "organizationId",
                         "customerId",
                         "name",
+                        "externalId",
                         "stage",
                         "amountCents",
                         "currency",
@@ -32559,6 +33141,11 @@
                         "description",
                         "closedAt",
                         "archivedAt",
+                        "nextStepText",
+                        "nextStepDueAt",
+                        "needsHuman",
+                        "needsHumanReason",
+                        "priorityScore",
                         "contactIds",
                         "createdAt",
                         "updatedAt"
@@ -32610,6 +33197,12 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "externalId": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 255
+                  },
                   "stage": {
                     "type": "string",
                     "enum": [
@@ -32651,6 +33244,26 @@
                     "items": {
                       "type": "string"
                     }
+                  },
+                  "nextStepText": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "nextStepDueAt": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "needsHuman": {
+                    "type": "boolean",
+                    "nullable": true
+                  },
+                  "needsHumanReason": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "priorityScore": {
+                    "type": "number",
+                    "nullable": true
                   }
                 }
               }
@@ -32679,6 +33292,10 @@
                         },
                         "name": {
                           "type": "string"
+                        },
+                        "externalId": {
+                          "type": "string",
+                          "nullable": true
                         },
                         "stage": {
                           "type": "string",
@@ -32715,6 +33332,26 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "nextStepText": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "nextStepDueAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "needsHuman": {
+                          "type": "boolean",
+                          "nullable": true
+                        },
+                        "needsHumanReason": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "priorityScore": {
+                          "type": "number",
+                          "nullable": true
+                        },
                         "contactIds": {
                           "type": "array",
                           "items": {
@@ -32733,6 +33370,7 @@
                         "organizationId",
                         "customerId",
                         "name",
+                        "externalId",
                         "stage",
                         "amountCents",
                         "currency",
@@ -32740,6 +33378,11 @@
                         "description",
                         "closedAt",
                         "archivedAt",
+                        "nextStepText",
+                        "nextStepDueAt",
+                        "needsHuman",
+                        "needsHumanReason",
+                        "priorityScore",
                         "contactIds",
                         "createdAt",
                         "updatedAt"
@@ -33013,6 +33656,10 @@
                           "name": {
                             "type": "string"
                           },
+                          "externalId": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "stage": {
                             "type": "string",
                             "enum": [
@@ -33048,6 +33695,26 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "nextStepText": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "nextStepDueAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "needsHuman": {
+                            "type": "boolean",
+                            "nullable": true
+                          },
+                          "needsHumanReason": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "priorityScore": {
+                            "type": "number",
+                            "nullable": true
+                          },
                           "contactIds": {
                             "type": "array",
                             "items": {
@@ -33066,6 +33733,7 @@
                           "organizationId",
                           "customerId",
                           "name",
+                          "externalId",
                           "stage",
                           "amountCents",
                           "currency",
@@ -33073,6 +33741,11 @@
                           "description",
                           "closedAt",
                           "archivedAt",
+                          "nextStepText",
+                          "nextStepDueAt",
+                          "needsHuman",
+                          "needsHumanReason",
+                          "priorityScore",
                           "contactIds",
                           "createdAt",
                           "updatedAt"

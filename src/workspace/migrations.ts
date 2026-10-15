@@ -911,6 +911,35 @@ const v71 = `ALTER TABLE document_spaces ADD COLUMN restricted INTEGER NOT NULL 
 --> statement-breakpoint
 UPDATE document_spaces SET restricted = 1 WHERE public_sharing = 0`;
 
+const v72 = `ALTER TABLE customers ADD COLUMN next_step_text TEXT
+--> statement-breakpoint
+ALTER TABLE customers ADD COLUMN next_step_due_at TEXT
+--> statement-breakpoint
+ALTER TABLE customers ADD COLUMN needs_human INTEGER
+--> statement-breakpoint
+ALTER TABLE customers ADD COLUMN needs_human_reason TEXT
+--> statement-breakpoint
+ALTER TABLE customers ADD COLUMN priority_score REAL
+--> statement-breakpoint
+ALTER TABLE deals ADD COLUMN external_id TEXT
+--> statement-breakpoint
+ALTER TABLE deals ADD COLUMN next_step_text TEXT
+--> statement-breakpoint
+ALTER TABLE deals ADD COLUMN next_step_due_at TEXT
+--> statement-breakpoint
+ALTER TABLE deals ADD COLUMN needs_human INTEGER
+--> statement-breakpoint
+ALTER TABLE deals ADD COLUMN needs_human_reason TEXT
+--> statement-breakpoint
+ALTER TABLE deals ADD COLUMN priority_score REAL
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS customers_external_id_idx ON customers (organization_id, external_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS customers_next_step_due_idx ON customers (organization_id, next_step_due_at)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS deals_external_id_idx ON deals (organization_id, external_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS deals_next_step_due_idx ON deals (organization_id, next_step_due_at)`;
 const v69 = `CREATE TABLE comments_new (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -1156,6 +1185,7 @@ export const workspaceMigrations = {
       { idx: 68, when: 68, tag: "v69", breakpoints: false },
       { idx: 69, when: 69, tag: "v70", breakpoints: false },
       { idx: 70, when: 70, tag: "v71", breakpoints: true },
+      { idx: 71, when: 71, tag: "v72", breakpoints: false },
     ],
   },
   migrations: {
@@ -1230,5 +1260,6 @@ export const workspaceMigrations = {
     m0068: v69,
     m0069: v70,
     m0070: v71,
+    m0071: v72,
   },
 } satisfies Parameters<typeof migrate>[1];

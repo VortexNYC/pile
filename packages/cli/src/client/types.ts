@@ -15496,7 +15496,13 @@ export interface paths {
         /** List customers */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description Only customers whose nextStepDueAt is on/before this ISO timestamp */
+                    dueBefore?: string;
+                    /** @description cold=true → customers with no nextStepText and no nextStepDueAt */
+                    cold?: string;
+                    needsHuman?: string;
+                };
                 header?: never;
                 path: {
                     organizationId: string;
@@ -15524,6 +15530,11 @@ export interface paths {
                                 tierId: string | null;
                                 statusId: string | null;
                                 ownerId: string | null;
+                                nextStepText: string | null;
+                                nextStepDueAt: string | null;
+                                needsHuman: boolean | null;
+                                needsHumanReason: string | null;
+                                priorityScore: number | null;
                                 createdAt: string;
                                 updatedAt: string;
                             }[];
@@ -15533,10 +15544,15 @@ export interface paths {
             };
         };
         put?: never;
-        /** Create customer */
+        /**
+         * Create customer
+         * @description externalId is a hard dedupe key (same contract as issues' externalRef): when a customer with the same externalId exists the call returns that customer with 200 instead of creating a duplicate. Pass dedupe=block to get 409 with the existing record in details.customer instead — the hard guarantee importers need.
+         */
         post: {
             parameters: {
-                query?: never;
+                query?: {
+                    dedupe?: "warn" | "block";
+                };
                 header?: never;
                 path: {
                     organizationId: string;
@@ -15555,10 +15571,43 @@ export interface paths {
                         tierId?: string;
                         statusId?: string;
                         ownerId?: string;
+                        nextStepText?: string | null;
+                        nextStepDueAt?: string | null;
+                        needsHuman?: boolean | null;
+                        needsHumanReason?: string | null;
+                        priorityScore?: number | null;
                     };
                 };
             };
             responses: {
+                /** @description Existing customer with the same externalId (idempotent create) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            name: string;
+                            url: string | null;
+                            bookingUrl: string | null;
+                            notes: string | null;
+                            logoUrl: string | null;
+                            externalId: string | null;
+                            tierId: string | null;
+                            statusId: string | null;
+                            ownerId: string | null;
+                            nextStepText: string | null;
+                            nextStepDueAt: string | null;
+                            needsHuman: boolean | null;
+                            needsHumanReason: string | null;
+                            priorityScore: number | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
                 /** @description Customer created */
                 201: {
                     headers: {
@@ -15577,10 +15626,22 @@ export interface paths {
                             tierId: string | null;
                             statusId: string | null;
                             ownerId: string | null;
+                            nextStepText: string | null;
+                            nextStepDueAt: string | null;
+                            needsHuman: boolean | null;
+                            needsHumanReason: string | null;
+                            priorityScore: number | null;
                             createdAt: string;
                             updatedAt: string;
                         };
                     };
+                };
+                /** @description dedupe=block and externalId is already used */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
                 };
             };
         };
@@ -15628,6 +15689,11 @@ export interface paths {
                             tierId: string | null;
                             statusId: string | null;
                             ownerId: string | null;
+                            nextStepText: string | null;
+                            nextStepDueAt: string | null;
+                            needsHuman: boolean | null;
+                            needsHumanReason: string | null;
+                            priorityScore: number | null;
                             createdAt: string;
                             updatedAt: string;
                         };
@@ -15698,6 +15764,11 @@ export interface paths {
                         tierId?: string;
                         statusId?: string;
                         ownerId?: string;
+                        nextStepText?: string | null;
+                        nextStepDueAt?: string | null;
+                        needsHuman?: boolean | null;
+                        needsHumanReason?: string | null;
+                        priorityScore?: number | null;
                     };
                 };
             };
@@ -15720,6 +15791,11 @@ export interface paths {
                             tierId: string | null;
                             statusId: string | null;
                             ownerId: string | null;
+                            nextStepText: string | null;
+                            nextStepDueAt: string | null;
+                            needsHuman: boolean | null;
+                            needsHumanReason: string | null;
+                            priorityScore: number | null;
                             createdAt: string;
                             updatedAt: string;
                         };
@@ -16726,6 +16802,12 @@ export interface paths {
                     customerId?: string;
                     contactId?: string;
                     includeArchived?: string;
+                    stage?: "lead" | "qualified" | "proposal" | "negotiation" | "won" | "lost";
+                    /** @description Only deals whose nextStepDueAt is on/before this ISO timestamp */
+                    dueBefore?: string;
+                    /** @description cold=true → open deals with no nextStepText and no nextStepDueAt */
+                    cold?: string;
+                    needsHuman?: string;
                 };
                 header?: never;
                 path: {
@@ -16747,6 +16829,7 @@ export interface paths {
                                 organizationId: string;
                                 customerId: string;
                                 name: string;
+                                externalId: string | null;
                                 /** @enum {string} */
                                 stage: "lead" | "qualified" | "proposal" | "negotiation" | "won" | "lost";
                                 amountCents: number | null;
@@ -16755,6 +16838,11 @@ export interface paths {
                                 description: string | null;
                                 closedAt: string | null;
                                 archivedAt: string | null;
+                                nextStepText: string | null;
+                                nextStepDueAt: string | null;
+                                needsHuman: boolean | null;
+                                needsHumanReason: string | null;
+                                priorityScore: number | null;
                                 contactIds: string[];
                                 createdAt: string;
                                 updatedAt: string;
@@ -16765,10 +16853,15 @@ export interface paths {
             };
         };
         put?: never;
-        /** Create deal */
+        /**
+         * Create deal
+         * @description externalId is a hard dedupe key (same contract as issues' externalRef): when a deal with the same externalId exists the call returns that deal with 200 instead of creating a duplicate. Pass dedupe=block to get 409 with the existing record in details.deal instead — the hard guarantee importers need.
+         */
         post: {
             parameters: {
-                query?: never;
+                query?: {
+                    dedupe?: "warn" | "block";
+                };
                 header?: never;
                 path: {
                     organizationId: string;
@@ -16780,6 +16873,7 @@ export interface paths {
                     "application/json": {
                         customerId: string;
                         name: string;
+                        externalId?: string;
                         /**
                          * @default lead
                          * @enum {string}
@@ -16790,10 +16884,48 @@ export interface paths {
                         expectedCloseAt?: string | null;
                         description?: string | null;
                         contactIds?: string[];
+                        nextStepText?: string | null;
+                        nextStepDueAt?: string | null;
+                        needsHuman?: boolean | null;
+                        needsHumanReason?: string | null;
+                        priorityScore?: number | null;
                     };
                 };
             };
             responses: {
+                /** @description Existing deal with the same externalId (idempotent create) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            deal: {
+                                id: string;
+                                organizationId: string;
+                                customerId: string;
+                                name: string;
+                                externalId: string | null;
+                                /** @enum {string} */
+                                stage: "lead" | "qualified" | "proposal" | "negotiation" | "won" | "lost";
+                                amountCents: number | null;
+                                currency: string | null;
+                                expectedCloseAt: string | null;
+                                description: string | null;
+                                closedAt: string | null;
+                                archivedAt: string | null;
+                                nextStepText: string | null;
+                                nextStepDueAt: string | null;
+                                needsHuman: boolean | null;
+                                needsHumanReason: string | null;
+                                priorityScore: number | null;
+                                contactIds: string[];
+                                createdAt: string;
+                                updatedAt: string;
+                            };
+                        };
+                    };
+                };
                 /** @description Created deal */
                 201: {
                     headers: {
@@ -16806,6 +16938,7 @@ export interface paths {
                                 organizationId: string;
                                 customerId: string;
                                 name: string;
+                                externalId: string | null;
                                 /** @enum {string} */
                                 stage: "lead" | "qualified" | "proposal" | "negotiation" | "won" | "lost";
                                 amountCents: number | null;
@@ -16814,12 +16947,24 @@ export interface paths {
                                 description: string | null;
                                 closedAt: string | null;
                                 archivedAt: string | null;
+                                nextStepText: string | null;
+                                nextStepDueAt: string | null;
+                                needsHuman: boolean | null;
+                                needsHumanReason: string | null;
+                                priorityScore: number | null;
                                 contactIds: string[];
                                 createdAt: string;
                                 updatedAt: string;
                             };
                         };
                     };
+                };
+                /** @description dedupe=block and externalId is already used */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
                 };
             };
         };
@@ -16861,6 +17006,7 @@ export interface paths {
                                 organizationId: string;
                                 customerId: string;
                                 name: string;
+                                externalId: string | null;
                                 /** @enum {string} */
                                 stage: "lead" | "qualified" | "proposal" | "negotiation" | "won" | "lost";
                                 amountCents: number | null;
@@ -16869,6 +17015,11 @@ export interface paths {
                                 description: string | null;
                                 closedAt: string | null;
                                 archivedAt: string | null;
+                                nextStepText: string | null;
+                                nextStepDueAt: string | null;
+                                needsHuman: boolean | null;
+                                needsHumanReason: string | null;
+                                priorityScore: number | null;
                                 contactIds: string[];
                                 createdAt: string;
                                 updatedAt: string;
@@ -16924,6 +17075,7 @@ export interface paths {
                     "application/json": {
                         customerId?: string;
                         name?: string;
+                        externalId?: string | null;
                         /** @enum {string} */
                         stage?: "lead" | "qualified" | "proposal" | "negotiation" | "won" | "lost";
                         amountCents?: number | null;
@@ -16932,6 +17084,11 @@ export interface paths {
                         archivedAt?: string | null;
                         contactIds?: string[];
                         issueIds?: string[];
+                        nextStepText?: string | null;
+                        nextStepDueAt?: string | null;
+                        needsHuman?: boolean | null;
+                        needsHumanReason?: string | null;
+                        priorityScore?: number | null;
                     };
                 };
             };
@@ -16948,6 +17105,7 @@ export interface paths {
                                 organizationId: string;
                                 customerId: string;
                                 name: string;
+                                externalId: string | null;
                                 /** @enum {string} */
                                 stage: "lead" | "qualified" | "proposal" | "negotiation" | "won" | "lost";
                                 amountCents: number | null;
@@ -16956,6 +17114,11 @@ export interface paths {
                                 description: string | null;
                                 closedAt: string | null;
                                 archivedAt: string | null;
+                                nextStepText: string | null;
+                                nextStepDueAt: string | null;
+                                needsHuman: boolean | null;
+                                needsHumanReason: string | null;
+                                priorityScore: number | null;
                                 contactIds: string[];
                                 createdAt: string;
                                 updatedAt: string;
@@ -17113,6 +17276,7 @@ export interface paths {
                                 organizationId: string;
                                 customerId: string;
                                 name: string;
+                                externalId: string | null;
                                 /** @enum {string} */
                                 stage: "lead" | "qualified" | "proposal" | "negotiation" | "won" | "lost";
                                 amountCents: number | null;
@@ -17121,6 +17285,11 @@ export interface paths {
                                 description: string | null;
                                 closedAt: string | null;
                                 archivedAt: string | null;
+                                nextStepText: string | null;
+                                nextStepDueAt: string | null;
+                                needsHuman: boolean | null;
+                                needsHumanReason: string | null;
+                                priorityScore: number | null;
                                 contactIds: string[];
                                 createdAt: string;
                                 updatedAt: string;
