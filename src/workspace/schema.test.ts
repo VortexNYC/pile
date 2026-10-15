@@ -30,6 +30,13 @@ describe("workspaceAgentSessions schema", () => {
     const infra = config.columns.find((c) => c.name === "infra_failure");
     expect(infra?.hasDefault).toBe(true);
   });
+
+  it("keeps plan nullable — most sessions never publish a checklist (PILE-426)", () => {
+    const column = workspaceAgentSessions.plan;
+    expect(column.name).toBe("plan");
+    expect(column.notNull).toBe(false);
+    expect(column.dataType).toBe("string");
+  });
 });
 
 describe("workspaceEntityAttachments schema", () => {
@@ -186,12 +193,11 @@ describe("workspaceGuidancePacks schema (PILE-423)", () => {
     expect(workspaceGuidancePacks.version.notNull).toBe(true);
   });
 
-  it("keeps agent_sessions' guidance + step_key nullable", () => {
-    const byName = (name: string) =>
-      getTableConfig(workspaceAgentSessions).columns.find(
-        (c) => c.name === name
-      );
-    expect(byName("guidance")?.notNull).toBe(false);
-    expect(byName("step_key")?.notNull).toBe(false);
+  it("keeps agent_sessions' guidance + step_key + plan nullable", () => {
+    const names = ["guidance", "step_key", "plan"] as const;
+    const columns = getTableConfig(workspaceAgentSessions).columns;
+    for (const name of names) {
+      expect(columns.find((c) => c.name === name)?.notNull).toBe(false);
+    }
   });
 });

@@ -326,6 +326,32 @@ optional fields alongside `status`/`result`/`prUrl`/`branch`:
 `todos` (≤50 items, `pending | in_progress | completed`) replaces the
 displayed list wholesale; invalid lists return 400.
 
+### Session plan checklist (PILE-426)
+
+A lane can also publish a **plan** — an ordered checklist on the session
+itself, shown on the session view, counted on the issue's session list, and
+rendered into the live progress comment (taking precedence over `todos`).
+Statuses are Linear's: `pending | inProgress | completed | canceled`. Every
+update **replaces the whole array** — resend every item, not just the one
+that changed. Each publish lands a `session.plan` event on the event stream;
+re-publishing an identical plan is a no-op there.
+
+```json
+{
+  "plan": [
+    { "content": "Read the issue", "status": "completed" },
+    { "content": "Write the fix", "status": "inProgress" },
+    { "content": "Open the PR", "status": "pending" }
+  ]
+}
+```
+
+Write paths: `plan` on `POST …/agent/sessions/{id}/report` (lane token),
+`plan` on `PATCH …/agent/sessions/{id}` (workspace credential), and the
+`set_plan` tool on the lane MCP (`lane:report` permission — every tier).
+Read it back on `GET …/agent/sessions/{id}` (`plan` field) or the `/state`
+payload.
+
 ## Lane events
 
 Every lane (agent session) has an append-only event stream in the workspace
@@ -453,7 +479,7 @@ Tools live in `src/agents/lane-tools.ts`. Each declares one permission:
 
 | permission     | tools                                                                                                                                                                                                                                                                                                                                  |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `lane:report`  | `get_lane_context`, `report_progress`, `set_output`                                                                                                                                                                                                                                                                                    |
+| `lane:report`  | `get_lane_context`, `report_progress`, `set_output`, `set_plan`                                                                                                                                                                                                                                                                        |
 | `repo:read`    | `get_repository`, `get_file_contents`, `list_pull_requests`, `get_pull_request`, `get_pull_request_diff`, `list_pull_request_files`, `list_pull_request_reviews`, `list_review_comments`, `list_review_threads`, `list_check_runs`, `get_check_run_logs`, `get_issue`, `list_issue_comments`, `find_similar_issues`, `compare_commits` |
 | `pr:write`     | `create_pull_request`, `update_pull_request`, `comment_on_pull_request`, `add_labels`, `update_pull_request_branch` — only on PRs headed at the lane's own branch                                                                                                                                                                      |
 | `review:write` | `create_pull_request_review` (no self-approval), `reply_to_review_comment`, `resolve_review_thread` (lane's PR only)                                                                                                                                                                                                                   |

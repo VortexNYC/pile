@@ -156,6 +156,39 @@ describe("workspace agent session data", () => {
     });
   });
 
+  it("persists and clears the plan checklist column (PILE-426)", async () => {
+    await withDb(async (db) => {
+      const session = await createAgentSession(
+        db,
+        sessionInput({ status: "running" })
+      );
+      expect(session.plan).toBeNull();
+
+      const plan = JSON.stringify([
+        { content: "Read issue", status: "completed" },
+        { content: "Write fix", status: "inProgress" },
+      ]);
+      await updateAgentSession(db, WORKSPACE_ID, session.id, { plan });
+      expect((await getAgentSession(db, WORKSPACE_ID, session.id))?.plan).toBe(
+        plan
+      );
+
+      // Whole-array replace — and null clears a published plan.
+      await updateAgentSession(db, WORKSPACE_ID, session.id, {
+        plan: JSON.stringify([{ content: "Ship it", status: "pending" }]),
+      });
+      expect(
+        JSON.parse(
+          (await getAgentSession(db, WORKSPACE_ID, session.id))?.plan ?? "null"
+        )
+      ).toEqual([{ content: "Ship it", status: "pending" }]);
+      await updateAgentSession(db, WORKSPACE_ID, session.id, { plan: null });
+      expect(
+        (await getAgentSession(db, WORKSPACE_ID, session.id))?.plan
+      ).toBeNull();
+    });
+  });
+
   it("rewinds createdAt on update so queue dwell does not count as runtime", async () => {
     await withDb(async (db) => {
       const stale = new Date(Date.now() - 30 * 60 * 1000).toISOString();
@@ -997,7 +1030,13 @@ describe("guidance packs (PILE-423)", () => {
       );
       expect(session.stepKey).toBe("contacted");
       const refs = JSON.stringify([
-        { id: "p1", name: "P", scope: "step", scopeKey: "contacted", version: 2 },
+        {
+          id: "p1",
+          name: "P",
+          scope: "step",
+          scopeKey: "contacted",
+          version: 2,
+        },
       ]);
       const updated = await updateAgentSession(db, org, session.id, {
         guidance: refs,

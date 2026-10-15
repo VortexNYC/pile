@@ -904,6 +904,10 @@ export const workspaceAgentSessions = sqliteTable(
     // drives step-scoped guidance resolution). Persisted so promotion and
     // retries resolve the same scope.
     stepKey: text("step_key" as string),
+    // PILE-426 — the agent's published plan checklist: JSON
+    // [{content, status}] (pending | inProgress | completed | canceled).
+    // Each write replaces the whole array; null = no plan published.
+    plan: text("plan" as string),
   },
   (table) => [
     index("agent_sessions_organization_idx" as string).on(

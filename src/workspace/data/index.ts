@@ -1361,6 +1361,8 @@ export async function updateAgentSession(
     /** PILE-423 — JSON guidance-pack refs recorded at dispatch. */
     guidance: string | null;
     stepKey: string | null;
+    /** PILE-426 — serialized plan checklist JSON (or null to clear). */
+    plan: string | null;
   }>
 ) {
   const existing = await getAgentSession(db, organizationId, id);
@@ -1426,6 +1428,7 @@ export async function updateAgentSession(
     set.awaitingEscalatedAt = input.awaitingEscalatedAt;
   if (input.guidance !== undefined) set.guidance = input.guidance;
   if (input.stepKey !== undefined) set.stepKey = input.stepKey;
+  if (input.plan !== undefined) set.plan = input.plan;
   // A retry/redispatch lane inherits the review history of the lane it
   // replaces, so the next review still range-diffs from the last verdict.
   if (
@@ -1787,7 +1790,11 @@ const GUIDANCE_SCOPE_ORDER: Record<GuidanceScope, number> = {
 export async function resolveGuidancePacks(
   db: WorkspaceDb,
   organizationId: string,
-  keys: { teamId?: string | null; status?: string | null; stepKey?: string | null }
+  keys: {
+    teamId?: string | null;
+    status?: string | null;
+    stepKey?: string | null;
+  }
 ): Promise<GuidancePack[]> {
   const rows = await db
     .select()
@@ -1819,7 +1826,7 @@ export async function resolveGuidancePacks(
       )
     )
     .all();
-  return rows.sort(
+  return rows.toSorted(
     (a, b) =>
       GUIDANCE_SCOPE_ORDER[a.scope] - GUIDANCE_SCOPE_ORDER[b.scope] ||
       a.createdAt.localeCompare(b.createdAt) ||

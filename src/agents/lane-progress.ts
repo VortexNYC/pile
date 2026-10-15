@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type { AgentSession, AgentSessionStatus } from "../types/workspace.js";
+import { sessionPlanMarkdown, type SessionPlan } from "./session-plan.js";
 
 /** One live comment per lane on its issue (PILE-290): created when the lane
  *  starts running, edited in place as it reports steps, frozen on terminal. */
@@ -150,6 +151,10 @@ export interface LaneProgressInput {
   >;
   step: string | null;
   todos: LaneTodo[] | null;
+  /** PILE-426 — the session's published plan checklist. When present it
+   *  renders in place of the looser `todos` task list (the plan is the
+   *  canonical, session-persisted version of the same checklist). */
+  plan?: SessionPlan | null;
   typical: { ms: number; samples: number } | null;
   /** Pile API origin — used for the session link when the provider has no
    *  UI url of its own. */
@@ -158,7 +163,7 @@ export interface LaneProgressInput {
 }
 
 export function renderLaneProgressComment(input: LaneProgressInput): string {
-  const { session, step, todos, typical, now } = input;
+  const { session, step, todos, plan, typical, now } = input;
   const status = session.status as AgentSessionStatus;
   const terminal = TERMINAL.has(status);
   const started = Date.parse(session.startedAt ?? session.createdAt);
@@ -204,7 +209,10 @@ export function renderLaneProgressComment(input: LaneProgressInput): string {
   }
   if (session.branch) lines.push(`- Branch: \`${session.branch}\``);
   if (session.prUrl) lines.push(`- PR: ${session.prUrl}`);
-  if (todos && todos.length > 0) {
+  if (plan && plan.length > 0) {
+    lines.push("", "**Plan**");
+    lines.push(...sessionPlanMarkdown(plan));
+  } else if (todos && todos.length > 0) {
     lines.push("", "**Tasks**");
     for (const todo of todos) {
       const mark = todo.status === "completed" ? "x" : " ";

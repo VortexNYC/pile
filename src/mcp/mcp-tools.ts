@@ -6710,7 +6710,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdAgentSessionsSessionId",
-    "description": "Update agent session (PATCH /workspaces/{organizationId}/agent/sessions/{sessionId}) Path params (top-level, required): organizationId, sessionId. Request body goes in the \"body\" object; fields: status, result, url, prUrl, prState, branch.",
+    "description": "Update agent session (PATCH /workspaces/{organizationId}/agent/sessions/{sessionId}) Path params (top-level, required): organizationId, sessionId. Request body goes in the \"body\" object; fields: status, result, url, prUrl, prState, branch, plan.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}",
     "inputSchema": {
@@ -6751,6 +6751,33 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "branch": {
               "type": "string"
+            },
+            "plan": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "content": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "pending",
+                      "inProgress",
+                      "completed",
+                      "canceled"
+                    ]
+                  }
+                },
+                "required": [
+                  "content",
+                  "status"
+                ]
+              },
+              "maxItems": 50
             }
           }
         }

@@ -246,4 +246,51 @@ describe("lane MCP endpoint", () => {
       events.filter((e) => e.type === "lane.tool").map((e) => e.message)
     ).toEqual(expect.arrayContaining(["get_lane_context", "set_output"]));
   });
+
+  it("publishes the session plan via the set_plan tool (PILE-426)", async () => {
+    const { session, laneToken, stub } = await registerLane("VortexNYC/pile");
+    const plan = [
+      { content: "Read the issue", status: "completed" },
+      { content: "Write the fix", status: "inProgress" },
+    ];
+    const res = await mcp(
+      `/workspaces/${organizationId}/agent/sessions/${session.id}/mcp`,
+      laneToken,
+      {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: { name: "set_plan", arguments: { plan } },
+      }
+    );
+    const parsed = rpcResponse.parse(await res.json());
+    expect(parsed.result?.isError).toBe(false);
+
+    const updated = await stub.getAgentSession(session.id);
+    expect(JSON.parse(updated?.plan ?? "null")).toEqual(plan);
+    const events = await stub.listAgentSessionEvents(session.id);
+    expect(events.some((e) => e.type === "session.plan")).toBe(true);
+
+    // Invalid plans are rejected inside the tool before any write.
+    const bad = await mcp(
+      `/workspaces/${organizationId}/agent/sessions/${session.id}/mcp`,
+      laneToken,
+      {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/call",
+        params: {
+          name: "set_plan",
+          arguments: { plan: [{ content: "x", status: "in_progress" }] },
+        },
+      }
+    );
+    const badParsed = rpcResponse.parse(await bad.json());
+    expect(
+      badParsed.error !== undefined || badParsed.result?.isError === true
+    ).toBe(true);
+    expect(
+      JSON.parse((await stub.getAgentSession(session.id))?.plan ?? "null")
+    ).toEqual(plan);
+  });
 });

@@ -1894,6 +1894,11 @@ export interface paths {
                             awaitingEscalatedAt?: string | null;
                             paused?: number;
                             stepKey?: string | null;
+                            plan?: {
+                                content: string;
+                                /** @enum {string} */
+                                status: "pending" | "inProgress" | "completed" | "canceled";
+                            }[] | null;
                             guidance?: {
                                 id: string;
                                 name: string;
@@ -2006,6 +2011,11 @@ export interface paths {
                                 awaitingEscalatedAt?: string | null;
                                 paused?: number;
                                 stepKey?: string | null;
+                                plan?: {
+                                    content: string;
+                                    /** @enum {string} */
+                                    status: "pending" | "inProgress" | "completed" | "canceled";
+                                }[] | null;
                                 guidance?: {
                                     id: string;
                                     name: string;
@@ -2229,6 +2239,11 @@ export interface paths {
                                 awaitingEscalatedAt?: string | null;
                                 paused?: number;
                                 stepKey?: string | null;
+                                plan?: {
+                                    content: string;
+                                    /** @enum {string} */
+                                    status: "pending" | "inProgress" | "completed" | "canceled";
+                                }[] | null;
                                 guidance?: {
                                     id: string;
                                     name: string;
@@ -2304,6 +2319,11 @@ export interface paths {
                                 awaitingEscalatedAt?: string | null;
                                 paused?: number;
                                 stepKey?: string | null;
+                                plan?: {
+                                    content: string;
+                                    /** @enum {string} */
+                                    status: "pending" | "inProgress" | "completed" | "canceled";
+                                }[] | null;
                                 guidance?: {
                                     id: string;
                                     name: string;
@@ -2493,6 +2513,11 @@ export interface paths {
                                 awaitingEscalatedAt?: string | null;
                                 paused?: number;
                                 stepKey?: string | null;
+                                plan?: {
+                                    content: string;
+                                    /** @enum {string} */
+                                    status: "pending" | "inProgress" | "completed" | "canceled";
+                                }[] | null;
                                 guidance?: {
                                     id: string;
                                     name: string;
@@ -2715,6 +2740,11 @@ export interface paths {
                                 awaitingEscalatedAt?: string | null;
                                 paused?: number;
                                 stepKey?: string | null;
+                                plan?: {
+                                    content: string;
+                                    /** @enum {string} */
+                                    status: "pending" | "inProgress" | "completed" | "canceled";
+                                }[] | null;
                                 guidance?: {
                                     id: string;
                                     name: string;
@@ -2831,6 +2861,11 @@ export interface paths {
                             awaitingEscalatedAt?: string | null;
                             paused?: number;
                             stepKey?: string | null;
+                            plan?: {
+                                content: string;
+                                /** @enum {string} */
+                                status: "pending" | "inProgress" | "completed" | "canceled";
+                            }[] | null;
                             guidance?: {
                                 id: string;
                                 name: string;
@@ -2911,6 +2946,11 @@ export interface paths {
                         prUrl?: string;
                         prState?: string;
                         branch?: string;
+                        plan?: {
+                            content: string;
+                            /** @enum {string} */
+                            status: "pending" | "inProgress" | "completed" | "canceled";
+                        }[];
                     };
                 };
             };
@@ -2957,6 +2997,11 @@ export interface paths {
                             awaitingEscalatedAt?: string | null;
                             paused?: number;
                             stepKey?: string | null;
+                            plan?: {
+                                content: string;
+                                /** @enum {string} */
+                                status: "pending" | "inProgress" | "completed" | "canceled";
+                            }[] | null;
                             guidance?: {
                                 id: string;
                                 name: string;
@@ -3354,6 +3399,11 @@ export interface paths {
                             awaitingEscalatedAt?: string | null;
                             paused?: number;
                             stepKey?: string | null;
+                            plan?: {
+                                content: string;
+                                /** @enum {string} */
+                                status: "pending" | "inProgress" | "completed" | "canceled";
+                            }[] | null;
                             guidance?: {
                                 id: string;
                                 name: string;
@@ -3466,6 +3516,11 @@ export interface paths {
                             awaitingEscalatedAt?: string | null;
                             paused?: number;
                             stepKey?: string | null;
+                            plan?: {
+                                content: string;
+                                /** @enum {string} */
+                                status: "pending" | "inProgress" | "completed" | "canceled";
+                            }[] | null;
                             guidance?: {
                                 id: string;
                                 name: string;
@@ -3704,6 +3759,11 @@ export interface paths {
                             awaitingEscalatedAt?: string | null;
                             paused?: number;
                             stepKey?: string | null;
+                            plan?: {
+                                content: string;
+                                /** @enum {string} */
+                                status: "pending" | "inProgress" | "completed" | "canceled";
+                            }[] | null;
                             guidance?: {
                                 id: string;
                                 name: string;
@@ -3809,6 +3869,11 @@ export interface paths {
                                 awaitingEscalatedAt?: string | null;
                                 paused?: number;
                                 stepKey?: string | null;
+                                plan?: {
+                                    content: string;
+                                    /** @enum {string} */
+                                    status: "pending" | "inProgress" | "completed" | "canceled";
+                                }[] | null;
                                 guidance?: {
                                     id: string;
                                     name: string;
@@ -3943,6 +4008,11 @@ export interface paths {
                                 awaitingEscalatedAt?: string | null;
                                 paused?: number;
                                 stepKey?: string | null;
+                                plan?: {
+                                    content: string;
+                                    /** @enum {string} */
+                                    status: "pending" | "inProgress" | "completed" | "canceled";
+                                }[] | null;
                                 guidance?: {
                                     id: string;
                                     name: string;
@@ -4083,6 +4153,11 @@ export interface paths {
                             awaitingEscalatedAt?: string | null;
                             paused?: number;
                             stepKey?: string | null;
+                            plan?: {
+                                content: string;
+                                /** @enum {string} */
+                                status: "pending" | "inProgress" | "completed" | "canceled";
+                            }[] | null;
                             guidance?: {
                                 id: string;
                                 name: string;
@@ -4202,6 +4277,11 @@ export interface paths {
                             awaitingEscalatedAt?: string | null;
                             paused?: number;
                             stepKey?: string | null;
+                            plan?: {
+                                content: string;
+                                /** @enum {string} */
+                                status: "pending" | "inProgress" | "completed" | "canceled";
+                            }[] | null;
                             guidance?: {
                                 id: string;
                                 name: string;
@@ -4327,6 +4407,11 @@ export interface paths {
                             awaitingEscalatedAt?: string | null;
                             paused?: number;
                             stepKey?: string | null;
+                            plan?: {
+                                content: string;
+                                /** @enum {string} */
+                                status: "pending" | "inProgress" | "completed" | "canceled";
+                            }[] | null;
                             guidance?: {
                                 id: string;
                                 name: string;

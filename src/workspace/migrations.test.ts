@@ -119,3 +119,11 @@ describe("v77 guidance packs", () => {
     );
   });
 });
+
+describe("v78 session plan", () => {
+  it("adds the plan checklist column to agent_sessions", () => {
+    expect(workspaceMigrations.migrations.m0077).toBe(
+      "ALTER TABLE agent_sessions ADD COLUMN plan TEXT"
+    );
+  });
+});
