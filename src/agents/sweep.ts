@@ -55,6 +55,11 @@ import { parseStoredSecondaryRepos } from "./secondary-repos.js";
 
 export const DEFAULT_TIMEOUT_MINUTES = 60;
 export const DEFAULT_INACTIVITY_MINUTES = 20;
+// PILE-420 — silence past this marks a live lane `stale` + alerts the CoS
+// channel (notification + session.stale automation event). Below the
+// inactivity kill so the alert has a window to matter; org metadata
+// `sessionStaleAfterMinutes` overrides per workspace.
+export const DEFAULT_STALE_MINUTES = 15;
 export const DEFAULT_PROVISION_TIMEOUT_MINUTES = 10;
 // A provider call that hangs must never stall the whole org's sweep — the
 // loop is serial, so one wedged sandbox otherwise starves every session.
@@ -385,6 +390,45 @@ async function escalateBudgetExceeded(
   }
 }
 
+// PILE-420 — confirmed-silent lane below the kill window: mark `stale`
+// (idempotent — only `running` transitions) then alert the Chief of Staff
+// channel: the `session.stale` workspace event fires event automations, so a
+// CoS agent registered on it picks the lane up; the DO notification reaches
+// the routed human as the fallback.
+async function markStaleAndAlert(
+  env: WorkerEnv,
+  stub: DurableObjectStub<WorkspaceDO>,
+  organizationId: string,
+  session: AgentSession,
+  staleMinutes: number,
+  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
+): Promise<void> {
+  const marked = await stub
+    .markAgentSessionStale(session.id, { staleAfterMinutes: staleMinutes })
+    .catch((err: unknown) => {
+      console.error("stale mark failed", {
+        session: session.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return null;
+    });
+  if (!marked) return;
+  await fireEventAutomations(
+    env,
+    stub,
+    organizationId,
+    "session.stale",
+    issueEventTarget(stub, session.issueId),
+    `Agent session ${session.id} (${session.agentId}) went stale — no activity or heartbeat for ${staleMinutes}m.`,
+    ctx
+  ).catch((err: unknown) => {
+    console.error("session.stale automation fire failed", {
+      session: session.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  });
+}
+
 const MAX_AUTO_RETRIES = 1;
 // PILE-240 — consecutive infra-class deaths across a provider's lanes mean
 // the provider/substrate is unhealthy (devin's fleet repeatedly wedged with
@@ -588,6 +632,10 @@ async function promoteQueuedSessions(
     // human answer, not queued: no promote, no orphan rescue. The respond
     // route resumes it (or keeps it waiting when queuedAfter is also set).
     if (session.awaitingActivityId) continue;
+    // PILE-420 — operator pause holds (`paused`): not queue-parked, so the
+    // orphan-flip and edge promotion must leave them alone. Only the
+    // resume drain (releasePausedSessions) releases them.
+    if (session.paused === 1) continue;
     if (!session.queuedAfter) {
       // Queue orphan (no edge recorded): rewinding createdAt on the flip
       // keeps its stale queue timestamp from tripping the provision
@@ -655,41 +703,7 @@ async function promoteQueuedSessions(
       }
     }
     try {
-      const issue = await stub.getIssue(session.issueId);
-      if (!issue) continue;
-      const providerConfig = await loadProviderConfig(
-        env,
-        stub,
-        session.agentId
-      );
-      const effectiveEnv = resolveAgentEnv(env, providerConfig ?? undefined);
-      // PILE-321 — promotion is a dispatch: a repo-less issue inherits the
-      // team's defaultRepo here too.
-      const promotedIssue = await inheritTeamDefaultRepo(
-        createD1(env.D1),
-        stub,
-        organizationId,
-        issue,
-        session.actorId
-      );
-      await dispatchAgent(
-        effectiveEnv,
-        session.agentId,
-        organizationId,
-        promotedIssue,
-        {
-          id: session.actorId,
-          organizationId,
-          type: session.actorType,
-          permissions: [],
-        },
-        undefined,
-        ctx,
-        {
-          promoteSessionId: session.id,
-          secondaryRepos: parseStoredSecondaryRepos(session.secondaryRepos),
-        }
-      );
+      await promoteQueuedSession(env, stub, organizationId, session, ctx);
     } catch (err) {
       console.error("queued session promotion failed", {
         session: session.id,
@@ -727,6 +741,86 @@ async function escalateStaleElicitations(
       });
     });
   }
+}
+
+/** The real dispatch behind promotion (queue edge resolved or pause drain):
+ *  issue lookup → provider config → defaultRepo inherit → dispatchAgent with
+ *  `promoteSessionId`, which flips the parked row to `created` and runs it. */
+async function promoteQueuedSession(
+  env: WorkerEnv,
+  stub: DurableObjectStub<WorkspaceDO>,
+  organizationId: string,
+  session: AgentSession,
+  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
+): Promise<void> {
+  const issue = await stub.getIssue(session.issueId);
+  if (!issue) return;
+  const providerConfig = await loadProviderConfig(env, stub, session.agentId);
+  const effectiveEnv = resolveAgentEnv(env, providerConfig ?? undefined);
+  // PILE-321 — promotion is a dispatch: a repo-less issue inherits the
+  // team's defaultRepo here too.
+  const promotedIssue = await inheritTeamDefaultRepo(
+    createD1(env.D1),
+    stub,
+    organizationId,
+    issue,
+    session.actorId
+  );
+  await dispatchAgent(
+    effectiveEnv,
+    session.agentId,
+    organizationId,
+    promotedIssue,
+    {
+      id: session.actorId,
+      organizationId,
+      type: session.actorType,
+      permissions: [],
+    },
+    undefined,
+    ctx,
+    {
+      promoteSessionId: session.id,
+      secondaryRepos: parseStoredSecondaryRepos(session.secondaryRepos),
+    }
+  );
+}
+
+/** PILE-420 — resume drain: release every pause-held session for `agentId`,
+ *  oldest first. Pure holds (no queuedAfter edge) promote immediately; a
+ *  held row that also carries a queue edge just drops the flag and stays
+ *  parked for the normal chain. Returns the released ids for the API. */
+export async function releasePausedSessions(
+  env: WorkerEnv,
+  stub: DurableObjectStub<WorkspaceDO>,
+  organizationId: string,
+  agentId: string,
+  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
+): Promise<string[]> {
+  const held = await stub.listPauseHeldSessions(agentId);
+  const released: string[] = [];
+  for (const session of held) {
+    await stub
+      .updateAgentSession(session.id, { paused: 0 })
+      .catch((err: unknown) => {
+        console.error("pause hold release failed", {
+          session: session.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+    released.push(session.id);
+    if (session.queuedAfter) continue;
+    try {
+      await promoteQueuedSession(env, stub, organizationId, session, ctx);
+    } catch (err) {
+      console.error("pause-held session promote failed", {
+        session: session.id,
+        agentId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  return released;
 }
 
 /** Tear down a lane-scoped DB once the session lands terminal, then clear the
@@ -1098,7 +1192,14 @@ export async function sweepAgentSessions(
       const sessions = [
         ...(await stub.listAgentSessions({ status: "running" })),
         ...(await stub.listAgentSessions({ status: "created" })),
+        // PILE-420 — stale lanes stay in the poll set: a heartbeat or a
+        // provider-reported `running` flips them back; staying silent past
+        // the inactivity window cancels them as before.
+        ...(await stub.listAgentSessions({ status: "stale" })),
       ];
+      const staleMinutes = await stub
+        .getSessionStaleMinutes()
+        .catch(() => DEFAULT_STALE_MINUTES);
       // Terminal sessions stop being polled, but their PRs keep moving —
       // reconcile session.prState and the issue's PR fields from GitHub so a
       // merged PR doesn't sit displayed as "open" forever.
@@ -1227,8 +1328,9 @@ export async function sweepAgentSessions(
         }
 
         if (!provider) {
-          // External session: no remote to poll. If it has stopped reporting
-          // past the inactivity window, mark it canceled rather than zombie.
+          // External session: no remote to poll. Silence past the stale
+          // window marks it `stale` + alerts (PILE-420); past the inactivity
+          // window it's canceled rather than zombie.
           if (
             progressIsStale({
               now,
@@ -1252,6 +1354,16 @@ export async function sweepAgentSessions(
                 probeTimeoutMs
               )
             );
+          } else if (
+            session.status === "running" &&
+            progressIsStale({
+              now,
+              createdAt: session.createdAt,
+              lastProgressAt: session.lastProgressAt,
+              inactivityMinutes: staleMinutes,
+            })
+          ) {
+            await markStaleAndAlert(env, stub, id, session, staleMinutes, ctx);
           }
           return;
         }
@@ -1361,7 +1473,9 @@ export async function sweepAgentSessions(
               now,
               createdAt: session.createdAt,
               lastProgressAt: session.lastProgressAt,
-              inactivityMinutes,
+              // PILE-420 — probe at the stale threshold: getState's lastSeen
+              // / state-hash rescue applies to the stale mark too.
+              inactivityMinutes: Math.min(staleMinutes, inactivityMinutes),
             })
           ) {
             return;
@@ -1401,6 +1515,22 @@ export async function sweepAgentSessions(
         }
 
         if (stillAlive) return;
+        // PILE-420 — confirmed silent but inside the kill window: mark
+        // `stale` + alert instead of canceling. The gap between the stale
+        // and inactivity thresholds is the CoS/human's window to act.
+        if (
+          !progressIsStale({
+            now,
+            createdAt: session.createdAt,
+            lastProgressAt: session.lastProgressAt,
+            inactivityMinutes,
+          })
+        ) {
+          if (session.status === "running") {
+            await markStaleAndAlert(env, stub, id, session, staleMinutes, ctx);
+          }
+          return;
+        }
         await cancelSession(
           stub,
           session,

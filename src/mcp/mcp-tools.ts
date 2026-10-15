@@ -200,6 +200,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdAgentPausesAgentId",
+    "description": "Delete agent pause (DELETE /workspaces/{organizationId}/agent/pauses/{agentId}) Path params (top-level, required): organizationId, agentId.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/agent/pauses/{agentId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "agentId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "agentId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdAgentProvidersAgentId",
     "description": "Delete agent provider (DELETE /workspaces/{organizationId}/agent/providers/{agentId}) Path params (top-level, required): organizationId, agentId.",
     "method": "DELETE",
@@ -2042,6 +2063,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "List agent fleet health (GET /workspaces/{organizationId}/agent/fleet-health) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/agent/fleet-health",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdAgentPauses",
+    "description": "List agent pauses (GET /workspaces/{organizationId}/agent/pauses) Path params (top-level, required): organizationId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/agent/pauses",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -6533,6 +6571,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "enum": [
                 "created",
                 "running",
+                "stale",
                 "waiting",
                 "completed",
                 "failed",
@@ -10331,6 +10370,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "enum": [
                 "created",
                 "running",
+                "stale",
                 "waiting",
                 "completed",
                 "failed",
@@ -10691,6 +10731,36 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "minimum": 1,
               "maximum": 1440,
               "description": "Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "organizationId",
+        "sessionId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdAgentSessionsSessionIdStop",
+    "description": "Create agent session stop (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/stop) Path params (top-level, required): organizationId, sessionId. Request body goes in the \"body\" object; fields: reason.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}/stop",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "reason": {
+              "type": "string"
             }
           },
           "additionalProperties": false
@@ -17364,6 +17434,36 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "putWorkspacesOrganizationIdAgentPausesAgentId",
+    "description": "Update agent pause (PUT /workspaces/{organizationId}/agent/pauses/{agentId}) Path params (top-level, required): organizationId, agentId. Request body goes in the \"body\" object; fields: reason.",
+    "method": "PUT",
+    "path": "/workspaces/{organizationId}/agent/pauses/{agentId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "agentId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "reason": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "agentId",
         "organizationId"
       ]
     }

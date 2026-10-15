@@ -3006,6 +3006,175 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     };
   }
 
+  // ---- agent type pauses (PILE-420) ----
+
+  listAgentPauses() {
+    return data.listAgentPauses(this.db, this.organizationId);
+  }
+
+  getAgentPause(agentId: string) {
+    return data.getAgentPause(this.db, this.organizationId, agentId);
+  }
+
+  listPauseHeldSessions(agentId: string) {
+    return data.listPauseHeldSessions(this.db, this.organizationId, agentId);
+  }
+
+  /** Pause an agent type workspace-wide: new dispatches of `agentId` park
+   *  as `waiting` + `paused` until resume. Upserts — re-pausing refreshes
+   *  the reason/actor. Audited with actor and reason (operator action). */
+  async pauseAgentType(
+    agentId: string,
+    input: {
+      reason?: string | null;
+      actorId?: string | null;
+      actorType?: string | null;
+    }
+  ) {
+    await this.ready;
+    const existing = await data.getAgentPause(
+      this.db,
+      this.organizationId,
+      agentId
+    );
+    const row = await data.upsertAgentPause(
+      this.db,
+      this.organizationId,
+      agentId,
+      { reason: input.reason, createdBy: input.actorId }
+    );
+    this.audit(
+      "agent_type.paused",
+      "agent_type",
+      agentId,
+      input.actorId,
+      {
+        reason: { from: existing?.reason ?? null, to: row?.reason ?? null },
+      },
+      { actorType: input.actorType }
+    );
+    return row;
+  }
+
+  /** Resume an agent type: deletes the pause row (the caller drains held
+   *  sessions in order). Returns false when nothing was paused. */
+  async resumeAgentType(
+    agentId: string,
+    input: { actorId?: string | null; actorType?: string | null }
+  ): Promise<boolean> {
+    await this.ready;
+    const ok = await data.deleteAgentPause(
+      this.db,
+      this.organizationId,
+      agentId
+    );
+    if (ok) {
+      this.audit(
+        "agent_type.resumed",
+        "agent_type",
+        agentId,
+        input.actorId,
+        null,
+        { actorType: input.actorType }
+      );
+    }
+    return ok;
+  }
+
+  /** PILE-420 — minutes of silence (no activity, no heartbeat) before a
+   *  live lane is marked `stale` and the alert fires. Org metadata
+   *  `sessionStaleAfterMinutes`; default 15 — below the 20m inactivity
+   *  kill so the stale window gives the CoS/human time to act. */
+  async getSessionStaleMinutes(): Promise<number> {
+    const d1 = createD1(this.env.D1);
+    const row = await d1
+      .select({ metadata: organization.metadata })
+      .from(organization)
+      .where(eq(organization.id, this.organizationId))
+      .get();
+    const parsed = safeJSON(row?.metadata ?? null) as Record<
+      string,
+      unknown
+    > | null;
+    const value = parsed?.sessionStaleAfterMinutes;
+    return typeof value === "number" && value > 0 ? value : 15;
+  }
+
+  /** PILE-420 — a `running` lane that went silent moves to `stale`
+   *  (non-terminal): `session.stale` event, a status activity, a
+   *  `lane_stale` notification to the routed human (assignee else the
+   *  dispatching actor — the same routing needs-input uses), and an
+   *  `agent_session.updated` emit so live boards repaint. Idempotent:
+   *  only `running` transitions, so a stale lane doesn't re-alert. */
+  async markAgentSessionStale(
+    sessionId: string,
+    input: { staleAfterMinutes: number }
+  ): Promise<AgentSession | null> {
+    await this.ready;
+    const session = await this.getAgentSession(sessionId);
+    if (!session || session.status !== "running") return null;
+    const updated = await data.updateAgentSession(
+      this.db,
+      this.organizationId,
+      sessionId,
+      { status: "stale" }
+    );
+    if (!updated) return null;
+    const issue = await this.getIssue(session.issueId);
+    const message = `Session stale — no activity or heartbeat for ${input.staleAfterMinutes}m`;
+    await data.addAgentSessionEvent(this.db, {
+      sessionId,
+      type: "session.stale",
+      message,
+      payload: {
+        issueId: issue?.id ?? null,
+        staleAfterMinutes: input.staleAfterMinutes,
+      },
+    });
+    await this.addAgentActivity({
+      sessionId,
+      type: "status",
+      message,
+    });
+    try {
+      const humanAssignee =
+        issue?.assigneeId && !issue.assigneeId.startsWith("lane:")
+          ? issue.assigneeId
+          : null;
+      const recipientId = humanAssignee ?? session.actorId;
+      const recipientType: data.RecipientType = humanAssignee
+        ? "user"
+        : session.actorType;
+      if (recipientId && issue) {
+        await this.createNotification({
+          recipientId,
+          recipientType,
+          issueId: issue.id,
+          type: "lane_stale",
+          metadata: {
+            sessionId,
+            agentId: session.agentId,
+            staleAfterMinutes: input.staleAfterMinutes,
+          },
+        });
+      }
+    } catch (err) {
+      console.error("stale lane notify failed", {
+        sessionId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+    if (issue) {
+      await this.emit({
+        type: "agent_session.updated",
+        organizationId: this.organizationId,
+        session: updated,
+        issue,
+      });
+    }
+    return updated;
+  }
+
   // ---- agent automations ----
   createAgentAutomation(input: data.AgentAutomationInput) {
     return data.createAgentAutomation(this.db, this.organizationId, input);

@@ -245,7 +245,7 @@ export class CfAgentProvider implements AgentProvider {
                 "completed",
                 "failed",
                 "canceled",
-              ] as const
+              ] as const satisfies readonly AgentSessionStatus[]
             ).includes(rawStatus as AgentSessionStatus)
           ? (rawStatus as AgentSessionStatus)
           : undefined;

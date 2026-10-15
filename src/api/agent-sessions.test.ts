@@ -3260,4 +3260,187 @@ describe("agent sessions API", () => {
     expect(payload.prompt).toBe("status report please");
     expect(payload.delivery).toBe("queued");
   });
+
+  it("stops a running session: session.stopped event, provider cancel, terminal activities rejected", async () => {
+    const agentId = `mock-stop-${crypto.randomUUID().slice(0, 8)}`;
+    const cancels: string[] = [];
+    registerAgentProvider(
+      agentId,
+      () =>
+        new MockAgentProvider(agentId, {
+          cancel: (id) => {
+            cancels.push(id);
+          },
+        })
+    );
+    const issueRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ title: "Stop target" }),
+      }),
+      env
+    );
+    const issue = await issueRes.json<{ id: string }>();
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: "user-1",
+      actorType: "user",
+      status: "running",
+      providerSessionId: "prov-stop-1",
+      startedAt: new Date().toISOString(),
+    });
+
+    const stopRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/stop`,
+        {
+          method: "POST",
+          token,
+          body: JSON.stringify({ reason: "operator abort" }),
+        }
+      ),
+      env
+    );
+    expect(stopRes.status).toBe(200);
+    const stopped = await stopRes.json<{ status: string; result: string }>();
+    expect(stopped.status).toBe("canceled");
+    expect(stopped.result).toContain("Stopped by");
+    expect(stopped.result).toContain("operator abort");
+    expect(cancels).toEqual(["prov-stop-1"]);
+
+    const events = await stub.listAgentSessionEvents(session.id, {});
+    const evt = events.find((e) => e.type === "session.stopped");
+    expect(evt).toBeDefined();
+    expect(JSON.parse(evt?.payload ?? "{}")).toMatchObject({
+      actorId: expect.any(String),
+      reason: "operator abort",
+    });
+
+    // Terminal sessions accept no further activities (PILE-420).
+    const activityRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/activities`,
+        {
+          method: "POST",
+          token,
+          body: JSON.stringify({ type: "thought", message: "too late" }),
+        }
+      ),
+      env
+    );
+    expect(activityRes.status).toBe(409);
+
+    // Stopping again is a no-op, not a second event.
+    const again = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/stop`,
+        { method: "POST", token, body: JSON.stringify({}) }
+      ),
+      env
+    );
+    expect(again.status).toBe(200);
+    const stoppedEvents = (
+      await stub.listAgentSessionEvents(session.id, {})
+    ).filter((e) => e.type === "session.stopped");
+    expect(stoppedEvents).toHaveLength(1);
+  });
+
+  it("pauses an agent type, holds dispatches, and drains them on resume", async () => {
+    const agentId = `mock-ptype-${crypto.randomUUID().slice(0, 8)}`;
+    const dispatches: string[] = [];
+    registerAgentProvider(
+      agentId,
+      () =>
+        new MockAgentProvider(agentId, {
+          dispatch: (_org, _issue, _model, ctx) => {
+            dispatches.push(ctx?.sessionId ?? "");
+            return {
+              id: `prov-${ctx?.sessionId}`,
+              agentId,
+              status: "running" as const,
+            };
+          },
+        })
+    );
+
+    const pauseRes = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/pauses/${agentId}`, {
+        method: "PUT",
+        token,
+        body: JSON.stringify({ reason: "rolling brownout" }),
+      }),
+      env
+    );
+    expect(pauseRes.status).toBe(200);
+    const pause = await pauseRes.json<{ agentId: string; reason: string }>();
+    expect(pause.agentId).toBe(agentId);
+    expect(pause.reason).toBe("rolling brownout");
+
+    const listRes = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/pauses`, { token }),
+      env
+    );
+    const { pauses } = await listRes.json<{
+      pauses: Array<{ agentId: string }>;
+    }>();
+    expect(pauses.some((p) => p.agentId === agentId)).toBe(true);
+
+    const issueRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ title: "Paused dispatch" }),
+      }),
+      env
+    );
+    const issue = await issueRes.json<{ id: string }>();
+    const dispatchRes = await app.fetch(
+      request(`/workspaces/${organizationId}/issues/${issue.id}/dispatch`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ agentId }),
+      }),
+      env
+    );
+    expect(dispatchRes.status).toBe(201);
+    const dispatched = await dispatchRes.json<{
+      id: string;
+      status: string;
+      paused: number;
+    }>();
+    expect(dispatched.status).toBe("waiting");
+    expect(dispatched.paused).toBe(1);
+    expect(dispatches).toHaveLength(0);
+
+    const resumeRes = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/pauses/${agentId}`, {
+        method: "DELETE",
+        token,
+      }),
+      env
+    );
+    expect(resumeRes.status).toBe(200);
+    const resumed = await resumeRes.json<{
+      ok: boolean;
+      released: string[];
+    }>();
+    expect(resumed.released).toEqual([dispatched.id]);
+    expect(dispatches).toEqual([dispatched.id]);
+
+    // Resume with nothing paused and nothing held 404s.
+    const absent = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/pauses/${agentId}`, {
+        method: "DELETE",
+        token,
+      }),
+      env
+    );
+    expect(absent.status).toBe(404);
+  });
 });

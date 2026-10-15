@@ -1502,6 +1502,76 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "agent sessions stop create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/stop",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "sessionId",
+        flag: "session",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "reason",
+        flag: "reason",
+      },
+    ],
+  },
+  "agent pauses list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/agent/pauses",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "agent pauses update": {
+    method: "PUT",
+    path: "/workspaces/{organizationId}/agent/pauses/{agentId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "agentId",
+        flag: "agent-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "reason",
+        flag: "reason",
+      },
+    ],
+  },
+  "agent pauses delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/agent/pauses/{agentId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "agentId",
+        flag: "agent-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "agent sessions poll create": {
     method: "POST",
     path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/poll",

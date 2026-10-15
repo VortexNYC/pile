@@ -3774,6 +3774,7 @@
                       "enum": [
                         "created",
                         "running",
+                        "stale",
                         "waiting",
                         "completed",
                         "failed",
@@ -3869,6 +3870,9 @@
                     "awaitingEscalatedAt": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "paused": {
+                      "type": "number"
                     },
                     "derivedStatus": {
                       "type": "string",
@@ -4079,6 +4083,7 @@
                           "enum": [
                             "created",
                             "running",
+                            "stale",
                             "waiting",
                             "completed",
                             "failed",
@@ -4174,6 +4179,9 @@
                         "awaitingEscalatedAt": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "paused": {
+                          "type": "number"
                         },
                         "derivedStatus": {
                           "type": "string",
@@ -4457,6 +4465,7 @@
                     "enum": [
                       "created",
                       "running",
+                      "stale",
                       "waiting",
                       "completed",
                       "failed",
@@ -4523,6 +4532,7 @@
                           "enum": [
                             "created",
                             "running",
+                            "stale",
                             "waiting",
                             "completed",
                             "failed",
@@ -4618,6 +4628,9 @@
                         "awaitingEscalatedAt": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "paused": {
+                          "type": "number"
                         },
                         "derivedStatus": {
                           "type": "string",
@@ -4784,6 +4797,7 @@
                           "enum": [
                             "created",
                             "running",
+                            "stale",
                             "waiting",
                             "completed",
                             "failed",
@@ -4879,6 +4893,9 @@
                         "awaitingEscalatedAt": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "paused": {
+                          "type": "number"
                         },
                         "derivedStatus": {
                           "type": "string",
@@ -5159,6 +5176,7 @@
                             "enum": [
                               "created",
                               "running",
+                              "stale",
                               "waiting",
                               "completed",
                               "failed",
@@ -5276,6 +5294,7 @@
                                 "enum": [
                                   "created",
                                   "running",
+                                  "stale",
                                   "waiting",
                                   "completed",
                                   "failed",
@@ -5371,6 +5390,9 @@
                               "awaitingEscalatedAt": {
                                 "type": "string",
                                 "nullable": true
+                              },
+                              "paused": {
+                                "type": "number"
                               },
                               "derivedStatus": {
                                 "type": "string",
@@ -5500,6 +5522,7 @@
                                 "enum": [
                                   "created",
                                   "running",
+                                  "stale",
                                   "waiting",
                                   "completed",
                                   "failed",
@@ -5808,6 +5831,7 @@
                           "enum": [
                             "created",
                             "running",
+                            "stale",
                             "waiting",
                             "completed",
                             "failed",
@@ -5903,6 +5927,9 @@
                         "awaitingEscalatedAt": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "paused": {
+                          "type": "number"
                         },
                         "derivedStatus": {
                           "type": "string",
@@ -6153,6 +6180,7 @@
                           "enum": [
                             "created",
                             "running",
+                            "stale",
                             "waiting",
                             "completed",
                             "failed",
@@ -6248,6 +6276,9 @@
                         "awaitingEscalatedAt": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "paused": {
+                          "type": "number"
                         },
                         "derivedStatus": {
                           "type": "string",
@@ -6366,6 +6397,7 @@
                           "enum": [
                             "created",
                             "running",
+                            "stale",
                             "waiting",
                             "completed",
                             "failed",
@@ -6474,6 +6506,7 @@
                     "enum": [
                       "created",
                       "running",
+                      "stale",
                       "waiting",
                       "completed",
                       "failed",
@@ -6538,6 +6571,7 @@
                       "enum": [
                         "created",
                         "running",
+                        "stale",
                         "waiting",
                         "completed",
                         "failed",
@@ -6633,6 +6667,9 @@
                     "awaitingEscalatedAt": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "paused": {
+                      "type": "number"
                     },
                     "derivedStatus": {
                       "type": "string",
@@ -7149,6 +7186,9 @@
           },
           "404": {
             "description": "Session not found"
+          },
+          "409": {
+            "description": "Session is terminal"
           }
         },
         "summary": "Create agent session activity"
@@ -7360,6 +7400,7 @@
                       "enum": [
                         "created",
                         "running",
+                        "stale",
                         "waiting",
                         "completed",
                         "failed",
@@ -7455,6 +7496,9 @@
                     "awaitingEscalatedAt": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "paused": {
+                      "type": "number"
                     },
                     "derivedStatus": {
                       "type": "string",
@@ -7563,7 +7607,7 @@
         "summary": "Create agent session cancel"
       }
     },
-    "/workspaces/{organizationId}/agent/sessions/{sessionId}/poll": {
+    "/workspaces/{organizationId}/agent/sessions/{sessionId}/stop": {
       "post": {
         "tags": [
           "agent-sessions"
@@ -7586,9 +7630,24 @@
             "in": "path"
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Session polled and updated",
+            "description": "Session stopped",
             "content": {
               "application/json": {
                 "schema": {
@@ -7624,6 +7683,7 @@
                       "enum": [
                         "created",
                         "running",
+                        "stale",
                         "waiting",
                         "completed",
                         "failed",
@@ -7719,6 +7779,476 @@
                     "awaitingEscalatedAt": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "paused": {
+                      "type": "number"
+                    },
+                    "derivedStatus": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "stalled",
+                        "needs_input",
+                        null
+                      ]
+                    },
+                    "activities": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "sessionId": {
+                            "type": "string"
+                          },
+                          "actorId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "thought",
+                              "response",
+                              "error",
+                              "elicitation",
+                              "action",
+                              "status",
+                              "artifact"
+                            ]
+                          },
+                          "message": {
+                            "type": "string"
+                          },
+                          "payload": {
+                            "nullable": true
+                          },
+                          "parentId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "startedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "endedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "durationMs": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "sessionId",
+                          "actorId",
+                          "type",
+                          "message",
+                          "parentId",
+                          "startedAt",
+                          "endedAt",
+                          "durationMs",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "issueId",
+                    "agentId",
+                    "provider",
+                    "actorId",
+                    "actorType",
+                    "status",
+                    "result",
+                    "url",
+                    "providerSessionId",
+                    "prUrl",
+                    "prState",
+                    "branch",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found"
+          }
+        },
+        "summary": "Create agent session stop"
+      }
+    },
+    "/workspaces/{organizationId}/agent/pauses": {
+      "get": {
+        "tags": [
+          "agent-sessions"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paused agent types for the workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "pauses": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "agentId": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdBy": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "agentId",
+                          "reason",
+                          "createdBy",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "pauses"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List agent pauses"
+      }
+    },
+    "/workspaces/{organizationId}/agent/pauses/{agentId}": {
+      "put": {
+        "tags": [
+          "agent-sessions"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "agentId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Agent type paused — new dispatches queue until resume (upserts: re-pausing refreshes reason/actor)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "agentId": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdBy": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "agentId",
+                    "reason",
+                    "createdBy",
+                    "createdAt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Update agent pause"
+      },
+      "delete": {
+        "tags": [
+          "agent-sessions"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "agentId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agent type resumed — held sessions released oldest-first (`released` lists them)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "released": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "released"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Agent type is not paused"
+          }
+        },
+        "summary": "Delete agent pause"
+      }
+    },
+    "/workspaces/{organizationId}/agent/sessions/{sessionId}/poll": {
+      "post": {
+        "tags": [
+          "agent-sessions"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "sessionId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session polled and updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "issueId": {
+                      "type": "string"
+                    },
+                    "agentId": {
+                      "type": "string"
+                    },
+                    "provider": {
+                      "type": "string"
+                    },
+                    "actorId": {
+                      "type": "string"
+                    },
+                    "actorType": {
+                      "type": "string",
+                      "enum": [
+                        "user",
+                        "agent"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "created",
+                        "running",
+                        "stale",
+                        "waiting",
+                        "completed",
+                        "failed",
+                        "canceled"
+                      ]
+                    },
+                    "result": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "url": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "providerSessionId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "prUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "prState": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "branch": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "purpose": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "secondaryRepos": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "maxDurationMinutes": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "effort": {
+                      "type": "string",
+                      "nullable": true,
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high",
+                        "max",
+                        null
+                      ]
+                    },
+                    "label": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resultSchema": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "structuredResult": {
+                      "nullable": true
+                    },
+                    "resultSchemaErrors": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    },
+                    "lastProgressAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "lastStateHash": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "paused": {
+                      "type": "number"
                     },
                     "derivedStatus": {
                       "type": "string",
@@ -7891,6 +8421,7 @@
                           "enum": [
                             "created",
                             "running",
+                            "stale",
                             "waiting",
                             "completed",
                             "failed",
@@ -7986,6 +8517,9 @@
                         "awaitingEscalatedAt": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "paused": {
+                          "type": "number"
                         },
                         "derivedStatus": {
                           "type": "string",
@@ -8217,6 +8751,7 @@
                           "enum": [
                             "created",
                             "running",
+                            "stale",
                             "waiting",
                             "completed",
                             "failed",
@@ -8312,6 +8847,9 @@
                         "awaitingEscalatedAt": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "paused": {
+                          "type": "number"
                         },
                         "derivedStatus": {
                           "type": "string",
@@ -8568,6 +9106,7 @@
                       "enum": [
                         "created",
                         "running",
+                        "stale",
                         "waiting",
                         "completed",
                         "failed",
@@ -8663,6 +9202,9 @@
                     "awaitingEscalatedAt": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "paused": {
+                      "type": "number"
                     },
                     "derivedStatus": {
                       "type": "string",
@@ -9157,6 +9699,7 @@
                       "enum": [
                         "created",
                         "running",
+                        "stale",
                         "waiting",
                         "completed",
                         "failed",
@@ -9252,6 +9795,9 @@
                     "awaitingEscalatedAt": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "paused": {
+                      "type": "number"
                     },
                     "derivedStatus": {
                       "type": "string",

@@ -1867,7 +1867,7 @@ export interface paths {
                             /** @enum {string} */
                             actorType: "user" | "agent";
                             /** @enum {string} */
-                            status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                            status: "created" | "running" | "stale" | "waiting" | "completed" | "failed" | "canceled";
                             result: string | null;
                             url: string | null;
                             providerSessionId: string | null;
@@ -1891,6 +1891,7 @@ export interface paths {
                             lastStateHash?: string | null;
                             awaitingActivityId?: string | null;
                             awaitingEscalatedAt?: string | null;
+                            paused?: number;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
                             activities?: {
@@ -1969,7 +1970,7 @@ export interface paths {
                                 /** @enum {string} */
                                 actorType: "user" | "agent";
                                 /** @enum {string} */
-                                status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                                status: "created" | "running" | "stale" | "waiting" | "completed" | "failed" | "canceled";
                                 result: string | null;
                                 url: string | null;
                                 providerSessionId: string | null;
@@ -1993,6 +1994,7 @@ export interface paths {
                                 lastStateHash?: string | null;
                                 awaitingActivityId?: string | null;
                                 awaitingEscalatedAt?: string | null;
+                                paused?: number;
                                 /** @enum {string|null} */
                                 derivedStatus?: "stalled" | "needs_input" | null;
                                 activities?: {
@@ -2157,7 +2159,7 @@ export interface paths {
                         provider: string;
                         providerSessionId?: string;
                         /** @enum {string} */
-                        status?: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                        status?: "created" | "running" | "stale" | "waiting" | "completed" | "failed" | "canceled";
                         url?: string;
                         branch?: string;
                         prUrl?: string;
@@ -2182,7 +2184,7 @@ export interface paths {
                                 /** @enum {string} */
                                 actorType: "user" | "agent";
                                 /** @enum {string} */
-                                status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                                status: "created" | "running" | "stale" | "waiting" | "completed" | "failed" | "canceled";
                                 result: string | null;
                                 url: string | null;
                                 providerSessionId: string | null;
@@ -2206,6 +2208,7 @@ export interface paths {
                                 lastStateHash?: string | null;
                                 awaitingActivityId?: string | null;
                                 awaitingEscalatedAt?: string | null;
+                                paused?: number;
                                 /** @enum {string|null} */
                                 derivedStatus?: "stalled" | "needs_input" | null;
                                 activities?: {
@@ -2247,7 +2250,7 @@ export interface paths {
                                 /** @enum {string} */
                                 actorType: "user" | "agent";
                                 /** @enum {string} */
-                                status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                                status: "created" | "running" | "stale" | "waiting" | "completed" | "failed" | "canceled";
                                 result: string | null;
                                 url: string | null;
                                 providerSessionId: string | null;
@@ -2271,6 +2274,7 @@ export interface paths {
                                 lastStateHash?: string | null;
                                 awaitingActivityId?: string | null;
                                 awaitingEscalatedAt?: string | null;
+                                paused?: number;
                                 /** @enum {string|null} */
                                 derivedStatus?: "stalled" | "needs_input" | null;
                                 activities?: {
@@ -2371,7 +2375,7 @@ export interface paths {
                                 issueId: string;
                                 sessionId: string | null;
                                 /** @enum {string|null} */
-                                status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled" | null;
+                                status: "created" | "running" | "stale" | "waiting" | "completed" | "failed" | "canceled" | null;
                                 error: string | null;
                             }[];
                         };
@@ -2425,7 +2429,7 @@ export interface paths {
                                 /** @enum {string} */
                                 actorType: "user" | "agent";
                                 /** @enum {string} */
-                                status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                                status: "created" | "running" | "stale" | "waiting" | "completed" | "failed" | "canceled";
                                 result: string | null;
                                 url: string | null;
                                 providerSessionId: string | null;
@@ -2449,6 +2453,7 @@ export interface paths {
                                 lastStateHash?: string | null;
                                 awaitingActivityId?: string | null;
                                 awaitingEscalatedAt?: string | null;
+                                paused?: number;
                                 /** @enum {string|null} */
                                 derivedStatus?: "stalled" | "needs_input" | null;
                                 activities?: {
@@ -2473,7 +2478,7 @@ export interface paths {
                                 agentId: string;
                                 provider: string;
                                 /** @enum {string} */
-                                status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                                status: "created" | "running" | "stale" | "waiting" | "completed" | "failed" | "canceled";
                                 prUrl: string | null;
                                 prState: string | null;
                                 createdAt: string;
@@ -2637,7 +2642,7 @@ export interface paths {
                                 /** @enum {string} */
                                 actorType: "user" | "agent";
                                 /** @enum {string} */
-                                status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                                status: "created" | "running" | "stale" | "waiting" | "completed" | "failed" | "canceled";
                                 result: string | null;
                                 url: string | null;
                                 providerSessionId: string | null;
@@ -2661,6 +2666,7 @@ export interface paths {
                                 lastStateHash?: string | null;
                                 awaitingActivityId?: string | null;
                                 awaitingEscalatedAt?: string | null;
+                                paused?: number;
                                 /** @enum {string|null} */
                                 derivedStatus?: "stalled" | "needs_input" | null;
                                 activities?: {
@@ -2743,7 +2749,7 @@ export interface paths {
                             /** @enum {string} */
                             actorType: "user" | "agent";
                             /** @enum {string} */
-                            status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                            status: "created" | "running" | "stale" | "waiting" | "completed" | "failed" | "canceled";
                             result: string | null;
                             url: string | null;
                             providerSessionId: string | null;
@@ -2767,6 +2773,7 @@ export interface paths {
                             lastStateHash?: string | null;
                             awaitingActivityId?: string | null;
                             awaitingEscalatedAt?: string | null;
+                            paused?: number;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
                             activities?: {
@@ -2789,7 +2796,7 @@ export interface paths {
                             agentId: string;
                             provider: string;
                             /** @enum {string} */
-                            status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                            status: "created" | "running" | "stale" | "waiting" | "completed" | "failed" | "canceled";
                             prUrl: string | null;
                             prState: string | null;
                             createdAt: string;
@@ -2833,7 +2840,7 @@ export interface paths {
                 content: {
                     "application/json": {
                         /** @enum {string} */
-                        status?: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                        status?: "created" | "running" | "stale" | "waiting" | "completed" | "failed" | "canceled";
                         result?: string;
                         url?: string;
                         prUrl?: string;
@@ -2859,7 +2866,7 @@ export interface paths {
                             /** @enum {string} */
                             actorType: "user" | "agent";
                             /** @enum {string} */
-                            status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                            status: "created" | "running" | "stale" | "waiting" | "completed" | "failed" | "canceled";
                             result: string | null;
                             url: string | null;
                             providerSessionId: string | null;
@@ -2883,6 +2890,7 @@ export interface paths {
                             lastStateHash?: string | null;
                             awaitingActivityId?: string | null;
                             awaitingEscalatedAt?: string | null;
+                            paused?: number;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
                             activities?: {
@@ -3122,6 +3130,13 @@ export interface paths {
                     };
                     content?: never;
                 };
+                /** @description Session is terminal */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
             };
         };
         delete?: never;
@@ -3239,7 +3254,7 @@ export interface paths {
                             /** @enum {string} */
                             actorType: "user" | "agent";
                             /** @enum {string} */
-                            status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                            status: "created" | "running" | "stale" | "waiting" | "completed" | "failed" | "canceled";
                             result: string | null;
                             url: string | null;
                             providerSessionId: string | null;
@@ -3263,6 +3278,7 @@ export interface paths {
                             lastStateHash?: string | null;
                             awaitingActivityId?: string | null;
                             awaitingEscalatedAt?: string | null;
+                            paused?: number;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
                             activities?: {
@@ -3292,6 +3308,239 @@ export interface paths {
             };
         };
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/agent/sessions/{sessionId}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create agent session stop */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    sessionId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        reason?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Session stopped */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            issueId: string;
+                            agentId: string;
+                            provider: string;
+                            actorId: string;
+                            /** @enum {string} */
+                            actorType: "user" | "agent";
+                            /** @enum {string} */
+                            status: "created" | "running" | "stale" | "waiting" | "completed" | "failed" | "canceled";
+                            result: string | null;
+                            url: string | null;
+                            providerSessionId: string | null;
+                            prUrl: string | null;
+                            prState: string | null;
+                            branch: string | null;
+                            purpose?: string | null;
+                            secondaryRepos?: string | null;
+                            maxDurationMinutes?: number | null;
+                            /** @enum {string|null} */
+                            effort?: "low" | "medium" | "high" | "max" | null;
+                            label?: string | null;
+                            resultSchema?: {
+                                [key: string]: unknown;
+                            } | null;
+                            structuredResult?: unknown;
+                            resultSchemaErrors?: string[] | null;
+                            createdAt: string;
+                            updatedAt: string;
+                            lastProgressAt?: string | null;
+                            lastStateHash?: string | null;
+                            paused?: number;
+                            /** @enum {string|null} */
+                            derivedStatus?: "stalled" | "needs_input" | null;
+                            activities?: {
+                                id: string;
+                                sessionId: string;
+                                actorId: string | null;
+                                /** @enum {string} */
+                                type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
+                                message: string;
+                                payload?: unknown;
+                                parentId: string | null;
+                                startedAt: string | null;
+                                endedAt: string | null;
+                                durationMs: number | null;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Session not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/agent/pauses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List agent pauses */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Paused agent types for the workspace */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            pauses: {
+                                id: string;
+                                organizationId: string;
+                                agentId: string;
+                                reason: string | null;
+                                createdBy: string | null;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/agent/pauses/{agentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update agent pause */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    agentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        reason?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Agent type paused — new dispatches queue until resume (upserts: re-pausing refreshes reason/actor) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            agentId: string;
+                            reason: string | null;
+                            createdBy: string | null;
+                            createdAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Delete agent pause */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    agentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Agent type resumed — held sessions released oldest-first (`released` lists them) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                            released: string[];
+                        };
+                    };
+                };
+                /** @description Agent type is not paused */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;
@@ -3335,7 +3584,7 @@ export interface paths {
                             /** @enum {string} */
                             actorType: "user" | "agent";
                             /** @enum {string} */
-                            status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                            status: "created" | "running" | "stale" | "waiting" | "completed" | "failed" | "canceled";
                             result: string | null;
                             url: string | null;
                             providerSessionId: string | null;
@@ -3359,6 +3608,7 @@ export interface paths {
                             lastStateHash?: string | null;
                             awaitingActivityId?: string | null;
                             awaitingEscalatedAt?: string | null;
+                            paused?: number;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
                             activities?: {
@@ -3430,7 +3680,7 @@ export interface paths {
                                 /** @enum {string} */
                                 actorType: "user" | "agent";
                                 /** @enum {string} */
-                                status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                                status: "created" | "running" | "stale" | "waiting" | "completed" | "failed" | "canceled";
                                 result: string | null;
                                 url: string | null;
                                 providerSessionId: string | null;
@@ -3454,6 +3704,7 @@ export interface paths {
                                 lastStateHash?: string | null;
                                 awaitingActivityId?: string | null;
                                 awaitingEscalatedAt?: string | null;
+                                paused?: number;
                                 /** @enum {string|null} */
                                 derivedStatus?: "stalled" | "needs_input" | null;
                                 activities?: {
@@ -3553,7 +3804,7 @@ export interface paths {
                                 /** @enum {string} */
                                 actorType: "user" | "agent";
                                 /** @enum {string} */
-                                status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                                status: "created" | "running" | "stale" | "waiting" | "completed" | "failed" | "canceled";
                                 result: string | null;
                                 url: string | null;
                                 providerSessionId: string | null;
@@ -3577,6 +3828,7 @@ export interface paths {
                                 lastStateHash?: string | null;
                                 awaitingActivityId?: string | null;
                                 awaitingEscalatedAt?: string | null;
+                                paused?: number;
                                 /** @enum {string|null} */
                                 derivedStatus?: "stalled" | "needs_input" | null;
                                 activities?: {
@@ -3683,7 +3935,7 @@ export interface paths {
                             /** @enum {string} */
                             actorType: "user" | "agent";
                             /** @enum {string} */
-                            status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                            status: "created" | "running" | "stale" | "waiting" | "completed" | "failed" | "canceled";
                             result: string | null;
                             url: string | null;
                             providerSessionId: string | null;
@@ -3707,6 +3959,7 @@ export interface paths {
                             lastStateHash?: string | null;
                             awaitingActivityId?: string | null;
                             awaitingEscalatedAt?: string | null;
+                            paused?: number;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
                             activities?: {
@@ -3907,7 +4160,7 @@ export interface paths {
                             /** @enum {string} */
                             actorType: "user" | "agent";
                             /** @enum {string} */
-                            status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                            status: "created" | "running" | "stale" | "waiting" | "completed" | "failed" | "canceled";
                             result: string | null;
                             url: string | null;
                             providerSessionId: string | null;
@@ -3931,6 +4184,7 @@ export interface paths {
                             lastStateHash?: string | null;
                             awaitingActivityId?: string | null;
                             awaitingEscalatedAt?: string | null;
+                            paused?: number;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
                             activities?: {

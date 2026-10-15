@@ -33,7 +33,10 @@ import {
   parseStoredSecondaryRepos,
   secondaryReposSchema,
 } from "../agents/secondary-repos.js";
-import { sessionHoldsKeptSandbox } from "../agents/sweep.js";
+import {
+  releasePausedSessions,
+  sessionHoldsKeptSandbox,
+} from "../agents/sweep.js";
 import { consumeUsage } from "../global/billing.js";
 import { timingSafeEqualHex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
@@ -121,6 +124,7 @@ type AgentActivity = InferSelectModel<typeof workspaceAgentActivities>;
 const agentSessionStatusSchema = z.enum([
   "created",
   "running",
+  "stale",
   "waiting",
   "completed",
   "failed",
@@ -164,6 +168,9 @@ export const agentSessionSchema = z.object({
   awaitingActivityId: z.string().nullable().optional(),
   /** When the open elicitation last fired its escalation (dedupe stamp). */
   awaitingEscalatedAt: z.string().nullable().optional(),
+  /** PILE-420 — 1 while the lane is parked `waiting` by an agent-type
+   *  pause; resume drains holds in order. */
+  paused: z.number().optional(),
   /** Read-time derivation (PILE-209): `stalled` = running, stale progress,
    *  no PR; `needs_input` = an open elicitation is parked on the session
    *  (or, for pre-suspend rows, the latest activity is an elicitation).
@@ -246,6 +253,9 @@ function deriveSessionStatus(
   activities?: AgentActivity[]
 ): "stalled" | "needs_input" | null {
   if (["completed", "failed", "canceled"].includes(row.status)) return null;
+  // PILE-420 — the durable `stale` mark surfaces as the same `stalled`
+  // badge a silent `running` lane derives at read.
+  if (row.status === "stale") return "stalled";
   // PILE-419 — an open elicitation suspends the session (`waiting` +
   // awaitingActivityId); legacy rows only carry the trailing activity.
   if (row.awaitingActivityId) return "needs_input";
@@ -586,6 +596,7 @@ const addActivityRoute = createRoute({
       },
     },
     404: { description: "Session not found" },
+    409: { description: "Session is terminal" },
   },
 });
 
@@ -698,6 +709,119 @@ const cancelSessionRoute = createRoute({
       },
     },
     404: { description: "Session not found" },
+  },
+});
+
+// PILE-420 — human Stop: emits `session.stopped`, cancels in-flight runtime
+// work via the provider, and ends the session terminal with the stopped
+// reason — actor and reason land on the event and the audit entry. No
+// further activities are accepted once terminal.
+const stopSessionRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/stop",
+  tags: ["agent-sessions"],
+  middleware: [rls("session:create", "agent:write")],
+  request: {
+    params: z.object({ organizationId: z.string(), sessionId: z.string() }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({ reason: z.string().optional() }).strict(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Session stopped",
+      content: {
+        "application/json": { schema: agentSessionSchema },
+      },
+    },
+    404: { description: "Session not found" },
+  },
+});
+
+// PILE-420 — global pause per agent type: while a pause row exists, new
+// dispatches for that agent park `waiting` + `paused`; resuming releases
+// the holds in order. Pauses carry actor + reason (audit-logged).
+const agentPauseSchema = z.object({
+  id: z.string(),
+  organizationId: z.string(),
+  agentId: z.string(),
+  reason: z.string().nullable(),
+  createdBy: z.string().nullable(),
+  createdAt: z.string(),
+});
+
+const listAgentPausesRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/agent/pauses",
+  tags: ["agent-sessions"],
+  middleware: [rls("session:view", "agent:read")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Paused agent types for the workspace",
+      content: {
+        "application/json": {
+          schema: z.object({ pauses: z.array(agentPauseSchema) }),
+        },
+      },
+    },
+  },
+});
+
+const pauseAgentTypeRoute = createRoute({
+  method: "put",
+  path: "/workspaces/{organizationId}/agent/pauses/{agentId}",
+  tags: ["agent-sessions"],
+  middleware: [rls("session:create", "agent:write")],
+  request: {
+    params: z.object({ organizationId: z.string(), agentId: z.string() }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({ reason: z.string().optional() }).strict(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description:
+        "Agent type paused — new dispatches queue until resume (upserts: re-pausing refreshes reason/actor)",
+      content: {
+        "application/json": { schema: agentPauseSchema },
+      },
+    },
+  },
+});
+
+const resumeAgentTypeRoute = createRoute({
+  method: "delete",
+  path: "/workspaces/{organizationId}/agent/pauses/{agentId}",
+  tags: ["agent-sessions"],
+  middleware: [rls("session:create", "agent:write")],
+  request: {
+    params: z.object({ organizationId: z.string(), agentId: z.string() }),
+  },
+  responses: {
+    200: {
+      description:
+        "Agent type resumed — held sessions released oldest-first (`released` lists them)",
+      content: {
+        "application/json": {
+          schema: z.object({
+            ok: z.boolean(),
+            released: z.array(z.string()),
+          }),
+        },
+      },
+    },
+    404: { description: "Agent type is not paused" },
   },
 });
 
@@ -1877,6 +2001,14 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       session,
       c.var.workspaceIdentity
     );
+    // PILE-420 — a stopped (terminal) session accepts no further activities.
+    if (
+      session.status === "completed" ||
+      session.status === "failed" ||
+      session.status === "canceled"
+    ) {
+      return c.json({ message: "Session is terminal" }, 409);
+    }
 
     const activity = await stub.addAgentActivity({
       sessionId,
@@ -2519,6 +2651,132 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     );
     const activities = await stub.listAgentActivities(sessionId);
     return c.json(toSessionResponse(updated ?? session, activities));
+  });
+
+  // PILE-420 — the human Stop action: `session.stopped` on the event stream
+  // first (a wedged provider call must not lose it), provider cancel kills
+  // in-flight runtime work, then the row lands terminal — `canceled` with
+  // the stopped reason — and the action is audit-logged with actor+reason.
+  app.openapi(stopSessionRoute, async (c) => {
+    const { organizationId, sessionId } = c.req.valid("param");
+    const { reason } = c.req.valid("json");
+    const identity = c.var.workspaceIdentity;
+    const stub = getWorkspaceStub(c.env, organizationId);
+
+    const session = await stub.getAgentSession(sessionId);
+    if (!session) {
+      return c.json({ message: "Session not found" }, 404);
+    }
+    await assertSessionIssueAccess(
+      createD1(c.env.D1),
+      stub,
+      session,
+      c.var.workspaceIdentity
+    );
+    const terminal =
+      session.status === "completed" ||
+      session.status === "failed" ||
+      session.status === "canceled";
+    if (terminal) {
+      const activities = await stub.listAgentActivities(sessionId);
+      return c.json(toSessionResponse(session, activities));
+    }
+
+    await stub
+      .addAgentSessionEvent({
+        sessionId,
+        type: "session.stopped",
+        message: reason ? `Session stopped: ${reason}` : "Session stopped",
+        payload: {
+          actorId: identity.id,
+          actorType: identity.type,
+          reason: reason ?? null,
+        },
+      })
+      .catch(() => {});
+
+    // Cancel in-flight runtime work — the provider's cancel tears down the
+    // remote session/sandbox within seconds. Externally-registered sessions
+    // have no provider to reach: the terminal write is still the record.
+    try {
+      const providerConfig = await loadProviderConfig(
+        c.env,
+        stub,
+        session.agentId
+      );
+      const provider = getAgentProvider(
+        session.agentId,
+        resolveAgentEnv(c.env, providerConfig ?? undefined)
+      );
+      if (provider.cancel) {
+        await provider.cancel(session.providerSessionId ?? sessionId);
+      }
+    } catch (err) {
+      console.error("stop provider cancel failed", {
+        session: sessionId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
+    const stoppedResult = `Stopped by ${identity.id}${reason ? `: ${reason}` : ""}`;
+    const updated = await stub.applyAgentSessionResult(
+      sessionId,
+      { status: "canceled", result: stoppedResult },
+      identity.id
+    );
+    await stub.recordAudit(
+      "agent_session.stopped",
+      "agent_session",
+      sessionId,
+      identity.id,
+      null,
+      { actorType: identity.type }
+    );
+    const activities = await stub.listAgentActivities(sessionId);
+    return c.json(toSessionResponse(updated ?? session, activities));
+  });
+
+  app.openapi(listAgentPausesRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    return c.json({ pauses: await stub.listAgentPauses() }, 200);
+  });
+
+  app.openapi(pauseAgentTypeRoute, async (c) => {
+    const { organizationId, agentId } = c.req.valid("param");
+    const { reason } = c.req.valid("json");
+    const identity = c.var.workspaceIdentity;
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const pause = await stub.pauseAgentType(agentId, {
+      reason: reason ?? null,
+      actorId: identity.id,
+      actorType: identity.type,
+    });
+    return c.json(pause, 200);
+  });
+
+  // Resume drains held sessions oldest-first. The drain runs even when the
+  // pause row is already gone — a hold can outlive a row deleted out-of-
+  // band, and releasing is the only way those lanes move.
+  app.openapi(resumeAgentTypeRoute, async (c) => {
+    const { organizationId, agentId } = c.req.valid("param");
+    const identity = c.var.workspaceIdentity;
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const wasPaused = await stub.resumeAgentType(agentId, {
+      actorId: identity.id,
+      actorType: identity.type,
+    });
+    const released = await releasePausedSessions(
+      c.env,
+      stub,
+      organizationId,
+      agentId,
+      getExecutionCtx(c)
+    );
+    if (!wasPaused && released.length === 0) {
+      return c.json({ message: "Agent type is not paused" }, 404);
+    }
+    return c.json({ ok: true, released }, 200);
   });
 
   app.openapi(pollSessionRoute, async (c) => {
