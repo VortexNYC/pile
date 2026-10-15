@@ -12,7 +12,7 @@ import { createPileClient } from "@vortex-api/pile";
 
 const client = createPileClient({
   baseUrl: process.env.PILE_BASE_URL!, // https://<host>
-  apiKey: process.env.PILE_API_KEY!,   // workspace-scoped key
+  apiKey: process.env.PILE_API_KEY!, // workspace-scoped key
 });
 
 const { data, error } = await client.GET(
@@ -20,22 +20,19 @@ const { data, error } = await client.GET(
   { params: { path: { organizationId: "org_..." } } }
 );
 
-const created = await client.POST(
-  "/workspaces/{organizationId}/documents",
-  {
-    params: { path: { organizationId: "org_..." } },
-    body: { title: "Release notes", content: "…", contentFormat: "markdown" },
-  }
-);
+const created = await client.POST("/workspaces/{organizationId}/documents", {
+  params: { path: { organizationId: "org_..." } },
+  body: { title: "Release notes", content: "…", contentFormat: "markdown" },
+});
 ```
 
 ## When to use which surface
 
-| Surface | Best for |
-| --- | --- |
-| SDK | Long-running TypeScript services, scheduled jobs, integrations |
-| CLI | Humans, shell scripts, quick probes |
-| MCP | Coding/ops agents already speaking MCP |
-| HTTP | Everything else |
+| Surface | Best for                                                       |
+| ------- | -------------------------------------------------------------- |
+| SDK     | Long-running TypeScript services, scheduled jobs, integrations |
+| CLI     | Humans, shell scripts, quick probes                            |
+| MCP     | Coding/ops agents already speaking MCP                         |
+| HTTP    | Everything else                                                |
 
 All four authenticate identically and see the same entities, links, and comments — a doc created via MCP shows up in the SDK and the app.

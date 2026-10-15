@@ -416,9 +416,11 @@ describe("CLI integration", () => {
   });
 
   it("sends -d as the JSON request body", async () => {
-    const mockFetch = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ ok: true }), { status: 201 })
-    );
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ ok: true }), { status: 201 })
+      );
     vi.spyOn(console, "log").mockImplementation(() => undefined);
 
     const exitCode = await runCli(
