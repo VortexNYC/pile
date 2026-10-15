@@ -290,8 +290,19 @@ describe("API integration", () => {
 
   it("manages issue subscribers", async () => {
     const organizationId = await seedWorkspace();
-    const issueId = "issue-1";
     const token = await adminToken(organizationId);
+    // PILE-328 tightened this route — subscribing to a nonexistent issue
+    // 404s, so seed a real one.
+    const issueRes = await app.fetch(
+      request("/workspaces/" + organizationId + "/issues", {
+        method: "POST",
+        token,
+        body: JSON.stringify({ title: "Subscriber target" }),
+      }),
+      env
+    );
+    expect(issueRes.status).toBe(201);
+    const { id: issueId } = await issueRes.json<{ id: string }>();
 
     const create = await app.fetch(
       request(
