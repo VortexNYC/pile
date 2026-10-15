@@ -1,4 +1,5 @@
 import { env, runInDurableObject } from "cloudflare:test";
+import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/durable-sqlite";
 import { beforeAll, describe, expect, it } from "vitest";
 
@@ -665,6 +666,9 @@ describe("hiddenIssueCondition", () => {
       const mine = mk("mine");
       setIssuePermission(db, org, mine.id, "u-9", "user");
 
+      // hiddenIssueCondition returns a visibility predicate only — callers
+      // still scope by org. These manual queries must do the same or they
+      // see sibling tests' rows in the shared DO store.
       const cond = hiddenIssueCondition(
         db,
         workspaceIssues.id,
@@ -675,7 +679,7 @@ describe("hiddenIssueCondition", () => {
       const visible = await db
         .select({ id: workspaceIssues.id })
         .from(workspaceIssues)
-        .where(cond)
+        .where(and(cond, eq(workspaceIssues.organizationId, org)))
         .all();
       expect(visible.map((r) => r.id)).toEqual([mine.id]);
 
@@ -689,7 +693,7 @@ describe("hiddenIssueCondition", () => {
       const visible2 = await db
         .select({ id: workspaceIssues.id })
         .from(workspaceIssues)
-        .where(cond2)
+        .where(and(cond2, eq(workspaceIssues.organizationId, org)))
         .all();
       expect(new Set(visible2.map((r) => r.id))).toEqual(
         new Set([open.id, mine.id])

@@ -864,9 +864,9 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
       const issue = await stub.getIssue(input.issueId);
       if (!issue) {
         throw new VortexError({
-          code: "NOT_FOUND",
-          status: 404,
-          message: "Issue not found",
+          code: "BAD_REQUEST",
+          status: 400,
+          message: `Unresolvable issueId: ${input.issueId}`,
         });
       }
       await assertIssueAccess(createD1(c.env.D1), stub, issue, identity);
@@ -906,9 +906,9 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
       const issue = await stub.getIssue(input.issueId);
       if (!issue) {
         throw new VortexError({
-          code: "NOT_FOUND",
-          status: 404,
-          message: "Issue not found",
+          code: "BAD_REQUEST",
+          status: 400,
+          message: `Unresolvable issueId: ${input.issueId}`,
         });
       }
       await assertIssueAccess(createD1(c.env.D1), stub, issue, identity);
