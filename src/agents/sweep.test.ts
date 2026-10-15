@@ -12,7 +12,7 @@ import { createTeam } from "../global/teams.js";
 import { createWorkspace } from "../global/workspaces.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
 import { MockAgentProvider } from "./harness.js";
-import { registerAgentProvider } from "./index.js";
+import { dispatchAgent, registerAgentProvider } from "./index.js";
 import { MAX_NUDGES_PER_HEAD_SHA, MAX_NUDGES_PER_LANE } from "./nudge.js";
 import { automationEventTarget } from "./repo-triggers.js";
 import { REVIEW_PURPOSE } from "./review.js";
@@ -26,6 +26,7 @@ import {
   parseAgentTimeouts,
   progressIsStale,
   prStateFromPull,
+  releasePausedSessions,
   shouldUpdatePrBranch,
   summarizeCheckRuns,
   sweepAgentSessions,
@@ -170,6 +171,7 @@ describe("ingestFailedAgentSession", () => {
       sandboxBackupRef: null,
       awaitingActivityId: null,
       awaitingEscalatedAt: null,
+      paused: 0,
     };
     const polled = {
       id: "prov-1",
@@ -3616,5 +3618,153 @@ describe("cronMatchesNow", () => {
     expect(cronMatchesNow("45-50 * * * *", at)).toBe(false);
     expect(cronMatchesNow("30 14", at)).toBe(false);
     expect(cronMatchesNow("not-a-cron", at)).toBe(false);
+  });
+});
+
+describe("PILE-420 stale marking + pause holds", () => {
+  let organizationId: string;
+  let stub: ReturnType<typeof env.WORKSPACE_DURABLE_OBJECT.get>;
+  const userId = "user-p420";
+
+  beforeAll(async () => {
+    const db = createD1(env.D1);
+    const now = new Date();
+    await db
+      .insert(userTable)
+      .values({
+        id: userId,
+        name: "Stale Test User",
+        email: `${userId}@example.com`,
+        emailVerified: false,
+        image: null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({ target: [userTable.email] });
+    const headers = await createAdminHeaders(env, userId);
+    const workspace = await createWorkspace(db, env, headers, {
+      name: "Stale pause tests",
+      slug: `pile-420-${crypto.randomUUID()}`,
+      key: `P4${crypto.randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+      ownerId: userId,
+    });
+    organizationId = workspace!.id;
+    stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+  });
+
+  it("marks a silent running lane stale, alerts once, and cancels at the inactivity window", async () => {
+    const agentId = `mock-stale-${crypto.randomUUID().slice(0, 8)}`;
+    registerMock(agentId, {
+      // Poll must echo the stored row exactly (result/url/prUrl) — a diff
+      // counts as progress and keeps the lane alive.
+      poll: (id) => ({
+        id,
+        agentId,
+        status: "running" as const,
+        result: null,
+        url: null,
+        prUrl: null,
+      }),
+      getState: () => null,
+    });
+    const issue = await stub.createIssue({ title: "Stale lane" });
+    // 17m of dead air: past the 15m default stale window, inside the 20m
+    // inactivity kill — the lane must be marked, not canceled.
+    const silent = new Date(Date.now() - 17 * 60 * 1000).toISOString();
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      createdAt: silent,
+      startedAt: silent,
+    });
+    await stub.updateAgentSession(session.id, {
+      lastProgressAt: silent,
+      lastStateHash: "null",
+    });
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 500 });
+
+    const after = await stub.getAgentSession(session.id);
+    expect(after?.status).toBe("stale");
+    const events = await stub.listAgentSessionEvents(session.id, {
+      limit: 50,
+    });
+    expect(events.some((e) => e.type === "session.stale")).toBe(true);
+    const notifications = await stub.listNotificationsForRecipient(
+      userId,
+      "user",
+      { limit: 50 }
+    );
+    expect(notifications.some((n) => n.type === "lane_stale")).toBe(true);
+
+    // Already-stale rows don't re-alert on the next pass.
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 500 });
+    const eventsAfter = (
+      await stub.listAgentSessionEvents(session.id, { limit: 100 })
+    ).filter((e) => e.type === "session.stale");
+    expect(eventsAfter).toHaveLength(1);
+
+    // Once the silence crosses the inactivity window, the existing kill
+    // path still applies.
+    const dead = new Date(Date.now() - 25 * 60 * 1000).toISOString();
+    await stub.updateAgentSession(session.id, { lastProgressAt: dead });
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 500 });
+    const killed = await stub.getAgentSession(session.id);
+    expect(killed?.status).toBe("canceled");
+    expect(killed?.result).toContain("inactive");
+  }, 20000);
+
+  it("holds dispatches while the agent type is paused and drains them in order on resume", async () => {
+    const agentId = `mock-pause-${crypto.randomUUID().slice(0, 8)}`;
+    const dispatches: string[] = [];
+    registerMock(agentId, {
+      dispatch: (_org, _issue, _model, ctx) => {
+        dispatches.push(ctx?.sessionId ?? "");
+        return { id: `prov-${ctx?.sessionId}`, agentId, status: "running" };
+      },
+      poll: (id) => ({ id, agentId, status: "running" }),
+    });
+    await stub.pauseAgentType(agentId, {
+      reason: "fleet maintenance",
+      actorId: userId,
+      actorType: "user",
+    });
+    const actor = {
+      id: userId,
+      organizationId,
+      type: "user" as const,
+      permissions: [] as string[],
+    };
+    const first = await stub.createIssue({ title: "Held one" });
+    const second = await stub.createIssue({ title: "Held two" });
+    const s1 = await dispatchAgent(env, agentId, organizationId, first, actor);
+    const s2 = await dispatchAgent(env, agentId, organizationId, second, actor);
+    expect(s1.status).toBe("waiting");
+    expect(s1.paused).toBe(1);
+    expect(s2.status).toBe("waiting");
+    expect(s2.paused).toBe(1);
+    expect(dispatches).toHaveLength(0);
+
+    // The sweep's promote pass must not release held lanes.
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+    expect((await stub.getAgentSession(s1.id))?.status).toBe("waiting");
+    expect((await stub.getAgentSession(s2.id))?.status).toBe("waiting");
+
+    const released = await releasePausedSessions(
+      env,
+      stub,
+      organizationId,
+      agentId
+    );
+    expect(released).toEqual([s1.id, s2.id]);
+    expect(dispatches).toEqual([s1.id, s2.id]);
+    expect((await stub.getAgentSession(s1.id))?.paused).toBe(0);
   });
 });

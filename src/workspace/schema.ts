@@ -810,6 +810,9 @@ export const workspaceAgentSessions = sqliteTable(
       enum: [
         "created",
         "running",
+        // PILE-420 — silent lane marker between `running` and the
+        // inactivity cancel; non-terminal.
+        "stale",
         "waiting",
         "completed",
         "failed",
@@ -886,6 +889,13 @@ export const workspaceAgentSessions = sqliteTable(
     // awaitingEscalatedAt dedupes the sweep's escalation notification.
     awaitingActivityId: text("awaiting_activity_id" as string),
     awaitingEscalatedAt: text("awaiting_escalated_at" as string),
+    // PILE-420 — operator pause hold: dispatch parked this `waiting` lane
+    // because its agent type is paused (agent_pauses row). Resume drains
+    // holds in createdAt order; the flag clears on promotion or any
+    // non-waiting transition.
+    paused: integer("paused" as string)
+      .notNull()
+      .default(0),
   },
   (table) => [
     index("agent_sessions_organization_idx" as string).on(
@@ -955,6 +965,28 @@ export const workspaceAgentSessionEvents = sqliteTable(
     index("agent_session_events_session_idx" as string).on(
       table.sessionId,
       table.id
+    ),
+  ]
+);
+
+// PILE-420 — global pause per agent type. While a row exists for
+// (organization_id, agent_id), new dispatches of that agent park as
+// `waiting` + `paused`; deleting the row resumes — held lanes drain in
+// createdAt order. The row records who paused and why (audit surface).
+export const workspaceAgentPauses = sqliteTable(
+  "agent_pauses" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    agentId: text("agent_id" as string).notNull(),
+    reason: text("reason" as string),
+    createdBy: text("created_by" as string),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    uniqueIndex("agent_pauses_org_agent_idx" as string).on(
+      table.organizationId,
+      table.agentId
     ),
   ]
 );

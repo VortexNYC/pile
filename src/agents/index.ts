@@ -340,6 +340,44 @@ export async function dispatchAgent(
         .catch(() => {});
       return queued;
     }
+    // PILE-420 — the agent type is paused workspace-wide: the dispatch is
+    // accepted but held, parked `waiting` + `paused`. Resume drains holds
+    // in order; a dedupe edge rides along so a held lane still joins its
+    // queue chain after release.
+    const pause = await stub.getAgentPause(agentId);
+    if (pause) {
+      const parked = await stub.createAgentSession({
+        issueId: issue.id,
+        agentId,
+        provider: agentId,
+        actorId: actor.id,
+        actorType: actor.type,
+        status: "waiting",
+        queuedAfter: queueAfter ?? null,
+        paused: 1,
+        parentSessionId: options?.parentSessionId ?? null,
+        spawnDepth: options?.spawnDepth ?? 0,
+        purpose: options?.purpose ?? null,
+        secondaryRepos: storedSecondaryRepos,
+        effort,
+        maxDurationMinutes,
+        label,
+        resultSchema,
+      });
+      await stub
+        .addAgentSessionEvent({
+          sessionId: parked.id,
+          type: "agent.paused",
+          message: `Dispatch held — agent type "${agentId}" is paused${pause.reason ? `: ${pause.reason}` : ""}`,
+          payload: {
+            agentId,
+            reason: pause.reason ?? null,
+            pausedBy: pause.createdBy ?? null,
+          },
+        })
+        .catch(() => {});
+      return parked;
+    }
     // Workspace-wide lane ceiling for container-backed lanes — the CF
     // container apps are bounded (max_instances) and an uncapped queue of
     // concurrent lanes wedges provisioning for everyone. Promote is exempt:

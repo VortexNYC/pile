@@ -120,6 +120,8 @@ function formatClock(ms: number): string {
 const HEADLINE: Record<AgentSessionStatus, string> = {
   created: "is starting",
   running: "is on it",
+  // PILE-420 — silent lane marked stale by the sweep; still recoverable.
+  stale: "went quiet",
   waiting: "is waiting",
   completed: "completed",
   failed: "failed",

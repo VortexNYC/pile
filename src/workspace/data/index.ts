@@ -26,6 +26,7 @@ import type { workspaceSchema } from "../schema-map.js";
 import {
   workspaceAgentActivities,
   workspaceAgentAutomations,
+  workspaceAgentPauses,
   workspaceAgentSessionEvents,
   workspaceDocumentHistory,
   workspaceDocumentLinks,
@@ -836,7 +837,8 @@ export type NotificationType =
   | "document_commented"
   | "mention"
   | "lane_needs_input"
-  | "lane_elicitation_escalated";
+  | "lane_elicitation_escalated"
+  | "lane_stale";
 
 export type RecipientType = "user" | "agent";
 
@@ -1063,6 +1065,7 @@ export interface AgentSessionInput {
   status?:
     | "created"
     | "running"
+    | "stale"
     | "waiting"
     | "completed"
     | "failed"
@@ -1071,6 +1074,8 @@ export interface AgentSessionInput {
   url?: string | null;
   providerSessionId?: string | null;
   createdAt?: string;
+  /** PILE-420 — 1 when this dispatch is held by an agent-type pause. */
+  paused?: number;
   startedAt?: string | null;
   prUrl?: string | null;
   prState?: string | null;
@@ -1105,6 +1110,7 @@ export async function createAgentSession(
     url: input.url ?? null,
     providerSessionId: input.providerSessionId ?? null,
     createdAt: input.createdAt ?? ts,
+    paused: input.paused ?? 0,
     startedAt: input.startedAt ?? null,
     prUrl: input.prUrl ?? null,
     prState: input.prState ?? null,
@@ -1309,6 +1315,7 @@ export async function updateAgentSession(
     status:
       | "created"
       | "running"
+      | "stale"
       | "waiting"
       | "completed"
       | "failed"
@@ -1338,6 +1345,9 @@ export async function updateAgentSession(
     /** PILE-419 — open elicitation marker + escalation dedupe stamp. */
     awaitingActivityId: string | null;
     awaitingEscalatedAt: string | null;
+    /** PILE-420 — operator pause hold marker. Cleared when the row leaves
+     *  `waiting` (promotion, resume drain, terminal), or set explicitly. */
+    paused: number;
   }>
 ) {
   const existing = await getAgentSession(db, organizationId, id);
@@ -1362,7 +1372,14 @@ export async function updateAgentSession(
       set.awaitingActivityId = null;
       set.awaitingEscalatedAt = null;
     }
+    // A hold only exists while the lane is parked in `waiting`; any other
+    // status (promoted, resumed, stale, terminal) releases it. An explicit
+    // paused write below wins.
+    if (input.status !== "waiting" && input.paused === undefined) {
+      set.paused = 0;
+    }
   }
+  if (input.paused !== undefined) set.paused = input.paused;
   if (input.result !== undefined) set.result = input.result;
   if (input.url !== undefined) set.url = input.url;
   if (input.providerSessionId !== undefined)
@@ -1453,6 +1470,105 @@ export function listAwaitingElicitationSessions(
       )
     )
     .all();
+}
+
+/** PILE-420 — `waiting` sessions held by an agent-type pause for this
+ *  agent, oldest first — the order resume drains them. A held row may also
+ *  carry a queuedAfter edge (dedupe parked it before the pause); those stay
+ *  for the queue chain, not the drain. */
+export function listPauseHeldSessions(
+  db: WorkspaceDb,
+  organizationId: string,
+  agentId: string
+) {
+  return db
+    .select()
+    .from(workspaceAgentSessions)
+    .where(
+      and(
+        eq(workspaceAgentSessions.organizationId, organizationId),
+        eq(workspaceAgentSessions.agentId, agentId),
+        eq(workspaceAgentSessions.status, "waiting"),
+        eq(workspaceAgentSessions.paused, 1)
+      )
+    )
+    .orderBy(workspaceAgentSessions.createdAt, workspaceAgentSessions.id)
+    .all();
+}
+
+// ---- agent_pauses (PILE-420 — global pause per agent type) ----
+
+export function listAgentPauses(db: WorkspaceDb, organizationId: string) {
+  return db
+    .select()
+    .from(workspaceAgentPauses)
+    .where(eq(workspaceAgentPauses.organizationId, organizationId))
+    .orderBy(workspaceAgentPauses.createdAt, workspaceAgentPauses.id)
+    .all();
+}
+
+export function getAgentPause(
+  db: WorkspaceDb,
+  organizationId: string,
+  agentId: string
+) {
+  return db
+    .select()
+    .from(workspaceAgentPauses)
+    .where(
+      and(
+        eq(workspaceAgentPauses.organizationId, organizationId),
+        eq(workspaceAgentPauses.agentId, agentId)
+      )
+    )
+    .get();
+}
+
+export async function upsertAgentPause(
+  db: WorkspaceDb,
+  organizationId: string,
+  agentId: string,
+  input: { reason?: string | null; createdBy?: string | null }
+) {
+  const existing = await getAgentPause(db, organizationId, agentId);
+  if (existing) {
+    await db
+      .update(workspaceAgentPauses)
+      .set({
+        reason: input.reason ?? null,
+        createdBy: input.createdBy ?? existing.createdBy,
+      })
+      .where(eq(workspaceAgentPauses.id, existing.id));
+    return getAgentPause(db, organizationId, agentId);
+  }
+  const id = crypto.randomUUID();
+  await db.insert(workspaceAgentPauses).values({
+    id,
+    organizationId,
+    agentId,
+    reason: input.reason ?? null,
+    createdBy: input.createdBy ?? null,
+    createdAt: new Date().toISOString(),
+  });
+  return getAgentPause(db, organizationId, agentId);
+}
+
+export async function deleteAgentPause(
+  db: WorkspaceDb,
+  organizationId: string,
+  agentId: string
+): Promise<boolean> {
+  const rows = await db
+    .delete(workspaceAgentPauses)
+    .where(
+      and(
+        eq(workspaceAgentPauses.organizationId, organizationId),
+        eq(workspaceAgentPauses.agentId, agentId)
+      )
+    )
+    .returning({ id: workspaceAgentPauses.id })
+    .all();
+  return rows.length > 0;
 }
 
 /** Re-point still-waiting dependents of a dead session onto its retry —

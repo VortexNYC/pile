@@ -124,6 +124,7 @@ const NOTIFICATION_LABELS: Record<string, string> = {
   mention: "You were mentioned",
   lane_needs_input: "An issue needs your input",
   lane_elicitation_escalated: "An agent's question went unanswered — escalated",
+  lane_stale: "An agent session went stale — no activity or heartbeat",
 };
 
 export type NotificationTarget =

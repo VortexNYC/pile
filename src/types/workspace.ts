@@ -7,6 +7,10 @@ import type { Id, Timestamp } from "./index.js";
 export const AGENT_SESSION_STATUSES = [
   "created",
   "running",
+  // PILE-420 — a live lane that went silent: no activity or heartbeat inside
+  // the workspace's stale window. Non-terminal — the lane can still recover
+  // to `running`, or the sweep cancels it on the inactivity clock.
+  "stale",
   "waiting",
   "completed",
   "failed",

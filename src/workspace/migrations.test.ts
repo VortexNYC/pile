@@ -86,3 +86,19 @@ describe("v74 claim lease", () => {
     );
   });
 });
+
+describe("v76 agent type pause", () => {
+  it("adds the paused hold flag and the agent_pauses table", () => {
+    const sql = workspaceMigrations.migrations.m0075;
+    expect(sql).toContain(
+      "ALTER TABLE agent_sessions ADD COLUMN paused INTEGER NOT NULL DEFAULT 0"
+    );
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS agent_pauses");
+    for (const col of ["organization_id", "agent_id", "reason", "created_by"]) {
+      expect(sql).toContain(col);
+    }
+    expect(sql).toContain(
+      "CREATE UNIQUE INDEX IF NOT EXISTS agent_pauses_org_agent_idx ON agent_pauses (organization_id, agent_id)"
+    );
+  });
+});

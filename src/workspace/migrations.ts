@@ -967,6 +967,22 @@ const v75 = `ALTER TABLE agent_sessions ADD COLUMN awaiting_activity_id TEXT
 ALTER TABLE agent_sessions ADD COLUMN awaiting_escalated_at TEXT
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS agent_sessions_awaiting_idx ON agent_sessions (organization_id, awaiting_activity_id)`;
+
+// PILE-420 — agent-type pause: `agent_pauses` rows hold every new dispatch
+// of that agent type (sessions park `waiting` + `paused`); the session
+// `paused` flag marks holds so resume can drain them in order.
+const v76 = `ALTER TABLE agent_sessions ADD COLUMN paused INTEGER NOT NULL DEFAULT 0
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS agent_pauses (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  agent_id TEXT NOT NULL,
+  reason TEXT,
+  created_by TEXT,
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS agent_pauses_org_agent_idx ON agent_pauses (organization_id, agent_id)`;
 const v69 = `CREATE TABLE comments_new (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -1216,6 +1232,7 @@ export const workspaceMigrations = {
       { idx: 72, when: 72, tag: "v73", breakpoints: true },
       { idx: 73, when: 73, tag: "v74", breakpoints: true },
       { idx: 74, when: 74, tag: "v75", breakpoints: false },
+      { idx: 75, when: 75, tag: "v76", breakpoints: true },
     ],
   },
   migrations: {
@@ -1294,5 +1311,6 @@ export const workspaceMigrations = {
     m0072: v73,
     m0073: v74,
     m0074: v75,
+    m0075: v76,
   },
 } satisfies Parameters<typeof migrate>[1];
