@@ -1365,6 +1365,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "branch",
         flag: "branch",
       },
+      {
+        name: "plan",
+        flag: "plan",
+      },
     ],
   },
   "agent sessions events list": {

@@ -174,6 +174,7 @@ describe("ingestFailedAgentSession", () => {
       paused: 0,
       guidance: null,
       stepKey: null,
+      plan: null,
     };
     const polled = {
       id: "prov-1",

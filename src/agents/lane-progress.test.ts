@@ -137,6 +137,44 @@ describe("renderLaneProgressComment", () => {
     expect(fresh).toContain("no completed devin lanes");
   });
 
+  it("renders the published plan checklist instead of reported todos (PILE-426)", () => {
+    const body = renderLaneProgressComment({
+      session: base,
+      step: "Write the fix",
+      todos: [{ content: "loose task", status: "in_progress" }],
+      plan: [
+        { content: "Read the issue", status: "completed" },
+        { content: "Write the fix", status: "inProgress" },
+        { content: "Skipped refactor", status: "canceled" },
+        { content: "Open the PR", status: "pending" },
+      ],
+      typical: null,
+      now,
+    });
+    expect(body).toContain("**Plan**");
+    expect(body).toContain("- [x] Read the issue");
+    expect(body).toContain("- [ ] Write the fix _(in progress)_");
+    expect(body).toContain("- [ ] ~~Skipped refactor~~ _(canceled)_");
+    expect(body).toContain("- [ ] Open the PR");
+    // The looser todo list must not shadow the published plan.
+    expect(body).not.toContain("loose task");
+    expect(body).not.toContain("**Tasks**");
+  });
+
+  it("keeps rendering todos when no plan is published", () => {
+    const body = renderLaneProgressComment({
+      session: base,
+      step: null,
+      todos: [{ content: "loose task", status: "in_progress" }],
+      plan: [],
+      typical: null,
+      now,
+    });
+    expect(body).toContain("**Tasks**");
+    expect(body).toContain("- [ ] loose task _(in progress)_");
+    expect(body).not.toContain("**Plan**");
+  });
+
   it("freezes a terminal lane with its duration and no ETA", () => {
     const body = renderLaneProgressComment({
       session: {

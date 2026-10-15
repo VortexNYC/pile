@@ -37,6 +37,7 @@ import {
   PLAN_COMMENT_SOURCE,
   PLAN_PURPOSE,
 } from "../agents/plan.js";
+import { parseSessionPlan, type SessionPlan } from "../agents/session-plan.js";
 import {
   dispatchTriageLane,
   formatTriageComment,
@@ -3084,7 +3085,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   // ---- guidance packs (PILE-423 — scoped instruction packs injected into
   // the dispatch prompt envelope, most specific last) ----
 
-  listGuidancePacks(filter?: { scope?: data.GuidanceScope; scopeKey?: string }) {
+  listGuidancePacks(filter?: {
+    scope?: data.GuidanceScope;
+    scopeKey?: string;
+  }) {
     return data.listGuidancePacks(this.db, this.organizationId, filter);
   }
 
@@ -3093,11 +3097,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   listGuidancePackVersions(packId: string) {
-    return data.listGuidancePackVersions(
-      this.db,
-      this.organizationId,
-      packId
-    );
+    return data.listGuidancePackVersions(this.db, this.organizationId, packId);
   }
 
   /** Packs a lane should see for (teamId, status, stepKey) — least specific
@@ -3219,11 +3219,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     actor: { actorId?: string | null; actorType?: string | null }
   ): Promise<boolean> {
     await this.ready;
-    const ok = await data.deleteGuidancePack(
-      this.db,
-      this.organizationId,
-      id
-    );
+    const ok = await data.deleteGuidancePack(this.db, this.organizationId, id);
     if (ok) {
       this.audit(
         "guidance_pack.deleted",
@@ -3385,6 +3381,51 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     input: Parameters<typeof data.updateAgentSession>[3]
   ) {
     return data.updateAgentSession(this.db, this.organizationId, id, input);
+  }
+
+  /** PILE-426 — publish or replace the session's plan checklist. Whole-array
+   *  replace (no per-item edits — the agent resends the full plan each time,
+   *  same as Linear's agentSessionUpdate). A no-change publish still bumps
+   *  the row but skips the event + progress-comment churn. */
+  async setAgentSessionPlan(sessionId: string, plan: SessionPlan | null) {
+    const session = await this.getAgentSession(sessionId);
+    if (!session) return null;
+    const serialized = plan === null ? null : JSON.stringify(plan);
+    const updated = await data.updateAgentSession(
+      this.db,
+      this.organizationId,
+      sessionId,
+      { plan: serialized, lastProgressAt: new Date().toISOString() }
+    );
+    if (!updated) return null;
+    if (serialized !== session.plan) {
+      const done = (plan ?? []).filter(
+        (item) => item.status === "completed" || item.status === "canceled"
+      ).length;
+      await data.addAgentSessionEvent(this.db, {
+        sessionId,
+        type: "session.plan",
+        message:
+          plan === null
+            ? "Plan cleared"
+            : `Plan updated (${done}/${plan.length} done)`,
+        payload: { plan },
+      });
+      await this.syncLaneProgressComment(sessionId, {
+        create: true,
+        throttleMs: 0,
+      });
+      const issue = await this.getIssue(session.issueId);
+      if (issue) {
+        await this.emit({
+          type: "agent_session.updated",
+          organizationId: this.organizationId,
+          session: updated,
+          issue,
+        });
+      }
+    }
+    return updated;
   }
 
   /** Read-merge-write inside the DO so the webhook and the sweep can both
@@ -3553,6 +3594,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         session,
         step,
         todos,
+        plan: parseSessionPlan(session.plan),
         typical,
         apiBaseUrl: this.env.PUBLIC_API_URL ?? this.env.BETTER_AUTH_URL,
         now,

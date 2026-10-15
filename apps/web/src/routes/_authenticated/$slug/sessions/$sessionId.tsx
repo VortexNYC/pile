@@ -16,6 +16,7 @@ import { EntityLinksRail } from "@/components/entity-links";
 import { EntityPage, RailSection } from "@/components/entity-page";
 import { Feed } from "@/components/feed";
 import { RecordNotes } from "@/components/record-notes";
+import { SessionPlanCard } from "@/components/session-plan";
 import { ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap, type paths } from "@/lib/api";
@@ -193,6 +194,9 @@ function SessionDetail() {
               <LayerCard>
                 <p className="text-sm whitespace-pre-wrap">{s.result}</p>
               </LayerCard>
+            ) : null}
+            {s.plan && s.plan.length > 0 ? (
+              <SessionPlanCard plan={s.plan} />
             ) : null}
             <Feed>
               {(() => {

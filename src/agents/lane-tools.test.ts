@@ -248,4 +248,26 @@ describe("lane tools", () => {
     });
     expect(reports).toHaveLength(1);
   });
+
+  it("set_plan publishes the whole checklist via ctx.report (PILE-426)", async () => {
+    const { gh } = mockGithub({});
+    const reports: unknown[] = [];
+    const plan = [
+      { content: "Read the issue", status: "completed" },
+      { content: "Write the fix", status: "inProgress" },
+    ];
+    const out = await tool("set_plan").run(ctxFor(gh, reports), { plan });
+    expect(out).toEqual({ ok: true, items: 2 });
+    expect(reports).toEqual([{ plan }]);
+    // Invalid statuses are rejected by the tool schema before reporting.
+    await expect(
+      tool("set_plan").run(ctxFor(gh, reports), {
+        plan: [{ content: "x", status: "in_progress" }],
+      })
+    ).rejects.toThrow();
+    expect(reports).toHaveLength(1);
+    // Every lane tier can report — set_plan rides the lane:report grant.
+    const readonly = laneToolPolicy("readonly");
+    expect(allowedLaneTools(readonly).map((t) => t.name)).toContain("set_plan");
+  });
 });

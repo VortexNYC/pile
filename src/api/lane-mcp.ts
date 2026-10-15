@@ -112,6 +112,11 @@ export function registerLaneMcpRoutes(app: OpenAPIHono<AppContext>) {
               message: input.message.slice(0, 2000),
             });
           }
+          // PILE-426 — set_plan publishes the checklist on the session row
+          // (event + progress-comment refresh ride along in the DO).
+          if (input.plan !== undefined) {
+            await stub.setAgentSessionPlan(sessionId, input.plan);
+          }
           await stub.updateAgentSession(sessionId, {
             lastProgressAt: now,
             ...(input.result !== undefined ? { result: input.result } : {}),

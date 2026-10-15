@@ -7,7 +7,6 @@ import {
   maxDurationSchema,
   resolveDispatchEffort,
 } from "../agents/budget.js";
-import type { SessionGuidanceRef } from "../agents/guidance.js";
 import {
   agentLogToken,
   agentLogUrl,
@@ -17,6 +16,7 @@ import {
   verifySessionToken,
 } from "../agents/credentials.js";
 import { resolveAgentEnv } from "../agents/daytona.js";
+import type { SessionGuidanceRef } from "../agents/guidance.js";
 import {
   dispatchAgent,
   getAgentProvider,
@@ -34,6 +34,11 @@ import {
   parseStoredSecondaryRepos,
   secondaryReposSchema,
 } from "../agents/secondary-repos.js";
+import {
+  parseSessionPlan,
+  sessionPlanItemSchema,
+  sessionPlanSchema,
+} from "../agents/session-plan.js";
 import {
   releasePausedSessions,
   sessionHoldsKeptSandbox,
@@ -175,6 +180,9 @@ export const agentSessionSchema = z.object({
   /** PILE-423 — pipeline sub-step key this lane works; step-scoped guidance
    *  packs resolve against it. */
   stepKey: z.string().nullable().optional(),
+  /** PILE-426 — the agent's published plan checklist, in declared order.
+   *  Replaced wholesale on each update; null when no plan was published. */
+  plan: z.array(sessionPlanItemSchema).nullable().optional(),
   /** PILE-423 — the guidance packs injected into this lane's dispatch
    *  prompt, in injection order (least specific first). Versions resolve
    *  against the pack's revision history. */
@@ -359,6 +367,7 @@ export function toSessionResponse(
     structuredResult: parseJsonColumn(row.structuredResult),
     resultSchemaErrors: parseStringArray(row.resultSchemaErrors),
     guidance: parseGuidanceRefs(row.guidance),
+    plan: parseSessionPlan(row.plan),
     derivedStatus: deriveSessionStatus(row, activities),
     activities: activities?.map(toActivityResponse),
   };
@@ -729,6 +738,9 @@ const patchSessionRoute = createRoute({
             prUrl: z.string().optional(),
             prState: z.string().optional(),
             branch: z.string().optional(),
+            // PILE-426 — publish/replace the plan checklist. Whole-array
+            // replace: the agent resends the full ordered list each update.
+            plan: sessionPlanSchema.optional(),
           }),
         },
       },
@@ -2130,6 +2142,12 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       c.var.workspaceIdentity
     );
 
+    // Plan lands before the result write so a status transition in the same
+    // patch sees (and renders) the final checklist.
+    if (body.plan !== undefined) {
+      await stub.setAgentSessionPlan(sessionId, body.plan);
+    }
+
     const updated = await stub.applyAgentSessionResult(
       sessionId,
       {
@@ -2293,6 +2311,16 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
           message: laneReportStepMessage(step, todos).slice(0, 2000),
           payload: todos ? { todos } : undefined,
         });
+      }
+      // PILE-426 — `plan` publishes/replaces the session checklist; it lands
+      // before any status transition so a terminal report carries the final
+      // plan state into the frozen progress comment.
+      if (input.plan !== undefined) {
+        const parsed = sessionPlanSchema.safeParse(input.plan);
+        if (!parsed.success) {
+          return c.json({ message: "Invalid plan" }, 400);
+        }
+        await stub.setAgentSessionPlan(sessionId, parsed.data);
       }
       if (update.status !== undefined) {
         if (

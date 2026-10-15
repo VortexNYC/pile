@@ -2620,6 +2620,152 @@ describe("agent sessions API", () => {
     expect(all.some((c) => c.body.includes("completed: shipped"))).toBe(true);
   });
 
+  it("publishes and replaces a session plan via PATCH and lane report (PILE-426)", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const issue = await stub.createIssue({
+      title: "Plan checklist API",
+      repo: "VortexNYC/pile",
+    });
+    const reg = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/sessions/register`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({
+          issueId: issue.id,
+          provider: "plan-bot",
+          status: "running",
+        }),
+      }),
+      env
+    );
+    const { session, laneToken } = await reg.json<{
+      session: { id: string };
+      laneToken: string;
+    }>();
+    const sessionPath = `/workspaces/${organizationId}/agent/sessions/${session.id}`;
+    const plan = [
+      { content: "Read the issue", status: "completed" },
+      { content: "Write the fix", status: "inProgress" },
+      { content: "Open the PR", status: "pending" },
+    ];
+
+    // PATCH publishes the plan; the session response carries it parsed.
+    const patched = await app.fetch(
+      request(sessionPath, {
+        method: "PATCH",
+        token,
+        body: JSON.stringify({ plan }),
+      }),
+      env
+    );
+    expect(patched.status).toBe(200);
+    const patchedBody = await patched.json<{ plan?: unknown }>();
+    expect(patchedBody.plan).toEqual(plan);
+    const fetched = await app.fetch(request(sessionPath, { token }), env);
+    expect((await fetched.json<{ plan?: unknown }>()).plan).toEqual(plan);
+
+    // A lane self-report replaces the whole array — no per-item patching.
+    const reported = await app.fetch(
+      request(`${sessionPath}/report`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${laneToken}` },
+        body: JSON.stringify({
+          plan: [
+            { content: "Write the fix", status: "completed" },
+            { content: "Open the PR", status: "inProgress" },
+          ],
+        }),
+      }),
+      env
+    );
+    expect(reported.status).toBe(200);
+    const afterReport = await stub.getAgentSession(session.id);
+    expect(JSON.parse(afterReport?.plan ?? "null")).toEqual([
+      { content: "Write the fix", status: "completed" },
+      { content: "Open the PR", status: "inProgress" },
+    ]);
+
+    // Each publish lands a session.plan event; the live progress comment
+    // renders the checklist on the issue.
+    const events = await app.fetch(
+      request(`${sessionPath}/events?limit=100`, { token }),
+      env
+    );
+    const eventsBody = await events.json<{
+      events: Array<{ type: string; message: string }>;
+    }>();
+    const planEvents = eventsBody.events.filter(
+      (e) => e.type === "session.plan"
+    );
+    expect(planEvents.length).toBeGreaterThanOrEqual(2);
+    const progress = (await stub.listComments(issue.id)).find(
+      (c) => c.externalId === `${session.id}:progress`
+    );
+    expect(progress?.body).toContain("**Plan**");
+    expect(progress?.body).toContain("- [ ] Open the PR _(in progress)_");
+
+    // Malformed plans are rejected on both write paths.
+    const badReport = await app.fetch(
+      request(`${sessionPath}/report`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${laneToken}` },
+        body: JSON.stringify({
+          plan: [{ content: "x", status: "in_progress" }],
+        }),
+      }),
+      env
+    );
+    expect(badReport.status).toBe(400);
+    const badPatch = await app.fetch(
+      request(sessionPath, {
+        method: "PATCH",
+        token,
+        body: JSON.stringify({ plan: [{ content: "", status: "pending" }] }),
+      }),
+      env
+    );
+    expect(badPatch.status).toBe(400);
+
+    // A plan published alongside a terminal report survives on the row.
+    const done = await app.fetch(
+      request(`${sessionPath}/report`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${laneToken}` },
+        body: JSON.stringify({
+          status: "completed",
+          result: "shipped",
+          plan: [
+            { content: "Write the fix", status: "completed" },
+            { content: "Open the PR", status: "completed" },
+          ],
+        }),
+      }),
+      env
+    );
+    expect(done.status).toBe(200);
+    const final = await stub.getAgentSession(session.id);
+    expect(final?.status).toBe("completed");
+    expect(JSON.parse(final?.plan ?? "null")).toEqual([
+      { content: "Write the fix", status: "completed" },
+      { content: "Open the PR", status: "completed" },
+    ]);
+    // Terminal sessions refuse further plan reports.
+    const late = await app.fetch(
+      request(`${sessionPath}/report`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${laneToken}` },
+        body: JSON.stringify({
+          plan: [{ content: "zombie", status: "pending" }],
+        }),
+      }),
+      env
+    );
+    expect(late.status).toBe(409);
+  });
+
   it("lets a lane token read back its own session and events (PILE-232)", async () => {
     const stub = env.WORKSPACE_DURABLE_OBJECT.get(
       env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
@@ -3518,7 +3664,11 @@ describe("agent sessions API", () => {
     const session = await getRes.json<{
       status: string;
       stepKey: string | null;
-      guidance: Array<{ name: string; scope: string; scopeKey: string | null }> | null;
+      guidance: Array<{
+        name: string;
+        scope: string;
+        scopeKey: string | null;
+      }> | null;
     }>();
     expect(session.stepKey).toBe("contacted");
     expect(

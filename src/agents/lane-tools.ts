@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { GITHUB_USER_AGENT } from "../global/github-auth.js";
+import { sessionPlanSchema, type SessionPlan } from "./session-plan.js";
 
 // PILE-284 — purpose-built lane tool surface. Instead of handing a lane a raw
 // shell + installation token for GitHub ops, Pile exposes named tools that
@@ -183,6 +184,7 @@ export interface LaneToolContext {
     message?: string;
     result?: string;
     prUrl?: string;
+    plan?: SessionPlan;
   }): Promise<void>;
   policy: LaneToolPolicy;
 }
@@ -326,6 +328,17 @@ export const LANE_TOOLS: readonly LaneTool[] = [
       }
       await ctx.report({ result: input.result, prUrl: input.prUrl });
       return { ok: true };
+    },
+  }),
+  defineTool({
+    name: "set_plan",
+    description:
+      "Publish the lane's plan checklist on the session (PILE-426). Ordered items, each {content, status: pending|inProgress|completed|canceled}; every call replaces the whole plan — resend all items, not just the changed ones.",
+    permission: "lane:report",
+    inputSchema: z.object({ plan: sessionPlanSchema }),
+    async run(ctx, input) {
+      await ctx.report({ plan: input.plan });
+      return { ok: true, items: input.plan.length };
     },
   }),
 

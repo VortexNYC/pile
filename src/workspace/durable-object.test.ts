@@ -2268,6 +2268,92 @@ describe("WorkspaceDO", () => {
     ).rejects.toMatchObject({ status: 409 });
   });
 
+  it("publishes and replaces the session plan checklist (PILE-426)", async () => {
+    const stub = getStub();
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Plan checklist" })
+    );
+    const session = await withWorkspace(stub, (instance) =>
+      instance.createAgentSession({
+        issueId: issue.id,
+        agentId: "mock",
+        provider: "mock",
+        actorId: "user-1",
+        actorType: "user",
+        status: "running",
+      })
+    );
+    expect(session.plan).toBeNull();
+
+    const plan = [
+      { content: "Read the issue", status: "completed" as const },
+      { content: "Write the fix", status: "inProgress" as const },
+      { content: "Open a PR", status: "pending" as const },
+    ];
+    const updated = await withWorkspace(stub, (instance) =>
+      instance.setAgentSessionPlan(session.id, plan)
+    );
+    expect(JSON.parse(updated?.plan ?? "null")).toEqual(plan);
+
+    // A publish emits session.plan on the event stream and renders into
+    // the lane's live progress comment on the issue.
+    const events = await withWorkspace(stub, (instance) =>
+      instance.listAgentSessionEvents(session.id, { limit: 100 })
+    );
+    const planEvents = events.filter((e) => e.type === "session.plan");
+    expect(planEvents).toHaveLength(1);
+    expect(planEvents[0]?.message).toContain("1/3 done");
+    const comments = await withWorkspace(stub, (instance) =>
+      instance.listComments(issue.id)
+    );
+    const progress = comments.find(
+      (c) => c.externalId === `${session.id}:progress`
+    );
+    expect(progress?.body).toContain("**Plan**");
+    expect(progress?.body).toContain("- [x] Read the issue");
+    expect(progress?.body).toContain("- [ ] Write the fix _(in progress)_");
+
+    // Re-publishing the identical plan is a no-op on the event stream.
+    await withWorkspace(stub, (instance) =>
+      instance.setAgentSessionPlan(session.id, plan)
+    );
+    const afterSame = await withWorkspace(stub, (instance) =>
+      instance.listAgentSessionEvents(session.id, { limit: 100 })
+    );
+    expect(afterSame.filter((e) => e.type === "session.plan")).toHaveLength(1);
+
+    // Whole-array replace: statuses move forward, a dropped item is gone,
+    // and a canceled item renders struck-through.
+    const replaced = await withWorkspace(stub, (instance) =>
+      instance.setAgentSessionPlan(session.id, [
+        { content: "Write the fix", status: "completed" },
+        { content: "Open a PR", status: "inProgress" },
+        { content: "Extra polish", status: "canceled" },
+      ])
+    );
+    expect(JSON.parse(replaced?.plan ?? "null")).toEqual([
+      { content: "Write the fix", status: "completed" },
+      { content: "Open a PR", status: "inProgress" },
+      { content: "Extra polish", status: "canceled" },
+    ]);
+    const progressAfter = (
+      await withWorkspace(stub, (instance) => instance.listComments(issue.id))
+    ).find((c) => c.externalId === `${session.id}:progress`);
+    expect(progressAfter?.body).toContain("- [x] Write the fix");
+    expect(progressAfter?.body).toContain("- [ ] Open a PR _(in progress)_");
+    expect(progressAfter?.body).toContain(
+      "- [ ] ~~Extra polish~~ _(canceled)_"
+    );
+    expect(progressAfter?.body).not.toContain("Read the issue");
+
+    // Unknown sessions report cleanly instead of throwing.
+    expect(
+      await withWorkspace(stub, (instance) =>
+        instance.setAgentSessionPlan(crypto.randomUUID(), plan)
+      )
+    ).toBeNull();
+  });
+
   it("stores entity attachments in R2 and cascades them on customer delete", async () => {
     const stub = getStub();
     const customer = await withWorkspace(stub, (instance) =>
@@ -2615,9 +2701,9 @@ describe("pipeline hygiene via DO RPC", () => {
     const other = await stub.resolveGuidancePacks({ status: "done" });
     expect(other.some((p) => p.id === pack.id)).toBe(false);
 
-    expect(
-      await stub.deleteGuidancePack(pack.id, { actorId: "user-1" })
-    ).toBe(true);
+    expect(await stub.deleteGuidancePack(pack.id, { actorId: "user-1" })).toBe(
+      true
+    );
     // Deleted pack still resolves its recorded version history.
     expect((await stub.listGuidancePackVersions(pack.id)).length).toBe(2);
   });

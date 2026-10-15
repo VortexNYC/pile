@@ -24,6 +24,7 @@ import { IssueForm, type IssueFormValues } from "@/components/issue-form";
 import { Markdown } from "@/components/markdown";
 import { Page } from "@/components/page";
 import { PrChip } from "@/components/pr-chip";
+import { planProgress } from "@/components/session-plan";
 import { ShareButton } from "@/components/share-button";
 import { ErrorState, LoadingState } from "@/components/states";
 import { useFavorites } from "@/hooks/use-favorites";
@@ -871,6 +872,11 @@ function IssueDetail() {
                       >
                         {s.label ?? s.id.slice(0, 8)}
                       </RailLink>
+                      {"plan" in s && s.plan && s.plan.length > 0 ? (
+                        <span className="text-xs text-kumo-subtle">
+                          {planProgress(s.plan).done}/{s.plan.length}
+                        </span>
+                      ) : null}
                     </div>
                   ))}
                   {issueSessions.length > 5 ? (

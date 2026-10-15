@@ -1026,6 +1026,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS guidance_pack_versions_pack_idx ON guidance_pa
 ALTER TABLE agent_sessions ADD COLUMN guidance TEXT
 --> statement-breakpoint
 ALTER TABLE agent_sessions ADD COLUMN step_key TEXT`;
+
+// PILE-426 — the lane's published plan checklist (Linear AgentSession.plan):
+// JSON [{content, status}] with status pending | inProgress | completed |
+// canceled. Whole-array replace semantics; null means no plan published.
+const v78 = `ALTER TABLE agent_sessions ADD COLUMN plan TEXT`;
 const v69 = `CREATE TABLE comments_new (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -1277,6 +1282,7 @@ export const workspaceMigrations = {
       { idx: 74, when: 74, tag: "v75", breakpoints: false },
       { idx: 75, when: 75, tag: "v76", breakpoints: true },
       { idx: 76, when: 76, tag: "v77", breakpoints: true },
+      { idx: 77, when: 77, tag: "v78", breakpoints: true },
     ],
   },
   migrations: {
@@ -1357,5 +1363,6 @@ export const workspaceMigrations = {
     m0074: v75,
     m0075: v76,
     m0076: v77,
+    m0077: v78,
   },
 } satisfies Parameters<typeof migrate>[1];

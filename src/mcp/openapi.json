@@ -3882,6 +3882,33 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "plan": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "content": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "inProgress",
+                              "completed",
+                              "canceled"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "content",
+                          "status"
+                        ]
+                      }
+                    },
                     "guidance": {
                       "type": "array",
                       "nullable": true,
@@ -4232,6 +4259,33 @@
                         "stepKey": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "plan": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "content": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 500
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "pending",
+                                  "inProgress",
+                                  "completed",
+                                  "canceled"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "content",
+                              "status"
+                            ]
+                          }
                         },
                         "guidance": {
                           "type": "array",
@@ -4724,6 +4778,33 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "plan": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "content": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 500
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "pending",
+                                  "inProgress",
+                                  "completed",
+                                  "canceled"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "content",
+                              "status"
+                            ]
+                          }
+                        },
                         "guidance": {
                           "type": "array",
                           "nullable": true,
@@ -5030,6 +5111,33 @@
                         "stepKey": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "plan": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "content": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 500
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "pending",
+                                  "inProgress",
+                                  "completed",
+                                  "canceled"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "content",
+                              "status"
+                            ]
+                          }
                         },
                         "guidance": {
                           "type": "array",
@@ -5573,6 +5681,33 @@
                               "stepKey": {
                                 "type": "string",
                                 "nullable": true
+                              },
+                              "plan": {
+                                "type": "array",
+                                "nullable": true,
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "content": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 500
+                                    },
+                                    "status": {
+                                      "type": "string",
+                                      "enum": [
+                                        "pending",
+                                        "inProgress",
+                                        "completed",
+                                        "canceled"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "content",
+                                    "status"
+                                  ]
+                                }
                               },
                               "guidance": {
                                 "type": "array",
@@ -6153,6 +6288,33 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "plan": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "content": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 500
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "pending",
+                                  "inProgress",
+                                  "completed",
+                                  "canceled"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "content",
+                              "status"
+                            ]
+                          }
+                        },
                         "guidance": {
                           "type": "array",
                           "nullable": true,
@@ -6544,6 +6706,33 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "plan": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "content": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 500
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "pending",
+                                  "inProgress",
+                                  "completed",
+                                  "canceled"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "content",
+                              "status"
+                            ]
+                          }
+                        },
                         "guidance": {
                           "type": "array",
                           "nullable": true,
@@ -6829,6 +7018,33 @@
                   },
                   "branch": {
                     "type": "string"
+                  },
+                  "plan": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "content": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 500
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "pending",
+                            "inProgress",
+                            "completed",
+                            "canceled"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "content",
+                        "status"
+                      ]
+                    },
+                    "maxItems": 50
                   }
                 }
               }
@@ -6976,6 +7192,33 @@
                     "stepKey": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "plan": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "content": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "inProgress",
+                              "completed",
+                              "canceled"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "content",
+                          "status"
+                        ]
+                      }
                     },
                     "guidance": {
                       "type": "array",
@@ -7848,6 +8091,33 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "plan": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "content": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "inProgress",
+                              "completed",
+                              "canceled"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "content",
+                          "status"
+                        ]
+                      }
+                    },
                     "guidance": {
                       "type": "array",
                       "nullable": true,
@@ -8172,6 +8442,33 @@
                     "stepKey": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "plan": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "content": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "inProgress",
+                              "completed",
+                              "canceled"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "content",
+                          "status"
+                        ]
+                      }
                     },
                     "guidance": {
                       "type": "array",
@@ -8691,6 +8988,33 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "plan": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "content": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "inProgress",
+                              "completed",
+                              "canceled"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "content",
+                          "status"
+                        ]
+                      }
+                    },
                     "guidance": {
                       "type": "array",
                       "nullable": true,
@@ -9003,6 +9327,33 @@
                         "stepKey": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "plan": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "content": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 500
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "pending",
+                                  "inProgress",
+                                  "completed",
+                                  "canceled"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "content",
+                              "status"
+                            ]
+                          }
                         },
                         "guidance": {
                           "type": "array",
@@ -9379,6 +9730,33 @@
                         "stepKey": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "plan": {
+                          "type": "array",
+                          "nullable": true,
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "content": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 500
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "pending",
+                                  "inProgress",
+                                  "completed",
+                                  "canceled"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "content",
+                              "status"
+                            ]
+                          }
                         },
                         "guidance": {
                           "type": "array",
@@ -9777,6 +10155,33 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "plan": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "content": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "inProgress",
+                              "completed",
+                              "canceled"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "content",
+                          "status"
+                        ]
+                      }
+                    },
                     "guidance": {
                       "type": "array",
                       "nullable": true,
@@ -10108,6 +10513,33 @@
                     "stepKey": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "plan": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "content": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "inProgress",
+                              "completed",
+                              "canceled"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "content",
+                          "status"
+                        ]
+                      }
                     },
                     "guidance": {
                       "type": "array",
@@ -10457,6 +10889,33 @@
                     "stepKey": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "plan": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "content": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 500
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "inProgress",
+                              "completed",
+                              "canceled"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "content",
+                          "status"
+                        ]
+                      }
                     },
                     "guidance": {
                       "type": "array",
