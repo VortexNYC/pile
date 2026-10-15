@@ -1250,6 +1250,10 @@ describe("API integration", () => {
           name: "member",
           permissions: "read,write",
           actorType: "agent",
+          // Agent tokens join every team by default (Linear-style app
+          // install) — scope this one to none so team membership alone is
+          // what grants visibility below.
+          teamIds: [],
         }),
       }),
       env

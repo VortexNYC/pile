@@ -773,7 +773,10 @@ def resume_repo():
     # The kept checkout's .git/config is agent-writable — rebuild it before
     # any runner git call so a tampered config can't redirect or hook us.
     _reset_git_config()
-    run(['timeout', '120', GIT, '-C', REPO_DIR] + _GIT_SAFE_FLAGS + ['fetch', '--depth', '50', 'origin', BRANCH], env=git_auth_env(), check=False)
+    try:
+        run([GIT, '-C', REPO_DIR] + _GIT_SAFE_FLAGS + ['fetch', '--depth', '50', 'origin', BRANCH], env=git_auth_env(), check=False, timeout=120)
+    except subprocess.TimeoutExpired:
+        print('git fetch timed out after 120s — continuing')
     run([GIT, '-C', REPO_DIR] + _GIT_SAFE_FLAGS + ['merge', '--ff-only', f'origin/{BRANCH}'], env=git_env(), check=False)
     lock_remote()
 
@@ -1316,12 +1319,12 @@ def clone_secondary_repos():
             SECONDARY_TOKENS[repo] = token
         auth_env = secondary_auth_env(token)
         git = [GIT, '-C', dest] + _GIT_SAFE_FLAGS
-        run_transport(['timeout', '300', GIT] + _GIT_SAFE_FLAGS + ['clone', '--quiet', '--depth', '1', secondary_remote_url(repo, token), dest], env=auth_env)
+        run_transport([GIT] + _GIT_SAFE_FLAGS + ['clone', '--quiet', '--depth', '1', secondary_remote_url(repo, token), dest], env=auth_env, timeout=300)
         if entry.get('access') == 'write':
             # Resume the lane branch when a prior run already pushed it.
             heads = run_transport(git + ['ls-remote', '--heads', 'origin', BRANCH], env=auth_env, capture_output=True, text=True)
             if (heads.stdout or '').strip():
-                run_transport(['timeout', '300'] + git + ['fetch', '--depth', '1', 'origin', f'+refs/heads/{BRANCH}:refs/remotes/origin/{BRANCH}'], env=auth_env)
+                run_transport(git + ['fetch', '--depth', '1', 'origin', f'+refs/heads/{BRANCH}:refs/remotes/origin/{BRANCH}'], env=auth_env, timeout=300)
                 run(git + ['checkout', '-B', BRANCH, f'origin/{BRANCH}'], env=git_env(), check=True)
             else:
                 run(git + ['checkout', '-b', BRANCH], env=git_env(), check=True)
