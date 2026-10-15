@@ -1225,6 +1225,310 @@ describe("agent sessions API", () => {
     expect(childEvent).toBeTruthy();
   });
 
+  it("suspends a session on elicitation and resumes it on respond (PILE-419)", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const issue = await stub.createIssue({ title: "Elicitation lane" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "mock",
+      provider: "mock",
+      actorId: "user-1",
+      actorType: "user",
+      status: "running",
+    });
+
+    // The lane asks a human: activity lands, the session parks in `waiting`
+    // with the open question recorded (no runtime held), and needs_input
+    // surfaces on the derived status.
+    const elicitationRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/activities`,
+        {
+          method: "POST",
+          token,
+          body: JSON.stringify({
+            type: "elicitation",
+            message: "Ship to staging or prod?",
+          }),
+        }
+      ),
+      env
+    );
+    expect(elicitationRes.status).toBe(201);
+    const elicitation = await elicitationRes.json<{
+      id: string;
+      type: string;
+      startedAt: string | null;
+    }>();
+    expect(elicitation.startedAt).toBeTruthy();
+
+    const parked = await stub.getAgentSession(session.id);
+    expect(parked?.status).toBe("waiting");
+    expect(parked?.awaitingActivityId).toBe(elicitation.id);
+
+    const needsInput = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/sessions/${session.id}`, {
+        token,
+      }),
+      env
+    );
+    const needsInputBody = await needsInput.json<{
+      status: string;
+      awaitingActivityId: string | null;
+      derivedStatus: string | null;
+    }>();
+    expect(needsInputBody.derivedStatus).toBe("needs_input");
+    expect(needsInputBody.awaitingActivityId).toBe(elicitation.id);
+
+    // The human's answer records a `response` activity parented to the
+    // question, closes the question's span, and resumes the session.
+    const respondRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/respond`,
+        {
+          method: "POST",
+          token,
+          body: JSON.stringify({ answer: "staging first" }),
+        }
+      ),
+      env
+    );
+    expect(respondRes.status).toBe(200);
+    const resumed = await respondRes.json<{
+      status: string;
+      awaitingActivityId: string | null;
+      derivedStatus: string | null;
+      activities: { id: string; type: string; parentId: string | null }[];
+    }>();
+    expect(resumed.status).toBe("running");
+    expect(resumed.awaitingActivityId).toBeNull();
+    const answer = resumed.activities.find((a) => a.type === "response");
+    expect(answer).toBeTruthy();
+    expect(answer?.parentId).toBe(elicitation.id);
+    const answered = resumed.activities.find((a) => a.id === elicitation.id);
+    expect(answered).toBeTruthy();
+
+    // The elicitation span closed — durationMs is the answer latency — and
+    // the answer announcement lands on the event stream.
+    const closed = await stub.getAgentActivity(elicitation.id);
+    expect(closed?.endedAt).toBeTruthy();
+    expect(closed?.durationMs).toBeGreaterThanOrEqual(0);
+    const events = await stub.listAgentSessionEvents(session.id, {
+      limit: 100,
+    });
+    const responseEvent = events.find((e) => e.type === "elicitation.response");
+    expect(responseEvent).toBeTruthy();
+    expect(
+      (JSON.parse(responseEvent?.payload ?? "{}") as { elicitationId?: string })
+        .elicitationId
+    ).toBe(elicitation.id);
+
+    // A second answer has no open question — 409, not a stray response.
+    const againRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/respond`,
+        {
+          method: "POST",
+          token,
+          body: JSON.stringify({ answer: "actually prod" }),
+        }
+      ),
+      env
+    );
+    expect(againRes.status).toBe(409);
+
+    // Release the active-session slot — the workspace caps live lanes.
+    await stub.applyAgentSessionResult(session.id, { status: "canceled" });
+  });
+
+  it("409s respond when the session has no open elicitation", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const issue = await stub.createIssue({ title: "No elicitation lane" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "mock",
+      provider: "mock",
+      actorId: "user-1",
+      actorType: "user",
+      status: "running",
+    });
+    const res = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/respond`,
+        {
+          method: "POST",
+          token,
+          body: JSON.stringify({ answer: "no question pending" }),
+        }
+      ),
+      env
+    );
+    expect(res.status).toBe(409);
+    await stub.applyAgentSessionResult(session.id, { status: "canceled" });
+  });
+
+  it("delivers a provider-managed answer into the live sandbox via sendPrompt", async () => {
+    const agentId = `mock-respond-${crypto.randomUUID().slice(0, 8)}`;
+    const prompts: string[] = [];
+    registerAgentProvider(
+      agentId,
+      () =>
+        new MockAgentProvider(agentId, {
+          sendPrompt: (_id, prompt) => {
+            prompts.push(prompt);
+            return true;
+          },
+        })
+    );
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const issue = await stub.createIssue({ title: "Provider answer lane" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: "user-1",
+      actorType: "user",
+      status: "running",
+      providerSessionId: "remote-1",
+    });
+    await stub.addAgentActivity({
+      sessionId: session.id,
+      type: "elicitation",
+      message: "Which region?",
+    });
+    expect((await stub.getAgentSession(session.id))?.status).toBe("waiting");
+
+    const res = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/respond`,
+        {
+          method: "POST",
+          token,
+          body: JSON.stringify({ answer: "us-east" }),
+        }
+      ),
+      env
+    );
+    expect(res.status).toBe(200);
+    expect(prompts).toEqual(["us-east"]);
+    const after = await stub.getAgentSession(session.id);
+    expect(after?.status).toBe("running");
+    expect(after?.awaitingActivityId).toBeNull();
+    await stub.applyAgentSessionResult(session.id, { status: "canceled" });
+  });
+
+  it("409s respond when the provider sandbox is gone, keeping the question open", async () => {
+    const agentId = `mock-dead-${crypto.randomUUID().slice(0, 8)}`;
+    registerAgentProvider(
+      agentId,
+      () =>
+        new MockAgentProvider(agentId, {
+          sendPrompt: () => false,
+        })
+    );
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const issue = await stub.createIssue({ title: "Dead sandbox lane" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: "user-1",
+      actorType: "user",
+      status: "running",
+      providerSessionId: "remote-dead",
+    });
+    const elicitation = await stub.addAgentActivity({
+      sessionId: session.id,
+      type: "elicitation",
+      message: "Ready to proceed?",
+    });
+
+    const res = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/respond`,
+        {
+          method: "POST",
+          token,
+          body: JSON.stringify({ answer: "yes" }),
+        }
+      ),
+      env
+    );
+    expect(res.status).toBe(409);
+    // Undelivered answers don't close the question.
+    const after = await stub.getAgentSession(session.id);
+    expect(after?.status).toBe("waiting");
+    expect(after?.awaitingActivityId).toBe(elicitation.id);
+    await stub.applyAgentSessionResult(session.id, { status: "canceled" });
+  });
+
+  it("records `prompt` activities for human follow-ups (PILE-419)", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const issue = await stub.createIssue({ title: "Prompt activity" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "mock",
+      provider: "mock",
+      actorId: "user-1",
+      actorType: "user",
+      status: "running",
+    });
+
+    // `prompt` is a valid activity type on the raw route (Linear's model —
+    // the human's message to the agent).
+    const activityRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/activities`,
+        {
+          method: "POST",
+          token,
+          body: JSON.stringify({
+            type: "prompt",
+            message: "please also update the docs",
+          }),
+        }
+      ),
+      env
+    );
+    expect(activityRes.status).toBe(201);
+    const activity = await activityRes.json<{ type: string }>();
+    expect(activity.type).toBe("prompt");
+
+    // The /prompt route records the same type — the ask is auditable.
+    const promptRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/prompt`,
+        {
+          method: "POST",
+          token,
+          body: JSON.stringify({ prompt: "check the flake" }),
+        }
+      ),
+      env
+    );
+    expect(promptRes.status).toBe(200);
+    const activities = await stub.listAgentActivities(session.id);
+    expect(
+      activities.some((a) => a.type === "prompt" && a.actorId === "user-1")
+    ).toBe(true);
+    await stub.applyAgentSessionResult(session.id, { status: "canceled" });
+  });
+
   it("captures a text artifact to the session timeline", async () => {
     const stub = env.WORKSPACE_DURABLE_OBJECT.get(
       env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)

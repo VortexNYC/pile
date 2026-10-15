@@ -2178,6 +2178,96 @@ describe("WorkspaceDO", () => {
     expect(unrelatedAfter?.queuedAfter).toBeNull();
   });
 
+  it("suspends on elicitation, escalates once, resumes on respond (PILE-419)", async () => {
+    const stub = getStub();
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({
+        title: "Elicitation roundtrip",
+        assigneeId: "user-1",
+      })
+    );
+    const session = await withWorkspace(stub, (instance) =>
+      instance.createAgentSession({
+        issueId: issue.id,
+        agentId: "mock",
+        provider: "mock",
+        actorId: "user-1",
+        actorType: "user",
+        status: "running",
+      })
+    );
+
+    // Ask → the session parks in `waiting` holding the open question id.
+    const elicitation = await withWorkspace(stub, (instance) =>
+      instance.addAgentActivity({
+        sessionId: session.id,
+        type: "elicitation",
+        message: "Deploy where?",
+      })
+    );
+    const parked = await withWorkspace(stub, (instance) =>
+      instance.getAgentSession(session.id)
+    );
+    expect(parked?.status).toBe("waiting");
+    expect(parked?.awaitingActivityId).toBe(elicitation.id);
+    expect(elicitation.startedAt).toBeTruthy();
+
+    // Escalation stamps the marker and fires its fanout exactly once.
+    await withWorkspace(stub, (instance) =>
+      instance.escalateElicitation(session.id)
+    );
+    const escalated = await withWorkspace(stub, (instance) =>
+      instance.getAgentSession(session.id)
+    );
+    expect(escalated?.awaitingEscalatedAt).toBeTruthy();
+    await withWorkspace(stub, (instance) =>
+      instance.escalateElicitation(session.id)
+    );
+    const escalatedEvents = await withWorkspace(stub, (instance) =>
+      instance.listAgentSessionEvents(session.id, { limit: 100 })
+    );
+    expect(
+      escalatedEvents.filter((e) => e.type === "session.elicitation_escalated")
+    ).toHaveLength(1);
+    const notifications = await withWorkspace(stub, (instance) =>
+      instance.listNotificationsForRecipient("user-1", "user", {})
+    );
+    expect(
+      notifications.some((n) => n.type === "lane_elicitation_escalated")
+    ).toBe(true);
+
+    // Answer → response activity parented to the question, span closed,
+    // session running again with the marker cleared.
+    const resumed = await withWorkspace(stub, (instance) =>
+      instance.respondToElicitation(session.id, {
+        answer: "staging",
+        actorId: "user-1",
+        delivery: "queued",
+      })
+    );
+    expect(resumed?.status).toBe("running");
+    expect(resumed?.awaitingActivityId).toBeNull();
+    const activities = await withWorkspace(stub, (instance) =>
+      instance.listAgentActivities(session.id)
+    );
+    const response = activities.find((a) => a.type === "response");
+    expect(response?.parentId).toBe(elicitation.id);
+    expect(response?.actorId).toBe("user-1");
+    const closedQuestion = activities.find((a) => a.id === elicitation.id);
+    expect(closedQuestion?.endedAt).toBeTruthy();
+
+    // No open question → respond is a conflict, not a stray activity.
+    await expect(
+      withWorkspace(stub, (instance) =>
+        instance.respondToElicitation(session.id, {
+          answer: "again",
+          actorId: "user-1",
+          delivery: "queued",
+        })
+      )
+    ).rejects.toMatchObject({ status: 409 });
+  });
+
   it("stores entity attachments in R2 and cascades them on customer delete", async () => {
     const stub = getStub();
     const customer = await withWorkspace(stub, (instance) =>

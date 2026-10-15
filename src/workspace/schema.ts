@@ -879,6 +879,13 @@ export const workspaceAgentSessions = sqliteTable(
     // review + a rolling JSON snapshot of verdicts (see agents/review-context).
     lastReviewedSha: text("last_reviewed_sha" as string),
     reviewSummary: text("review_summary" as string),
+    // PILE-419 — open elicitation: the id of the unanswered `elicitation`
+    // activity that parked this session in `waiting` (suspend: no runtime
+    // held while a human thinks). NULL means the session isn't suspended
+    // on a question — distinct from queue-parked `waiting` (queuedAfter).
+    // awaitingEscalatedAt dedupes the sweep's escalation notification.
+    awaitingActivityId: text("awaiting_activity_id" as string),
+    awaitingEscalatedAt: text("awaiting_escalated_at" as string),
   },
   (table) => [
     index("agent_sessions_organization_idx" as string).on(
@@ -890,6 +897,10 @@ export const workspaceAgentSessions = sqliteTable(
     index("agent_sessions_provider_session_idx" as string).on(
       table.organizationId,
       table.providerSessionId
+    ),
+    index("agent_sessions_awaiting_idx" as string).on(
+      table.organizationId,
+      table.awaitingActivityId
     ),
   ]
 );
@@ -906,6 +917,7 @@ export const workspaceAgentActivities = sqliteTable(
         "response",
         "error",
         "elicitation",
+        "prompt",
         "action",
         "status",
         "artifact",

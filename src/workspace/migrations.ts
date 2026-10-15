@@ -957,6 +957,16 @@ const v74 = `ALTER TABLE issues ADD COLUMN claimed_by TEXT
 ALTER TABLE issues ADD COLUMN claimed_lease_expires_at TEXT
 --> statement-breakpoint
 ALTER TABLE issues ADD COLUMN claim_epoch INTEGER NOT NULL DEFAULT 0`;
+
+// PILE-419 — elicitation suspend: awaiting_activity_id points at the open
+// (unanswered) elicitation activity that parked the session in `waiting`;
+// awaiting_escalated_at dedupes the sweep's escalation notification. Both
+// clear when the answer lands or the session leaves `waiting`.
+const v75 = `ALTER TABLE agent_sessions ADD COLUMN awaiting_activity_id TEXT
+--> statement-breakpoint
+ALTER TABLE agent_sessions ADD COLUMN awaiting_escalated_at TEXT
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS agent_sessions_awaiting_idx ON agent_sessions (organization_id, awaiting_activity_id)`;
 const v69 = `CREATE TABLE comments_new (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -1205,6 +1215,7 @@ export const workspaceMigrations = {
       { idx: 71, when: 71, tag: "v72", breakpoints: false },
       { idx: 72, when: 72, tag: "v73", breakpoints: true },
       { idx: 73, when: 73, tag: "v74", breakpoints: true },
+      { idx: 74, when: 74, tag: "v75", breakpoints: false },
     ],
   },
   migrations: {
@@ -1282,5 +1293,6 @@ export const workspaceMigrations = {
     m0071: v72,
     m0072: v73,
     m0073: v74,
+    m0074: v75,
   },
 } satisfies Parameters<typeof migrate>[1];

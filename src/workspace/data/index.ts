@@ -13,6 +13,7 @@ import {
   isNull,
   lte,
   ne,
+  not,
   or,
   sql,
 } from "drizzle-orm";
@@ -834,7 +835,8 @@ export type NotificationType =
   | "document_updated"
   | "document_commented"
   | "mention"
-  | "lane_needs_input";
+  | "lane_needs_input"
+  | "lane_elicitation_escalated";
 
 export type RecipientType = "user" | "agent";
 
@@ -1272,6 +1274,9 @@ const agentSessionSummaryColumns = {
   endedAt: workspaceAgentSessions.endedAt,
   lastProgressAt: workspaceAgentSessions.lastProgressAt,
   label: workspaceAgentSessions.label,
+  // PILE-419 — summary rows carry the open-elicitation marker so the
+  // fleet/summary views can derive `needs_input` without activity blobs.
+  awaitingActivityId: workspaceAgentSessions.awaitingActivityId,
 };
 
 export type AgentSessionSummary = Pick<
@@ -1330,6 +1335,9 @@ export async function updateAgentSession(
     lastReviewedSha: string | null;
     reviewSummary: string | null;
     sandboxBackupRef: string | null;
+    /** PILE-419 — open elicitation marker + escalation dedupe stamp. */
+    awaitingActivityId: string | null;
+    awaitingEscalatedAt: string | null;
   }>
 ) {
   const existing = await getAgentSession(db, organizationId, id);
@@ -1346,6 +1354,13 @@ export async function updateAgentSession(
       !existing.endedAt
     ) {
       set.endedAt = set.updatedAt;
+    }
+    // PILE-419 — an open elicitation only exists while the session is
+    // parked in `waiting`; any other status (resumed, terminal, re-queued
+    // to `created`) closes it. Explicit awaiting* writes below win.
+    if (input.status !== "waiting" && input.awaitingActivityId === undefined) {
+      set.awaitingActivityId = null;
+      set.awaitingEscalatedAt = null;
     }
   }
   if (input.result !== undefined) set.result = input.result;
@@ -1375,6 +1390,10 @@ export async function updateAgentSession(
     set.lastReviewedSha = input.lastReviewedSha;
   if (input.reviewSummary !== undefined)
     set.reviewSummary = input.reviewSummary;
+  if (input.awaitingActivityId !== undefined)
+    set.awaitingActivityId = input.awaitingActivityId;
+  if (input.awaitingEscalatedAt !== undefined)
+    set.awaitingEscalatedAt = input.awaitingEscalatedAt;
   // A retry/redispatch lane inherits the review history of the lane it
   // replaces, so the next review still range-diffs from the last verdict.
   if (
@@ -1412,6 +1431,27 @@ export function listQueuedAgentSessions(
       )
     )
     .orderBy(workspaceAgentSessions.createdAt, workspaceAgentSessions.id)
+    .all();
+}
+
+/** PILE-419 — live sessions suspended on an open elicitation. The sweep
+ *  scans this set to escalate questions that went unanswered past the
+ *  workspace's configured window. */
+export function listAwaitingElicitationSessions(
+  db: WorkspaceDb,
+  organizationId: string
+) {
+  const terminal: AgentSessionStatus[] = ["completed", "failed", "canceled"];
+  return db
+    .select()
+    .from(workspaceAgentSessions)
+    .where(
+      and(
+        eq(workspaceAgentSessions.organizationId, organizationId),
+        isNotNull(workspaceAgentSessions.awaitingActivityId),
+        not(inArray(workspaceAgentSessions.status, terminal))
+      )
+    )
     .all();
 }
 
@@ -1510,6 +1550,7 @@ export interface AgentActivityInput {
     | "response"
     | "error"
     | "elicitation"
+    | "prompt"
     | "action"
     | "status"
     | "artifact";
@@ -1563,6 +1604,14 @@ export async function addAgentActivity(
     .set({ lastProgressAt: ts, updatedAt: ts })
     .where(eq(workspaceAgentSessions.id, input.sessionId));
   return row;
+}
+
+export function getAgentActivity(db: WorkspaceDb, id: string) {
+  return db
+    .select()
+    .from(workspaceAgentActivities)
+    .where(eq(workspaceAgentActivities.id, id))
+    .get();
 }
 
 export function listAgentActivities(

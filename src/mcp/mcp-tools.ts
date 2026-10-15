@@ -10383,6 +10383,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "response",
                 "error",
                 "elicitation",
+                "prompt",
                 "action",
                 "status",
                 "artifact"
@@ -10606,6 +10607,40 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           },
           "required": [
             "prompt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "organizationId",
+        "sessionId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdAgentSessionsSessionIdRespond",
+    "description": "Create agent session respond (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/respond) Path params (top-level, required): organizationId, sessionId. Request body goes in the \"body\" object; fields: answer* (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}/respond",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "answer": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "answer"
           ],
           "additionalProperties": false
         }
