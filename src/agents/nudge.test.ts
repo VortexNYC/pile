@@ -159,4 +159,41 @@ describe("nudgeLane redispatch (PILE-321)", () => {
     expect(seen.repo).toBe("VortexNYC/own-repo");
     expect((await stub.getIssue(issue.id))?.repo).toBe("VortexNYC/own-repo");
   });
+
+  // PILE-423 — a cold redispatch keeps the dead lane's stepKey so the same
+  // step-scoped guidance packs resolve on the replacement lane.
+  it("carries the dead lane's stepKey onto the redispatch", async () => {
+    const stub = getStub();
+    await stub.setOrganizationId(actor.organizationId);
+    const agentId = `mock-nudge-step-${crypto.randomUUID().slice(0, 8)}`;
+    registerCapturingProvider(agentId);
+
+    const issue = await stub.createIssue({
+      title: "Step-scoped lane",
+      teamId: defaultedTeamId,
+    });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: actor.id,
+      actorType: "user",
+      status: "completed",
+      stepKey: "contacted",
+    });
+
+    await nudgeLane(
+      env,
+      stub,
+      actor.organizationId,
+      session,
+      issue,
+      "https://github.com/VortexNYC/nudge-default/pull/3",
+      { prompt: "CI is red", reason: "CI failed" }
+    );
+
+    const sessions = await stub.listAgentSessions({ issueId: issue.id });
+    const redispatch = sessions.find((s) => s.id !== session.id);
+    expect(redispatch?.stepKey).toBe("contacted");
+  });
 });

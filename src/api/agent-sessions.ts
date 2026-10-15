@@ -7,6 +7,7 @@ import {
   maxDurationSchema,
   resolveDispatchEffort,
 } from "../agents/budget.js";
+import type { SessionGuidanceRef } from "../agents/guidance.js";
 import {
   agentLogToken,
   agentLogUrl,
@@ -171,6 +172,24 @@ export const agentSessionSchema = z.object({
   /** PILE-420 — 1 while the lane is parked `waiting` by an agent-type
    *  pause; resume drains holds in order. */
   paused: z.number().optional(),
+  /** PILE-423 — pipeline sub-step key this lane works; step-scoped guidance
+   *  packs resolve against it. */
+  stepKey: z.string().nullable().optional(),
+  /** PILE-423 — the guidance packs injected into this lane's dispatch
+   *  prompt, in injection order (least specific first). Versions resolve
+   *  against the pack's revision history. */
+  guidance: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        scope: z.enum(["workspace", "team", "status", "step"]),
+        scopeKey: z.string().nullable(),
+        version: z.number().int(),
+      })
+    )
+    .nullable()
+    .optional(),
   /** Read-time derivation (PILE-209): `stalled` = running, stale progress,
    *  no PR; `needs_input` = an open elicitation is parked on the session
    *  (or, for pre-suspend rows, the latest activity is an elicitation).
@@ -298,6 +317,38 @@ function parseStringArray(value: string | null): string[] | null {
     : null;
 }
 
+const GUIDANCE_SCOPES = new Set(["workspace", "team", "status", "step"]);
+
+// PILE-423 — the session row stores guidance refs as JSON; only well-formed
+// entries reach the response (a hand-edited row degrades to null).
+function parseGuidanceRefs(value: string | null): SessionGuidanceRef[] | null {
+  const parsed = parseJsonColumn(value);
+  if (!Array.isArray(parsed)) return null;
+  const refs: SessionGuidanceRef[] = [];
+  for (const entry of parsed) {
+    if (!isJsonObject(entry)) return null;
+    const { id, name, scope, scopeKey, version } = entry;
+    if (
+      typeof id !== "string" ||
+      typeof name !== "string" ||
+      typeof version !== "number" ||
+      typeof scope !== "string" ||
+      !GUIDANCE_SCOPES.has(scope) ||
+      (scopeKey !== null && typeof scopeKey !== "string")
+    ) {
+      return null;
+    }
+    refs.push({
+      id,
+      name,
+      scope: scope as SessionGuidanceRef["scope"],
+      scopeKey,
+      version,
+    });
+  }
+  return refs;
+}
+
 export function toSessionResponse(
   row: AgentSession,
   activities?: AgentActivity[]
@@ -307,6 +358,7 @@ export function toSessionResponse(
     resultSchema: parseJsonObject(row.resultSchema),
     structuredResult: parseJsonColumn(row.structuredResult),
     resultSchemaErrors: parseStringArray(row.resultSchemaErrors),
+    guidance: parseGuidanceRefs(row.guidance),
     derivedStatus: deriveSessionStatus(row, activities),
     activities: activities?.map(toActivityResponse),
   };
@@ -905,6 +957,9 @@ const createChildSessionRoute = createRoute({
             repo: z.string().optional(),
             effort: dispatchEffortSchema.optional(),
             maxDuration: maxDurationSchema.optional(),
+            // PILE-423 — defaults to the parent session's stepKey when unset
+            // so a spawned sub-lane keeps the same step-scoped guidance.
+            stepKey: z.string().min(1).optional(),
           }),
         },
       },
@@ -1016,6 +1071,9 @@ const dispatchBatchItemSchema = z
     agentId: z.string().optional(),
     branch: z.string().nullable().optional(),
     instructions: z.string().optional(),
+    // PILE-423 — pipeline sub-step key; step-scoped guidance packs resolve
+    // against it and it persists on the session row.
+    stepKey: z.string().min(1).optional(),
     queuedAfter: z.string().optional(),
     secondaryRepos: secondaryReposSchema.optional(),
     // PILE-293 — run budget: effort picks the model tier (defaults from the
@@ -1616,6 +1674,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
           getExecutionCtx(c),
           {
             instructions: item.instructions,
+            stepKey: item.stepKey,
             envAllowlist: pileConfig?.env,
             queueAfter,
             secondaryRepos: item.secondaryRepos,
@@ -2974,6 +3033,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         spawnDepth: nextDepth,
         effort: body.effort,
         maxDurationMinutes: body.maxDuration,
+        stepKey: body.stepKey ?? session.stepKey ?? undefined,
       }
     );
 
@@ -3242,6 +3302,8 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         // A lane that was queued behind a blocker re-enters the queue on
         // retry — the edge survives promotion on the session row (PILE-260).
         queueAfter: session.queuedAfter ?? undefined,
+        // PILE-423 — retries resolve the same step scope as the original.
+        stepKey: session.stepKey ?? undefined,
         secondaryRepos: parseStoredSecondaryRepos(session.secondaryRepos),
         effort: body.effort ?? session.effort ?? undefined,
         maxDurationMinutes:

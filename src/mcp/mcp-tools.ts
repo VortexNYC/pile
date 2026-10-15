@@ -200,6 +200,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdAgentGuidanceId",
+    "description": "Delete agent guidance — Delete a guidance pack. Version snapshots are kept so sessions that ran with it still resolve their recorded refs. (DELETE /workspaces/{organizationId}/agent/guidance/{id}) Path params (top-level, required): organizationId, id.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/agent/guidance/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdAgentPausesAgentId",
     "description": "Delete agent pause (DELETE /workspaces/{organizationId}/agent/pauses/{agentId}) Path params (top-level, required): organizationId, agentId.",
     "method": "DELETE",
@@ -2071,6 +2092,77 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdAgentGuidance",
+    "description": "List agent guidance — List guidance packs for the workspace. Optional scope/scopeKey filters narrow to one attachment level. (GET /workspaces/{organizationId}/agent/guidance) Path params (top-level, required): organizationId. Query params (top-level, optional): scope, scopeKey.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/agent/guidance",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "workspace",
+            "team",
+            "status",
+            "step"
+          ]
+        },
+        "scopeKey": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdAgentGuidanceId",
+    "description": "Get agent guidance (GET /workspaces/{organizationId}/agent/guidance/{id}) Path params (top-level, required): organizationId, id.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/agent/guidance/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdAgentGuidanceIdVersions",
+    "description": "List agent guidance versions — Revision history of a pack — one row per version, including versions recorded on sessions dispatched before a delete. (GET /workspaces/{organizationId}/agent/guidance/{id}/versions) Path params (top-level, required): organizationId, id.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/agent/guidance/{id}/versions",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
         "organizationId"
       ]
     }
@@ -6550,6 +6642,73 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "patchWorkspacesOrganizationIdAgentGuidanceId",
+    "description": "Update agent guidance — Edit a guidance pack — bumps version and snapshots the revision. Sessions dispatched afterwards pick up the new version; existing sessions keep the refs they recorded. (PATCH /workspaces/{organizationId}/agent/guidance/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, scope, scopeKey, body, links.",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/agent/guidance/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "scope": {
+              "type": "string",
+              "enum": [
+                "workspace",
+                "team",
+                "status",
+                "step"
+              ]
+            },
+            "scopeKey": {
+              "type": "string",
+              "nullable": true,
+              "minLength": 1
+            },
+            "body": {
+              "type": "string",
+              "minLength": 1
+            },
+            "links": {
+              "type": "array",
+              "nullable": true,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "label": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "url"
+                ]
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "patchWorkspacesOrganizationIdAgentSessionsSessionId",
     "description": "Update agent session (PATCH /workspaces/{organizationId}/agent/sessions/{sessionId}) Path params (top-level, required): organizationId, sessionId. Request body goes in the \"body\" object; fields: status, result, url, prUrl, prState, branch.",
     "method": "PATCH",
@@ -10185,6 +10344,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                   "instructions": {
                     "type": "string"
                   },
+                  "stepKey": {
+                    "type": "string",
+                    "minLength": 1
+                  },
                   "queuedAfter": {
                     "type": "string"
                   },
@@ -10257,6 +10420,73 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           },
           "required": [
             "items"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdAgentGuidance",
+    "description": "Create agent guidance — Create a guidance pack. scope=workspace applies to every lane; team/status/step packs match scopeKey against the issue's teamId, its workflow status, and the session's stepKey. (POST /workspaces/{organizationId}/agent/guidance) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, scope*, scopeKey, body*, links (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/agent/guidance",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "scope": {
+              "type": "string",
+              "enum": [
+                "workspace",
+                "team",
+                "status",
+                "step"
+              ]
+            },
+            "scopeKey": {
+              "type": "string",
+              "nullable": true,
+              "minLength": 1
+            },
+            "body": {
+              "type": "string",
+              "minLength": 1
+            },
+            "links": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "label": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "url"
+                ]
+              }
+            }
+          },
+          "required": [
+            "name",
+            "scope",
+            "body"
           ],
           "additionalProperties": false
         }
@@ -10544,7 +10774,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdAgentSessionsSessionIdChildren",
-    "description": "Create agent session children (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/children) Path params (top-level, required): organizationId, sessionId. Request body goes in the \"body\" object; fields: title*, description, agentId, model, repo, effort, maxDuration (* = required).",
+    "description": "Create agent session children (POST /workspaces/{organizationId}/agent/sessions/{sessionId}/children) Path params (top-level, required): organizationId, sessionId. Request body goes in the \"body\" object; fields: title*, description, agentId, model, repo, effort, maxDuration, stepKey (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}/children",
     "inputSchema": {
@@ -10589,6 +10819,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "minimum": 1,
               "maximum": 1440,
               "description": "Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue"
+            },
+            "stepKey": {
+              "type": "string",
+              "minLength": 1
             }
           },
           "required": [
@@ -13357,7 +13591,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssuesIdDispatch",
-    "description": "Dispatch issue (POST /workspaces/{organizationId}/issues/{id}/dispatch) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: agentId, provider, model, repo, branch, instructions, preflight, secondaryRepos, mode, effort, maxDuration, resultSchema.",
+    "description": "Dispatch issue (POST /workspaces/{organizationId}/issues/{id}/dispatch) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: agentId, provider, model, repo, branch, instructions, stepKey, preflight, secondaryRepos, mode, effort, maxDuration, resultSchema.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues/{id}/dispatch",
     "inputSchema": {
@@ -13391,6 +13625,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "instructions": {
               "type": "string"
+            },
+            "stepKey": {
+              "type": "string",
+              "minLength": 1
             },
             "preflight": {
               "type": "boolean"

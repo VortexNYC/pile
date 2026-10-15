@@ -463,7 +463,12 @@ async function redispatchCompletedLane(
       },
       undefined,
       undefined,
-      { instructions: opts.prompt }
+      // PILE-423 — a cold redispatch keeps the dead lane's step scope so
+      // the same step-scoped guidance resolves on the retry.
+      {
+        instructions: opts.prompt,
+        stepKey: session.stepKey ?? undefined,
+      }
     );
     await stub
       .updateAgentSession(dispatched.id, { retryOf: session.id })

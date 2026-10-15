@@ -172,6 +172,8 @@ describe("ingestFailedAgentSession", () => {
       awaitingActivityId: null,
       awaitingEscalatedAt: null,
       paused: 0,
+      guidance: null,
+      stepKey: null,
     };
     const polled = {
       id: "prov-1",

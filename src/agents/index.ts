@@ -35,6 +35,7 @@ import { resolveAgentEnv } from "./daytona.js";
 import { checkDispatchDedupe, type DedupeResult } from "./dedupe.js";
 import { DevinCliAgentProvider } from "./devin-cli.js";
 import { DevinAgentProvider } from "./devin.js";
+import { guidanceRefs, renderGuidancePacks } from "./guidance.js";
 import {
   getLaneDbProvider,
   laneDbConfigForRepo,
@@ -218,6 +219,10 @@ export async function dispatchAgent(
     /** Serialized draft-07 JSON Schema (see `resolveResultSchema`) the
      *  lane's final output is validated against (PILE-289). */
     resultSchema?: string;
+    /** PILE-423 — pipeline sub-step key this lane works (e.g. "outreach").
+     *  Step-scoped guidance packs resolve against it; persisted on the
+     *  session so promotion/retries keep the same scope. */
+    stepKey?: string;
   }
 ): Promise<AgentSession> {
   const label = sessionLabel(issue, agentId, options?.purpose);
@@ -327,6 +332,7 @@ export async function dispatchAgent(
         maxDurationMinutes,
         label,
         resultSchema,
+        stepKey: options?.stepKey ?? null,
       });
       await stub
         .addAgentSessionEvent({
@@ -363,6 +369,7 @@ export async function dispatchAgent(
         maxDurationMinutes,
         label,
         resultSchema,
+        stepKey: options?.stepKey ?? null,
       });
       await stub
         .addAgentSessionEvent({
@@ -422,6 +429,11 @@ export async function dispatchAgent(
     session = (await stub.updateAgentSession(promoted.id, {
       status: "created",
       createdAt: promotedAt,
+      // An explicit stepKey on promote wins; otherwise the parked row's
+      // stored key (set when the dispatch was queued) drives resolution.
+      ...(options?.stepKey !== undefined
+        ? { stepKey: options.stepKey }
+        : {}),
     })) ??
       // A null return means the row didn't take the write — the fallback
       // must still reflect the promotion or the stale queue timestamp
@@ -445,7 +457,38 @@ export async function dispatchAgent(
       maxDurationMinutes,
       label,
       resultSchema,
+      stepKey: options?.stepKey ?? null,
     });
+  }
+
+  // PILE-423 — scoped guidance packs (Linear's "Guidance"): resolve the packs
+  // applying to this lane (workspace → team → status → step), record the
+  // versions used on the session row, and inject the rendered text into the
+  // dispatch prompt envelope ahead of the caller's own instructions so the
+  // most specific text lands last. Queued/paused lanes resolve at promotion
+  // — a parked row re-enters this path and picks up current versions.
+  const stepKey = options?.stepKey ?? session.stepKey ?? null;
+  const guidancePacks = await stub.resolveGuidancePacks({
+    teamId: issue.teamId ?? null,
+    status: issue.status ?? null,
+    stepKey,
+  });
+  let guidanceText: string | null = null;
+  if (guidancePacks.length > 0) {
+    const refs = guidanceRefs(guidancePacks);
+    const recorded = await stub.updateAgentSession(session.id, {
+      guidance: JSON.stringify(refs),
+    });
+    if (recorded) session = recorded;
+    guidanceText = renderGuidancePacks(guidancePacks);
+    await stub
+      .addAgentSessionEvent({
+        sessionId: session.id,
+        type: "lane.guidance",
+        message: `Guidance packs: ${refs.map((r) => `${r.name}@${r.version}`).join(", ")}`,
+        payload: { packs: refs },
+      })
+      .catch(() => {});
   }
 
   // PILE-212 — lane-scoped preview DB: when org metadata declares laneDb for
@@ -609,6 +652,7 @@ export async function dispatchAgent(
         pileApi,
         instructions:
           [
+            guidanceText,
             options?.instructions ?? null,
             session.resultSchema
               ? buildResultSchemaInstructions(session.resultSchema)

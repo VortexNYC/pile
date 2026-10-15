@@ -102,3 +102,20 @@ describe("v76 agent type pause", () => {
     );
   });
 });
+
+describe("v77 guidance packs", () => {
+  it("creates guidance_packs + version history and the session columns", () => {
+    const sql = workspaceMigrations.migrations.m0076;
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS guidance_packs");
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS guidance_pack_versions");
+    for (const col of ["organization_id", "scope", "scope_key", "version"]) {
+      expect(sql).toContain(col);
+    }
+    expect(sql).toContain(
+      "ALTER TABLE agent_sessions ADD COLUMN guidance TEXT"
+    );
+    expect(sql).toContain(
+      "ALTER TABLE agent_sessions ADD COLUMN step_key TEXT"
+    );
+  });
+});

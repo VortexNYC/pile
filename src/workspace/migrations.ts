@@ -983,6 +983,49 @@ CREATE TABLE IF NOT EXISTS agent_pauses (
 )
 --> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS agent_pauses_org_agent_idx ON agent_pauses (organization_id, agent_id)`;
+
+// PILE-423 — agent guidance packs (Linear's "Guidance"): markdown instruction
+// packs scoped to the workspace, a team, a workflow status/stage, or a step
+// key. Session context assembly injects the applicable packs least-specific
+// first; `version` bumps on every edit and guidance_pack_versions snapshots
+// each revision so the `guidance` refs recorded on a session row
+// ({packId, version}) always resolve back to the exact text the lane saw.
+// `step_key` on agent_sessions is the pipeline sub-step the lane works —
+// persisted so queue promotion/retries resolve the same step scope.
+const v77 = `CREATE TABLE IF NOT EXISTS guidance_packs (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  scope_key TEXT,
+  body TEXT NOT NULL,
+  links TEXT,
+  version INTEGER NOT NULL DEFAULT 1,
+  created_by TEXT,
+  updated_by TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS guidance_packs_scope_idx ON guidance_packs (organization_id, scope, scope_key)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS guidance_pack_versions (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  pack_id TEXT NOT NULL,
+  version INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  body TEXT NOT NULL,
+  links TEXT,
+  actor_id TEXT,
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS guidance_pack_versions_pack_idx ON guidance_pack_versions (pack_id, version)
+--> statement-breakpoint
+ALTER TABLE agent_sessions ADD COLUMN guidance TEXT
+--> statement-breakpoint
+ALTER TABLE agent_sessions ADD COLUMN step_key TEXT`;
 const v69 = `CREATE TABLE comments_new (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -1233,6 +1276,7 @@ export const workspaceMigrations = {
       { idx: 73, when: 73, tag: "v74", breakpoints: true },
       { idx: 74, when: 74, tag: "v75", breakpoints: false },
       { idx: 75, when: 75, tag: "v76", breakpoints: true },
+      { idx: 76, when: 76, tag: "v77", breakpoints: true },
     ],
   },
   migrations: {
@@ -1312,5 +1356,6 @@ export const workspaceMigrations = {
     m0073: v74,
     m0074: v75,
     m0075: v76,
+    m0076: v77,
   },
 } satisfies Parameters<typeof migrate>[1];

@@ -527,6 +527,8 @@ async function retryDeadLane(
         // queue on retry (the edge survives promotion on the session row)
         // instead of dispatching immediately and racing the chain.
         queueAfter: session.queuedAfter ?? undefined,
+        // PILE-423 — retries resolve the same step scope as the original.
+        stepKey: session.stepKey ?? undefined,
         secondaryRepos: parseStoredSecondaryRepos(session.secondaryRepos),
         effort: session.effort ?? undefined,
         maxDurationMinutes: session.maxDurationMinutes ?? undefined,

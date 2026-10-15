@@ -1828,6 +1828,7 @@ export interface paths {
                         repo?: string | null;
                         branch?: string | null;
                         instructions?: string;
+                        stepKey?: string;
                         preflight?: boolean;
                         secondaryRepos?: {
                             repo: string;
@@ -1892,6 +1893,15 @@ export interface paths {
                             awaitingActivityId?: string | null;
                             awaitingEscalatedAt?: string | null;
                             paused?: number;
+                            stepKey?: string | null;
+                            guidance?: {
+                                id: string;
+                                name: string;
+                                /** @enum {string} */
+                                scope: "workspace" | "team" | "status" | "step";
+                                scopeKey: string | null;
+                                version: number;
+                            }[] | null;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
                             activities?: {
@@ -1995,6 +2005,15 @@ export interface paths {
                                 awaitingActivityId?: string | null;
                                 awaitingEscalatedAt?: string | null;
                                 paused?: number;
+                                stepKey?: string | null;
+                                guidance?: {
+                                    id: string;
+                                    name: string;
+                                    /** @enum {string} */
+                                    scope: "workspace" | "team" | "status" | "step";
+                                    scopeKey: string | null;
+                                    version: number;
+                                }[] | null;
                                 /** @enum {string|null} */
                                 derivedStatus?: "stalled" | "needs_input" | null;
                                 activities?: {
@@ -2209,6 +2228,15 @@ export interface paths {
                                 awaitingActivityId?: string | null;
                                 awaitingEscalatedAt?: string | null;
                                 paused?: number;
+                                stepKey?: string | null;
+                                guidance?: {
+                                    id: string;
+                                    name: string;
+                                    /** @enum {string} */
+                                    scope: "workspace" | "team" | "status" | "step";
+                                    scopeKey: string | null;
+                                    version: number;
+                                }[] | null;
                                 /** @enum {string|null} */
                                 derivedStatus?: "stalled" | "needs_input" | null;
                                 activities?: {
@@ -2275,6 +2303,15 @@ export interface paths {
                                 awaitingActivityId?: string | null;
                                 awaitingEscalatedAt?: string | null;
                                 paused?: number;
+                                stepKey?: string | null;
+                                guidance?: {
+                                    id: string;
+                                    name: string;
+                                    /** @enum {string} */
+                                    scope: "workspace" | "team" | "status" | "step";
+                                    scopeKey: string | null;
+                                    version: number;
+                                }[] | null;
                                 /** @enum {string|null} */
                                 derivedStatus?: "stalled" | "needs_input" | null;
                                 activities?: {
@@ -2341,6 +2378,7 @@ export interface paths {
                             agentId?: string;
                             branch?: string | null;
                             instructions?: string;
+                            stepKey?: string;
                             queuedAfter?: string;
                             secondaryRepos?: {
                                 repo: string;
@@ -2454,6 +2492,15 @@ export interface paths {
                                 awaitingActivityId?: string | null;
                                 awaitingEscalatedAt?: string | null;
                                 paused?: number;
+                                stepKey?: string | null;
+                                guidance?: {
+                                    id: string;
+                                    name: string;
+                                    /** @enum {string} */
+                                    scope: "workspace" | "team" | "status" | "step";
+                                    scopeKey: string | null;
+                                    version: number;
+                                }[] | null;
                                 /** @enum {string|null} */
                                 derivedStatus?: "stalled" | "needs_input" | null;
                                 activities?: {
@@ -2667,6 +2714,15 @@ export interface paths {
                                 awaitingActivityId?: string | null;
                                 awaitingEscalatedAt?: string | null;
                                 paused?: number;
+                                stepKey?: string | null;
+                                guidance?: {
+                                    id: string;
+                                    name: string;
+                                    /** @enum {string} */
+                                    scope: "workspace" | "team" | "status" | "step";
+                                    scopeKey: string | null;
+                                    version: number;
+                                }[] | null;
                                 /** @enum {string|null} */
                                 derivedStatus?: "stalled" | "needs_input" | null;
                                 activities?: {
@@ -2774,6 +2830,15 @@ export interface paths {
                             awaitingActivityId?: string | null;
                             awaitingEscalatedAt?: string | null;
                             paused?: number;
+                            stepKey?: string | null;
+                            guidance?: {
+                                id: string;
+                                name: string;
+                                /** @enum {string} */
+                                scope: "workspace" | "team" | "status" | "step";
+                                scopeKey: string | null;
+                                version: number;
+                            }[] | null;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
                             activities?: {
@@ -2891,6 +2956,15 @@ export interface paths {
                             awaitingActivityId?: string | null;
                             awaitingEscalatedAt?: string | null;
                             paused?: number;
+                            stepKey?: string | null;
+                            guidance?: {
+                                id: string;
+                                name: string;
+                                /** @enum {string} */
+                                scope: "workspace" | "team" | "status" | "step";
+                                scopeKey: string | null;
+                                version: number;
+                            }[] | null;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
                             activities?: {
@@ -3279,6 +3353,15 @@ export interface paths {
                             awaitingActivityId?: string | null;
                             awaitingEscalatedAt?: string | null;
                             paused?: number;
+                            stepKey?: string | null;
+                            guidance?: {
+                                id: string;
+                                name: string;
+                                /** @enum {string} */
+                                scope: "workspace" | "team" | "status" | "step";
+                                scopeKey: string | null;
+                                version: number;
+                            }[] | null;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
                             activities?: {
@@ -3379,7 +3462,18 @@ export interface paths {
                             updatedAt: string;
                             lastProgressAt?: string | null;
                             lastStateHash?: string | null;
+                            awaitingActivityId?: string | null;
+                            awaitingEscalatedAt?: string | null;
                             paused?: number;
+                            stepKey?: string | null;
+                            guidance?: {
+                                id: string;
+                                name: string;
+                                /** @enum {string} */
+                                scope: "workspace" | "team" | "status" | "step";
+                                scopeKey: string | null;
+                                version: number;
+                            }[] | null;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
                             activities?: {
@@ -3387,7 +3481,7 @@ export interface paths {
                                 sessionId: string;
                                 actorId: string | null;
                                 /** @enum {string} */
-                                type: "thought" | "response" | "error" | "elicitation" | "action" | "status" | "artifact";
+                                type: "thought" | "response" | "error" | "elicitation" | "prompt" | "action" | "status" | "artifact";
                                 message: string;
                                 payload?: unknown;
                                 parentId: string | null;
@@ -3609,6 +3703,15 @@ export interface paths {
                             awaitingActivityId?: string | null;
                             awaitingEscalatedAt?: string | null;
                             paused?: number;
+                            stepKey?: string | null;
+                            guidance?: {
+                                id: string;
+                                name: string;
+                                /** @enum {string} */
+                                scope: "workspace" | "team" | "status" | "step";
+                                scopeKey: string | null;
+                                version: number;
+                            }[] | null;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
                             activities?: {
@@ -3705,6 +3808,15 @@ export interface paths {
                                 awaitingActivityId?: string | null;
                                 awaitingEscalatedAt?: string | null;
                                 paused?: number;
+                                stepKey?: string | null;
+                                guidance?: {
+                                    id: string;
+                                    name: string;
+                                    /** @enum {string} */
+                                    scope: "workspace" | "team" | "status" | "step";
+                                    scopeKey: string | null;
+                                    version: number;
+                                }[] | null;
                                 /** @enum {string|null} */
                                 derivedStatus?: "stalled" | "needs_input" | null;
                                 activities?: {
@@ -3783,6 +3895,7 @@ export interface paths {
                         effort?: "low" | "medium" | "high" | "max";
                         /** @description Wall-clock run budget in minutes; past it the lane is canceled and escalated on the issue */
                         maxDuration?: number;
+                        stepKey?: string;
                     };
                 };
             };
@@ -3829,6 +3942,15 @@ export interface paths {
                                 awaitingActivityId?: string | null;
                                 awaitingEscalatedAt?: string | null;
                                 paused?: number;
+                                stepKey?: string | null;
+                                guidance?: {
+                                    id: string;
+                                    name: string;
+                                    /** @enum {string} */
+                                    scope: "workspace" | "team" | "status" | "step";
+                                    scopeKey: string | null;
+                                    version: number;
+                                }[] | null;
                                 /** @enum {string|null} */
                                 derivedStatus?: "stalled" | "needs_input" | null;
                                 activities?: {
@@ -3960,6 +4082,15 @@ export interface paths {
                             awaitingActivityId?: string | null;
                             awaitingEscalatedAt?: string | null;
                             paused?: number;
+                            stepKey?: string | null;
+                            guidance?: {
+                                id: string;
+                                name: string;
+                                /** @enum {string} */
+                                scope: "workspace" | "team" | "status" | "step";
+                                scopeKey: string | null;
+                                version: number;
+                            }[] | null;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
                             activities?: {
@@ -4045,7 +4176,7 @@ export interface paths {
                             /** @enum {string} */
                             actorType: "user" | "agent";
                             /** @enum {string} */
-                            status: "created" | "running" | "waiting" | "completed" | "failed" | "canceled";
+                            status: "created" | "running" | "stale" | "waiting" | "completed" | "failed" | "canceled";
                             result: string | null;
                             url: string | null;
                             providerSessionId: string | null;
@@ -4069,6 +4200,16 @@ export interface paths {
                             lastStateHash?: string | null;
                             awaitingActivityId?: string | null;
                             awaitingEscalatedAt?: string | null;
+                            paused?: number;
+                            stepKey?: string | null;
+                            guidance?: {
+                                id: string;
+                                name: string;
+                                /** @enum {string} */
+                                scope: "workspace" | "team" | "status" | "step";
+                                scopeKey: string | null;
+                                version: number;
+                            }[] | null;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
                             activities?: {
@@ -4185,6 +4326,15 @@ export interface paths {
                             awaitingActivityId?: string | null;
                             awaitingEscalatedAt?: string | null;
                             paused?: number;
+                            stepKey?: string | null;
+                            guidance?: {
+                                id: string;
+                                name: string;
+                                /** @enum {string} */
+                                scope: "workspace" | "team" | "status" | "step";
+                                scopeKey: string | null;
+                                version: number;
+                            }[] | null;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
                             activities?: {
@@ -4374,6 +4524,344 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/agent/guidance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List agent guidance
+         * @description List guidance packs for the workspace. Optional scope/scopeKey filters narrow to one attachment level.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    scope?: "workspace" | "team" | "status" | "step";
+                    scopeKey?: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Guidance packs */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            packs: {
+                                id: string;
+                                organizationId: string;
+                                name: string;
+                                /** @enum {string} */
+                                scope: "workspace" | "team" | "status" | "step";
+                                scopeKey: string | null;
+                                body: string;
+                                links: {
+                                    label?: string;
+                                    url: string;
+                                }[] | null;
+                                version: number;
+                                createdBy: string | null;
+                                updatedBy: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Create agent guidance
+         * @description Create a guidance pack. scope=workspace applies to every lane; team/status/step packs match scopeKey against the issue's teamId, its workflow status, and the session's stepKey.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        name: string;
+                        /** @enum {string} */
+                        scope: "workspace" | "team" | "status" | "step";
+                        scopeKey?: string | null;
+                        body: string;
+                        links?: {
+                            label?: string;
+                            url: string;
+                        }[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Guidance pack created (version 1) */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            name: string;
+                            /** @enum {string} */
+                            scope: "workspace" | "team" | "status" | "step";
+                            scopeKey: string | null;
+                            body: string;
+                            links: {
+                                label?: string;
+                                url: string;
+                            }[] | null;
+                            version: number;
+                            createdBy: string | null;
+                            updatedBy: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/agent/guidance/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get agent guidance */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Guidance pack */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            name: string;
+                            /** @enum {string} */
+                            scope: "workspace" | "team" | "status" | "step";
+                            scopeKey: string | null;
+                            body: string;
+                            links: {
+                                label?: string;
+                                url: string;
+                            }[] | null;
+                            version: number;
+                            createdBy: string | null;
+                            updatedBy: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Guidance pack not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /**
+         * Delete agent guidance
+         * @description Delete a guidance pack. Version snapshots are kept so sessions that ran with it still resolve their recorded refs.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Guidance pack deleted */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                        };
+                    };
+                };
+                /** @description Guidance pack not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /**
+         * Update agent guidance
+         * @description Edit a guidance pack — bumps version and snapshots the revision. Sessions dispatched afterwards pick up the new version; existing sessions keep the refs they recorded.
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        name?: string;
+                        /** @enum {string} */
+                        scope?: "workspace" | "team" | "status" | "step";
+                        scopeKey?: string | null;
+                        body?: string;
+                        links?: {
+                            label?: string;
+                            url: string;
+                        }[] | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Guidance pack updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            name: string;
+                            /** @enum {string} */
+                            scope: "workspace" | "team" | "status" | "step";
+                            scopeKey: string | null;
+                            body: string;
+                            links: {
+                                label?: string;
+                                url: string;
+                            }[] | null;
+                            version: number;
+                            createdBy: string | null;
+                            updatedBy: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Guidance pack not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/agent/guidance/{id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List agent guidance versions
+         * @description Revision history of a pack — one row per version, including versions recorded on sessions dispatched before a delete.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Guidance pack versions */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            versions: {
+                                id: string;
+                                organizationId: string;
+                                packId: string;
+                                version: number;
+                                name: string;
+                                body: string;
+                                links: {
+                                    label?: string;
+                                    url: string;
+                                }[] | null;
+                                actorId: string | null;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;

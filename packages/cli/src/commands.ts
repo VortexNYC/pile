@@ -1078,6 +1078,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "instructions",
       },
       {
+        name: "stepKey",
+        flag: "step-key",
+      },
+      {
         name: "preflight",
         flag: "preflight",
       },
@@ -1647,6 +1651,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "maxDuration",
         flag: "max-duration",
       },
+      {
+        name: "stepKey",
+        flag: "step-key",
+      },
     ],
   },
   "agent sessions prompt create": {
@@ -1792,6 +1800,145 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "automationId",
         flag: "automation-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "agent guidance list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/agent/guidance",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "scope",
+        flag: "scope",
+      },
+      {
+        name: "scopeKey",
+        flag: "scope-key",
+      },
+    ],
+    body: [],
+  },
+  "agent guidance create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/agent/guidance",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "scope",
+        flag: "scope",
+      },
+      {
+        name: "scopeKey",
+        flag: "scope-key",
+      },
+      {
+        name: "body",
+        flag: "body",
+      },
+      {
+        name: "links",
+        flag: "links",
+      },
+    ],
+  },
+  "agent guidance get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/agent/guidance/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "agent guidance update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/agent/guidance/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "scope",
+        flag: "scope",
+      },
+      {
+        name: "scopeKey",
+        flag: "scope-key",
+      },
+      {
+        name: "body",
+        flag: "body",
+      },
+      {
+        name: "links",
+        flag: "links",
+      },
+    ],
+  },
+  "agent guidance delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/agent/guidance/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "agent guidance versions list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/agent/guidance/{id}/versions",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
       },
     ],
     query: [],
