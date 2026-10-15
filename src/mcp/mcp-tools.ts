@@ -3581,6 +3581,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "status",
             "priority",
             "assigneeId",
+            "delegateId",
             "teamId",
             "projectId",
             "cycleId"
@@ -3616,7 +3617,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdIssues",
-    "description": "List issues (GET /workspaces/{organizationId}/issues) Path params (top-level, required): organizationId. Query params (top-level, optional): limit, cursor, teamId, status, priority, parentId, hasParent, isParent, isDraft, includeSnoozed, assigneeId, projectId, cycleId, labelId, search, identifier, externalRef, view.",
+    "description": "List issues (GET /workspaces/{organizationId}/issues) Path params (top-level, required): organizationId. Query params (top-level, optional): limit, cursor, teamId, status, priority, parentId, hasParent, isParent, isDraft, includeSnoozed, assigneeId, delegateId, projectId, cycleId, labelId, search, identifier, externalRef, view.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/issues",
     "inputSchema": {
@@ -3689,6 +3690,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           ]
         },
         "assigneeId": {
+          "type": "string"
+        },
+        "delegateId": {
           "type": "string"
         },
         "projectId": {
@@ -6124,7 +6128,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdTriage",
-    "description": "List triage (GET /workspaces/{organizationId}/triage) Path params (top-level, required): organizationId. Query params (top-level, optional): limit, cursor, teamId, status, priority, parentId, hasParent, isParent, isDraft, includeSnoozed, assigneeId, projectId, cycleId, labelId, search, identifier, externalRef, view.",
+    "description": "List triage (GET /workspaces/{organizationId}/triage) Path params (top-level, required): organizationId. Query params (top-level, optional): limit, cursor, teamId, status, priority, parentId, hasParent, isParent, isDraft, includeSnoozed, assigneeId, delegateId, projectId, cycleId, labelId, search, identifier, externalRef, view.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/triage",
     "inputSchema": {
@@ -6197,6 +6201,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           ]
         },
         "assigneeId": {
+          "type": "string"
+        },
+        "delegateId": {
           "type": "string"
         },
         "projectId": {
@@ -7295,7 +7302,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdIssuesId",
-    "description": "Update issue (PATCH /workspaces/{organizationId}/issues/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: title, externalRef, teamId, teamKey, description, status, priority, resolution, parentId, subIssueSortOrder, estimate, isDraft, templateId, snoozedUntil, assigneeId, projectId, cycleId, labelIds, repo, branch, prUrl, prState.",
+    "description": "Update issue (PATCH /workspaces/{organizationId}/issues/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: title, externalRef, teamId, teamKey, description, status, priority, resolution, parentId, subIssueSortOrder, estimate, isDraft, templateId, snoozedUntil, assigneeId, delegateId, projectId, cycleId, labelIds, repo, branch, prUrl, prState.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/issues/{id}",
     "inputSchema": {
@@ -7387,6 +7394,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "nullable": true
             },
             "assigneeId": {
+              "type": "string",
+              "nullable": true
+            },
+            "delegateId": {
               "type": "string",
               "nullable": true
             },
@@ -10982,7 +10993,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdCsvexports",
-    "description": "Create csv export (POST /workspaces/{organizationId}/csv-exports) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: entityType*, teamId, status, priority, assigneeId, projectId (* = required).",
+    "description": "Create csv export (POST /workspaces/{organizationId}/csv-exports) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: entityType*, teamId, status, priority, assigneeId, delegateId, projectId (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/csv-exports",
     "inputSchema": {
@@ -11025,6 +11036,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               ]
             },
             "assigneeId": {
+              "type": "string"
+            },
+            "delegateId": {
               "type": "string"
             },
             "projectId": {
@@ -12839,7 +12853,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssues",
-    "description": "Create issue — The 201 response includes possibleDuplicates: open issues (in teams you can see) whose titles closely match, best first. Non-blocking — if one is the same work, comment on or update it instead of keeping the new issue. Pass dedupe=block to get 409 with the matches in details.possibleDuplicates instead of creating. (POST /workspaces/{organizationId}/issues) Path params (top-level, required): organizationId. Query params (top-level, optional): dedupe. Request body goes in the \"body\" object; fields: title*, externalRef, teamId, teamKey, description, status, priority, resolution, parentId, subIssueSortOrder, estimate, isDraft, templateId, snoozedUntil, assigneeId, projectId, cycleId, labelIds, repo, branch (* = required).",
+    "description": "Create issue — The 201 response includes possibleDuplicates: open issues (in teams you can see) whose titles closely match, best first. Non-blocking — if one is the same work, comment on or update it instead of keeping the new issue. Pass dedupe=block to get 409 with the matches in details.possibleDuplicates instead of creating. (POST /workspaces/{organizationId}/issues) Path params (top-level, required): organizationId. Query params (top-level, optional): dedupe. Request body goes in the \"body\" object; fields: title*, externalRef, teamId, teamKey, description, status, priority, resolution, parentId, subIssueSortOrder, estimate, isDraft, templateId, snoozedUntil, assigneeId, delegateId, projectId, cycleId, labelIds, repo, branch (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues",
     "inputSchema": {
@@ -12936,6 +12950,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "nullable": true
             },
             "assigneeId": {
+              "type": "string",
+              "nullable": true
+            },
+            "delegateId": {
               "type": "string",
               "nullable": true
             },
@@ -13079,6 +13097,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                   "type": "string",
                   "nullable": true
                 },
+                "delegateId": {
+                  "type": "string",
+                  "nullable": true
+                },
                 "projectId": {
                   "type": "string",
                   "nullable": true
@@ -13151,7 +13173,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "properties": {
             "assigneeId": {
               "type": "string",
-              "nullable": true
+              "nullable": true,
+              "description": "Member to hold accountable. A registered agent id is a delegation instead — the agent lands on delegateId and a lane is dispatched, while the human assignee stays (PILE-417)."
             }
           },
           "required": [

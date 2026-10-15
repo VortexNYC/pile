@@ -6,6 +6,7 @@ import {
   workspaceCustomers,
   workspaceDeals,
   workspaceEntityAttachments,
+  workspaceIssues,
   workspaceNotificationPreferences,
 } from "./schema.js";
 
@@ -129,4 +130,17 @@ describe("pipeline hygiene columns (PILE-402)", () => {
       expect(columns).toEqual(["organization_id", "external_id"]);
     }
   );
+});
+
+describe("workspaceIssues schema", () => {
+  it("keeps delegate_id nullable beside assignee_id (PILE-417)", () => {
+    const config = getTableConfig(workspaceIssues);
+    const column = config.columns.find((c) => c.name === "delegate_id");
+    // Nullable: issues created before the delegate edge existed carry no
+    // value, and an issue without an agent delegate is the common case.
+    expect(column?.notNull).toBe(false);
+    expect(
+      config.indexes.some((i) => i.config.name === "idx_issues_delegate")
+    ).toBe(true);
+  });
 });

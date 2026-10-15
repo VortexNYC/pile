@@ -803,6 +803,7 @@ export interface paths {
                     isDraft?: "true" | "false";
                     includeSnoozed?: "true" | "false";
                     assigneeId?: string;
+                    delegateId?: string;
                     projectId?: string;
                     cycleId?: string;
                     labelId?: string;
@@ -871,6 +872,7 @@ export interface paths {
                         templateId?: string;
                         snoozedUntil?: string | null;
                         assigneeId?: string | null;
+                        delegateId?: string | null;
                         projectId?: string | null;
                         cycleId?: string | null;
                         labelIds?: string[] | null;
@@ -937,6 +939,7 @@ export interface paths {
                     isDraft?: "true" | "false";
                     includeSnoozed?: "true" | "false";
                     assigneeId?: string;
+                    delegateId?: string;
                     projectId?: string;
                     cycleId?: string;
                     labelId?: string;
@@ -1034,7 +1037,7 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
-                    groupBy?: "status" | "priority" | "assigneeId" | "teamId" | "projectId" | "cycleId";
+                    groupBy?: "status" | "priority" | "assigneeId" | "delegateId" | "teamId" | "projectId" | "cycleId";
                 };
                 header?: never;
                 path: {
@@ -1266,6 +1269,7 @@ export interface paths {
                         templateId?: string;
                         snoozedUntil?: string | null;
                         assigneeId?: string | null;
+                        delegateId?: string | null;
                         projectId?: string | null;
                         cycleId?: string | null;
                         labelIds?: string[] | null;
@@ -1761,6 +1765,7 @@ export interface paths {
                             templateId?: string;
                             snoozedUntil?: string | null;
                             assigneeId?: string | null;
+                            delegateId?: string | null;
                             projectId?: string | null;
                             cycleId?: string | null;
                             labelIds?: string[] | null;
@@ -1938,6 +1943,7 @@ export interface paths {
             requestBody?: {
                 content: {
                     "application/json": {
+                        /** @description Member to hold accountable. A registered agent id is a delegation instead — the agent lands on delegateId and a lane is dispatched, while the human assignee stays (PILE-417). */
                         assigneeId: string | null;
                     };
                 };
@@ -23090,6 +23096,7 @@ export interface paths {
                         /** @enum {string} */
                         priority?: "low" | "medium" | "high" | "urgent";
                         assigneeId?: string;
+                        delegateId?: string;
                         projectId?: string;
                     };
                 };
@@ -28748,6 +28755,7 @@ export interface components {
             isDraft: boolean;
             snoozedUntil: string | null;
             assigneeId: string | null;
+            delegateId: string | null;
             projectId: string | null;
             cycleId: string | null;
             labelIds: string | null;

@@ -41,6 +41,9 @@ export const workspaceIssues = sqliteTable(
       ] as const,
     }),
     assigneeId: text("assignee_id" as string),
+    // PILE-417 — Linear's delegate model: assigneeId is the accountable
+    // human; delegateId is the agent acting on their behalf.
+    delegateId: text("delegate_id" as string),
     projectId: text("project_id" as string),
     cycleId: text("cycle_id" as string),
     labelIds: text("label_ids" as string),
@@ -92,6 +95,7 @@ export const workspaceIssues = sqliteTable(
       table.status,
       table.snoozedUntil
     ),
+    index("idx_issues_delegate" as string).on(table.delegateId),
   ]
 );
 

@@ -86,6 +86,10 @@
             "type": "string",
             "nullable": true
           },
+          "delegateId": {
+            "type": "string",
+            "nullable": true
+          },
           "projectId": {
             "type": "string",
             "nullable": true
@@ -149,6 +153,7 @@
           "isDraft",
           "snoozedUntil",
           "assigneeId",
+          "delegateId",
           "projectId",
           "cycleId",
           "labelIds",
@@ -1756,6 +1761,14 @@
               "type": "string"
             },
             "required": false,
+            "name": "delegateId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
             "name": "projectId",
             "in": "query"
           },
@@ -1948,6 +1961,10 @@
                     "nullable": true
                   },
                   "assigneeId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "delegateId": {
                     "type": "string",
                     "nullable": true
                   },
@@ -2157,6 +2174,14 @@
               "type": "string"
             },
             "required": false,
+            "name": "delegateId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
             "name": "projectId",
             "in": "query"
           },
@@ -2308,6 +2333,7 @@
                 "status",
                 "priority",
                 "assigneeId",
+                "delegateId",
                 "teamId",
                 "projectId",
                 "cycleId"
@@ -2676,6 +2702,10 @@
                     "nullable": true
                   },
                   "assigneeId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "delegateId": {
                     "type": "string",
                     "nullable": true
                   },
@@ -3489,6 +3519,10 @@
                         "type": "string",
                         "nullable": true
                       },
+                      "delegateId": {
+                        "type": "string",
+                        "nullable": true
+                      },
                       "projectId": {
                         "type": "string",
                         "nullable": true
@@ -3967,7 +4001,8 @@
                 "properties": {
                   "assigneeId": {
                     "type": "string",
-                    "nullable": true
+                    "nullable": true,
+                    "description": "Member to hold accountable. A registered agent id is a delegation instead — the agent lands on delegateId and a lane is dispatched, while the human assignee stays (PILE-417)."
                   }
                 },
                 "required": [
@@ -48103,6 +48138,9 @@
                     ]
                   },
                   "assigneeId": {
+                    "type": "string"
+                  },
+                  "delegateId": {
                     "type": "string"
                   },
                   "projectId": {

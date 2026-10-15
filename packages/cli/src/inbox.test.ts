@@ -28,6 +28,7 @@ function issue(overrides: Partial<InboxIssue> = {}): InboxIssue {
     priority: "medium",
     teamId: "team-1",
     assigneeId: null,
+    delegateId: null,
     prUrl: null,
     prState: null,
     prCheckState: null,

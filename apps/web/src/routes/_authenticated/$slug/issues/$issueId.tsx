@@ -683,6 +683,12 @@ function IssueDetail() {
                   <span>{assignee}</span>
                 </div>
               ) : null}
+              {data.delegateId ? (
+                <div className="text-sm flex items-center gap-2">
+                  <span className="text-kumo-subtle">Delegate</span>
+                  <Badge variant="secondary">{data.delegateId}</Badge>
+                </div>
+              ) : null}
               {team ? (
                 <div className="text-sm flex items-center gap-2">
                   <span className="text-kumo-subtle">Team</span>

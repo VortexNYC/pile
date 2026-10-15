@@ -17,6 +17,7 @@ const exportRequestSchema = z.object({
   status: z.enum(ISSUE_STATUSES).optional(),
   priority: z.enum(ISSUE_PRIORITIES).optional(),
   assigneeId: z.string().optional(),
+  delegateId: z.string().optional(),
   projectId: z.string().optional(),
 });
 
@@ -82,6 +83,7 @@ export function registerCsvExportRoutes(app: OpenAPIHono<AppContext>) {
         status: input.status,
         priority: input.priority,
         assigneeId: input.assigneeId,
+        delegateId: input.delegateId,
         projectId: input.projectId,
       });
       const headers = [
@@ -91,6 +93,7 @@ export function registerCsvExportRoutes(app: OpenAPIHono<AppContext>) {
         "status",
         "priority",
         "assigneeId",
+        "delegateId",
         "teamId",
         "projectId",
         "createdAt",
@@ -106,6 +109,7 @@ export function registerCsvExportRoutes(app: OpenAPIHono<AppContext>) {
             issue.status,
             issue.priority,
             issue.assigneeId,
+            issue.delegateId,
             issue.teamId,
             issue.projectId,
             issue.createdAt,

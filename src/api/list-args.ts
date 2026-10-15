@@ -37,6 +37,7 @@ export const listIssuesQuerySchema = z.object({
   isDraft: booleanQueryParam,
   includeSnoozed: booleanQueryParam,
   assigneeId: z.string().optional(),
+  delegateId: z.string().optional(),
   projectId: z.string().optional(),
   cycleId: z.string().optional(),
   labelId: z.string().optional(),
@@ -114,6 +115,9 @@ export function toListArgs(query: ListIssuesQuery): ListIssuesArgs {
   }
   if (query.assigneeId) {
     args.assigneeId = query.assigneeId;
+  }
+  if (query.delegateId) {
+    args.delegateId = query.delegateId;
   }
   if (query.projectId) {
     args.projectId = query.projectId;

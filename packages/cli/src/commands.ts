@@ -369,6 +369,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "assignee",
       },
       {
+        name: "delegateId",
+        flag: "delegate-id",
+      },
+      {
         name: "projectId",
         flag: "project",
       },
@@ -476,6 +480,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "assignee",
       },
       {
+        name: "delegateId",
+        flag: "delegate-id",
+      },
+      {
         name: "projectId",
         flag: "project",
       },
@@ -550,6 +558,10 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "assigneeId",
         flag: "assignee",
+      },
+      {
+        name: "delegateId",
+        flag: "delegate-id",
       },
       {
         name: "projectId",
@@ -783,6 +795,10 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "assigneeId",
         flag: "assignee",
+      },
+      {
+        name: "delegateId",
+        flag: "delegate-id",
       },
       {
         name: "projectId",
@@ -9225,6 +9241,10 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "assigneeId",
         flag: "assignee",
+      },
+      {
+        name: "delegateId",
+        flag: "delegate-id",
       },
       {
         name: "projectId",

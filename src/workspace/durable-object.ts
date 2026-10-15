@@ -2834,11 +2834,14 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     });
     const issue = await this.getIssue(session.issueId);
     if (issue) {
-      // PILE-229: the lane owns the workload while it runs. `lane:{id}` in
-      // assigneeId distinguishes agent ownership from a human assignee and is
-      // released on terminal transition in applyAgentSessionResult.
+      // PILE-417: dispatching an agent is delegation — the human assignee
+      // stays accountable while delegateId records the agent doing the
+      // work. Supersedes the PILE-229 `lane:{id}` assignee marker, which
+      // clobbered the human assignee for the run's duration; rows written
+      // before delegate_id existed are still released by
+      // applyAgentSessionResult's legacy lane-marker cleanup.
       await this.updateIssue(issue.id, {
-        assigneeId: `lane:${session.id}`,
+        delegateId: session.agentId,
       }).catch(() => null);
       await this.emit({
         type: "agent_session.created",
@@ -4386,6 +4389,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         isDraft: input.isDraft ?? false,
         snoozedUntil: input.snoozedUntil ?? null,
         assigneeId: resolvedAssigneeId,
+        delegateId: input.delegateId ?? null,
         projectId: resolvedProjectId,
         cycleId: resolvedCycleId,
         labelIds: input.labelIds ?? null,
@@ -4748,6 +4752,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       | "status"
       | "priority"
       | "assigneeId"
+      | "delegateId"
       | "teamId"
       | "projectId"
       | "cycleId",
@@ -4760,6 +4765,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       status: workspaceIssues.status,
       priority: workspaceIssues.priority,
       assigneeId: workspaceIssues.assigneeId,
+      delegateId: workspaceIssues.delegateId,
       teamId: workspaceIssues.teamId,
       projectId: workspaceIssues.projectId,
       cycleId: workspaceIssues.cycleId,
@@ -5028,6 +5034,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (args.assigneeId) {
       conditions.push(eq(workspaceIssues.assigneeId, args.assigneeId));
     }
+    if (args.delegateId) {
+      conditions.push(eq(workspaceIssues.delegateId, args.delegateId));
+    }
     if (args.projectId) {
       conditions.push(eq(workspaceIssues.projectId, args.projectId));
     }
@@ -5165,6 +5174,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       { key: "isDraft", field: "is_draft" },
       { key: "snoozedUntil", field: "snoozed_until" },
       { key: "assigneeId", field: "assignee_id" },
+      { key: "delegateId", field: "delegate_id" },
       { key: "projectId", field: "project_id" },
       { key: "cycleId", field: "cycle_id" },
       { key: "labelIds", field: "label_ids" },
@@ -5259,6 +5269,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       set.snoozedUntil = null;
     }
     if (patch.assigneeId !== undefined) set.assigneeId = patch.assigneeId;
+    if (patch.delegateId !== undefined) set.delegateId = patch.delegateId;
     if (
       patch.assigneeId === undefined &&
       !old.assigneeId &&
