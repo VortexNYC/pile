@@ -31,6 +31,7 @@ jobs:
     env:
       ARTIFACTS_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      ARTIFACTS_TOKEN: ${{ secrets.ARTIFACTS_PUSH_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -41,15 +42,21 @@ jobs:
         run: |
           set -euo pipefail
           # Repo-scoped Artifacts tokens are TTL'd — a stored secret expires
-          # silently and every push 403s (PILE-415 follow-up). Mint a
-          # 15-minute write token per run instead.
+          # silently and every push 403s (happened 2026-10-15). Mint a
+          # 15-minute write token per run when the API token has Artifacts
+          # scope; fall back to the stored ARTIFACTS_PUSH_TOKEN (rotate with
+          # the same POST before it expires).
+          TOKEN=""
           RESP=$(curl -fsS -X POST \
             "https://api.cloudflare.com/client/v4/accounts/${ARTIFACTS_ACCOUNT_ID}/artifacts/namespaces/vortex/tokens" \
             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d '{"repo":"pile","scope":"write","ttl":900}')
-          TOKEN=$(echo "$RESP" | grep -o '"plaintext":"[^"]*"' | cut -d'"' -f4)
-          test -n "$TOKEN" || { echo "no plaintext token in response"; exit 1; }
+            -d '{"repo":"pile","scope":"write","ttl":900}' || true)
+          TOKEN=$(echo "$RESP" | grep -o '"plaintext":"[^"]*"' | cut -d'"' -f4 || true)
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::Artifacts token mint failed; using stored ARTIFACTS_PUSH_TOKEN"
+            TOKEN="$ARTIFACTS_TOKEN"
+          fi
           REMOTE="https://${ARTIFACTS_ACCOUNT_ID}.artifacts.cloudflare.net/git/vortex/pile.git"
           # Artifacts is a mirror: force-push so rebased/rewritten branches still sync.
           git -c http.extraHeader="Authorization: Bearer ${TOKEN}" push --force "$REMOTE" "HEAD:refs/heads/${GITHUB_REF_NAME}"
