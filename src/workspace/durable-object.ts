@@ -4474,14 +4474,27 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   private startTriageLane(issue: Issue, actorId?: string) {
     if (!hasWorkspaceNamespace(this.env)) return;
     // Mirror dispatchTriageLane's bail conditions — building the context
-    // (index + labels) for a draft/canceled issue is wasted work.
+    // (index + labels) for a draft/canceled issue is wasted work, and so is
+    // building it for a team with no triageAgentId: the dispatch would bail
+    // on the same check after paying for a cold search-index build. Resolve
+    // the team first so a workspace without triage never warms the index.
     if (issue.isDraft || issue.status === "done" || issue.status === "canceled")
       return;
     const env = this.env;
     this.ctx.waitUntil(
-      this.buildTriageContext(issue)
-        .then((context) =>
-          dispatchTriageLane(env, this.organizationId, issue, actorId, context)
+      getTeamById(createD1(env.D1), issue.teamId, this.organizationId)
+        .then((team) =>
+          team?.triageAgentId
+            ? this.buildTriageContext(issue).then((context) =>
+                dispatchTriageLane(
+                  env,
+                  this.organizationId,
+                  issue,
+                  actorId,
+                  context
+                )
+              )
+            : null
         )
         .catch((err: unknown) => {
           console.warn(

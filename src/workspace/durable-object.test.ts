@@ -2120,11 +2120,16 @@ describe("comment mentions", () => {
         title: "assignee target",
         assigneeId: "user-1",
       });
-      await instance.createComment({
+      const comment = await instance.createComment({
         issueId: issue.id,
         authorId: "author-2",
         body: "assignee ping",
       });
+      if (!comment) throw new Error("comment was not created");
+      // createComment itself only notifies watchers/mentions — the API
+      // route follows with emitCommentCreated, the single comment_created
+      // delivery path to issue assignee/subscribers.
+      await instance.emitCommentCreated(comment, issue, "author-2");
       const notes = await instance.listNotificationsForRecipient(
         "user-1",
         "user"

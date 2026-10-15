@@ -6,13 +6,12 @@
     },
     "apps/web": {
       "entry": ["src/routes/**/*.tsx", "e2e/**/*.ts"]
+    },
+    "packages/docs": {
+      "entry": ["blume.config.ts", "docs/**/meta.ts"]
     }
   },
-  "ignore": [
-    "packages/cli/src/client/types.ts",
-    "packages/docs/blume.config.ts",
-    "packages/clipper/**"
-  ],
+  "ignore": ["packages/cli/src/client/types.ts", "packages/clipper/**"],
   "ignoreDependencies": [
     "cloudflare",
     "@secretlint/secretlint-rule-preset-recommend"
