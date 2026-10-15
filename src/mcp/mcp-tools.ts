@@ -2473,13 +2473,24 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdCustomers",
-    "description": "List customers (GET /workspaces/{organizationId}/customers) Path params (top-level, required): organizationId.",
+    "description": "List customers (GET /workspaces/{organizationId}/customers) Path params (top-level, required): organizationId. Query params (top-level, optional): dueBefore, cold, needsHuman.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/customers",
     "inputSchema": {
       "type": "object",
       "properties": {
         "organizationId": {
+          "type": "string"
+        },
+        "dueBefore": {
+          "type": "string",
+          "description": "Only customers whose nextStepDueAt is on/before this ISO timestamp"
+        },
+        "cold": {
+          "type": "string",
+          "description": "cold=true → customers with no nextStepText and no nextStepDueAt"
+        },
+        "needsHuman": {
           "type": "string"
         }
       },
@@ -2759,7 +2770,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdDeals",
-    "description": "List deals (GET /workspaces/{organizationId}/deals) Path params (top-level, required): organizationId. Query params (top-level, optional): customerId, contactId, includeArchived.",
+    "description": "List deals (GET /workspaces/{organizationId}/deals) Path params (top-level, required): organizationId. Query params (top-level, optional): customerId, contactId, includeArchived, stage, dueBefore, cold, needsHuman.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/deals",
     "inputSchema": {
@@ -2775,6 +2786,28 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "type": "string"
         },
         "includeArchived": {
+          "type": "string"
+        },
+        "stage": {
+          "type": "string",
+          "enum": [
+            "lead",
+            "qualified",
+            "proposal",
+            "negotiation",
+            "won",
+            "lost"
+          ]
+        },
+        "dueBefore": {
+          "type": "string",
+          "description": "Only deals whose nextStepDueAt is on/before this ISO timestamp"
+        },
+        "cold": {
+          "type": "string",
+          "description": "cold=true → open deals with no nextStepText and no nextStepDueAt"
+        },
+        "needsHuman": {
           "type": "string"
         }
       },
@@ -6599,7 +6632,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdCustomersId",
-    "description": "Update customer (PATCH /workspaces/{organizationId}/customers/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, url, bookingUrl, notes, logoUrl, externalId, tierId, statusId, ownerId.",
+    "description": "Update customer (PATCH /workspaces/{organizationId}/customers/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, url, bookingUrl, notes, logoUrl, externalId, tierId, statusId, ownerId, nextStepText, nextStepDueAt, needsHuman, needsHumanReason, priorityScore.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/customers/{id}",
     "inputSchema": {
@@ -6634,7 +6667,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "externalId": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
             },
             "tierId": {
               "type": "string"
@@ -6644,6 +6679,26 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "ownerId": {
               "type": "string"
+            },
+            "nextStepText": {
+              "type": "string",
+              "nullable": true
+            },
+            "nextStepDueAt": {
+              "type": "string",
+              "nullable": true
+            },
+            "needsHuman": {
+              "type": "boolean",
+              "nullable": true
+            },
+            "needsHumanReason": {
+              "type": "string",
+              "nullable": true
+            },
+            "priorityScore": {
+              "type": "number",
+              "nullable": true
             }
           }
         }
@@ -6784,7 +6839,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdDealsDealId",
-    "description": "Update deal (PATCH /workspaces/{organizationId}/deals/{dealId}) Path params (top-level, required): organizationId, dealId. Request body goes in the \"body\" object; fields: customerId, name, stage, amountCents, currency, expectedCloseAt, archivedAt, contactIds, issueIds.",
+    "description": "Update deal (PATCH /workspaces/{organizationId}/deals/{dealId}) Path params (top-level, required): organizationId, dealId. Request body goes in the \"body\" object; fields: customerId, name, externalId, stage, amountCents, currency, expectedCloseAt, archivedAt, contactIds, issueIds, nextStepText, nextStepDueAt, needsHuman, needsHumanReason, priorityScore.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/deals/{dealId}",
     "inputSchema": {
@@ -6805,6 +6860,12 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "name": {
               "type": "string",
               "minLength": 1
+            },
+            "externalId": {
+              "type": "string",
+              "nullable": true,
+              "minLength": 1,
+              "maxLength": 255
             },
             "stage": {
               "type": "string",
@@ -6847,6 +6908,26 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "items": {
                 "type": "string"
               }
+            },
+            "nextStepText": {
+              "type": "string",
+              "nullable": true
+            },
+            "nextStepDueAt": {
+              "type": "string",
+              "nullable": true
+            },
+            "needsHuman": {
+              "type": "boolean",
+              "nullable": true
+            },
+            "needsHumanReason": {
+              "type": "string",
+              "nullable": true
+            },
+            "priorityScore": {
+              "type": "number",
+              "nullable": true
             }
           }
         }
@@ -11003,7 +11084,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdCustomers",
-    "description": "Create customer (POST /workspaces/{organizationId}/customers) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, url, bookingUrl, notes, logoUrl, externalId, tierId, statusId, ownerId (* = required).",
+    "description": "Create customer — externalId is a hard dedupe key (same contract as issues' externalRef): when a customer with the same externalId exists the call returns that customer with 200 instead of creating a duplicate. Pass dedupe=block to get 409 with the existing record in details.customer instead — the hard guarantee importers need. (POST /workspaces/{organizationId}/customers) Path params (top-level, required): organizationId. Query params (top-level, optional): dedupe. Request body goes in the \"body\" object; fields: name*, url, bookingUrl, notes, logoUrl, externalId, tierId, statusId, ownerId, nextStepText, nextStepDueAt, needsHuman, needsHumanReason, priorityScore (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/customers",
     "inputSchema": {
@@ -11011,6 +11092,13 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "properties": {
         "organizationId": {
           "type": "string"
+        },
+        "dedupe": {
+          "type": "string",
+          "enum": [
+            "warn",
+            "block"
+          ]
         },
         "body": {
           "type": "object",
@@ -11034,7 +11122,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "externalId": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
             },
             "tierId": {
               "type": "string"
@@ -11044,6 +11134,26 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "ownerId": {
               "type": "string"
+            },
+            "nextStepText": {
+              "type": "string",
+              "nullable": true
+            },
+            "nextStepDueAt": {
+              "type": "string",
+              "nullable": true
+            },
+            "needsHuman": {
+              "type": "boolean",
+              "nullable": true
+            },
+            "needsHumanReason": {
+              "type": "string",
+              "nullable": true
+            },
+            "priorityScore": {
+              "type": "number",
+              "nullable": true
             }
           },
           "required": [
@@ -11366,7 +11476,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdDeals",
-    "description": "Create deal (POST /workspaces/{organizationId}/deals) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: customerId*, name*, stage, amountCents, currency, expectedCloseAt, description, contactIds (* = required).",
+    "description": "Create deal — externalId is a hard dedupe key (same contract as issues' externalRef): when a deal with the same externalId exists the call returns that deal with 200 instead of creating a duplicate. Pass dedupe=block to get 409 with the existing record in details.deal instead — the hard guarantee importers need. (POST /workspaces/{organizationId}/deals) Path params (top-level, required): organizationId. Query params (top-level, optional): dedupe. Request body goes in the \"body\" object; fields: customerId*, name*, externalId, stage, amountCents, currency, expectedCloseAt, description, contactIds, nextStepText, nextStepDueAt, needsHuman, needsHumanReason, priorityScore (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/deals",
     "inputSchema": {
@@ -11374,6 +11484,13 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "properties": {
         "organizationId": {
           "type": "string"
+        },
+        "dedupe": {
+          "type": "string",
+          "enum": [
+            "warn",
+            "block"
+          ]
         },
         "body": {
           "type": "object",
@@ -11384,6 +11501,11 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "name": {
               "type": "string",
               "minLength": 1
+            },
+            "externalId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
             },
             "stage": {
               "type": "string",
@@ -11421,6 +11543,26 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "items": {
                 "type": "string"
               }
+            },
+            "nextStepText": {
+              "type": "string",
+              "nullable": true
+            },
+            "nextStepDueAt": {
+              "type": "string",
+              "nullable": true
+            },
+            "needsHuman": {
+              "type": "boolean",
+              "nullable": true
+            },
+            "needsHumanReason": {
+              "type": "string",
+              "nullable": true
+            },
+            "priorityScore": {
+              "type": "number",
+              "nullable": true
             }
           },
           "required": [

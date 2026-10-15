@@ -271,9 +271,7 @@ export function registerIntakeRoutes(app: OpenAPIHono<AppContext>) {
     // failure (flaky cell connection) does not create a second merchant.
     let deduped = false;
     let customer = input.intakeId
-      ? (await stub.listCustomers()).find(
-          (existing) => existing.externalId === input.intakeId
-        )
+      ? await stub.getCustomerByExternalId(input.intakeId)
       : undefined;
     if (customer) {
       deduped = true;

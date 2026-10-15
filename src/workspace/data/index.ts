@@ -2748,10 +2748,26 @@ export interface CustomerInput {
   tierId?: string | null;
   statusId?: string | null;
   ownerId?: string | null;
+  nextStepText?: string | null;
+  nextStepDueAt?: string | null;
+  needsHuman?: boolean | null;
+  needsHumanReason?: string | null;
+  priorityScore?: number | null;
   createdAt?: string;
 }
 
 export function createCustomer(db: WorkspaceDb, input: CustomerInput) {
+  // externalId is a hard dedupe key (same contract as issues' externalRef):
+  // re-creating with an existing key returns the record instead of
+  // duplicating — importers can re-run blindly.
+  if (input.externalId) {
+    const existing = getCustomerByExternalId(
+      db,
+      input.organizationId,
+      input.externalId
+    );
+    if (existing) return existing;
+  }
   const now = new Date().toISOString();
   return db
     .insert(workspaceCustomers)
@@ -2768,6 +2784,11 @@ export function createCustomer(db: WorkspaceDb, input: CustomerInput) {
       tierId: input.tierId ?? null,
       statusId: input.statusId ?? null,
       ownerId: input.ownerId ?? null,
+      nextStepText: input.nextStepText ?? null,
+      nextStepDueAt: input.nextStepDueAt ?? null,
+      needsHuman: input.needsHuman ?? null,
+      needsHumanReason: input.needsHumanReason ?? null,
+      priorityScore: input.priorityScore ?? null,
       createdAt: input.createdAt ?? now,
       updatedAt: now,
     })
@@ -2775,12 +2796,44 @@ export function createCustomer(db: WorkspaceDb, input: CustomerInput) {
     .get();
 }
 
-export function listCustomers(db: WorkspaceDb, organizationId: string) {
+export function getCustomerByExternalId(
+  db: WorkspaceDb,
+  organizationId: string,
+  externalId: string
+) {
   return db
+    .select()
+    .from(workspaceCustomers)
+    .where(
+      and(
+        eq(workspaceCustomers.organizationId, organizationId),
+        eq(workspaceCustomers.externalId, externalId)
+      )
+    )
+    .get();
+}
+
+export function listCustomers(
+  db: WorkspaceDb,
+  organizationId: string,
+  opts: { cold?: boolean; dueBefore?: string; needsHuman?: boolean } = {}
+) {
+  const rows = db
     .select()
     .from(workspaceCustomers)
     .where(eq(workspaceCustomers.organizationId, organizationId))
     .all();
+  return rows.filter((c) => {
+    if (opts.cold && (c.nextStepText !== null || c.nextStepDueAt !== null))
+      return false;
+    if (
+      opts.dueBefore &&
+      (c.nextStepDueAt === null || c.nextStepDueAt > opts.dueBefore)
+    )
+      return false;
+    if (opts.needsHuman && c.needsHuman !== true) return false;
+    return true;
+  });
 }
 
 export function getCustomer(
@@ -2820,6 +2873,11 @@ export function updateCustomer(
     "tierId",
     "statusId",
     "ownerId",
+    "nextStepText",
+    "nextStepDueAt",
+    "needsHuman",
+    "needsHumanReason",
+    "priorityScore",
   ] as const) {
     if (patch[key] !== undefined) updates[key] = patch[key];
   }
@@ -2898,15 +2956,54 @@ export interface DealInput {
   organizationId: string;
   customerId: string;
   name: string;
+  externalId?: string | null;
   stage: DealStage;
   amountCents?: number | null;
   currency?: string | null;
   expectedCloseAt?: string | null;
   description?: string | null;
   contactIds?: string[];
+  nextStepText?: string | null;
+  nextStepDueAt?: string | null;
+  needsHuman?: boolean | null;
+  needsHumanReason?: string | null;
+  priorityScore?: number | null;
+}
+
+export function getDealByExternalId(
+  db: WorkspaceDb,
+  organizationId: string,
+  externalId: string
+) {
+  const deal = db
+    .select()
+    .from(workspaceDeals)
+    .where(
+      and(
+        eq(workspaceDeals.organizationId, organizationId),
+        eq(workspaceDeals.externalId, externalId)
+      )
+    )
+    .get();
+  if (!deal) return undefined;
+  return {
+    ...deal,
+    stage: deal.stage as DealStage,
+    contactIds: listDealContactIds(db, deal.id),
+  };
 }
 
 export function createDeal(db: WorkspaceDb, input: DealInput) {
+  // externalId is a hard dedupe key (same contract as issues' externalRef):
+  // Scout keys imports on Google place_id, so a re-run returns the record.
+  if (input.externalId) {
+    const existing = getDealByExternalId(
+      db,
+      input.organizationId,
+      input.externalId
+    );
+    if (existing) return existing;
+  }
   const now = new Date().toISOString();
   const deal = db
     .insert(workspaceDeals)
@@ -2915,6 +3012,7 @@ export function createDeal(db: WorkspaceDb, input: DealInput) {
       organizationId: input.organizationId,
       customerId: input.customerId,
       name: input.name,
+      externalId: input.externalId ?? null,
       stage: input.stage,
       amountCents: input.amountCents ?? null,
       currency: input.currency ?? null,
@@ -2922,6 +3020,11 @@ export function createDeal(db: WorkspaceDb, input: DealInput) {
       description: input.description ?? null,
       closedAt: input.stage === "won" || input.stage === "lost" ? now : null,
       archivedAt: null,
+      nextStepText: input.nextStepText ?? null,
+      nextStepDueAt: input.nextStepDueAt ?? null,
+      needsHuman: input.needsHuman ?? null,
+      needsHumanReason: input.needsHumanReason ?? null,
+      priorityScore: input.priorityScore ?? null,
       createdAt: now,
       updatedAt: now,
     })
@@ -2940,16 +3043,36 @@ export function createDeal(db: WorkspaceDb, input: DealInput) {
 export function listDeals(
   db: WorkspaceDb,
   organizationId: string,
-  opts: { includeArchived?: boolean } = {}
+  opts: {
+    includeArchived?: boolean;
+    stage?: DealStage;
+    dueBefore?: string;
+    cold?: boolean;
+    needsHuman?: boolean;
+  } = {}
 ) {
   const rows = db
     .select()
     .from(workspaceDeals)
     .where(eq(workspaceDeals.organizationId, organizationId))
     .all();
-  const filtered = opts.includeArchived
-    ? rows
-    : rows.filter((d) => d.archivedAt === null);
+  const filtered = rows.filter((d) => {
+    if (!opts.includeArchived && d.archivedAt !== null) return false;
+    if (opts.stage && d.stage !== opts.stage) return false;
+    // Cold = open record with no next step and no due date — the sweep-
+    // missed-something view. Closed deals aren't leads, so they're out.
+    if (opts.cold) {
+      if (d.stage === "won" || d.stage === "lost") return false;
+      if (d.nextStepText !== null || d.nextStepDueAt !== null) return false;
+    }
+    if (
+      opts.dueBefore &&
+      (d.nextStepDueAt === null || d.nextStepDueAt > opts.dueBefore)
+    )
+      return false;
+    if (opts.needsHuman && d.needsHuman !== true) return false;
+    return true;
+  });
   return filtered.map((deal) => ({
     ...deal,
     stage: deal.stage as DealStage,
@@ -2994,12 +3117,18 @@ export function updateDeal(
   for (const key of [
     "name",
     "customerId",
+    "externalId",
     "stage",
     "amountCents",
     "currency",
     "expectedCloseAt",
     "description",
     "archivedAt",
+    "nextStepText",
+    "nextStepDueAt",
+    "needsHuman",
+    "needsHumanReason",
+    "priorityScore",
   ] as const) {
     if (patch[key] !== undefined) updates[key] = patch[key];
   }

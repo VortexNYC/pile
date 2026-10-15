@@ -6224,7 +6224,20 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "workspace",
       },
     ],
-    query: [],
+    query: [
+      {
+        name: "dueBefore",
+        flag: "due-before",
+      },
+      {
+        name: "cold",
+        flag: "cold",
+      },
+      {
+        name: "needsHuman",
+        flag: "needs-human",
+      },
+    ],
     body: [],
   },
   "customers create": {
@@ -6236,7 +6249,12 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "workspace",
       },
     ],
-    query: [],
+    query: [
+      {
+        name: "dedupe",
+        flag: "dedupe",
+      },
+    ],
     body: [
       {
         name: "name",
@@ -6273,6 +6291,26 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "ownerId",
         flag: "owner-id",
+      },
+      {
+        name: "nextStepText",
+        flag: "next-step-text",
+      },
+      {
+        name: "nextStepDueAt",
+        flag: "next-step-due-at",
+      },
+      {
+        name: "needsHuman",
+        flag: "needs-human",
+      },
+      {
+        name: "needsHumanReason",
+        flag: "needs-human-reason",
+      },
+      {
+        name: "priorityScore",
+        flag: "priority-score",
       },
     ],
   },
@@ -6342,6 +6380,26 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "ownerId",
         flag: "owner-id",
+      },
+      {
+        name: "nextStepText",
+        flag: "next-step-text",
+      },
+      {
+        name: "nextStepDueAt",
+        flag: "next-step-due-at",
+      },
+      {
+        name: "needsHuman",
+        flag: "needs-human",
+      },
+      {
+        name: "needsHumanReason",
+        flag: "needs-human-reason",
+      },
+      {
+        name: "priorityScore",
+        flag: "priority-score",
       },
     ],
   },
@@ -6811,6 +6869,22 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "includeArchived",
         flag: "include-archived",
       },
+      {
+        name: "stage",
+        flag: "stage",
+      },
+      {
+        name: "dueBefore",
+        flag: "due-before",
+      },
+      {
+        name: "cold",
+        flag: "cold",
+      },
+      {
+        name: "needsHuman",
+        flag: "needs-human",
+      },
     ],
     body: [],
   },
@@ -6823,7 +6897,12 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "workspace",
       },
     ],
-    query: [],
+    query: [
+      {
+        name: "dedupe",
+        flag: "dedupe",
+      },
+    ],
     body: [
       {
         name: "customerId",
@@ -6832,6 +6911,10 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "name",
         flag: "name",
+      },
+      {
+        name: "externalId",
+        flag: "external-id",
       },
       {
         name: "stage",
@@ -6856,6 +6939,26 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "contactIds",
         flag: "contact-ids",
+      },
+      {
+        name: "nextStepText",
+        flag: "next-step-text",
+      },
+      {
+        name: "nextStepDueAt",
+        flag: "next-step-due-at",
+      },
+      {
+        name: "needsHuman",
+        flag: "needs-human",
+      },
+      {
+        name: "needsHumanReason",
+        flag: "needs-human-reason",
+      },
+      {
+        name: "priorityScore",
+        flag: "priority-score",
       },
     ],
   },
@@ -6899,6 +7002,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "name",
       },
       {
+        name: "externalId",
+        flag: "external-id",
+      },
+      {
         name: "stage",
         flag: "stage",
       },
@@ -6925,6 +7032,26 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "issueIds",
         flag: "issue-ids",
+      },
+      {
+        name: "nextStepText",
+        flag: "next-step-text",
+      },
+      {
+        name: "nextStepDueAt",
+        flag: "next-step-due-at",
+      },
+      {
+        name: "needsHuman",
+        flag: "needs-human",
+      },
+      {
+        name: "needsHumanReason",
+        flag: "needs-human-reason",
+      },
+      {
+        name: "priorityScore",
+        flag: "priority-score",
       },
     ],
   },

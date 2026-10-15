@@ -25,6 +25,11 @@ const customerSchema = z.object({
   tierId: z.string().nullable(),
   statusId: z.string().nullable(),
   ownerId: z.string().nullable(),
+  nextStepText: z.string().nullable(),
+  nextStepDueAt: z.string().nullable(),
+  needsHuman: z.boolean().nullable(),
+  needsHumanReason: z.string().nullable(),
+  priorityScore: z.number().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -35,10 +40,15 @@ const createCustomerSchema = z.object({
   bookingUrl: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
   logoUrl: z.string().optional(),
-  externalId: z.string().optional(),
+  externalId: z.string().min(1).max(255).optional(),
   tierId: z.string().optional(),
   statusId: z.string().optional(),
   ownerId: z.string().optional(),
+  nextStepText: z.string().nullable().optional(),
+  nextStepDueAt: z.string().nullable().optional(),
+  needsHuman: z.boolean().nullable().optional(),
+  needsHumanReason: z.string().nullable().optional(),
+  priorityScore: z.number().nullable().optional(),
 });
 
 const updateCustomerSchema = createCustomerSchema.partial().extend({
@@ -141,7 +151,20 @@ const listCustomersRoute = createRoute({
   path: "/workspaces/{organizationId}/customers",
   tags: ["customers"],
   middleware: [rls("customer:view")],
-  request: { params: orgParam },
+  request: {
+    params: orgParam,
+    query: z.object({
+      dueBefore: z.string().optional().openapi({
+        description:
+          "Only customers whose nextStepDueAt is on/before this ISO timestamp",
+      }),
+      cold: z.string().optional().openapi({
+        description:
+          "cold=true → customers with no nextStepText and no nextStepDueAt",
+      }),
+      needsHuman: z.string().optional(),
+    }),
+  },
   responses: {
     200: {
       description: "Customer list",
@@ -159,8 +182,13 @@ const createCustomerRoute = createRoute({
   path: "/workspaces/{organizationId}/customers",
   tags: ["customers"],
   middleware: [rls("customer:create")],
+  description:
+    "externalId is a hard dedupe key (same contract as issues' externalRef): when a customer with the same externalId exists the call returns that customer with 200 instead of creating a duplicate. Pass dedupe=block to get 409 with the existing record in details.customer instead — the hard guarantee importers need.",
   request: {
     params: orgParam,
+    query: z.object({
+      dedupe: z.enum(["warn", "block"]).optional(),
+    }),
     body: {
       content: { "application/json": { schema: createCustomerSchema } },
     },
@@ -169,6 +197,14 @@ const createCustomerRoute = createRoute({
     201: {
       description: "Customer created",
       content: { "application/json": { schema: customerSchema } },
+    },
+    200: {
+      description:
+        "Existing customer with the same externalId (idempotent create)",
+      content: { "application/json": { schema: customerSchema } },
+    },
+    409: {
+      description: "dedupe=block and externalId is already used",
     },
   },
 });
@@ -636,16 +672,39 @@ async function scrubNeedIssueId<T extends { issueId: string | null }>(
 export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listCustomersRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
+    const { cold, dueBefore, needsHuman } = c.req.valid("query");
     const stub = getWorkspaceStub(c.env, organizationId);
     await stub.setOrganizationId(organizationId);
-    return c.json({ customers: await stub.listCustomers() });
+    return c.json({
+      customers: await stub.listCustomers({
+        cold: cold === "true",
+        dueBefore,
+        needsHuman: needsHuman === "true",
+      }),
+    });
   });
 
   app.openapi(createCustomerRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
+    const { dedupe } = c.req.valid("query");
     const input = c.req.valid("json");
     const stub = getWorkspaceStub(c.env, organizationId);
     await stub.setOrganizationId(organizationId);
+    if (input.externalId) {
+      const existing = await stub.getCustomerByExternalId(input.externalId);
+      if (existing) {
+        if (dedupe === "block") {
+          throw new VortexError({
+            code: "CONFLICT",
+            status: 409,
+            message: "externalId already used",
+            hint: `Update customer ${existing.id} instead, or retry without dedupe=block`,
+            details: { customer: existing },
+          });
+        }
+        return c.json(existing, 200);
+      }
+    }
     const customer = await stub.createCustomer(input);
     return c.json(customer, 201);
   });

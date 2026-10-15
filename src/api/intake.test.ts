@@ -219,6 +219,9 @@ describe("intake API", () => {
       token
     );
     expect(first.status).toBe(201);
+    const firstResult = z
+      .object({ customerId: z.string() })
+      .parse(await first.json());
     const second = await post(
       `/workspaces/${organizationId}/intake`,
       body,
@@ -226,9 +229,12 @@ describe("intake API", () => {
     );
     expect(second.status).toBe(200);
     const result = z
-      .object({ deduped: z.boolean() })
+      .object({ deduped: z.boolean(), customerId: z.string() })
       .parse(await second.json());
     expect(result.deduped).toBe(true);
+    // The retry resolves to the same customer record — dedupe is by
+    // identity (externalId), not just suppression of a second insert.
+    expect(result.customerId).toBe(firstResult.customerId);
 
     const customersRes = await api(
       `/workspaces/${organizationId}/customers`,

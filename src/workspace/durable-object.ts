@@ -1504,12 +1504,22 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return deal;
   }
 
-  listDeals(opts?: { includeArchived?: boolean }) {
+  listDeals(opts?: {
+    includeArchived?: boolean;
+    stage?: data.DealStage;
+    dueBefore?: string;
+    cold?: boolean;
+    needsHuman?: boolean;
+  }) {
     return data.listDeals(this.db, this.organizationId, opts);
   }
 
   getDeal(id: string) {
     return data.getDeal(this.db, this.organizationId, id);
+  }
+
+  getDealByExternalId(externalId: string) {
+    return data.getDealByExternalId(this.db, this.organizationId, externalId);
   }
 
   updateDeal(
@@ -2095,12 +2105,24 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return customer;
   }
 
-  listCustomers() {
-    return data.listCustomers(this.db, this.organizationId);
+  listCustomers(opts?: {
+    cold?: boolean;
+    dueBefore?: string;
+    needsHuman?: boolean;
+  }) {
+    return data.listCustomers(this.db, this.organizationId, opts);
   }
 
   getCustomerByDomain(domain: string) {
     return data.getCustomerByDomain(this.db, this.organizationId, domain);
+  }
+
+  getCustomerByExternalId(externalId: string) {
+    return data.getCustomerByExternalId(
+      this.db,
+      this.organizationId,
+      externalId
+    );
   }
 
   getCustomer(id: string) {

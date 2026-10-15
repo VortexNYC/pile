@@ -42,3 +42,24 @@ describe("workspaceMigrations", () => {
     );
   });
 });
+
+describe("v71 pipeline hygiene", () => {
+  it("adds external_id + hygiene columns and dedupe indexes", () => {
+    const sql = workspaceMigrations.migrations.m0071;
+    for (const table of ["customers", "deals"]) {
+      for (const col of [
+        "next_step_text",
+        "next_step_due_at",
+        "needs_human",
+        "needs_human_reason",
+        "priority_score",
+      ]) {
+        expect(sql).toContain(`ALTER TABLE ${table} ADD COLUMN ${col}`);
+      }
+      expect(sql).toContain(
+        `CREATE INDEX IF NOT EXISTS ${table}_external_id_idx ON ${table} (organization_id, external_id)`
+      );
+    }
+    expect(sql).toContain("ALTER TABLE deals ADD COLUMN external_id");
+  });
+});

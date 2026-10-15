@@ -568,11 +568,24 @@ export const workspaceCustomers = sqliteTable(
     tierId: text("tier_id" as string),
     statusId: text("status_id" as string),
     ownerId: text("owner_id" as string),
+    nextStepText: text("next_step_text" as string),
+    nextStepDueAt: text("next_step_due_at" as string),
+    needsHuman: integer("needs_human" as string, { mode: "boolean" }),
+    needsHumanReason: text("needs_human_reason" as string),
+    priorityScore: real("priority_score" as string),
     createdAt: text("created_at" as string).notNull(),
     updatedAt: text("updated_at" as string).notNull(),
   },
   (table) => [
     index("customers_organization_idx" as string).on(table.organizationId),
+    index("customers_external_id_idx" as string).on(
+      table.organizationId,
+      table.externalId
+    ),
+    index("customers_next_step_due_idx" as string).on(
+      table.organizationId,
+      table.nextStepDueAt
+    ),
   ]
 );
 
@@ -1182,6 +1195,7 @@ export const workspaceDeals = sqliteTable(
     organizationId: text("organization_id" as string).notNull(),
     customerId: text("customer_id" as string).notNull(),
     name: text("name" as string).notNull(),
+    externalId: text("external_id" as string),
     stage: text("stage" as string).notNull(),
     amountCents: integer("amount_cents" as string),
     currency: text("currency" as string),
@@ -1189,12 +1203,25 @@ export const workspaceDeals = sqliteTable(
     description: text("description" as string),
     closedAt: text("closed_at" as string),
     archivedAt: text("archived_at" as string),
+    nextStepText: text("next_step_text" as string),
+    nextStepDueAt: text("next_step_due_at" as string),
+    needsHuman: integer("needs_human" as string, { mode: "boolean" }),
+    needsHumanReason: text("needs_human_reason" as string),
+    priorityScore: real("priority_score" as string),
     createdAt: text("created_at" as string).notNull(),
     updatedAt: text("updated_at" as string).notNull(),
   },
   (table) => [
     index("deals_organization_idx" as string).on(table.organizationId),
     index("deals_customer_idx" as string).on(table.customerId),
+    index("deals_external_id_idx" as string).on(
+      table.organizationId,
+      table.externalId
+    ),
+    index("deals_next_step_due_idx" as string).on(
+      table.organizationId,
+      table.nextStepDueAt
+    ),
   ]
 );
 
