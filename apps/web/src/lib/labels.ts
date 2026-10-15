@@ -123,6 +123,7 @@ const NOTIFICATION_LABELS: Record<string, string> = {
   document_updated: "Document updated",
   mention: "You were mentioned",
   lane_needs_input: "An issue needs your input",
+  lane_elicitation_escalated: "An agent's question went unanswered — escalated",
 };
 
 export type NotificationTarget =

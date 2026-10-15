@@ -1600,6 +1600,27 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "agent sessions respond": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/respond",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "sessionId",
+        flag: "session",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "answer",
+        flag: "answer",
+      },
+    ],
+  },
   "agent sessions retry create": {
     method: "POST",
     path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/retry",

@@ -142,6 +142,7 @@ type ActivityType =
   | "response"
   | "error"
   | "elicitation"
+  | "prompt"
   | "action"
   | "status"
   | "artifact";

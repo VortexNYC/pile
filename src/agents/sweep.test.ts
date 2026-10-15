@@ -3,7 +3,11 @@ import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { createD1 } from "../global/db.js";
-import { supportTickets, user as userTable } from "../global/schema.js";
+import {
+  organization,
+  supportTickets,
+  user as userTable,
+} from "../global/schema.js";
 import { createTeam } from "../global/teams.js";
 import { createWorkspace } from "../global/workspaces.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
@@ -164,6 +168,8 @@ describe("ingestFailedAgentSession", () => {
       lastReviewedSha: null,
       reviewSummary: null,
       sandboxBackupRef: null,
+      awaitingActivityId: null,
+      awaitingEscalatedAt: null,
     };
     const polled = {
       id: "prov-1",
@@ -1425,6 +1431,133 @@ describe("sweepAgentSessions", () => {
     expect(needsInput?.message).toBe(
       "Which environment should I deploy to — staging or prod?"
     );
+  });
+
+  it("leaves elicitation-suspended lanes parked — no promote, no orphan rescue (PILE-419)", async () => {
+    const agentId = `mock-await-${crypto.randomUUID().slice(0, 8)}`;
+    let dispatches = 0;
+    registerMock(agentId, {
+      dispatch: () => {
+        dispatches += 1;
+        return { id: "await-1", agentId, status: "created" };
+      },
+      poll: (id) => ({ id, agentId, status: "running" }),
+    });
+    const issue = await stub.createIssue({ title: "Suspended on question" });
+    // Externally-managed lane (no providerSessionId) suspended on an open
+    // elicitation: without the awaiting guard the orphan rescue would flip
+    // it back to `created` while the human is still thinking.
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+    });
+    await stub.addAgentActivity({
+      sessionId: session.id,
+      type: "elicitation",
+      message: "Approve the spend?",
+    });
+    expect((await stub.getAgentSession(session.id))?.status).toBe("waiting");
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    const after = await stub.getAgentSession(session.id);
+    expect(after?.status).toBe("waiting");
+    expect(after?.awaitingActivityId).toBeTruthy();
+    expect(dispatches).toBe(0);
+  });
+
+  it("escalates an unanswered elicitation past the configured window, once (PILE-419)", async () => {
+    // Dedicated workspace: a near-zero escalation window makes any open
+    // question stale on the next sweep pass.
+    const db = createD1(env.D1);
+    const escalateUser = "user-sweep-escalate";
+    const now = new Date();
+    await db
+      .insert(userTable)
+      .values({
+        id: escalateUser,
+        name: "Escalate",
+        email: `${escalateUser}@example.com`,
+        emailVerified: false,
+        image: null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({ target: [userTable.email] });
+    const headers = await createAdminHeaders(env, escalateUser);
+    const workspace = await createWorkspace(db, env, headers, {
+      name: "Escalation sweep",
+      slug: `sweep-esc-${crypto.randomUUID()}`,
+      key: `ES${crypto.randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+      ownerId: escalateUser,
+    });
+    const escalateOrg = workspace!.id;
+    await db
+      .update(organization)
+      .set({
+        metadata: JSON.stringify({
+          key: workspace?.key ?? null,
+          elicitationEscalateAfterMinutes: 0.0001,
+        }),
+      })
+      .where(eq(organization.id, escalateOrg));
+    const escalateStub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(escalateOrg)
+    );
+    await escalateStub.setOrganizationId(escalateOrg);
+
+    const issue = await escalateStub.createIssue({
+      title: "Stale question",
+      assigneeId: escalateUser,
+    });
+    const session = await escalateStub.createAgentSession({
+      issueId: issue.id,
+      agentId: "mock",
+      provider: "mock",
+      actorId: escalateUser,
+      actorType: "user",
+      status: "running",
+    });
+    await escalateStub.addAgentActivity({
+      sessionId: session.id,
+      type: "elicitation",
+      message: "Merge or hold?",
+    });
+    // The window is ~6ms — let the question age past it.
+    await new Promise((r) => setTimeout(r, 50));
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    const escalated = await escalateStub.getAgentSession(session.id);
+    expect(escalated?.awaitingEscalatedAt).toBeTruthy();
+    const events = await escalateStub.listAgentSessionEvents(session.id, {
+      limit: 100,
+    });
+    expect(
+      events.filter((e) => e.type === "session.elicitation_escalated")
+    ).toHaveLength(1);
+    const notifications = await escalateStub.listNotificationsForRecipient(
+      escalateUser,
+      "user",
+      {}
+    );
+    expect(
+      notifications.some((n) => n.type === "lane_elicitation_escalated")
+    ).toBe(true);
+
+    // Deduped — a second pass does not re-escalate the same question.
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+    const eventsAgain = await escalateStub.listAgentSessionEvents(session.id, {
+      limit: 100,
+    });
+    expect(
+      eventsAgain.filter((e) => e.type === "session.elicitation_escalated")
+    ).toHaveLength(1);
   });
 
   it("measures the run clock from startedAt, not createdAt", async () => {

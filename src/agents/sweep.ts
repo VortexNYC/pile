@@ -584,6 +584,10 @@ async function promoteQueuedSessions(
     // the provision clock on a lane that never needed provisioning and
     // double-dispatch a lane that already owns a sandbox (PILE-260).
     if (session.providerSessionId) continue;
+    // PILE-419 — a `waiting` row with an open elicitation is suspended on a
+    // human answer, not queued: no promote, no orphan rescue. The respond
+    // route resumes it (or keeps it waiting when queuedAfter is also set).
+    if (session.awaitingActivityId) continue;
     if (!session.queuedAfter) {
       // Queue orphan (no edge recorded): rewinding createdAt on the flip
       // keeps its stale queue timestamp from tripping the provision
@@ -692,6 +696,36 @@ async function promoteQueuedSessions(
         error: err instanceof Error ? err.message : String(err),
       });
     }
+  }
+}
+
+/** PILE-419 — an elicitation suspends its session until a human answers.
+ *  Unanswered past the workspace's `elicitationEscalateAfterMinutes` window
+ *  (default 4h), the question escalates once — event + status activity +
+ *  escalated notification to the routed human. */
+async function escalateStaleElicitations(
+  stub: DurableObjectStub<WorkspaceDO>,
+  now: number
+): Promise<void> {
+  const sessions = await stub
+    .listAwaitingElicitationSessions()
+    .catch(() => [] as AgentSession[]);
+  if (sessions.length === 0) return;
+  const escalateAfterMinutes = await stub.getElicitationEscalationMinutes();
+  for (const session of sessions) {
+    if (!session.awaitingActivityId || session.awaitingEscalatedAt) continue;
+    const elicitation = await stub
+      .getAgentActivity(session.awaitingActivityId)
+      .catch(() => null);
+    const askedAt = Date.parse(elicitation?.createdAt ?? session.updatedAt);
+    if (!Number.isFinite(askedAt)) continue;
+    if (now - askedAt < escalateAfterMinutes * 60_000) continue;
+    await stub.escalateElicitation(session.id).catch((err: unknown) => {
+      console.error("elicitation escalation failed", {
+        session: session.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
   }
 }
 
@@ -1070,6 +1104,7 @@ export async function sweepAgentSessions(
       // merged PR doesn't sit displayed as "open" forever.
       await syncOpenPrSessions(env, stub, id, { probeTimeoutMs });
       await promoteQueuedSessions(env, stub, id, now, ctx);
+      await escalateStaleElicitations(stub, now);
       await fireDueAutomations(env, stub, id, new Date(now), ctx);
       await reapTerminalArtifacts(env, stub, id, now);
       if (sessions.length === 0) continue;

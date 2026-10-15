@@ -77,6 +77,7 @@ const agentActivityTypeSchema = z.enum([
   "response",
   "error",
   "elicitation",
+  "prompt",
   "action",
   "status",
   "artifact",
@@ -158,8 +159,15 @@ export const agentSessionSchema = z.object({
   updatedAt: z.string(),
   lastProgressAt: z.string().nullable().optional(),
   lastStateHash: z.string().nullable().optional(),
+  /** PILE-419 — id of the open (unanswered) elicitation activity that
+   *  suspended this session in `waiting`; null when not awaiting input. */
+  awaitingActivityId: z.string().nullable().optional(),
+  /** When the open elicitation last fired its escalation (dedupe stamp). */
+  awaitingEscalatedAt: z.string().nullable().optional(),
   /** Read-time derivation (PILE-209): `stalled` = running, stale progress,
-   *  no PR; `needs_input` = latest activity is an elicitation. Never stored. */
+   *  no PR; `needs_input` = an open elicitation is parked on the session
+   *  (or, for pre-suspend rows, the latest activity is an elicitation).
+   *  Never stored. */
   derivedStatus: z.enum(["stalled", "needs_input"]).nullable().optional(),
   activities: z
     .array(
@@ -198,6 +206,7 @@ const agentSessionSummarySchema = agentSessionSchema
     lastProgressAt: true,
     derivedStatus: true,
     label: true,
+    awaitingActivityId: true,
   })
   .extend({
     startedAt: z.string().nullable(),
@@ -230,9 +239,16 @@ const STALLED_PROGRESS_MS = 15 * 60 * 1000;
 /** Durable fields only are stored; display status is derived at read —
  *  same rule as AO: never mark dead, just surface ambiguity. */
 function deriveSessionStatus(
-  row: Pick<AgentSession, "status" | "prUrl" | "lastProgressAt">,
+  row: Pick<
+    AgentSession,
+    "status" | "prUrl" | "lastProgressAt" | "awaitingActivityId"
+  >,
   activities?: AgentActivity[]
 ): "stalled" | "needs_input" | null {
+  if (["completed", "failed", "canceled"].includes(row.status)) return null;
+  // PILE-419 — an open elicitation suspends the session (`waiting` +
+  // awaitingActivityId); legacy rows only carry the trailing activity.
+  if (row.awaitingActivityId) return "needs_input";
   if (row.status !== "running") return null;
   const last = activities?.[activities.length - 1];
   if (last?.type === "elicitation") return "needs_input";
@@ -303,6 +319,7 @@ function toSessionSummary(row: AgentSessionSummary) {
     endedAt: row.endedAt,
     lastProgressAt: row.lastProgressAt,
     label: row.label,
+    awaitingActivityId: row.awaitingActivityId,
     derivedStatus: deriveSessionStatus(row),
   };
 }
@@ -968,6 +985,39 @@ const promptSessionRoute = createRoute({
     409: {
       description:
         "Sandbox gone or busy — use the retry route for a cold dispatch",
+    },
+  },
+});
+
+// PILE-419 — a suspended lane's answer path: the human answers the open
+// elicitation, the answer lands as a `response` activity parented to the
+// question, and the session resumes (`running`, delivered into the live
+// sandbox or queued on the event stream; still `waiting` when the lane is
+// also queue-parked behind a blocker).
+const respondSessionRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/respond",
+  tags: ["agent-sessions"],
+  middleware: [rls("session:create", "agent:write")],
+  request: {
+    params: z.object({ organizationId: z.string(), sessionId: z.string() }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({ answer: z.string().min(1) }).strict(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Answer recorded and session resumed",
+      content: { "application/json": { schema: agentSessionSchema } },
+    },
+    404: { description: "Session not found" },
+    409: {
+      description:
+        "No open elicitation, or the sandbox is gone/busy — use the retry route for a cold dispatch",
     },
   },
 });
@@ -2712,6 +2762,17 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     // receive a live sendPrompt — the reply is queued as a readable event
     // and the agent picks it up by polling /events or the SSE stream.
     const externallyManaged = session.providerSessionId === null;
+    // PILE-419 — the human→agent direction is a first-class activity too
+    // (Linear's `prompt` type): the ask is auditable, not just the answers.
+    const recordPromptActivity = () =>
+      stub
+        .addAgentActivity({
+          sessionId,
+          actorId: identity.id,
+          type: "prompt",
+          message: prompt.slice(0, 2000),
+        })
+        .catch(() => null);
     if (externallyManaged) {
       await stub.addAgentSessionEvent({
         sessionId,
@@ -2719,6 +2780,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         message: `Follow-up prompt queued (${prompt.length} chars)`,
         payload: { prompt: prompt.slice(0, 2000), delivery: "queued" },
       });
+      await recordPromptActivity();
       const queued = await stub.applyAgentSessionResult(
         sessionId,
         { status: "running", result: null },
@@ -2776,11 +2838,89 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         payload: { prompt: prompt.slice(0, 2000) },
       })
       .catch(() => {});
+    await recordPromptActivity();
     const updated = await stub.applyAgentSessionResult(
       sessionId,
       { status: "running", result: null },
       identity.id
     );
+    const activities = await stub.listAgentActivities(sessionId);
+    return c.json(toSessionResponse(updated ?? session, activities), 200);
+  });
+
+  // PILE-419 — the human's answer to an open elicitation resumes the
+  // session. Provider lanes get the answer pushed into their live sandbox
+  // via sendPrompt (a dead/busy sandbox 409s without closing the question —
+  // cold-dispatch through /retry instead). Externally-managed lanes pick the
+  // answer up off the event stream (`elicitation.response`); a lane still
+  // queue-parked behind a blocker stays `waiting` with the marker cleared.
+  app.openapi(respondSessionRoute, async (c) => {
+    const { organizationId, sessionId } = c.req.valid("param");
+    const { answer } = c.req.valid("json");
+    const identity = c.var.workspaceIdentity;
+    const stub = getWorkspaceStub(c.env, organizationId);
+
+    const session = await stub.getAgentSession(sessionId);
+    if (!session) {
+      return c.json({ message: "Session not found" }, 404);
+    }
+    await assertSessionIssueAccess(
+      createD1(c.env.D1),
+      stub,
+      session,
+      c.var.workspaceIdentity
+    );
+    if (!session.awaitingActivityId) {
+      return c.json({ message: "Session is not awaiting input" }, 409);
+    }
+    const issue = await stub.getIssue(session.issueId);
+    if (!issue) {
+      return c.json({ message: "Issue not found" }, 404);
+    }
+
+    let delivery: "sent" | "queued" = "queued";
+    if (session.providerSessionId !== null && !session.queuedAfter) {
+      const providerConfig = await loadProviderConfig(
+        c.env,
+        stub,
+        session.agentId
+      );
+      const effectiveEnv = resolveAgentEnv(c.env, providerConfig ?? undefined);
+      const provider = getAgentProvider(session.agentId, effectiveEnv);
+      const gitIdentity = issue.repo
+        ? ((await stub.getGitIdentityByRepo(issue.repo)) ??
+          (await stub.getGitIdentityByRepo(DEFAULT_GIT_IDENTITY_REPO)) ??
+          null)
+        : null;
+      const delivered = provider.sendPrompt
+        ? await provider.sendPrompt(
+            session.providerSessionId,
+            answer,
+            issue,
+            gitIdentity,
+            {
+              organizationId,
+              backupRef: session.sandboxBackupRef ?? null,
+            }
+          )
+        : false;
+      if (!delivered) {
+        return c.json(
+          {
+            message:
+              "Session sandbox is gone or busy — retry for a cold dispatch with the answer as context",
+          },
+          409
+        );
+      }
+      delivery = "sent";
+    }
+
+    const updated = await stub.respondToElicitation(sessionId, {
+      answer,
+      actorId: identity.id,
+      delivery,
+    });
     const activities = await stub.listAgentActivities(sessionId);
     return c.json(toSessionResponse(updated ?? session, activities), 200);
   });

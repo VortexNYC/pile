@@ -1039,6 +1039,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     "issue_assigned",
     "mention",
     "lane_needs_input",
+    "lane_elicitation_escalated",
   ]);
 
   // Single notification path: preference-gated in-app row + email fanout.
@@ -3079,7 +3080,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   async addAgentActivity(input: data.AgentActivityInput) {
-    const activity = await data.addAgentActivity(this.db, input);
+    // PILE-419 — an elicitation opens a span that closes when the human
+    // answers (respondToElicitation stamps endedAt → answer latency).
+    const enriched =
+      input.type === "elicitation" && input.startedAt === undefined
+        ? { ...input, startedAt: new Date().toISOString() }
+        : input;
+    const activity = await data.addAgentActivity(this.db, enriched);
     await data.addAgentSessionEvent(this.db, {
       sessionId: input.sessionId,
       type: "activity",
@@ -3096,6 +3103,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     // PILE-229 handoff: an elicitation is the lane asking a human. Mark it on
     // the event stream and notify the issue's human owner — the assignee when
     // it's a user, else the actor who dispatched the lane.
+    // PILE-419: the same activity suspends the session — parks it in
+    // `waiting` with awaitingActivityId pointing at this question until a
+    // human answers via the respond route (Linear's awaitingInput).
     if (input.type === "elicitation") {
       try {
         const session = await this.getAgentSession(input.sessionId);
@@ -3106,6 +3116,34 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           message: activity.message,
           payload: { issueId: issue?.id ?? null },
         });
+        if (
+          session &&
+          !["completed", "failed", "canceled"].includes(session.status)
+        ) {
+          const updated = await data.updateAgentSession(
+            this.db,
+            this.organizationId,
+            input.sessionId,
+            {
+              status: "waiting",
+              awaitingActivityId: activity.id,
+              // A newer question supersedes — re-arm the escalation clock.
+              awaitingEscalatedAt: null,
+            }
+          );
+          if (updated && updated.status !== session.status) {
+            await data.addAgentSessionEvent(this.db, {
+              sessionId: input.sessionId,
+              type: "session.status",
+              message: "Session status changed",
+              payload: {
+                field: "status",
+                old: session.status,
+                new: updated.status,
+              },
+            });
+          }
+        }
         const humanAssignee =
           issue?.assigneeId && !issue.assigneeId.startsWith("lane:")
             ? issue.assigneeId
@@ -3220,6 +3258,174 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   async closeAgentActivity(id: string) {
     return data.closeAgentActivity(this.db, id);
+  }
+
+  getAgentActivity(id: string) {
+    return data.getAgentActivity(this.db, id);
+  }
+
+  listAwaitingElicitationSessions() {
+    return data.listAwaitingElicitationSessions(this.db, this.organizationId);
+  }
+
+  /** PILE-419 — minutes an elicitation may sit unanswered before the sweep
+   *  escalates it. Org metadata `elicitationEscalateAfterMinutes`; default
+   *  4h — a suspended lane holds no compute, so the SLA is human-paced. */
+  async getElicitationEscalationMinutes(): Promise<number> {
+    const d1 = createD1(this.env.D1);
+    const row = await d1
+      .select({ metadata: organization.metadata })
+      .from(organization)
+      .where(eq(organization.id, this.organizationId))
+      .get();
+    const parsed = safeJSON(row?.metadata ?? null) as Record<
+      string,
+      unknown
+    > | null;
+    const value = parsed?.elicitationEscalateAfterMinutes;
+    return typeof value === "number" && value > 0 ? value : 240;
+  }
+
+  /** PILE-419 — the human's answer to a suspended lane. Records a `response`
+   *  activity parented to the elicitation, closes the question's span, and
+   *  resumes the session (`running`, or back to `waiting` when it's still
+   *  queued behind a blocker lane). `delivery` records how the answer
+   *  reached the agent: pushed into a live sandbox ("sent") or left on the
+   *  event stream for an externally-managed session to poll ("queued"). */
+  async respondToElicitation(
+    sessionId: string,
+    input: { answer: string; actorId?: string; delivery: "sent" | "queued" }
+  ) {
+    await this.ready;
+    const session = await this.getAgentSession(sessionId);
+    if (!session) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Session not found",
+      });
+    }
+    const elicitationId = session.awaitingActivityId;
+    if (!elicitationId) {
+      throw new VortexError({
+        code: "CONFLICT",
+        status: 409,
+        message: "Session is not awaiting input",
+      });
+    }
+    const response = await this.addAgentActivity({
+      sessionId,
+      actorId: input.actorId,
+      type: "response",
+      message: input.answer,
+      parentId: elicitationId,
+      payload: { elicitationId },
+    });
+    // Close the elicitation span — its durationMs is the answer latency.
+    await data.closeAgentActivity(this.db, elicitationId).catch(() => null);
+    const resumeStatus = session.queuedAfter ? "waiting" : "running";
+    await this.applyAgentSessionResult(
+      sessionId,
+      { status: resumeStatus },
+      input.actorId
+    );
+    // Resuming to `waiting` (queue-parked) doesn't trip the non-waiting
+    // clear in applyAgentSessionResult — the question is answered either
+    // way, so the marker always comes off here.
+    const updated = await data.updateAgentSession(
+      this.db,
+      this.organizationId,
+      sessionId,
+      { awaitingActivityId: null, awaitingEscalatedAt: null }
+    );
+    await data.addAgentSessionEvent(this.db, {
+      sessionId,
+      type: "elicitation.response",
+      message: "Elicitation answered",
+      payload: {
+        elicitationId,
+        responseActivityId: response.id,
+        answer: input.answer.slice(0, 2000),
+        delivery: input.delivery,
+      },
+    });
+    return updated ?? (await this.getAgentSession(sessionId));
+  }
+
+  /** PILE-419 — an unanswered elicitation past the workspace window fires
+   *  once (awaitingEscalatedAt is the dedupe): escalated event, status
+   *  activity, and a `lane_elicitation_escalated` notification to the same
+   *  human the original question routed to. */
+  async escalateElicitation(sessionId: string): Promise<void> {
+    await this.ready;
+    const session = await this.getAgentSession(sessionId);
+    if (
+      !session?.awaitingActivityId ||
+      session.awaitingEscalatedAt ||
+      ["completed", "failed", "canceled"].includes(session.status)
+    ) {
+      return;
+    }
+    const elicitation = await data.getAgentActivity(
+      this.db,
+      session.awaitingActivityId
+    );
+    const now = new Date().toISOString();
+    // Stamp before fanout — a notification failure must not re-fire the
+    // escalation on every sweep pass.
+    await data.updateAgentSession(this.db, this.organizationId, sessionId, {
+      awaitingEscalatedAt: now,
+    });
+    const issue = await this.getIssue(session.issueId);
+    const askedAt = elicitation?.createdAt
+      ? Math.max(
+          0,
+          Math.round(
+            (Date.parse(now) - Date.parse(elicitation.createdAt)) / 60000
+          )
+        )
+      : null;
+    await data.addAgentSessionEvent(this.db, {
+      sessionId,
+      type: "session.elicitation_escalated",
+      message: "Elicitation unanswered — escalated",
+      payload: {
+        elicitationId: session.awaitingActivityId,
+        issueId: issue?.id ?? null,
+        unansweredMinutes: askedAt,
+      },
+    });
+    await this.addAgentActivity({
+      sessionId,
+      type: "status",
+      message:
+        askedAt === null
+          ? "Elicitation unanswered — escalated"
+          : `Elicitation unanswered for ${askedAt}m — escalated`,
+      parentId: session.awaitingActivityId,
+    });
+    const humanAssignee =
+      issue?.assigneeId && !issue.assigneeId.startsWith("lane:")
+        ? issue.assigneeId
+        : null;
+    const recipientId = humanAssignee ?? session.actorId;
+    const recipientType: data.RecipientType = humanAssignee
+      ? "user"
+      : session.actorType;
+    if (recipientId && issue) {
+      await this.createNotification({
+        recipientId,
+        recipientType,
+        issueId: issue.id,
+        type: "lane_elicitation_escalated",
+        metadata: {
+          sessionId,
+          elicitationId: session.awaitingActivityId,
+          question: elicitation?.message ?? null,
+          unansweredMinutes: askedAt,
+        },
+      });
+    }
   }
 
   async addAgentSessionArtifact(input: {
@@ -3526,6 +3732,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           set.endedAt = set.updatedAt;
         if (!terminal.has(result.status) && oldSession.endedAt)
           set.endedAt = null;
+        // PILE-419 — leaving `waiting` closes any open elicitation (the
+        // lane resumed or died without an answer).
+        if (result.status !== "waiting") {
+          set.awaitingActivityId = null;
+          set.awaitingEscalatedAt = null;
+        }
       }
       if (result.infraFailure !== undefined)
         set.infraFailure = result.infraFailure ? 1 : 0;
@@ -3570,6 +3782,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       // and can destroy a sandbox that's actively working a follow-up.
       if (!terminal.has(result.status) && oldSession.endedAt)
         set.endedAt = null;
+      // PILE-419 — leaving `waiting` closes any open elicitation (answered
+      // via /respond, provider un-parked on its own, or went terminal).
+      if (result.status !== "waiting") {
+        set.awaitingActivityId = null;
+        set.awaitingEscalatedAt = null;
+      }
     }
     if (result.infraFailure !== undefined)
       set.infraFailure = result.infraFailure ? 1 : 0;
