@@ -904,6 +904,13 @@ CREATE INDEX IF NOT EXISTS document_content_history_doc_idx ON document_content_
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS notification_preferences_user_idx ON notification_preferences (organization_id, user_id)`;
 
+// PILE-409: restricted spaces deny-by-default — docs inside need an
+// explicit document_permissions grant. Backfill: spaces with public
+// sharing off are the restricted ones (Leadership et al).
+const v71 = `ALTER TABLE document_spaces ADD COLUMN restricted INTEGER NOT NULL DEFAULT 0
+--> statement-breakpoint
+UPDATE document_spaces SET restricted = 1 WHERE public_sharing = 0`;
+
 const v69 = `CREATE TABLE comments_new (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -1148,6 +1155,7 @@ export const workspaceMigrations = {
       { idx: 67, when: 67, tag: "v68", breakpoints: false },
       { idx: 68, when: 68, tag: "v69", breakpoints: false },
       { idx: 69, when: 69, tag: "v70", breakpoints: false },
+      { idx: 70, when: 70, tag: "v71", breakpoints: true },
     ],
   },
   migrations: {
@@ -1221,5 +1229,6 @@ export const workspaceMigrations = {
     m0067: v68,
     m0068: v69,
     m0069: v70,
+    m0070: v71,
   },
 } satisfies Parameters<typeof migrate>[1];

@@ -2338,6 +2338,23 @@ export function listDocuments(
     .all();
 }
 
+/** Spaces where contained documents are deny-by-default (PILE-409). */
+export function restrictedSpaceIds(db: WorkspaceDb, organizationId: string) {
+  return new Set(
+    db
+      .select({ id: workspaceDocumentSpaces.id })
+      .from(workspaceDocumentSpaces)
+      .where(
+        and(
+          eq(workspaceDocumentSpaces.organizationId, organizationId),
+          eq(workspaceDocumentSpaces.restricted, true)
+        )
+      )
+      .all()
+      .map((s) => s.id)
+  );
+}
+
 /** List scope: open docs plus docs the actor is granted on —
  * restricted docs disappear from the list for ungranted members. */
 export function listDocumentsVisibleTo(
@@ -2354,11 +2371,18 @@ export function listDocumentsVisibleTo(
     .where(eq(workspaceDocumentPermissions.organizationId, organizationId))
     .all();
   const restricted = new Set(grants.map((g) => g.documentId));
+  const restrictedSpaces = restrictedSpaceIds(db, organizationId);
   const actorSet = new Set([actorId, ...teamIds]);
   const granted = new Set(
     grants.filter((g) => actorSet.has(g.actorId)).map((g) => g.documentId)
   );
-  return all.filter((d) => !restricted.has(d.id) || granted.has(d.id));
+  return all.filter(
+    (d) =>
+      !(
+        restricted.has(d.id) ||
+        (d.spaceId && restrictedSpaces.has(d.spaceId))
+      ) || granted.has(d.id)
+  );
 }
 
 /** Guest-scope: docs visible iff the actor holds an explicit grant —
@@ -4610,6 +4634,7 @@ export function createDocumentSpace(
     description?: string | null;
     icon?: string | null;
     publicSharing?: boolean;
+    restricted?: boolean;
     createdById: string;
   }
 ) {
@@ -4622,6 +4647,7 @@ export function createDocumentSpace(
       description: input.description ?? null,
       icon: input.icon ?? null,
       publicSharing: input.publicSharing ?? true,
+      restricted: input.restricted ?? false,
       createdById: input.createdById,
       createdAt: new Date().toISOString(),
     })
@@ -4663,10 +4689,17 @@ export function updateDocumentSpace(
     description?: string | null;
     icon?: string | null;
     publicSharing?: boolean;
+    restricted?: boolean;
   }
 ) {
   const updates: Record<string, unknown> = {};
-  for (const key of ["name", "description", "icon", "publicSharing"] as const) {
+  for (const key of [
+    "name",
+    "description",
+    "icon",
+    "publicSharing",
+    "restricted",
+  ] as const) {
     if (patch[key] !== undefined) updates[key] = patch[key];
   }
   return db
@@ -5042,6 +5075,26 @@ export function documentAccessLevel(
   const grants = listDocumentPermissions(db, documentId);
   // Members: no grants = open doc. Guests: no grants = invisible doc —
   // they see only what a permission row explicitly gives them.
+  // PILE-409: docs inside a restricted space deny-by-default for everyone —
+  // only an explicit grant (or admin bypass at the API layer) opens them.
+  const doc = db
+    .select({ spaceId: workspaceDocuments.spaceId })
+    .from(workspaceDocuments)
+    .where(eq(workspaceDocuments.id, documentId))
+    .get();
+  const inRestrictedSpace =
+    doc?.spaceId != null &&
+    db
+      .select({ id: workspaceDocumentSpaces.id })
+      .from(workspaceDocumentSpaces)
+      .where(
+        and(
+          eq(workspaceDocumentSpaces.id, doc.spaceId),
+          eq(workspaceDocumentSpaces.restricted, true)
+        )
+      )
+      .get() !== undefined;
+  if (inRestrictedSpace && grants.length === 0) return null;
   if (grants.length === 0) return defaultDenied ? null : "edit";
   let level: "view" | "edit" | null = null;
   for (const grant of grants) {

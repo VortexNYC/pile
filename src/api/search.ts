@@ -5,6 +5,7 @@ import { createD1 } from "../global/db.js";
 import { getVisibleTeamIds } from "../global/teams.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
+import { isAdminIdentity } from "../platform/permissions.js";
 import { rls } from "../platform/rls.js";
 import { issueViewer } from "./issue-access.js";
 
@@ -70,7 +71,8 @@ export function registerSearchRoutes(app: OpenAPIHono<AppContext>) {
       input.query,
       teamIds,
       input.limit,
-      await issueViewer(db, identity)
+      await issueViewer(db, identity),
+      { actorId: identity.id, admin: isAdminIdentity(identity) }
     );
     return c.json(results);
   });

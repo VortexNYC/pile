@@ -5562,6 +5562,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "publicSharing",
         flag: "public-sharing",
       },
+      {
+        name: "restricted",
+        flag: "restricted",
+      },
     ],
   },
   "document spaces update": {
@@ -5594,6 +5598,10 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "publicSharing",
         flag: "public-sharing",
+      },
+      {
+        name: "restricted",
+        flag: "restricted",
       },
     ],
   },

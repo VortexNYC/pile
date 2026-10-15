@@ -12,8 +12,12 @@ import {
   type AgentSessionInput,
   createAgentSession,
   createDocument,
+  createDocumentSpace,
+  documentAccessLevel,
   listDocumentsVisibleTo,
   setDocumentPermission,
+  updateDocument,
+  updateDocumentSpace,
   createCustomer,
   createEntityAttachment,
   deleteCustomer,
@@ -592,6 +596,47 @@ describe("listDocumentsVisibleTo", () => {
       setDocumentPermission(db, org, restricted.id, "member-1", "user", "view");
       const granted = listDocumentsVisibleTo(db, org, "member-1", []);
       expect(granted.map((d) => d.title)).toContain("restricted");
+    });
+  });
+});
+
+describe("restricted document spaces (PILE-409)", () => {
+  it("hides restricted-space docs from ungranted actors in list + access check", async () => {
+    await withDb(async (db) => {
+      const org = `space-${crypto.randomUUID()}`;
+      const space = createDocumentSpace(db, org, {
+        name: "Leadership",
+        restricted: true,
+        createdById: "owner-1",
+      });
+      const hidden = createDocument(db, {
+        organizationId: org,
+        title: "ceo-notes",
+        createdById: "owner-1",
+      });
+      updateDocument(db, org, hidden.id, { spaceId: space.id }, "owner-1");
+      createDocument(db, {
+        organizationId: org,
+        title: "open-doc",
+        createdById: "owner-1",
+      });
+
+      // Ungranted member: restricted-space doc invisible, no access level.
+      const rows = listDocumentsVisibleTo(db, org, "member-1", []);
+      expect(rows.map((d) => d.title)).toContain("open-doc");
+      expect(rows.map((d) => d.title)).not.toContain("ceo-notes");
+      expect(documentAccessLevel(db, hidden.id, "member-1", [])).toBeNull();
+
+      // Granted actor sees it.
+      setDocumentPermission(db, org, hidden.id, "member-1", "user", "view");
+      expect(
+        listDocumentsVisibleTo(db, org, "member-1", []).map((d) => d.title)
+      ).toContain("ceo-notes");
+      expect(documentAccessLevel(db, hidden.id, "member-1", [])).toBe("view");
+
+      // Unrestricting the space reopens the doc.
+      updateDocumentSpace(db, org, space.id, { restricted: false });
+      expect(documentAccessLevel(db, hidden.id, "member-1", [])).not.toBeNull();
     });
   });
 });

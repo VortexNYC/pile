@@ -20,7 +20,7 @@ pile request POST "/workspaces/{org}/deals" \
 
 # Link the field-sales playbook doc to the deal
 pile request POST "/workspaces/{org}/entities/document/{doc}/links" \
-  -d '{"targetEntityType":"deal","targetEntityId":"<deal-uuid>"}'
+  -d '{"toType":"deal","toId":"<deal-uuid>"}'
 ```
 
 ## How it connects

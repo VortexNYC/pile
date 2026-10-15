@@ -6944,7 +6944,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdDocumentspacesId",
-    "description": "Update document space (PATCH /workspaces/{organizationId}/document-spaces/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, description, icon, publicSharing.",
+    "description": "Update document space (PATCH /workspaces/{organizationId}/document-spaces/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, description, icon, publicSharing, restricted.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/document-spaces/{id}",
     "inputSchema": {
@@ -6972,6 +6972,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "nullable": true
             },
             "publicSharing": {
+              "type": "boolean"
+            },
+            "restricted": {
               "type": "boolean"
             }
           }
@@ -11675,7 +11678,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdDocumentspaces",
-    "description": "Create document space (POST /workspaces/{organizationId}/document-spaces) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, description, icon, publicSharing (* = required).",
+    "description": "Create document space (POST /workspaces/{organizationId}/document-spaces) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, description, icon, publicSharing, restricted (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/document-spaces",
     "inputSchema": {
@@ -11698,6 +11701,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "publicSharing": {
+              "type": "boolean"
+            },
+            "restricted": {
               "type": "boolean"
             }
           },

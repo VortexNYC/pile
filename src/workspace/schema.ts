@@ -400,6 +400,12 @@ export const workspaceDocumentSpaces = sqliteTable(
     publicSharing: integer("public_sharing" as string, { mode: "boolean" })
       .notNull()
       .default(true),
+    // PILE-409: restricted spaces make contained docs deny-by-default —
+    // readable only via an explicit document_permissions grant (admins
+    // bypass at the API layer).
+    restricted: integer("restricted" as string, { mode: "boolean" })
+      .notNull()
+      .default(false),
     createdById: text("created_by_id" as string).notNull(),
     createdAt: text("created_at" as string).notNull(),
   },
