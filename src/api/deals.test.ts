@@ -447,12 +447,25 @@ describe("deal hygiene fields + externalId dedupe", () => {
     expect(other.status).toBe(201);
   });
 
+  const mk = async (body: Record<string, unknown>) => {
+    const res = await postDeal(body);
+    expect(res.status).toBe(201);
+    return dealShape.parse(((await res.json()) as { deal: unknown }).deal);
+  };
+
+  const list = async (query: string) => {
+    const res = await fetch(
+      `/workspaces/${organizationId}/deals?${query}`,
+      {},
+      token
+    );
+    expect(res.status).toBe(200);
+    return ((await res.json()) as { deals: { id: string }[] }).deals.map(
+      (d) => d.id
+    );
+  };
+
   it("filters lists by stage, dueBefore, cold, and needsHuman", async () => {
-    const mk = async (body: Record<string, unknown>) => {
-      const res = await postDeal(body);
-      expect(res.status).toBe(201);
-      return dealShape.parse(((await res.json()) as { deal: unknown }).deal);
-    };
     const openNoStep = await mk({
       customerId,
       name: "Cold lead",
@@ -479,18 +492,6 @@ describe("deal hygiene fields + externalId dedupe", () => {
       name: "Old won",
       stage: "won",
     });
-
-    const list = async (query: string) => {
-      const res = await fetch(
-        `/workspaces/${organizationId}/deals?${query}`,
-        {},
-        token
-      );
-      expect(res.status).toBe(200);
-      return ((await res.json()) as { deals: { id: string }[] }).deals.map(
-        (d) => d.id
-      );
-    };
 
     const stageLead = await list("stage=lead");
     expect(stageLead).toContain(openNoStep.id);

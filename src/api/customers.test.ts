@@ -419,12 +419,25 @@ describe("customer hygiene fields + externalId dedupe", () => {
     expect(err.details?.customer?.id).toBe(firstCustomer.id);
   });
 
+  const mk = async (body: Record<string, unknown>) => {
+    const res = await postCustomer(body);
+    expect(res.status).toBe(201);
+    return customerShape.parse(await res.json());
+  };
+
+  const list = async (query: string) => {
+    const res = await fetch(
+      `/workspaces/${organizationId}/customers?${query}`,
+      {},
+      token
+    );
+    expect(res.status).toBe(200);
+    return (
+      (await res.json()) as { customers: { id: string }[] }
+    ).customers.map((c) => c.id);
+  };
+
   it("filters lists by cold, dueBefore, and needsHuman", async () => {
-    const mk = async (body: Record<string, unknown>) => {
-      const res = await postCustomer(body);
-      expect(res.status).toBe(201);
-      return customerShape.parse(await res.json());
-    };
     const cold = await mk({ name: "No next step" });
     const warm = await mk({
       name: "Scheduled",
@@ -436,18 +449,6 @@ describe("customer hygiene fields + externalId dedupe", () => {
       nextStepText: "call back",
       nextStepDueAt: "2026-11-30T00:00:00.000Z",
     });
-
-    const list = async (query: string) => {
-      const res = await fetch(
-        `/workspaces/${organizationId}/customers?${query}`,
-        {},
-        token
-      );
-      expect(res.status).toBe(200);
-      return (
-        (await res.json()) as { customers: { id: string }[] }
-      ).customers.map((c) => c.id);
-    };
 
     const coldIds = await list("cold=true");
     expect(coldIds).toContain(cold.id);
