@@ -4,8 +4,8 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { createD1 } from "../global/db.js";
 import { getVisibleTeamIds } from "../global/teams.js";
 import { VortexError } from "../platform/errors.js";
-import { isAdminIdentity } from "../platform/permissions.js";
 import type { AppContext } from "../platform/middleware.js";
+import { isAdminIdentity } from "../platform/permissions.js";
 import { rls } from "../platform/rls.js";
 import { issueViewer } from "./issue-access.js";
 

@@ -2378,8 +2378,10 @@ export function listDocumentsVisibleTo(
   );
   return all.filter(
     (d) =>
-      !(restricted.has(d.id) || (d.spaceId && restrictedSpaces.has(d.spaceId))) ||
-      granted.has(d.id)
+      !(
+        restricted.has(d.id) ||
+        (d.spaceId && restrictedSpaces.has(d.spaceId))
+      ) || granted.has(d.id)
   );
 }
 
