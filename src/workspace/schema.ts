@@ -904,6 +904,12 @@ export const workspaceAgentSessions = sqliteTable(
     // drives step-scoped guidance resolution). Persisted so promotion and
     // retries resolve the same scope.
     stepKey: text("step_key" as string),
+    // PILE-421 — when 1, the lane cannot transition to `completed` until an
+    // agent_handoffs row exists for it. Stage templates set this via the
+    // dispatch-time `requireHandoff` option.
+    handoffRequired: integer("handoff_required" as string)
+      .notNull()
+      .default(0),
   },
   (table) => [
     index("agent_sessions_organization_idx" as string).on(
@@ -1053,6 +1059,47 @@ export const workspaceGuidancePackVersions = sqliteTable(
     uniqueIndex("guidance_pack_versions_pack_idx" as string).on(
       table.packId,
       table.version
+    ),
+  ]
+);
+
+// PILE-421 — structured handoffs between sub-step agents (OpenAI Agents SDK
+// handoffs / Salesforce Flow Orchestration step outputs). A completing
+// sub-step lane posts one record carrying typed `outputs`, the suggested
+// `nextAgent`, and `evidence` links (docs/attachments/records). The record
+// anchors on `issueId` — the PARENT issue the sub-steps hang off, so the
+// handoff timeline and next-step context assembly query one id; `fromIssueId`
+// is the sub-step issue the session actually worked. `sessionId` is unique:
+// one handoff per completing lane, which is also the check the
+// `handoff_required` completion gate runs.
+export const workspaceAgentHandoffs = sqliteTable(
+  "agent_handoffs" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    issueId: text("issue_id" as string).notNull(),
+    fromIssueId: text("from_issue_id" as string),
+    sessionId: text("session_id" as string).notNull(),
+    stepKey: text("step_key" as string).notNull(),
+    nextAgent: text("next_agent" as string),
+    // JSON object — the step's typed outputs (template-defined shape).
+    outputs: text("outputs" as string).notNull(),
+    // JSON array of {type?, ref, label?} — links to docs/attachments/records.
+    evidence: text("evidence" as string),
+    createdBy: text("created_by" as string),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    uniqueIndex("agent_handoffs_session_idx" as string).on(table.sessionId),
+    index("agent_handoffs_issue_idx" as string).on(
+      table.organizationId,
+      table.issueId,
+      table.createdAt
+    ),
+    index("agent_handoffs_step_idx" as string).on(
+      table.organizationId,
+      table.issueId,
+      table.stepKey
     ),
   ]
 );

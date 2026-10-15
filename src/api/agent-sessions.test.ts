@@ -1804,6 +1804,23 @@ describe("agent sessions API", () => {
     );
     expect(getRes.status).toBe(200);
 
+    // PILE-421 — an agent:write-scoped token can post the lane's handoff.
+    const handoffRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/handoffs`,
+        {
+          method: "POST",
+          token: agentToken,
+          body: JSON.stringify({
+            stepKey: "scoped",
+            outputs: { ok: true },
+          }),
+        }
+      ),
+      env
+    );
+    expect(handoffRes.status).toBe(201);
+
     const activityRes = await app.fetch(
       request(
         `/workspaces/${organizationId}/agent/sessions/${session.id}/activities`,
@@ -3518,7 +3535,11 @@ describe("agent sessions API", () => {
     const session = await getRes.json<{
       status: string;
       stepKey: string | null;
-      guidance: Array<{ name: string; scope: string; scopeKey: string | null }> | null;
+      guidance: Array<{
+        name: string;
+        scope: string;
+        scopeKey: string | null;
+      }> | null;
     }>();
     expect(session.stepKey).toBe("contacted");
     expect(

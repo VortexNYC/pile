@@ -622,6 +622,8 @@ describe("sweepAgentSessions", () => {
       actorId: userId,
       actorType: "user",
       status: "created",
+      stepKey: "sourced",
+      handoffRequired: 1,
     });
 
     await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
@@ -634,6 +636,9 @@ describe("sweepAgentSessions", () => {
     const retried = siblings.find((s) => s.retryOf === session.id);
     expect(retried).toBeDefined();
     expect(retried?.retryCount).toBe(1);
+    // PILE-421 — the infra-retry keeps the dead lane's handoff gate.
+    expect(retried?.stepKey).toBe("sourced");
+    expect(retried?.handoffRequired).toBe(1);
   });
 
   // PILE-260 — queue dwell is not lane runtime: a promoted lane gets a fresh

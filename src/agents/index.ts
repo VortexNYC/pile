@@ -36,6 +36,7 @@ import { checkDispatchDedupe, type DedupeResult } from "./dedupe.js";
 import { DevinCliAgentProvider } from "./devin-cli.js";
 import { DevinAgentProvider } from "./devin.js";
 import { guidanceRefs, renderGuidancePacks } from "./guidance.js";
+import { renderHandoffs } from "./handoff.js";
 import {
   getLaneDbProvider,
   laneDbConfigForRepo,
@@ -223,6 +224,9 @@ export async function dispatchAgent(
      *  Step-scoped guidance packs resolve against it; persisted on the
      *  session so promotion/retries keep the same scope. */
     stepKey?: string;
+    /** PILE-421 — require the lane to post a handoff record before it can
+     *  complete (stage templates set this on required sub-steps). */
+    requireHandoff?: boolean;
   }
 ): Promise<AgentSession> {
   const label = sessionLabel(issue, agentId, options?.purpose);
@@ -333,6 +337,7 @@ export async function dispatchAgent(
         label,
         resultSchema,
         stepKey: options?.stepKey ?? null,
+        handoffRequired: options?.requireHandoff ? 1 : 0,
       });
       await stub
         .addAgentSessionEvent({
@@ -370,6 +375,7 @@ export async function dispatchAgent(
         label,
         resultSchema,
         stepKey: options?.stepKey ?? null,
+        handoffRequired: options?.requireHandoff ? 1 : 0,
       });
       await stub
         .addAgentSessionEvent({
@@ -431,9 +437,7 @@ export async function dispatchAgent(
       createdAt: promotedAt,
       // An explicit stepKey on promote wins; otherwise the parked row's
       // stored key (set when the dispatch was queued) drives resolution.
-      ...(options?.stepKey !== undefined
-        ? { stepKey: options.stepKey }
-        : {}),
+      ...(options?.stepKey !== undefined ? { stepKey: options.stepKey } : {}),
     })) ??
       // A null return means the row didn't take the write — the fallback
       // must still reflect the promotion or the stale queue timestamp
@@ -458,6 +462,7 @@ export async function dispatchAgent(
       label,
       resultSchema,
       stepKey: options?.stepKey ?? null,
+      handoffRequired: options?.requireHandoff ? 1 : 0,
     });
   }
 
@@ -489,6 +494,36 @@ export async function dispatchAgent(
         payload: { packs: refs },
       })
       .catch(() => {});
+  }
+
+  // PILE-421 — a step-scoped lane's context is the parent issue's thread
+  // plus prior sub-step handoffs, not the sub-issue's own transcript:
+  // the prompt envelope gets a compact parent card + rendered handoffs,
+  // and the comment pull below reads the anchor (parent) issue.
+  let stepContextText: string | null = null;
+  let contextIssue = issue;
+  if (stepKey) {
+    const parentIssue = issue.parentId
+      ? ((await stub.getIssue(issue.parentId)) ?? null)
+      : null;
+    const anchor = parentIssue ?? issue;
+    contextIssue = anchor;
+    const handoffs = await stub.listHandoffs({ issueId: anchor.id });
+    const sections: string[] = [];
+    if (parentIssue) {
+      sections.push(
+        [
+          "## Parent issue",
+          "",
+          `${parentIssue.identifier ?? parentIssue.id}: ${parentIssue.title}`,
+          ...(parentIssue.description ? ["", parentIssue.description] : []),
+        ].join("\n")
+      );
+    }
+    if (handoffs.length > 0) {
+      sections.push(renderHandoffs(handoffs));
+    }
+    stepContextText = sections.length > 0 ? sections.join("\n\n") : null;
   }
 
   // PILE-212 — lane-scoped preview DB: when org metadata declares laneDb for
@@ -565,7 +600,7 @@ export async function dispatchAgent(
   });
 
   try {
-    const comments = (await stub.listComments(issue.id))
+    const comments = (await stub.listComments(contextIssue.id))
       .filter((c) => !c.internal)
       .slice(-20)
       .map((c) => ({
@@ -653,6 +688,7 @@ export async function dispatchAgent(
         instructions:
           [
             guidanceText,
+            stepContextText,
             options?.instructions ?? null,
             session.resultSchema
               ? buildResultSchemaInstructions(session.resultSchema)

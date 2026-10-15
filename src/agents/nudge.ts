@@ -468,6 +468,8 @@ async function redispatchCompletedLane(
       {
         instructions: opts.prompt,
         stepKey: session.stepKey ?? undefined,
+        // PILE-421 — a redispatched required sub-step keeps the handoff gate.
+        requireHandoff: session.handoffRequired === 1,
       }
     );
     await stub

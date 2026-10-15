@@ -180,6 +180,7 @@ describe("nudgeLane redispatch (PILE-321)", () => {
       actorType: "user",
       status: "completed",
       stepKey: "contacted",
+      handoffRequired: 1,
     });
 
     await nudgeLane(
@@ -195,5 +196,7 @@ describe("nudgeLane redispatch (PILE-321)", () => {
     const sessions = await stub.listAgentSessions({ issueId: issue.id });
     const redispatch = sessions.find((s) => s.id !== session.id);
     expect(redispatch?.stepKey).toBe("contacted");
+    // PILE-421 — the handoff gate survives a redispatch too.
+    expect(redispatch?.handoffRequired).toBe(1);
   });
 });

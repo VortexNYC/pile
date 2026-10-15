@@ -3084,7 +3084,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   // ---- guidance packs (PILE-423 — scoped instruction packs injected into
   // the dispatch prompt envelope, most specific last) ----
 
-  listGuidancePacks(filter?: { scope?: data.GuidanceScope; scopeKey?: string }) {
+  listGuidancePacks(filter?: {
+    scope?: data.GuidanceScope;
+    scopeKey?: string;
+  }) {
     return data.listGuidancePacks(this.db, this.organizationId, filter);
   }
 
@@ -3093,11 +3096,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   listGuidancePackVersions(packId: string) {
-    return data.listGuidancePackVersions(
-      this.db,
-      this.organizationId,
-      packId
-    );
+    return data.listGuidancePackVersions(this.db, this.organizationId, packId);
   }
 
   /** Packs a lane should see for (teamId, status, stepKey) — least specific
@@ -3219,11 +3218,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     actor: { actorId?: string | null; actorType?: string | null }
   ): Promise<boolean> {
     await this.ready;
-    const ok = await data.deleteGuidancePack(
-      this.db,
-      this.organizationId,
-      id
-    );
+    const ok = await data.deleteGuidancePack(this.db, this.organizationId, id);
     if (ok) {
       this.audit(
         "guidance_pack.deleted",
@@ -3235,6 +3230,133 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       );
     }
     return ok;
+  }
+
+  // ---- agent handoffs (PILE-421) ----
+
+  listHandoffs(filter: { issueId: string; stepKey?: string }) {
+    return data.listAgentHandoffs(this.db, this.organizationId, filter);
+  }
+
+  getHandoff(id: string) {
+    return data.getAgentHandoff(this.db, this.organizationId, id);
+  }
+
+  getHandoffForSession(sessionId: string) {
+    return data.getHandoffForSession(this.db, this.organizationId, sessionId);
+  }
+
+  /** A completing sub-step lane posts its handoff record: typed outputs, an
+   *  optional nextAgent suggestion, and evidence links. The record anchors
+   *  on the session's issue's PARENT (explicit issueId overrides) so the
+   *  handoff timeline and the next step's prompt context share one query
+   *  key. One handoff per session — a byte-identical replay returns the
+   *  existing row (retried posts stay idempotent), a divergent one 409s. */
+  async createHandoff(
+    sessionId: string,
+    input: {
+      stepKey?: string | null;
+      issueId?: string | null;
+      nextAgent?: string | null;
+      outputs: Record<string, unknown>;
+      evidence?: Array<{ type?: string; ref: string; label?: string }> | null;
+    },
+    actor: { actorId?: string | null; actorType?: string | null }
+  ) {
+    await this.ready;
+    const session = await data.getAgentSession(
+      this.db,
+      this.organizationId,
+      sessionId
+    );
+    if (!session) {
+      throw VortexError.fromCode("NOT_FOUND", "Session not found");
+    }
+    const sessionIssue = await this.getIssue(session.issueId);
+    const issueId = input.issueId ?? sessionIssue?.parentId ?? session.issueId;
+    if (input.issueId) {
+      const anchor = await this.getIssue(input.issueId);
+      if (!anchor) {
+        throw VortexError.fromCode(
+          "NOT_FOUND",
+          "Handoff anchor issue not found"
+        );
+      }
+    }
+    const stepKey = input.stepKey ?? session.stepKey;
+    if (!stepKey) {
+      throw VortexError.fromCode(
+        "BAD_REQUEST",
+        "stepKey is required — the session carries none"
+      );
+    }
+    const outputs = JSON.stringify(input.outputs);
+    const evidence = input.evidence ? JSON.stringify(input.evidence) : null;
+    const nextAgent = input.nextAgent ?? null;
+    const existing = await data.getHandoffForSession(
+      this.db,
+      this.organizationId,
+      sessionId
+    );
+    if (existing) {
+      if (
+        existing.stepKey === stepKey &&
+        existing.outputs === outputs &&
+        existing.nextAgent === nextAgent &&
+        existing.evidence === evidence &&
+        existing.issueId === issueId
+      ) {
+        return existing;
+      }
+      throw VortexError.fromCode(
+        "CONFLICT",
+        "Session already posted a handoff"
+      );
+    }
+    const handoff = await data.createAgentHandoff(this.db, {
+      organizationId: this.organizationId,
+      issueId,
+      fromIssueId: session.issueId === issueId ? null : session.issueId,
+      sessionId,
+      stepKey,
+      nextAgent,
+      outputs,
+      evidence,
+      createdBy: actor.actorId ?? null,
+    });
+    this.audit(
+      "agent_handoff.created",
+      "agent_handoff",
+      handoff.id,
+      actor.actorId,
+      {
+        stepKey: { from: null, to: handoff.stepKey },
+        nextAgent: { from: null, to: handoff.nextAgent },
+        issueId: { from: null, to: handoff.issueId },
+      }
+    );
+    await this.recordIssueHistory(
+      issueId,
+      [
+        {
+          field: "handoff",
+          fromValue: null,
+          toValue: `${handoff.stepKey}${handoff.nextAgent ? ` → ${handoff.nextAgent}` : ""}`,
+        },
+      ],
+      actor.actorId ?? undefined
+    );
+    await this.addAgentSessionEvent({
+      sessionId,
+      type: "session.handoff",
+      message: `Handoff posted for step ${handoff.stepKey}`,
+      payload: {
+        handoffId: handoff.id,
+        stepKey: handoff.stepKey,
+        nextAgent: handoff.nextAgent,
+      },
+    }).catch(() => {});
+    return handoff;
   }
 
   /** PILE-420 — minutes of silence (no activity, no heartbeat) before a
@@ -3933,6 +4055,25 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const oldStatus = oldSession.status as AgentSessionStatus;
     const newStatus = result.status;
     const becameTerminal = !terminal.has(oldStatus) && terminal.has(newStatus);
+
+    // PILE-421 — a lane dispatched with handoffRequired cannot enter
+    // `completed` until it posted its agent_handoffs record. The write is
+    // rejected (409) rather than reclassified so the completing agent can
+    // post the handoff and re-report completion.
+    if (
+      newStatus === "completed" &&
+      oldSession.handoffRequired === 1 &&
+      !(await data.getHandoffForSession(
+        this.db,
+        this.organizationId,
+        sessionId
+      ))
+    ) {
+      throw VortexError.fromCode(
+        "CONFLICT",
+        "Session requires a handoff record before completing — POST the handoff first"
+      );
+    }
 
     // PILE-289 — validate the lane's final output against the dispatch-time
     // result schema. Only finished runs are judged; mid-run polls carry

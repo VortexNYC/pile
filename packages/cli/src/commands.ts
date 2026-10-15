@@ -1082,6 +1082,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "step-key",
       },
       {
+        name: "requireHandoff",
+        flag: "require-handoff",
+      },
+      {
         name: "preflight",
         flag: "preflight",
       },
@@ -1655,6 +1659,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "stepKey",
         flag: "step-key",
       },
+      {
+        name: "requireHandoff",
+        flag: "require-handoff",
+      },
     ],
   },
   "agent sessions prompt create": {
@@ -1942,6 +1950,80 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
     query: [],
+    body: [],
+  },
+  "agent sessions handoffs list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/handoffs",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "sessionId",
+        flag: "session",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "agent sessions handoffs create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/handoffs",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "sessionId",
+        flag: "session",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "stepKey",
+        flag: "step-key",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+      {
+        name: "nextAgent",
+        flag: "next-agent",
+      },
+      {
+        name: "outputs",
+        flag: "outputs",
+      },
+      {
+        name: "evidence",
+        flag: "evidence",
+      },
+    ],
+  },
+  "issues handoffs list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/issues/{issueId}/handoffs",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+    ],
+    query: [
+      {
+        name: "stepKey",
+        flag: "step-key",
+      },
+    ],
     body: [],
   },
   "agent providers catalog list": {

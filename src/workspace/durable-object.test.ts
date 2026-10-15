@@ -2615,10 +2615,158 @@ describe("pipeline hygiene via DO RPC", () => {
     const other = await stub.resolveGuidancePacks({ status: "done" });
     expect(other.some((p) => p.id === pack.id)).toBe(false);
 
-    expect(
-      await stub.deleteGuidancePack(pack.id, { actorId: "user-1" })
-    ).toBe(true);
+    expect(await stub.deleteGuidancePack(pack.id, { actorId: "user-1" })).toBe(
+      true
+    );
     // Deleted pack still resolves its recorded version history.
     expect((await stub.listGuidancePackVersions(pack.id)).length).toBe(2);
+  });
+});
+
+describe("agent handoffs via DO RPC (PILE-421)", () => {
+  it("anchors on the parent issue, replays idempotently, and gates completion", async () => {
+    const stub = getStub();
+    const parent = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Deal record" })
+    );
+    const sub = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Sourced", parentId: parent.id })
+    );
+    const session = await withWorkspace(stub, (instance) =>
+      instance.createAgentSession({
+        issueId: sub.id,
+        agentId: "mock",
+        provider: "mock",
+        actorId: "user-1",
+        actorType: "user",
+        status: "running",
+        stepKey: "sourced",
+        handoffRequired: 1,
+      })
+    );
+
+    // Completing a required sub-step without a handoff is rejected.
+    const rejected: unknown = await withWorkspace(stub, (instance) =>
+      instance.applyAgentSessionResult(
+        session.id,
+        { status: "completed" },
+        "user-1"
+      )
+    ).then(
+      () => undefined,
+      (e: unknown) => e
+    );
+    expect((rejected as { code?: unknown }).code).toBe("CONFLICT");
+    const stillRunning = await withWorkspace(stub, (instance) =>
+      instance.getAgentSession(session.id)
+    );
+    expect(stillRunning?.status).toBe("running");
+
+    const handoff = await withWorkspace(stub, (instance) =>
+      instance.createHandoff(
+        session.id,
+        {
+          outputs: { score: 0.8 },
+          nextAgent: "profiler",
+          evidence: [{ type: "document", ref: "doc-1", label: "Profile" }],
+        },
+        { actorId: "user-1" }
+      )
+    );
+    expect(handoff.issueId).toBe(parent.id);
+    expect(handoff.fromIssueId).toBe(sub.id);
+    expect(handoff.sessionId).toBe(session.id);
+    expect(handoff.stepKey).toBe("sourced");
+    expect(handoff.nextAgent).toBe("profiler");
+
+    // An identical replay returns the existing record — retried posts are safe.
+    const replay = await withWorkspace(stub, (instance) =>
+      instance.createHandoff(
+        session.id,
+        {
+          outputs: { score: 0.8 },
+          nextAgent: "profiler",
+          evidence: [{ type: "document", ref: "doc-1", label: "Profile" }],
+        },
+        { actorId: "user-1" }
+      )
+    );
+    expect(replay.id).toBe(handoff.id);
+
+    // A divergent second post conflicts.
+    const divergent: unknown = await withWorkspace(stub, (instance) =>
+      instance.createHandoff(
+        session.id,
+        { outputs: { score: 0.9 } },
+        { actorId: "user-1" }
+      )
+    ).then(
+      () => undefined,
+      (e: unknown) => e
+    );
+    expect((divergent as { code?: unknown }).code).toBe("CONFLICT");
+
+    // The handoff lands on the parent issue's history — the timeline surface.
+    const history = await withWorkspace(stub, (instance) =>
+      instance.listIssueHistory(parent.id)
+    );
+    expect(history).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "handoff",
+          fromValue: null,
+          toValue: "sourced → profiler",
+        }),
+      ])
+    );
+
+    // With the record posted, completion succeeds.
+    const done = await withWorkspace(stub, (instance) =>
+      instance.applyAgentSessionResult(
+        session.id,
+        { status: "completed" },
+        "user-1"
+      )
+    );
+    expect(done?.status).toBe("completed");
+  });
+
+  it("requires a stepKey the session or the caller must supply", async () => {
+    const stub = getStub();
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "No step" })
+    );
+    const session = await withWorkspace(stub, (instance) =>
+      instance.createAgentSession({
+        issueId: issue.id,
+        agentId: "mock",
+        provider: "mock",
+        actorId: "user-1",
+        actorType: "user",
+        status: "running",
+      })
+    );
+    const missing: unknown = await withWorkspace(stub, (instance) =>
+      instance.createHandoff(
+        session.id,
+        { outputs: { ok: true } },
+        { actorId: "user-1" }
+      )
+    ).then(
+      () => undefined,
+      (e: unknown) => e
+    );
+    expect((missing as { code?: unknown }).code).toBe("BAD_REQUEST");
+
+    const handoff = await withWorkspace(stub, (instance) =>
+      instance.createHandoff(
+        session.id,
+        { stepKey: "ad-hoc", outputs: { ok: true } },
+        { actorId: "user-1" }
+      )
+    );
+    // No parent on the issue — the handoff anchors on the issue itself.
+    expect(handoff.issueId).toBe(issue.id);
+    expect(handoff.stepKey).toBe("ad-hoc");
   });
 });

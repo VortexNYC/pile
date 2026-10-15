@@ -3666,6 +3666,9 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "requireHandoff": {
+                    "type": "boolean"
+                  },
                   "preflight": {
                     "type": "boolean"
                   },
@@ -3881,6 +3884,9 @@
                     "stepKey": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "handoffRequired": {
+                      "type": "number"
                     },
                     "guidance": {
                       "type": "array",
@@ -4232,6 +4238,9 @@
                         "stepKey": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "handoffRequired": {
+                          "type": "number"
                         },
                         "guidance": {
                           "type": "array",
@@ -4724,6 +4733,9 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "handoffRequired": {
+                          "type": "number"
+                        },
                         "guidance": {
                           "type": "array",
                           "nullable": true,
@@ -5031,6 +5043,9 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "handoffRequired": {
+                          "type": "number"
+                        },
                         "guidance": {
                           "type": "array",
                           "nullable": true,
@@ -5244,6 +5259,9 @@
                         "stepKey": {
                           "type": "string",
                           "minLength": 1
+                        },
+                        "requireHandoff": {
+                          "type": "boolean"
                         },
                         "queuedAfter": {
                           "type": "string"
@@ -5573,6 +5591,9 @@
                               "stepKey": {
                                 "type": "string",
                                 "nullable": true
+                              },
+                              "handoffRequired": {
+                                "type": "number"
                               },
                               "guidance": {
                                 "type": "array",
@@ -6153,6 +6174,9 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "handoffRequired": {
+                          "type": "number"
+                        },
                         "guidance": {
                           "type": "array",
                           "nullable": true,
@@ -6543,6 +6567,9 @@
                         "stepKey": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "handoffRequired": {
+                          "type": "number"
                         },
                         "guidance": {
                           "type": "array",
@@ -6976,6 +7003,9 @@
                     "stepKey": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "handoffRequired": {
+                      "type": "number"
                     },
                     "guidance": {
                       "type": "array",
@@ -7848,6 +7878,9 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "handoffRequired": {
+                      "type": "number"
+                    },
                     "guidance": {
                       "type": "array",
                       "nullable": true,
@@ -8172,6 +8205,9 @@
                     "stepKey": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "handoffRequired": {
+                      "type": "number"
                     },
                     "guidance": {
                       "type": "array",
@@ -8691,6 +8727,9 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "handoffRequired": {
+                      "type": "number"
+                    },
                     "guidance": {
                       "type": "array",
                       "nullable": true,
@@ -9004,6 +9043,9 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "handoffRequired": {
+                          "type": "number"
+                        },
                         "guidance": {
                           "type": "array",
                           "nullable": true,
@@ -9226,6 +9268,9 @@
                   "stepKey": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "requireHandoff": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -9379,6 +9424,9 @@
                         "stepKey": {
                           "type": "string",
                           "nullable": true
+                        },
+                        "handoffRequired": {
+                          "type": "number"
                         },
                         "guidance": {
                           "type": "array",
@@ -9777,6 +9825,9 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "handoffRequired": {
+                      "type": "number"
+                    },
                     "guidance": {
                       "type": "array",
                       "nullable": true,
@@ -10108,6 +10159,9 @@
                     "stepKey": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "handoffRequired": {
+                      "type": "number"
                     },
                     "guidance": {
                       "type": "array",
@@ -10457,6 +10511,9 @@
                     "stepKey": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "handoffRequired": {
+                      "type": "number"
                     },
                     "guidance": {
                       "type": "array",
@@ -11637,6 +11694,521 @@
           }
         },
         "summary": "List agent guidance versions"
+      }
+    },
+    "/workspaces/{organizationId}/agent/sessions/{sessionId}/handoffs": {
+      "post": {
+        "tags": [
+          "agent-sessions"
+        ],
+        "description": "Post the completing sub-step's handoff record — step_key, typed outputs, next_agent, evidence links. Anchors on the session's issue's parent unless issueId overrides. One per session: an identical retry returns the existing record, a divergent one 409s.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "sessionId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "stepKey": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "issueId": {
+                    "type": "string"
+                  },
+                  "nextAgent": {
+                    "type": "string"
+                  },
+                  "outputs": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "nullable": true
+                    }
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string"
+                        },
+                        "ref": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "label": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "ref"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "outputs"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Identical handoff already recorded (idempotent replay)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "issueId": {
+                      "type": "string"
+                    },
+                    "fromIssueId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "sessionId": {
+                      "type": "string"
+                    },
+                    "stepKey": {
+                      "type": "string"
+                    },
+                    "nextAgent": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "outputs": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "evidence": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string"
+                          },
+                          "ref": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "label": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "ref"
+                        ]
+                      }
+                    },
+                    "createdBy": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "issueId",
+                    "fromIssueId",
+                    "sessionId",
+                    "stepKey",
+                    "nextAgent",
+                    "outputs",
+                    "evidence",
+                    "createdBy",
+                    "createdAt"
+                  ]
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Handoff recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "issueId": {
+                      "type": "string"
+                    },
+                    "fromIssueId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "sessionId": {
+                      "type": "string"
+                    },
+                    "stepKey": {
+                      "type": "string"
+                    },
+                    "nextAgent": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "outputs": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "evidence": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string"
+                          },
+                          "ref": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "label": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "ref"
+                        ]
+                      }
+                    },
+                    "createdBy": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "issueId",
+                    "fromIssueId",
+                    "sessionId",
+                    "stepKey",
+                    "nextAgent",
+                    "outputs",
+                    "evidence",
+                    "createdBy",
+                    "createdAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session or anchor issue not found"
+          },
+          "409": {
+            "description": "Session already posted a different handoff"
+          }
+        },
+        "summary": "Create agent session handoff"
+      },
+      "get": {
+        "tags": [
+          "agent-sessions"
+        ],
+        "description": "Handoffs the session posted (at most one — session_id is unique).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "sessionId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session handoffs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "handoffs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "issueId": {
+                            "type": "string"
+                          },
+                          "fromIssueId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "sessionId": {
+                            "type": "string"
+                          },
+                          "stepKey": {
+                            "type": "string"
+                          },
+                          "nextAgent": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "outputs": {
+                            "type": "object",
+                            "nullable": true,
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          },
+                          "evidence": {
+                            "type": "array",
+                            "nullable": true,
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string"
+                                },
+                                "ref": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "label": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "ref"
+                              ]
+                            }
+                          },
+                          "createdBy": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "issueId",
+                          "fromIssueId",
+                          "sessionId",
+                          "stepKey",
+                          "nextAgent",
+                          "outputs",
+                          "evidence",
+                          "createdBy",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "handoffs"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found"
+          }
+        },
+        "summary": "List agent session handoffs"
+      }
+    },
+    "/workspaces/{organizationId}/issues/{issueId}/handoffs": {
+      "get": {
+        "tags": [
+          "issues"
+        ],
+        "description": "The handoff timeline for a parent issue — sub-step records in post order, optionally narrowed to one stepKey.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "issueId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "stepKey",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Issue handoff timeline",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "handoffs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "issueId": {
+                            "type": "string"
+                          },
+                          "fromIssueId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "sessionId": {
+                            "type": "string"
+                          },
+                          "stepKey": {
+                            "type": "string"
+                          },
+                          "nextAgent": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "outputs": {
+                            "type": "object",
+                            "nullable": true,
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          },
+                          "evidence": {
+                            "type": "array",
+                            "nullable": true,
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string"
+                                },
+                                "ref": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "label": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "ref"
+                              ]
+                            }
+                          },
+                          "createdBy": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "issueId",
+                          "fromIssueId",
+                          "sessionId",
+                          "stepKey",
+                          "nextAgent",
+                          "outputs",
+                          "evidence",
+                          "createdBy",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "handoffs"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Issue not found"
+          }
+        },
+        "summary": "List issue handoffs"
       }
     },
     "/workspaces/{organizationId}/agent/providers/catalog": {

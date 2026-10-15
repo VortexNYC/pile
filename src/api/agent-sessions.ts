@@ -7,7 +7,6 @@ import {
   maxDurationSchema,
   resolveDispatchEffort,
 } from "../agents/budget.js";
-import type { SessionGuidanceRef } from "../agents/guidance.js";
 import {
   agentLogToken,
   agentLogUrl,
@@ -17,6 +16,7 @@ import {
   verifySessionToken,
 } from "../agents/credentials.js";
 import { resolveAgentEnv } from "../agents/daytona.js";
+import type { SessionGuidanceRef } from "../agents/guidance.js";
 import {
   dispatchAgent,
   getAgentProvider,
@@ -175,6 +175,9 @@ export const agentSessionSchema = z.object({
   /** PILE-423 — pipeline sub-step key this lane works; step-scoped guidance
    *  packs resolve against it. */
   stepKey: z.string().nullable().optional(),
+  /** PILE-421 — 1 while the lane may not complete until it posts a handoff
+   *  record (stage templates dispatch required sub-steps with it set). */
+  handoffRequired: z.number().optional(),
   /** PILE-423 — the guidance packs injected into this lane's dispatch
    *  prompt, in injection order (least specific first). Versions resolve
    *  against the pack's revision history. */
@@ -960,6 +963,9 @@ const createChildSessionRoute = createRoute({
             // PILE-423 — defaults to the parent session's stepKey when unset
             // so a spawned sub-lane keeps the same step-scoped guidance.
             stepKey: z.string().min(1).optional(),
+            // PILE-421 — the child lane must post a handoff before it can
+            // complete.
+            requireHandoff: z.boolean().optional(),
           }),
         },
       },
@@ -1074,6 +1080,8 @@ const dispatchBatchItemSchema = z
     // PILE-423 — pipeline sub-step key; step-scoped guidance packs resolve
     // against it and it persists on the session row.
     stepKey: z.string().min(1).optional(),
+    // PILE-421 — completing this lane requires a posted handoff record.
+    requireHandoff: z.boolean().optional(),
     queuedAfter: z.string().optional(),
     secondaryRepos: secondaryReposSchema.optional(),
     // PILE-293 — run budget: effort picks the model tier (defaults from the
@@ -1675,6 +1683,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
           {
             instructions: item.instructions,
             stepKey: item.stepKey,
+            requireHandoff: item.requireHandoff,
             envAllowlist: pileConfig?.env,
             queueAfter,
             secondaryRepos: item.secondaryRepos,
@@ -3034,6 +3043,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         effort: body.effort,
         maxDurationMinutes: body.maxDuration,
         stepKey: body.stepKey ?? session.stepKey ?? undefined,
+        requireHandoff: body.requireHandoff,
       }
     );
 
@@ -3304,6 +3314,9 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         queueAfter: session.queuedAfter ?? undefined,
         // PILE-423 — retries resolve the same step scope as the original.
         stepKey: session.stepKey ?? undefined,
+        // PILE-421 — the handoff gate survives a redispatch: a retried
+        // required sub-step still owes a handoff record to complete.
+        requireHandoff: session.handoffRequired === 1,
         secondaryRepos: parseStoredSecondaryRepos(session.secondaryRepos),
         effort: body.effort ?? session.effort ?? undefined,
         maxDurationMinutes:

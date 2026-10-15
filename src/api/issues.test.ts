@@ -1948,4 +1948,44 @@ describe("grant-only issue visibility (scoped keys)", () => {
       .parse(await dispatchRes.json());
     expect(session.stepKey).toBe("contacted");
   });
+
+  // PILE-421 — the dispatch body's requireHandoff lands on the session row
+  // and gates completion on a posted agent_handoffs record.
+  it("persists the dispatch requireHandoff flag on the created session", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const agentId = `mock-handoff-${crypto.randomUUID().slice(0, 8)}`;
+    registerAgentProvider(agentId, () => new MockAgentProvider(agentId));
+
+    const issueRes = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      {
+        method: "POST",
+        body: JSON.stringify({ title: "handoff-gated dispatch" }),
+      },
+      token
+    );
+    const issue = z.object({ id: z.string() }).parse(await issueRes.json());
+
+    const dispatchRes = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}/dispatch`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          agentId,
+          stepKey: "sourced",
+          requireHandoff: true,
+        }),
+      },
+      token
+    );
+    expect(dispatchRes.status).toBe(201);
+    const session = z
+      .object({
+        stepKey: z.string().nullable(),
+        handoffRequired: z.number().optional(),
+      })
+      .parse(await dispatchRes.json());
+    expect(session.stepKey).toBe("sourced");
+    expect(session.handoffRequired).toBe(1);
+  });
 });
