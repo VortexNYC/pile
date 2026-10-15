@@ -106,6 +106,7 @@ import {
   workspaceAttachments,
   workspaceComments,
   workspaceDocuments,
+  workspaceDocumentPermissions,
   workspaceGitIdentities,
   workspaceIssueApprovals,
   workspaceIssueHistory,
@@ -2355,6 +2356,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     description?: string | null;
     icon?: string | null;
     publicSharing?: boolean;
+    restricted?: boolean;
     createdById: string;
   }) {
     return data.createDocumentSpace(this.db, this.organizationId, input);
@@ -2375,6 +2377,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       description?: string | null;
       icon?: string | null;
       publicSharing?: boolean;
+      restricted?: boolean;
     }
   ) {
     return data.updateDocumentSpace(this.db, this.organizationId, id, patch);
@@ -2448,7 +2451,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     query: string,
     teamIds: string[],
     limit = 50,
-    viewer?: IssueViewer
+    viewer?: IssueViewer,
+    docViewer?: { actorId: string; admin: boolean }
   ): Promise<{ issueIds: string[]; documentIds: string[] }> {
     const index = await this.ensureSearchIndex();
     const [issueIds, documentIds] = await Promise.all([
@@ -2458,9 +2462,46 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       searchDocuments(index, query, limit),
     ]);
     const hidden = new Set(this.hiddenIssueIdsFor(viewer));
+    let visibleDocs = documentIds;
+    // PILE-409: restricted-space docs and grant-gated docs don't leak
+    // through search. Admins see everything; others need a grant.
+    if (documentIds.length > 0 && docViewer && !docViewer.admin) {
+      const restrictedSpaces = data.restrictedSpaceIds(
+        this.db,
+        this.organizationId
+      );
+      const grants = await this.db
+        .select()
+        .from(workspaceDocumentPermissions)
+        .all();
+      const actorSet = new Set([docViewer.actorId, ...teamIds]);
+      const granted = new Set(
+        grants.filter((g) => actorSet.has(g.actorId)).map((g) => g.documentId)
+      );
+      const grantGated = new Set(grants.map((g) => g.documentId));
+      const spaceByDoc = new Map(
+        (
+          await this.db
+            .select({
+              id: workspaceDocuments.id,
+              spaceId: workspaceDocuments.spaceId,
+            })
+            .from(workspaceDocuments)
+            .where(inArray(workspaceDocuments.id, documentIds))
+            .all()
+        ).map((d) => [d.id, d.spaceId])
+      );
+      visibleDocs = documentIds.filter((id) => {
+        if (granted.has(id)) return true;
+        const spaceId = spaceByDoc.get(id);
+        if (spaceId && restrictedSpaces.has(spaceId)) return false;
+        if (grantGated.has(id)) return false;
+        return true;
+      });
+    }
     return {
       issueIds: issueIds.filter((id) => !hidden.has(id)),
-      documentIds,
+      documentIds: visibleDocs,
     };
   }
 

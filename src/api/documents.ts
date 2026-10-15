@@ -333,6 +333,7 @@ const spaceSchema = z.object({
   description: z.string().nullable(),
   icon: z.string().nullable(),
   publicSharing: z.boolean(),
+  restricted: z.boolean(),
   createdById: z.string(),
   createdAt: z.string(),
 });
@@ -391,6 +392,7 @@ const createSpaceRoute = createRoute({
             description: z.string().optional(),
             icon: z.string().optional(),
             publicSharing: z.boolean().optional(),
+            restricted: z.boolean().optional(),
           }),
         },
       },
@@ -419,6 +421,7 @@ const updateSpaceRoute = createRoute({
             description: z.string().nullable().optional(),
             icon: z.string().nullable().optional(),
             publicSharing: z.boolean().optional(),
+            restricted: z.boolean().optional(),
           }),
         },
       },
@@ -1054,6 +1057,18 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
     const stub = getWorkspaceStub(c.env, organizationId);
     const doc = await stub.getDocument(id);
     if (!doc) return notFound();
+    // Spaces with publicSharing off publish no links (docs-site already
+    // honors the flag) — restricted spaces imply it by policy.
+    if (doc.spaceId) {
+      const space = await stub.getDocumentSpace(doc.spaceId);
+      if (space && !space.publicSharing) {
+        throw new VortexError({
+          code: "FORBIDDEN",
+          status: 403,
+          message: "Public sharing is disabled for this document's space",
+        });
+      }
+    }
     const share = await stub.createDocumentShare({
       documentId: id,
       includeChildren: input.includeChildren,
@@ -1079,6 +1094,12 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
       return notFound();
     const doc = await stub.getDocument(share.documentId);
     if (!doc || doc.trashedAt) return notFound();
+    // Space-level sharing policy: a doc whose space has publicSharing off
+    // must not be readable via a share link minted before the flag flipped.
+    if (doc.spaceId) {
+      const space = await stub.getDocumentSpace(doc.spaceId);
+      if (space && !space.publicSharing) return notFound();
+    }
     const children = share.includeChildren
       ? await stub.listDocuments({ parentDocumentId: doc.id })
       : undefined;
@@ -1200,13 +1221,33 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
       links.map((l) => stub.getDocument(l.documentId))
     );
     const seen = new Set<string>();
-    const docs = [...direct, ...linked.filter((d) => d !== undefined)].filter(
+    let docs = [...direct, ...linked.filter((d) => d !== undefined)].filter(
       (d) => {
         if (seen.has(d.id)) return false;
         seen.add(d.id);
         return true;
       }
     );
+    // PILE-409: issue-linked docs still obey document visibility — restricted
+    // spaces and grant-gated docs don't leak through this route.
+    const identity = c.get("workspaceIdentity");
+    if (!isAdminIdentity(identity)) {
+      const teamIds =
+        identity.type === "user"
+          ? (
+              await createD1(c.env.D1)
+                .select({ teamId: teamMember.teamId })
+                .from(teamMember)
+                .where(eq(teamMember.userId, identity.id))
+                .all()
+            ).map((r: { teamId: string }) => r.teamId)
+          : [];
+      const scope = !canAccess(identity.permissions, "read")
+        ? await stub.listDocumentsForActor(identity.id)
+        : await stub.listDocumentsVisibleTo(identity.id, teamIds);
+      const visibleIds = new Set(scope.map((d) => d.id));
+      docs = docs.filter((d) => visibleIds.has(d.id));
+    }
     return c.json({ documents: docs.map(toResponse) });
   });
 
