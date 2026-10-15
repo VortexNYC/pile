@@ -1556,6 +1556,149 @@ describe("possible duplicates on create (PILE-163)", () => {
       .parse(await getRes.json());
     expect(fetched.repo).toBe(teamRepo);
   });
+
+  // PILE-417 — delegate vs assignee: delegateId holds the agent acting on
+  // the assignee's behalf; both can be set independently, the field is
+  // filterable, and non-agent delegates are rejected.
+  it("keeps assignee and delegate independent, filters, and validates agents", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const agentId = `mock-delegate-${crypto.randomUUID().slice(0, 8)}`;
+    registerAgentProvider(
+      agentId,
+      () =>
+        new MockAgentProvider(agentId, {
+          dispatch: (_org, dispatchedIssue) => ({
+            id: `delegate-${crypto.randomUUID()}`,
+            agentId,
+            issueId: dispatchedIssue.id,
+            status: "created" as const,
+          }),
+        })
+    );
+
+    const createRes = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          title: "Delegated work",
+          assigneeId: "user-issues",
+          delegateId: agentId,
+        }),
+      },
+      token
+    );
+    expect(createRes.status).toBe(201);
+    const issue = z
+      .object({
+        id: z.string(),
+        assigneeId: z.string().nullable(),
+        delegateId: z.string().nullable(),
+      })
+      .parse(await createRes.json());
+    expect(issue.assigneeId).toBe("user-issues");
+    expect(issue.delegateId).toBe(agentId);
+
+    // delegateId must be a registered agent.
+    const badRes = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}`,
+      { method: "PATCH", body: JSON.stringify({ delegateId: "not-an-agent" }) },
+      token
+    );
+    expect(badRes.status).toBe(400);
+
+    // delegate:<agent> list filter.
+    const listRes = await fetch(
+      `/workspaces/${organizationId}/issues?delegateId=${agentId}`,
+      {},
+      token
+    );
+    expect(listRes.status).toBe(200);
+    const listed = z
+      .object({ issues: z.array(z.object({ id: z.string() })) })
+      .parse(await listRes.json());
+    expect(listed.issues.map((i) => i.id)).toContain(issue.id);
+
+    // Clearing the delegate leaves the assignee alone.
+    const clearRes = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}`,
+      { method: "PATCH", body: JSON.stringify({ delegateId: null }) },
+      token
+    );
+    expect(clearRes.status).toBe(200);
+    const cleared = z
+      .object({
+        assigneeId: z.string().nullable(),
+        delegateId: z.string().nullable(),
+      })
+      .parse(await clearRes.json());
+    expect(cleared.delegateId).toBeNull();
+    expect(cleared.assigneeId).toBe("user-issues");
+  });
+
+  it("assigning an agent delegates and dispatches, keeping the assignee", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const auth = await createAuth(env);
+    const keyResult = await auth.api.createApiKey({
+      body: {
+        userId: "user-issues",
+        name: "delegate-agent",
+        metadata: {
+          organizationId,
+          permissions: "admin,agent:write",
+          actorType: "agent",
+        },
+      },
+    });
+    const agentToken = z.object({ key: z.string() }).parse(keyResult).key;
+
+    const agentId = `mock-delegate-${crypto.randomUUID().slice(0, 8)}`;
+    registerAgentProvider(
+      agentId,
+      () =>
+        new MockAgentProvider(agentId, {
+          dispatch: (_org, dispatchedIssue) => ({
+            id: `delegate-${crypto.randomUUID()}`,
+            agentId,
+            issueId: dispatchedIssue.id,
+            status: "created" as const,
+          }),
+        })
+    );
+
+    const createRes = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          title: "Delegate via assign",
+          assigneeId: "user-issues",
+        }),
+      },
+      token
+    );
+    expect(createRes.status).toBe(201);
+    const issue = z.object({ id: z.string() }).parse(await createRes.json());
+
+    const assignRes = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}/assign`,
+      { method: "POST", body: JSON.stringify({ assigneeId: agentId }) },
+      agentToken
+    );
+    expect(assignRes.status).toBe(200);
+    const assigned = z
+      .object({
+        issue: z.object({
+          assigneeId: z.string().nullable(),
+          delegateId: z.string().nullable(),
+        }),
+        session: z.object({ id: z.string() }).optional(),
+      })
+      .parse(await assignRes.json());
+    expect(assigned.issue.delegateId).toBe(agentId);
+    expect(assigned.issue.assigneeId).toBe("user-issues");
+    expect(assigned.session?.id).toBeTruthy();
+  });
 });
 
 describe("grant-only issue visibility (scoped keys)", () => {

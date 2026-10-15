@@ -63,3 +63,13 @@ describe("v71 pipeline hygiene", () => {
     expect(sql).toContain("ALTER TABLE deals ADD COLUMN external_id");
   });
 });
+
+describe("v73 delegate", () => {
+  it("adds delegate_id to issues with a filter index", () => {
+    const sql = workspaceMigrations.migrations.m0072;
+    expect(sql).toContain("ALTER TABLE issues ADD COLUMN delegate_id TEXT");
+    expect(sql).toContain(
+      "CREATE INDEX IF NOT EXISTS idx_issues_delegate ON issues (delegate_id)"
+    );
+  });
+});

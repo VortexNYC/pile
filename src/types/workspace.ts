@@ -93,6 +93,8 @@ export interface IssueInput {
   templateId?: string;
   snoozedUntil?: string | null;
   assigneeId?: string | null;
+  /** Agent executing the issue on the assignee's behalf (PILE-417). */
+  delegateId?: string | null;
   projectId?: string | null;
   cycleId?: string | null;
   labelIds?: string | null;
@@ -140,6 +142,7 @@ export interface ListIssuesArgs {
   isDraft?: boolean;
   hideSnoozed?: boolean;
   assigneeId?: string;
+  delegateId?: string;
   projectId?: string;
   cycleId?: string;
   labelId?: string;
@@ -164,6 +167,7 @@ export interface Issue {
   isDraft: boolean;
   snoozedUntil: string | null;
   assigneeId: Id | null;
+  delegateId: Id | null;
   projectId: Id | null;
   cycleId: Id | null;
   labelIds: string | null;

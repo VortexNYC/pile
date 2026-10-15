@@ -679,6 +679,101 @@ describe("WorkspaceDO", () => {
     ).rejects.toThrow();
   });
 
+  it("tracks delegateId independently of assigneeId and records history", async () => {
+    const stub = getStub();
+    const created = await withWorkspace(stub, (instance) =>
+      instance.createIssue({
+        title: "Delegated issue",
+        assigneeId: "user-1",
+        delegateId: "mock-agent",
+      })
+    );
+    expect(created.assigneeId).toBe("user-1");
+    expect(created.delegateId).toBe("mock-agent");
+
+    // Setting one leaves the other unchanged.
+    const redelegated = await withWorkspace(stub, (instance) =>
+      instance.updateIssue(created.id, { delegateId: "other-agent" }, "user-1")
+    );
+    expect(redelegated?.delegateId).toBe("other-agent");
+    expect(redelegated?.assigneeId).toBe("user-1");
+
+    const reassigned = await withWorkspace(stub, (instance) =>
+      instance.updateIssue(created.id, { assigneeId: "user-2" }, "user-1")
+    );
+    expect(reassigned?.assigneeId).toBe("user-2");
+    expect(reassigned?.delegateId).toBe("other-agent");
+
+    const history = await withWorkspace(stub, (instance) =>
+      instance.listIssueHistory(created.id)
+    );
+    expect(history).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "delegate_id",
+          fromValue: "mock-agent",
+          toValue: "other-agent",
+        }),
+      ])
+    );
+
+    // The delegateId list filter matches only delegated issues.
+    const delegated = await withWorkspace(stub, (instance) =>
+      instance.listIssues({ delegateId: "other-agent" })
+    );
+    expect(delegated.map((i) => i.id)).toContain(created.id);
+    const undelegeted = await withWorkspace(stub, (instance) =>
+      instance.listIssues({ delegateId: "no-such-agent" })
+    );
+    expect(undelegeted.map((i) => i.id)).not.toContain(created.id);
+
+    const cleared = await withWorkspace(stub, (instance) =>
+      instance.updateIssue(created.id, { delegateId: null }, "user-1")
+    );
+    expect(cleared?.delegateId).toBeNull();
+    expect(cleared?.assigneeId).toBe("user-2");
+  });
+
+  it("delegates to the session's agent without touching the assignee", async () => {
+    const stub = getStub();
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({
+        title: "Agent does the work",
+        assigneeId: "user-1",
+      })
+    );
+    const session = await withWorkspace(stub, (instance) =>
+      instance.createAgentSession({
+        issueId: issue.id,
+        agentId: "mock",
+        provider: "mock",
+        actorId: "user-1",
+        actorType: "user",
+        status: "running",
+      })
+    );
+
+    const running = await withWorkspace(stub, (instance) =>
+      instance.getIssue(issue.id)
+    );
+    expect(running?.delegateId).toBe("mock");
+    expect(running?.assigneeId).toBe("user-1");
+
+    await withWorkspace(stub, (instance) =>
+      instance.applyAgentSessionResult(
+        session.id,
+        { status: "completed" },
+        "user-1"
+      )
+    );
+    const done = await withWorkspace(stub, (instance) =>
+      instance.getIssue(issue.id)
+    );
+    // The agent stays delegate-of-record after the run ends.
+    expect(done?.delegateId).toBe("mock");
+    expect(done?.assigneeId).toBe("user-1");
+  });
+
   it("clears and validates resolution on status change", async () => {
     const stub = getStub();
     const issue = await withWorkspace(stub, (instance) =>

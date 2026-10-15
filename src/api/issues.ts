@@ -89,6 +89,7 @@ const templateDataSchema = z
     priority: z.enum(ISSUE_PRIORITIES).optional(),
     estimate: z.number().int().min(0).optional(),
     assigneeId: z.string().optional(),
+    delegateId: z.string().optional(),
     projectId: z.string().optional(),
     cycleId: z.string().optional(),
     labelIds: z.string().optional(),
@@ -228,6 +229,20 @@ function validateIssueState(
   }
 }
 
+// PILE-417 — the delegate is an agent acting on the assignee's behalf, so a
+// non-null delegateId must resolve to a registered agent provider. Internal
+// writers (lane session setup) bypass this — they run inside the DO.
+function assertDelegateIsAgent(delegateId: string, env: WorkerEnv): void {
+  try {
+    getAgentProvider(delegateId, env);
+  } catch {
+    throw VortexError.fromCode(
+      "BAD_REQUEST",
+      `delegateId must be a registered agent: ${delegateId}`
+    );
+  }
+}
+
 const createIssueSchema = z.object({
   title: z.string().min(1),
   externalRef: z.string().min(1).max(255).nullable().optional(),
@@ -244,6 +259,7 @@ const createIssueSchema = z.object({
   templateId: z.string().optional(),
   snoozedUntil: z.string().nullable().optional(),
   assigneeId: z.string().nullable().optional(),
+  delegateId: z.string().nullable().optional(),
   projectId: z.string().nullable().optional(),
   cycleId: z.string().nullable().optional(),
   labelIds: z
@@ -335,6 +351,7 @@ const issueApiSchema = z
     isDraft: z.boolean(),
     snoozedUntil: z.string().nullable(),
     assigneeId: z.string().nullable(),
+    delegateId: z.string().nullable(),
     projectId: z.string().nullable(),
     cycleId: z.string().nullable(),
     labelIds: z.string().nullable(),
@@ -430,6 +447,7 @@ const issueAnalyticsRoute = createRoute({
           "status",
           "priority",
           "assigneeId",
+          "delegateId",
           "teamId",
           "projectId",
           "cycleId",
@@ -917,7 +935,12 @@ const dispatchRoute = createRoute({
 });
 
 const assignIssueSchema = z.object({
-  assigneeId: z.string().nullable(),
+  assigneeId: z
+    .string()
+    .nullable()
+    .describe(
+      "Member to hold accountable. A registered agent id is a delegation instead — the agent lands on delegateId and a lane is dispatched, while the human assignee stays (PILE-417)."
+    ),
 });
 
 const assignIssueResponseSchema = z.object({
@@ -1306,6 +1329,13 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       input.status ?? templateDefaults.status ?? "backlog",
       input.resolution
     );
+    const effectiveDelegateId =
+      input.delegateId === undefined
+        ? templateDefaults.delegateId
+        : input.delegateId;
+    if (effectiveDelegateId) {
+      assertDelegateIsAgent(effectiveDelegateId, c.env);
+    }
     const { templateId: _templateId, teamKey: _teamKey, ...rest } = input;
     const created = await stub.createIssueWithDuplicates(
       {
@@ -1324,6 +1354,10 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
           input.assigneeId === undefined
             ? templateDefaults.assigneeId
             : input.assigneeId,
+        delegateId:
+          input.delegateId === undefined
+            ? templateDefaults.delegateId
+            : input.delegateId,
         projectId:
           input.projectId === undefined
             ? templateDefaults.projectId
@@ -1847,6 +1881,9 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       }
     }
     validateIssueState(input.status ?? existing.status, input.resolution);
+    if (input.delegateId) {
+      assertDelegateIsAgent(input.delegateId, c.env);
+    }
     const issue = await stub.updateIssue(
       existing.id,
       { ...input, teamId },
@@ -1913,6 +1950,10 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         });
       }
       await assertIssueAccess(db, stub, parent, identity);
+    }
+
+    if (patch.delegateId) {
+      assertDelegateIsAgent(patch.delegateId, c.env);
     }
 
     const existingIssues = await Promise.all(
@@ -2221,9 +2262,29 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     }
     await assertIssueAccess(db, stub, existing, identity);
 
+    // PILE-417 — assigning an agent is delegation: the agent lands on
+    // delegateId and dispatches a lane; the human assignee stays
+    // accountable. Assigning a person (or null) still writes assigneeId.
+    let isAgent = false;
+    if (assigneeId) {
+      try {
+        getAgentProvider(assigneeId, c.env);
+        isAgent = true;
+      } catch {
+        isAgent = false;
+      }
+    }
+    if (isAgent && !identity.permissions.includes("agent:write")) {
+      throw new VortexError({
+        code: "FORBIDDEN",
+        status: 403,
+        message: "Missing permission: agent:write",
+      });
+    }
+
     const issue = await stub.updateIssue(
       existing.id,
-      { assigneeId },
+      isAgent ? { delegateId: assigneeId } : { assigneeId },
       identity.id
     );
     if (!issue) {
@@ -2237,7 +2298,8 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     let session: Awaited<ReturnType<typeof dispatchAgent>> | undefined;
     if (assigneeId === null) {
       // Unassign kills the lane (PILE-211): cancel any live session on this
-      // issue — the issue is the orchestration surface.
+      // issue — the issue is the orchestration surface. The delegate is
+      // left as the agent-of-record; clear it explicitly to redelegate.
       const active = await stub.getActiveAgentSessionForIssue(issue.id);
       if (active) {
         const providerConfig = await loadProviderConfig(
@@ -2261,50 +2323,27 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         );
       }
     }
-    if (assigneeId) {
-      let isAgent = false;
-      try {
-        getAgentProvider(assigneeId, c.env);
-        isAgent = true;
-      } catch {
-        isAgent = false;
-      }
-      if (isAgent) {
-        if (!identity.permissions.includes("agent:write")) {
-          throw new VortexError({
-            code: "FORBIDDEN",
-            status: 403,
-            message: "Missing permission: agent:write",
-          });
-        }
-        const providerConfig = await loadProviderConfig(
-          c.env,
-          stub,
-          assigneeId
-        );
-        const effectiveEnv = resolveAgentEnv(
-          c.env,
-          providerConfig ?? undefined
-        );
-        // PILE-321 — assigning an agent dispatches a lane, so the same
-        // team-defaultRepo inheritance as /dispatch applies here.
-        const dispatchTarget = await inheritTeamDefaultRepo(
-          db,
-          stub,
-          organizationId,
-          issue,
-          identity.id
-        );
-        session = await dispatchAgent(
-          effectiveEnv,
-          assigneeId,
-          organizationId,
-          dispatchTarget,
-          identity,
-          undefined,
-          getExecutionCtx(c)
-        );
-      }
+    if (assigneeId && isAgent) {
+      const providerConfig = await loadProviderConfig(c.env, stub, assigneeId);
+      const effectiveEnv = resolveAgentEnv(c.env, providerConfig ?? undefined);
+      // PILE-321 — assigning an agent dispatches a lane, so the same
+      // team-defaultRepo inheritance as /dispatch applies here.
+      const dispatchTarget = await inheritTeamDefaultRepo(
+        db,
+        stub,
+        organizationId,
+        issue,
+        identity.id
+      );
+      session = await dispatchAgent(
+        effectiveEnv,
+        assigneeId,
+        organizationId,
+        dispatchTarget,
+        identity,
+        undefined,
+        getExecutionCtx(c)
+      );
     }
 
     return c.json(

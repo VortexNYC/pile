@@ -29,6 +29,7 @@ export type InboxIssue = {
   readonly priority: string;
   readonly teamId: string;
   readonly assigneeId: string | null;
+  readonly delegateId: string | null;
   readonly prUrl: string | null;
   readonly prState: string | null;
   readonly prCheckState: string | null;
@@ -107,6 +108,7 @@ function parseInboxIssue(value: unknown): InboxIssue | null {
     priority,
     teamId,
     assigneeId: optionalString(value.assigneeId),
+    delegateId: optionalString(value.delegateId),
     prUrl: optionalString(value.prUrl),
     prState: optionalString(value.prState),
     prCheckState: optionalString(value.prCheckState),
@@ -639,6 +641,9 @@ export class InboxModel {
         ` · team ${this.teamLabel(selected.teamId)}` +
         (selected.assigneeId !== null
           ? ` · @${shortAssignee(selected.assigneeId)}`
+          : "") +
+        (selected.delegateId !== null
+          ? ` · delegate ${shortAssignee(selected.delegateId)}`
           : "") +
         ` · updated ${formatAge(selected.updatedAt, now)} ago`
     );

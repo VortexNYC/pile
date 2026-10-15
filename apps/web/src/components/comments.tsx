@@ -30,6 +30,7 @@ const FIELD_LABELS: Record<string, string> = {
   status: "changed status",
   priority: "changed priority",
   assignee_id: "assigned to",
+  delegate_id: "delegated to",
   title: "edited the title",
   description: "edited the description",
   team_id: "moved to team",

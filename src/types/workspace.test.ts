@@ -60,6 +60,20 @@ describe("workspace shared types", () => {
     expect(unlink.prState).toBeNull();
   });
 
+  it("accepts delegateId on IssueInput and IssuePatch (PILE-417)", () => {
+    // Delegate is a peer of assigneeId: settable on create, patchable,
+    // clearable with null, and independent of the assignee field.
+    const input = {
+      title: "Delegated work",
+      assigneeId: "user-1",
+      delegateId: "devin",
+    } satisfies IssueInput;
+    expect(input.delegateId).toBe("devin");
+
+    const patch = { delegateId: null } satisfies IssuePatch;
+    expect(patch.delegateId).toBeNull();
+  });
+
   it("keeps prUrl/prState off IssueInput (patch-only)", () => {
     // createIssueRecord seeds both to null — pinning them as IssuePatch-only
     // keys turns "ignored on create" into a type error instead of a silent

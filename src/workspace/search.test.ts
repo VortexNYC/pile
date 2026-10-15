@@ -26,6 +26,7 @@ function issue(id: string, title: string, overrides: Partial<Issue> = {}) {
     isDraft: false,
     snoozedUntil: null,
     assigneeId: null,
+    delegateId: null,
     projectId: null,
     cycleId: null,
     labelIds: null,

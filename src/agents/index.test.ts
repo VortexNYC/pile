@@ -321,12 +321,15 @@ describe("agent providers", () => {
     expect(payload2.digest).toBeUndefined();
   });
 
-  it("lane owns the issue while running, hands off via elicitation, releases on terminal", async () => {
+  it("lane delegates the issue, hands off via elicitation, stays delegate on terminal", async () => {
     const stub = env.WORKSPACE_DURABLE_OBJECT.get(
       env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
     );
     await stub.setOrganizationId(actor.organizationId);
-    const issue = await stub.createIssue({ title: "Handoff test" });
+    const issue = await stub.createIssue({
+      title: "Handoff test",
+      assigneeId: actor.id,
+    });
 
     const provider = new MockAgentProvider("mock", {
       dispatch: () => ({
@@ -345,12 +348,14 @@ describe("agent providers", () => {
       actor
     );
 
-    // Lane owns the workload while it runs.
+    // PILE-417 — dispatch is delegation: the agent lands on delegateId and
+    // the human assignee stays accountable for the whole run.
     const owned = await stub.getIssue(issue.id);
-    expect(owned?.assigneeId).toBe(`lane:${session.id}`);
+    expect(owned?.delegateId).toBe(session.agentId);
+    expect(owned?.assigneeId).toBe(actor.id);
 
     // Elicitation is the lane→human ask: needs_input event + notification
-    // to the dispatching human (no human assignee set on the issue).
+    // to the issue's human assignee.
     await stub.addAgentActivity({
       sessionId: session.id,
       type: "elicitation",
@@ -369,10 +374,11 @@ describe("agent providers", () => {
     expect(n).toBeDefined();
     expect(n?.recipientId).toBe(actor.id);
 
-    // Terminal transition releases ownership.
+    // Terminal transition keeps the delegate-of-record and the assignee.
     await stub.applyAgentSessionResult(session.id, { status: "completed" });
     const released = await stub.getIssue(issue.id);
-    expect(released?.assigneeId).toBeNull();
+    expect(released?.delegateId).toBe(session.agentId);
+    expect(released?.assigneeId).toBe(actor.id);
   });
 
   it("marks the session failed without changing the issue status", async () => {

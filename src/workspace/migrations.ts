@@ -940,6 +940,13 @@ CREATE INDEX IF NOT EXISTS customers_next_step_due_idx ON customers (organizatio
 CREATE INDEX IF NOT EXISTS deals_external_id_idx ON deals (organization_id, external_id)
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS deals_next_step_due_idx ON deals (organization_id, next_step_due_at)`;
+
+// PILE-417 — delegate vs assignee (Linear's model): assigneeId stays the
+// accountable human; delegateId is the agent acting on their behalf. The
+// index backs the delegateId list filter and delegate:* views.
+const v73 = `ALTER TABLE issues ADD COLUMN delegate_id TEXT
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS idx_issues_delegate ON issues (delegate_id)`;
 const v69 = `CREATE TABLE comments_new (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -1186,6 +1193,7 @@ export const workspaceMigrations = {
       { idx: 69, when: 69, tag: "v70", breakpoints: false },
       { idx: 70, when: 70, tag: "v71", breakpoints: true },
       { idx: 71, when: 71, tag: "v72", breakpoints: false },
+      { idx: 72, when: 72, tag: "v73", breakpoints: true },
     ],
   },
   migrations: {
@@ -1261,5 +1269,6 @@ export const workspaceMigrations = {
     m0069: v70,
     m0070: v71,
     m0071: v72,
+    m0072: v73,
   },
 } satisfies Parameters<typeof migrate>[1];
