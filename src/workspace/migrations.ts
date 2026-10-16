@@ -1352,6 +1352,10 @@ ALTER TABLE agent_types ADD COLUMN model TEXT
 --> statement-breakpoint
 ALTER TABLE agent_types ADD COLUMN tools TEXT`;
 
+// External agents authenticate their webhook — the receiver verifies
+// the bearer before acting on a dispatch.
+const v95 = `ALTER TABLE agent_types ADD COLUMN endpoint_secret TEXT`;
+
 // External agents — endpoint_url is the webhook the kind="external"
 // dispatch POSTs to (Grokbot's routine, a customer's automation, etc).
 const v94 = `ALTER TABLE agent_types ADD COLUMN endpoint_url TEXT`;
@@ -1640,6 +1644,7 @@ export const workspaceMigrations = {
       { idx: 91, when: 91, tag: "v92", breakpoints: true },
       { idx: 92, when: 92, tag: "v93", breakpoints: true },
       { idx: 93, when: 93, tag: "v94", breakpoints: true },
+      { idx: 94, when: 94, tag: "v95", breakpoints: true },
     ],
   },
   migrations: {
@@ -1737,5 +1742,6 @@ export const workspaceMigrations = {
     m0091: v92,
     m0092: v93,
     m0093: v94,
+    m0094: v95,
   },
 } satisfies Parameters<typeof migrate>[1];

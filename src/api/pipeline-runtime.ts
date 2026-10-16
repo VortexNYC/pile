@@ -49,6 +49,7 @@ const agentTypeSchema = z.object({
   tools: z.string().nullable(),
   kind: z.string(),
   endpointUrl: z.string().nullable(),
+  hasEndpointSecret: z.boolean(),
   toolScope: z.string().nullable(),
   permissionsTier: z.string().nullable(),
   enabled: z.number(),
@@ -74,6 +75,8 @@ const upsertAgentTypeSchema = z
      *  "external" POSTs the dispatch payload to endpointUrl. */
     kind: z.enum(["agent", "human", "external"]).optional(),
     endpointUrl: z.string().url().nullable().optional(),
+    /** Bearer the endpoint verifies — write-only, never returned. */
+    endpointSecret: z.string().nullable().optional(),
     toolScope: z.string().nullable().optional(),
     permissionsTier: z.string().nullable().optional(),
     enabled: z.boolean().optional(),
@@ -254,6 +257,7 @@ const patchAgentTypeSchema = z
     providerAgentId: z.string().min(1).optional(),
     kind: z.enum(["agent", "human", "external"]).optional(),
     endpointUrl: z.string().url().nullable().optional(),
+    endpointSecret: z.string().nullable().optional(),
     jobSpec: z.string().nullable().optional(),
     toolScope: z.string().nullable().optional(),
     permissionsTier: z.string().nullable().optional(),

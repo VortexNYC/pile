@@ -1409,6 +1409,8 @@ export const workspaceAgentTypes = sqliteTable(
     kind: text("kind" as string).notNull().default("agent"),
     // kind="external" — the webhook pile POSTs dispatches to.
     endpointUrl: text("endpoint_url" as string),
+    // Bearer the receiver verifies — encrypted at rest like provider keys.
+    endpointSecret: text("endpoint_secret" as string),
     jobSpec: text("job_spec" as string),
     // Runtime profile fields — the prompt the agent runs with, the model
     // tier, and the JSON tool allowlist. Profiles are data, not code.

@@ -119,6 +119,7 @@ import {
   type RealtimeEvent,
 } from "../types/workspace.js";
 import * as data from "./data/index.js";
+import { encryptSecret } from "../agents/credentials.js";
 import { filterToSql } from "./filter.js";
 import { workspaceMigrations } from "./migrations.js";
 import { type ReviewVerdict, rollReviewSummary } from "./review-summary.js";
@@ -8021,7 +8022,14 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.deleteStageConfig(this.db, this.organizationId, id);
   }
 
-  upsertAgentType(input: data.AgentTypeInput) {
+  async upsertAgentType(input: data.AgentTypeInput) {
+    // Webhook bearer is a credential — encrypt at rest like provider keys.
+    if (input.endpointSecret) {
+      input = {
+        ...input,
+        endpointSecret: await encryptSecret(this.env, input.endpointSecret),
+      };
+    }
     return data.upsertAgentType(this.db, this.organizationId, input);
   }
 
@@ -8037,7 +8045,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.getAgentTypeById(this.db, this.organizationId, id);
   }
 
-  updateAgentType(id: string, patch: Partial<data.AgentTypeInput>) {
+  async updateAgentType(id: string, patch: Partial<data.AgentTypeInput>) {
+    if (patch.endpointSecret) {
+      patch = {
+        ...patch,
+        endpointSecret: await encryptSecret(this.env, patch.endpointSecret),
+      };
+    }
     return data.updateAgentType(this.db, this.organizationId, id, patch);
   }
 

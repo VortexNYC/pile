@@ -3950,6 +3950,9 @@ export interface AgentTypeInput {
   kind?: "agent" | "human" | "external";
   /** Webhook URL for kind="external" owners. */
   endpointUrl?: string | null;
+  /** Bearer the receiver verifies — write-only; the DO encrypts it at
+   *  rest before it reaches this layer. */
+  endpointSecret?: string | null;
   toolScope?: string | null;
   permissionsTier?: string | null;
   enabled?: boolean;
@@ -3986,6 +3989,7 @@ export async function upsertAgentType(
         tools: input.tools ?? existing.tools,
         kind: input.kind ?? existing.kind,
         endpointUrl: input.endpointUrl ?? existing.endpointUrl,
+        endpointSecret: input.endpointSecret ?? existing.endpointSecret,
         toolScope: input.toolScope ?? existing.toolScope,
         permissionsTier: input.permissionsTier ?? existing.permissionsTier,
         enabled:
@@ -4092,6 +4096,8 @@ export async function updateAgentType(
   if (patch.tools !== undefined) set.tools = patch.tools;
   if (patch.kind !== undefined) set.kind = patch.kind;
   if (patch.endpointUrl !== undefined) set.endpointUrl = patch.endpointUrl;
+  if (patch.endpointSecret !== undefined)
+    set.endpointSecret = patch.endpointSecret;
   if (patch.toolScope !== undefined) set.toolScope = patch.toolScope;
   if (patch.permissionsTier !== undefined)
     set.permissionsTier = patch.permissionsTier;
