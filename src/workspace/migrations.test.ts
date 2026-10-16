@@ -303,3 +303,36 @@ describe("v82 triage rules (PILE-427)", () => {
     );
   });
 });
+
+describe("v84 draft outputs (PILE-428)", () => {
+  it("flags issues as sensitive and creates draft_outputs", () => {
+    const sql = workspaceMigrations.migrations.m0083;
+    expect(sql).toContain(
+      "ALTER TABLE issues ADD COLUMN sensitive INTEGER NOT NULL DEFAULT 0"
+    );
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS draft_outputs");
+    for (const col of [
+      "organization_id",
+      "entity_type",
+      "entity_id",
+      "issue_id",
+      "kind",
+      "payload",
+      "status",
+      "created_by_id",
+      "session_id",
+      "reviewed_by_id",
+      "reviewed_at",
+      "review_note",
+      "published_comment_id",
+    ]) {
+      expect(sql).toContain(col);
+    }
+    expect(sql).toContain(
+      "CREATE INDEX IF NOT EXISTS draft_outputs_entity_idx ON draft_outputs (organization_id, entity_type, entity_id)"
+    );
+    expect(sql).toContain(
+      "CREATE INDEX IF NOT EXISTS draft_outputs_status_idx ON draft_outputs (organization_id, status, created_at)"
+    );
+  });
+});

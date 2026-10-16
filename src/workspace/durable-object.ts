@@ -100,6 +100,10 @@ import {
   type AgentSessionResult,
   type AgentSessionStatus,
   type Comment,
+  type DraftCommentPayload,
+  type DraftFieldChangePayload,
+  type DraftOutput,
+  type DraftOutputStatus,
   type ExternalEventDeliveryStatus,
   type ExternalEventIngestInput,
   type ExternalEventIngestResult,
@@ -126,6 +130,7 @@ import {
   workspaceComments,
   workspaceDocuments,
   workspaceDocumentPermissions,
+  workspaceDraftOutputs,
   workspaceGitIdentities,
   workspaceIssueApprovals,
   workspaceIssueHistory,
@@ -944,6 +949,298 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     await this.db.delete(workspaceComments).where(eq(workspaceComments.id, id));
   }
 
+  // ---- PILE-428 draft outputs ----
+  // Agent-produced writes on sensitive records land here as `pending`
+  // instead of going live; a human publishes (the payload replays through
+  // the same write path the agent would have hit) or discards (the row is
+  // retained for inspection — drafts are never deleted).
+
+  async createDraftOutput(input: {
+    entityType: string;
+    entityId: string;
+    issueId?: string | null;
+    kind: DraftOutput["kind"];
+    payload:
+      | DraftCommentPayload
+      | DraftFieldChangePayload
+      | Record<string, unknown>;
+    createdById?: string | null;
+    sessionId?: string | null;
+  }): Promise<DraftOutput> {
+    await this.ready;
+    const id = crypto.randomUUID();
+    const ts = new Date().toISOString();
+    const row = await this.db
+      .insert(workspaceDraftOutputs)
+      .values({
+        id,
+        organizationId: this.organizationId,
+        entityType: input.entityType,
+        entityId: input.entityId,
+        issueId: input.issueId ?? null,
+        kind: input.kind,
+        payload: JSON.stringify(input.payload),
+        status: "pending",
+        createdById: input.createdById ?? null,
+        sessionId: input.sessionId ?? null,
+        createdAt: ts,
+        updatedAt: ts,
+      })
+      .returning()
+      .get();
+    this.audit(
+      "draft_output.created",
+      "draft_output",
+      id,
+      input.createdById ?? null,
+      { kind: { from: null, to: input.kind } },
+      { actorType: "agent" }
+    );
+    // The gate only works if a human sees the queue — the record issue's
+    // subscribers hear draft_pending (in-app + default email).
+    if (input.issueId) {
+      const issue = await this.getIssue(input.issueId);
+      if (issue) {
+        await this.notifyIssueEvent(
+          issue,
+          "draft_pending",
+          input.createdById ?? undefined
+        );
+      }
+    }
+    return row;
+  }
+
+  async getDraftOutput(id: string) {
+    await this.ready;
+    return this.db
+      .select()
+      .from(workspaceDraftOutputs)
+      .where(eq(workspaceDraftOutputs.id, id))
+      .get();
+  }
+
+  async listDraftOutputs(filter?: {
+    issueId?: string;
+    entityType?: string;
+    entityId?: string;
+    status?: DraftOutputStatus;
+  }): Promise<DraftOutput[]> {
+    await this.ready;
+    const conditions = [
+      eq(workspaceDraftOutputs.organizationId, this.organizationId),
+    ];
+    if (filter?.issueId) {
+      conditions.push(eq(workspaceDraftOutputs.issueId, filter.issueId));
+    }
+    if (filter?.entityType) {
+      conditions.push(eq(workspaceDraftOutputs.entityType, filter.entityType));
+    }
+    if (filter?.entityId) {
+      conditions.push(eq(workspaceDraftOutputs.entityId, filter.entityId));
+    }
+    if (filter?.status) {
+      conditions.push(eq(workspaceDraftOutputs.status, filter.status));
+    }
+    return this.db
+      .select()
+      .from(workspaceDraftOutputs)
+      .where(and(...conditions))
+      .all();
+  }
+
+  private async requirePendingDraft(id: string): Promise<DraftOutput> {
+    const draft = await this.getDraftOutput(id);
+    if (!draft) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Draft output not found",
+      });
+    }
+    if (draft.status !== "pending") {
+      throw new VortexError({
+        code: "CONFLICT",
+        status: 409,
+        message: `Draft output is already ${draft.status}`,
+      });
+    }
+    return draft;
+  }
+
+  /** Edit the held payload while the draft is pending — the human "edit"
+   *  half of approve/edit/skip. The prior payload is kept in the audit
+   *  trail (edits are the signal that teaches the prompt). */
+  async updateDraftOutputPayload(
+    id: string,
+    payload:
+      | DraftCommentPayload
+      | DraftFieldChangePayload
+      | Record<string, unknown>,
+    actorId?: string
+  ): Promise<DraftOutput> {
+    await this.ready;
+    const draft = await this.requirePendingDraft(id);
+    const serialized = JSON.stringify(payload);
+    await this.db
+      .update(workspaceDraftOutputs)
+      .set({ payload: serialized, updatedAt: new Date().toISOString() })
+      .where(eq(workspaceDraftOutputs.id, id));
+    this.audit(
+      "draft_output.updated",
+      "draft_output",
+      id,
+      actorId ?? null,
+      { payload: { from: draft.payload, to: serialized } },
+      { actorType: "user" }
+    );
+    const updated = await this.getDraftOutput(id);
+    if (!updated) throw new Error("Draft output vanished mid-update");
+    return updated;
+  }
+
+  /** Publish = replay the held write through the same path the agent
+   *  would have taken: comment drafts post via createComment (+ the usual
+   *  comment.created fanout), field_change drafts replay through
+   *  updateIssue. The audit row records both the producing agent
+   *  (`producedBy`) and the publishing human (actorId). */
+  async publishDraftOutput(
+    id: string,
+    reviewerId: string,
+    note?: string
+  ): Promise<DraftOutput> {
+    await this.ready;
+    const draft = await this.requirePendingDraft(id);
+    const payload: unknown = JSON.parse(draft.payload);
+    let publishedCommentId: string | null = null;
+    if (draft.kind === "comment") {
+      const p = payload as DraftCommentPayload;
+      const comment = await this.createComment({
+        entityType: draft.entityType,
+        entityId: draft.entityId,
+        issueId:
+          draft.entityType === "issue"
+            ? draft.entityId
+            : (draft.issueId ?? undefined),
+        authorId: p.authorId ?? undefined,
+        body: p.body,
+        internal: p.internal,
+        mentions: p.mentions,
+        externalId: p.externalId ?? undefined,
+        externalSource: p.externalSource ?? undefined,
+        externalAuthor: p.externalAuthor ?? undefined,
+      });
+      publishedCommentId = comment?.id ?? null;
+      if (comment && draft.issueId) {
+        const issue = await this.getIssue(draft.issueId);
+        if (issue) {
+          await this.emitCommentCreated(comment, issue, reviewerId);
+        }
+      }
+    } else if (draft.kind === "field_change" && draft.entityType === "issue") {
+      const p = payload as DraftFieldChangePayload;
+      await this.updateIssue(draft.entityId, p.fields, reviewerId);
+    }
+    const ts = new Date().toISOString();
+    await this.db
+      .update(workspaceDraftOutputs)
+      .set({
+        status: "published",
+        reviewedById: reviewerId,
+        reviewedAt: ts,
+        reviewNote: note ?? null,
+        publishedCommentId,
+        updatedAt: ts,
+      })
+      .where(eq(workspaceDraftOutputs.id, id));
+    this.audit(
+      "draft_output.published",
+      "draft_output",
+      id,
+      reviewerId,
+      {
+        status: { from: "pending", to: "published" },
+        producedBy: { from: null, to: draft.createdById },
+        ...(publishedCommentId
+          ? { publishedCommentId: { from: null, to: publishedCommentId } }
+          : {}),
+      },
+      { actorType: "user" }
+    );
+    const updated = await this.getDraftOutput(id);
+    if (!updated) throw new Error("Draft output vanished mid-update");
+    return updated;
+  }
+
+  /** Discard keeps the row — rejected drafts are review history and the
+   *  record of what the agent tried to say. */
+  async discardDraftOutput(
+    id: string,
+    reviewerId: string,
+    note?: string
+  ): Promise<DraftOutput> {
+    await this.ready;
+    const draft = await this.requirePendingDraft(id);
+    const ts = new Date().toISOString();
+    await this.db
+      .update(workspaceDraftOutputs)
+      .set({
+        status: "discarded",
+        reviewedById: reviewerId,
+        reviewedAt: ts,
+        reviewNote: note ?? null,
+        updatedAt: ts,
+      })
+      .where(eq(workspaceDraftOutputs.id, id));
+    this.audit(
+      "draft_output.discarded",
+      "draft_output",
+      id,
+      reviewerId,
+      {
+        status: { from: "pending", to: "discarded" },
+        producedBy: { from: null, to: draft.createdById },
+        ...(note ? { reviewNote: { from: null, to: note } } : {}),
+      },
+      { actorType: "user" }
+    );
+    const updated = await this.getDraftOutput(id);
+    if (!updated) throw new Error("Draft output vanished mid-update");
+    return updated;
+  }
+
+  /** PILE-428 — lane-authored comments on sensitive issues are drafted
+   *  for human review instead of posting; everywhere else they post and
+   *  fan out exactly as before. */
+  private async recordLaneComment(
+    issue: Issue,
+    values: {
+      body: string;
+      externalAuthor: string;
+      externalSource: string;
+      externalId: string;
+    },
+    session: AgentSession,
+    actorId?: string
+  ): Promise<void> {
+    if (issue.sensitive) {
+      await this.createDraftOutput({
+        entityType: "issue",
+        entityId: issue.id,
+        issueId: issue.id,
+        kind: "comment",
+        payload: values,
+        createdById: session.agentId,
+        sessionId: session.id,
+      });
+      return;
+    }
+    const comment = await this.createComment({ issueId: issue.id, ...values });
+    if (comment) {
+      await this.emitCommentCreated(comment, issue, actorId);
+    }
+  }
+
   async listWorkspaceComments() {
     await this.ready;
     return this.db.select().from(workspaceComments).all();
@@ -1078,6 +1375,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     "mention",
     "lane_needs_input",
     "lane_elicitation_escalated",
+    // A pending agent draft is the same "needs a human" signal as a lane
+    // waiting on input — email by default (PILE-428).
+    "draft_pending",
   ]);
 
   // Single notification path: preference-gated in-app row + email fanout.
@@ -5342,16 +5642,17 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
                 ? `Agent ${oldSession.agentId} completed${result.result ? `: ${result.result}` : ""}\n\n${result.prUrl}`
                 : `Agent ${oldSession.agentId} completed: ${result.result}`;
       }
-      const comment = await this.createComment({
-        issueId: issue.id,
-        body: commentBody,
-        externalAuthor: oldSession.agentId,
-        externalSource: isPlan ? PLAN_COMMENT_SOURCE : "agent",
-        externalId: oldSession.id,
-      });
-      if (comment) {
-        await this.emitCommentCreated(comment, commentIssue, actorId);
-      }
+      await this.recordLaneComment(
+        commentIssue,
+        {
+          body: commentBody,
+          externalAuthor: oldSession.agentId,
+          externalSource: isPlan ? PLAN_COMMENT_SOURCE : "agent",
+          externalId: oldSession.id,
+        },
+        oldSession,
+        actorId
+      );
     }
 
     // PILE-268 — a lane that dies (sweep stall-cancel, provider cancel,
@@ -5367,16 +5668,17 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         `Agent ${oldSession.agentId} ${newStatus}${reason ? `: ${reason}` : ""}` +
         `\n\nSession ${oldSession.id}` +
         (updatedSession.url ? `\n${updatedSession.url}` : "");
-      const comment = await this.createComment({
-        issueId: issue.id,
-        body: commentBody,
-        externalAuthor: oldSession.agentId,
-        externalSource: "agent",
-        externalId: `${oldSession.id}:terminal`,
-      });
-      if (comment) {
-        await this.emitCommentCreated(comment, updatedIssue ?? issue, actorId);
-      }
+      await this.recordLaneComment(
+        updatedIssue ?? issue,
+        {
+          body: commentBody,
+          externalAuthor: oldSession.agentId,
+          externalSource: "agent",
+          externalId: `${oldSession.id}:terminal`,
+        },
+        oldSession,
+        actorId
+      );
     }
 
     await this.syncLaneProgressComment(sessionId, {
@@ -5916,6 +6218,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         subIssueSortOrder: input.subIssueSortOrder ?? null,
         estimate: input.estimate ?? null,
         isDraft: input.isDraft ?? false,
+        sensitive: input.sensitive ?? false,
         snoozedUntil: input.snoozedUntil ?? null,
         assigneeId: resolvedAssigneeId,
         delegateId: input.delegateId ?? null,
@@ -6731,6 +7034,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       { key: "subIssueSortOrder", field: "sub_issue_sort_order" },
       { key: "estimate", field: "estimate" },
       { key: "isDraft", field: "is_draft" },
+      { key: "sensitive", field: "sensitive" },
       { key: "snoozedUntil", field: "snoozed_until" },
       { key: "assigneeId", field: "assignee_id" },
       { key: "delegateId", field: "delegate_id" },
@@ -6822,6 +7126,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       set.subIssueSortOrder = patch.subIssueSortOrder;
     if (patch.estimate !== undefined) set.estimate = patch.estimate;
     if (patch.isDraft !== undefined) set.isDraft = patch.isDraft;
+    if (patch.sensitive !== undefined) set.sensitive = patch.sensitive;
     if (patch.snoozedUntil !== undefined) set.snoozedUntil = patch.snoozedUntil;
     if (
       patch.snoozedUntil === undefined &&

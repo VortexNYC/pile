@@ -850,6 +850,9 @@ export type NotificationType =
   | "lane_needs_input"
   | "lane_elicitation_escalated"
   | "lane_stale"
+  // PILE-428 — an agent write landed in draft_outputs on a sensitive
+  // record and waits on a human publish/discard decision.
+  | "draft_pending"
   // PILE-425 — an agent type breached its spend/token caps; the CoS alert
   // channel fires `agent.cap_exceeded` event automations alongside this.
   | "agent_cap_exceeded";

@@ -3,12 +3,21 @@ import { describe, expect, it } from "vitest";
 import {
   AGENT_SESSION_STATUSES,
   DEFAULT_GIT_IDENTITY_REPO,
+  DRAFT_OUTPUT_KINDS,
+  DRAFT_OUTPUT_STATUSES,
   ISSUE_PRIORITIES,
   ISSUE_PR_STATES,
   ISSUE_RESOLUTIONS,
   ISSUE_STATUSES,
 } from "./workspace.js";
-import type { Issue, IssueClaim, IssueInput, IssuePatch } from "./workspace.js";
+import type {
+  DraftCommentPayload,
+  DraftFieldChangePayload,
+  Issue,
+  IssueClaim,
+  IssueInput,
+  IssuePatch,
+} from "./workspace.js";
 
 describe("workspace shared types", () => {
   it("keeps the issue picklist constants stable", () => {
@@ -123,5 +132,39 @@ describe("IssueViewer", () => {
       grantedOnly: true,
     };
     expect(viewer.grantedOnly).toBe(true);
+  });
+});
+
+describe("draft output types (PILE-428)", () => {
+  it("keeps the draft kind + status picklists stable", () => {
+    // kind drives publish replay (comment → createComment, field_change →
+    // updateIssue); status order is the review lifecycle.
+    expect(DRAFT_OUTPUT_KINDS).toEqual(["comment", "field_change", "message"]);
+    expect(DRAFT_OUTPUT_STATUSES).toEqual([
+      "pending",
+      "published",
+      "discarded",
+    ]);
+  });
+
+  it("pins the publish-replay payload shapes", () => {
+    const comment = {
+      body: "held for review",
+      syncToRepo: true,
+    } satisfies DraftCommentPayload;
+    expect(comment.body).toBe("held for review");
+    expect(comment.syncToRepo).toBe(true);
+
+    const change = {
+      fields: { title: "edited title", sensitive: false },
+    } satisfies DraftFieldChangePayload;
+    expect(change.fields.title).toBe("edited title");
+  });
+
+  it("marks Issue.sensitive as a required boolean on the read model", () => {
+    const flagged = { sensitive: true } satisfies Pick<Issue, "sensitive">;
+    expect(flagged.sensitive).toBe(true);
+    const input = { sensitive: true } satisfies Partial<IssueInput>;
+    expect(input.sensitive).toBe(true);
   });
 });

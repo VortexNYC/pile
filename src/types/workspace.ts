@@ -4,6 +4,7 @@ import type { AgentRunUsage } from "../agents/spend.js";
 import type { FilterCondition } from "../workspace/filter.js";
 import {
   workspaceAgentSessions,
+  workspaceDraftOutputs,
   workspaceExternalEventDeliveries,
   workspaceExternalEventMappings,
   workspaceStageTemplates,
@@ -105,6 +106,9 @@ export interface IssueInput {
   subIssueSortOrder?: number | null;
   estimate?: number | null;
   isDraft?: boolean;
+  /** PILE-428 — review-gated record: agent-produced writes land in
+   *  draft_outputs pending human publish instead of going live. */
+  sensitive?: boolean;
   templateId?: string;
   snoozedUntil?: string | null;
   assigneeId?: string | null;
@@ -196,6 +200,9 @@ export interface Issue {
   subIssueSortOrder: number | null;
   estimate: number | null;
   isDraft: boolean;
+  /** PILE-428 — agent output on this record drafts for human review
+   *  before publishing. */
+  sensitive: boolean;
   snoozedUntil: string | null;
   assigneeId: Id | null;
   delegateId: Id | null;
@@ -333,6 +340,45 @@ export interface Comment {
   resolvedById: Id | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+}
+
+// PILE-428 — draft-then-publish for agent output on sensitive records:
+// the write an agent attempted is stored as a pending draft_output row; a
+// human publishes (replays the payload) or discards (row retained).
+export const DRAFT_OUTPUT_KINDS = [
+  "comment",
+  "field_change",
+  "message",
+] as const;
+export type DraftOutputKind = (typeof DRAFT_OUTPUT_KINDS)[number];
+
+export const DRAFT_OUTPUT_STATUSES = [
+  "pending",
+  "published",
+  "discarded",
+] as const;
+export type DraftOutputStatus = (typeof DRAFT_OUTPUT_STATUSES)[number];
+
+export type DraftOutput = InferSelectModel<typeof workspaceDraftOutputs>;
+
+/** Payload for kind="comment" — mirrors createComment's input. */
+export interface DraftCommentPayload {
+  body: string;
+  authorId?: string | null;
+  mentions?: string[];
+  internal?: boolean;
+  externalId?: string | null;
+  externalSource?: string | null;
+  externalAuthor?: string | null;
+  /** API-authored drafts: on publish the comment also syncs to the
+   *  issue's GitHub/GitLab mapping, matching the original POST. */
+  syncToRepo?: boolean;
+}
+
+/** Payload for kind="field_change" — the PATCH the agent attempted,
+ *  replayed through updateIssue on publish. */
+export interface DraftFieldChangePayload {
+  fields: IssuePatch;
 }
 
 export type RealtimeEvent =

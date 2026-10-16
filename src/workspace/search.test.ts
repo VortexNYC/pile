@@ -24,6 +24,7 @@ function issue(id: string, title: string, overrides: Partial<Issue> = {}) {
     subIssueSortOrder: null,
     estimate: null,
     isDraft: false,
+    sensitive: false,
     stepKey: null,
     required: false,
     ownerAgent: null,

@@ -468,6 +468,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "is-draft",
       },
       {
+        name: "sensitive",
+        flag: "sensitive",
+      },
+      {
         name: "templateId",
         flag: "template",
       },
@@ -795,6 +799,10 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "isDraft",
         flag: "is-draft",
+      },
+      {
+        name: "sensitive",
+        flag: "sensitive",
       },
       {
         name: "templateId",
@@ -2390,6 +2398,111 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "status",
         flag: "status",
+      },
+    ],
+  },
+  "issues drafts list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/issues/{issueId}/drafts",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+    ],
+    query: [
+      {
+        name: "status",
+        flag: "status",
+      },
+    ],
+    body: [],
+  },
+  "drafts list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/drafts",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "status",
+        flag: "status",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+    ],
+    body: [],
+  },
+  "drafts update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/drafts/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "payload",
+        flag: "payload",
+      },
+    ],
+  },
+  "drafts publish create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/drafts/{id}/publish",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "note",
+        flag: "note",
+      },
+    ],
+  },
+  "drafts discard create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/drafts/{id}/discard",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "note",
+        flag: "note",
       },
     ],
   },

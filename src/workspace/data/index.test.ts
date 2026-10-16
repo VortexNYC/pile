@@ -96,6 +96,7 @@ import {
   upsertAgentSpendCap,
   upsertNotificationPreferences,
   upsertRunReceipt,
+  type NotificationType,
   type WorkspaceDb,
 } from "./index.js";
 
@@ -1773,5 +1774,14 @@ describe("external link verification (PILE-429)", () => {
       const fetched = await getExternalLink(db, WORKSPACE_ID, created!.id);
       expect(fetched?.verificationStatus).toBe("failed");
     });
+  });
+});
+
+describe("notification types (PILE-428)", () => {
+  it("accepts draft_pending — the held-write alert the draft queue fires", () => {
+    // Compile-time pin: removing "draft_pending" from the union breaks this
+    // file, matching the notifyIssueEvent call on draft_output creation.
+    const t: NotificationType = "draft_pending";
+    expect(t).toBe("draft_pending");
   });
 });

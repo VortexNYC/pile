@@ -3454,6 +3454,34 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdDrafts",
+    "description": "List drafts (GET /workspaces/{organizationId}/drafts) Path params (top-level, required): organizationId. Query params (top-level, optional): status, issueId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/drafts",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "published",
+            "discarded"
+          ]
+        },
+        "issueId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdEmailinboxes",
     "description": "List email inboxes (GET /workspaces/{organizationId}/email-inboxes) Path params (top-level, required): organizationId.",
     "method": "GET",
@@ -4482,6 +4510,35 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         },
         "issueId": {
           "type": "string"
+        }
+      },
+      "required": [
+        "issueId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdIssuesIssueIdDrafts",
+    "description": "List issue drafts (GET /workspaces/{organizationId}/issues/{issueId}/drafts) Path params (top-level, required): organizationId, issueId. Query params (top-level, optional): status.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/issues/{issueId}/drafts",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "issueId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "published",
+            "discarded"
+          ]
         }
       },
       "required": [
@@ -7726,6 +7783,41 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "patchWorkspacesOrganizationIdDraftsId",
+    "description": "Update draft (PATCH /workspaces/{organizationId}/drafts/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: payload* (* = required).",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/drafts/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "payload": {
+              "type": "object",
+              "additionalProperties": {
+                "nullable": true
+              }
+            }
+          },
+          "required": [
+            "payload"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "patchWorkspacesOrganizationIdEmojisId",
     "description": "Update emoji (PATCH /workspaces/{organizationId}/emojis/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, shortcut, url.",
     "method": "PATCH",
@@ -8012,7 +8104,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdIssuesId",
-    "description": "Update issue (PATCH /workspaces/{organizationId}/issues/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: title, externalRef, teamId, teamKey, description, status, priority, resolution, parentId, subIssueSortOrder, estimate, isDraft, templateId, snoozedUntil, assigneeId, delegateId, stepKey, required, ownerAgent, projectId, cycleId, labelIds, repo, branch, prUrl, prState.",
+    "description": "Update issue (PATCH /workspaces/{organizationId}/issues/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: title, externalRef, teamId, teamKey, description, status, priority, resolution, parentId, subIssueSortOrder, estimate, isDraft, sensitive, templateId, snoozedUntil, assigneeId, delegateId, stepKey, required, ownerAgent, projectId, cycleId, labelIds, repo, branch, prUrl, prState.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/issues/{id}",
     "inputSchema": {
@@ -8094,6 +8186,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "minimum": 0
             },
             "isDraft": {
+              "type": "boolean"
+            },
+            "sensitive": {
               "type": "boolean"
             },
             "templateId": {
@@ -13048,6 +13143,64 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdDraftsIdDiscard",
+    "description": "Create draft discard (POST /workspaces/{organizationId}/drafts/{id}/discard) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: note.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/drafts/{id}/discard",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "note": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdDraftsIdPublish",
+    "description": "Create draft publish (POST /workspaces/{organizationId}/drafts/{id}/publish) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: note.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/drafts/{id}/publish",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "note": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdEmailinboxes",
     "description": "Create email inboxe (POST /workspaces/{organizationId}/email-inboxes) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: address*, teamId, projectId, customerId, enabled (* = required).",
     "method": "POST",
@@ -14120,7 +14273,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssues",
-    "description": "Create issue — The 201 response includes possibleDuplicates: open issues (in teams you can see) whose titles closely match, best first. Non-blocking — if one is the same work, comment on or update it instead of keeping the new issue. Pass dedupe=block to get 409 with the matches in details.possibleDuplicates instead of creating. (POST /workspaces/{organizationId}/issues) Path params (top-level, required): organizationId. Query params (top-level, optional): dedupe. Request body goes in the \"body\" object; fields: title*, externalRef, teamId, teamKey, description, status, priority, resolution, parentId, subIssueSortOrder, estimate, isDraft, templateId, snoozedUntil, assigneeId, delegateId, stepKey, required, ownerAgent, projectId, cycleId, labelIds, repo, branch (* = required).",
+    "description": "Create issue — The 201 response includes possibleDuplicates: open issues (in teams you can see) whose titles closely match, best first. Non-blocking — if one is the same work, comment on or update it instead of keeping the new issue. Pass dedupe=block to get 409 with the matches in details.possibleDuplicates instead of creating. (POST /workspaces/{organizationId}/issues) Path params (top-level, required): organizationId. Query params (top-level, optional): dedupe. Request body goes in the \"body\" object; fields: title*, externalRef, teamId, teamKey, description, status, priority, resolution, parentId, subIssueSortOrder, estimate, isDraft, sensitive, templateId, snoozedUntil, assigneeId, delegateId, stepKey, required, ownerAgent, projectId, cycleId, labelIds, repo, branch (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues",
     "inputSchema": {
@@ -14207,6 +14360,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "minimum": 0
             },
             "isDraft": {
+              "type": "boolean"
+            },
+            "sensitive": {
               "type": "boolean"
             },
             "templateId": {
@@ -14362,6 +14518,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                   "minimum": 0
                 },
                 "isDraft": {
+                  "type": "boolean"
+                },
+                "sensitive": {
                   "type": "boolean"
                 },
                 "templateId": {

@@ -63,12 +63,14 @@ import {
   type IssueResolution,
   type IssueStatus,
 } from "../types/workspace.js";
+import type { WorkspaceDO } from "../workspace/durable-object.js";
 import { filterConditionSchema } from "../workspace/filter.js";
 import {
   agentSessionSchema,
   resultSchemaInputSchema,
   toSessionResponse,
 } from "./agent-sessions.js";
+import { draftOutputSchema, serializeDraft } from "./draft-outputs.js";
 import { getExecutionCtx } from "./execution-ctx.js";
 import { assertIssueAccess, issueViewer } from "./issue-access.js";
 import {
@@ -160,7 +162,7 @@ async function loadVisibleTeamIds(
   return getVisibleTeamIds(db, organizationId, identity);
 }
 
-async function assertTeamAccess(
+export async function assertTeamAccess(
   db: ReturnType<typeof createD1>,
   organizationId: string,
   teamId: string | undefined,
@@ -198,7 +200,7 @@ async function assertTeamAccess(
 
 const TERMINAL_STATUSES: ReadonlyArray<IssueStatus> = ["done", "canceled"];
 
-function validateIssueState(
+export function validateIssueState(
   status: IssueStatus,
   resolution: IssueResolution | null | undefined
 ): void {
@@ -220,13 +222,135 @@ function validateIssueState(
 // PILE-417 — the delegate is an agent acting on the assignee's behalf, so a
 // non-null delegateId must resolve to a registered agent provider. Internal
 // writers (lane session setup) bypass this — they run inside the DO.
-function assertDelegateIsAgent(delegateId: string, env: WorkerEnv): void {
+export function assertDelegateIsAgent(
+  delegateId: string,
+  env: WorkerEnv
+): void {
   try {
     getAgentProvider(delegateId, env);
   } catch {
     throw VortexError.fromCode(
       "BAD_REQUEST",
       `delegateId must be a registered agent: ${delegateId}`
+    );
+  }
+}
+
+export type UpdateIssueInput = z.infer<typeof updateIssueSchema>;
+
+/** The validation half of PATCH /issues/{id} — also runs when a held
+ *  field_change draft publishes (PILE-428), so an agent's patch faces the
+ *  same checks at apply time it would have faced live. Returns the patch
+ *  with `teamId` resolved. */
+export async function resolveIssuePatch(
+  env: WorkerEnv,
+  db: ReturnType<typeof createD1>,
+  stub: DurableObjectStub<WorkspaceDO>,
+  organizationId: string,
+  existing: Issue,
+  input: UpdateIssueInput,
+  identity: WorkspaceIdentity
+): Promise<UpdateIssueInput> {
+  let teamId = existing.teamId;
+  if (input.teamId !== undefined) {
+    teamId = await assertTeamAccess(db, organizationId, input.teamId, identity);
+  }
+  if (input.parentId !== undefined && input.parentId !== null) {
+    const parent = await stub.getIssue(input.parentId);
+    if (!parent) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: "Parent issue not found",
+      });
+    }
+    await assertIssueAccess(db, stub, parent, identity);
+    if (parent.parentId) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: "Sub-issues can only be nested one level",
+        hint: `Parent ${parent.identifier} is already a sub-issue`,
+      });
+    }
+    const children = await stub.getIssueChildren(existing.id);
+    if (children.length > 0) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: "An issue with sub-issues cannot become a sub-issue",
+        hint: `Children: ${children.map((child) => child.identifier).join(", ")}`,
+      });
+    }
+    if (
+      await wouldCreateCycle(stub, existing.id, parent.id, new Set<string>())
+    ) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: "Parent would create a cycle",
+      });
+    }
+  }
+  if (typeof input.externalRef === "string") {
+    const existingByRef = await stub.getIssueByExternalRef(input.externalRef);
+    if (existingByRef && existingByRef.id !== existing.id) {
+      throw new VortexError({
+        code: "CONFLICT",
+        status: 409,
+        message: "externalRef already used",
+        hint: `Issue ${existingByRef.identifier} already has externalRef ${input.externalRef}`,
+      });
+    }
+  }
+  validateIssueState(input.status ?? existing.status, input.resolution);
+  if (input.delegateId) {
+    assertDelegateIsAgent(input.delegateId, env);
+  }
+  return { ...input, teamId };
+}
+
+/** The post-update side effects of PATCH /issues/{id}: repo-branch index
+ *  resync + the plan-label dispatch trigger. Draft publishes replay them
+ *  after the held patch applies (PILE-428). */
+export async function syncIssueWriteEffects(
+  env: WorkerEnv,
+  db: ReturnType<typeof createD1>,
+  stub: DurableObjectStub<WorkspaceDO>,
+  organizationId: string,
+  previous: Issue,
+  issue: Issue,
+  input: { labelIds?: string | null },
+  identity: WorkspaceIdentity,
+  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
+): Promise<void> {
+  await db
+    .delete(repoBranches)
+    .where(
+      and(
+        eq(repoBranches.organizationId, organizationId),
+        eq(repoBranches.issueId, issue.id)
+      )
+    );
+  if (issue.repo && issue.branch) {
+    await createRepoBranch(
+      db,
+      organizationId,
+      issue.repo,
+      issue.branch,
+      issue.id
+    );
+  }
+  if (input.labelIds !== undefined) {
+    await triggerPlanLabel(
+      env,
+      db,
+      stub,
+      organizationId,
+      previous.labelIds,
+      issue,
+      identity,
+      ctx
     );
   }
 }
@@ -244,6 +368,9 @@ const createIssueSchema = z.object({
   subIssueSortOrder: z.number().nullable().optional(),
   estimate: z.number().int().min(0).nullable().optional(),
   isDraft: z.boolean().optional(),
+  // PILE-428 — flags the record review-gated: agent writes draft for
+  // human publish instead of going live.
+  sensitive: z.boolean().optional(),
   templateId: z.string().optional(),
   snoozedUntil: z.string().nullable().optional(),
   assigneeId: z.string().nullable().optional(),
@@ -269,7 +396,7 @@ const createIssueSchema = z.object({
 // human or agent can link (or unlink) a PR without a session. prUrl stays a
 // plain URL (not github.com-specific — GitLab MR URLs are valid) and prState
 // is the canonical four-value domain the webhook writers normalize into.
-const updateIssueSchema = createIssueSchema.partial().extend({
+export const updateIssueSchema = createIssueSchema.partial().extend({
   prUrl: z
     .string()
     .url()
@@ -342,6 +469,7 @@ const issueApiSchema = z
     subIssueSortOrder: z.number().nullable(),
     estimate: z.number().nullable(),
     isDraft: z.boolean(),
+    sensitive: z.boolean(),
     snoozedUntil: z.string().nullable(),
     assigneeId: z.string().nullable(),
     delegateId: z.string().nullable(),
@@ -765,6 +893,15 @@ const updateIssueRoute = createRoute({
         "application/json": { schema: issueApiSchema },
       },
     },
+    202: {
+      description:
+        "Agent write held for review — the issue is flagged sensitive, so the patch was stored as a pending draft instead of applying",
+      content: {
+        "application/json": {
+          schema: z.object({ draft: draftOutputSchema }),
+        },
+      },
+    },
   },
 });
 
@@ -791,7 +928,12 @@ const batchUpdateIssuesRoute = createRoute({
       description: "Issues updated",
       content: {
         "application/json": {
-          schema: z.object({ issues: z.array(issueApiSchema) }),
+          schema: z.object({
+            issues: z.array(issueApiSchema),
+            // Agent batch-writes on sensitive records land here instead of
+            // applying (PILE-428).
+            drafts: z.array(draftOutputSchema),
+          }),
         },
       },
     },
@@ -1932,72 +2074,30 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     await assertIssueAccess(db, stub, existing, identity);
-    let teamId = existing.teamId;
-    if (input.teamId !== undefined) {
-      teamId = await assertTeamAccess(
-        db,
-        organizationId,
-        input.teamId,
-        identity
-      );
-    }
-    if (input.parentId !== undefined && input.parentId !== null) {
-      const parent = await stub.getIssue(input.parentId);
-      if (!parent) {
-        throw new VortexError({
-          code: "BAD_REQUEST",
-          status: 400,
-          message: "Parent issue not found",
-        });
-      }
-      await assertIssueAccess(db, stub, parent, identity);
-      if (parent.parentId) {
-        throw new VortexError({
-          code: "BAD_REQUEST",
-          status: 400,
-          message: "Sub-issues can only be nested one level",
-          hint: `Parent ${parent.identifier} is already a sub-issue`,
-        });
-      }
-      const children = await stub.getIssueChildren(existing.id);
-      if (children.length > 0) {
-        throw new VortexError({
-          code: "BAD_REQUEST",
-          status: 400,
-          message: "An issue with sub-issues cannot become a sub-issue",
-          hint: `Children: ${children.map((child) => child.identifier).join(", ")}`,
-        });
-      }
-      if (
-        await wouldCreateCycle(stub, existing.id, parent.id, new Set<string>())
-      ) {
-        throw new VortexError({
-          code: "BAD_REQUEST",
-          status: 400,
-          message: "Parent would create a cycle",
-        });
-      }
-    }
-    if (typeof input.externalRef === "string") {
-      const existingByRef = await stub.getIssueByExternalRef(input.externalRef);
-      if (existingByRef && existingByRef.id !== existing.id) {
-        throw new VortexError({
-          code: "CONFLICT",
-          status: 409,
-          message: "externalRef already used",
-          hint: `Issue ${existingByRef.identifier} already has externalRef ${input.externalRef}`,
-        });
-      }
-    }
-    validateIssueState(input.status ?? existing.status, input.resolution);
-    if (input.delegateId) {
-      assertDelegateIsAgent(input.delegateId, c.env);
-    }
-    const issue = await stub.updateIssue(
-      existing.id,
-      { ...input, teamId },
-      identity.id
+    const patch = await resolveIssuePatch(
+      c.env,
+      db,
+      stub,
+      organizationId,
+      existing,
+      input,
+      identity
     );
+    // PILE-428 — an agent patching a sensitive record drafts the change
+    // for human review instead of applying it; publish replays the patch
+    // through this same path (validation above re-runs then too).
+    if (identity.type === "agent" && existing.sensitive) {
+      const draft = await stub.createDraftOutput({
+        entityType: "issue",
+        entityId: existing.id,
+        issueId: existing.id,
+        kind: "field_change",
+        payload: { fields: patch },
+        createdById: identity.id,
+      });
+      return c.json({ draft: serializeDraft(draft) }, 202);
+    }
+    const issue = await stub.updateIssue(existing.id, patch, identity.id);
     if (!issue) {
       throw new VortexError({
         code: "NOT_FOUND",
@@ -2005,36 +2105,18 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         message: "Issue not found",
       });
     }
-    await db
-      .delete(repoBranches)
-      .where(
-        and(
-          eq(repoBranches.organizationId, organizationId),
-          eq(repoBranches.issueId, issue.id)
-        )
-      );
-    if (issue.repo && issue.branch) {
-      await createRepoBranch(
-        db,
-        organizationId,
-        issue.repo,
-        issue.branch,
-        issue.id
-      );
-    }
-    if (input.labelIds !== undefined) {
-      await triggerPlanLabel(
-        c.env,
-        db,
-        stub,
-        organizationId,
-        existing.labelIds,
-        issue,
-        identity,
-        getExecutionCtx(c)
-      );
-    }
-    return c.json(issue);
+    await syncIssueWriteEffects(
+      c.env,
+      db,
+      stub,
+      organizationId,
+      existing,
+      issue,
+      input,
+      identity,
+      getExecutionCtx(c)
+    );
+    return c.json(issue, 200);
   });
 
   app.openapi(batchUpdateIssuesRoute, async (c) => {
@@ -2099,12 +2181,36 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       );
     }
 
-    const issues = await stub.batchUpdateIssues(
-      validIssues.map((issue) => issue.id),
-      patch,
-      identity.id
+    // PILE-428 — an agent batch-patching sensitive records drafts each
+    // patch instead of applying it; everything else updates normally.
+    const liveIssues =
+      identity.type === "agent"
+        ? validIssues.filter((issue) => !issue.sensitive)
+        : validIssues;
+    const heldIssues = validIssues.filter(
+      (issue) => !liveIssues.includes(issue)
     );
-    return c.json({ issues });
+    const issues =
+      liveIssues.length > 0
+        ? await stub.batchUpdateIssues(
+            liveIssues.map((issue) => issue.id),
+            patch,
+            identity.id
+          )
+        : [];
+    const drafts = await Promise.all(
+      heldIssues.map((issue) =>
+        stub.createDraftOutput({
+          entityType: "issue",
+          entityId: issue.id,
+          issueId: issue.id,
+          kind: "field_change",
+          payload: { fields: patch },
+          createdById: identity.id,
+        })
+      )
+    );
+    return c.json({ issues, drafts: drafts.map(serializeDraft) });
   });
 
   app.openapi(deleteIssueRoute, async (c) => {

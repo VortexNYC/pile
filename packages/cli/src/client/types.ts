@@ -869,6 +869,7 @@ export interface paths {
                         subIssueSortOrder?: number | null;
                         estimate?: number | null;
                         isDraft?: boolean;
+                        sensitive?: boolean;
                         templateId?: string;
                         snoozedUntil?: string | null;
                         assigneeId?: string | null;
@@ -1269,6 +1270,7 @@ export interface paths {
                         subIssueSortOrder?: number | null;
                         estimate?: number | null;
                         isDraft?: boolean;
+                        sensitive?: boolean;
                         templateId?: string;
                         snoozedUntil?: string | null;
                         assigneeId?: string | null;
@@ -1296,6 +1298,17 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["Issue"];
+                    };
+                };
+                /** @description Agent write held for review — the issue is flagged sensitive, so the patch was stored as a pending draft instead of applying */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            draft: components["schemas"]["DraftOutput"];
+                        };
                     };
                 };
             };
@@ -1768,6 +1781,7 @@ export interface paths {
                             subIssueSortOrder?: number | null;
                             estimate?: number | null;
                             isDraft?: boolean;
+                            sensitive?: boolean;
                             templateId?: string;
                             snoozedUntil?: string | null;
                             assigneeId?: string | null;
@@ -1797,6 +1811,7 @@ export interface paths {
                     content: {
                         "application/json": {
                             issues: components["schemas"]["Issue"][];
+                            drafts: components["schemas"]["DraftOutput"][];
                         };
                     };
                 };
@@ -6402,6 +6417,229 @@ export interface paths {
                             createdAt: string;
                             resolvedAt: string | null;
                         };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/issues/{issueId}/drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List issue drafts */
+        get: {
+            parameters: {
+                query?: {
+                    status?: "pending" | "published" | "discarded";
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                    issueId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Draft outputs held on this record */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            drafts: components["schemas"]["DraftOutput"][];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List drafts */
+        get: {
+            parameters: {
+                query?: {
+                    status?: "pending" | "published" | "discarded";
+                    issueId?: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The workspace draft-review queue — pending agent output awaiting a human publish/discard decision */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            drafts: components["schemas"]["DraftOutput"][];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/drafts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update draft */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        payload: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Draft payload updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DraftOutput"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/drafts/{id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create draft publish */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        note?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Draft published — the held write applied and the audit log records both the producing agent and the reviewing human */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DraftOutput"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/drafts/{id}/discard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create draft discard */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        note?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Draft discarded — the write never applied; the row is retained for inspection */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DraftOutput"];
                     };
                 };
             };
@@ -14962,6 +15200,17 @@ export interface paths {
                             resolvedById: string | null;
                             createdAt: string;
                             updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Agent output held for review — the issue is flagged sensitive, so the comment was stored as a pending draft instead of posting */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            draft: components["schemas"]["DraftOutput"];
                         };
                     };
                 };
@@ -31716,6 +31965,7 @@ export interface components {
             subIssueSortOrder: number | null;
             estimate: number | null;
             isDraft: boolean;
+            sensitive: boolean;
             snoozedUntil: string | null;
             assigneeId: string | null;
             delegateId: string | null;
@@ -31758,6 +32008,28 @@ export interface components {
             details: {
                 possibleDuplicates: components["schemas"]["PossibleDuplicate"][];
             };
+        };
+        DraftOutput: {
+            id: string;
+            organizationId: string;
+            entityType: string;
+            entityId: string;
+            issueId: string | null;
+            /** @enum {string} */
+            kind: "comment" | "field_change" | "message";
+            payload: {
+                [key: string]: unknown;
+            };
+            /** @enum {string} */
+            status: "pending" | "published" | "discarded";
+            createdById: string | null;
+            sessionId: string | null;
+            reviewedById: string | null;
+            reviewedAt: string | null;
+            reviewNote: string | null;
+            publishedCommentId: string | null;
+            createdAt: string;
+            updatedAt: string;
         };
         StageTemplate: {
             id: string;
