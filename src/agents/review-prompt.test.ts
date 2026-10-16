@@ -23,6 +23,7 @@ const issue: Issue = {
   subIssueSortOrder: null,
   estimate: null,
   isDraft: false,
+  sensitive: false,
   stepKey: null,
   required: false,
   ownerAgent: null,

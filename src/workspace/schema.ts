@@ -75,6 +75,12 @@ export const workspaceIssues = sqliteTable(
     isDraft: integer("is_draft" as string, { mode: "boolean" })
       .notNull()
       .default(false),
+    // PILE-428 — review-gated record: agent-produced writes (comments,
+    // field changes, outbound messages) land in draft_outputs pending a
+    // human publish instead of taking effect immediately.
+    sensitive: integer("sensitive" as string, { mode: "boolean" })
+      .notNull()
+      .default(false),
     snoozedUntil: text("snoozed_until" as string),
     repo: text("repo" as string),
     branch: text("branch" as string),
@@ -174,6 +180,54 @@ export const workspaceComments = sqliteTable(
       table.organizationId,
       table.externalSource,
       table.externalId
+    ),
+  ]
+);
+
+// PILE-428 — agent output held for human review on sensitive records.
+// `kind` is the write the agent attempted ("comment" | "field_change" |
+// "message"); `payload` is the JSON the publish step replays (comment →
+// {body, externalAuthor, externalSource, externalId, internal, authorId,
+// mentions}; field_change → {fields: IssuePatch}). Discarded rows stay
+// pending-review history — nothing deletes them.
+export const workspaceDraftOutputs = sqliteTable(
+  "draft_outputs" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    entityType: text("entity_type" as string).notNull(),
+    entityId: text("entity_id" as string).notNull(),
+    // The issue the review hangs on — same as entityId for issue drafts;
+    // carries context (notifications, permissions) for other entities.
+    issueId: text("issue_id" as string),
+    kind: text("kind" as string, {
+      enum: ["comment", "field_change", "message"],
+    }).notNull(),
+    payload: text("payload" as string).notNull(),
+    status: text("status" as string, {
+      enum: ["pending", "published", "discarded"],
+    })
+      .notNull()
+      .default("pending"),
+    createdById: text("created_by_id" as string),
+    sessionId: text("session_id" as string),
+    reviewedById: text("reviewed_by_id" as string),
+    reviewedAt: text("reviewed_at" as string),
+    reviewNote: text("review_note" as string),
+    publishedCommentId: text("published_comment_id" as string),
+    createdAt: text("created_at" as string).notNull(),
+    updatedAt: text("updated_at" as string).notNull(),
+  },
+  (table) => [
+    index("draft_outputs_entity_idx" as string).on(
+      table.organizationId,
+      table.entityType,
+      table.entityId
+    ),
+    index("draft_outputs_status_idx" as string).on(
+      table.organizationId,
+      table.status,
+      table.createdAt
     ),
   ]
 );

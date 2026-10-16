@@ -1224,6 +1224,38 @@ ALTER TABLE external_links ADD COLUMN resolved_url TEXT
 ALTER TABLE external_links ADD COLUMN resolved_title TEXT
 --> statement-breakpoint
 ALTER TABLE external_links ADD COLUMN http_status INTEGER`;
+
+// PILE-428 — draft-then-publish for agent output on sensitive records.
+// `issues.sensitive` flags a record as review-gated; `draft_outputs` holds
+// agent-produced writes (comments, field changes, outbound messages) in
+// `pending` until a human publishes (applies the write) or discards (kept
+// for inspection — never deleted). `issue_id` carries the review context
+// even when the target entity is not itself an issue.
+const v84 = `ALTER TABLE issues ADD COLUMN sensitive INTEGER NOT NULL DEFAULT 0
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS draft_outputs (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  issue_id TEXT,
+  kind TEXT NOT NULL,
+  payload TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  created_by_id TEXT,
+  session_id TEXT,
+  reviewed_by_id TEXT,
+  reviewed_at TEXT,
+  review_note TEXT,
+  published_comment_id TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS draft_outputs_entity_idx ON draft_outputs (organization_id, entity_type, entity_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS draft_outputs_status_idx ON draft_outputs (organization_id, status, created_at)`;
+
 const v69 = `CREATE TABLE comments_new (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -1481,6 +1513,7 @@ export const workspaceMigrations = {
       { idx: 80, when: 80, tag: "v81", breakpoints: true },
       { idx: 81, when: 81, tag: "v82", breakpoints: true },
       { idx: 82, when: 82, tag: "v83", breakpoints: true },
+      { idx: 83, when: 83, tag: "v84", breakpoints: true },
     ],
   },
   migrations: {
@@ -1567,5 +1600,6 @@ export const workspaceMigrations = {
     m0080: v81,
     m0081: v82,
     m0082: v83,
+    m0083: v84,
   },
 } satisfies Parameters<typeof migrate>[1];

@@ -3536,3 +3536,99 @@ describe("external link verification (PILE-429)", () => {
     expect(updated?.resolvedUrl).toBeNull();
   });
 });
+
+describe("draft outputs (PILE-428)", () => {
+  it("holds a comment draft, publishes it as a real comment, then locks the row", async () => {
+    const stub = getStub();
+    await withWorkspace(stub, async (instance) => {
+      const issue = await instance.createIssue({ title: "Sensitive record" });
+      const draft = await instance.createDraftOutput({
+        entityType: "issue",
+        entityId: issue.id,
+        issueId: issue.id,
+        kind: "comment",
+        payload: { body: "agent-held comment" },
+        createdById: "agent-1",
+      });
+      expect(draft.status).toBe("pending");
+
+      // The held write is not live yet — no comment on the issue.
+      expect(await instance.listComments(issue.id)).toHaveLength(0);
+
+      const pending = await instance.listDraftOutputs({ issueId: issue.id });
+      expect(pending.map((d) => d.id)).toEqual([draft.id]);
+
+      const published = await instance.publishDraftOutput(
+        draft.id,
+        "user-1",
+        "looks right"
+      );
+      expect(published.status).toBe("published");
+      expect(published.reviewedById).toBe("user-1");
+      expect(published.reviewNote).toBe("looks right");
+      expect(published.publishedCommentId).toBeTruthy();
+
+      const comment = await instance.getComment(published.publishedCommentId!);
+      expect(comment?.body).toBe("agent-held comment");
+
+      // Resolved rows reject further transitions.
+      await expect(
+        instance.discardDraftOutput(draft.id, "user-1")
+      ).rejects.toMatchObject({ status: 409 });
+      await expect(
+        instance.publishDraftOutput("draft-missing", "user-1")
+      ).rejects.toMatchObject({ status: 404 });
+    });
+  });
+
+  it("replays a field_change draft through updateIssue on publish", async () => {
+    const stub = getStub();
+    await withWorkspace(stub, async (instance) => {
+      const issue = await instance.createIssue({ title: "before" });
+      const draft = await instance.createDraftOutput({
+        entityType: "issue",
+        entityId: issue.id,
+        issueId: issue.id,
+        kind: "field_change",
+        payload: { fields: { title: "after review" } },
+        createdById: "agent-1",
+      });
+
+      // A human can edit the held payload before publishing.
+      await instance.updateDraftOutputPayload(
+        draft.id,
+        { fields: { title: "edited then approved" } },
+        "user-1"
+      );
+
+      const published = await instance.publishDraftOutput(draft.id, "user-1");
+      expect(published.status).toBe("published");
+      const updated = await instance.getIssue(issue.id);
+      expect(updated?.title).toBe("edited then approved");
+    });
+  });
+
+  it("retains discarded drafts for inspection", async () => {
+    const stub = getStub();
+    await withWorkspace(stub, async (instance) => {
+      const draft = await instance.createDraftOutput({
+        entityType: "issue",
+        entityId: "issue-discard",
+        kind: "comment",
+        payload: { body: "off-brand" },
+        createdById: "agent-1",
+      });
+      const discarded = await instance.discardDraftOutput(
+        draft.id,
+        "user-1",
+        "not our voice"
+      );
+      expect(discarded.status).toBe("discarded");
+      expect(discarded.reviewNote).toBe("not our voice");
+
+      // The row is review history — still queryable by status.
+      const rows = await instance.listDraftOutputs({ status: "discarded" });
+      expect(rows.map((d) => d.id)).toContain(draft.id);
+    });
+  });
+});

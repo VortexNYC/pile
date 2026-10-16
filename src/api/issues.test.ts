@@ -2001,4 +2001,33 @@ describe("triage rules on issue create (PILE-427)", () => {
     expect(evals[0]?.ruleId).toBe(rule.id);
     expect(evals[0]?.outcome).toBe("matched");
   });
+
+  it("persists the sensitive review gate on create + patch (PILE-428)", async () => {
+    const res = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      {
+        method: "POST",
+        body: JSON.stringify({ title: "gated record", sensitive: true }),
+      },
+      token
+    );
+    expect(res.status).toBe(201);
+    const issue = z
+      .object({ id: z.string(), sensitive: z.boolean() })
+      .parse(await res.json());
+    expect(issue.sensitive).toBe(true);
+
+    const patched = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ sensitive: false }),
+      },
+      token
+    );
+    expect(patched.status).toBe(200);
+    expect(
+      z.object({ sensitive: z.boolean() }).parse(await patched.json()).sensitive
+    ).toBe(false);
+  });
 });

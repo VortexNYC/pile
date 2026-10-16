@@ -3752,3 +3752,32 @@ describe("triage routes registration (PILE-427)", () => {
     ).toBeTruthy();
   });
 });
+
+describe("draft review routes (PILE-428)", () => {
+  it("exposes the drafts queue + per-issue list in the OpenAPI doc", async () => {
+    const res = await app.fetch(
+      new Request("http://localhost/openapi.json"),
+      env
+    );
+    const spec = (await res.json()) as { paths: Record<string, unknown> };
+    expect(spec.paths["/workspaces/{organizationId}/drafts"]).toBeTruthy();
+    expect(spec.paths["/workspaces/{organizationId}/drafts/{id}"]).toBeTruthy();
+    expect(
+      spec.paths["/workspaces/{organizationId}/issues/{issueId}/drafts"]
+    ).toBeTruthy();
+  });
+
+  it("serves an empty drafts queue for a fresh workspace", async () => {
+    const organizationId = await seedWorkspace();
+    const token = await adminToken(organizationId);
+    const res = await app.fetch(
+      request(`/workspaces/${organizationId}/drafts`, { token }),
+      env
+    );
+    expect(res.status).toBe(200);
+    const body = z
+      .object({ drafts: z.array(z.unknown()) })
+      .parse(await res.json());
+    expect(body.drafts).toEqual([]);
+  });
+});

@@ -78,6 +78,9 @@
           "isDraft": {
             "type": "boolean"
           },
+          "sensitive": {
+            "type": "boolean"
+          },
           "snoozedUntil": {
             "type": "string",
             "nullable": true
@@ -173,6 +176,7 @@
           "subIssueSortOrder",
           "estimate",
           "isDraft",
+          "sensitive",
           "snoozedUntil",
           "assigneeId",
           "delegateId",
@@ -289,6 +293,97 @@
           "message",
           "hint",
           "details"
+        ]
+      },
+      "DraftOutput": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "organizationId": {
+            "type": "string"
+          },
+          "entityType": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "issueId": {
+            "type": "string",
+            "nullable": true
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "comment",
+              "field_change",
+              "message"
+            ]
+          },
+          "payload": {
+            "type": "object",
+            "additionalProperties": {
+              "nullable": true
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "published",
+              "discarded"
+            ]
+          },
+          "createdById": {
+            "type": "string",
+            "nullable": true
+          },
+          "sessionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "reviewedById": {
+            "type": "string",
+            "nullable": true
+          },
+          "reviewedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "reviewNote": {
+            "type": "string",
+            "nullable": true
+          },
+          "publishedCommentId": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "organizationId",
+          "entityType",
+          "entityId",
+          "issueId",
+          "kind",
+          "payload",
+          "status",
+          "createdById",
+          "sessionId",
+          "reviewedById",
+          "reviewedAt",
+          "reviewNote",
+          "publishedCommentId",
+          "createdAt",
+          "updatedAt"
         ]
       },
       "StageTemplate": {
@@ -2196,6 +2291,9 @@
                   "isDraft": {
                     "type": "boolean"
                   },
+                  "sensitive": {
+                    "type": "boolean"
+                  },
                   "templateId": {
                     "type": "string"
                   },
@@ -2948,6 +3046,9 @@
                   "isDraft": {
                     "type": "boolean"
                   },
+                  "sensitive": {
+                    "type": "boolean"
+                  },
                   "templateId": {
                     "type": "string"
                   },
@@ -3025,6 +3126,24 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Issue"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Agent write held for review — the issue is flagged sensitive, so the patch was stored as a pending draft instead of applying",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "draft": {
+                      "$ref": "#/components/schemas/DraftOutput"
+                    }
+                  },
+                  "required": [
+                    "draft"
+                  ]
                 }
               }
             }
@@ -3773,6 +3892,9 @@
                       "isDraft": {
                         "type": "boolean"
                       },
+                      "sensitive": {
+                        "type": "boolean"
+                      },
                       "templateId": {
                         "type": "string"
                       },
@@ -3862,10 +3984,17 @@
                       "items": {
                         "$ref": "#/components/schemas/Issue"
                       }
+                    },
+                    "drafts": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/DraftOutput"
+                      }
                     }
                   },
                   "required": [
-                    "issues"
+                    "issues",
+                    "drafts"
                   ]
                 }
               }
@@ -16319,6 +16448,292 @@
           }
         },
         "summary": "Create approval respond"
+      }
+    },
+    "/workspaces/{organizationId}/issues/{issueId}/drafts": {
+      "get": {
+        "tags": [
+          "drafts"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "issueId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "published",
+                "discarded"
+              ]
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Draft outputs held on this record",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "drafts": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/DraftOutput"
+                      }
+                    }
+                  },
+                  "required": [
+                    "drafts"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List issue drafts"
+      }
+    },
+    "/workspaces/{organizationId}/drafts": {
+      "get": {
+        "tags": [
+          "drafts"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "published",
+                "discarded"
+              ]
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "issueId",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The workspace draft-review queue — pending agent output awaiting a human publish/discard decision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "drafts": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/DraftOutput"
+                      }
+                    }
+                  },
+                  "required": [
+                    "drafts"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List drafts"
+      }
+    },
+    "/workspaces/{organizationId}/drafts/{id}": {
+      "patch": {
+        "tags": [
+          "drafts"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "payload": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "nullable": true
+                    }
+                  }
+                },
+                "required": [
+                  "payload"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Draft payload updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftOutput"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Update draft"
+      }
+    },
+    "/workspaces/{organizationId}/drafts/{id}/publish": {
+      "post": {
+        "tags": [
+          "drafts"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Draft published — the held write applied and the audit log records both the producing agent and the reviewing human",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftOutput"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create draft publish"
+      }
+    },
+    "/workspaces/{organizationId}/drafts/{id}/discard": {
+      "post": {
+        "tags": [
+          "drafts"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "note": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Draft discarded — the write never applied; the row is retained for inspection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftOutput"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create draft discard"
       }
     },
     "/workspaces/{organizationId}/issues/{issueId}/activity": {
@@ -31412,6 +31827,24 @@
                     "resolvedById",
                     "createdAt",
                     "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Agent output held for review — the issue is flagged sensitive, so the comment was stored as a pending draft instead of posting",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "draft": {
+                      "$ref": "#/components/schemas/DraftOutput"
+                    }
+                  },
+                  "required": [
+                    "draft"
                   ]
                 }
               }

@@ -6,6 +6,7 @@ import {
   workspaceAgentSessions,
   workspaceAgentSpendCaps,
   workspaceCustomers,
+  workspaceDraftOutputs,
   workspaceExternalEventDeliveries,
   workspaceExternalEventMappings,
   workspaceDeals,
@@ -446,5 +447,48 @@ describe("triage rule tables (PILE-427)", () => {
     for (const col of ["record_id", "rule_id", "rule_name", "outcome"]) {
       expect(evals.columns.some((c) => c.name === col)).toBe(true);
     }
+  });
+});
+
+describe("draft review schema (PILE-428)", () => {
+  it("adds a default-off sensitive flag to issues", () => {
+    const config = getTableConfig(workspaceIssues);
+    const column = config.columns.find((c) => c.name === "sensitive");
+    expect(column?.notNull).toBe(true);
+    expect(column?.hasDefault).toBe(true);
+    expect(column?.dataType).toBe("boolean");
+  });
+
+  it("creates draft_outputs keyed by org + entity with a status queue", () => {
+    const config = getTableConfig(workspaceDraftOutputs);
+    expect(config.name).toBe("draft_outputs");
+    const names = config.columns.map((c) => c.name);
+    for (const col of [
+      "organization_id",
+      "entity_type",
+      "entity_id",
+      "issue_id",
+      "kind",
+      "payload",
+      "status",
+      "created_by_id",
+      "session_id",
+      "reviewed_by_id",
+      "reviewed_at",
+      "review_note",
+      "published_comment_id",
+      "created_at",
+      "updated_at",
+    ]) {
+      expect(names).toContain(col);
+    }
+    // Discarded rows are retained — status defaults to pending and the
+    // review queue reads off the (org, status, created_at) index.
+    const status = config.columns.find((c) => c.name === "status");
+    expect(status?.notNull).toBe(true);
+    expect(status?.hasDefault).toBe(true);
+    const indexNames = config.indexes.map((i) => i.config.name);
+    expect(indexNames).toContain("draft_outputs_entity_idx");
+    expect(indexNames).toContain("draft_outputs_status_idx");
   });
 });

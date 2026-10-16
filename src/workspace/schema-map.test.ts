@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { workspaceSchema } from "./schema-map.js";
 import {
+  workspaceDraftOutputs,
   workspaceEntityAttachments,
   workspaceExternalEventDeliveries,
   workspaceExternalEventMappings,
@@ -61,5 +62,12 @@ describe("triage tables (PILE-427)", () => {
     expect(getTableName(workspaceTriageRuleEvaluations)).toBe(
       "triage_rule_evaluations"
     );
+  });
+});
+
+describe("draft outputs table (PILE-428)", () => {
+  it("registers draft_outputs so DO drizzle queries can reach it", () => {
+    expect(workspaceSchema.workspaceDraftOutputs).toBe(workspaceDraftOutputs);
+    expect(getTableName(workspaceDraftOutputs)).toBe("draft_outputs");
   });
 });

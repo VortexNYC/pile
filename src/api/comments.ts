@@ -1,7 +1,7 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
-import { decryptSecret, loadProviderConfig } from "../agents/credentials.js";
+import { loadProviderConfig } from "../agents/credentials.js";
 import { resolveAgentEnv } from "../agents/daytona.js";
 import {
   followupThrottleWindowMs,
@@ -11,18 +11,15 @@ import { getAgentProvider } from "../agents/index.js";
 import { triggerPlanMode } from "../agents/plan-dispatch.js";
 import { parsePlanCommand } from "../agents/plan.js";
 import { createD1 } from "../global/db.js";
-import { getInstallationToken } from "../global/github-auth.js";
-import { findGithubInstallation } from "../global/github-installations.js";
-import { gitlabFetch } from "../global/gitlab-auth.js";
-import { findGitlabInstallation } from "../global/gitlab-installations.js";
-import { findRepoIssueByIssueId } from "../global/repo-issues.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
+import { draftOutputSchema, serializeDraft } from "./draft-outputs.js";
 import { getExecutionCtx } from "./execution-ctx.js";
 import { assertIssueAccess } from "./issue-access.js";
 import { resolveMentions } from "./mentions.js";
+import { syncCommentToRepoMapping } from "./repo-comment-sync.js";
 
 async function getStub(env: WorkerEnv, organizationId: string) {
   const stub = env.WORKSPACE_DURABLE_OBJECT.get(
@@ -113,6 +110,15 @@ const createCommentRoute = createRoute({
       description: "Comment created",
       content: {
         "application/json": { schema: commentSchema },
+      },
+    },
+    202: {
+      description:
+        "Agent output held for review — the issue is flagged sensitive, so the comment was stored as a pending draft instead of posting",
+      content: {
+        "application/json": {
+          schema: z.object({ draft: draftOutputSchema }),
+        },
       },
     },
   },
@@ -268,6 +274,26 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
     }
     await assertIssueAccess(db, issueStub, issue, identity);
     const mentions = await resolveMentions(db, organizationId, body);
+    // PILE-428 — an agent writing on a sensitive record drafts for human
+    // review: no comment posts, no GitHub/GitLab sync, no follow-up
+    // prompt. Publishing replays this exact write (syncToRepo marks the
+    // mirror sync the POST would have performed).
+    if (identity.type === "agent" && issue.sensitive) {
+      const draft = await issueStub.createDraftOutput({
+        entityType: "issue",
+        entityId: issue.id,
+        issueId: issue.id,
+        kind: "comment",
+        payload: {
+          body,
+          authorId: identity.id,
+          mentions,
+          syncToRepo: true,
+        },
+        createdById: identity.id,
+      });
+      return c.json({ draft: serializeDraft(draft) }, 202);
+    }
     const created = await issueStub.createComment({
       issueId: issue.id,
       authorId: identity.id,
@@ -291,84 +317,13 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
       createdAt: item.createdAt,
     });
 
-    const mapping = await findRepoIssueByIssueId(db, issue.id);
-    if (mapping) {
-      if (mapping.source === "github") {
-        const installation = await findGithubInstallation(db, mapping.repo);
-        if (installation) {
-          const token = await getInstallationToken(
-            c.env,
-            installation.installationId
-          );
-          if (token) {
-            const response = await fetch(
-              `https://api.github.com/repos/${mapping.repo}/issues/${mapping.issueNumber}/comments`,
-              {
-                method: "POST",
-                headers: {
-                  Accept: "application/vnd.github+json",
-                  Authorization: `Bearer ${token}`,
-                  "X-GitHub-Api-Version": "2022-11-28",
-                  "Content-Type": "application/json",
-                  "User-Agent": "vortex",
-                },
-                body: JSON.stringify({ body }),
-              }
-            );
-            if (response.ok) {
-              const raw: unknown = await response.json();
-              const parsed = z.object({ id: z.number().int() }).safeParse(raw);
-              if (parsed.success) {
-                const externalId = parsed.data.id.toString();
-                const updated = await issueStub.updateComment(item.id, {
-                  body,
-                  externalId,
-                  externalSource: "github",
-                });
-                if (updated) {
-                  item = updated;
-                }
-              }
-            }
-          }
-        }
-      }
-
-      if (mapping.source === "gitlab") {
-        const installation = await findGitlabInstallation(
-          db,
-          issue.organizationId,
-          mapping.repo
-        );
-        if (installation) {
-          const response = await gitlabFetch(
-            c.env,
-            (await decryptSecret(c.env, installation.token)) ?? "",
-            `/projects/${encodeURIComponent(mapping.repo)}/issues/${mapping.issueNumber}/notes`,
-            {
-              method: "POST",
-              body: JSON.stringify({ body }),
-            }
-          );
-          if (response.ok) {
-            const raw: unknown = await response.json();
-            const parsed = z
-              .object({ id: z.union([z.string(), z.number()]) })
-              .safeParse(raw);
-            if (parsed.success) {
-              const externalId = String(parsed.data.id);
-              const updated = await issueStub.updateComment(item.id, {
-                body,
-                externalId,
-                externalSource: "gitlab",
-              });
-              if (updated) {
-                item = updated;
-              }
-            }
-          }
-        }
-      }
+    await syncCommentToRepoMapping(c.env, db, issueStub, issue, {
+      id: item.id,
+      body: item.body,
+    });
+    const synced = await issueStub.getComment(item.id);
+    if (synced) {
+      item = synced;
     }
 
     await issueStub.emitCommentCreated(item, issue, identity.id);

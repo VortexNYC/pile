@@ -227,3 +227,108 @@ describe("comment creation", () => {
     expect(comment.body).toBe("Hello world");
   });
 });
+
+async function createAgentToken(organizationId: string) {
+  const auth = await createAuth(env);
+  const result = await auth.api.createApiKey({
+    body: {
+      userId: "user-comments",
+      name: "test-agent",
+      rateLimitEnabled: false,
+      metadata: {
+        organizationId,
+        permissions: "admin",
+        actorType: "agent",
+      },
+    },
+  });
+  return z.object({ key: z.string() }).parse(result).key;
+}
+
+describe("sensitive records (PILE-428)", () => {
+  it("holds agent comments on a sensitive issue as drafts", async () => {
+    const seeded = await seedWorkspace();
+    const agent = await createAgentToken(seeded.organizationId);
+    const issueRes = await fetch(
+      `/workspaces/${seeded.organizationId}/issues`,
+      {
+        method: "POST",
+        body: JSON.stringify({ title: "sensitive", sensitive: true }),
+      },
+      seeded.token
+    );
+    expect(issueRes.status).toBe(201);
+    const issue = z.object({ id: z.string() }).parse(await issueRes.json());
+
+    const res = await fetch(
+      `/workspaces/${seeded.organizationId}/issues/${issue.id}/comments`,
+      {
+        method: "POST",
+        body: JSON.stringify({ body: "agent draft copy" }),
+      },
+      agent
+    );
+    expect(res.status).toBe(202);
+    const { draft } = z
+      .object({
+        draft: z.object({
+          id: z.string(),
+          kind: z.string(),
+          status: z.string(),
+        }),
+      })
+      .parse(await res.json());
+    expect(draft.kind).toBe("comment");
+    expect(draft.status).toBe("pending");
+
+    // Nothing posted to the thread; publishing replays the comment.
+    const list = await fetch(
+      `/workspaces/${seeded.organizationId}/issues/${issue.id}/comments`,
+      {},
+      seeded.token
+    );
+    const { comments } = z
+      .object({ comments: z.array(z.object({ body: z.string() })) })
+      .parse(await list.json());
+    expect(comments.some((c) => c.body === "agent draft copy")).toBe(false);
+
+    const published = await fetch(
+      `/workspaces/${seeded.organizationId}/drafts/${draft.id}/publish`,
+      { method: "POST", body: JSON.stringify({}) },
+      seeded.token
+    );
+    expect(published.status).toBe(200);
+    const after = await fetch(
+      `/workspaces/${seeded.organizationId}/issues/${issue.id}/comments`,
+      {},
+      seeded.token
+    );
+    const { comments: live } = z
+      .object({ comments: z.array(z.object({ body: z.string() })) })
+      .parse(await after.json());
+    expect(live.some((c) => c.body === "agent draft copy")).toBe(true);
+  });
+
+  it("posts agent comments normally on ordinary issues", async () => {
+    const seeded = await seedWorkspace();
+    const agent = await createAgentToken(seeded.organizationId);
+    const issueRes = await fetch(
+      `/workspaces/${seeded.organizationId}/issues`,
+      {
+        method: "POST",
+        body: JSON.stringify({ title: "ordinary" }),
+      },
+      seeded.token
+    );
+    const issue = z.object({ id: z.string() }).parse(await issueRes.json());
+    const res = await fetch(
+      `/workspaces/${seeded.organizationId}/issues/${issue.id}/comments`,
+      {
+        method: "POST",
+        body: JSON.stringify({ body: "agent note" }),
+      },
+      agent
+    );
+    expect(res.status).toBe(201);
+  });
+});
