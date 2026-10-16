@@ -5443,11 +5443,23 @@ export function deleteEntityAttachment(
 
 // ---- external links ----
 
+// Outcome of the best-effort URL probe the API runs when a link is
+// written (PILE-429). `unchecked` means no probe ran — non-http(s)
+// schemes or rows created before v82.
+export interface ExternalLinkVerification {
+  status: "verified" | "failed" | "unreachable" | "unchecked";
+  verifiedAt: string | null;
+  resolvedUrl: string | null;
+  resolvedTitle: string | null;
+  httpStatus: number | null;
+}
+
 export interface ExternalLinkInput {
   entityType: string;
   entityId: string;
   url: string;
   label?: string | null;
+  verification?: ExternalLinkVerification;
 }
 
 export function listExternalLinks(
@@ -5514,6 +5526,11 @@ export async function createExternalLink(
     entityId: input.entityId,
     url: input.url,
     label: input.label ?? null,
+    verificationStatus: input.verification?.status ?? "unchecked",
+    verifiedAt: input.verification?.verifiedAt ?? null,
+    resolvedUrl: input.verification?.resolvedUrl ?? null,
+    resolvedTitle: input.verification?.resolvedTitle ?? null,
+    httpStatus: input.verification?.httpStatus ?? null,
     createdAt: ts,
   });
   return getExternalLink(db, organizationId, id);
@@ -5523,7 +5540,11 @@ export async function updateExternalLink(
   db: WorkspaceDb,
   organizationId: string,
   id: string,
-  input: { url?: string; label?: string | null }
+  input: {
+    url?: string;
+    label?: string | null;
+    verification?: ExternalLinkVerification;
+  }
 ) {
   const existing = await getExternalLink(db, organizationId, id);
   if (!existing) return undefined;
@@ -5532,6 +5553,24 @@ export async function updateExternalLink(
     .set({
       url: input.url ?? existing.url,
       label: input.label === undefined ? existing.label : input.label,
+      verificationStatus:
+        input.verification?.status ?? existing.verificationStatus,
+      verifiedAt:
+        input.verification === undefined
+          ? existing.verifiedAt
+          : input.verification.verifiedAt,
+      resolvedUrl:
+        input.verification === undefined
+          ? existing.resolvedUrl
+          : input.verification.resolvedUrl,
+      resolvedTitle:
+        input.verification === undefined
+          ? existing.resolvedTitle
+          : input.verification.resolvedTitle,
+      httpStatus:
+        input.verification === undefined
+          ? existing.httpStatus
+          : input.verification.httpStatus,
     })
     .where(
       and(

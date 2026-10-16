@@ -7857,7 +7857,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "label": {
               "type": "string"
             }
-          }
+          },
+          "additionalProperties": false
         }
       },
       "required": [
@@ -8233,7 +8234,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "label": {
               "type": "string"
             }
-          }
+          },
+          "additionalProperties": false
         }
       },
       "required": [
@@ -13165,7 +13167,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "required": [
             "toType",
             "toId"
-          ]
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -13304,7 +13307,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "entityType",
             "entityId",
             "url"
-          ]
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -14894,7 +14898,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           },
           "required": [
             "url"
-          ]
+          ],
+          "additionalProperties": false
         }
       },
       "required": [

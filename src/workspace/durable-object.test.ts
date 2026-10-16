@@ -3032,7 +3032,7 @@ describe("external event ingest (PILE-422)", () => {
         customerId: customer.id,
         name: "Seal deal",
         externalId: "deal-ext-7",
-        stage: "contracting",
+        stage: "negotiation",
       });
       const parent = await instance.createIssue({ title: "Deal — Seal" });
       await instance.linkDealIssue(deal.id, parent.id);
@@ -3488,5 +3488,51 @@ describe("triage rules via DO RPC (PILE-427)", () => {
       true
     );
     expect(await stub.getTriageRule(rule.id)).toBeUndefined();
+  });
+});
+
+describe("external link verification (PILE-429)", () => {
+  beforeAll(ensureWorkspace);
+
+  it("round-trips the probe result through the DO RPC surface", async () => {
+    const stub = getStub();
+    const created = await withWorkspace(stub, (instance) =>
+      instance.createExternalLink(
+        {
+          entityType: "customer",
+          entityId: crypto.randomUUID(),
+          url: "https://example.com/spec",
+          verification: {
+            status: "verified",
+            verifiedAt: "2026-10-20T00:00:00.000Z",
+            resolvedUrl: "https://example.com/spec",
+            resolvedTitle: "The Spec",
+            httpStatus: 200,
+          },
+        },
+        "user-1"
+      )
+    );
+    expect(created?.verificationStatus).toBe("verified");
+    expect(created?.resolvedTitle).toBe("The Spec");
+
+    const updated = await withWorkspace(stub, (instance) =>
+      instance.updateExternalLink(
+        created!.id,
+        {
+          url: "https://example.com/moved",
+          verification: {
+            status: "unreachable",
+            verifiedAt: "2026-10-20T01:00:00.000Z",
+            resolvedUrl: null,
+            resolvedTitle: null,
+            httpStatus: null,
+          },
+        },
+        "user-1"
+      )
+    );
+    expect(updated?.verificationStatus).toBe("unreachable");
+    expect(updated?.resolvedUrl).toBeNull();
   });
 });

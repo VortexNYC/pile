@@ -87,6 +87,9 @@ import {
   summarizeRunReceipts,
   sumRunReceipts,
   updateAgentSession,
+  createExternalLink,
+  getExternalLink,
+  updateExternalLink,
   updateExternalEventDelivery,
   updateExternalEventMapping,
   updateGuidancePack,
@@ -1711,6 +1714,64 @@ describe("triage rules data (PILE-427)", () => {
 
       expect(deleteTriageRule(db, WORKSPACE_ID, inactive.id)).toBe(true);
       expect(getTriageRule(db, WORKSPACE_ID, inactive.id)).toBeUndefined();
+    });
+  });
+});
+
+describe("external link verification (PILE-429)", () => {
+  it("persists the probe result on create and re-writes it on update", async () => {
+    await withDb(async (db) => {
+      const created = await createExternalLink(db, WORKSPACE_ID, {
+        entityType: "customer",
+        entityId: crypto.randomUUID(),
+        url: "https://example.com/spec",
+        verification: {
+          status: "verified",
+          verifiedAt: "2026-10-20T00:00:00.000Z",
+          resolvedUrl: "https://example.com/spec",
+          resolvedTitle: "The Spec",
+          httpStatus: 200,
+        },
+      });
+      expect(created?.verificationStatus).toBe("verified");
+      expect(created?.resolvedTitle).toBe("The Spec");
+      expect(created?.httpStatus).toBe(200);
+
+      // Default when no probe ran.
+      const unprobed = await createExternalLink(db, WORKSPACE_ID, {
+        entityType: "customer",
+        entityId: crypto.randomUUID(),
+        url: "ftp://example.com/file",
+      });
+      expect(unprobed?.verificationStatus).toBe("unchecked");
+      expect(unprobed?.verifiedAt).toBeNull();
+
+      const updated = await updateExternalLink(db, WORKSPACE_ID, created!.id, {
+        url: "https://example.com/moved",
+        verification: {
+          status: "failed",
+          verifiedAt: "2026-10-20T01:00:00.000Z",
+          resolvedUrl: "https://example.com/moved",
+          resolvedTitle: null,
+          httpStatus: 404,
+        },
+      });
+      expect(updated?.verificationStatus).toBe("failed");
+      expect(updated?.httpStatus).toBe(404);
+      expect(updated?.resolvedTitle).toBeNull();
+
+      // A label-only update keeps the stored verification.
+      const relabeled = await updateExternalLink(
+        db,
+        WORKSPACE_ID,
+        created!.id,
+        { label: "spec doc" }
+      );
+      expect(relabeled?.verificationStatus).toBe("failed");
+      expect(relabeled?.httpStatus).toBe(404);
+
+      const fetched = await getExternalLink(db, WORKSPACE_ID, created!.id);
+      expect(fetched?.verificationStatus).toBe("failed");
     });
   });
 });
