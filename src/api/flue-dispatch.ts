@@ -5,6 +5,7 @@ import { getExecutionCtx } from "./execution-ctx.js";
 import { dispatchAgent } from "../agents/index.js";
 import { VortexError } from "../platform/errors.js";
 import { getWorkspaceStub } from "./stub.js";
+import { loadProviderConfig } from "../agents/credentials.js";
 
 // In-pile agent runtime — pile owns the agent. CfAgentProvider POSTs the
 // registry profile + conversationKey here; the durable conversation is an
@@ -70,18 +71,30 @@ const dispatchPileRoute = createRoute({
 
 export function registerFlueDispatchRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(dispatchPileRoute, async (c) => {
-    // Bearer auth — the same secret CfAgentProvider sends.
+    // Bearer auth — the deployment secret (AGENT_PROVIDER_TOKEN) OR the
+    // workspace's stored flue provider token (PUT /agent/providers/flue) —
+    // the provider's outbound header resolves config.token ?? env var, so
+    // a workspace-scoped token is the self-serve path.
     const auth = c.req.header("Authorization") ?? "";
-    const expected = c.env.AGENT_PROVIDER_TOKEN;
-    if (!expected || auth !== `Bearer ${expected}`) {
+    const body = c.req.valid("json");
+    const stub = getWorkspaceStub(c.env, body.organizationId);
+    const wsToken = (await loadProviderConfig(c.env, stub, "flue"))?.token;
+    const expected = c.env.AGENT_PROVIDER_TOKEN ?? wsToken;
+    const ok = auth === `Bearer ${expected}` || auth === `Bearer ${wsToken}`;
+    if (!expected && !wsToken) {
+      throw new VortexError({
+        code: "UNAUTHORIZED",
+        status: 401,
+        message: "No dispatch token configured",
+      });
+    }
+    if (!ok) {
       throw new VortexError({
         code: "UNAUTHORIZED",
         status: 401,
         message: "Missing or invalid dispatch token",
       });
     }
-    const body = c.req.valid("json");
-    const stub = getWorkspaceStub(c.env, body.organizationId);
     const key = body.conversationKey ?? body.sessionId ?? crypto.randomUUID();
 
     // Resume: a session pinned to this conversation key already exists —
