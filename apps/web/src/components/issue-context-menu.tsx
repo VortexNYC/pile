@@ -4,8 +4,9 @@ import { useState } from "react";
 
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
-import { api, unwrap, unwrapEmpty } from "@/lib/api";
+import { api, stageGateBlockMessage, unwrap, unwrapEmpty } from "@/lib/api";
 import { ISSUE_STATUS_LABELS, ISSUE_STATUSES } from "@/lib/labels";
+import { toastError, toastManager } from "@/lib/toast";
 
 const itemClass =
   "flex cursor-default items-center px-3 py-1.5 text-sm text-kumo-default outline-none data-[highlighted]:bg-kumo-tint";
@@ -42,6 +43,12 @@ export function IssueContextMenu({
         })
       ),
     onSuccess: invalidate,
+    // PILE-412 — surface the stage gate's blocking sub-steps on 409.
+    onError: (error) => {
+      const blocked = stageGateBlockMessage(error);
+      if (blocked) toastManager.add({ title: blocked, variant: "error" });
+      else toastError(error);
+    },
   });
 
   const [confirmDelete, setConfirmDelete] = useState(false);

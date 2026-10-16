@@ -83,6 +83,10 @@ export const ISSUE_RESOLUTIONS = [
   "not_reproducible",
   "obsolete",
   "resolved",
+  // PILE-412 — skipped is how a required stage sub-step ends undone: it
+  // counts as done for the stage gate, and the write path requires a
+  // non-empty resolutionReason so the "why" is always on the record.
+  "skipped",
 ] as const;
 export type IssueResolution = (typeof ISSUE_RESOLUTIONS)[number];
 
@@ -102,6 +106,9 @@ export interface IssueInput {
   status?: IssueStatus;
   priority?: IssuePriority;
   resolution?: IssueResolution | null;
+  /** PILE-412 — why the issue resolved the way it did. Required when
+   *  resolution is "skipped"; recorded on the record and in history. */
+  resolutionReason?: string | null;
   parentId?: string | null;
   subIssueSortOrder?: number | null;
   estimate?: number | null;
@@ -136,6 +143,11 @@ export interface IssueInput {
 export type IssuePatch = Partial<IssueInput> & {
   prUrl?: string | null;
   prState?: IssuePrState | null;
+  /** PILE-412 — stage-gate override directive, not a column: when set, an
+   *  admin's status change proceeds despite open required sub-steps, and the
+   *  reason lands in the audit log and issue history. The API refuses the
+   *  flag for non-admin identities; internal callers never set it. */
+  stageGateOverride?: { reason: string };
 };
 
 export interface IssueCursor {
@@ -196,6 +208,8 @@ export interface Issue {
   status: IssueStatus;
   priority: IssuePriority;
   resolution: IssueResolution | null;
+  /** Why the issue resolved the way it did (required on skipped). */
+  resolutionReason: string | null;
   parentId: Id | null;
   subIssueSortOrder: number | null;
   estimate: number | null;

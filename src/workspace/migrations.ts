@@ -1275,6 +1275,10 @@ const v85 = `CREATE TABLE IF NOT EXISTS import_receipts (
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS import_receipts_org_idx ON import_receipts (organization_id, created_at)`;
 
+// PILE-412 — stage gate skip reasons. `resolution_reason` holds the "why"
+// for a resolution; required when resolution is 'skipped' so a required
+// sub-step can only end undone with a recorded justification.
+const v86 = `ALTER TABLE issues ADD COLUMN resolution_reason TEXT`;
 const v69 = `CREATE TABLE comments_new (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -1534,6 +1538,7 @@ export const workspaceMigrations = {
       { idx: 82, when: 82, tag: "v83", breakpoints: true },
       { idx: 83, when: 83, tag: "v84", breakpoints: true },
       { idx: 84, when: 84, tag: "v85", breakpoints: true },
+      { idx: 85, when: 85, tag: "v86", breakpoints: true },
     ],
   },
   migrations: {
@@ -1622,5 +1627,6 @@ export const workspaceMigrations = {
     m0082: v83,
     m0083: v84,
     m0084: v85,
+    m0085: v86,
   },
 } satisfies Parameters<typeof migrate>[1];

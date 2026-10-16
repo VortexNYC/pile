@@ -257,9 +257,18 @@ function externalSignatureTokens(headers: string[]): string[] {
 
 function validateIssueResolution(
   status: IssueStatus,
-  resolution: IssueResolution | null
+  resolution: IssueResolution | null,
+  resolutionReason?: string | null
 ): IssueResolution | null {
-  if (resolution === null) return null;
+  if (resolution === null) {
+    if (resolutionReason) {
+      throw VortexError.fromCode(
+        "BAD_REQUEST",
+        "resolutionReason requires a resolution"
+      );
+    }
+    return null;
+  }
   if (!ISSUE_RESOLUTIONS.some((r) => r === resolution)) {
     throw VortexError.fromCode(
       "BAD_REQUEST",
@@ -272,7 +281,52 @@ function validateIssueResolution(
       `Resolution can only be set when status is done or canceled, got ${status}`
     );
   }
+  // PILE-412 — a skipped sub-step is the gate's "deliberately not done"
+  // outcome; without a recorded reason it is indistinguishable from a dodge.
+  if (resolution === "skipped" && !resolutionReason) {
+    throw VortexError.fromCode(
+      "BAD_REQUEST",
+      "resolution 'skipped' requires a resolutionReason"
+    );
+  }
   return resolution;
+}
+
+/** PILE-412 — a required sub-step stops blocking its parent's stage
+ *  transition when the work happened (done) or was deliberately skipped
+ *  with a reason (canceled + resolution skipped). Any other terminal or
+ *  non-terminal state still blocks. */
+function subStepSatisfied(child: Issue): boolean {
+  return (
+    child.status === "done" ||
+    (child.status === "canceled" && child.resolution === "skipped")
+  );
+}
+
+/** The 409 every gated transition shares — issue status, customer status,
+ *  and deal stage all answer the same body shape so clients (and the web
+ *  UI's blocking list) handle one error form. */
+function stageGateConflict(
+  blocked: { parent: Issue; steps: Issue[] }[]
+): VortexError {
+  const count = blocked.reduce((n, b) => n + b.steps.length, 0);
+  return new VortexError({
+    code: "CONFLICT",
+    status: 409,
+    message: `${count} required sub-step${count === 1 ? "" : "s"} still open`,
+    hint: "Complete them, or cancel with resolution 'skipped' and a resolutionReason",
+    details: {
+      blockingSubSteps: blocked.flatMap(({ parent, steps }) =>
+        steps.map((child) => ({
+          id: child.id,
+          identifier: child.identifier,
+          stepKey: child.stepKey,
+          ownerAgent: child.ownerAgent,
+          parentIssueId: parent.id,
+        }))
+      ),
+    },
+  });
 }
 
 function hasWorkspaceNamespace(env: AppEnv): env is WorkerEnv {
@@ -1885,18 +1939,63 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       contactIds?: string[];
       archivedAt?: string | null;
       customFields?: Record<string, string | null>;
+      // PILE-412 — admin stage-gate override (the API refuses it for
+      // non-admins); the reason is required and lands in audit + history.
+      stageGateOverride?: { reason: string };
     },
     actorId?: string
   ) {
     const { customFields, ...dealPatch } = patch;
     const before = data.getDeal(this.db, this.organizationId, id);
+    if (!before) return undefined;
+    if (
+      patch.stageGateOverride !== undefined &&
+      !patch.stageGateOverride.reason
+    ) {
+      throw VortexError.fromCode(
+        "BAD_REQUEST",
+        "stageGateOverride requires a non-empty reason"
+      );
+    }
+    // PILE-412 — leaving the deal's stage is refused while a linked parent
+    // issue still has open required sub-steps.
+    let gateOverride:
+      | { reason: string; blocked: { parent: Issue; steps: Issue[] }[] }
+      | undefined;
+    if (patch.stage !== undefined && patch.stage !== before.stage) {
+      const blocked = await this.blockingSubStepParents(
+        await this.linkedParentIssues("deal", id)
+      );
+      if (blocked.length > 0) {
+        if (!patch.stageGateOverride) {
+          throw stageGateConflict(blocked);
+        }
+        gateOverride = { reason: patch.stageGateOverride.reason, blocked };
+      }
+    }
     const deal = data.updateDeal(this.db, this.organizationId, id, dealPatch);
     if (!deal) return undefined;
     this.applyCustomFields("deal", id, customFields);
     this.audit("deal.updated", "deal", id, actorId);
+    if (gateOverride) {
+      const transition = {
+        field: "stage",
+        from: before.stage,
+        to: deal.stage,
+      };
+      for (const { parent, steps } of gateOverride.blocked) {
+        await this.recordStageGateOverride(
+          parent,
+          steps,
+          gateOverride.reason,
+          actorId,
+          transition
+        );
+      }
+    }
     // PILE-411 — entering a templated stage materializes sub-steps under the
     // deal's linked parent issues.
-    if (dealPatch.stage !== undefined && deal.stage !== before?.stage) {
+    if (dealPatch.stage !== undefined && deal.stage !== before.stage) {
       await this.applyStageTemplates(
         "deal",
         deal.stage,
@@ -2591,11 +2690,40 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     id: string,
     patch: Partial<Omit<data.CustomerInput, "organizationId">> & {
       customFields?: Record<string, string | null>;
+      // PILE-412 — admin stage-gate override (the API refuses it for
+      // non-admins); the reason is required and lands in audit + history.
+      stageGateOverride?: { reason: string };
     },
     actorId?: string
   ) {
     const { customFields, ...customerPatch } = patch;
     const before = data.getCustomer(this.db, this.organizationId, id);
+    if (!before) return undefined;
+    if (
+      patch.stageGateOverride !== undefined &&
+      !patch.stageGateOverride.reason
+    ) {
+      throw VortexError.fromCode(
+        "BAD_REQUEST",
+        "stageGateOverride requires a non-empty reason"
+      );
+    }
+    // PILE-412 — the merchant's stage is the customer status: leaving it is
+    // refused while a linked deal issue still has open required sub-steps.
+    let gateOverride:
+      | { reason: string; blocked: { parent: Issue; steps: Issue[] }[] }
+      | undefined;
+    if (patch.statusId !== undefined && patch.statusId !== before.statusId) {
+      const blocked = await this.blockingSubStepParents(
+        await this.linkedParentIssues("customer", id)
+      );
+      if (blocked.length > 0) {
+        if (!patch.stageGateOverride) {
+          throw stageGateConflict(blocked);
+        }
+        gateOverride = { reason: patch.stageGateOverride.reason, blocked };
+      }
+    }
     const customer = data.updateCustomer(
       this.db,
       this.organizationId,
@@ -2605,12 +2733,33 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (!customer) return undefined;
     this.applyCustomFields("customer", id, customFields);
     this.audit("customer.updated", "customer", id, actorId);
+    if (gateOverride) {
+      const stageName = (statusId: string | null) =>
+        statusId === null
+          ? null
+          : (data.getCustomerStatus(this.db, this.organizationId, statusId)
+              ?.name ?? statusId);
+      const transition = {
+        field: "stage",
+        from: stageName(before.statusId),
+        to: stageName(customer.statusId),
+      };
+      for (const { parent, steps } of gateOverride.blocked) {
+        await this.recordStageGateOverride(
+          parent,
+          steps,
+          gateOverride.reason,
+          actorId,
+          transition
+        );
+      }
+    }
     // PILE-411 — the merchant's stage is its customer status: entering a
     // templated status materializes sub-steps under the linked deal issues.
     // Templates key on the status's name, not the statusId uuid.
     if (
       customerPatch.statusId !== undefined &&
-      customer.statusId !== before?.statusId &&
+      customer.statusId !== before.statusId &&
       customer.statusId
     ) {
       const status = data.getCustomerStatus(
@@ -6238,7 +6387,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const status = input.status ?? "backlog";
     const resolution = validateIssueResolution(
       status,
-      input.resolution ?? null
+      input.resolution ?? null,
+      input.resolutionReason ?? null
     );
 
     const parent = await resolveParent(
@@ -6346,6 +6496,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         status,
         priority: resolvedPriority,
         resolution,
+        resolutionReason: input.resolutionReason ?? null,
         parentId: parent?.id ?? null,
         subIssueSortOrder: input.subIssueSortOrder ?? null,
         estimate: input.estimate ?? null,
@@ -7116,9 +7267,19 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         : patch.status !== undefined && newStatus !== old.status
           ? null
           : old.resolution;
+    // The reason follows the resolution: an explicit patch wins, a carried
+    // resolution keeps its reason, and a resolution reset (or swap) drops the
+    // stale one unless the patch supplies a replacement.
+    const resolvedReason =
+      patch.resolutionReason !== undefined
+        ? patch.resolutionReason
+        : newResolution !== null && newResolution === old.resolution
+          ? old.resolutionReason
+          : null;
     const resolvedResolution = validateIssueResolution(
       newStatus,
-      newResolution
+      newResolution,
+      resolvedReason
     );
 
     const newRepo = patch.repo !== undefined ? patch.repo : old.repo;
@@ -7150,6 +7311,33 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       }
     }
 
+    if (
+      patch.stageGateOverride !== undefined &&
+      !patch.stageGateOverride.reason
+    ) {
+      throw VortexError.fromCode(
+        "BAD_REQUEST",
+        "stageGateOverride requires a non-empty reason"
+      );
+    }
+
+    // PILE-412 — stage gate: leaving a stage is refused while the issue's
+    // required sub-steps are still open. An admin's override flag (enforced
+    // at the API boundary) bypasses the block; the reason and the blocking
+    // list land in the audit log and issue history after the write. The
+    // implicit prState→status mapping is exempt — it syncs a recorded fact,
+    // not a stage decision.
+    let gateOverride: { reason: string; blocking: Issue[] } | undefined;
+    if (patch.status !== undefined && patch.status !== old.status) {
+      const blocking = await this.getBlockingSubSteps(old.id);
+      if (blocking.length > 0) {
+        if (!patch.stageGateOverride) {
+          throw stageGateConflict([{ parent: old, steps: blocking }]);
+        }
+        gateOverride = { reason: patch.stageGateOverride.reason, blocking };
+      }
+    }
+
     const set: Partial<Issue> = {
       updatedAt: new Date().toISOString(),
     };
@@ -7162,6 +7350,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       { key: "status", field: "status" },
       { key: "priority", field: "priority" },
       { key: "resolution", field: "resolution" },
+      { key: "resolutionReason", field: "resolution_reason" },
       { key: "parentId", field: "parent_id" },
       { key: "subIssueSortOrder", field: "sub_issue_sort_order" },
       { key: "estimate", field: "estimate" },
@@ -7252,6 +7441,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (patch.priority !== undefined) set.priority = patch.priority;
     if (patch.resolution !== undefined || patch.status !== undefined) {
       set.resolution = resolvedResolution;
+    }
+    if (
+      patch.resolutionReason !== undefined ||
+      patch.resolution !== undefined ||
+      patch.status !== undefined
+    ) {
+      set.resolutionReason = resolvedReason;
     }
     if (newParentId !== undefined) set.parentId = newParentId;
     if (patch.subIssueSortOrder !== undefined)
@@ -7367,6 +7563,17 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
     if (historyEntries.length > 0) {
       await this.recordIssueHistory(issue.id, historyEntries, actorId);
+    }
+    // PILE-412 — an admin's stage-gate override is part of the issue's
+    // activity: who bypassed which blockers and why.
+    if (gateOverride) {
+      await this.recordStageGateOverride(
+        issue,
+        gateOverride.blocking,
+        gateOverride.reason,
+        actorId,
+        { field: "status", from: old.status, to: issue.status }
+      );
     }
     timer.mark("write");
 
@@ -7614,6 +7821,57 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       );
       if (issue) existing.add(def.stepKey);
     }
+  }
+
+  // ---- stage gate (PILE-412) — a record cannot leave its stage while its
+  // required sub-steps are open ----
+
+  /** Open required sub-steps under one parent issue. */
+  private async getBlockingSubSteps(parentId: string): Promise<Issue[]> {
+    return (await this.getIssueChildren(parentId)).filter(
+      (child) => child.required && !subStepSatisfied(child)
+    );
+  }
+
+  /** The subset of `parents` that still have open required sub-steps —
+   *  customer/deal transitions gate on every linked parent issue. */
+  private async blockingSubStepParents(
+    parents: Issue[]
+  ): Promise<{ parent: Issue; steps: Issue[] }[]> {
+    const blocked: { parent: Issue; steps: Issue[] }[] = [];
+    for (const parent of parents) {
+      const steps = await this.getBlockingSubSteps(parent.id);
+      if (steps.length > 0) blocked.push({ parent, steps });
+    }
+    return blocked;
+  }
+
+  /** An override is part of the parent's activity and the audit log — who
+   *  bypassed which blockers, why, and which transition it freed. */
+  private async recordStageGateOverride(
+    parent: Issue,
+    steps: Issue[],
+    reason: string,
+    actorId: string | undefined,
+    transition: { field: string; from: string | null; to: string | null }
+  ) {
+    const blocking = steps.map((child) => child.identifier ?? child.id);
+    await this.recordIssueHistory(
+      parent.id,
+      [
+        {
+          field: "stage_gate_override",
+          fromValue: blocking.join(", "),
+          toValue: reason,
+        },
+      ],
+      actorId
+    );
+    this.audit("issue.stage_gate_override", "issue", parent.id, actorId, {
+      [transition.field]: { from: transition.from, to: transition.to },
+      overrideReason: { from: null, to: reason },
+      blockingSubSteps: { from: blocking, to: null },
+    });
   }
 
   async batchUpdateIssues(

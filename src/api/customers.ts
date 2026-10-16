@@ -5,6 +5,7 @@ import type { Context } from "hono";
 import { createD1 } from "../global/db.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
+import { isAdminIdentity } from "../platform/permissions.js";
 import { rls } from "../platform/rls.js";
 import type { workspaceEntityAttachments } from "../workspace/schema.js";
 import {
@@ -59,6 +60,12 @@ const createCustomerSchema = z.object({
 
 const updateCustomerSchema = createCustomerSchema.partial().extend({
   url: z.string().nullable().optional(),
+  // PILE-412 — admin-only stage-gate override for the status transition:
+  // proceed past open required sub-steps on linked deal issues, recording
+  // the reason in audit + issue history. Non-admin callers get 403.
+  stageGateOverride: z
+    .object({ reason: z.string().min(1).max(2000) })
+    .optional(),
 });
 
 const tierSchema = z.object({
@@ -877,6 +884,13 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId, id } = c.req.valid("param");
     const input = c.req.valid("json");
     const identity = c.var.workspaceIdentity;
+    if (input.stageGateOverride !== undefined && !isAdminIdentity(identity)) {
+      throw new VortexError({
+        code: "FORBIDDEN",
+        status: 403,
+        message: "stageGateOverride requires admin",
+      });
+    }
     const stub = getWorkspaceStub(c.env, organizationId);
     await stub.setOrganizationId(organizationId);
     const customer = await stub.updateCustomer(id, input, identity.id);

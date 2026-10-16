@@ -5,6 +5,7 @@ import { createD1 } from "../global/db.js";
 import { runTriageRules } from "../global/triage-rules.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
+import { isAdminIdentity } from "../platform/permissions.js";
 import { rls } from "../platform/rls.js";
 import type { DealStage } from "../workspace/data/index.js";
 import { getWorkspaceStub } from "./stub.js";
@@ -81,6 +82,12 @@ const updateDealSchema = z.object({
   needsHumanReason: z.string().nullable().optional(),
   priorityScore: z.number().nullable().optional(),
   customFields: z.record(z.string(), z.string().nullable()).optional(),
+  // PILE-412 — admin-only stage-gate override for the stage transition:
+  // proceed past open required sub-steps on linked parent issues, recording
+  // the reason in audit + issue history. Non-admin callers get 403.
+  stageGateOverride: z
+    .object({ reason: z.string().min(1).max(2000) })
+    .optional(),
 });
 
 function notFound(): never {
@@ -320,24 +327,37 @@ export function registerDealRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(updateDealRoute, async (c) => {
     const { organizationId, dealId } = c.req.valid("param");
     const body = c.req.valid("json");
+    const identity = c.var.workspaceIdentity;
+    if (body.stageGateOverride !== undefined && !isAdminIdentity(identity)) {
+      throw new VortexError({
+        code: "FORBIDDEN",
+        status: 403,
+        message: "stageGateOverride requires admin",
+      });
+    }
     const stub = getWorkspaceStub(c.env, organizationId);
-    const deal = await stub.updateDeal(dealId, {
-      name: body.name,
-      customerId: body.customerId,
-      externalId: body.externalId,
-      stage: body.stage as DealStage | undefined,
-      amountCents: body.amountCents,
-      currency: body.currency,
-      expectedCloseAt: body.expectedCloseAt,
-      archivedAt: body.archivedAt,
-      contactIds: body.contactIds,
-      nextStepText: body.nextStepText,
-      nextStepDueAt: body.nextStepDueAt,
-      needsHuman: body.needsHuman,
-      needsHumanReason: body.needsHumanReason,
-      priorityScore: body.priorityScore,
-      customFields: body.customFields,
-    });
+    const deal = await stub.updateDeal(
+      dealId,
+      {
+        name: body.name,
+        customerId: body.customerId,
+        externalId: body.externalId,
+        stage: body.stage as DealStage | undefined,
+        amountCents: body.amountCents,
+        currency: body.currency,
+        expectedCloseAt: body.expectedCloseAt,
+        archivedAt: body.archivedAt,
+        contactIds: body.contactIds,
+        nextStepText: body.nextStepText,
+        nextStepDueAt: body.nextStepDueAt,
+        needsHuman: body.needsHuman,
+        needsHumanReason: body.needsHumanReason,
+        priorityScore: body.priorityScore,
+        customFields: body.customFields,
+        stageGateOverride: body.stageGateOverride,
+      },
+      identity.id
+    );
     if (!deal) notFound();
     return c.json({ deal }, 200);
   });

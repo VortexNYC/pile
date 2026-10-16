@@ -364,6 +364,9 @@ const createIssueSchema = z.object({
   status: z.enum(ISSUE_STATUSES).optional(),
   priority: z.enum(ISSUE_PRIORITIES).optional(),
   resolution: z.enum(ISSUE_RESOLUTIONS).nullable().optional(),
+  // PILE-412 — the "why" behind a resolution; mandatory when resolution is
+  // "skipped" (the stage gate's undone-with-justification outcome).
+  resolutionReason: z.string().nullable().optional(),
   parentId: z.string().nullable().optional(),
   subIssueSortOrder: z.number().nullable().optional(),
   estimate: z.number().int().min(0).nullable().optional(),
@@ -406,6 +409,12 @@ export const updateIssueSchema = createIssueSchema.partial().extend({
     .nullable()
     .optional(),
   prState: z.enum(ISSUE_PR_STATES).nullable().optional(),
+  // PILE-412 — admin-only stage-gate override: proceed past open required
+  // sub-steps, recording the reason in the audit log and issue activity.
+  // Non-admin requests carrying it are refused 403.
+  stageGateOverride: z
+    .object({ reason: z.string().min(1).max(2000) })
+    .optional(),
 });
 
 const CAPTURE_SCREENSHOT_MAX_BYTES = 8 * 1024 * 1024;
@@ -465,6 +474,7 @@ const issueApiSchema = z
     status: z.enum(ISSUE_STATUSES),
     priority: z.enum(ISSUE_PRIORITIES),
     resolution: z.enum(ISSUE_RESOLUTIONS).nullable(),
+    resolutionReason: z.string().nullable(),
     parentId: z.string().nullable(),
     subIssueSortOrder: z.number().nullable(),
     estimate: z.number().nullable(),
@@ -901,6 +911,13 @@ const updateIssueRoute = createRoute({
           schema: z.object({ draft: draftOutputSchema }),
         },
       },
+    },
+    403: {
+      description: "stageGateOverride was supplied by a non-admin identity",
+    },
+    409: {
+      description:
+        "Stage gate — required sub-steps are still open; details.blockingSubSteps lists them (id, identifier, stepKey, ownerAgent). Retry after completing or skipping them, or pass stageGateOverride (admin only)",
     },
   },
 });
@@ -2074,6 +2091,15 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     await assertIssueAccess(db, stub, existing, identity);
+    // PILE-412 — the override flag is admin-only; the DO re-checks the
+    // reason is non-empty when it actually bypasses a block.
+    if (input.stageGateOverride !== undefined && !isAdminIdentity(identity)) {
+      throw new VortexError({
+        code: "FORBIDDEN",
+        status: 403,
+        message: "stageGateOverride requires admin",
+      });
+    }
     const patch = await resolveIssuePatch(
       c.env,
       db,
@@ -2126,6 +2152,14 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     const db = createD1(c.env.D1);
     const stub = await getStub(c.env, organizationId);
 
+    // PILE-412 — batch override is admin-only like the single-issue path.
+    if (patch.stageGateOverride !== undefined && !isAdminIdentity(identity)) {
+      throw new VortexError({
+        code: "FORBIDDEN",
+        status: 403,
+        message: "stageGateOverride requires admin",
+      });
+    }
     if (patch.teamId !== undefined) {
       await assertTeamAccess(db, organizationId, patch.teamId, identity);
     }

@@ -864,7 +864,8 @@ export interface paths {
                         /** @enum {string} */
                         priority?: "low" | "medium" | "high" | "urgent";
                         /** @enum {string|null} */
-                        resolution?: "duplicate" | "not_planned" | "intended_behavior" | "not_reproducible" | "obsolete" | "resolved" | null;
+                        resolution?: "duplicate" | "not_planned" | "intended_behavior" | "not_reproducible" | "obsolete" | "resolved" | "skipped" | null;
+                        resolutionReason?: string | null;
                         parentId?: string | null;
                         subIssueSortOrder?: number | null;
                         estimate?: number | null;
@@ -1265,7 +1266,8 @@ export interface paths {
                         /** @enum {string} */
                         priority?: "low" | "medium" | "high" | "urgent";
                         /** @enum {string|null} */
-                        resolution?: "duplicate" | "not_planned" | "intended_behavior" | "not_reproducible" | "obsolete" | "resolved" | null;
+                        resolution?: "duplicate" | "not_planned" | "intended_behavior" | "not_reproducible" | "obsolete" | "resolved" | "skipped" | null;
+                        resolutionReason?: string | null;
                         parentId?: string | null;
                         subIssueSortOrder?: number | null;
                         estimate?: number | null;
@@ -1287,6 +1289,9 @@ export interface paths {
                         prUrl?: string | null;
                         /** @enum {string|null} */
                         prState?: "draft" | "open" | "merged" | "closed" | null;
+                        stageGateOverride?: {
+                            reason: string;
+                        };
                     };
                 };
             };
@@ -1310,6 +1315,20 @@ export interface paths {
                             draft: components["schemas"]["DraftOutput"];
                         };
                     };
+                };
+                /** @description stageGateOverride was supplied by a non-admin identity */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Stage gate — required sub-steps are still open; details.blockingSubSteps lists them (id, identifier, stepKey, ownerAgent). Retry after completing or skipping them, or pass stageGateOverride (admin only) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
                 };
             };
         };
@@ -1776,7 +1795,8 @@ export interface paths {
                             /** @enum {string} */
                             priority?: "low" | "medium" | "high" | "urgent";
                             /** @enum {string|null} */
-                            resolution?: "duplicate" | "not_planned" | "intended_behavior" | "not_reproducible" | "obsolete" | "resolved" | null;
+                            resolution?: "duplicate" | "not_planned" | "intended_behavior" | "not_reproducible" | "obsolete" | "resolved" | "skipped" | null;
+                            resolutionReason?: string | null;
                             parentId?: string | null;
                             subIssueSortOrder?: number | null;
                             estimate?: number | null;
@@ -1798,6 +1818,9 @@ export interface paths {
                             prUrl?: string | null;
                             /** @enum {string|null} */
                             prState?: "draft" | "open" | "merged" | "closed" | null;
+                            stageGateOverride?: {
+                                reason: string;
+                            };
                         };
                     };
                 };
@@ -18693,6 +18716,9 @@ export interface paths {
                         customFields?: {
                             [key: string]: string | null;
                         };
+                        stageGateOverride?: {
+                            reason: string;
+                        };
                     };
                 };
             };
@@ -20033,6 +20059,9 @@ export interface paths {
                         priorityScore?: number | null;
                         customFields?: {
                             [key: string]: string | null;
+                        };
+                        stageGateOverride?: {
+                            reason: string;
                         };
                     };
                 };
@@ -32219,7 +32248,8 @@ export interface components {
             /** @enum {string} */
             priority: "low" | "medium" | "high" | "urgent";
             /** @enum {string|null} */
-            resolution: "duplicate" | "not_planned" | "intended_behavior" | "not_reproducible" | "obsolete" | "resolved" | null;
+            resolution: "duplicate" | "not_planned" | "intended_behavior" | "not_reproducible" | "obsolete" | "resolved" | "skipped" | null;
+            resolutionReason: string | null;
             parentId: string | null;
             subIssueSortOrder: number | null;
             estimate: number | null;

@@ -5,6 +5,7 @@ import { createD1 } from "../global/db.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { AppContext } from "../platform/middleware.js";
+import { isAdminIdentity } from "../platform/permissions.js";
 import { rls } from "../platform/rls.js";
 import { DRAFT_OUTPUT_STATUSES } from "../types/workspace.js";
 import type { DraftOutput } from "../types/workspace.js";
@@ -324,6 +325,18 @@ export function registerDraftRoutes(app: OpenAPIHono<AppContext>) {
       const fields = updateIssueSchema.parse(
         (raw as { fields?: unknown }).fields
       );
+      // PILE-412 — a held patch can't smuggle the admin-only stage-gate
+      // override past a non-admin publisher.
+      if (
+        fields.stageGateOverride !== undefined &&
+        !isAdminIdentity(identity)
+      ) {
+        throw new VortexError({
+          code: "FORBIDDEN",
+          status: 403,
+          message: "stageGateOverride requires admin",
+        });
+      }
       const resolved = await resolveIssuePatch(
         c.env,
         db,
