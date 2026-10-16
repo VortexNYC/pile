@@ -52,6 +52,7 @@ import {
 } from "./review.js";
 import { parseStoredSecondaryRepos } from "./secondary-repos.js";
 import {
+import { drainDomainEvents } from "./pipeline-events.js";
   type CapBreach,
   describeCapBreach,
   evaluateRunCaps,
@@ -1346,6 +1347,14 @@ export async function sweepAgentSessions(
       // CoS; runs even with zero live sessions (a day of finished runs can
       // breach while nothing is in flight).
       await enforceSpendCaps(env, stub, id, sessions, ctx);
+      // PILE-401/413 — pipeline runtime: drain domain events (stage
+      // entries, actionable sub-steps, all-required-done) into dispatches.
+      await drainDomainEvents(env, stub, id, ctx).catch((err: unknown) => {
+        console.error("domain event drain failed", {
+          organizationId: id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
       if (sessions.length === 0) continue;
       // Sessions are swept in parallel with a bounded fan-out — one session
       // whose provider probes all stall can burn ~3x probeTimeoutMs serially,

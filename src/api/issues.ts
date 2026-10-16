@@ -72,6 +72,7 @@ import {
 } from "./agent-sessions.js";
 import { draftOutputSchema, serializeDraft } from "./draft-outputs.js";
 import { getExecutionCtx } from "./execution-ctx.js";
+import { drainDomainEvents } from "../agents/pipeline-events.js";
 import { assertIssueAccess, issueViewer } from "./issue-access.js";
 import {
   encodeCursor,
@@ -2141,6 +2142,11 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       input,
       identity,
       getExecutionCtx(c)
+    );
+    // PILE-413 — sub-step lifecycle events (actionable, all-required-done)
+    // drain into dispatches + stage policy here; the sweep is the backstop.
+    getExecutionCtx(c)?.waitUntil(
+      drainDomainEvents(c.env, stub, organizationId, getExecutionCtx(c))
     );
     return c.json(issue, 200);
   });

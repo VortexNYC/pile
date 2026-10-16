@@ -1277,6 +1277,117 @@ export const workspaceStageTemplates = sqliteTable(
   ]
 );
 
+// PILE-401/405/413 — the pipeline runtime's durable event outbox. The DO
+// records domain events at mutation points (a record enters a stage, a
+// sub-step becomes actionable, the last required sub-step closes); the
+// worker layer drains them into agent dispatches and stage policy. This
+// decouples DO writes from provider calls and makes every trigger durable —
+// an undrained event survives the request that produced it (the 5-minute
+// sweep is the backstop).
+export const workspaceDomainEvents = sqliteTable(
+  "domain_events" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    type: text("type" as string, {
+      enum: [
+        "record.stage_entered",
+        "substep.actionable",
+        "substeps.all_required_done",
+      ],
+    }).notNull(),
+    payload: text("payload" as string).notNull(),
+    dedupeKey: text("dedupe_key" as string),
+    status: text("status" as string, {
+      enum: ["pending", "delivered", "failed"],
+    })
+      .notNull()
+      .default("pending"),
+    error: text("error" as string),
+    attempts: integer("attempts" as string).notNull().default(0),
+    createdAt: text("created_at" as string).notNull(),
+    deliveredAt: text("delivered_at" as string),
+  },
+  (table) => [
+    index("domain_events_pending_idx" as string).on(
+      table.organizationId,
+      table.status,
+      table.createdAt
+    ),
+    index("domain_events_dedupe_idx" as string).on(
+      table.organizationId,
+      table.type,
+      table.dedupeKey
+    ),
+  ]
+);
+
+// PILE-401/413 — per-stage config: which pod agent a stage belongs to (the
+// VOR-701 agent-per-stage model), the instructions/job-spec override, and
+// the advance policy applied when the stage's required sub-steps all close
+// — `auto` moves the record to the next stage (which materializes the next
+// checklist), `ready_flag` marks needsHuman so a person reviews the move,
+// `none` leaves advancement manual.
+export const workspaceStageConfigs = sqliteTable(
+  "stage_configs" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    entityType: text("entity_type" as string, {
+      enum: ["issue", "deal", "customer"],
+    })
+      .notNull()
+      .default("issue"),
+    status: text("status" as string).notNull(),
+    ownerAgent: text("owner_agent" as string),
+    instructions: text("instructions" as string),
+    advancePolicy: text("advance_policy" as string, {
+      enum: ["none", "auto", "ready_flag"],
+    })
+      .notNull()
+      .default("none"),
+    enabled: integer("enabled" as string).notNull().default(1),
+    createdBy: text("created_by" as string),
+    createdAt: text("created_at" as string).notNull(),
+    updatedAt: text("updated_at" as string).notNull(),
+  },
+  (table) => [
+    uniqueIndex("stage_configs_stage_idx" as string).on(
+      table.organizationId,
+      table.entityType,
+      table.status
+    ),
+  ]
+);
+
+// PILE-405 — the agent registry: a slug like "sales-scout" maps to a
+// provider + job spec + tool scope. `owner_agent` on stage templates and
+// sub-steps resolves through this table; engineering is one registered
+// type, not the implicit whole.
+export const workspaceAgentTypes = sqliteTable(
+  "agent_types" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    slug: text("slug" as string).notNull(),
+    name: text("name" as string).notNull(),
+    providerAgentId: text("provider_agent_id" as string).notNull(),
+    jobSpec: text("job_spec" as string),
+    toolScope: text("tool_scope" as string),
+    permissionsTier: text("permissions_tier" as string),
+    enabled: integer("enabled" as string).notNull().default(1),
+    createdBy: text("created_by" as string),
+    createdAt: text("created_at" as string).notNull(),
+    updatedAt: text("updated_at" as string).notNull(),
+  },
+  (table) => [
+    uniqueIndex("agent_types_slug_idx" as string).on(
+      table.organizationId,
+      table.slug
+    ),
+  ]
+);
+
 // PILE-422 — inbound external events complete stage sub-steps (the Stripe
 // Connect requirements model: a server-side provider event, not an agent
 // claim, clears the step). A mapping binds (source, eventType) to a

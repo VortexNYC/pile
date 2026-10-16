@@ -321,6 +321,9 @@ export function registerDealRoutes(app: OpenAPIHono<AppContext>) {
     const stub = getWorkspaceStub(c.env, organizationId);
     const deal = await stub.getDeal(dealId);
     if (!deal) notFound();
+    getExecutionCtx(c)?.waitUntil(
+      drainDomainEvents(c.env, stub, organizationId, getExecutionCtx(c))
+    );
     return c.json({ deal }, 200);
   });
 

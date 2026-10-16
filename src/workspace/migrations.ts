@@ -1279,6 +1279,59 @@ CREATE INDEX IF NOT EXISTS import_receipts_org_idx ON import_receipts (organizat
 // for a resolution; required when resolution is 'skipped' so a required
 // sub-step can only end undone with a recorded justification.
 const v86 = `ALTER TABLE issues ADD COLUMN resolution_reason TEXT`;
+
+// PILE-401/405/413 — pipeline runtime: durable domain-event outbox the
+// worker drains into dispatches, per-stage config (owner agent + advance
+// policy), and the agent-type registry owner_agent slugs resolve through.
+const v87 = `CREATE TABLE IF NOT EXISTS domain_events (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  payload TEXT NOT NULL,
+  dedupe_key TEXT,
+  status TEXT NOT NULL DEFAULT 'pending',
+  error TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  delivered_at TEXT
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS domain_events_pending_idx ON domain_events (organization_id, status, created_at)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS domain_events_dedupe_idx ON domain_events (organization_id, type, dedupe_key)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS stage_configs (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  entity_type TEXT NOT NULL DEFAULT 'issue',
+  status TEXT NOT NULL,
+  owner_agent TEXT,
+  instructions TEXT,
+  advance_policy TEXT NOT NULL DEFAULT 'none',
+  enabled INTEGER NOT NULL DEFAULT 1,
+  created_by TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS stage_configs_stage_idx ON stage_configs (organization_id, entity_type, status)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS agent_types (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  slug TEXT NOT NULL,
+  name TEXT NOT NULL,
+  provider_agent_id TEXT NOT NULL,
+  job_spec TEXT,
+  tool_scope TEXT,
+  permissions_tier TEXT,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  created_by TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS agent_types_slug_idx ON agent_types (organization_id, slug)`;
 const v69 = `CREATE TABLE comments_new (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -1539,6 +1592,7 @@ export const workspaceMigrations = {
       { idx: 83, when: 83, tag: "v84", breakpoints: true },
       { idx: 84, when: 84, tag: "v85", breakpoints: true },
       { idx: 85, when: 85, tag: "v86", breakpoints: true },
+      { idx: 86, when: 86, tag: "v87", breakpoints: true },
     ],
   },
   migrations: {
@@ -1628,5 +1682,6 @@ export const workspaceMigrations = {
     m0083: v84,
     m0084: v85,
     m0085: v86,
+    m0086: v87,
   },
 } satisfies Parameters<typeof migrate>[1];

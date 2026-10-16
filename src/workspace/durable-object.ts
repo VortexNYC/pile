@@ -2004,6 +2004,20 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         actorId
       );
     }
+    // PILE-401 — the stage-entered event drives stage-owner dispatch +
+    // downstream stage policy in the worker drainer.
+    if (dealPatch.stage !== undefined && deal.stage !== before.stage) {
+      await this.emitDomainEvent(
+        "record.stage_entered",
+        {
+          entityType: "deal",
+          entityId: deal.id,
+          from: before.stage,
+          to: deal.stage,
+        },
+        `stage:${deal.id}:${deal.stage}`
+      );
+    }
     return this.withEntityFields("deal", deal);
   }
 
@@ -2775,6 +2789,18 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         actorId
       );
     }
+      // PILE-401 — stage-entered event for the customer pipeline stage.
+      await this.emitDomainEvent(
+        "record.stage_entered",
+        {
+          entityType: "customer",
+          entityId: customer.id,
+          from: before.statusId,
+          to: customer.statusId,
+          toName: status?.name ?? customer.statusId,
+        },
+        `stage:${customer.id}:${customer.statusId}`
+      );
     return this.withEntityFields("customer", customer);
   }
 
@@ -7672,6 +7698,53 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       timer.mark("automation");
     }
 
+    // PILE-413 — a materialized sub-step becoming actionable (created todo,
+    // or moved to an actionable status / assigned an owner) emits the
+    // dispatch event; the dedupe key keeps re-emits free.
+    if (
+      issue.parentId &&
+      issue.ownerAgent &&
+      (issue.status === "todo" || issue.status === "in_progress")
+    ) {
+      const becameActionable =
+        old.status !== issue.status || old.ownerAgent !== issue.ownerAgent;
+      if (becameActionable) {
+        await this.emitDomainEvent(
+          "substep.actionable",
+          {
+            issueId: issue.id,
+            parentId: issue.parentId,
+            stepKey: issue.stepKey,
+            ownerAgent: issue.ownerAgent,
+            required: issue.required,
+          },
+          `actionable:${issue.id}`
+        );
+      }
+    }
+    // When the last open required sub-step closes, the parent's stage is
+    // complete — the event fires exactly once per parent (dedupe key) and
+    // the drainer applies the stage's advance policy.
+    if (
+      issue.parentId &&
+      issue.required &&
+      !subStepSatisfied(old) &&
+      subStepSatisfied(issue)
+    ) {
+      const openRequired = await this.getBlockingSubSteps(issue.parentId);
+      if (openRequired.length === 0) {
+        await this.emitDomainEvent(
+          "substeps.all_required_done",
+          {
+            parentId: issue.parentId,
+            completedBy: issue.id,
+            stepKey: issue.stepKey,
+          },
+          `alldone:${issue.parentId}`
+        );
+      }
+    }
+
     const changes: Record<string, { from: unknown; to: unknown }> = {};
     for (const key of Object.keys(patch) as (keyof Issue)[]) {
       if (issue[key] !== old[key]) {
@@ -7819,8 +7892,80 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         },
         actorId
       );
-      if (issue) existing.add(def.stepKey);
+      if (issue) {
+        existing.add(def.stepKey);
+        // PILE-413 — a materialized sub-step becomes dispatchable work.
+        await this.emitDomainEvent(
+          "substep.actionable",
+          {
+            issueId: issue.id,
+            parentId: parent.id,
+            stepKey: def.stepKey,
+            ownerAgent: def.ownerAgent,
+            required: def.required,
+          },
+          `actionable:${issue.id}`
+        );
+      }
     }
+  }
+
+  // ---- pipeline runtime outbox (PILE-401/405/413) — the DO records domain
+  // events; the worker layer drains them into dispatches + stage policy ----
+
+  private async emitDomainEvent(
+    type: data.DomainEventType,
+    payload: Record<string, unknown>,
+    dedupeKey?: string
+  ) {
+    return data.emitDomainEvent(this.db, this.organizationId, {
+      type,
+      payload,
+      dedupeKey,
+    });
+  }
+
+  listPendingDomainEvents() {
+    return data.listPendingDomainEvents(this.db, this.organizationId);
+  }
+
+  markDomainEvent(id: string, status: "delivered" | "failed", error?: string) {
+    return data.markDomainEvent(this.db, id, status, error);
+  }
+
+  upsertStageConfig(input: data.StageConfigInput) {
+    return data.upsertStageConfig(this.db, this.organizationId, input);
+  }
+
+  getStageConfig(
+    entityType: "issue" | "deal" | "customer",
+    status: string
+  ) {
+    return data.getStageConfig(this.db, this.organizationId, entityType, status);
+  }
+
+  listStageConfigs() {
+    return data.listStageConfigs(this.db, this.organizationId);
+  }
+
+  deleteStageConfig(id: string) {
+    return data.deleteStageConfig(this.db, this.organizationId, id);
+  }
+
+  upsertAgentType(input: data.AgentTypeInput) {
+    return data.upsertAgentType(this.db, this.organizationId, input);
+  }
+
+  getAgentTypeBySlug(slug: string) {
+    return data.getAgentTypeBySlug(this.db, this.organizationId, slug);
+  }
+
+  listAgentTypes() {
+    return data.listAgentTypes(this.db, this.organizationId);
+  }
+
+  deleteAgentType(id: string) {
+    return data.deleteAgentType(this.db, this.organizationId, id);
   }
 
   // ---- stage gate (PILE-412) — a record cannot leave its stage while its

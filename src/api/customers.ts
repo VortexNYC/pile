@@ -895,6 +895,11 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     await stub.setOrganizationId(organizationId);
     const customer = await stub.updateCustomer(id, input, identity.id);
     if (!customer) return notFound("Customer not found");
+    // PILE-401 — stage transitions emit domain events; drain them into
+    // dispatches after the write (sweep is the backstop).
+    getExecutionCtx(c)?.waitUntil(
+      drainDomainEvents(c.env, stub, organizationId, getExecutionCtx(c))
+    );
     return c.json(customer);
   });
 
