@@ -3945,8 +3945,11 @@ export interface AgentTypeInput {
   /** JSON allowlist of tool names the profile may call. */
   tools?: string | null;
   /** "agent" (default) runs a provider lane; "human" resolves the owner
-   *  slug for lint but is never dispatched. */
-  kind?: "agent" | "human";
+   *  slug for lint but is never dispatched; "external" POSTs a webhook to
+   *  endpointUrl instead of launching a lane. */
+  kind?: "agent" | "human" | "external";
+  /** Webhook URL for kind="external" owners. */
+  endpointUrl?: string | null;
   toolScope?: string | null;
   permissionsTier?: string | null;
   enabled?: boolean;
@@ -3982,6 +3985,7 @@ export async function upsertAgentType(
         model: input.model ?? existing.model,
         tools: input.tools ?? existing.tools,
         kind: input.kind ?? existing.kind,
+        endpointUrl: input.endpointUrl ?? existing.endpointUrl,
         toolScope: input.toolScope ?? existing.toolScope,
         permissionsTier: input.permissionsTier ?? existing.permissionsTier,
         enabled:
@@ -4087,6 +4091,7 @@ export async function updateAgentType(
   if (patch.model !== undefined) set.model = patch.model;
   if (patch.tools !== undefined) set.tools = patch.tools;
   if (patch.kind !== undefined) set.kind = patch.kind;
+  if (patch.endpointUrl !== undefined) set.endpointUrl = patch.endpointUrl;
   if (patch.toolScope !== undefined) set.toolScope = patch.toolScope;
   if (patch.permissionsTier !== undefined)
     set.permissionsTier = patch.permissionsTier;

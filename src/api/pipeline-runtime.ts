@@ -48,6 +48,7 @@ const agentTypeSchema = z.object({
   model: z.string().nullable(),
   tools: z.string().nullable(),
   kind: z.string(),
+  endpointUrl: z.string().nullable(),
   toolScope: z.string().nullable(),
   permissionsTier: z.string().nullable(),
   enabled: z.number(),
@@ -69,8 +70,10 @@ const upsertAgentTypeSchema = z
     model: z.string().nullable().optional(),
     /** JSON allowlist of tool names. */
     tools: z.string().nullable().optional(),
-    /** "agent" runs a provider lane; "human" owns steps without dispatch. */
-    kind: z.enum(["agent", "human"]).optional(),
+    /** "agent" runs a provider lane; "human" owns steps without dispatch;
+     *  "external" POSTs the dispatch payload to endpointUrl. */
+    kind: z.enum(["agent", "human", "external"]).optional(),
+    endpointUrl: z.string().url().nullable().optional(),
     toolScope: z.string().nullable().optional(),
     permissionsTier: z.string().nullable().optional(),
     enabled: z.boolean().optional(),
@@ -249,7 +252,8 @@ const patchAgentTypeSchema = z
     slug: z.string().min(1).optional(),
     name: z.string().min(1).optional(),
     providerAgentId: z.string().min(1).optional(),
-    kind: z.enum(["agent", "human"]).optional(),
+    kind: z.enum(["agent", "human", "external"]).optional(),
+    endpointUrl: z.string().url().nullable().optional(),
     jobSpec: z.string().nullable().optional(),
     toolScope: z.string().nullable().optional(),
     permissionsTier: z.string().nullable().optional(),

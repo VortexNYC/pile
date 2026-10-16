@@ -100,6 +100,7 @@ async function resolveOwner(
   slug: string;
   name: string;
   kind: string;
+  endpointUrl: string | null;
   jobSpec: string | null;
   toolScope: string | null;
 } | null> {
@@ -111,9 +112,35 @@ async function resolveOwner(
     slug: type.slug,
     name: type.name,
     kind: type.kind ?? "agent",
+    endpointUrl: type.endpointUrl ?? null,
     jobSpec: type.jobSpec,
     toolScope: type.toolScope,
   };
+}
+
+/** kind="external" owners (Grokbot as chief_of_staff, a customer's own
+ *  automation) get the dispatch POSTed to their endpoint instead of a
+ *  pile lane — same payload contract a CfAgentProvider would receive. */
+async function dispatchExternal(
+  env: WorkerEnv,
+  owner: { endpointUrl: string | null; slug: string; name: string },
+  payload: Record<string, unknown>,
+  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
+): Promise<void> {
+  if (!owner.endpointUrl) return;
+  const task = fetch(owner.endpointUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  }).then(async (res) => {
+    if (!res.ok) {
+      console.error(
+        `external dispatch to ${owner.slug} (${owner.endpointUrl}) failed: ${res.status}`
+      );
+    }
+  });
+  if (ctx) ctx.waitUntil(task);
+  else await task;
 }
 
 /** Durable conversation key for per-merchant agent memory — the flue
@@ -136,6 +163,24 @@ async function handleStageEntered(
   if (!config?.ownerAgent) return;
   const owner = await resolveOwner(stub, config.ownerAgent);
   if (!owner || owner.kind === "human") return;
+  if (owner.kind === "external") {
+    if (!owner.endpointUrl) return;
+    await dispatchExternal(
+      env,
+      owner,
+      {
+        event: "record.stage_entered",
+        organizationId,
+        entityType: payload.entityType,
+        entityId: payload.entityId,
+        stage: stageName,
+        agent: owner.slug,
+        conversationKey: conversationKey(payload.entityId, owner.slug),
+      },
+      ctx
+    );
+    return;
+  }
   const issue = await pipelineIssueFor(
     stub,
     payload.entityType,
@@ -225,6 +270,29 @@ async function handleSubstepActionable(
   if (issue.status !== "todo" && issue.status !== "in_progress") return;
   const owner = await resolveOwner(stub, issue.ownerAgent);
   if (owner?.kind === "human") return;
+  if (owner?.kind === "external") {
+    if (!owner.endpointUrl) return;
+    const parentIssue = await stub.getIssue(payload.parentId);
+    await dispatchExternal(
+      env,
+      owner,
+      {
+        event: "substep.actionable",
+        organizationId,
+        issueId: issue.id,
+        parentId: payload.parentId,
+        stepKey: issue.stepKey ?? null,
+        title: issue.title,
+        agent: owner.slug,
+        conversationKey: conversationKey(payload.parentId, owner.slug),
+        parent: parentIssue
+          ? { id: parentIssue.id, title: parentIssue.title }
+          : null,
+      },
+      ctx
+    );
+    return;
+  }
   if (!owner) {
     // Unresolvable sub-steps escalate to the chief of staff — a registered
     // "chief_of_staff" agent type gets dispatched with the orphan step;
