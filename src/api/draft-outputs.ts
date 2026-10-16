@@ -39,6 +39,10 @@ export const draftOutputSchema = z
     reviewedAt: z.string().nullable(),
     reviewNote: z.string().nullable(),
     publishedCommentId: z.string().nullable(),
+    /** PILE-404 — provenance + edit-diff bookkeeping for artifact drafts. */
+    agentSlug: z.string().nullable(),
+    promptVersion: z.string().nullable(),
+    originalPayload: z.record(z.string(), z.unknown()).nullable(),
     createdAt: z.string(),
     updatedAt: z.string(),
   })
@@ -57,5 +61,11 @@ function parsePayload(raw: string): Record<string, unknown> {
 }
 
 export function serializeDraft(draft: DraftOutput) {
-  return { ...draft, payload: parsePayload(draft.payload) };
+  return {
+    ...draft,
+    payload: parsePayload(draft.payload),
+    originalPayload: draft.originalPayload
+      ? parsePayload(draft.originalPayload)
+      : null,
+  };
 }

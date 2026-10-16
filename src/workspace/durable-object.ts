@@ -1020,6 +1020,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       | Record<string, unknown>;
     createdById?: string | null;
     sessionId?: string | null;
+    /** PILE-404 — provenance for evals: which agent + prompt produced
+     *  this draft. */
+    agentSlug?: string | null;
+    promptVersion?: string | null;
   }): Promise<DraftOutput> {
     await this.ready;
     const id = crypto.randomUUID();
@@ -1037,6 +1041,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         status: "pending",
         createdById: input.createdById ?? null,
         sessionId: input.sessionId ?? null,
+        agentSlug: input.agentSlug ?? null,
+        promptVersion: input.promptVersion ?? null,
         createdAt: ts,
         updatedAt: ts,
       })
@@ -1064,6 +1070,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }
     return row;
   }
+
 
   async getDraftOutput(id: string) {
     await this.ready;
@@ -1138,7 +1145,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const serialized = JSON.stringify(payload);
     await this.db
       .update(workspaceDraftOutputs)
-      .set({ payload: serialized, updatedAt: new Date().toISOString() })
+      .set({
+        payload: serialized,
+        // PILE-404 — the first human edit preserves the agent's original
+        // payload so the diff (draft vs. what shipped) survives.
+        originalPayload: draft.originalPayload ?? draft.payload,
+        updatedAt: new Date().toISOString(),
+      })
       .where(eq(workspaceDraftOutputs.id, id));
     this.audit(
       "draft_output.updated",
