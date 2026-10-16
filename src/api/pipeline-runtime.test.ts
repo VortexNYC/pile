@@ -10,6 +10,8 @@ import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
+import { drainDomainEvents } from "../agents/pipeline-events.js";
+import { getWorkspaceStub } from "./stub.js";
 
 async function seedWorkspace() {
   const db = createD1(env.D1);
@@ -158,5 +160,96 @@ describe("pipeline runtime (PILE-401/405/413)", () => {
       admin
     );
     expect(done.status).toBe(200);
+  });
+
+  it("drains substep.actionable into a dispatch to the resolved owner agent", async () => {
+    const dispatched: string[] = [];
+    const agentId = `mock-pod-${crypto.randomUUID().slice(0, 8)}`;
+    registerAgentProvider(
+      agentId,
+      () =>
+        new MockAgentProvider(agentId, {
+          dispatch: (_org, dispatchedIssue) => {
+            dispatched.push(dispatchedIssue.id);
+            return {
+              id: `sess-${crypto.randomUUID()}`,
+              agentId,
+              issueId: dispatchedIssue.id,
+              status: "created" as const,
+            };
+          },
+        })
+    );
+    // Register a pod agent type whose provider is the mock, then a stage
+    // config that names it; a customer stage entry should dispatch it.
+    const type = await fetch(
+      `/workspaces/${org}/agent-types`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          slug: "pod-scout",
+          name: "Pod Scout",
+          providerAgentId: agentId,
+          jobSpec: "Scout the merchant.",
+        }),
+      },
+      admin
+    );
+    expect(type.status).toBe(200);
+    const cfg = await fetch(
+      `/workspaces/${org}/stage-configs`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          entityType: "customer",
+          status: "Prospect",
+          ownerAgent: "pod-scout",
+        }),
+      },
+      admin
+    );
+    expect(cfg.status).toBe(200);
+
+    // Register a stage template so the sub-step materializes.
+    await fetch(
+      `/workspaces/${org}/stage-templates`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          entityType: "customer",
+          status: "Prospect",
+          stepKey: "scout_step",
+          title: "Scout step",
+          required: true,
+          ownerAgent: "pod-scout",
+        }),
+      },
+      admin
+    );
+
+    const customerRes = await fetch(
+      `/workspaces/${org}/customers`,
+      { method: "POST", body: JSON.stringify({ name: "Dispatch Co" }) },
+      admin
+    );
+    const customer = z.object({ id: z.string() }).parse(await customerRes.json());
+    const statusRes = await fetch(
+      `/workspaces/${org}/customer-statuses`,
+      { method: "POST", body: JSON.stringify({ name: "Prospect" }) },
+      admin
+    );
+    const status = z.object({ id: z.string() }).parse(await statusRes.json());
+    const enter = await fetch(
+      `/workspaces/${org}/customers/${customer.id}`,
+      { method: "PATCH", body: JSON.stringify({ statusId: status.id }) },
+      admin
+    );
+    expect(enter.status).toBe(200);
+
+    // waitUntil may not flush in the test pool — drain explicitly.
+    const stub = getWorkspaceStub(env, org);
+    const drained = await drainDomainEvents(env, stub, org);
+    expect(drained).toBeGreaterThan(0);
+    expect(dispatched.length).toBeGreaterThan(0);
   });
 });
