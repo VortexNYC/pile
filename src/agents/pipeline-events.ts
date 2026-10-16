@@ -95,11 +95,30 @@ async function pipelineIssueFor(
 async function resolveOwner(
   stub: Stub,
   slug: string | null
-): Promise<{ agentId: string; jobSpec: string | null } | null> {
+): Promise<{
+  agentId: string;
+  slug: string;
+  name: string;
+  jobSpec: string | null;
+  toolScope: string | null;
+} | null> {
   if (!slug) return null;
   const type = await stub.getAgentTypeBySlug(slug);
   if (!type) return null;
-  return { agentId: type.providerAgentId, jobSpec: type.jobSpec };
+  return {
+    agentId: type.providerAgentId,
+    slug: type.slug,
+    name: type.name,
+    jobSpec: type.jobSpec,
+    toolScope: type.toolScope,
+  };
+}
+
+/** Durable conversation key for per-merchant agent memory — the flue
+ *  worker names the conversation after this, so a profile's context for
+ *  a merchant survives across dispatches. */
+function conversationKey(recordId: string, agentSlug: string): string {
+  return `${recordId}-${agentSlug}`;
 }
 
 async function handleStageEntered(
@@ -234,7 +253,17 @@ async function handleSubstepActionable(
     { ...PIPELINE_ACTOR, organizationId },
     undefined,
     ctx,
-    { instructions, stepKey: issue.stepKey ?? undefined }
+    {
+      instructions,
+      stepKey: issue.stepKey ?? undefined,
+      agentProfile: {
+        slug: owner.slug,
+        name: owner.name,
+        jobSpec: owner.jobSpec,
+        toolScope: owner.toolScope,
+      },
+      conversationKey: conversationKey(payload.parentId, owner.slug),
+    }
   );
 }
 
