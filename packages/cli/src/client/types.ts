@@ -1918,6 +1918,34 @@ export interface paths {
                             }[] | null;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
+                            receipt?: {
+                                id: string;
+                                organizationId: string;
+                                sessionId: string;
+                                issueId: string;
+                                agentId: string;
+                                stepKey: string | null;
+                                dealId: string | null;
+                                status: string;
+                                model: string | null;
+                                effort: string | null;
+                                inputTokens: number | null;
+                                outputTokens: number | null;
+                                totalTokens: number | null;
+                                toolCalls: number | null;
+                                costMicros: number | null;
+                                externalSpendMicros: number | null;
+                                totalCostMicros: number | null;
+                                /** @enum {string|null} */
+                                costSource: "reported" | "rate_map" | null;
+                                capExceeded: number;
+                                stopReason: string | null;
+                                startedAt: string | null;
+                                endedAt: string | null;
+                                durationMs: number | null;
+                                createdAt: string;
+                                updatedAt: string;
+                            } | null;
                             activities?: {
                                 id: string;
                                 sessionId: string;
@@ -2035,6 +2063,34 @@ export interface paths {
                                 }[] | null;
                                 /** @enum {string|null} */
                                 derivedStatus?: "stalled" | "needs_input" | null;
+                                receipt?: {
+                                    id: string;
+                                    organizationId: string;
+                                    sessionId: string;
+                                    issueId: string;
+                                    agentId: string;
+                                    stepKey: string | null;
+                                    dealId: string | null;
+                                    status: string;
+                                    model: string | null;
+                                    effort: string | null;
+                                    inputTokens: number | null;
+                                    outputTokens: number | null;
+                                    totalTokens: number | null;
+                                    toolCalls: number | null;
+                                    costMicros: number | null;
+                                    externalSpendMicros: number | null;
+                                    totalCostMicros: number | null;
+                                    /** @enum {string|null} */
+                                    costSource: "reported" | "rate_map" | null;
+                                    capExceeded: number;
+                                    stopReason: string | null;
+                                    startedAt: string | null;
+                                    endedAt: string | null;
+                                    durationMs: number | null;
+                                    createdAt: string;
+                                    updatedAt: string;
+                                } | null;
                                 activities?: {
                                     id: string;
                                     sessionId: string;
@@ -2263,6 +2319,34 @@ export interface paths {
                                 }[] | null;
                                 /** @enum {string|null} */
                                 derivedStatus?: "stalled" | "needs_input" | null;
+                                receipt?: {
+                                    id: string;
+                                    organizationId: string;
+                                    sessionId: string;
+                                    issueId: string;
+                                    agentId: string;
+                                    stepKey: string | null;
+                                    dealId: string | null;
+                                    status: string;
+                                    model: string | null;
+                                    effort: string | null;
+                                    inputTokens: number | null;
+                                    outputTokens: number | null;
+                                    totalTokens: number | null;
+                                    toolCalls: number | null;
+                                    costMicros: number | null;
+                                    externalSpendMicros: number | null;
+                                    totalCostMicros: number | null;
+                                    /** @enum {string|null} */
+                                    costSource: "reported" | "rate_map" | null;
+                                    capExceeded: number;
+                                    stopReason: string | null;
+                                    startedAt: string | null;
+                                    endedAt: string | null;
+                                    durationMs: number | null;
+                                    createdAt: string;
+                                    updatedAt: string;
+                                } | null;
                                 activities?: {
                                     id: string;
                                     sessionId: string;
@@ -2343,6 +2427,34 @@ export interface paths {
                                 }[] | null;
                                 /** @enum {string|null} */
                                 derivedStatus?: "stalled" | "needs_input" | null;
+                                receipt?: {
+                                    id: string;
+                                    organizationId: string;
+                                    sessionId: string;
+                                    issueId: string;
+                                    agentId: string;
+                                    stepKey: string | null;
+                                    dealId: string | null;
+                                    status: string;
+                                    model: string | null;
+                                    effort: string | null;
+                                    inputTokens: number | null;
+                                    outputTokens: number | null;
+                                    totalTokens: number | null;
+                                    toolCalls: number | null;
+                                    costMicros: number | null;
+                                    externalSpendMicros: number | null;
+                                    totalCostMicros: number | null;
+                                    /** @enum {string|null} */
+                                    costSource: "reported" | "rate_map" | null;
+                                    capExceeded: number;
+                                    stopReason: string | null;
+                                    startedAt: string | null;
+                                    endedAt: string | null;
+                                    durationMs: number | null;
+                                    createdAt: string;
+                                    updatedAt: string;
+                                } | null;
                                 activities?: {
                                     id: string;
                                     sessionId: string;
@@ -2537,6 +2649,34 @@ export interface paths {
                                 }[] | null;
                                 /** @enum {string|null} */
                                 derivedStatus?: "stalled" | "needs_input" | null;
+                                receipt?: {
+                                    id: string;
+                                    organizationId: string;
+                                    sessionId: string;
+                                    issueId: string;
+                                    agentId: string;
+                                    stepKey: string | null;
+                                    dealId: string | null;
+                                    status: string;
+                                    model: string | null;
+                                    effort: string | null;
+                                    inputTokens: number | null;
+                                    outputTokens: number | null;
+                                    totalTokens: number | null;
+                                    toolCalls: number | null;
+                                    costMicros: number | null;
+                                    externalSpendMicros: number | null;
+                                    totalCostMicros: number | null;
+                                    /** @enum {string|null} */
+                                    costSource: "reported" | "rate_map" | null;
+                                    capExceeded: number;
+                                    stopReason: string | null;
+                                    startedAt: string | null;
+                                    endedAt: string | null;
+                                    durationMs: number | null;
+                                    createdAt: string;
+                                    updatedAt: string;
+                                } | null;
                                 activities?: {
                                     id: string;
                                     sessionId: string;
@@ -2764,6 +2904,34 @@ export interface paths {
                                 }[] | null;
                                 /** @enum {string|null} */
                                 derivedStatus?: "stalled" | "needs_input" | null;
+                                receipt?: {
+                                    id: string;
+                                    organizationId: string;
+                                    sessionId: string;
+                                    issueId: string;
+                                    agentId: string;
+                                    stepKey: string | null;
+                                    dealId: string | null;
+                                    status: string;
+                                    model: string | null;
+                                    effort: string | null;
+                                    inputTokens: number | null;
+                                    outputTokens: number | null;
+                                    totalTokens: number | null;
+                                    toolCalls: number | null;
+                                    costMicros: number | null;
+                                    externalSpendMicros: number | null;
+                                    totalCostMicros: number | null;
+                                    /** @enum {string|null} */
+                                    costSource: "reported" | "rate_map" | null;
+                                    capExceeded: number;
+                                    stopReason: string | null;
+                                    startedAt: string | null;
+                                    endedAt: string | null;
+                                    durationMs: number | null;
+                                    createdAt: string;
+                                    updatedAt: string;
+                                } | null;
                                 activities?: {
                                     id: string;
                                     sessionId: string;
@@ -2885,6 +3053,34 @@ export interface paths {
                             }[] | null;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
+                            receipt?: {
+                                id: string;
+                                organizationId: string;
+                                sessionId: string;
+                                issueId: string;
+                                agentId: string;
+                                stepKey: string | null;
+                                dealId: string | null;
+                                status: string;
+                                model: string | null;
+                                effort: string | null;
+                                inputTokens: number | null;
+                                outputTokens: number | null;
+                                totalTokens: number | null;
+                                toolCalls: number | null;
+                                costMicros: number | null;
+                                externalSpendMicros: number | null;
+                                totalCostMicros: number | null;
+                                /** @enum {string|null} */
+                                costSource: "reported" | "rate_map" | null;
+                                capExceeded: number;
+                                stopReason: string | null;
+                                startedAt: string | null;
+                                endedAt: string | null;
+                                durationMs: number | null;
+                                createdAt: string;
+                                updatedAt: string;
+                            } | null;
                             activities?: {
                                 id: string;
                                 sessionId: string;
@@ -3021,6 +3217,34 @@ export interface paths {
                             }[] | null;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
+                            receipt?: {
+                                id: string;
+                                organizationId: string;
+                                sessionId: string;
+                                issueId: string;
+                                agentId: string;
+                                stepKey: string | null;
+                                dealId: string | null;
+                                status: string;
+                                model: string | null;
+                                effort: string | null;
+                                inputTokens: number | null;
+                                outputTokens: number | null;
+                                totalTokens: number | null;
+                                toolCalls: number | null;
+                                costMicros: number | null;
+                                externalSpendMicros: number | null;
+                                totalCostMicros: number | null;
+                                /** @enum {string|null} */
+                                costSource: "reported" | "rate_map" | null;
+                                capExceeded: number;
+                                stopReason: string | null;
+                                startedAt: string | null;
+                                endedAt: string | null;
+                                durationMs: number | null;
+                                createdAt: string;
+                                updatedAt: string;
+                            } | null;
                             activities?: {
                                 id: string;
                                 sessionId: string;
@@ -3423,6 +3647,34 @@ export interface paths {
                             }[] | null;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
+                            receipt?: {
+                                id: string;
+                                organizationId: string;
+                                sessionId: string;
+                                issueId: string;
+                                agentId: string;
+                                stepKey: string | null;
+                                dealId: string | null;
+                                status: string;
+                                model: string | null;
+                                effort: string | null;
+                                inputTokens: number | null;
+                                outputTokens: number | null;
+                                totalTokens: number | null;
+                                toolCalls: number | null;
+                                costMicros: number | null;
+                                externalSpendMicros: number | null;
+                                totalCostMicros: number | null;
+                                /** @enum {string|null} */
+                                costSource: "reported" | "rate_map" | null;
+                                capExceeded: number;
+                                stopReason: string | null;
+                                startedAt: string | null;
+                                endedAt: string | null;
+                                durationMs: number | null;
+                                createdAt: string;
+                                updatedAt: string;
+                            } | null;
                             activities?: {
                                 id: string;
                                 sessionId: string;
@@ -3540,6 +3792,34 @@ export interface paths {
                             }[] | null;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
+                            receipt?: {
+                                id: string;
+                                organizationId: string;
+                                sessionId: string;
+                                issueId: string;
+                                agentId: string;
+                                stepKey: string | null;
+                                dealId: string | null;
+                                status: string;
+                                model: string | null;
+                                effort: string | null;
+                                inputTokens: number | null;
+                                outputTokens: number | null;
+                                totalTokens: number | null;
+                                toolCalls: number | null;
+                                costMicros: number | null;
+                                externalSpendMicros: number | null;
+                                totalCostMicros: number | null;
+                                /** @enum {string|null} */
+                                costSource: "reported" | "rate_map" | null;
+                                capExceeded: number;
+                                stopReason: string | null;
+                                startedAt: string | null;
+                                endedAt: string | null;
+                                durationMs: number | null;
+                                createdAt: string;
+                                updatedAt: string;
+                            } | null;
                             activities?: {
                                 id: string;
                                 sessionId: string;
@@ -3704,6 +3984,298 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/agent/spend-caps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List agent spend caps */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Spend/token caps for the workspace — agentId "*" is the workspace default */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            caps: {
+                                id: string;
+                                organizationId: string;
+                                agentId: string;
+                                maxRunsPerDay: number | null;
+                                maxRunsPerMonth: number | null;
+                                maxTokensPerDay: number | null;
+                                maxTokensPerMonth: number | null;
+                                maxCostMicrosPerDay: number | null;
+                                maxCostMicrosPerMonth: number | null;
+                                maxTokensPerRun: number | null;
+                                maxCostMicrosPerRun: number | null;
+                                lastCapAlertAt: string | null;
+                                createdBy: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/agent/spend-caps/{agentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update agent spend cap */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    agentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        maxRunsPerDay?: number | null;
+                        maxRunsPerMonth?: number | null;
+                        maxTokensPerDay?: number | null;
+                        maxTokensPerMonth?: number | null;
+                        maxCostMicrosPerDay?: number | null;
+                        maxCostMicrosPerMonth?: number | null;
+                        maxTokensPerRun?: number | null;
+                        maxCostMicrosPerRun?: number | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Spend caps upserted for the agent type — null fields clear a limit; omitted fields keep their value */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            agentId: string;
+                            maxRunsPerDay: number | null;
+                            maxRunsPerMonth: number | null;
+                            maxTokensPerDay: number | null;
+                            maxTokensPerMonth: number | null;
+                            maxCostMicrosPerDay: number | null;
+                            maxCostMicrosPerMonth: number | null;
+                            maxTokensPerRun: number | null;
+                            maxCostMicrosPerRun: number | null;
+                            lastCapAlertAt: string | null;
+                            createdBy: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
+        /** Delete agent spend cap */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    agentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Spend caps deleted for the agent type */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                        };
+                    };
+                };
+                /** @description No caps configured for this agent type */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/agent/receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List agent receipts */
+        get: {
+            parameters: {
+                query?: {
+                    sessionId?: string;
+                    agentId?: string;
+                    issueId?: string;
+                    stepKey?: string;
+                    dealId?: string;
+                    since?: string;
+                    until?: string;
+                    limit?: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Run receipts — per-run usage + cost records */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            receipts: {
+                                id: string;
+                                organizationId: string;
+                                sessionId: string;
+                                issueId: string;
+                                agentId: string;
+                                stepKey: string | null;
+                                dealId: string | null;
+                                status: string;
+                                model: string | null;
+                                effort: string | null;
+                                inputTokens: number | null;
+                                outputTokens: number | null;
+                                totalTokens: number | null;
+                                toolCalls: number | null;
+                                costMicros: number | null;
+                                externalSpendMicros: number | null;
+                                totalCostMicros: number | null;
+                                /** @enum {string|null} */
+                                costSource: "reported" | "rate_map" | null;
+                                capExceeded: number;
+                                stopReason: string | null;
+                                startedAt: string | null;
+                                endedAt: string | null;
+                                durationMs: number | null;
+                                createdAt: string;
+                                updatedAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/agent/receipts/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List agent receipt summary */
+        get: {
+            parameters: {
+                query: {
+                    sessionId?: string;
+                    agentId?: string;
+                    issueId?: string;
+                    stepKey?: string;
+                    dealId?: string;
+                    since?: string;
+                    until?: string;
+                    limit?: string;
+                    groupBy: "agentId" | "stepKey" | "issueId" | "dealId";
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Run receipts aggregated per agent, step (pipeline stage), issue, or deal */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            summary: {
+                                key: string | null;
+                                runs: number;
+                                inputTokens: number;
+                                outputTokens: number;
+                                totalTokens: number;
+                                toolCalls: number;
+                                costMicros: number;
+                                externalSpendMicros: number;
+                                capExceededRuns: number;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/agent/sessions/{sessionId}/poll": {
         parameters: {
             query?: never;
@@ -3783,6 +4355,34 @@ export interface paths {
                             }[] | null;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
+                            receipt?: {
+                                id: string;
+                                organizationId: string;
+                                sessionId: string;
+                                issueId: string;
+                                agentId: string;
+                                stepKey: string | null;
+                                dealId: string | null;
+                                status: string;
+                                model: string | null;
+                                effort: string | null;
+                                inputTokens: number | null;
+                                outputTokens: number | null;
+                                totalTokens: number | null;
+                                toolCalls: number | null;
+                                costMicros: number | null;
+                                externalSpendMicros: number | null;
+                                totalCostMicros: number | null;
+                                /** @enum {string|null} */
+                                costSource: "reported" | "rate_map" | null;
+                                capExceeded: number;
+                                stopReason: string | null;
+                                startedAt: string | null;
+                                endedAt: string | null;
+                                durationMs: number | null;
+                                createdAt: string;
+                                updatedAt: string;
+                            } | null;
                             activities?: {
                                 id: string;
                                 sessionId: string;
@@ -3893,6 +4493,34 @@ export interface paths {
                                 }[] | null;
                                 /** @enum {string|null} */
                                 derivedStatus?: "stalled" | "needs_input" | null;
+                                receipt?: {
+                                    id: string;
+                                    organizationId: string;
+                                    sessionId: string;
+                                    issueId: string;
+                                    agentId: string;
+                                    stepKey: string | null;
+                                    dealId: string | null;
+                                    status: string;
+                                    model: string | null;
+                                    effort: string | null;
+                                    inputTokens: number | null;
+                                    outputTokens: number | null;
+                                    totalTokens: number | null;
+                                    toolCalls: number | null;
+                                    costMicros: number | null;
+                                    externalSpendMicros: number | null;
+                                    totalCostMicros: number | null;
+                                    /** @enum {string|null} */
+                                    costSource: "reported" | "rate_map" | null;
+                                    capExceeded: number;
+                                    stopReason: string | null;
+                                    startedAt: string | null;
+                                    endedAt: string | null;
+                                    durationMs: number | null;
+                                    createdAt: string;
+                                    updatedAt: string;
+                                } | null;
                                 activities?: {
                                     id: string;
                                     sessionId: string;
@@ -4032,6 +4660,34 @@ export interface paths {
                                 }[] | null;
                                 /** @enum {string|null} */
                                 derivedStatus?: "stalled" | "needs_input" | null;
+                                receipt?: {
+                                    id: string;
+                                    organizationId: string;
+                                    sessionId: string;
+                                    issueId: string;
+                                    agentId: string;
+                                    stepKey: string | null;
+                                    dealId: string | null;
+                                    status: string;
+                                    model: string | null;
+                                    effort: string | null;
+                                    inputTokens: number | null;
+                                    outputTokens: number | null;
+                                    totalTokens: number | null;
+                                    toolCalls: number | null;
+                                    costMicros: number | null;
+                                    externalSpendMicros: number | null;
+                                    totalCostMicros: number | null;
+                                    /** @enum {string|null} */
+                                    costSource: "reported" | "rate_map" | null;
+                                    capExceeded: number;
+                                    stopReason: string | null;
+                                    startedAt: string | null;
+                                    endedAt: string | null;
+                                    durationMs: number | null;
+                                    createdAt: string;
+                                    updatedAt: string;
+                                } | null;
                                 activities?: {
                                     id: string;
                                     sessionId: string;
@@ -4177,6 +4833,34 @@ export interface paths {
                             }[] | null;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
+                            receipt?: {
+                                id: string;
+                                organizationId: string;
+                                sessionId: string;
+                                issueId: string;
+                                agentId: string;
+                                stepKey: string | null;
+                                dealId: string | null;
+                                status: string;
+                                model: string | null;
+                                effort: string | null;
+                                inputTokens: number | null;
+                                outputTokens: number | null;
+                                totalTokens: number | null;
+                                toolCalls: number | null;
+                                costMicros: number | null;
+                                externalSpendMicros: number | null;
+                                totalCostMicros: number | null;
+                                /** @enum {string|null} */
+                                costSource: "reported" | "rate_map" | null;
+                                capExceeded: number;
+                                stopReason: string | null;
+                                startedAt: string | null;
+                                endedAt: string | null;
+                                durationMs: number | null;
+                                createdAt: string;
+                                updatedAt: string;
+                            } | null;
                             activities?: {
                                 id: string;
                                 sessionId: string;
@@ -4301,6 +4985,34 @@ export interface paths {
                             }[] | null;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
+                            receipt?: {
+                                id: string;
+                                organizationId: string;
+                                sessionId: string;
+                                issueId: string;
+                                agentId: string;
+                                stepKey: string | null;
+                                dealId: string | null;
+                                status: string;
+                                model: string | null;
+                                effort: string | null;
+                                inputTokens: number | null;
+                                outputTokens: number | null;
+                                totalTokens: number | null;
+                                toolCalls: number | null;
+                                costMicros: number | null;
+                                externalSpendMicros: number | null;
+                                totalCostMicros: number | null;
+                                /** @enum {string|null} */
+                                costSource: "reported" | "rate_map" | null;
+                                capExceeded: number;
+                                stopReason: string | null;
+                                startedAt: string | null;
+                                endedAt: string | null;
+                                durationMs: number | null;
+                                createdAt: string;
+                                updatedAt: string;
+                            } | null;
                             activities?: {
                                 id: string;
                                 sessionId: string;
@@ -4431,6 +5143,34 @@ export interface paths {
                             }[] | null;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
+                            receipt?: {
+                                id: string;
+                                organizationId: string;
+                                sessionId: string;
+                                issueId: string;
+                                agentId: string;
+                                stepKey: string | null;
+                                dealId: string | null;
+                                status: string;
+                                model: string | null;
+                                effort: string | null;
+                                inputTokens: number | null;
+                                outputTokens: number | null;
+                                totalTokens: number | null;
+                                toolCalls: number | null;
+                                costMicros: number | null;
+                                externalSpendMicros: number | null;
+                                totalCostMicros: number | null;
+                                /** @enum {string|null} */
+                                costSource: "reported" | "rate_map" | null;
+                                capExceeded: number;
+                                stopReason: string | null;
+                                startedAt: string | null;
+                                endedAt: string | null;
+                                durationMs: number | null;
+                                createdAt: string;
+                                updatedAt: string;
+                            } | null;
                             activities?: {
                                 id: string;
                                 sessionId: string;

@@ -1014,6 +1014,103 @@ export const workspaceAgentPauses = sqliteTable(
   ]
 );
 
+// PILE-425 — per-agent-type spend/token caps (generalizes VOR-712). One row
+// per (org, agentId); agentId "*" is the workspace default applied to agent
+// types without their own row. All limits are nullable — an unset field is
+// uncapped. Costs are integer USD micros. `lastCapAlertAt` dedupes the
+// once-per-day CoS alert a breached cap fires.
+export const workspaceAgentSpendCaps = sqliteTable(
+  "agent_spend_caps" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    // "*" = workspace default row.
+    agentId: text("agent_id" as string).notNull(),
+    maxRunsPerDay: integer("max_runs_per_day" as string),
+    maxRunsPerMonth: integer("max_runs_per_month" as string),
+    maxTokensPerDay: integer("max_tokens_per_day" as string),
+    maxTokensPerMonth: integer("max_tokens_per_month" as string),
+    maxCostMicrosPerDay: integer("max_cost_micros_per_day" as string),
+    maxCostMicrosPerMonth: integer("max_cost_micros_per_month" as string),
+    maxTokensPerRun: integer("max_tokens_per_run" as string),
+    maxCostMicrosPerRun: integer("max_cost_micros_per_run" as string),
+    lastCapAlertAt: text("last_cap_alert_at" as string),
+    createdBy: text("created_by" as string),
+    createdAt: text("created_at" as string).notNull(),
+    updatedAt: text("updated_at" as string).notNull(),
+  },
+  (table) => [
+    uniqueIndex("agent_spend_caps_org_agent_idx" as string).on(
+      table.organizationId,
+      table.agentId
+    ),
+  ]
+);
+
+// PILE-425 — one receipt per run: the usage a lane reported (via /report or
+// a provider poll result) plus the cost computed from the rate map when the
+// provider didn't report spend. Written mid-run on usage reports and
+// finalized on the session's terminal transition. `dealId` resolves at
+// write time (entity_links deal edge, else the issue's parent ticket) so
+// receipts aggregate per agent, step, and deal without joins.
+export const workspaceAgentRunReceipts = sqliteTable(
+  "agent_run_receipts" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    sessionId: text("session_id" as string).notNull(),
+    issueId: text("issue_id" as string).notNull(),
+    agentId: text("agent_id" as string).notNull(),
+    stepKey: text("step_key" as string),
+    dealId: text("deal_id" as string),
+    // Session status at last receipt write — "running" for mid-run usage
+    // reports, terminal status once the run ends.
+    status: text("status" as string)
+      .notNull()
+      .default("running"),
+    model: text("model" as string),
+    effort: text("effort" as string),
+    inputTokens: integer("input_tokens" as string),
+    outputTokens: integer("output_tokens" as string),
+    totalTokens: integer("total_tokens" as string),
+    toolCalls: integer("tool_calls" as string),
+    // LLM cost, USD micros — provider-reported (`costSource` "reported")
+    // or computed from the rate map ("rate_map").
+    costMicros: integer("cost_micros" as string),
+    // Non-LLM spend the lane reports (paid APIs, browsing credits, …).
+    externalSpendMicros: integer("external_spend_micros" as string),
+    costSource: text("cost_source" as string),
+    // 1 when the sweep stopped the run for breaching a per-run cap;
+    // `stopReason` carries the human-readable breach ("shows why").
+    capExceeded: integer("cap_exceeded" as string)
+      .notNull()
+      .default(0),
+    stopReason: text("stop_reason" as string),
+    startedAt: text("started_at" as string),
+    endedAt: text("ended_at" as string),
+    durationMs: integer("duration_ms" as string),
+    createdAt: text("created_at" as string).notNull(),
+    updatedAt: text("updated_at" as string).notNull(),
+  },
+  (table) => [
+    uniqueIndex("agent_run_receipts_session_idx" as string).on(table.sessionId),
+    index("agent_run_receipts_org_agent_idx" as string).on(
+      table.organizationId,
+      table.agentId,
+      table.createdAt
+    ),
+    index("agent_run_receipts_org_step_idx" as string).on(
+      table.organizationId,
+      table.stepKey
+    ),
+    index("agent_run_receipts_issue_idx" as string).on(table.issueId),
+    index("agent_run_receipts_deal_idx" as string).on(
+      table.organizationId,
+      table.dealId
+    ),
+  ]
+);
+
 // PILE-423 — guidance packs (Linear's "Guidance"): markdown instruction
 // blocks injected into the dispatch prompt envelope. `scope` picks the level
 // — workspace applies to every lane, team matches the issue's teamId, status

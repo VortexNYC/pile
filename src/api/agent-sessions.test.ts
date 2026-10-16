@@ -3678,3 +3678,200 @@ describe("agent sessions API", () => {
     ).toBe(true);
   });
 });
+
+describe("spend caps + run receipts (PILE-425)", () => {
+  let organizationId: string;
+  let token: string;
+
+  beforeAll(async () => {
+    const db = createD1(env.D1);
+    const headers = await createAdminHeaders(env, "user-1");
+    const workspace = await createWorkspace(db, env, headers, {
+      name: "Spend caps test",
+      slug: `spend-caps-${crypto.randomUUID().slice(0, 8)}`,
+      ownerId: "user-1",
+    });
+    organizationId = workspace!.id;
+    const auth = await createAuth(env);
+    const result = await auth.api.createApiKey({
+      body: {
+        userId: "user-1",
+        name: "caps-admin",
+        metadata: { organizationId, permissions: "admin" },
+      },
+    });
+    token = z.object({ key: z.string() }).parse(result).key;
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+  });
+
+  it("upserts, lists, and deletes spend caps", async () => {
+    const agentId = `caps-api-${crypto.randomUUID().slice(0, 8)}`;
+    const put = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/spend-caps/${agentId}`, {
+        method: "PUT",
+        token,
+        body: JSON.stringify({
+          maxRunsPerDay: 5,
+          maxTokensPerDay: 100_000,
+          maxCostMicrosPerRun: 500_000,
+        }),
+      }),
+      env
+    );
+    expect(put.status).toBe(200);
+    const caps = (await put.json()) as Record<string, unknown>;
+    expect(caps.agentId).toBe(agentId);
+    expect(caps.maxRunsPerDay).toBe(5);
+    expect(caps.maxCostMicrosPerRun).toBe(500_000);
+
+    const list = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/spend-caps`, { token }),
+      env
+    );
+    const listed = (await list.json()) as { caps: Array<{ agentId: string }> };
+    expect(listed.caps.some((row) => row.agentId === agentId)).toBe(true);
+
+    // Explicit null clears a limit; omitted fields keep their value.
+    const clear = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/spend-caps/${agentId}`, {
+        method: "PUT",
+        token,
+        body: JSON.stringify({ maxTokensPerDay: null }),
+      }),
+      env
+    );
+    const cleared = (await clear.json()) as Record<string, unknown>;
+    expect(cleared.maxTokensPerDay).toBeNull();
+    expect(cleared.maxRunsPerDay).toBe(5);
+
+    const del = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/spend-caps/${agentId}`, {
+        method: "DELETE",
+        token,
+      }),
+      env
+    );
+    expect(del.status).toBe(200);
+    const delAgain = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/spend-caps/${agentId}`, {
+        method: "DELETE",
+        token,
+      }),
+      env
+    );
+    expect(delAgain.status).toBe(404);
+  });
+
+  it("records usage via /report and exposes the receipt", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    const issue = await stub.createIssue({ title: "Receipt lane" });
+    const reg = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/sessions/register`, {
+        method: "POST",
+        token,
+        body: JSON.stringify({ issueId: issue.id, provider: "custom-bot" }),
+      }),
+      env
+    );
+    const { session, laneToken } = (await reg.json()) as {
+      session: { id: string };
+      laneToken: string;
+    };
+    const reportBase = `/workspaces/${organizationId}/agent/sessions/${session.id}/report`;
+
+    const usageReport = await app.fetch(
+      request(reportBase, {
+        method: "POST",
+        token: laneToken,
+        body: JSON.stringify({
+          status: "running",
+          usage: {
+            model: "claude-sonnet-4-5",
+            inputTokens: 100_000,
+            outputTokens: 10_000,
+            toolCalls: 12,
+            externalSpendMicros: 500,
+          },
+        }),
+      }),
+      env
+    );
+    expect(usageReport.status).toBe(200);
+
+    // A malformed usage payload is rejected.
+    const badUsage = await app.fetch(
+      request(reportBase, {
+        method: "POST",
+        token: laneToken,
+        body: JSON.stringify({ usage: { inputTokens: -1 } }),
+      }),
+      env
+    );
+    expect(badUsage.status).toBe(400);
+
+    // Complete the run — the receipt finalizes with terminal status.
+    await app.fetch(
+      request(reportBase, {
+        method: "POST",
+        token: laneToken,
+        body: JSON.stringify({ status: "completed", result: "done" }),
+      }),
+      env
+    );
+
+    const get = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/sessions/${session.id}`, {
+        token,
+      }),
+      env
+    );
+    const detail = (await get.json()) as {
+      receipt: {
+        status: string;
+        totalTokens: number;
+        costMicros: number;
+        costSource: string;
+        toolCalls: number;
+      } | null;
+    };
+    expect(detail.receipt).not.toBeNull();
+    expect(detail.receipt?.status).toBe("completed");
+    expect(detail.receipt?.totalTokens).toBe(110_000);
+    expect(detail.receipt?.toolCalls).toBe(12);
+    expect(detail.receipt?.costSource).toBe("rate_map");
+    expect(detail.receipt?.costMicros).toBe(450_000);
+
+    // List + summary endpoints expose the same record.
+    const list = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/receipts?sessionId=${session.id}`,
+        { token }
+      ),
+      env
+    );
+    const { receipts } = (await list.json()) as {
+      receipts: Array<{ sessionId: string; totalCostMicros: number }>;
+    };
+    expect(receipts).toHaveLength(1);
+    expect(receipts[0]?.totalCostMicros).toBe(450_500);
+
+    const summary = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/receipts/summary?groupBy=agentId`,
+        { token }
+      ),
+      env
+    );
+    const { summary: rows } = (await summary.json()) as {
+      summary: Array<{ key: string; runs: number; totalTokens: number }>;
+    };
+    const row = rows.find((r) => r.key === "custom-bot");
+    expect(row?.runs).toBe(1);
+    expect(row?.totalTokens).toBe(110_000);
+  });
+});

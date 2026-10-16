@@ -47,6 +47,7 @@ import {
   validateSecondaryRepos,
   type SecondaryRepo,
 } from "./secondary-repos.js";
+import { describeCapBreach, SPEND_CAP_ACTOR } from "./spend.js";
 
 // Workspace-wide ceiling on live lanes — the container apps are bounded
 // (max_instances) and one lane's provisioning wedge otherwise starves all.
@@ -350,7 +351,30 @@ export async function dispatchAgent(
     // accepted but held, parked `waiting` + `paused`. Resume drains holds
     // in order; a dedupe edge rides along so a held lane still joins its
     // queue chain after release.
-    const pause = await stub.getAgentPause(agentId);
+    let pause = await stub.getAgentPause(agentId);
+    if (!pause) {
+      // PILE-425 — spend/token window caps: a breached cap pauses the agent
+      // type (the sweep fires the CoS alert once per breach-day via
+      // claimSpendCapAlert) and this dispatch parks on the hold like any
+      // pause. Fails open — a DO hiccup must not block dispatch; the sweep
+      // catches up next pass.
+      const verdict = await stub
+        .evaluateAgentSpendCaps(agentId)
+        .catch((err: unknown) => {
+          console.error("spend-cap evaluation failed", {
+            agentId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          return null;
+        });
+      if (verdict && verdict.breaches.length > 0) {
+        pause = await stub.pauseAgentType(agentId, {
+          reason: `spend cap — ${describeCapBreach(verdict.breaches[0])}`,
+          actorId: SPEND_CAP_ACTOR,
+          actorType: "agent",
+        });
+      }
+    }
     if (pause) {
       const parked = await stub.createAgentSession({
         issueId: issue.id,

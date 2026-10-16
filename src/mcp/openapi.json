@@ -4218,6 +4218,135 @@
                         null
                       ]
                     },
+                    "receipt": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "sessionId": {
+                          "type": "string"
+                        },
+                        "issueId": {
+                          "type": "string"
+                        },
+                        "agentId": {
+                          "type": "string"
+                        },
+                        "stepKey": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "dealId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "model": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "effort": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "inputTokens": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "outputTokens": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "totalTokens": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "toolCalls": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "costMicros": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "externalSpendMicros": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "totalCostMicros": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "costSource": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "reported",
+                            "rate_map",
+                            null
+                          ]
+                        },
+                        "capExceeded": {
+                          "type": "integer"
+                        },
+                        "stopReason": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "startedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "endedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "durationMs": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "sessionId",
+                        "issueId",
+                        "agentId",
+                        "stepKey",
+                        "dealId",
+                        "status",
+                        "model",
+                        "effort",
+                        "inputTokens",
+                        "outputTokens",
+                        "totalTokens",
+                        "toolCalls",
+                        "costMicros",
+                        "externalSpendMicros",
+                        "totalCostMicros",
+                        "costSource",
+                        "capExceeded",
+                        "stopReason",
+                        "startedAt",
+                        "endedAt",
+                        "durationMs",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    },
                     "activities": {
                       "type": "array",
                       "items": {
@@ -4594,6 +4723,135 @@
                             "stalled",
                             "needs_input",
                             null
+                          ]
+                        },
+                        "receipt": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "organizationId": {
+                              "type": "string"
+                            },
+                            "sessionId": {
+                              "type": "string"
+                            },
+                            "issueId": {
+                              "type": "string"
+                            },
+                            "agentId": {
+                              "type": "string"
+                            },
+                            "stepKey": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "dealId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "status": {
+                              "type": "string"
+                            },
+                            "model": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "effort": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "inputTokens": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "outputTokens": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "totalTokens": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "toolCalls": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "costMicros": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "externalSpendMicros": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "totalCostMicros": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "costSource": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "reported",
+                                "rate_map",
+                                null
+                              ]
+                            },
+                            "capExceeded": {
+                              "type": "integer"
+                            },
+                            "stopReason": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "startedAt": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "endedAt": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "durationMs": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "createdAt": {
+                              "type": "string"
+                            },
+                            "updatedAt": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "organizationId",
+                            "sessionId",
+                            "issueId",
+                            "agentId",
+                            "stepKey",
+                            "dealId",
+                            "status",
+                            "model",
+                            "effort",
+                            "inputTokens",
+                            "outputTokens",
+                            "totalTokens",
+                            "toolCalls",
+                            "costMicros",
+                            "externalSpendMicros",
+                            "totalCostMicros",
+                            "costSource",
+                            "capExceeded",
+                            "stopReason",
+                            "startedAt",
+                            "endedAt",
+                            "durationMs",
+                            "createdAt",
+                            "updatedAt"
                           ]
                         },
                         "activities": {
@@ -5114,6 +5372,135 @@
                             null
                           ]
                         },
+                        "receipt": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "organizationId": {
+                              "type": "string"
+                            },
+                            "sessionId": {
+                              "type": "string"
+                            },
+                            "issueId": {
+                              "type": "string"
+                            },
+                            "agentId": {
+                              "type": "string"
+                            },
+                            "stepKey": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "dealId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "status": {
+                              "type": "string"
+                            },
+                            "model": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "effort": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "inputTokens": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "outputTokens": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "totalTokens": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "toolCalls": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "costMicros": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "externalSpendMicros": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "totalCostMicros": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "costSource": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "reported",
+                                "rate_map",
+                                null
+                              ]
+                            },
+                            "capExceeded": {
+                              "type": "integer"
+                            },
+                            "stopReason": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "startedAt": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "endedAt": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "durationMs": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "createdAt": {
+                              "type": "string"
+                            },
+                            "updatedAt": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "organizationId",
+                            "sessionId",
+                            "issueId",
+                            "agentId",
+                            "stepKey",
+                            "dealId",
+                            "status",
+                            "model",
+                            "effort",
+                            "inputTokens",
+                            "outputTokens",
+                            "totalTokens",
+                            "toolCalls",
+                            "costMicros",
+                            "externalSpendMicros",
+                            "totalCostMicros",
+                            "costSource",
+                            "capExceeded",
+                            "stopReason",
+                            "startedAt",
+                            "endedAt",
+                            "durationMs",
+                            "createdAt",
+                            "updatedAt"
+                          ]
+                        },
                         "activities": {
                           "type": "array",
                           "items": {
@@ -5446,6 +5833,135 @@
                             "stalled",
                             "needs_input",
                             null
+                          ]
+                        },
+                        "receipt": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "organizationId": {
+                              "type": "string"
+                            },
+                            "sessionId": {
+                              "type": "string"
+                            },
+                            "issueId": {
+                              "type": "string"
+                            },
+                            "agentId": {
+                              "type": "string"
+                            },
+                            "stepKey": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "dealId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "status": {
+                              "type": "string"
+                            },
+                            "model": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "effort": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "inputTokens": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "outputTokens": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "totalTokens": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "toolCalls": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "costMicros": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "externalSpendMicros": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "totalCostMicros": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "costSource": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "reported",
+                                "rate_map",
+                                null
+                              ]
+                            },
+                            "capExceeded": {
+                              "type": "integer"
+                            },
+                            "stopReason": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "startedAt": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "endedAt": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "durationMs": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "createdAt": {
+                              "type": "string"
+                            },
+                            "updatedAt": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "organizationId",
+                            "sessionId",
+                            "issueId",
+                            "agentId",
+                            "stepKey",
+                            "dealId",
+                            "status",
+                            "model",
+                            "effort",
+                            "inputTokens",
+                            "outputTokens",
+                            "totalTokens",
+                            "toolCalls",
+                            "costMicros",
+                            "externalSpendMicros",
+                            "totalCostMicros",
+                            "costSource",
+                            "capExceeded",
+                            "stopReason",
+                            "startedAt",
+                            "endedAt",
+                            "durationMs",
+                            "createdAt",
+                            "updatedAt"
                           ]
                         },
                         "activities": {
@@ -6016,6 +6532,135 @@
                                   "stalled",
                                   "needs_input",
                                   null
+                                ]
+                              },
+                              "receipt": {
+                                "type": "object",
+                                "nullable": true,
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "organizationId": {
+                                    "type": "string"
+                                  },
+                                  "sessionId": {
+                                    "type": "string"
+                                  },
+                                  "issueId": {
+                                    "type": "string"
+                                  },
+                                  "agentId": {
+                                    "type": "string"
+                                  },
+                                  "stepKey": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "dealId": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "status": {
+                                    "type": "string"
+                                  },
+                                  "model": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "effort": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "inputTokens": {
+                                    "type": "integer",
+                                    "nullable": true
+                                  },
+                                  "outputTokens": {
+                                    "type": "integer",
+                                    "nullable": true
+                                  },
+                                  "totalTokens": {
+                                    "type": "integer",
+                                    "nullable": true
+                                  },
+                                  "toolCalls": {
+                                    "type": "integer",
+                                    "nullable": true
+                                  },
+                                  "costMicros": {
+                                    "type": "integer",
+                                    "nullable": true
+                                  },
+                                  "externalSpendMicros": {
+                                    "type": "integer",
+                                    "nullable": true
+                                  },
+                                  "totalCostMicros": {
+                                    "type": "integer",
+                                    "nullable": true
+                                  },
+                                  "costSource": {
+                                    "type": "string",
+                                    "nullable": true,
+                                    "enum": [
+                                      "reported",
+                                      "rate_map",
+                                      null
+                                    ]
+                                  },
+                                  "capExceeded": {
+                                    "type": "integer"
+                                  },
+                                  "stopReason": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "startedAt": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "endedAt": {
+                                    "type": "string",
+                                    "nullable": true
+                                  },
+                                  "durationMs": {
+                                    "type": "integer",
+                                    "nullable": true
+                                  },
+                                  "createdAt": {
+                                    "type": "string"
+                                  },
+                                  "updatedAt": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "organizationId",
+                                  "sessionId",
+                                  "issueId",
+                                  "agentId",
+                                  "stepKey",
+                                  "dealId",
+                                  "status",
+                                  "model",
+                                  "effort",
+                                  "inputTokens",
+                                  "outputTokens",
+                                  "totalTokens",
+                                  "toolCalls",
+                                  "costMicros",
+                                  "externalSpendMicros",
+                                  "totalCostMicros",
+                                  "costSource",
+                                  "capExceeded",
+                                  "stopReason",
+                                  "startedAt",
+                                  "endedAt",
+                                  "durationMs",
+                                  "createdAt",
+                                  "updatedAt"
                                 ]
                               },
                               "activities": {
@@ -6624,6 +7269,135 @@
                             null
                           ]
                         },
+                        "receipt": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "organizationId": {
+                              "type": "string"
+                            },
+                            "sessionId": {
+                              "type": "string"
+                            },
+                            "issueId": {
+                              "type": "string"
+                            },
+                            "agentId": {
+                              "type": "string"
+                            },
+                            "stepKey": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "dealId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "status": {
+                              "type": "string"
+                            },
+                            "model": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "effort": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "inputTokens": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "outputTokens": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "totalTokens": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "toolCalls": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "costMicros": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "externalSpendMicros": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "totalCostMicros": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "costSource": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "reported",
+                                "rate_map",
+                                null
+                              ]
+                            },
+                            "capExceeded": {
+                              "type": "integer"
+                            },
+                            "stopReason": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "startedAt": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "endedAt": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "durationMs": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "createdAt": {
+                              "type": "string"
+                            },
+                            "updatedAt": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "organizationId",
+                            "sessionId",
+                            "issueId",
+                            "agentId",
+                            "stepKey",
+                            "dealId",
+                            "status",
+                            "model",
+                            "effort",
+                            "inputTokens",
+                            "outputTokens",
+                            "totalTokens",
+                            "toolCalls",
+                            "costMicros",
+                            "externalSpendMicros",
+                            "totalCostMicros",
+                            "costSource",
+                            "capExceeded",
+                            "stopReason",
+                            "startedAt",
+                            "endedAt",
+                            "durationMs",
+                            "createdAt",
+                            "updatedAt"
+                          ]
+                        },
                         "activities": {
                           "type": "array",
                           "items": {
@@ -7040,6 +7814,135 @@
                             "stalled",
                             "needs_input",
                             null
+                          ]
+                        },
+                        "receipt": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "organizationId": {
+                              "type": "string"
+                            },
+                            "sessionId": {
+                              "type": "string"
+                            },
+                            "issueId": {
+                              "type": "string"
+                            },
+                            "agentId": {
+                              "type": "string"
+                            },
+                            "stepKey": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "dealId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "status": {
+                              "type": "string"
+                            },
+                            "model": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "effort": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "inputTokens": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "outputTokens": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "totalTokens": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "toolCalls": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "costMicros": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "externalSpendMicros": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "totalCostMicros": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "costSource": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "reported",
+                                "rate_map",
+                                null
+                              ]
+                            },
+                            "capExceeded": {
+                              "type": "integer"
+                            },
+                            "stopReason": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "startedAt": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "endedAt": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "durationMs": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "createdAt": {
+                              "type": "string"
+                            },
+                            "updatedAt": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "organizationId",
+                            "sessionId",
+                            "issueId",
+                            "agentId",
+                            "stepKey",
+                            "dealId",
+                            "status",
+                            "model",
+                            "effort",
+                            "inputTokens",
+                            "outputTokens",
+                            "totalTokens",
+                            "toolCalls",
+                            "costMicros",
+                            "externalSpendMicros",
+                            "totalCostMicros",
+                            "costSource",
+                            "capExceeded",
+                            "stopReason",
+                            "startedAt",
+                            "endedAt",
+                            "durationMs",
+                            "createdAt",
+                            "updatedAt"
                           ]
                         },
                         "activities": {
@@ -7527,6 +8430,135 @@
                         "stalled",
                         "needs_input",
                         null
+                      ]
+                    },
+                    "receipt": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "sessionId": {
+                          "type": "string"
+                        },
+                        "issueId": {
+                          "type": "string"
+                        },
+                        "agentId": {
+                          "type": "string"
+                        },
+                        "stepKey": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "dealId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "model": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "effort": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "inputTokens": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "outputTokens": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "totalTokens": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "toolCalls": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "costMicros": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "externalSpendMicros": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "totalCostMicros": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "costSource": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "reported",
+                            "rate_map",
+                            null
+                          ]
+                        },
+                        "capExceeded": {
+                          "type": "integer"
+                        },
+                        "stopReason": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "startedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "endedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "durationMs": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "sessionId",
+                        "issueId",
+                        "agentId",
+                        "stepKey",
+                        "dealId",
+                        "status",
+                        "model",
+                        "effort",
+                        "inputTokens",
+                        "outputTokens",
+                        "totalTokens",
+                        "toolCalls",
+                        "costMicros",
+                        "externalSpendMicros",
+                        "totalCostMicros",
+                        "costSource",
+                        "capExceeded",
+                        "stopReason",
+                        "startedAt",
+                        "endedAt",
+                        "durationMs",
+                        "createdAt",
+                        "updatedAt"
                       ]
                     },
                     "activities": {
@@ -8427,6 +9459,135 @@
                         null
                       ]
                     },
+                    "receipt": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "sessionId": {
+                          "type": "string"
+                        },
+                        "issueId": {
+                          "type": "string"
+                        },
+                        "agentId": {
+                          "type": "string"
+                        },
+                        "stepKey": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "dealId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "model": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "effort": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "inputTokens": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "outputTokens": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "totalTokens": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "toolCalls": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "costMicros": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "externalSpendMicros": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "totalCostMicros": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "costSource": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "reported",
+                            "rate_map",
+                            null
+                          ]
+                        },
+                        "capExceeded": {
+                          "type": "integer"
+                        },
+                        "stopReason": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "startedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "endedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "durationMs": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "sessionId",
+                        "issueId",
+                        "agentId",
+                        "stepKey",
+                        "dealId",
+                        "status",
+                        "model",
+                        "effort",
+                        "inputTokens",
+                        "outputTokens",
+                        "totalTokens",
+                        "toolCalls",
+                        "costMicros",
+                        "externalSpendMicros",
+                        "totalCostMicros",
+                        "costSource",
+                        "capExceeded",
+                        "stopReason",
+                        "startedAt",
+                        "endedAt",
+                        "durationMs",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    },
                     "activities": {
                       "type": "array",
                       "items": {
@@ -8779,6 +9940,135 @@
                         null
                       ]
                     },
+                    "receipt": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "sessionId": {
+                          "type": "string"
+                        },
+                        "issueId": {
+                          "type": "string"
+                        },
+                        "agentId": {
+                          "type": "string"
+                        },
+                        "stepKey": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "dealId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "model": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "effort": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "inputTokens": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "outputTokens": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "totalTokens": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "toolCalls": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "costMicros": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "externalSpendMicros": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "totalCostMicros": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "costSource": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "reported",
+                            "rate_map",
+                            null
+                          ]
+                        },
+                        "capExceeded": {
+                          "type": "integer"
+                        },
+                        "stopReason": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "startedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "endedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "durationMs": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "sessionId",
+                        "issueId",
+                        "agentId",
+                        "stepKey",
+                        "dealId",
+                        "status",
+                        "model",
+                        "effort",
+                        "inputTokens",
+                        "outputTokens",
+                        "totalTokens",
+                        "toolCalls",
+                        "costMicros",
+                        "externalSpendMicros",
+                        "totalCostMicros",
+                        "costSource",
+                        "capExceeded",
+                        "stopReason",
+                        "startedAt",
+                        "endedAt",
+                        "durationMs",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    },
                     "activities": {
                       "type": "array",
                       "items": {
@@ -9085,6 +10375,722 @@
         "summary": "Delete agent pause"
       }
     },
+    "/workspaces/{organizationId}/agent/spend-caps": {
+      "get": {
+        "tags": [
+          "agent-sessions"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Spend/token caps for the workspace — agentId \"*\" is the workspace default",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "caps": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "agentId": {
+                            "type": "string"
+                          },
+                          "maxRunsPerDay": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "maxRunsPerMonth": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "maxTokensPerDay": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "maxTokensPerMonth": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "maxCostMicrosPerDay": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "maxCostMicrosPerMonth": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "maxTokensPerRun": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "maxCostMicrosPerRun": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "lastCapAlertAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdBy": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "agentId",
+                          "maxRunsPerDay",
+                          "maxRunsPerMonth",
+                          "maxTokensPerDay",
+                          "maxTokensPerMonth",
+                          "maxCostMicrosPerDay",
+                          "maxCostMicrosPerMonth",
+                          "maxTokensPerRun",
+                          "maxCostMicrosPerRun",
+                          "lastCapAlertAt",
+                          "createdBy",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "caps"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List agent spend caps"
+      }
+    },
+    "/workspaces/{organizationId}/agent/spend-caps/{agentId}": {
+      "put": {
+        "tags": [
+          "agent-sessions"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "agentId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "maxRunsPerDay": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 1
+                  },
+                  "maxRunsPerMonth": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 1
+                  },
+                  "maxTokensPerDay": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "maxTokensPerMonth": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "maxCostMicrosPerDay": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "maxCostMicrosPerMonth": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "maxTokensPerRun": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0
+                  },
+                  "maxCostMicrosPerRun": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Spend caps upserted for the agent type — null fields clear a limit; omitted fields keep their value",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "agentId": {
+                      "type": "string"
+                    },
+                    "maxRunsPerDay": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "maxRunsPerMonth": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "maxTokensPerDay": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "maxTokensPerMonth": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "maxCostMicrosPerDay": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "maxCostMicrosPerMonth": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "maxTokensPerRun": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "maxCostMicrosPerRun": {
+                      "type": "integer",
+                      "nullable": true
+                    },
+                    "lastCapAlertAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdBy": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "agentId",
+                    "maxRunsPerDay",
+                    "maxRunsPerMonth",
+                    "maxTokensPerDay",
+                    "maxTokensPerMonth",
+                    "maxCostMicrosPerDay",
+                    "maxCostMicrosPerMonth",
+                    "maxTokensPerRun",
+                    "maxCostMicrosPerRun",
+                    "lastCapAlertAt",
+                    "createdBy",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Update agent spend cap"
+      },
+      "delete": {
+        "tags": [
+          "agent-sessions"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "agentId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Spend caps deleted for the agent type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No caps configured for this agent type"
+          }
+        },
+        "summary": "Delete agent spend cap"
+      }
+    },
+    "/workspaces/{organizationId}/agent/receipts": {
+      "get": {
+        "tags": [
+          "agent-sessions"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "sessionId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "agentId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "issueId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "stepKey",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "dealId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "since",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "until",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Run receipts — per-run usage + cost records",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "receipts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "sessionId": {
+                            "type": "string"
+                          },
+                          "issueId": {
+                            "type": "string"
+                          },
+                          "agentId": {
+                            "type": "string"
+                          },
+                          "stepKey": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "dealId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "model": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "effort": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "inputTokens": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "outputTokens": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "totalTokens": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "toolCalls": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "costMicros": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "externalSpendMicros": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "totalCostMicros": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "costSource": {
+                            "type": "string",
+                            "nullable": true,
+                            "enum": [
+                              "reported",
+                              "rate_map",
+                              null
+                            ]
+                          },
+                          "capExceeded": {
+                            "type": "integer"
+                          },
+                          "stopReason": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "startedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "endedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "durationMs": {
+                            "type": "integer",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "sessionId",
+                          "issueId",
+                          "agentId",
+                          "stepKey",
+                          "dealId",
+                          "status",
+                          "model",
+                          "effort",
+                          "inputTokens",
+                          "outputTokens",
+                          "totalTokens",
+                          "toolCalls",
+                          "costMicros",
+                          "externalSpendMicros",
+                          "totalCostMicros",
+                          "costSource",
+                          "capExceeded",
+                          "stopReason",
+                          "startedAt",
+                          "endedAt",
+                          "durationMs",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "receipts"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List agent receipts"
+      }
+    },
+    "/workspaces/{organizationId}/agent/receipts/summary": {
+      "get": {
+        "tags": [
+          "agent-sessions"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "sessionId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "agentId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "issueId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "stepKey",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "dealId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "since",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "until",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "agentId",
+                "stepKey",
+                "issueId",
+                "dealId"
+              ]
+            },
+            "required": true,
+            "name": "groupBy",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Run receipts aggregated per agent, step (pipeline stage), issue, or deal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "summary": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "runs": {
+                            "type": "integer"
+                          },
+                          "inputTokens": {
+                            "type": "integer"
+                          },
+                          "outputTokens": {
+                            "type": "integer"
+                          },
+                          "totalTokens": {
+                            "type": "integer"
+                          },
+                          "toolCalls": {
+                            "type": "integer"
+                          },
+                          "costMicros": {
+                            "type": "integer"
+                          },
+                          "externalSpendMicros": {
+                            "type": "integer"
+                          },
+                          "capExceededRuns": {
+                            "type": "integer"
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "runs",
+                          "inputTokens",
+                          "outputTokens",
+                          "totalTokens",
+                          "toolCalls",
+                          "costMicros",
+                          "externalSpendMicros",
+                          "capExceededRuns"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "summary"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List agent receipt summary"
+      }
+    },
     "/workspaces/{organizationId}/agent/sessions/{sessionId}/poll": {
       "post": {
         "tags": [
@@ -9322,6 +11328,135 @@
                         "stalled",
                         "needs_input",
                         null
+                      ]
+                    },
+                    "receipt": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "sessionId": {
+                          "type": "string"
+                        },
+                        "issueId": {
+                          "type": "string"
+                        },
+                        "agentId": {
+                          "type": "string"
+                        },
+                        "stepKey": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "dealId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "model": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "effort": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "inputTokens": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "outputTokens": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "totalTokens": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "toolCalls": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "costMicros": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "externalSpendMicros": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "totalCostMicros": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "costSource": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "reported",
+                            "rate_map",
+                            null
+                          ]
+                        },
+                        "capExceeded": {
+                          "type": "integer"
+                        },
+                        "stopReason": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "startedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "endedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "durationMs": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "sessionId",
+                        "issueId",
+                        "agentId",
+                        "stepKey",
+                        "dealId",
+                        "status",
+                        "model",
+                        "effort",
+                        "inputTokens",
+                        "outputTokens",
+                        "totalTokens",
+                        "toolCalls",
+                        "costMicros",
+                        "externalSpendMicros",
+                        "totalCostMicros",
+                        "costSource",
+                        "capExceeded",
+                        "stopReason",
+                        "startedAt",
+                        "endedAt",
+                        "durationMs",
+                        "createdAt",
+                        "updatedAt"
                       ]
                     },
                     "activities": {
@@ -9662,6 +11797,135 @@
                             "stalled",
                             "needs_input",
                             null
+                          ]
+                        },
+                        "receipt": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "organizationId": {
+                              "type": "string"
+                            },
+                            "sessionId": {
+                              "type": "string"
+                            },
+                            "issueId": {
+                              "type": "string"
+                            },
+                            "agentId": {
+                              "type": "string"
+                            },
+                            "stepKey": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "dealId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "status": {
+                              "type": "string"
+                            },
+                            "model": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "effort": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "inputTokens": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "outputTokens": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "totalTokens": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "toolCalls": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "costMicros": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "externalSpendMicros": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "totalCostMicros": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "costSource": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "reported",
+                                "rate_map",
+                                null
+                              ]
+                            },
+                            "capExceeded": {
+                              "type": "integer"
+                            },
+                            "stopReason": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "startedAt": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "endedAt": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "durationMs": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "createdAt": {
+                              "type": "string"
+                            },
+                            "updatedAt": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "organizationId",
+                            "sessionId",
+                            "issueId",
+                            "agentId",
+                            "stepKey",
+                            "dealId",
+                            "status",
+                            "model",
+                            "effort",
+                            "inputTokens",
+                            "outputTokens",
+                            "totalTokens",
+                            "toolCalls",
+                            "costMicros",
+                            "externalSpendMicros",
+                            "totalCostMicros",
+                            "costSource",
+                            "capExceeded",
+                            "stopReason",
+                            "startedAt",
+                            "endedAt",
+                            "durationMs",
+                            "createdAt",
+                            "updatedAt"
                           ]
                         },
                         "activities": {
@@ -10065,6 +12329,135 @@
                             "stalled",
                             "needs_input",
                             null
+                          ]
+                        },
+                        "receipt": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "organizationId": {
+                              "type": "string"
+                            },
+                            "sessionId": {
+                              "type": "string"
+                            },
+                            "issueId": {
+                              "type": "string"
+                            },
+                            "agentId": {
+                              "type": "string"
+                            },
+                            "stepKey": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "dealId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "status": {
+                              "type": "string"
+                            },
+                            "model": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "effort": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "inputTokens": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "outputTokens": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "totalTokens": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "toolCalls": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "costMicros": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "externalSpendMicros": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "totalCostMicros": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "costSource": {
+                              "type": "string",
+                              "nullable": true,
+                              "enum": [
+                                "reported",
+                                "rate_map",
+                                null
+                              ]
+                            },
+                            "capExceeded": {
+                              "type": "integer"
+                            },
+                            "stopReason": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "startedAt": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "endedAt": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "durationMs": {
+                              "type": "integer",
+                              "nullable": true
+                            },
+                            "createdAt": {
+                              "type": "string"
+                            },
+                            "updatedAt": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "organizationId",
+                            "sessionId",
+                            "issueId",
+                            "agentId",
+                            "stepKey",
+                            "dealId",
+                            "status",
+                            "model",
+                            "effort",
+                            "inputTokens",
+                            "outputTokens",
+                            "totalTokens",
+                            "toolCalls",
+                            "costMicros",
+                            "externalSpendMicros",
+                            "totalCostMicros",
+                            "costSource",
+                            "capExceeded",
+                            "stopReason",
+                            "startedAt",
+                            "endedAt",
+                            "durationMs",
+                            "createdAt",
+                            "updatedAt"
                           ]
                         },
                         "activities": {
@@ -10491,6 +12884,135 @@
                         null
                       ]
                     },
+                    "receipt": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "sessionId": {
+                          "type": "string"
+                        },
+                        "issueId": {
+                          "type": "string"
+                        },
+                        "agentId": {
+                          "type": "string"
+                        },
+                        "stepKey": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "dealId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "model": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "effort": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "inputTokens": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "outputTokens": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "totalTokens": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "toolCalls": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "costMicros": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "externalSpendMicros": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "totalCostMicros": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "costSource": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "reported",
+                            "rate_map",
+                            null
+                          ]
+                        },
+                        "capExceeded": {
+                          "type": "integer"
+                        },
+                        "stopReason": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "startedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "endedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "durationMs": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "sessionId",
+                        "issueId",
+                        "agentId",
+                        "stepKey",
+                        "dealId",
+                        "status",
+                        "model",
+                        "effort",
+                        "inputTokens",
+                        "outputTokens",
+                        "totalTokens",
+                        "toolCalls",
+                        "costMicros",
+                        "externalSpendMicros",
+                        "totalCostMicros",
+                        "costSource",
+                        "capExceeded",
+                        "stopReason",
+                        "startedAt",
+                        "endedAt",
+                        "durationMs",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    },
                     "activities": {
                       "type": "array",
                       "items": {
@@ -10848,6 +13370,135 @@
                         "stalled",
                         "needs_input",
                         null
+                      ]
+                    },
+                    "receipt": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "sessionId": {
+                          "type": "string"
+                        },
+                        "issueId": {
+                          "type": "string"
+                        },
+                        "agentId": {
+                          "type": "string"
+                        },
+                        "stepKey": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "dealId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "model": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "effort": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "inputTokens": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "outputTokens": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "totalTokens": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "toolCalls": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "costMicros": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "externalSpendMicros": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "totalCostMicros": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "costSource": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "reported",
+                            "rate_map",
+                            null
+                          ]
+                        },
+                        "capExceeded": {
+                          "type": "integer"
+                        },
+                        "stopReason": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "startedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "endedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "durationMs": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "sessionId",
+                        "issueId",
+                        "agentId",
+                        "stepKey",
+                        "dealId",
+                        "status",
+                        "model",
+                        "effort",
+                        "inputTokens",
+                        "outputTokens",
+                        "totalTokens",
+                        "toolCalls",
+                        "costMicros",
+                        "externalSpendMicros",
+                        "totalCostMicros",
+                        "costSource",
+                        "capExceeded",
+                        "stopReason",
+                        "startedAt",
+                        "endedAt",
+                        "durationMs",
+                        "createdAt",
+                        "updatedAt"
                       ]
                     },
                     "activities": {
@@ -11224,6 +13875,135 @@
                         "stalled",
                         "needs_input",
                         null
+                      ]
+                    },
+                    "receipt": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "sessionId": {
+                          "type": "string"
+                        },
+                        "issueId": {
+                          "type": "string"
+                        },
+                        "agentId": {
+                          "type": "string"
+                        },
+                        "stepKey": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "dealId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "model": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "effort": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "inputTokens": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "outputTokens": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "totalTokens": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "toolCalls": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "costMicros": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "externalSpendMicros": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "totalCostMicros": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "costSource": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "reported",
+                            "rate_map",
+                            null
+                          ]
+                        },
+                        "capExceeded": {
+                          "type": "integer"
+                        },
+                        "stopReason": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "startedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "endedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "durationMs": {
+                          "type": "integer",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "sessionId",
+                        "issueId",
+                        "agentId",
+                        "stepKey",
+                        "dealId",
+                        "status",
+                        "model",
+                        "effort",
+                        "inputTokens",
+                        "outputTokens",
+                        "totalTokens",
+                        "toolCalls",
+                        "costMicros",
+                        "externalSpendMicros",
+                        "totalCostMicros",
+                        "costSource",
+                        "capExceeded",
+                        "stopReason",
+                        "startedAt",
+                        "endedAt",
+                        "durationMs",
+                        "createdAt",
+                        "updatedAt"
                       ]
                     },
                     "activities": {

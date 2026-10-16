@@ -39,6 +39,7 @@ import {
   sessionPlanItemSchema,
   sessionPlanSchema,
 } from "../agents/session-plan.js";
+import { runUsageSchema, spendCapBodySchema } from "../agents/spend.js";
 import {
   releasePausedSessions,
   sessionHoldsKeptSandbox,
@@ -66,7 +67,10 @@ import {
   type AgentSessionStatus,
   type Issue,
 } from "../types/workspace.js";
-import type { AgentSessionSummary } from "../workspace/data/index.js";
+import type {
+  AgentRunReceipt,
+  AgentSessionSummary,
+} from "../workspace/data/index.js";
 import type {
   workspaceAgentActivities,
   workspaceAgentSessions,
@@ -126,6 +130,55 @@ async function assertSessionIssueAccess(
 }
 
 type AgentActivity = InferSelectModel<typeof workspaceAgentActivities>;
+
+// PILE-425 — one row per run: the usage a lane reported plus cost computed
+// from the rate map when the provider didn't report spend.
+const runReceiptSchema = z.object({
+  id: z.string(),
+  organizationId: z.string(),
+  sessionId: z.string(),
+  issueId: z.string(),
+  agentId: z.string(),
+  stepKey: z.string().nullable(),
+  dealId: z.string().nullable(),
+  status: z.string(),
+  model: z.string().nullable(),
+  effort: z.string().nullable(),
+  inputTokens: z.number().int().nullable(),
+  outputTokens: z.number().int().nullable(),
+  totalTokens: z.number().int().nullable(),
+  toolCalls: z.number().int().nullable(),
+  costMicros: z.number().int().nullable(),
+  externalSpendMicros: z.number().int().nullable(),
+  /** costMicros + externalSpendMicros; null when neither was reported. */
+  totalCostMicros: z.number().int().nullable(),
+  costSource: z.enum(["reported", "rate_map"]).nullable(),
+  capExceeded: z.number().int(),
+  stopReason: z.string().nullable(),
+  startedAt: z.string().nullable(),
+  endedAt: z.string().nullable(),
+  durationMs: z.number().int().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+function toReceiptResponse(row: AgentRunReceipt) {
+  // DB column is free text — narrow to the two sources this build writes.
+  const costSource: "reported" | "rate_map" | null =
+    row.costSource === "reported"
+      ? "reported"
+      : row.costSource === "rate_map"
+        ? "rate_map"
+        : null;
+  return {
+    ...row,
+    costSource,
+    totalCostMicros:
+      row.costMicros !== null || row.externalSpendMicros !== null
+        ? (row.costMicros ?? 0) + (row.externalSpendMicros ?? 0)
+        : null,
+  };
+}
 
 const agentSessionStatusSchema = z.enum([
   "created",
@@ -203,6 +256,9 @@ export const agentSessionSchema = z.object({
    *  (or, for pre-suspend rows, the latest activity is an elicitation).
    *  Never stored. */
   derivedStatus: z.enum(["stalled", "needs_input"]).nullable().optional(),
+  /** PILE-425 — the run's usage/cost receipt, populated on the session
+   *  detail GET when the lane reported usage or reached terminal state. */
+  receipt: runReceiptSchema.nullable().optional(),
   activities: z
     .array(
       z.object({
@@ -886,6 +942,161 @@ const resumeAgentTypeRoute = createRoute({
       },
     },
     404: { description: "Agent type is not paused" },
+  },
+});
+
+// PILE-425 — per-agent spend/token caps. `agentId` "*" is the workspace
+// default applied to agent types without their own row. Hitting a cap
+// pauses the agent type (agent_pauses row, createdBy "spend-cap") and
+// alerts the CoS once per breach-day.
+const agentSpendCapSchema = z.object({
+  id: z.string(),
+  organizationId: z.string(),
+  agentId: z.string(),
+  maxRunsPerDay: z.number().int().nullable(),
+  maxRunsPerMonth: z.number().int().nullable(),
+  maxTokensPerDay: z.number().int().nullable(),
+  maxTokensPerMonth: z.number().int().nullable(),
+  maxCostMicrosPerDay: z.number().int().nullable(),
+  maxCostMicrosPerMonth: z.number().int().nullable(),
+  maxTokensPerRun: z.number().int().nullable(),
+  maxCostMicrosPerRun: z.number().int().nullable(),
+  lastCapAlertAt: z.string().nullable(),
+  createdBy: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+const receiptFilterQuerySchema = z.object({
+  sessionId: z.string().optional(),
+  agentId: z.string().optional(),
+  issueId: z.string().optional(),
+  stepKey: z.string().optional(),
+  dealId: z.string().optional(),
+  /** ISO 8601 bounds on the receipt's createdAt — when the run recorded. */
+  since: z.string().optional(),
+  until: z.string().optional(),
+  limit: z.string().optional(),
+});
+
+const listSpendCapsRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/agent/spend-caps",
+  tags: ["agent-sessions"],
+  middleware: [rls("session:view", "agent:read")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+  },
+  responses: {
+    200: {
+      description:
+        'Spend/token caps for the workspace — agentId "*" is the workspace default',
+      content: {
+        "application/json": {
+          schema: z.object({ caps: z.array(agentSpendCapSchema) }),
+        },
+      },
+    },
+  },
+});
+
+const upsertSpendCapRoute = createRoute({
+  method: "put",
+  path: "/workspaces/{organizationId}/agent/spend-caps/{agentId}",
+  tags: ["agent-sessions"],
+  middleware: [rls("session:create", "agent:write")],
+  request: {
+    params: z.object({ organizationId: z.string(), agentId: z.string() }),
+    body: {
+      content: { "application/json": { schema: spendCapBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description:
+        "Spend caps upserted for the agent type — null fields clear a limit; omitted fields keep their value",
+      content: {
+        "application/json": { schema: agentSpendCapSchema },
+      },
+    },
+  },
+});
+
+const deleteSpendCapRoute = createRoute({
+  method: "delete",
+  path: "/workspaces/{organizationId}/agent/spend-caps/{agentId}",
+  tags: ["agent-sessions"],
+  middleware: [rls("session:create", "agent:write")],
+  request: {
+    params: z.object({ organizationId: z.string(), agentId: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Spend caps deleted for the agent type",
+      content: {
+        "application/json": { schema: z.object({ ok: z.boolean() }) },
+      },
+    },
+    404: { description: "No caps configured for this agent type" },
+  },
+});
+
+const listRunReceiptsRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/agent/receipts",
+  tags: ["agent-sessions"],
+  middleware: [rls("session:view", "agent:read")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    query: receiptFilterQuerySchema,
+  },
+  responses: {
+    200: {
+      description: "Run receipts — per-run usage + cost records",
+      content: {
+        "application/json": {
+          schema: z.object({ receipts: z.array(runReceiptSchema) }),
+        },
+      },
+    },
+  },
+});
+
+const summarizeRunReceiptsRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/agent/receipts/summary",
+  tags: ["agent-sessions"],
+  middleware: [rls("session:view", "agent:read")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    query: receiptFilterQuerySchema.extend({
+      groupBy: z.enum(["agentId", "stepKey", "issueId", "dealId"]),
+    }),
+  },
+  responses: {
+    200: {
+      description:
+        "Run receipts aggregated per agent, step (pipeline stage), issue, or deal",
+      content: {
+        "application/json": {
+          schema: z.object({
+            summary: z.array(
+              z.object({
+                key: z.string().nullable(),
+                runs: z.number().int(),
+                inputTokens: z.number().int(),
+                outputTokens: z.number().int(),
+                totalTokens: z.number().int(),
+                toolCalls: z.number().int(),
+                costMicros: z.number().int(),
+                externalSpendMicros: z.number().int(),
+                capExceededRuns: z.number().int(),
+              })
+            ),
+          }),
+        },
+      },
+    },
   },
 });
 
@@ -1958,7 +2169,15 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       session,
       c.var.workspaceIdentity
     );
-    return c.json(toSessionResponse(session, session.activities), 200);
+    // PILE-425 — the run's usage/cost receipt rides the detail response.
+    const receipt = await stub.getRunReceipt(sessionId).catch(() => undefined);
+    return c.json(
+      {
+        ...toSessionResponse(session, session.activities),
+        receipt: receipt ? toReceiptResponse(receipt) : null,
+      },
+      200
+    );
   });
 
   app.openapi(getSessionEventsRoute, async (c) => {
@@ -2321,6 +2540,16 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
           return c.json({ message: "Invalid plan" }, 400);
         }
         await stub.setAgentSessionPlan(sessionId, parsed.data);
+      }
+      // PILE-425 — cumulative usage snapshot → the session's run receipt.
+      // Recorded before the status transition so a terminal report lands
+      // usage on the finalized receipt.
+      if (input.usage !== undefined) {
+        const parsed = runUsageSchema.safeParse(input.usage);
+        if (!parsed.success) {
+          return c.json({ message: "Invalid usage" }, 400);
+        }
+        await stub.recordSessionUsage(sessionId, parsed.data);
       }
       if (update.status !== undefined) {
         if (
@@ -2864,6 +3093,73 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       return c.json({ message: "Agent type is not paused" }, 404);
     }
     return c.json({ ok: true, released }, 200);
+  });
+
+  app.openapi(listSpendCapsRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    return c.json({ caps: await stub.listAgentSpendCaps() }, 200);
+  });
+
+  app.openapi(upsertSpendCapRoute, async (c) => {
+    const { organizationId, agentId } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const identity = c.var.workspaceIdentity;
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const caps = await stub.upsertAgentSpendCap(agentId, input, {
+      id: identity.id,
+      type: identity.type,
+    });
+    return c.json(caps, 200);
+  });
+
+  app.openapi(deleteSpendCapRoute, async (c) => {
+    const { organizationId, agentId } = c.req.valid("param");
+    const identity = c.var.workspaceIdentity;
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const deleted = await stub.deleteAgentSpendCap(agentId, {
+      id: identity.id,
+      type: identity.type,
+    });
+    if (!deleted) {
+      return c.json({ message: "No caps configured for this agent type" }, 404);
+    }
+    return c.json({ ok: true }, 200);
+  });
+
+  app.openapi(listRunReceiptsRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const query = c.req.valid("query");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const receipts = await stub.listRunReceipts({
+      sessionId: query.sessionId,
+      agentId: query.agentId,
+      issueId: query.issueId,
+      stepKey: query.stepKey,
+      dealId: query.dealId,
+      since: query.since,
+      until: query.until,
+      limit: query.limit ? Number(query.limit) : undefined,
+    });
+    return c.json({ receipts: receipts.map(toReceiptResponse) }, 200);
+  });
+
+  app.openapi(summarizeRunReceiptsRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const { groupBy, ...query } = c.req.valid("query");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const summary = await stub.summarizeRunReceipts({
+      groupBy,
+      sessionId: query.sessionId,
+      agentId: query.agentId,
+      issueId: query.issueId,
+      stepKey: query.stepKey,
+      dealId: query.dealId,
+      since: query.since,
+      until: query.until,
+      limit: query.limit ? Number(query.limit) : undefined,
+    });
+    return c.json({ summary }, 200);
   });
 
   app.openapi(pollSessionRoute, async (c) => {

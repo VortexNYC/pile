@@ -3279,3 +3279,165 @@ describe("external event ingest (PILE-422)", () => {
     });
   });
 });
+
+describe("spend caps + run receipts (PILE-425)", () => {
+  beforeAll(async () => {
+    await ensureWorkspace();
+  });
+
+  it("records a usage snapshot and computes cost from the rate map", async () => {
+    const stub = getStub();
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "receipt test" })
+    );
+    const session = await withWorkspace(stub, (instance) =>
+      instance.createAgentSession({
+        issueId: issue.id,
+        agentId: "mock",
+        provider: "mock",
+        actorId: "user-1",
+        actorType: "user",
+        status: "running",
+      })
+    );
+    const receipt = await stub.recordSessionUsage(session.id, {
+      model: "claude-sonnet-4-5",
+      inputTokens: 100_000,
+      outputTokens: 10_000,
+      toolCalls: 7,
+    });
+    expect(receipt?.sessionId).toBe(session.id);
+    expect(receipt?.issueId).toBe(issue.id);
+    expect(receipt?.totalTokens).toBe(110_000);
+    // 100k in @3/MTok + 10k out @15/MTok = 450_000 micros ($0.45).
+    expect(receipt?.costMicros).toBe(450_000);
+    expect(receipt?.costSource).toBe("rate_map");
+    // Reported cost wins over the rate map.
+    const reported = await stub.recordSessionUsage(session.id, {
+      costMicros: 999,
+    });
+    expect(reported?.costMicros).toBe(999);
+    expect(reported?.costSource).toBe("reported");
+  });
+
+  it("finalizes the receipt on the terminal transition even without usage", async () => {
+    const stub = getStub();
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "terminal receipt" })
+    );
+    const session = await withWorkspace(stub, (instance) =>
+      instance.createAgentSession({
+        issueId: issue.id,
+        agentId: "mock",
+        provider: "mock",
+        actorId: "user-1",
+        actorType: "user",
+        status: "running",
+      })
+    );
+    await withWorkspace(stub, (instance) =>
+      instance.applyAgentSessionResult(session.id, { status: "completed" })
+    );
+    const receipt = await stub.getRunReceipt(session.id);
+    expect(receipt).not.toBeUndefined();
+    expect(receipt?.status).toBe("completed");
+    expect(receipt?.endedAt).not.toBeNull();
+    expect(receipt?.durationMs).not.toBeNull();
+    // No usage reported — token/cost fields stay null, not zero.
+    expect(receipt?.totalTokens).toBeNull();
+    expect(receipt?.costMicros).toBeNull();
+  });
+
+  it("carries usage on the result into the finalized receipt", async () => {
+    const stub = getStub();
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "usage result" })
+    );
+    const session = await withWorkspace(stub, (instance) =>
+      instance.createAgentSession({
+        issueId: issue.id,
+        agentId: "mock",
+        provider: "mock",
+        actorId: "user-1",
+        actorType: "user",
+        status: "running",
+      })
+    );
+    await withWorkspace(stub, (instance) =>
+      instance.applyAgentSessionResult(session.id, {
+        status: "failed",
+        usage: {
+          model: "gpt-5",
+          inputTokens: 1_000_000,
+          outputTokens: 0,
+          externalSpendMicros: 50,
+        },
+      })
+    );
+    const receipt = await stub.getRunReceipt(session.id);
+    expect(receipt?.status).toBe("failed");
+    expect(receipt?.totalTokens).toBe(1_000_000);
+    expect(receipt?.costMicros).toBe(1_250_000);
+    expect(receipt?.externalSpendMicros).toBe(50);
+  });
+
+  it("evaluates window caps against runs and receipts", async () => {
+    const stub = getStub();
+    const agentId = `caps-do-${crypto.randomUUID()}`;
+    await stub.upsertAgentSpendCap(agentId, { maxRunsPerDay: 1 });
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "cap eval" })
+    );
+    await withWorkspace(stub, (instance) =>
+      instance.createAgentSession({
+        issueId: issue.id,
+        agentId,
+        provider: "mock",
+        actorId: "user-1",
+        actorType: "user",
+        status: "running",
+      })
+    );
+    const verdict = await stub.evaluateAgentSpendCaps(agentId);
+    expect(verdict.breaches).toEqual([
+      { scope: "day", dimension: "runs", limit: 1, observed: 1 },
+    ]);
+    // Unknown agent → uncapped.
+    const none = await stub.evaluateAgentSpendCaps(
+      `no-caps-${crypto.randomUUID()}`
+    );
+    expect(none.breaches).toEqual([]);
+    expect(none.caps).toBeUndefined();
+  });
+
+  it("claims the cap alert once per day", async () => {
+    const stub = getStub();
+    const agentId = `caps-claim-${crypto.randomUUID()}`;
+    await stub.upsertAgentSpendCap(agentId, { maxRunsPerDay: 1 });
+    expect(await stub.claimSpendCapAlert(agentId)).toBe(true);
+    expect(await stub.claimSpendCapAlert(agentId)).toBe(false);
+  });
+
+  it("marks a receipt stopped by a per-run cap", async () => {
+    const stub = getStub();
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "cap stop" })
+    );
+    const session = await withWorkspace(stub, (instance) =>
+      instance.createAgentSession({
+        issueId: issue.id,
+        agentId: "mock",
+        provider: "mock",
+        actorId: "user-1",
+        actorType: "user",
+        status: "running",
+      })
+    );
+    const receipt = await stub.markRunReceiptStopped(
+      session.id,
+      "per-run tokens cap exceeded (51000/50000)"
+    );
+    expect(receipt?.capExceeded).toBe(1);
+    expect(receipt?.stopReason).toContain("per-run tokens cap");
+  });
+});

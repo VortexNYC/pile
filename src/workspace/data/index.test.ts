@@ -71,11 +71,21 @@ import {
   resolveGuidancePacks,
   resolvePayloadPath,
   resolveCustomerForEmail,
+  countAgentSessionsSince,
+  deleteAgentSpendCap,
+  getAgentSpendCap,
+  listRunReceipts,
+  markAgentSpendCapAlerted,
+  resolveAgentSpendCap,
+  summarizeRunReceipts,
+  sumRunReceipts,
   updateAgentSession,
   updateExternalEventDelivery,
   updateExternalEventMapping,
   updateGuidancePack,
+  upsertAgentSpendCap,
   upsertNotificationPreferences,
+  upsertRunReceipt,
   type WorkspaceDb,
 } from "./index.js";
 
@@ -1428,5 +1438,181 @@ describe("external event data (PILE-422)", () => {
     );
     expect(extractEventField("nope", ["type"])).toBeNull();
     expect(extractEventField({}, ["type"])).toBeNull();
+  });
+});
+
+describe("spend caps + run receipts (PILE-425)", () => {
+  it("resolves the agent's own row before the workspace default", async () => {
+    await withDb(async (db) => {
+      const org = WORKSPACE_ID;
+      const agentId = `caps-${crypto.randomUUID()}`;
+      await upsertAgentSpendCap(db, org, "*", {
+        maxTokensPerDay: 1_000_000,
+      });
+      expect((await resolveAgentSpendCap(db, org, agentId))?.agentId).toBe("*");
+      await upsertAgentSpendCap(db, org, agentId, {
+        maxTokensPerDay: 5_000,
+      });
+      const resolved = await resolveAgentSpendCap(db, org, agentId);
+      expect(resolved?.agentId).toBe(agentId);
+      expect(resolved?.maxTokensPerDay).toBe(5_000);
+      await deleteAgentSpendCap(db, org, agentId);
+      expect(await getAgentSpendCap(db, org, agentId)).toBeUndefined();
+    });
+  });
+
+  it("upserts caps fields individually — omitted limits keep their value", async () => {
+    await withDb(async (db) => {
+      const org = WORKSPACE_ID;
+      const agentId = `caps-patch-${crypto.randomUUID()}`;
+      await upsertAgentSpendCap(db, org, agentId, {
+        maxRunsPerDay: 5,
+        maxTokensPerDay: 1000,
+      });
+      await upsertAgentSpendCap(db, org, agentId, {
+        maxRunsPerDay: 10,
+      });
+      let row = await getAgentSpendCap(db, org, agentId);
+      expect(row?.maxRunsPerDay).toBe(10);
+      expect(row?.maxTokensPerDay).toBe(1000);
+      // Explicit null clears a limit.
+      await upsertAgentSpendCap(db, org, agentId, {
+        maxTokensPerDay: null,
+      });
+      row = await getAgentSpendCap(db, org, agentId);
+      expect(row?.maxTokensPerDay).toBeNull();
+      expect(row?.maxRunsPerDay).toBe(10);
+    });
+  });
+
+  it("stamps the resolved caps row when the alert is claimed", async () => {
+    await withDb(async (db) => {
+      const org = WORKSPACE_ID;
+      const agentId = `caps-alert-${crypto.randomUUID()}`;
+      // No row at all → nothing to stamp (fresh org: the suite's shared
+      // workspace already has a "*" default from an earlier test).
+      expect(
+        await markAgentSpendCapAlerted(db, `${org}-nocap`, agentId)
+      ).toBeUndefined();
+      await upsertAgentSpendCap(db, org, agentId, { maxRunsPerDay: 1 });
+      const stamped = await markAgentSpendCapAlerted(db, org, agentId);
+      expect(stamped?.lastCapAlertAt).not.toBeNull();
+    });
+  });
+
+  it("upserts one receipt per session and keeps unwritten fields", async () => {
+    await withDb(async (db) => {
+      const org = WORKSPACE_ID;
+      const sessionId = crypto.randomUUID();
+      await upsertRunReceipt(db, org, {
+        sessionId,
+        issueId: crypto.randomUUID(),
+        agentId: "mock",
+        status: "running",
+        inputTokens: 100,
+      });
+      const updated = await upsertRunReceipt(db, org, {
+        sessionId,
+        issueId: crypto.randomUUID(),
+        agentId: "mock",
+        status: "completed",
+        outputTokens: 40,
+      });
+      expect(updated?.inputTokens).toBe(100);
+      expect(updated?.outputTokens).toBe(40);
+      expect(updated?.status).toBe("completed");
+      const all = listRunReceipts(db, org, { sessionId });
+      expect(all).toHaveLength(1);
+    });
+  });
+
+  it("sums window usage and counts sessions for cap evaluation", async () => {
+    await withDb(async (db) => {
+      const org = WORKSPACE_ID;
+      const agentId = `caps-sums-${crypto.randomUUID()}`;
+      const sessionA = await createAgentSession(
+        db,
+        sessionInput({ agentId, status: "completed" })
+      );
+      const sessionB = await createAgentSession(
+        db,
+        sessionInput({ agentId, status: "running" })
+      );
+      await upsertRunReceipt(db, org, {
+        sessionId: sessionA.id,
+        issueId: sessionA.issueId,
+        agentId,
+        inputTokens: 60,
+        outputTokens: 40,
+        totalTokens: 100,
+        costMicros: 500,
+        externalSpendMicros: 25,
+      });
+      await upsertRunReceipt(db, org, {
+        sessionId: sessionB.id,
+        issueId: sessionB.issueId,
+        agentId,
+        inputTokens: 30,
+        outputTokens: 10,
+        totalTokens: 40,
+      });
+      const since = "2000-01-01T00:00:00.000Z";
+      const sums = await sumRunReceipts(db, org, { agentId, since });
+      expect(sums.receipts).toBe(2);
+      expect(sums.totalTokens).toBe(140);
+      expect(sums.costMicros).toBe(500);
+      expect(sums.externalSpendMicros).toBe(25);
+      expect(await countAgentSessionsSince(db, org, agentId, since)).toBe(2);
+      // A future bound excludes everything.
+      expect(
+        await countAgentSessionsSince(
+          db,
+          org,
+          agentId,
+          "2999-01-01T00:00:00.000Z"
+        )
+      ).toBe(0);
+    });
+  });
+
+  it("aggregates receipts per agent, step, and deal", async () => {
+    await withDb(async (db) => {
+      const org = WORKSPACE_ID;
+      const agentId = `caps-agg-${crypto.randomUUID()}`;
+      const dealId = crypto.randomUUID();
+      for (const [i, stepKey] of [
+        "sourced",
+        "sourced",
+        "contacted",
+      ].entries()) {
+        await upsertRunReceipt(db, org, {
+          sessionId: crypto.randomUUID(),
+          issueId: crypto.randomUUID(),
+          agentId,
+          stepKey,
+          dealId,
+          totalTokens: 10 * (i + 1),
+          costMicros: 100 * (i + 1),
+          capExceeded: i === 2 ? 1 : 0,
+        });
+      }
+      const byStep = await summarizeRunReceipts(db, org, {
+        groupBy: "stepKey",
+        agentId,
+      });
+      expect(byStep).toHaveLength(2);
+      const sourced = byStep.find((r) => r.key === "sourced");
+      expect(sourced?.runs).toBe(2);
+      expect(sourced?.totalTokens).toBe(30);
+      const contacted = byStep.find((r) => r.key === "contacted");
+      expect(contacted?.capExceededRuns).toBe(1);
+      const byDeal = await summarizeRunReceipts(db, org, {
+        groupBy: "dealId",
+        dealId,
+      });
+      expect(byDeal).toHaveLength(1);
+      expect(byDeal[0]?.runs).toBe(3);
+      expect(byDeal[0]?.costMicros).toBe(600);
+    });
   });
 });

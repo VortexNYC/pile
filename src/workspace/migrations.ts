@@ -1118,6 +1118,63 @@ CREATE UNIQUE INDEX IF NOT EXISTS external_event_deliveries_dedupe_idx ON extern
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS external_event_deliveries_org_idx ON external_event_deliveries (organization_id, created_at)`;
 
+// PILE-425 — per-agent spend/token caps + per-run receipts.
+const v81 = `CREATE TABLE IF NOT EXISTS agent_spend_caps (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  agent_id TEXT NOT NULL,
+  max_runs_per_day INTEGER,
+  max_runs_per_month INTEGER,
+  max_tokens_per_day INTEGER,
+  max_tokens_per_month INTEGER,
+  max_cost_micros_per_day INTEGER,
+  max_cost_micros_per_month INTEGER,
+  max_tokens_per_run INTEGER,
+  max_cost_micros_per_run INTEGER,
+  last_cap_alert_at TEXT,
+  created_by TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS agent_spend_caps_org_agent_idx ON agent_spend_caps (organization_id, agent_id)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS agent_run_receipts (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  session_id TEXT NOT NULL,
+  issue_id TEXT NOT NULL,
+  agent_id TEXT NOT NULL,
+  step_key TEXT,
+  deal_id TEXT,
+  status TEXT NOT NULL DEFAULT 'running',
+  model TEXT,
+  effort TEXT,
+  input_tokens INTEGER,
+  output_tokens INTEGER,
+  total_tokens INTEGER,
+  tool_calls INTEGER,
+  cost_micros INTEGER,
+  external_spend_micros INTEGER,
+  cost_source TEXT,
+  cap_exceeded INTEGER NOT NULL DEFAULT 0,
+  stop_reason TEXT,
+  started_at TEXT,
+  ended_at TEXT,
+  duration_ms INTEGER,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS agent_run_receipts_session_idx ON agent_run_receipts (session_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS agent_run_receipts_org_agent_idx ON agent_run_receipts (organization_id, agent_id, created_at)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS agent_run_receipts_org_step_idx ON agent_run_receipts (organization_id, step_key)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS agent_run_receipts_issue_idx ON agent_run_receipts (issue_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS agent_run_receipts_deal_idx ON agent_run_receipts (organization_id, deal_id)`;
 const v69 = `CREATE TABLE comments_new (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -1372,6 +1429,7 @@ export const workspaceMigrations = {
       { idx: 77, when: 77, tag: "v78", breakpoints: true },
       { idx: 78, when: 78, tag: "v79", breakpoints: true },
       { idx: 79, when: 79, tag: "v80", breakpoints: true },
+      { idx: 80, when: 80, tag: "v81", breakpoints: true },
     ],
   },
   migrations: {
@@ -1455,5 +1513,6 @@ export const workspaceMigrations = {
     m0077: v78,
     m0078: v79,
     m0079: v80,
+    m0080: v81,
   },
 } satisfies Parameters<typeof migrate>[1];
