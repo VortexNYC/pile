@@ -609,7 +609,8 @@ const INTAKE_PAGE = `<!DOCTYPE html>
 
   var BILLING = ["point-of-sale","standalone terminal","invoicing software","online checkout","keyed phone orders","recurring billing","none"];
   var PAYMENTS = ["card-present","keyed","online","invoice links","recurring","bank transfer"];
-  var STAGES = ["New","Meeting booked","Statement received","Proposal sent","Onboarded","Passed"];
+  var STAGES = ["New","Meeting booked","Statement received","Proposal sent","Onboarding in flight","Onboarded","Passed","Lost"];
+  var TERMINAL = { "Passed": 1, "Lost": 1 };
 
   function chips(el, names){
     $(el).innerHTML = names.map(function(n){
@@ -672,7 +673,7 @@ const INTAKE_PAGE = `<!DOCTYPE html>
       await api("/workspaces/" + ws + "/customer-statuses", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name: STAGES[i], position: i })
+        body: JSON.stringify({ name: STAGES[i], position: i, type: TERMINAL[STAGES[i]] ? "terminal" : "active" })
       });
     }
     await loadStages();

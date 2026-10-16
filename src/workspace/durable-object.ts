@@ -636,6 +636,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   private async runMigrations() {
     await migrate(this.db, workspaceMigrations);
+    // PILE-438 — persist keys on statuses that predate the column so a
+    // rename can no longer orphan the stage bindings that reference them.
+    await data.backfillCustomerStatusKeys(this.db, this.organizationId);
   }
 
   private async ensureSearchIndex(): Promise<WorkspaceSearchIndex> {
@@ -2898,6 +2901,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     name: string;
     color?: string | null;
     position?: number;
+    key?: string;
+    type?: "active" | "terminal";
   }) {
     return data.createCustomerStatus(this.db, this.organizationId, input);
   }
@@ -2912,7 +2917,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   updateCustomerStatus(
     id: string,
-    input: { name?: string; color?: string | null; position?: number }
+    input: {
+      name?: string;
+      color?: string | null;
+      position?: number;
+      type?: "active" | "terminal";
+    }
   ) {
     return data.updateCustomerStatus(this.db, this.organizationId, id, input);
   }

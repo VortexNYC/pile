@@ -74,6 +74,8 @@ const tierSchema = z.object({
   id: z.string(),
   organizationId: z.string(),
   name: z.string(),
+  key: z.string().nullable(),
+  type: z.string(),
   color: z.string().nullable(),
   position: z.number(),
   createdAt: z.string(),
@@ -81,6 +83,11 @@ const tierSchema = z.object({
 
 const tierBodySchema = z.object({
   name: z.string().min(1),
+  // PILE-438 — explicit immutable key override; defaults to a slug of the
+  // name at create and can never be edited afterward.
+  key: z.string().min(1).optional(),
+  // "active" | "terminal" — Passed/Lost end the pipeline.
+  type: z.enum(["active", "terminal"]).optional(),
   color: z.string().optional(),
   position: z.number().optional(),
 });

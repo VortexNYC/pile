@@ -1338,6 +1338,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS agent_types_slug_idx ON agent_types (organizat
 const v88 = `ALTER TABLE agent_sessions ADD COLUMN first_activity_at TEXT`;
 
 // PILE-404 — draft-approval provenance + edit-diff snapshot.
+// PILE-438 — immutable status key + active/terminal marker.
+const v91 = `ALTER TABLE customer_statuses ADD COLUMN key TEXT
+--> statement-breakpoint
+ALTER TABLE customer_statuses ADD COLUMN type TEXT NOT NULL DEFAULT 'active'
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS customer_statuses_key_idx ON customer_statuses (organization_id, key)`;
+
 const v89 = `ALTER TABLE draft_outputs ADD COLUMN agent_slug TEXT
 --> statement-breakpoint
 ALTER TABLE draft_outputs ADD COLUMN prompt_version TEXT
@@ -1606,6 +1613,7 @@ export const workspaceMigrations = {
       { idx: 86, when: 86, tag: "v87", breakpoints: true },
       { idx: 87, when: 87, tag: "v88", breakpoints: true },
       { idx: 88, when: 88, tag: "v89", breakpoints: true },
+      { idx: 89, when: 89, tag: "v91", breakpoints: true },
     ],
   },
   migrations: {
@@ -1698,5 +1706,6 @@ export const workspaceMigrations = {
     m0086: v87,
     m0087: v88,
     m0088: v89,
+    m0089: v91,
   },
 } satisfies Parameters<typeof migrate>[1];

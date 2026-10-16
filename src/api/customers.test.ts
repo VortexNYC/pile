@@ -826,4 +826,53 @@ describe("bulk customer import (PILE-403)", () => {
     // retry just that place_id.
     expect(receipt.rows[1]?.customerId).toBeUndefined();
   });
+
+  it("statuses carry an immutable key and a terminal type (PILE-438)", async () => {
+    const seed = await seedWorkspace();
+    const org = seed.organizationId;
+    const admin = seed.token;
+
+    const create = await fetch(
+      `/workspaces/${org}/customer-statuses`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "Onboarding In Flight",
+          position: 0,
+        }),
+      },
+      admin
+    );
+    expect(create.status).toBe(201);
+    const created = (await create.json()) as {
+      id: string;
+      key: string | null;
+      type: string;
+    };
+    expect(created.key).toBe("onboarding_in_flight");
+    expect(created.type).toBe("active");
+
+    // rename — the key must NOT move with the display name
+    const rename = await fetch(
+      `/workspaces/${org}/customer-statuses/${created.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ name: "Live Onboarding" }),
+      },
+      admin
+    );
+    const renamed = (await rename.json()) as { key: string | null };
+    expect(renamed.key).toBe("onboarding_in_flight");
+
+    // mark terminal
+    const term = await fetch(
+      `/workspaces/${org}/customer-statuses/${created.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ type: "terminal" }),
+      },
+      admin
+    );
+    expect((await term.json() as { type: string }).type).toBe("terminal");
+  });
 });
