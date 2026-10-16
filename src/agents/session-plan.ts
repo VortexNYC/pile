@@ -12,7 +12,7 @@ export const sessionPlanItemSchema = z.object({
 export const sessionPlanSchema = z.array(sessionPlanItemSchema).max(50);
 
 export type SessionPlanItem = z.infer<typeof sessionPlanItemSchema>;
-export type SessionPlan = z.infer<typeof sessionPlanSchema>;
+export type SessionPlan = SessionPlanItem[];
 
 /** The stored `agent_sessions.plan` column is JSON text; a hand-edited or
  *  legacy row degrades to null rather than poisoning the response. */

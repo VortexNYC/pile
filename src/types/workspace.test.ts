@@ -33,6 +33,7 @@ describe("workspace shared types", () => {
     expect(AGENT_SESSION_STATUSES).toEqual([
       "created",
       "running",
+      "stale",
       "waiting",
       "completed",
       "failed",
