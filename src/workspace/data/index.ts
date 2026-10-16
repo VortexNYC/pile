@@ -3938,6 +3938,15 @@ export interface AgentTypeInput {
   name: string;
   providerAgentId: string;
   jobSpec?: string | null;
+  /** System prompt the profile runs with. */
+  prompt?: string | null;
+  /** Model tier or id — e.g. "claude-sonnet" or a Workers AI model. */
+  model?: string | null;
+  /** JSON allowlist of tool names the profile may call. */
+  tools?: string | null;
+  /** "agent" (default) runs a provider lane; "human" resolves the owner
+   *  slug for lint but is never dispatched. */
+  kind?: "agent" | "human";
   toolScope?: string | null;
   permissionsTier?: string | null;
   enabled?: boolean;
@@ -3969,6 +3978,10 @@ export async function upsertAgentType(
         name: input.name,
         providerAgentId: input.providerAgentId,
         jobSpec: input.jobSpec ?? existing.jobSpec,
+        prompt: input.prompt ?? existing.prompt,
+        model: input.model ?? existing.model,
+        tools: input.tools ?? existing.tools,
+        kind: input.kind ?? existing.kind,
         toolScope: input.toolScope ?? existing.toolScope,
         permissionsTier: input.permissionsTier ?? existing.permissionsTier,
         enabled:
@@ -4070,6 +4083,10 @@ export async function updateAgentType(
   if (patch.providerAgentId !== undefined)
     set.providerAgentId = patch.providerAgentId;
   if (patch.jobSpec !== undefined) set.jobSpec = patch.jobSpec;
+  if (patch.prompt !== undefined) set.prompt = patch.prompt;
+  if (patch.model !== undefined) set.model = patch.model;
+  if (patch.tools !== undefined) set.tools = patch.tools;
+  if (patch.kind !== undefined) set.kind = patch.kind;
   if (patch.toolScope !== undefined) set.toolScope = patch.toolScope;
   if (patch.permissionsTier !== undefined)
     set.permissionsTier = patch.permissionsTier;
@@ -7004,6 +7021,8 @@ export function createCustomerStatus(
 /** PILE-438 — persist a key on rows that predate the column. Called from
  *  DO initialize after migrations so renames stop orphaning stage
  *  bindings. */
+const TERMINAL_STATUS_KEYS = new Set(["passed", "lost", "dead"]);
+
 export async function backfillCustomerStatusKeys(
   db: WorkspaceDb,
   organizationId: string
@@ -7019,12 +7038,43 @@ export async function backfillCustomerStatusKeys(
     )
     .all();
   for (const row of missing) {
+    const key = stageKey(row.name);
     await db
       .update(workspaceCustomerStatuses)
-      .set({ key: stageKey(row.name) })
+      .set({
+        key,
+        // Rows that predate the column never got terminal marked — fix the
+        // known dead-end names while we're here.
+        type: TERMINAL_STATUS_KEYS.has(key) ? "terminal" : "active",
+      })
       .where(eq(workspaceCustomerStatuses.id, row.id));
   }
   return missing.length;
+}
+
+/** PILE-438 follow-up — rows that got `key` backfilled but stayed "active"
+ *  on a terminal name. Idempotent; safe to call every boot. */
+export async function markTerminalStatuses(
+  db: WorkspaceDb,
+  organizationId: string
+): Promise<number> {
+  const rows = db
+    .select()
+    .from(workspaceCustomerStatuses)
+    .where(eq(workspaceCustomerStatuses.organizationId, organizationId))
+    .all();
+  let fixed = 0;
+  for (const row of rows) {
+    const key = row.key ?? stageKey(row.name);
+    if (TERMINAL_STATUS_KEYS.has(key) && row.type !== "terminal") {
+      await db
+        .update(workspaceCustomerStatuses)
+        .set({ type: "terminal" })
+        .where(eq(workspaceCustomerStatuses.id, row.id));
+      fixed++;
+    }
+  }
+  return fixed;
 }
 
 export function listCustomerStatuses(db: WorkspaceDb, organizationId: string) {

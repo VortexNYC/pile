@@ -133,7 +133,7 @@ async function handleStageEntered(
   const config = await stub.getStageConfig(payload.entityType, stageName);
   if (!config?.ownerAgent) return;
   const owner = await resolveOwner(stub, config.ownerAgent);
-  if (!owner) return;
+  if (!owner || owner.kind === "human") return;
   const issue = await pipelineIssueFor(
     stub,
     payload.entityType,
@@ -222,6 +222,7 @@ async function handleSubstepActionable(
   // Only dispatch work that's still open.
   if (issue.status !== "todo" && issue.status !== "in_progress") return;
   const owner = await resolveOwner(stub, issue.ownerAgent);
+  if (owner?.kind === "human") return;
   if (!owner) {
     // PILE-413 — ownerless/unresolvable sub-steps go to the Chief of Staff
     // queue: flagged for a human rather than silently undispatched.

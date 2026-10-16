@@ -44,6 +44,10 @@ const agentTypeSchema = z.object({
   name: z.string(),
   providerAgentId: z.string(),
   jobSpec: z.string().nullable(),
+  prompt: z.string().nullable(),
+  model: z.string().nullable(),
+  tools: z.string().nullable(),
+  kind: z.string(),
   toolScope: z.string().nullable(),
   permissionsTier: z.string().nullable(),
   enabled: z.number(),
@@ -59,6 +63,14 @@ const upsertAgentTypeSchema = z
     name: z.string().min(1),
     providerAgentId: z.string().min(1),
     jobSpec: z.string().nullable().optional(),
+    /** System prompt the profile runs with. */
+    prompt: z.string().nullable().optional(),
+    /** Model tier or id. */
+    model: z.string().nullable().optional(),
+    /** JSON allowlist of tool names. */
+    tools: z.string().nullable().optional(),
+    /** "agent" runs a provider lane; "human" owns steps without dispatch. */
+    kind: z.enum(["agent", "human"]).optional(),
     toolScope: z.string().nullable().optional(),
     permissionsTier: z.string().nullable().optional(),
     enabled: z.boolean().optional(),
@@ -237,6 +249,7 @@ const patchAgentTypeSchema = z
     slug: z.string().min(1).optional(),
     name: z.string().min(1).optional(),
     providerAgentId: z.string().min(1).optional(),
+    kind: z.enum(["agent", "human"]).optional(),
     jobSpec: z.string().nullable().optional(),
     toolScope: z.string().nullable().optional(),
     permissionsTier: z.string().nullable().optional(),

@@ -639,6 +639,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     // PILE-438 — persist keys on statuses that predate the column so a
     // rename can no longer orphan the stage bindings that reference them.
     await data.backfillCustomerStatusKeys(this.db, this.organizationId);
+    await data.markTerminalStatuses(this.db, this.organizationId);
   }
 
   private async ensureSearchIndex(): Promise<WorkspaceSearchIndex> {
