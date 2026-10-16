@@ -355,7 +355,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   constructor(ctx: DurableObjectState, env: AppEnv) {
     super(ctx, env);
-    this.organizationId = ctx.id.toString();
+    // `idFromName(organizationId)` ids carry the name — that's the real
+    // org id. Only `newUniqueId` ids lack it and fall back to the hex id.
+    this.organizationId = ctx.id.name ?? ctx.id.toString();
     this.ready = this.initialize();
   }
 
@@ -372,7 +374,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       this.runMigrations(),
       this.ctx.storage.get<boolean>("workspaceDataBackfilled"),
     ]);
-    if (stored) {
+    if (stored && !this.ctx.id.name) {
+      // Name-less DOs (newUniqueId) still need the stored org id; named
+      // ids already have it via ctx.id.name.
       this.organizationId = stored;
     }
     if (!backfilled) {

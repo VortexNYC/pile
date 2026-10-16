@@ -8,6 +8,7 @@ import {
   laneFollowupThrottled,
 } from "../agents/followup.js";
 import { getAgentProvider } from "../agents/index.js";
+import { dispatchAgent } from "../agents/index.js";
 import { triggerPlanMode } from "../agents/plan-dispatch.js";
 import { parsePlanCommand } from "../agents/plan.js";
 import { createD1 } from "../global/db.js";
@@ -67,6 +68,27 @@ const commentSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
 });
+
+/** PILE-435 — an @mention that resolves to a registered agent type
+ *  dispatches a lane (mentions today notify humans but never wake agents).
+ *  Slugs normalize like stage keys: @sales-scout ≈ @sales_scout. */
+const AGENT_MENTION_RE = /@([a-zA-Z0-9._-]{2,})/g;
+async function resolveAgentMentions(
+  stub: Awaited<ReturnType<typeof getStub>>,
+  body: string
+) {
+  const handles = new Set(
+    [...body.matchAll(AGENT_MENTION_RE)].map((m) => m[1])
+  );
+  const types = [];
+  for (const handle of handles) {
+    const agentType = await stub
+      .getAgentTypeBySlug(handle)
+      .catch(() => undefined);
+    if (agentType) types.push(agentType);
+  }
+  return types;
+}
 
 const createCommentBodySchema = z.object({
   body: z.string().min(1),
@@ -300,6 +322,41 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
       body,
       mentions,
     });
+    // PILE-435 — @agent-slug in a human comment wakes that agent on the
+    // issue. Agent-authored comments skip this to keep lanes from
+    // dispatching each other in a loop.
+    if (identity.type !== "agent") {
+      const agentTypes = await resolveAgentMentions(issueStub, body);
+      for (const agentType of agentTypes) {
+        const request = body.replace(AGENT_MENTION_RE, "").trim();
+        // Awaited inline — the same contract the drainer uses; a mention
+        // is a deliberate human action, not a background fan-out.
+        await dispatchAgent(
+          c.env,
+          agentType.providerAgentId,
+          organizationId,
+          issue,
+          identity,
+          undefined,
+          getExecutionCtx(c),
+          {
+            instructions: [
+              agentType.jobSpec ?? "",
+              "",
+              `You were mentioned by ${identity.id} on ${issue.identifier ?? issue.id}:`,
+              "",
+              request || "(mention with no request text)",
+            ].join("\n"),
+          }
+        ).catch((err: unknown) => {
+          console.error("mention dispatch failed", {
+            agentSlug: agentType.slug,
+            issueId: issue.id,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+      }
+    }
     if (!created) {
       throw new VortexError({
         code: "INTERNAL_ERROR",

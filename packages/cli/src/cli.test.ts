@@ -1287,13 +1287,21 @@ describe("CLI integration", () => {
     const captured: Array<{ url: string; body: string }> = [];
     const mockFetch = vi
       .fn()
-      .mockImplementation(async (url: string | URL, init?: { body?: string }) => {
-        captured.push({ url: String(url), body: String(init?.body ?? "") });
-        return new Response(
-          JSON.stringify({ id: "imp-1", total: 2, created: 2, existing: 0, failed: 0 }),
-          { status: 200, headers: { "Content-Type": "application/json" } }
-        );
-      });
+      .mockImplementation(
+        async (url: string | URL, init?: { body?: string }) => {
+          captured.push({ url: String(url), body: String(init?.body ?? "") });
+          return new Response(
+            JSON.stringify({
+              id: "imp-1",
+              total: 2,
+              created: 2,
+              existing: 0,
+              failed: 0,
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          );
+        }
+      );
     const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
 
     const exitCode = await runCli(
@@ -1314,7 +1322,10 @@ describe("CLI integration", () => {
       priorityScore: 42,
       customFields: { processor_detected: "square" },
     });
-    expect(body.rows[1]).toMatchObject({ placeId: "plc_2", name: "Beta Diner" });
+    expect(body.rows[1]).toMatchObject({
+      placeId: "plc_2",
+      name: "Beta Diner",
+    });
     spy.mockRestore();
   });
 });
