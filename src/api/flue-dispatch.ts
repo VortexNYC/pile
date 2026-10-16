@@ -1,6 +1,7 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 
 import type { AppContext } from "../platform/middleware.js";
+import { getExecutionCtx } from "./execution-ctx.js";
 import { dispatchAgent } from "../agents/index.js";
 import { VortexError } from "../platform/errors.js";
 import { getWorkspaceStub } from "./stub.js";
@@ -125,40 +126,47 @@ export function registerFlueDispatchRoutes(app: OpenAPIHono<AppContext>) {
     ]
       .filter((part) => part !== "")
       .join("\n");
-    await stub.getIssue(body.issue.id).then(async (issue) => {
-      if (!issue) return;
-      await dispatchAgent(
-        c.env,
-        executor,
-        body.organizationId,
-        issue,
-        {
-          id: "flue-dispatch",
-          type: "agent",
-          organizationId: body.organizationId,
-          permissions: ["admin"],
-        },
-        body.profile?.model ?? undefined,
-        undefined,
-        {
-          instructions,
-          conversationKey: key,
-          agentProfile: body.profile
-            ? {
-                slug: body.profile.slug,
-                name: body.profile.name,
-                jobSpec: body.profile.jobSpec ?? null,
-                toolScope: body.profile.toolScope ?? null,
-              }
-            : undefined,
-        }
-      ).catch((err: unknown) => {
+    // Lane provisioning (sandbox spawn) takes minutes — far past a POST's
+    // timeout. Return the conversation id now; the lane dispatches in the
+    // background and writes its own progress back onto the session.
+    const task = stub
+      .getIssue(body.issue.id)
+      .then(async (issue) => {
+        if (!issue) return;
+        await dispatchAgent(
+          c.env,
+          executor,
+          body.organizationId,
+          issue,
+          {
+            id: "flue-dispatch",
+            type: "agent",
+            organizationId: body.organizationId,
+            permissions: ["admin"],
+          },
+          body.profile?.model ?? undefined,
+          undefined,
+          {
+            instructions,
+            conversationKey: key,
+            agentProfile: body.profile
+              ? {
+                  slug: body.profile.slug,
+                  name: body.profile.name,
+                  jobSpec: body.profile.jobSpec ?? null,
+                  toolScope: body.profile.toolScope ?? null,
+                }
+              : undefined,
+          }
+        );
+      })
+      .catch((err: unknown) => {
         console.error("flue lane dispatch failed", {
           conversationKey: key,
           error: err instanceof Error ? err.message : String(err),
         });
       });
-    });
+    getExecutionCtx(c)?.waitUntil(task);
     return c.json({ ok: true, conversationId: session.id }, 200);
   });
 }
