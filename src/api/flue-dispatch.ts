@@ -1,6 +1,7 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 
 import type { AppContext } from "../platform/middleware.js";
+import { dispatchAgent } from "../agents/index.js";
 import { VortexError } from "../platform/errors.js";
 import { getWorkspaceStub } from "./stub.js";
 
@@ -31,6 +32,9 @@ const dispatchBodySchema = z.object({
       name: z.string(),
       jobSpec: z.string().nullable().optional(),
       toolScope: z.string().nullable().optional(),
+      providerAgentId: z.string().nullable().optional(),
+      model: z.string().nullable().optional(),
+      prompt: z.string().nullable().optional(),
     })
     .passthrough()
     .nullable()
@@ -103,6 +107,57 @@ export function registerFlueDispatchRoutes(app: OpenAPIHono<AppContext>) {
       conversationKey: key,
       label: body.profile?.name ?? body.agent ?? "flue-agent",
       guidance: body.profile?.jobSpec ?? null,
+    });
+    // The session is the conversation anchor; the turn actually executes as
+    // a pile lane on the executor provider (claude-cli by default — a real
+    // headless run in the sandbox, not an external call).
+    const executor =
+      body.profile?.providerAgentId &&
+      body.profile.providerAgentId !== "flue"
+        ? body.profile.providerAgentId
+        : "claude-cli";
+    const instructions = [
+      body.profile?.prompt ?? "",
+      body.profile?.jobSpec ?? "",
+      "",
+      `Issue: ${body.issue.identifier ?? body.issue.id} — ${body.issue.title}`,
+      body.issue.description ?? "",
+    ]
+      .filter((part) => part !== "")
+      .join("\n");
+    await stub.getIssue(body.issue.id).then(async (issue) => {
+      if (!issue) return;
+      await dispatchAgent(
+        c.env,
+        executor,
+        body.organizationId,
+        issue,
+        {
+          id: "flue-dispatch",
+          type: "agent",
+          organizationId: body.organizationId,
+          permissions: ["admin"],
+        },
+        body.profile?.model ?? undefined,
+        undefined,
+        {
+          instructions,
+          conversationKey: key,
+          agentProfile: body.profile
+            ? {
+                slug: body.profile.slug,
+                name: body.profile.name,
+                jobSpec: body.profile.jobSpec ?? null,
+                toolScope: body.profile.toolScope ?? null,
+              }
+            : undefined,
+        }
+      ).catch((err: unknown) => {
+        console.error("flue lane dispatch failed", {
+          conversationKey: key,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
     });
     return c.json({ ok: true, conversationId: session.id }, 200);
   });
