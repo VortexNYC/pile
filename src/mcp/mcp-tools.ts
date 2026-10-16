@@ -284,6 +284,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdAgenttypesId",
+    "description": "Delete agent type (DELETE /workspaces/{organizationId}/agent-types/{id}) Path params (top-level, required): organizationId, id.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/agent-types/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdChangelogEntryId",
     "description": "Delete changelog (DELETE /workspaces/{organizationId}/changelog/{entryId}) Path params (top-level, required): organizationId, entryId.",
     "method": "DELETE",
@@ -1404,6 +1425,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "deleteWorkspacesOrganizationIdStageconfigsId",
+    "description": "Delete stage config (DELETE /workspaces/{organizationId}/stage-configs/{id}) Path params (top-level, required): organizationId, id.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/stage-configs/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
         "organizationId"
       ]
     }
@@ -2570,6 +2612,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "List agent stats (GET /workspaces/{organizationId}/agent/stats) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/agent/stats",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdAgenttypes",
+    "description": "List agent types (GET /workspaces/{organizationId}/agent-types) Path params (top-level, required): organizationId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/agent-types",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -5454,6 +5513,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "List slack (GET /workspaces/{organizationId}/slack) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/slack",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdStageconfigs",
+    "description": "List stage configs (GET /workspaces/{organizationId}/stage-configs) Path params (top-level, required): organizationId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/stage-configs",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -12006,6 +12082,61 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdAgenttypes",
+    "description": "Create agent type (POST /workspaces/{organizationId}/agent-types) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: slug*, name*, providerAgentId*, jobSpec, toolScope, permissionsTier, enabled (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/agent-types",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "slug": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "providerAgentId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "jobSpec": {
+              "type": "string",
+              "nullable": true
+            },
+            "toolScope": {
+              "type": "string",
+              "nullable": true
+            },
+            "permissionsTier": {
+              "type": "string",
+              "nullable": true
+            },
+            "enabled": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "slug",
+            "name",
+            "providerAgentId"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdApprovalsIdRespond",
     "description": "Create approval respond (POST /workspaces/{organizationId}/approvals/{id}/respond) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: status* (* = required).",
     "method": "POST",
@@ -16390,6 +16521,63 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "properties": {
         "organizationId": {
           "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdStageconfigs",
+    "description": "Create stage config (POST /workspaces/{organizationId}/stage-configs) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: entityType, status*, ownerAgent, instructions, advancePolicy, enabled (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/stage-configs",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "entityType": {
+              "type": "string",
+              "enum": [
+                "issue",
+                "deal",
+                "customer"
+              ]
+            },
+            "status": {
+              "type": "string",
+              "minLength": 1
+            },
+            "ownerAgent": {
+              "type": "string",
+              "nullable": true
+            },
+            "instructions": {
+              "type": "string",
+              "nullable": true
+            },
+            "advancePolicy": {
+              "type": "string",
+              "enum": [
+                "none",
+                "auto",
+                "ready_flag"
+              ]
+            },
+            "enabled": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [

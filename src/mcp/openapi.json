@@ -20528,6 +20528,566 @@
         "summary": "Create stage template seed"
       }
     },
+    "/workspaces/{organizationId}/stage-configs": {
+      "get": {
+        "tags": [
+          "pipeline"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stage configs for the workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "configs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "entityType": {
+                            "type": "string",
+                            "enum": [
+                              "issue",
+                              "deal",
+                              "customer"
+                            ]
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "ownerAgent": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "instructions": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "advancePolicy": {
+                            "type": "string",
+                            "enum": [
+                              "none",
+                              "auto",
+                              "ready_flag"
+                            ]
+                          },
+                          "enabled": {
+                            "type": "number"
+                          },
+                          "createdBy": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "entityType",
+                          "status",
+                          "ownerAgent",
+                          "instructions",
+                          "advancePolicy",
+                          "enabled",
+                          "createdBy",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "configs"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List stage configs"
+      },
+      "post": {
+        "tags": [
+          "pipeline"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "entityType": {
+                    "type": "string",
+                    "enum": [
+                      "issue",
+                      "deal",
+                      "customer"
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "ownerAgent": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "instructions": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "advancePolicy": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "auto",
+                      "ready_flag"
+                    ]
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "status"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Stage config upserted (keyed on entityType + status)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "entityType": {
+                      "type": "string",
+                      "enum": [
+                        "issue",
+                        "deal",
+                        "customer"
+                      ]
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "ownerAgent": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "instructions": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "advancePolicy": {
+                      "type": "string",
+                      "enum": [
+                        "none",
+                        "auto",
+                        "ready_flag"
+                      ]
+                    },
+                    "enabled": {
+                      "type": "number"
+                    },
+                    "createdBy": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "entityType",
+                    "status",
+                    "ownerAgent",
+                    "instructions",
+                    "advancePolicy",
+                    "enabled",
+                    "createdBy",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create stage config"
+      }
+    },
+    "/workspaces/{organizationId}/stage-configs/{id}": {
+      "delete": {
+        "tags": [
+          "pipeline"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stage config deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Stage config not found"
+          }
+        },
+        "summary": "Delete stage config"
+      }
+    },
+    "/workspaces/{organizationId}/agent-types": {
+      "get": {
+        "tags": [
+          "pipeline"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Registered agent types for the workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "agentTypes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "slug": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "providerAgentId": {
+                            "type": "string"
+                          },
+                          "jobSpec": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "toolScope": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "permissionsTier": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "enabled": {
+                            "type": "number"
+                          },
+                          "createdBy": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "slug",
+                          "name",
+                          "providerAgentId",
+                          "jobSpec",
+                          "toolScope",
+                          "permissionsTier",
+                          "enabled",
+                          "createdBy",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "agentTypes"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List agent types"
+      },
+      "post": {
+        "tags": [
+          "pipeline"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "slug": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "providerAgentId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "jobSpec": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "toolScope": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "permissionsTier": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "slug",
+                  "name",
+                  "providerAgentId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Agent type upserted (keyed on slug)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "slug": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "providerAgentId": {
+                      "type": "string"
+                    },
+                    "jobSpec": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "toolScope": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "permissionsTier": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "enabled": {
+                      "type": "number"
+                    },
+                    "createdBy": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "slug",
+                    "name",
+                    "providerAgentId",
+                    "jobSpec",
+                    "toolScope",
+                    "permissionsTier",
+                    "enabled",
+                    "createdBy",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create agent type"
+      }
+    },
+    "/workspaces/{organizationId}/agent-types/{id}": {
+      "delete": {
+        "tags": [
+          "pipeline"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agent type deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Agent type not found"
+          }
+        },
+        "summary": "Delete agent type"
+      }
+    },
     "/workspaces/{organizationId}/external-events/{source}": {
       "post": {
         "tags": [
