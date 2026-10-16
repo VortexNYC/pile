@@ -8,6 +8,7 @@ import {
   desc,
   eq,
   gt,
+  gte,
   inArray,
   isNotNull,
   isNull,
@@ -27,7 +28,9 @@ import {
   workspaceAgentActivities,
   workspaceAgentAutomations,
   workspaceAgentPauses,
+  workspaceAgentRunReceipts,
   workspaceAgentSessionEvents,
+  workspaceAgentSpendCaps,
   workspaceDocumentHistory,
   workspaceDocumentLinks,
   workspaceDocumentPermissions,
@@ -843,7 +846,10 @@ export type NotificationType =
   | "mention"
   | "lane_needs_input"
   | "lane_elicitation_escalated"
-  | "lane_stale";
+  | "lane_stale"
+  // PILE-425 — an agent type breached its spend/token caps; the CoS alert
+  // channel fires `agent.cap_exceeded` event automations alongside this.
+  | "agent_cap_exceeded";
 
 export type RecipientType = "user" | "agent";
 
@@ -1590,6 +1596,455 @@ export async function deleteAgentPause(
     .returning({ id: workspaceAgentPauses.id })
     .all();
   return rows.length > 0;
+}
+
+// ---- agent spend caps + run receipts (PILE-425) ----
+
+export type AgentSpendCap = typeof workspaceAgentSpendCaps.$inferSelect;
+export type AgentRunReceipt = typeof workspaceAgentRunReceipts.$inferSelect;
+
+/** Fields of a caps row a PUT may set; omitted keys keep their value. */
+export interface AgentSpendCapPatch {
+  maxRunsPerDay?: number | null;
+  maxRunsPerMonth?: number | null;
+  maxTokensPerDay?: number | null;
+  maxTokensPerMonth?: number | null;
+  maxCostMicrosPerDay?: number | null;
+  maxCostMicrosPerMonth?: number | null;
+  maxTokensPerRun?: number | null;
+  maxCostMicrosPerRun?: number | null;
+}
+
+const SPEND_CAP_PATCH_COLUMNS = [
+  "maxRunsPerDay",
+  "maxRunsPerMonth",
+  "maxTokensPerDay",
+  "maxTokensPerMonth",
+  "maxCostMicrosPerDay",
+  "maxCostMicrosPerMonth",
+  "maxTokensPerRun",
+  "maxCostMicrosPerRun",
+] as const;
+
+export function listAgentSpendCaps(db: WorkspaceDb, organizationId: string) {
+  return db
+    .select()
+    .from(workspaceAgentSpendCaps)
+    .where(eq(workspaceAgentSpendCaps.organizationId, organizationId))
+    .orderBy(workspaceAgentSpendCaps.agentId)
+    .all();
+}
+
+export function getAgentSpendCap(
+  db: WorkspaceDb,
+  organizationId: string,
+  agentId: string
+) {
+  return db
+    .select()
+    .from(workspaceAgentSpendCaps)
+    .where(
+      and(
+        eq(workspaceAgentSpendCaps.organizationId, organizationId),
+        eq(workspaceAgentSpendCaps.agentId, agentId)
+      )
+    )
+    .get();
+}
+
+/** The caps an agent type actually runs under: its own row, else the
+ *  workspace default ("*"), else uncapped. */
+export function resolveAgentSpendCap(
+  db: WorkspaceDb,
+  organizationId: string,
+  agentId: string
+) {
+  return (
+    getAgentSpendCap(db, organizationId, agentId) ??
+    getAgentSpendCap(db, organizationId, "*")
+  );
+}
+
+export async function upsertAgentSpendCap(
+  db: WorkspaceDb,
+  organizationId: string,
+  agentId: string,
+  input: AgentSpendCapPatch & { createdBy?: string | null }
+) {
+  const existing = await getAgentSpendCap(db, organizationId, agentId);
+  const ts = new Date().toISOString();
+  if (existing) {
+    const set: Record<string, number | string | null> = { updatedAt: ts };
+    for (const key of SPEND_CAP_PATCH_COLUMNS) {
+      if (input[key] !== undefined) set[key] = input[key];
+    }
+    await db
+      .update(workspaceAgentSpendCaps)
+      .set(set)
+      .where(eq(workspaceAgentSpendCaps.id, existing.id));
+    return getAgentSpendCap(db, organizationId, agentId);
+  }
+  const id = crypto.randomUUID();
+  await db.insert(workspaceAgentSpendCaps).values({
+    id,
+    organizationId,
+    agentId,
+    maxRunsPerDay: input.maxRunsPerDay ?? null,
+    maxRunsPerMonth: input.maxRunsPerMonth ?? null,
+    maxTokensPerDay: input.maxTokensPerDay ?? null,
+    maxTokensPerMonth: input.maxTokensPerMonth ?? null,
+    maxCostMicrosPerDay: input.maxCostMicrosPerDay ?? null,
+    maxCostMicrosPerMonth: input.maxCostMicrosPerMonth ?? null,
+    maxTokensPerRun: input.maxTokensPerRun ?? null,
+    maxCostMicrosPerRun: input.maxCostMicrosPerRun ?? null,
+    createdBy: input.createdBy ?? null,
+    createdAt: ts,
+    updatedAt: ts,
+  });
+  return getAgentSpendCap(db, organizationId, agentId);
+}
+
+export async function deleteAgentSpendCap(
+  db: WorkspaceDb,
+  organizationId: string,
+  agentId: string
+): Promise<boolean> {
+  const rows = await db
+    .delete(workspaceAgentSpendCaps)
+    .where(
+      and(
+        eq(workspaceAgentSpendCaps.organizationId, organizationId),
+        eq(workspaceAgentSpendCaps.agentId, agentId)
+      )
+    )
+    .returning({ id: workspaceAgentSpendCaps.id })
+    .all();
+  return rows.length > 0;
+}
+
+/** Stamp the caps row that produced the current breach so the once-a-day
+ *  CoS alert doesn't refire while the breach persists. Stamps the row the
+ *  cap resolved from (agent's own row or the "*" default). Returns the
+ *  stamped row, or null when the agent has no caps row at all. */
+export async function markAgentSpendCapAlerted(
+  db: WorkspaceDb,
+  organizationId: string,
+  agentId: string
+): Promise<AgentSpendCap | undefined> {
+  const row = await resolveAgentSpendCap(db, organizationId, agentId);
+  if (!row) return undefined;
+  await db
+    .update(workspaceAgentSpendCaps)
+    .set({
+      lastCapAlertAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(workspaceAgentSpendCaps.id, row.id));
+  return getAgentSpendCap(db, organizationId, row.agentId);
+}
+
+// ---- run receipts ----
+
+export function getRunReceipt(
+  db: WorkspaceDb,
+  organizationId: string,
+  sessionId: string
+) {
+  return db
+    .select()
+    .from(workspaceAgentRunReceipts)
+    .where(
+      and(
+        eq(workspaceAgentRunReceipts.organizationId, organizationId),
+        eq(workspaceAgentRunReceipts.sessionId, sessionId)
+      )
+    )
+    .get();
+}
+
+export interface RunReceiptFilter {
+  sessionId?: string;
+  agentId?: string;
+  issueId?: string;
+  stepKey?: string;
+  dealId?: string;
+  /** ISO createdAt bounds — receipt written inside the window. */
+  since?: string;
+  until?: string;
+  limit?: number;
+}
+
+function runReceiptConditions(
+  organizationId: string,
+  filter: RunReceiptFilter
+) {
+  const conditions = [
+    eq(workspaceAgentRunReceipts.organizationId, organizationId),
+  ];
+  if (filter.sessionId) {
+    conditions.push(eq(workspaceAgentRunReceipts.sessionId, filter.sessionId));
+  }
+  if (filter.agentId) {
+    conditions.push(eq(workspaceAgentRunReceipts.agentId, filter.agentId));
+  }
+  if (filter.issueId) {
+    conditions.push(eq(workspaceAgentRunReceipts.issueId, filter.issueId));
+  }
+  if (filter.stepKey) {
+    conditions.push(eq(workspaceAgentRunReceipts.stepKey, filter.stepKey));
+  }
+  if (filter.dealId) {
+    conditions.push(eq(workspaceAgentRunReceipts.dealId, filter.dealId));
+  }
+  if (filter.since) {
+    conditions.push(gte(workspaceAgentRunReceipts.createdAt, filter.since));
+  }
+  if (filter.until) {
+    conditions.push(lte(workspaceAgentRunReceipts.createdAt, filter.until));
+  }
+  return conditions;
+}
+
+export function listRunReceipts(
+  db: WorkspaceDb,
+  organizationId: string,
+  filter: RunReceiptFilter = {}
+) {
+  return db
+    .select()
+    .from(workspaceAgentRunReceipts)
+    .where(and(...runReceiptConditions(organizationId, filter)))
+    .orderBy(
+      desc(workspaceAgentRunReceipts.createdAt),
+      desc(workspaceAgentRunReceipts.id)
+    )
+    .limit(filter.limit ?? 100)
+    .all();
+}
+
+/** Identity + immutable-ish fields set when the receipt row is created;
+ *  usage/outcome fields update on every write. */
+export interface RunReceiptInsert {
+  sessionId: string;
+  issueId: string;
+  agentId: string;
+  stepKey?: string | null;
+  dealId?: string | null;
+  status?: string;
+  model?: string | null;
+  effort?: string | null;
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  totalTokens?: number | null;
+  toolCalls?: number | null;
+  costMicros?: number | null;
+  externalSpendMicros?: number | null;
+  costSource?: string | null;
+  capExceeded?: number;
+  stopReason?: string | null;
+  startedAt?: string | null;
+  endedAt?: string | null;
+  durationMs?: number | null;
+}
+
+const RECEIPT_PATCH_COLUMNS = [
+  "status",
+  "model",
+  "effort",
+  "stepKey",
+  "dealId",
+  "inputTokens",
+  "outputTokens",
+  "totalTokens",
+  "toolCalls",
+  "costMicros",
+  "externalSpendMicros",
+  "costSource",
+  "capExceeded",
+  "stopReason",
+  "startedAt",
+  "endedAt",
+  "durationMs",
+] as const;
+
+/** Insert-or-update keyed by session — usage reports land mid-run, the
+ *  terminal transition finalizes status/timing. Only provided fields are
+ *  written, so a later partial report can't null out earlier data. */
+export async function upsertRunReceipt(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: RunReceiptInsert
+): Promise<AgentRunReceipt | undefined> {
+  const existing = await getRunReceipt(db, organizationId, input.sessionId);
+  const ts = new Date().toISOString();
+  if (existing) {
+    const set: Record<string, number | string | null> = { updatedAt: ts };
+    for (const key of RECEIPT_PATCH_COLUMNS) {
+      const value = input[key];
+      if (value !== undefined) set[key] = value;
+    }
+    await db
+      .update(workspaceAgentRunReceipts)
+      .set(set)
+      .where(eq(workspaceAgentRunReceipts.id, existing.id));
+    return getRunReceipt(db, organizationId, input.sessionId);
+  }
+  const id = crypto.randomUUID();
+  await db.insert(workspaceAgentRunReceipts).values({
+    id,
+    organizationId,
+    sessionId: input.sessionId,
+    issueId: input.issueId,
+    agentId: input.agentId,
+    stepKey: input.stepKey ?? null,
+    dealId: input.dealId ?? null,
+    status: input.status ?? "running",
+    model: input.model ?? null,
+    effort: input.effort ?? null,
+    inputTokens: input.inputTokens ?? null,
+    outputTokens: input.outputTokens ?? null,
+    totalTokens: input.totalTokens ?? null,
+    toolCalls: input.toolCalls ?? null,
+    costMicros: input.costMicros ?? null,
+    externalSpendMicros: input.externalSpendMicros ?? null,
+    costSource: input.costSource ?? null,
+    capExceeded: input.capExceeded ?? 0,
+    stopReason: input.stopReason ?? null,
+    startedAt: input.startedAt ?? null,
+    endedAt: input.endedAt ?? null,
+    durationMs: input.durationMs ?? null,
+    createdAt: ts,
+    updatedAt: ts,
+  });
+  return getRunReceipt(db, organizationId, input.sessionId);
+}
+
+export interface RunUsageSums {
+  receipts: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  costMicros: number;
+  externalSpendMicros: number;
+}
+
+/** Sum receipt usage for an agent (or the whole org when agentId is null)
+ *  since an ISO bound. `totalTokens` falls back to in+out so runs that only
+ *  reported halves still count. */
+export async function sumRunReceipts(
+  db: WorkspaceDb,
+  organizationId: string,
+  filter: { agentId?: string | null; since: string }
+): Promise<RunUsageSums> {
+  const conditions = [
+    eq(workspaceAgentRunReceipts.organizationId, organizationId),
+    gte(workspaceAgentRunReceipts.createdAt, filter.since),
+  ];
+  if (filter.agentId) {
+    conditions.push(eq(workspaceAgentRunReceipts.agentId, filter.agentId));
+  }
+  const row = await db
+    .select({
+      receipts: sql<number>`count(*)`,
+      inputTokens: sql<number>`coalesce(sum(${workspaceAgentRunReceipts.inputTokens}), 0)`,
+      outputTokens: sql<number>`coalesce(sum(${workspaceAgentRunReceipts.outputTokens}), 0)`,
+      totalTokens: sql<number>`coalesce(sum(coalesce(${workspaceAgentRunReceipts.totalTokens}, ${workspaceAgentRunReceipts.inputTokens} + ${workspaceAgentRunReceipts.outputTokens})), 0)`,
+      costMicros: sql<number>`coalesce(sum(${workspaceAgentRunReceipts.costMicros}), 0)`,
+      externalSpendMicros: sql<number>`coalesce(sum(${workspaceAgentRunReceipts.externalSpendMicros}), 0)`,
+    })
+    .from(workspaceAgentRunReceipts)
+    .where(and(...conditions))
+    .get();
+  return {
+    receipts: row?.receipts ?? 0,
+    inputTokens: row?.inputTokens ?? 0,
+    outputTokens: row?.outputTokens ?? 0,
+    totalTokens: row?.totalTokens ?? 0,
+    costMicros: row?.costMicros ?? 0,
+    externalSpendMicros: row?.externalSpendMicros ?? 0,
+  };
+}
+
+/** Sessions created since an ISO bound — the "runs per day/month" count.
+ *  Counts sessions, not receipts: a queued lane still consumed a run slot. */
+export async function countAgentSessionsSince(
+  db: WorkspaceDb,
+  organizationId: string,
+  agentId: string,
+  since: string
+) {
+  const row = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(workspaceAgentSessions)
+    .where(
+      and(
+        eq(workspaceAgentSessions.organizationId, organizationId),
+        eq(workspaceAgentSessions.agentId, agentId),
+        gte(workspaceAgentSessions.createdAt, since)
+      )
+    )
+    .get();
+  return row?.count ?? 0;
+}
+
+export type RunReceiptGroupBy = "agentId" | "stepKey" | "issueId" | "dealId";
+
+export interface RunReceiptSummaryRow {
+  key: string | null;
+  runs: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  toolCalls: number;
+  costMicros: number;
+  externalSpendMicros: number;
+  capExceededRuns: number;
+}
+
+const RECEIPT_GROUP_COLUMNS = {
+  agentId: workspaceAgentRunReceipts.agentId,
+  stepKey: workspaceAgentRunReceipts.stepKey,
+  issueId: workspaceAgentRunReceipts.issueId,
+  dealId: workspaceAgentRunReceipts.dealId,
+} as const;
+
+/** Receipts aggregated per agent, step (pipeline stage), issue, or deal —
+ *  the spec's "receipts can be aggregated per agent, stage, and deal". */
+export async function summarizeRunReceipts(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: RunReceiptFilter & { groupBy: RunReceiptGroupBy }
+): Promise<RunReceiptSummaryRow[]> {
+  const groupColumn = RECEIPT_GROUP_COLUMNS[input.groupBy];
+  const rows = await db
+    .select({
+      key: groupColumn,
+      runs: sql<number>`count(*)`,
+      inputTokens: sql<number>`coalesce(sum(${workspaceAgentRunReceipts.inputTokens}), 0)`,
+      outputTokens: sql<number>`coalesce(sum(${workspaceAgentRunReceipts.outputTokens}), 0)`,
+      totalTokens: sql<number>`coalesce(sum(coalesce(${workspaceAgentRunReceipts.totalTokens}, ${workspaceAgentRunReceipts.inputTokens} + ${workspaceAgentRunReceipts.outputTokens})), 0)`,
+      toolCalls: sql<number>`coalesce(sum(${workspaceAgentRunReceipts.toolCalls}), 0)`,
+      costMicros: sql<number>`coalesce(sum(${workspaceAgentRunReceipts.costMicros}), 0)`,
+      externalSpendMicros: sql<number>`coalesce(sum(${workspaceAgentRunReceipts.externalSpendMicros}), 0)`,
+      capExceededRuns: sql<number>`coalesce(sum(${workspaceAgentRunReceipts.capExceeded}), 0)`,
+    })
+    .from(workspaceAgentRunReceipts)
+    .where(and(...runReceiptConditions(organizationId, input)))
+    .groupBy(groupColumn)
+    .orderBy(desc(sql`count(*)`))
+    .limit(input.limit ?? 500)
+    .all();
+  return rows.map((row) => ({
+    key: row.key,
+    runs: row.runs,
+    inputTokens: row.inputTokens,
+    outputTokens: row.outputTokens,
+    totalTokens: row.totalTokens,
+    toolCalls: row.toolCalls,
+    costMicros: row.costMicros,
+    externalSpendMicros: row.externalSpendMicros,
+    capExceededRuns: row.capExceededRuns,
+  }));
 }
 
 // ---- guidance_packs (PILE-423 — scoped agent instruction packs) ----

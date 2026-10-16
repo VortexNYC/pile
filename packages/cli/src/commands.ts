@@ -1604,6 +1604,177 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "agent spend caps list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/agent/spend-caps",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "agent spend caps update": {
+    method: "PUT",
+    path: "/workspaces/{organizationId}/agent/spend-caps/{agentId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "agentId",
+        flag: "agent-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "maxRunsPerDay",
+        flag: "max-runs-per-day",
+      },
+      {
+        name: "maxRunsPerMonth",
+        flag: "max-runs-per-month",
+      },
+      {
+        name: "maxTokensPerDay",
+        flag: "max-tokens-per-day",
+      },
+      {
+        name: "maxTokensPerMonth",
+        flag: "max-tokens-per-month",
+      },
+      {
+        name: "maxCostMicrosPerDay",
+        flag: "max-cost-micros-per-day",
+      },
+      {
+        name: "maxCostMicrosPerMonth",
+        flag: "max-cost-micros-per-month",
+      },
+      {
+        name: "maxTokensPerRun",
+        flag: "max-tokens-per-run",
+      },
+      {
+        name: "maxCostMicrosPerRun",
+        flag: "max-cost-micros-per-run",
+      },
+    ],
+  },
+  "agent spend caps delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/agent/spend-caps/{agentId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "agentId",
+        flag: "agent-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "agent receipts list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/agent/receipts",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "sessionId",
+        flag: "session",
+      },
+      {
+        name: "agentId",
+        flag: "agent-id",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+      {
+        name: "stepKey",
+        flag: "step-key",
+      },
+      {
+        name: "dealId",
+        flag: "deal-id",
+      },
+      {
+        name: "since",
+        flag: "since",
+      },
+      {
+        name: "until",
+        flag: "until",
+      },
+      {
+        name: "limit",
+        flag: "limit",
+      },
+    ],
+    body: [],
+  },
+  "agent receipts summary list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/agent/receipts/summary",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "sessionId",
+        flag: "session",
+      },
+      {
+        name: "agentId",
+        flag: "agent-id",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+      {
+        name: "stepKey",
+        flag: "step-key",
+      },
+      {
+        name: "dealId",
+        flag: "deal-id",
+      },
+      {
+        name: "since",
+        flag: "since",
+      },
+      {
+        name: "until",
+        flag: "until",
+      },
+      {
+        name: "limit",
+        flag: "limit",
+      },
+      {
+        name: "groupBy",
+        flag: "group-by",
+      },
+    ],
+    body: [],
+  },
   "agent sessions poll create": {
     method: "POST",
     path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/poll",

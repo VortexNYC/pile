@@ -39,6 +39,15 @@ import {
 } from "../agents/plan.js";
 import { parseSessionPlan, type SessionPlan } from "../agents/session-plan.js";
 import {
+  computeCostMicros,
+  type CapBreach,
+  dayWindowStart,
+  evaluateSpendCaps,
+  monthWindowStart,
+  type AgentRunUsage,
+  type SpendWindowUsage,
+} from "../agents/spend.js";
+import {
   dispatchTriageLane,
   formatTriageComment,
   parseTriageReport,
@@ -3145,6 +3154,314 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return ok;
   }
 
+  // ---- spend caps + run receipts (PILE-425 — per-agent token/$ budgets
+  // and the per-run usage record every terminal lane writes) ----
+
+  listAgentSpendCaps() {
+    return data.listAgentSpendCaps(this.db, this.organizationId);
+  }
+
+  getAgentSpendCap(agentId: string) {
+    return data.getAgentSpendCap(this.db, this.organizationId, agentId);
+  }
+
+  /** The caps an agent type actually runs under — its own row, else the
+   *  workspace default "*" row, else undefined (uncapped). */
+  resolveAgentSpendCap(agentId: string) {
+    return data.resolveAgentSpendCap(this.db, this.organizationId, agentId);
+  }
+
+  async upsertAgentSpendCap(
+    agentId: string,
+    input: data.AgentSpendCapPatch,
+    actor?: { id?: string | null; type?: string | null }
+  ) {
+    await this.ready;
+    const existing = await data.getAgentSpendCap(
+      this.db,
+      this.organizationId,
+      agentId
+    );
+    const row = await data.upsertAgentSpendCap(
+      this.db,
+      this.organizationId,
+      agentId,
+      { ...input, createdBy: actor?.id }
+    );
+    this.audit(
+      existing ? "agent_spend_cap.updated" : "agent_spend_cap.created",
+      "agent_spend_cap",
+      agentId,
+      actor?.id,
+      { caps: { from: existing ?? null, to: row ?? null } },
+      { actorType: actor?.type }
+    );
+    return row;
+  }
+
+  async deleteAgentSpendCap(
+    agentId: string,
+    actor?: { id?: string | null; type?: string | null }
+  ): Promise<boolean> {
+    await this.ready;
+    const ok = await data.deleteAgentSpendCap(
+      this.db,
+      this.organizationId,
+      agentId
+    );
+    if (ok) {
+      this.audit(
+        "agent_spend_cap.deleted",
+        "agent_spend_cap",
+        agentId,
+        actor?.id,
+        null,
+        { actorType: actor?.type }
+      );
+    }
+    return ok;
+  }
+
+  /** Caps + observed window usage for an agent type, evaluated to breach
+   *  list. `runUsage` adds a live lane's per-run numbers so the sweep can
+   *  enforce the per-run caps against a mid-flight receipt. */
+  async evaluateAgentSpendCaps(
+    agentId: string,
+    runUsage?: {
+      totalTokens?: number | null;
+      costMicros?: number | null;
+    }
+  ): Promise<{
+    caps: data.AgentSpendCap | undefined;
+    usage: SpendWindowUsage | null;
+    breaches: CapBreach[];
+  }> {
+    await this.ready;
+    const caps = await data.resolveAgentSpendCap(
+      this.db,
+      this.organizationId,
+      agentId
+    );
+    if (!caps) return { caps: undefined, usage: null, breaches: [] };
+    const now = new Date();
+    const dayStart = dayWindowStart(now);
+    const monthStart = monthWindowStart(now);
+    const [runsPerDay, runsPerMonth, daySums, monthSums] = await Promise.all([
+      data.countAgentSessionsSince(
+        this.db,
+        this.organizationId,
+        agentId,
+        dayStart
+      ),
+      data.countAgentSessionsSince(
+        this.db,
+        this.organizationId,
+        agentId,
+        monthStart
+      ),
+      data.sumRunReceipts(this.db, this.organizationId, {
+        agentId,
+        since: dayStart,
+      }),
+      data.sumRunReceipts(this.db, this.organizationId, {
+        agentId,
+        since: monthStart,
+      }),
+    ]);
+    const usage: SpendWindowUsage = {
+      runsPerDay,
+      runsPerMonth,
+      tokensPerDay: daySums.totalTokens,
+      tokensPerMonth: monthSums.totalTokens,
+      costMicrosPerDay: daySums.costMicros + daySums.externalSpendMicros,
+      costMicrosPerMonth: monthSums.costMicros + monthSums.externalSpendMicros,
+      runTokens: runUsage?.totalTokens ?? undefined,
+      runCostMicros: runUsage?.costMicros ?? undefined,
+    };
+    return { caps, usage, breaches: evaluateSpendCaps(caps, usage) };
+  }
+
+  /** Write the caps-row alert stamp and report whether a CoS alert is due —
+   *  once per UTC day per breached caps row, so a breach that persists for
+   *  days alerts daily rather than every sweep pass. */
+  async claimSpendCapAlert(agentId: string): Promise<boolean> {
+    await this.ready;
+    const caps = await data.resolveAgentSpendCap(
+      this.db,
+      this.organizationId,
+      agentId
+    );
+    if (!caps) return false;
+    const alertedToday =
+      caps.lastCapAlertAt !== null &&
+      caps.lastCapAlertAt >= dayWindowStart(new Date());
+    if (alertedToday) return false;
+    await data.markAgentSpendCapAlerted(this.db, this.organizationId, agentId);
+    return true;
+  }
+
+  // ---- run receipts ----
+
+  getRunReceipt(sessionId: string) {
+    return data.getRunReceipt(this.db, this.organizationId, sessionId);
+  }
+
+  listRunReceipts(filter: data.RunReceiptFilter = {}) {
+    return data.listRunReceipts(this.db, this.organizationId, filter);
+  }
+
+  summarizeRunReceipts(
+    input: data.RunReceiptFilter & { groupBy: data.RunReceiptGroupBy }
+  ) {
+    return data.summarizeRunReceipts(this.db, this.organizationId, input);
+  }
+
+  /** The deal a receipt rolls up to: an explicit entity_links deal edge on
+   *  the issue, else the parent ticket (merchant deal = parent issue in the
+   *  pipeline model). */
+  private async resolveReceiptDealId(
+    issue: Pick<Issue, "id" | "parentId">
+  ): Promise<string | null> {
+    const links = await data.listEntityLinks(
+      this.db,
+      this.organizationId,
+      "issue",
+      issue.id
+    );
+    for (const link of links) {
+      if (link.fromType === "deal") return link.fromId;
+      if (link.toType === "deal") return link.toId;
+    }
+    return issue.parentId ?? null;
+  }
+
+  /** Record a cumulative usage snapshot on the session's receipt. Values
+   *  are run-totals, not deltas — each write replaces the usage fields.
+   *  `costSource` is "reported" when the lane/provider supplies costMicros,
+   *  else "rate_map" when the model is known. */
+  async recordSessionUsage(
+    sessionId: string,
+    usage: AgentRunUsage
+  ): Promise<data.AgentRunReceipt | undefined> {
+    await this.ready;
+    const session = await this.getAgentSession(sessionId);
+    if (!session) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Session not found",
+      });
+    }
+    const existing = await data.getRunReceipt(
+      this.db,
+      this.organizationId,
+      sessionId
+    );
+    const inputTokens = usage.inputTokens ?? existing?.inputTokens ?? null;
+    const outputTokens = usage.outputTokens ?? existing?.outputTokens ?? null;
+    const totalTokens =
+      usage.totalTokens ??
+      (inputTokens !== null || outputTokens !== null
+        ? (inputTokens ?? 0) + (outputTokens ?? 0)
+        : (existing?.totalTokens ?? null));
+    const model = usage.model ?? existing?.model ?? null;
+    let costMicros = usage.costMicros ?? null;
+    let costSource = costMicros !== null ? "reported" : existing?.costSource;
+    if (costMicros === null) {
+      costMicros =
+        computeCostMicros(model, inputTokens, outputTokens) ??
+        existing?.costMicros ??
+        null;
+      if (costMicros !== null && costSource !== "reported") {
+        costSource = "rate_map";
+      }
+    }
+    const issue = await this.getIssue(session.issueId);
+    return data.upsertRunReceipt(this.db, this.organizationId, {
+      sessionId,
+      issueId: session.issueId,
+      agentId: session.agentId,
+      stepKey: session.stepKey,
+      dealId:
+        existing?.dealId ??
+        (issue ? await this.resolveReceiptDealId(issue) : null),
+      status: session.status,
+      model,
+      effort: session.effort,
+      inputTokens,
+      outputTokens,
+      totalTokens,
+      toolCalls: usage.toolCalls ?? existing?.toolCalls ?? null,
+      costMicros,
+      externalSpendMicros:
+        usage.externalSpendMicros ?? existing?.externalSpendMicros ?? null,
+      costSource,
+      startedAt: session.startedAt ?? session.createdAt,
+    });
+  }
+
+  /** Guarantee a receipt row for a terminal session and stamp outcome
+   *  fields. Runs that never reported usage still get a receipt — the spec's
+   *  "each run writes a receipt". */
+  private async finalizeRunReceipt(session: AgentSession): Promise<void> {
+    const existing = await data.getRunReceipt(
+      this.db,
+      this.organizationId,
+      session.id
+    );
+    const issue = await this.getIssue(session.issueId);
+    const endedAt = session.endedAt ?? new Date().toISOString();
+    const start = Date.parse(session.startedAt ?? session.createdAt ?? "");
+    const end = Date.parse(endedAt);
+    let costMicros = existing?.costMicros ?? null;
+    let costSource = existing?.costSource ?? null;
+    if (costMicros === null) {
+      costMicros = computeCostMicros(
+        existing?.model ?? null,
+        existing?.inputTokens ?? null,
+        existing?.outputTokens ?? null
+      );
+      if (costMicros !== null) costSource = "rate_map";
+    }
+    await data.upsertRunReceipt(this.db, this.organizationId, {
+      sessionId: session.id,
+      issueId: session.issueId,
+      agentId: session.agentId,
+      stepKey: session.stepKey,
+      dealId:
+        existing?.dealId ??
+        (issue ? await this.resolveReceiptDealId(issue) : null),
+      status: session.status,
+      effort: session.effort,
+      costMicros,
+      costSource,
+      startedAt: session.startedAt ?? session.createdAt,
+      endedAt,
+      durationMs:
+        Number.isFinite(start) && Number.isFinite(end)
+          ? Math.max(0, end - start)
+          : null,
+    });
+  }
+
+  /** Mark the receipt as stopped by a per-run cap — "the receipt shows
+   *  why" per the spec's acceptance criteria. */
+  async markRunReceiptStopped(
+    sessionId: string,
+    stopReason: string
+  ): Promise<data.AgentRunReceipt | undefined> {
+    await this.ready;
+    const session = await this.getAgentSession(sessionId);
+    if (!session) return undefined;
+    return data.upsertRunReceipt(this.db, this.organizationId, {
+      sessionId,
+      issueId: session.issueId,
+      agentId: session.agentId,
+      capExceeded: 1,
+      stopReason,
+    });
+  }
+
   // ---- guidance packs (PILE-423 — scoped instruction packs injected into
   // the dispatch prompt envelope, most specific last) ----
 
@@ -4646,6 +4963,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           this.addAgentSessionEvent(event)
         )
       );
+      if (result.usage) {
+        await this.recordSessionUsage(sessionId, result.usage);
+      }
+      if (becameTerminal) {
+        await this.finalizeRunReceipt(updatedSession);
+      }
       return updatedSession;
     }
 
@@ -5008,6 +5331,16 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           },
         }).catch(() => {});
       }
+    }
+
+    // PILE-425 — the run receipt: a `usage` payload on this result updates
+    // the receipt's usage fields; the terminal transition finalizes it
+    // (status, end time, duration) even when the lane never reported usage.
+    if (result.usage) {
+      await this.recordSessionUsage(sessionId, result.usage);
+    }
+    if (becameTerminal) {
+      await this.finalizeRunReceipt(updatedSession);
     }
 
     return updatedSession;

@@ -51,6 +51,13 @@ import {
   requestPrReview,
 } from "./review.js";
 import { parseStoredSecondaryRepos } from "./secondary-repos.js";
+import {
+  type CapBreach,
+  describeCapBreach,
+  evaluateRunCaps,
+  SPEND_CAP_ACTOR,
+  WORKSPACE_SPEND_CAP_AGENT,
+} from "./spend.js";
 
 export const DEFAULT_TIMEOUT_MINUTES = 60;
 export const DEFAULT_INACTIVITY_MINUTES = 20;
@@ -336,6 +343,179 @@ async function escalateBudgetExceeded(
       .catch((err: unknown) =>
         console.error("budget escalation status move failed", {
           session: session.id,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      );
+  }
+}
+
+// PILE-425 — a lane killed for breaching its per-run spend/token cap
+// escalates exactly like a maxDuration breach (issue.escalated + comment +
+// triage) and is never retried: a re-run spends the same budget on the same
+// scope. The receipt (`cap_exceeded`/`stop_reason`) carries the why.
+async function escalateSpendCapExceeded(
+  stub: DurableObjectStub<WorkspaceDO>,
+  session: AgentSession,
+  breaches: CapBreach[]
+): Promise<void> {
+  const reason = describeCapBreach(breaches[0]);
+  try {
+    await stub.addAgentSessionEvent({
+      sessionId: session.id,
+      type: "issue.escalated",
+      message: `${reason} — escalated to triage`,
+      payload: {
+        issueId: session.issueId,
+        reason: "spend_cap",
+        breaches,
+        key: `escalated-${session.id}`,
+      },
+    });
+  } catch (err) {
+    console.error("spend-cap escalation event failed", {
+      session: session.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return;
+  }
+  const body =
+    `**Escalated — run spend cap exceeded.**\n\n` +
+    `Lane \`${session.agentId}\` (session \`${session.id}\`) hit ${reason} and was canceled. ` +
+    "The run's receipt records the usage it reported and why it stopped.\n\n" +
+    "Not retried automatically. Raise the per-run cap, narrow the scope, or take it over.";
+  await stub
+    .createComment({
+      issueId: session.issueId,
+      body,
+      externalAuthor: "pile-sweep",
+      externalSource: "spend-cap",
+    })
+    .catch((err: unknown) =>
+      console.error("spend-cap escalation comment failed", {
+        session: session.id,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    );
+  const issue = await stub.getIssue(session.issueId).catch(() => null);
+  if (
+    issue &&
+    issue.status !== "triage" &&
+    issue.status !== "done" &&
+    issue.status !== "canceled"
+  ) {
+    await stub
+      .updateIssue(issue.id, { status: "triage" }, "agent-escalation")
+      .catch((err: unknown) =>
+        console.error("spend-cap escalation status move failed", {
+          session: session.id,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      );
+  }
+}
+
+// PILE-425 — window spend caps (runs/tokens/$ per day+month): when observed
+// usage breaches the caps an agent type resolves to (its own row or the "*"
+// workspace default), the sweep writes the agent_pauses row that parks new
+// dispatches and alerts the Chief of Staff once per breach-day —
+// `claimSpendCapAlert` stamps `agent_spend_caps.last_cap_alert_at` so a
+// breach that persists for days alerts daily instead of every pass. Resume
+// is operator action: raise the caps or resume the paused type.
+async function enforceSpendCaps(
+  env: WorkerEnv,
+  stub: DurableObjectStub<WorkspaceDO>,
+  organizationId: string,
+  liveSessions: AgentSession[],
+  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
+): Promise<void> {
+  const capsRows = await stub.listAgentSpendCaps().catch(() => []);
+  if (capsRows.length === 0) return;
+  const agentIds = new Set<string>();
+  for (const row of capsRows) {
+    if (row.agentId !== WORKSPACE_SPEND_CAP_AGENT) agentIds.add(row.agentId);
+  }
+  // A workspace-default row governs every agent without its own row — only
+  // live agents can be spending, so evaluate those.
+  if (capsRows.some((row) => row.agentId === WORKSPACE_SPEND_CAP_AGENT)) {
+    for (const session of liveSessions) agentIds.add(session.agentId);
+  }
+  let recentSessions: AgentSession[] | null = null;
+  for (const agentId of agentIds) {
+    const verdict = await stub
+      .evaluateAgentSpendCaps(agentId)
+      .catch((err: unknown) => {
+        console.error("spend-cap evaluation failed", {
+          agentId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return null;
+      });
+    if (!verdict?.caps || verdict.breaches.length === 0) continue;
+    const reason = `spend cap — ${describeCapBreach(verdict.breaches[0])}`;
+    await stub
+      .pauseAgentType(agentId, {
+        reason,
+        actorId: SPEND_CAP_ACTOR,
+        actorType: "agent",
+      })
+      .catch((err: unknown) =>
+        console.error("spend-cap pause failed", {
+          agentId,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      );
+    const alertDue = await stub.claimSpendCapAlert(agentId).catch(() => false);
+    if (!alertDue) continue;
+    const target =
+      liveSessions.find((s) => s.agentId === agentId) ??
+      (recentSessions ??= await stub
+        .listAgentSessions({ limit: 50 })
+        .catch(() => [] as AgentSession[])).find((s) => s.agentId === agentId);
+    // No issue to anchor the alert target on — nothing to notify against.
+    if (!target) continue;
+    const context =
+      `Agent type \`${agentId}\` breached its spend cap — ${reason}. ` +
+      "New dispatches pause until the caps are raised or the agent type is resumed.";
+    await fireEventAutomations(
+      env,
+      stub,
+      organizationId,
+      "agent.cap_exceeded",
+      issueEventTarget(stub, target.issueId),
+      context,
+      ctx
+    ).catch((err: unknown) => {
+      console.error("agent.cap_exceeded automation fire failed", {
+        agentId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+    // The automation event is the CoS channel; the DO notification reaches
+    // the issue's routed human (or the lane's actor) as the fallback — same
+    // shape as the stale-lane alert.
+    const issue = await stub.getIssue(target.issueId).catch(() => null);
+    if (!issue) continue;
+    const humanAssignee =
+      issue.assigneeId && !issue.assigneeId.startsWith("lane:")
+        ? issue.assigneeId
+        : null;
+    const recipientId = humanAssignee ?? target.actorId;
+    if (!recipientId) continue;
+    await stub
+      .createNotification({
+        recipientId,
+        recipientType: humanAssignee ? "user" : target.actorType,
+        issueId: issue.id,
+        type: "agent_cap_exceeded",
+        metadata: {
+          agentId,
+          breaches: verdict.breaches,
+          usage: verdict.usage,
+        },
+      })
+      .catch((err: unknown) =>
+        console.error("spend-cap alert notification failed", {
+          agentId,
           error: err instanceof Error ? err.message : String(err),
         })
       );
@@ -1162,6 +1342,10 @@ export async function sweepAgentSessions(
       await escalateStaleElicitations(stub, now);
       await fireDueAutomations(env, stub, id, new Date(now), ctx);
       await reapTerminalArtifacts(env, stub, id, now);
+      // PILE-425 — window spend caps pause breached agent types + alert the
+      // CoS; runs even with zero live sessions (a day of finished runs can
+      // breach while nothing is in flight).
+      await enforceSpendCaps(env, stub, id, sessions, ctx);
       if (sessions.length === 0) continue;
       // Sessions are swept in parallel with a bounded fan-out — one session
       // whose provider probes all stall can burn ~3x probeTimeoutMs serially,
@@ -1254,6 +1438,55 @@ export async function sweepAgentSessions(
           );
           await escalateBudgetExceeded(stub, session, budget);
           return;
+        }
+        // PILE-425 — hard per-run spend/token cap: the lane's live receipt
+        // carries the usage it reported; over cap = cancel + escalate + a
+        // receipt that shows why (same shape as a maxDuration breach, no
+        // retry).
+        const runCaps = await stub
+          .resolveAgentSpendCap(session.agentId)
+          .catch(() => null);
+        if (
+          runCaps &&
+          (runCaps.maxTokensPerRun !== null ||
+            runCaps.maxCostMicrosPerRun !== null)
+        ) {
+          const receipt = await stub
+            .getRunReceipt(session.id)
+            .catch(() => null);
+          const runBreaches = receipt
+            ? evaluateRunCaps(runCaps, {
+                totalTokens: receipt.totalTokens,
+                costMicros:
+                  receipt.costMicros !== null ||
+                  receipt.externalSpendMicros !== null
+                    ? (receipt.costMicros ?? 0) +
+                      (receipt.externalSpendMicros ?? 0)
+                    : null,
+              })
+            : [];
+          if (runBreaches.length > 0) {
+            const reason = describeCapBreach(runBreaches[0]);
+            await cancelSession(
+              stub,
+              session,
+              provider,
+              `per-run spend cap — ${reason}`,
+              probeTimeoutMs,
+              undefined,
+              false
+            );
+            await stub
+              .markRunReceiptStopped(session.id, reason)
+              .catch((err: unknown) =>
+                console.error("receipt cap mark failed", {
+                  session: session.id,
+                  error: err instanceof Error ? err.message : String(err),
+                })
+              );
+            await escalateSpendCapExceeded(stub, session, runBreaches);
+            return;
+          }
         }
         if (
           budget === null &&

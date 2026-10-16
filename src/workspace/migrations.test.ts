@@ -199,3 +199,63 @@ describe("v80 external events (PILE-422)", () => {
     );
   });
 });
+
+describe("v81 spend caps + run receipts (PILE-425)", () => {
+  it("creates agent_spend_caps keyed by (org, agent) with window + per-run limits", () => {
+    const sql = workspaceMigrations.migrations.m0080;
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS agent_spend_caps");
+    for (const col of [
+      "organization_id",
+      "agent_id",
+      "max_runs_per_day",
+      "max_runs_per_month",
+      "max_tokens_per_day",
+      "max_tokens_per_month",
+      "max_cost_micros_per_day",
+      "max_cost_micros_per_month",
+      "max_tokens_per_run",
+      "max_cost_micros_per_run",
+      "last_cap_alert_at",
+      "created_by",
+    ]) {
+      expect(sql).toContain(col);
+    }
+    expect(sql).toContain(
+      "CREATE UNIQUE INDEX IF NOT EXISTS agent_spend_caps_org_agent_idx ON agent_spend_caps (organization_id, agent_id)"
+    );
+  });
+
+  it("creates agent_run_receipts keyed by session with aggregation indexes", () => {
+    const sql = workspaceMigrations.migrations.m0080;
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS agent_run_receipts");
+    for (const col of [
+      "session_id",
+      "issue_id",
+      "agent_id",
+      "step_key",
+      "deal_id",
+      "model",
+      "input_tokens",
+      "output_tokens",
+      "total_tokens",
+      "tool_calls",
+      "cost_micros",
+      "external_spend_micros",
+      "cost_source",
+      "cap_exceeded",
+      "stop_reason",
+      "duration_ms",
+    ]) {
+      expect(sql).toContain(col);
+    }
+    expect(sql).toContain(
+      "CREATE UNIQUE INDEX IF NOT EXISTS agent_run_receipts_session_idx ON agent_run_receipts (session_id)"
+    );
+    expect(sql).toContain(
+      "CREATE INDEX IF NOT EXISTS agent_run_receipts_org_agent_idx ON agent_run_receipts (organization_id, agent_id, created_at)"
+    );
+    expect(sql).toContain(
+      "CREATE INDEX IF NOT EXISTS agent_run_receipts_deal_idx ON agent_run_receipts (organization_id, deal_id)"
+    );
+  });
+});

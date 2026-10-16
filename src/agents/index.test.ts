@@ -1093,3 +1093,46 @@ describe("guidance pack injection (PILE-423)", () => {
     expect(recorded.stepKey).toBe("contacted");
   });
 });
+
+describe("spend caps (PILE-425)", () => {
+  it("parks a dispatch whose agent type breached its run cap", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
+    );
+    await stub.setOrganizationId(actor.organizationId);
+    const agentId = `mock-cap-${crypto.randomUUID().slice(0, 8)}`;
+    registerAgentProvider(
+      agentId,
+      () =>
+        new MockAgentProvider(agentId, {
+          dispatch: () => ({ id: "x", agentId, status: "created" }),
+        })
+    );
+    await stub.upsertAgentSpendCap(agentId, { maxRunsPerDay: 1 });
+    // One prior run already consumed the day's budget.
+    const prior = await stub.createIssue({ title: "prior run" });
+    await stub.createAgentSession({
+      issueId: prior.id,
+      agentId,
+      provider: agentId,
+      actorId: actor.id,
+      actorType: "user",
+      status: "completed",
+    });
+
+    const issue = await stub.createIssue({ title: "capped dispatch" });
+    const session = await dispatchAgent(
+      env,
+      agentId,
+      actor.organizationId,
+      issue,
+      actor
+    );
+    // Held like a PILE-420 pause — waiting + paused, never dispatched.
+    expect(session.status).toBe("waiting");
+    expect(session.paused).toBe(1);
+    const pause = await stub.getAgentPause(agentId);
+    expect(pause?.createdBy).toBe("spend-cap");
+    expect(pause?.reason).toContain("daily runs cap");
+  });
+});

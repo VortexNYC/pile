@@ -3666,3 +3666,103 @@ describe("PILE-420 stale marking + pause holds", () => {
     expect((await stub.getAgentSession(s1.id))?.paused).toBe(0);
   });
 });
+
+describe("spend caps (PILE-425)", () => {
+  const userId = "user-sweep-caps";
+  let organizationId = "";
+  let stub: ReturnType<typeof env.WORKSPACE_DURABLE_OBJECT.get>;
+
+  beforeAll(async () => {
+    const db = createD1(env.D1);
+    const now = new Date();
+    await db
+      .insert(userTable)
+      .values({
+        id: userId,
+        name: "Caps Sweep",
+        email: `${userId}@example.com`,
+        emailVerified: false,
+        image: null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({ target: [userTable.email] });
+    const headers = await createAdminHeaders(env, userId);
+    const workspace = await createWorkspace(db, env, headers, {
+      name: "Caps sweep",
+      slug: `caps-sweep-${crypto.randomUUID().slice(0, 8)}`,
+      ownerId: userId,
+    });
+    organizationId = workspace!.id;
+    stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+  });
+
+  it("pauses the agent type and stamps the alert when a window cap trips", async () => {
+    const agentId = `mock-cap-${crypto.randomUUID().slice(0, 8)}`;
+    registerMock(agentId, {
+      poll: (id) => ({ id, agentId, status: "running" }),
+    });
+    await stub.upsertAgentSpendCap(agentId, { maxRunsPerDay: 1 });
+    const issue = await stub.createIssue({ title: "capped agent" });
+    await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+    });
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    const pause = await stub.getAgentPause(agentId);
+    expect(pause?.createdBy).toBe("spend-cap");
+    expect(pause?.reason).toContain("daily runs cap");
+    const caps = await stub.getAgentSpendCap(agentId);
+    expect(caps?.lastCapAlertAt).not.toBeNull();
+    const firstAlert = caps?.lastCapAlertAt;
+
+    // A second pass doesn't re-stamp — one alert per breach-day.
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+    expect((await stub.getAgentSpendCap(agentId))?.lastCapAlertAt).toBe(
+      firstAlert
+    );
+  });
+
+  it("cancels a lane that breaches its per-run token cap and marks the receipt", async () => {
+    const agentId = `mock-runcap-${crypto.randomUUID().slice(0, 8)}`;
+    registerMock(agentId, {
+      poll: (id) => ({ id, agentId, status: "running" }),
+    });
+    await stub.upsertAgentSpendCap(agentId, { maxTokensPerRun: 100 });
+    const issue = await stub.createIssue({ title: "per-run cap" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      startedAt: new Date().toISOString(),
+    });
+    await stub.recordSessionUsage(session.id, {
+      model: "claude-sonnet-4-5",
+      inputTokens: 150,
+      outputTokens: 0,
+    });
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    const after = await stub.getAgentSession(session.id);
+    expect(after?.status).toBe("canceled");
+    const receipt = await stub.getRunReceipt(session.id);
+    expect(receipt?.capExceeded).toBe(1);
+    expect(receipt?.stopReason).toContain("per-run tokens cap");
+    // Escalation comment lands on the issue.
+    const comments = await stub.listComments(issue.id);
+    expect(comments.some((c) => c.externalSource === "spend-cap")).toBe(true);
+  });
+});

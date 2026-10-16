@@ -263,6 +263,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdAgentSpendcapsAgentId",
+    "description": "Delete agent spend cap (DELETE /workspaces/{organizationId}/agent/spend-caps/{agentId}) Path params (top-level, required): organizationId, agentId.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/agent/spend-caps/{agentId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "agentId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "agentId",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdChangelogEntryId",
     "description": "Delete changelog (DELETE /workspaces/{organizationId}/changelog/{entryId}) Path params (top-level, required): organizationId, entryId.",
     "method": "DELETE",
@@ -2261,6 +2282,98 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdAgentReceipts",
+    "description": "List agent receipts (GET /workspaces/{organizationId}/agent/receipts) Path params (top-level, required): organizationId. Query params (top-level, optional): sessionId, agentId, issueId, stepKey, dealId, since, until, limit.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/agent/receipts",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "agentId": {
+          "type": "string"
+        },
+        "issueId": {
+          "type": "string"
+        },
+        "stepKey": {
+          "type": "string"
+        },
+        "dealId": {
+          "type": "string"
+        },
+        "since": {
+          "type": "string"
+        },
+        "until": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdAgentReceiptsSummary",
+    "description": "List agent receipt summary (GET /workspaces/{organizationId}/agent/receipts/summary) Path params (top-level, required): organizationId. Query params (top-level, optional): sessionId, agentId, issueId, stepKey, dealId, since, until, limit, groupBy.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/agent/receipts/summary",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "agentId": {
+          "type": "string"
+        },
+        "issueId": {
+          "type": "string"
+        },
+        "stepKey": {
+          "type": "string"
+        },
+        "dealId": {
+          "type": "string"
+        },
+        "since": {
+          "type": "string"
+        },
+        "until": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "string"
+        },
+        "groupBy": {
+          "type": "string",
+          "enum": [
+            "agentId",
+            "stepKey",
+            "issueId",
+            "dealId"
+          ]
+        }
+      },
+      "required": [
+        "groupBy",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdAgentSessions",
     "description": "List agent sessions (GET /workspaces/{organizationId}/agent/sessions) Path params (top-level, required): organizationId. Query params (top-level, optional): issueId, limit, summary.",
     "method": "GET",
@@ -2402,6 +2515,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "List agent setup status (GET /workspaces/{organizationId}/agent/setup-status) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/agent/setup-status",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdAgentSpendcaps",
+    "description": "List agent spend caps (GET /workspaces/{organizationId}/agent/spend-caps) Path params (top-level, required): organizationId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/agent/spend-caps",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -18332,6 +18462,73 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               }
             }
           }
+        }
+      },
+      "required": [
+        "agentId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "putWorkspacesOrganizationIdAgentSpendcapsAgentId",
+    "description": "Update agent spend cap (PUT /workspaces/{organizationId}/agent/spend-caps/{agentId}) Path params (top-level, required): organizationId, agentId. Request body goes in the \"body\" object; fields: maxRunsPerDay, maxRunsPerMonth, maxTokensPerDay, maxTokensPerMonth, maxCostMicrosPerDay, maxCostMicrosPerMonth, maxTokensPerRun, maxCostMicrosPerRun.",
+    "method": "PUT",
+    "path": "/workspaces/{organizationId}/agent/spend-caps/{agentId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "agentId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "maxRunsPerDay": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 1
+            },
+            "maxRunsPerMonth": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 1
+            },
+            "maxTokensPerDay": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 0
+            },
+            "maxTokensPerMonth": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 0
+            },
+            "maxCostMicrosPerDay": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 0
+            },
+            "maxCostMicrosPerMonth": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 0
+            },
+            "maxTokensPerRun": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 0
+            },
+            "maxCostMicrosPerRun": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
         }
       },
       "required": [

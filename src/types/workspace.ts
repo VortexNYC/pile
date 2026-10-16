@@ -1,5 +1,6 @@
 import type { InferSelectModel } from "drizzle-orm";
 
+import type { AgentRunUsage } from "../agents/spend.js";
 import type { FilterCondition } from "../workspace/filter.js";
 import {
   workspaceAgentSessions,
@@ -37,7 +38,12 @@ export interface AgentSessionResult {
   // runner died without a result, or a sweep stall-cancel — rather than the
   // agent reporting a task outcome. Drives auto-retry + the unhealthy streak.
   infraFailure?: boolean;
+  // PILE-425 — cumulative usage snapshot the lane/provider reports with this
+  // result; lands on the session's run receipt (agent_run_receipts).
+  usage?: AgentRunUsage | null;
 }
+
+export type { AgentRunUsage };
 
 export interface GitIdentity {
   id: string;

@@ -2,7 +2,9 @@ import { getTableConfig } from "drizzle-orm/sqlite-core";
 import { describe, expect, it } from "vitest";
 
 import {
+  workspaceAgentRunReceipts,
   workspaceAgentSessions,
+  workspaceAgentSpendCaps,
   workspaceCustomers,
   workspaceExternalEventDeliveries,
   workspaceExternalEventMappings,
@@ -320,5 +322,106 @@ describe("external event tables (PILE-422)", () => {
     expect(
       unique?.config.columns.map((c) => ("name" in c ? c.name : String(c)))
     ).toEqual(["organization_id", "source", "dedupe_key"]);
+  });
+});
+
+describe("workspaceAgentSpendCaps schema (PILE-425)", () => {
+  it("keys caps per (org, agent) and keeps every limit nullable", () => {
+    const config = getTableConfig(workspaceAgentSpendCaps);
+    expect(config.name).toBe("agent_spend_caps");
+    const names = config.columns.map((c) => c.name);
+    for (const col of [
+      "id",
+      "organization_id",
+      "agent_id",
+      "max_runs_per_day",
+      "max_runs_per_month",
+      "max_tokens_per_day",
+      "max_tokens_per_month",
+      "max_cost_micros_per_day",
+      "max_cost_micros_per_month",
+      "max_tokens_per_run",
+      "max_cost_micros_per_run",
+      "last_cap_alert_at",
+      "created_by",
+      "created_at",
+      "updated_at",
+    ]) {
+      expect(names).toContain(col);
+    }
+    // Unset = uncapped — every limit column must stay nullable.
+    for (const col of config.columns.filter((c) => c.name.startsWith("max_"))) {
+      expect(col.notNull).toBe(false);
+    }
+    expect(
+      config.indexes.some(
+        (i) =>
+          i.config.name === "agent_spend_caps_org_agent_idx" &&
+          i.config.unique === true
+      )
+    ).toBe(true);
+  });
+});
+
+describe("workspaceAgentRunReceipts schema (PILE-425)", () => {
+  it("keys receipts by session and indexes the aggregation dimensions", () => {
+    const config = getTableConfig(workspaceAgentRunReceipts);
+    expect(config.name).toBe("agent_run_receipts");
+    const names = config.columns.map((c) => c.name);
+    for (const col of [
+      "id",
+      "organization_id",
+      "session_id",
+      "issue_id",
+      "agent_id",
+      "step_key",
+      "deal_id",
+      "status",
+      "model",
+      "effort",
+      "input_tokens",
+      "output_tokens",
+      "total_tokens",
+      "tool_calls",
+      "cost_micros",
+      "external_spend_micros",
+      "cost_source",
+      "cap_exceeded",
+      "stop_reason",
+      "started_at",
+      "ended_at",
+      "duration_ms",
+      "created_at",
+      "updated_at",
+    ]) {
+      expect(names).toContain(col);
+    }
+    // One receipt per run — the unique session index is load-bearing.
+    expect(
+      config.indexes.some(
+        (i) =>
+          i.config.name === "agent_run_receipts_session_idx" &&
+          i.config.unique === true
+      )
+    ).toBe(true);
+    for (const idx of [
+      "agent_run_receipts_org_agent_idx",
+      "agent_run_receipts_org_step_idx",
+      "agent_run_receipts_issue_idx",
+      "agent_run_receipts_deal_idx",
+    ]) {
+      expect(config.indexes.some((i) => i.config.name === idx)).toBe(true);
+    }
+    // Usage columns stay nullable — a run that never reported still gets a
+    // receipt on terminal transition.
+    for (const col of [
+      "model",
+      "input_tokens",
+      "output_tokens",
+      "cost_micros",
+      "stop_reason",
+    ]) {
+      expect(config.columns.find((c) => c.name === col)?.notNull).toBe(false);
+    }
   });
 });
