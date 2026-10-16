@@ -1077,7 +1077,6 @@ export async function markAllNotificationsRead(
 // ---- agent_sessions / agent_activities ----
 
 export interface AgentSessionInput {
-  /** Flue profile memory — resume key ({merchantId}-{agentSlug}). */
   organizationId: string;
   issueId: string;
   agentId: string;
@@ -1117,6 +1116,8 @@ export interface AgentSessionInput {
   /** PILE-423 — JSON [{id, name, scope, scopeKey, version}] of the guidance
    *  packs injected into this lane's dispatch prompt. */
   guidance?: string | null;
+  /** Flue profile memory — resume key ({merchantId}-{agentSlug}). */
+  conversationKey?: string | null;
 }
 
 export async function createAgentSession(
