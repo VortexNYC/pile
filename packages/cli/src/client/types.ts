@@ -8744,6 +8744,12 @@ export interface paths {
                                 entityId: string;
                                 url: string;
                                 label: string | null;
+                                /** @enum {string} */
+                                verificationStatus: "verified" | "failed" | "unreachable" | "unchecked";
+                                verifiedAt: string | null;
+                                resolvedUrl: string | null;
+                                resolvedTitle: string | null;
+                                httpStatus: number | null;
                                 createdAt: string;
                             }[];
                         };
@@ -8788,6 +8794,12 @@ export interface paths {
                             entityId: string;
                             url: string;
                             label: string | null;
+                            /** @enum {string} */
+                            verificationStatus: "verified" | "failed" | "unreachable" | "unchecked";
+                            verifiedAt: string | null;
+                            resolvedUrl: string | null;
+                            resolvedTitle: string | null;
+                            httpStatus: number | null;
                             createdAt: string;
                         };
                     };
@@ -8840,6 +8852,12 @@ export interface paths {
                             entityId: string;
                             url: string;
                             label: string | null;
+                            /** @enum {string} */
+                            verificationStatus: "verified" | "failed" | "unreachable" | "unchecked";
+                            verifiedAt: string | null;
+                            resolvedUrl: string | null;
+                            resolvedTitle: string | null;
+                            httpStatus: number | null;
                             createdAt: string;
                         };
                     };
@@ -8923,6 +8941,12 @@ export interface paths {
                             entityId: string;
                             url: string;
                             label: string | null;
+                            /** @enum {string} */
+                            verificationStatus: "verified" | "failed" | "unreachable" | "unchecked";
+                            verifiedAt: string | null;
+                            resolvedUrl: string | null;
+                            resolvedTitle: string | null;
+                            httpStatus: number | null;
                             createdAt: string;
                         };
                     };
@@ -26440,6 +26464,12 @@ export interface paths {
                                 entityId: string;
                                 url: string;
                                 label: string | null;
+                                /** @enum {string} */
+                                verificationStatus: "verified" | "failed" | "unreachable" | "unchecked";
+                                verifiedAt: string | null;
+                                resolvedUrl: string | null;
+                                resolvedTitle: string | null;
+                                httpStatus: number | null;
                                 createdAt: string;
                             }[];
                         };
@@ -26482,6 +26512,12 @@ export interface paths {
                             entityId: string;
                             url: string;
                             label: string | null;
+                            /** @enum {string} */
+                            verificationStatus: "verified" | "failed" | "unreachable" | "unchecked";
+                            verifiedAt: string | null;
+                            resolvedUrl: string | null;
+                            resolvedTitle: string | null;
+                            httpStatus: number | null;
                             createdAt: string;
                         };
                     };
@@ -26528,6 +26564,12 @@ export interface paths {
                             entityId: string;
                             url: string;
                             label: string | null;
+                            /** @enum {string} */
+                            verificationStatus: "verified" | "failed" | "unreachable" | "unchecked";
+                            verifiedAt: string | null;
+                            resolvedUrl: string | null;
+                            resolvedTitle: string | null;
+                            httpStatus: number | null;
                             createdAt: string;
                         };
                     };
@@ -26610,6 +26652,12 @@ export interface paths {
                             entityId: string;
                             url: string;
                             label: string | null;
+                            /** @enum {string} */
+                            verificationStatus: "verified" | "failed" | "unreachable" | "unchecked";
+                            verifiedAt: string | null;
+                            resolvedUrl: string | null;
+                            resolvedTitle: string | null;
+                            httpStatus: number | null;
                             createdAt: string;
                         };
                     };

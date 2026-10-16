@@ -20604,6 +20604,31 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "verificationStatus": {
+                            "type": "string",
+                            "enum": [
+                              "verified",
+                              "failed",
+                              "unreachable",
+                              "unchecked"
+                            ]
+                          },
+                          "verifiedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "resolvedUrl": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "resolvedTitle": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "httpStatus": {
+                            "type": "number",
+                            "nullable": true
+                          },
                           "createdAt": {
                             "type": "string"
                           }
@@ -20615,6 +20640,11 @@
                           "entityId",
                           "url",
                           "label",
+                          "verificationStatus",
+                          "verifiedAt",
+                          "resolvedUrl",
+                          "resolvedTitle",
+                          "httpStatus",
                           "createdAt"
                         ]
                       }
@@ -20674,7 +20704,8 @@
                   "entityType",
                   "entityId",
                   "url"
-                ]
+                ],
+                "additionalProperties": false
               }
             }
           }
@@ -20706,6 +20737,31 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "verificationStatus": {
+                      "type": "string",
+                      "enum": [
+                        "verified",
+                        "failed",
+                        "unreachable",
+                        "unchecked"
+                      ]
+                    },
+                    "verifiedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resolvedUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resolvedTitle": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "httpStatus": {
+                      "type": "number",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     }
@@ -20717,6 +20773,11 @@
                     "entityId",
                     "url",
                     "label",
+                    "verificationStatus",
+                    "verifiedAt",
+                    "resolvedUrl",
+                    "resolvedTitle",
+                    "httpStatus",
                     "createdAt"
                   ]
                 }
@@ -20780,6 +20841,31 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "verificationStatus": {
+                      "type": "string",
+                      "enum": [
+                        "verified",
+                        "failed",
+                        "unreachable",
+                        "unchecked"
+                      ]
+                    },
+                    "verifiedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resolvedUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resolvedTitle": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "httpStatus": {
+                      "type": "number",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     }
@@ -20791,6 +20877,11 @@
                     "entityId",
                     "url",
                     "label",
+                    "verificationStatus",
+                    "verifiedAt",
+                    "resolvedUrl",
+                    "resolvedTitle",
+                    "httpStatus",
                     "createdAt"
                   ]
                 }
@@ -20850,7 +20941,8 @@
                   "label": {
                     "type": "string"
                   }
-                }
+                },
+                "additionalProperties": false
               }
             }
           }
@@ -20882,6 +20974,31 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "verificationStatus": {
+                      "type": "string",
+                      "enum": [
+                        "verified",
+                        "failed",
+                        "unreachable",
+                        "unchecked"
+                      ]
+                    },
+                    "verifiedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resolvedUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resolvedTitle": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "httpStatus": {
+                      "type": "number",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     }
@@ -20893,6 +21010,11 @@
                     "entityId",
                     "url",
                     "label",
+                    "verificationStatus",
+                    "verifiedAt",
+                    "resolvedUrl",
+                    "resolvedTitle",
+                    "httpStatus",
                     "createdAt"
                   ]
                 }
@@ -41427,7 +41549,8 @@
                 "required": [
                   "toType",
                   "toId"
-                ]
+                ],
+                "additionalProperties": false
               }
             }
           }
@@ -57658,6 +57781,31 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "verificationStatus": {
+                            "type": "string",
+                            "enum": [
+                              "verified",
+                              "failed",
+                              "unreachable",
+                              "unchecked"
+                            ]
+                          },
+                          "verifiedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "resolvedUrl": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "resolvedTitle": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "httpStatus": {
+                            "type": "number",
+                            "nullable": true
+                          },
                           "createdAt": {
                             "type": "string"
                           }
@@ -57669,6 +57817,11 @@
                           "entityId",
                           "url",
                           "label",
+                          "verificationStatus",
+                          "verifiedAt",
+                          "resolvedUrl",
+                          "resolvedTitle",
+                          "httpStatus",
                           "createdAt"
                         ]
                       }
@@ -57722,7 +57875,8 @@
                 },
                 "required": [
                   "url"
-                ]
+                ],
+                "additionalProperties": false
               }
             }
           }
@@ -57754,6 +57908,31 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "verificationStatus": {
+                      "type": "string",
+                      "enum": [
+                        "verified",
+                        "failed",
+                        "unreachable",
+                        "unchecked"
+                      ]
+                    },
+                    "verifiedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resolvedUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resolvedTitle": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "httpStatus": {
+                      "type": "number",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     }
@@ -57765,6 +57944,11 @@
                     "entityId",
                     "url",
                     "label",
+                    "verificationStatus",
+                    "verifiedAt",
+                    "resolvedUrl",
+                    "resolvedTitle",
+                    "httpStatus",
                     "createdAt"
                   ]
                 }
@@ -57833,6 +58017,31 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "verificationStatus": {
+                      "type": "string",
+                      "enum": [
+                        "verified",
+                        "failed",
+                        "unreachable",
+                        "unchecked"
+                      ]
+                    },
+                    "verifiedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resolvedUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resolvedTitle": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "httpStatus": {
+                      "type": "number",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     }
@@ -57844,6 +58053,11 @@
                     "entityId",
                     "url",
                     "label",
+                    "verificationStatus",
+                    "verifiedAt",
+                    "resolvedUrl",
+                    "resolvedTitle",
+                    "httpStatus",
                     "createdAt"
                   ]
                 }
@@ -57899,7 +58113,8 @@
                   "label": {
                     "type": "string"
                   }
-                }
+                },
+                "additionalProperties": false
               }
             }
           }
@@ -57931,6 +58146,31 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "verificationStatus": {
+                      "type": "string",
+                      "enum": [
+                        "verified",
+                        "failed",
+                        "unreachable",
+                        "unchecked"
+                      ]
+                    },
+                    "verifiedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resolvedUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "resolvedTitle": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "httpStatus": {
+                      "type": "number",
+                      "nullable": true
+                    },
                     "createdAt": {
                       "type": "string"
                     }
@@ -57942,6 +58182,11 @@
                     "entityId",
                     "url",
                     "label",
+                    "verificationStatus",
+                    "verifiedAt",
+                    "resolvedUrl",
+                    "resolvedTitle",
+                    "httpStatus",
                     "createdAt"
                   ]
                 }
