@@ -178,7 +178,7 @@ describe("stage templates", () => {
     expect(seeded.templates.length).toBe(22);
     expect(seeded.skipped).toBe(0);
     const statuses = new Set(seeded.templates.map((t) => t.status));
-    expect([...statuses].sort()).toEqual(
+    expect([...statuses].toSorted()).toEqual(
       [
         "application_underwriting",
         "contracting",
@@ -187,7 +187,7 @@ describe("stage templates", () => {
         "outreach",
         "prospect",
         "proposal",
-      ].sort()
+      ].toSorted()
     );
 
     // Second seed is a no-op — operator edits survive.
@@ -274,14 +274,14 @@ describe("stage templates", () => {
       })
       .parse(await childrenRes.json());
     const byStep = new Map(children.map((c) => [c.stepKey, c]));
-    expect([...byStep.keys()].sort()).toEqual(
+    expect([...byStep.keys()].toSorted()).toEqual(
       [
         "contact_found",
         "field_visit",
         "profiled",
         "ready_for_outreach",
         "sourced",
-      ].sort()
+      ].toSorted()
     );
     expect(byStep.get("sourced")).toMatchObject({
       required: true,

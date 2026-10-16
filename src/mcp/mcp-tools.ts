@@ -615,6 +615,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdExternaleventmappingsId",
+    "description": "Delete external event mapping (DELETE /workspaces/{organizationId}/external-event-mappings/{id}) Path params (top-level, required): organizationId, id.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/external-event-mappings/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdExternallinksId",
     "description": "Delete external link (DELETE /workspaces/{organizationId}/external-links/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
@@ -3374,6 +3395,75 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdExternaleventdeliveries",
+    "description": "List external event deliveries — The inbound event ledger — every delivery lands one row recording its outcome (applied, already_done, no_step, no_record, unmapped, invalid_payload, invalid_signature). Replays return the original outcome without writing a row. (GET /workspaces/{organizationId}/external-event-deliveries) Path params (top-level, required): organizationId. Query params (top-level, optional): source, status, limit.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/external-event-deliveries",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdExternaleventmappings",
+    "description": "List external event mappings (GET /workspaces/{organizationId}/external-event-mappings) Path params (top-level, required): organizationId. Query params (top-level, optional): source.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/external-event-mappings",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdExternaleventmappingsId",
+    "description": "Get external event mapping (GET /workspaces/{organizationId}/external-event-mappings/{id}) Path params (top-level, required): organizationId, id.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/external-event-mappings/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
         "organizationId"
       ]
     }
@@ -7426,6 +7516,64 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "format": "uri"
             }
           }
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "patchWorkspacesOrganizationIdExternaleventmappingsId",
+    "description": "Update external event mapping (PATCH /workspaces/{organizationId}/external-event-mappings/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: source, eventType, entityType, matchPath, stepKey, secret, enabled.",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/external-event-mappings/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "minLength": 1
+            },
+            "eventType": {
+              "type": "string",
+              "minLength": 1
+            },
+            "entityType": {
+              "type": "string",
+              "enum": [
+                "issue",
+                "deal",
+                "customer"
+              ]
+            },
+            "matchPath": {
+              "type": "string",
+              "minLength": 1
+            },
+            "stepKey": {
+              "type": "string",
+              "minLength": 1
+            },
+            "secret": {
+              "type": "string",
+              "minLength": 1
+            },
+            "enabled": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
         }
       },
       "required": [
@@ -12562,6 +12710,97 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         "entityId",
         "entityType",
         "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdExternaleventmappings",
+    "description": "Create external event mapping — Bind an inbound provider event to a stage sub-step. source and stepKey slug-normalize; eventType is the provider's literal event name (\"*\" is a catch-all). The matcher resolves the payload at matchPath to the record's externalId (deal/customer) or externalRef (issue). (POST /workspaces/{organizationId}/external-event-mappings) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: source*, eventType*, entityType*, matchPath*, stepKey*, secret*, enabled (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/external-event-mappings",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "minLength": 1
+            },
+            "eventType": {
+              "type": "string",
+              "minLength": 1
+            },
+            "entityType": {
+              "type": "string",
+              "enum": [
+                "issue",
+                "deal",
+                "customer"
+              ]
+            },
+            "matchPath": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Dotted path into the event payload resolving to the record's external id — e.g. \"data.merchant_id\"."
+            },
+            "stepKey": {
+              "type": "string",
+              "minLength": 1
+            },
+            "secret": {
+              "type": "string",
+              "minLength": 1,
+              "description": "HMAC-SHA256 signing secret for this source's deliveries."
+            },
+            "enabled": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "source",
+            "eventType",
+            "entityType",
+            "matchPath",
+            "stepKey",
+            "secret"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdExternaleventsSource",
+    "description": "Create external event — Inbound provider webhook. The raw JSON body is verified with HMAC-SHA256 against the source's mapping secret — send the hex digest in any *-signature header (X-Pile-Signature, Finix-Signature, sha256=<hex>, or t=...,v1=<hex> envelopes all work). The provider event id for dedupe comes from a *-Event-Id header or the payload's id field. (POST /workspaces/{organizationId}/external-events/{source}) Path params (top-level, required): organizationId, source. Request body goes in the \"body\" object.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/external-events/{source}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "additionalProperties": {
+            "nullable": true
+          }
+        }
+      },
+      "required": [
+        "organizationId",
+        "source"
       ]
     }
   },

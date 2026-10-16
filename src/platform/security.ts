@@ -68,6 +68,9 @@ function isPublicPath(pathname: string): boolean {
     pathname.startsWith("/support/widget/") ||
     pathname.startsWith("/webhooks/agent/") ||
     pathname.startsWith("/webhooks/comms/") ||
+    // PILE-422 — inbound provider events; the HMAC signature on the body is
+    // the credential (verified inside the workspace DO).
+    pathname.includes("/external-events/") ||
     pathname.startsWith("/public/leads/") ||
     (pathname.startsWith("/workspaces/") && pathname.endsWith("/board")) ||
     (pathname.startsWith("/workspaces/") && pathname.endsWith("/changelog")) ||

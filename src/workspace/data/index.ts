@@ -49,6 +49,8 @@ import {
   workspaceGuidancePacks,
   workspaceGuidancePackVersions,
   workspaceStageTemplates,
+  workspaceExternalEventDeliveries,
+  workspaceExternalEventMappings,
   workspaceCustomerStatuses,
   workspaceCustomerTiers,
   workspaceIssueApprovals,
@@ -2151,6 +2153,307 @@ export function listLinkedIssueIds(
     )
     .all()
     .map((row) => (row.fromType === "issue" ? row.fromId : row.toId));
+}
+
+// ---- external event mappings + deliveries (PILE-422) ----
+// An inbound provider event (Finix merchant approved, Seal agreement
+// signed, carrier delivered) resolves through a mapping to a sub-step and
+// completes the child issue carrying that stepKey. The deliveries table is
+// both the dedupe ledger and the audit log — every inbound event lands one
+// row recording why it did or didn't move state.
+
+export type ExternalEventMapping =
+  typeof workspaceExternalEventMappings.$inferSelect;
+export type ExternalEventDelivery =
+  typeof workspaceExternalEventDeliveries.$inferSelect;
+
+export interface ExternalEventMappingInput {
+  organizationId: string;
+  source: string;
+  eventType: string;
+  entityType: "issue" | "deal" | "customer";
+  matchPath: string;
+  stepKey: string;
+  secret: string;
+  enabled?: boolean;
+  createdBy?: string | null;
+}
+
+export type ExternalEventMappingPatch = Partial<
+  Omit<ExternalEventMappingInput, "organizationId" | "createdBy">
+>;
+
+export function createExternalEventMapping(
+  db: WorkspaceDb,
+  input: ExternalEventMappingInput
+) {
+  const now = new Date().toISOString();
+  return db
+    .insert(workspaceExternalEventMappings)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId: input.organizationId,
+      // Source and stepKey slug-normalize like stage keys; eventType stays
+      // verbatim — provider event names are literals ("merchant.updated").
+      source: stageKey(input.source),
+      eventType: input.eventType,
+      entityType: input.entityType,
+      matchPath: input.matchPath,
+      stepKey: stageKey(input.stepKey),
+      secret: input.secret,
+      enabled: input.enabled ?? true,
+      createdBy: input.createdBy ?? null,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning()
+    .get();
+}
+
+export function getExternalEventMapping(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return db
+    .select()
+    .from(workspaceExternalEventMappings)
+    .where(
+      and(
+        eq(workspaceExternalEventMappings.organizationId, organizationId),
+        eq(workspaceExternalEventMappings.id, id)
+      )
+    )
+    .get();
+}
+
+export function listExternalEventMappings(
+  db: WorkspaceDb,
+  organizationId: string,
+  filter: { source?: string; enabledOnly?: boolean } = {}
+) {
+  const conditions = [
+    eq(workspaceExternalEventMappings.organizationId, organizationId),
+  ];
+  if (filter.source !== undefined) {
+    conditions.push(
+      eq(workspaceExternalEventMappings.source, stageKey(filter.source))
+    );
+  }
+  if (filter.enabledOnly) {
+    conditions.push(eq(workspaceExternalEventMappings.enabled, true));
+  }
+  return db
+    .select()
+    .from(workspaceExternalEventMappings)
+    .where(and(...conditions))
+    .orderBy(
+      workspaceExternalEventMappings.source,
+      workspaceExternalEventMappings.eventType
+    )
+    .all();
+}
+
+export function updateExternalEventMapping(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string,
+  patch: ExternalEventMappingPatch
+) {
+  const set: Partial<typeof workspaceExternalEventMappings.$inferInsert> = {
+    updatedAt: new Date().toISOString(),
+  };
+  if (patch.source !== undefined) set.source = stageKey(patch.source);
+  if (patch.eventType !== undefined) set.eventType = patch.eventType;
+  if (patch.entityType !== undefined) set.entityType = patch.entityType;
+  if (patch.matchPath !== undefined) set.matchPath = patch.matchPath;
+  if (patch.stepKey !== undefined) set.stepKey = stageKey(patch.stepKey);
+  if (patch.secret !== undefined) set.secret = patch.secret;
+  if (patch.enabled !== undefined) set.enabled = patch.enabled;
+  return db
+    .update(workspaceExternalEventMappings)
+    .set(set)
+    .where(
+      and(
+        eq(workspaceExternalEventMappings.id, id),
+        eq(workspaceExternalEventMappings.organizationId, organizationId)
+      )
+    )
+    .returning()
+    .get();
+}
+
+export function deleteExternalEventMapping(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return (
+    db
+      .delete(workspaceExternalEventMappings)
+      .where(
+        and(
+          eq(workspaceExternalEventMappings.id, id),
+          eq(workspaceExternalEventMappings.organizationId, organizationId)
+        )
+      )
+      .returning({ id: workspaceExternalEventMappings.id })
+      .all().length > 0
+  );
+}
+
+export interface ExternalEventDeliveryInput {
+  organizationId: string;
+  source: string;
+  eventType?: string | null;
+  eventId?: string | null;
+  dedupeKey: string;
+  status: string;
+  entityType?: string | null;
+  entityId?: string | null;
+  completedIssueIds?: string[];
+  payload?: string | null;
+}
+
+/** Insert returns undefined on a (org, source, dedupe_key) conflict — the
+ *  caller treats that as a replay and reads back the recorded row. */
+export function insertExternalEventDelivery(
+  db: WorkspaceDb,
+  input: ExternalEventDeliveryInput
+) {
+  return db
+    .insert(workspaceExternalEventDeliveries)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId: input.organizationId,
+      source: input.source,
+      eventType: input.eventType ?? null,
+      eventId: input.eventId ?? null,
+      dedupeKey: input.dedupeKey,
+      status: input.status,
+      entityType: input.entityType ?? null,
+      entityId: input.entityId ?? null,
+      completedIssueIds: input.completedIssueIds
+        ? JSON.stringify(input.completedIssueIds)
+        : null,
+      payload: input.payload ?? null,
+      createdAt: new Date().toISOString(),
+    })
+    .onConflictDoNothing()
+    .returning()
+    .get();
+}
+
+/** Finalizes a claimed delivery row — ingest writes the row as
+ *  "processing" first (the dedupe claim), then updates it with the
+ *  outcome. */
+export function updateExternalEventDelivery(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string,
+  patch: {
+    status?: string;
+    eventType?: string | null;
+    entityType?: string | null;
+    entityId?: string | null;
+    completedIssueIds?: string[];
+  }
+) {
+  const set: Partial<typeof workspaceExternalEventDeliveries.$inferInsert> = {};
+  if (patch.status !== undefined) set.status = patch.status;
+  if (patch.eventType !== undefined) set.eventType = patch.eventType;
+  if (patch.entityType !== undefined) set.entityType = patch.entityType;
+  if (patch.entityId !== undefined) set.entityId = patch.entityId;
+  if (patch.completedIssueIds !== undefined) {
+    set.completedIssueIds = JSON.stringify(patch.completedIssueIds);
+  }
+  return db
+    .update(workspaceExternalEventDeliveries)
+    .set(set)
+    .where(
+      and(
+        eq(workspaceExternalEventDeliveries.id, id),
+        eq(workspaceExternalEventDeliveries.organizationId, organizationId)
+      )
+    )
+    .returning()
+    .get();
+}
+
+export function getExternalEventDeliveryByDedupeKey(
+  db: WorkspaceDb,
+  organizationId: string,
+  source: string,
+  dedupeKey: string
+) {
+  return db
+    .select()
+    .from(workspaceExternalEventDeliveries)
+    .where(
+      and(
+        eq(workspaceExternalEventDeliveries.organizationId, organizationId),
+        eq(workspaceExternalEventDeliveries.source, source),
+        eq(workspaceExternalEventDeliveries.dedupeKey, dedupeKey)
+      )
+    )
+    .get();
+}
+
+export function listExternalEventDeliveries(
+  db: WorkspaceDb,
+  organizationId: string,
+  filter: { source?: string; status?: string; limit?: number } = {}
+) {
+  const conditions = [
+    eq(workspaceExternalEventDeliveries.organizationId, organizationId),
+  ];
+  if (filter.source !== undefined) {
+    conditions.push(
+      eq(workspaceExternalEventDeliveries.source, stageKey(filter.source))
+    );
+  }
+  if (filter.status !== undefined) {
+    conditions.push(eq(workspaceExternalEventDeliveries.status, filter.status));
+  }
+  return db
+    .select()
+    .from(workspaceExternalEventDeliveries)
+    .where(and(...conditions))
+    .orderBy(desc(workspaceExternalEventDeliveries.createdAt))
+    .limit(filter.limit ?? 100)
+    .all();
+}
+
+/** Pulls a scalar out of a payload by dotted path ("data.merchant.id");
+ *  numeric segments index arrays. Returns null when the path resolves to
+ *  nothing stringifiable — the caller treats that as no record match. */
+export function resolvePayloadPath(
+  payload: unknown,
+  path: string
+): string | null {
+  let node: unknown = payload;
+  for (const segment of path.split(".")) {
+    if (typeof node !== "object" || node === null) return null;
+    node = (node as Record<string, unknown>)[segment];
+  }
+  if (typeof node === "string" && node !== "") return node;
+  if (typeof node === "number") return String(node);
+  return null;
+}
+
+/** Reads the first present string field — provider envelopes disagree on
+ *  naming ("type" vs "event_type" vs "event"; "id" vs "event_id"). */
+export function extractEventField(
+  payload: unknown,
+  keys: string[]
+): string | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const record = payload as Record<string, unknown>;
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value !== "") return value;
+  }
+  return null;
 }
 
 /** The sales-led merchant pipeline's seven stages (design doc

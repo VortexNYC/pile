@@ -48,6 +48,7 @@ import { registerEmailInboxRoutes } from "./email-inboxes.js";
 import { registerEmojiRoutes } from "./emojis.js";
 import { registerEntityCommentRoutes } from "./entity-comments.js";
 import { getExecutionCtx } from "./execution-ctx.js";
+import { registerExternalEventRoutes } from "./external-events.js";
 import { registerExternalLinkRoutes } from "./external-links.js";
 import { registerFieldRoutes } from "./fields.js";
 import { registerFileRoutes } from "./files.js";
@@ -167,6 +168,16 @@ app.use("/workspaces/:organizationId/*", async (c, next) => {
     await next();
     return;
   }
+  // External event ingest (PILE-422): provider webhooks carry an HMAC
+  // signature over the body instead of workspace credentials — verified
+  // against the source's mapping secret inside the DO.
+  if (
+    c.req.method === "POST" &&
+    /^\/workspaces\/[^/]+\/external-events\/[^/]+$/.test(c.req.path)
+  ) {
+    await next();
+    return;
+  }
   // Agent runners push log lines and fetch/upload the pnpm store cache with a
   // per-session HMAC token instead of a user/API-key identity — verified
   // inside the route handlers.
@@ -229,6 +240,7 @@ registerActivityRoutes(app);
 registerActivityFeedRoutes(app);
 registerWorkspaceEntityRoutes(app);
 registerStageTemplateRoutes(app);
+registerExternalEventRoutes(app);
 registerExternalLinkRoutes(app);
 registerProjectDetailRoutes(app);
 registerPrRoutes(app);

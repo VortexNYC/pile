@@ -160,3 +160,42 @@ describe("v79 stage templates", () => {
     expect(sql).toContain("ALTER TABLE issues ADD COLUMN owner_agent TEXT");
   });
 });
+
+describe("v80 external events (PILE-422)", () => {
+  it("creates the mapping and delivery tables with their dedupe keys", () => {
+    const sql = workspaceMigrations.migrations.m0079;
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS external_event_mappings");
+    for (const col of [
+      "organization_id",
+      "source",
+      "event_type",
+      "entity_type",
+      "match_path",
+      "step_key",
+      "secret",
+      "enabled",
+    ]) {
+      expect(sql).toContain(col);
+    }
+    expect(sql).toContain(
+      "CREATE UNIQUE INDEX IF NOT EXISTS external_event_mappings_event_idx ON external_event_mappings (organization_id, source, event_type)"
+    );
+
+    expect(sql).toContain(
+      "CREATE TABLE IF NOT EXISTS external_event_deliveries"
+    );
+    for (const col of [
+      "dedupe_key",
+      "status",
+      "entity_type",
+      "entity_id",
+      "completed_issue_ids",
+      "payload",
+    ]) {
+      expect(sql).toContain(col);
+    }
+    expect(sql).toContain(
+      "CREATE UNIQUE INDEX IF NOT EXISTS external_event_deliveries_dedupe_idx ON external_event_deliveries (organization_id, source, dedupe_key)"
+    );
+  });
+});
