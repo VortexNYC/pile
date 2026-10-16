@@ -18227,6 +18227,9 @@ export interface paths {
                                 needsHuman: boolean | null;
                                 needsHumanReason: string | null;
                                 priorityScore: number | null;
+                                customFields: {
+                                    [key: string]: string;
+                                };
                                 createdAt: string;
                                 updatedAt: string;
                             }[];
@@ -18268,6 +18271,9 @@ export interface paths {
                         needsHuman?: boolean | null;
                         needsHumanReason?: string | null;
                         priorityScore?: number | null;
+                        customFields?: {
+                            [key: string]: string | null;
+                        };
                     };
                 };
             };
@@ -18295,6 +18301,9 @@ export interface paths {
                             needsHuman: boolean | null;
                             needsHumanReason: string | null;
                             priorityScore: number | null;
+                            customFields: {
+                                [key: string]: string;
+                            };
                             createdAt: string;
                             updatedAt: string;
                         };
@@ -18323,6 +18332,9 @@ export interface paths {
                             needsHuman: boolean | null;
                             needsHumanReason: string | null;
                             priorityScore: number | null;
+                            customFields: {
+                                [key: string]: string;
+                            };
                             createdAt: string;
                             updatedAt: string;
                         };
@@ -18337,6 +18349,220 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/customers/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create customer import
+         * @description Bulk merchant import — Scout's write path. Each row becomes a customer deduped on externalId (placeId maps to "gplace:<place_id>"); re-runs return existing records and fill empty slots rather than duplicating. Optionally creates an initial deal per row (stage defaults to "lead"). Every row lands a receipt (created/existing/failed + why) and the batch itself is persisted as an import receipt readable via GET /customer-imports/{id}.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        source?: string;
+                        corridor?: string;
+                        rows: {
+                            placeId?: string;
+                            externalId?: string;
+                            name: string;
+                            url?: string | null;
+                            notes?: string | null;
+                            status?: string;
+                            statusId?: string;
+                            tierId?: string;
+                            ownerId?: string;
+                            nextStepText?: string | null;
+                            nextStepDueAt?: string | null;
+                            needsHuman?: boolean | null;
+                            needsHumanReason?: string | null;
+                            priorityScore?: number | null;
+                            customFields?: {
+                                [key: string]: string | null;
+                            };
+                            deal?: {
+                                name?: string;
+                                /** @enum {string} */
+                                stage?: "lead" | "qualified" | "proposal" | "negotiation" | "won" | "lost";
+                                amountCents?: number | null;
+                                currency?: string | null;
+                                expectedCloseAt?: string | null;
+                                description?: string | null;
+                                priorityScore?: number | null;
+                            };
+                        }[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Import receipt — per-row outcomes included */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            source: string | null;
+                            corridor: string | null;
+                            total: number;
+                            created: number;
+                            existing: number;
+                            failed: number;
+                            createdById: string | null;
+                            createdAt: string;
+                            rows: {
+                                index: number;
+                                externalId: string | null;
+                                /** @enum {string} */
+                                outcome: "created" | "existing" | "failed";
+                                customerId?: string;
+                                dealId?: string;
+                                error?: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/customer-imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List customer imports */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Import receipt history (summaries — no row details) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            imports: {
+                                id: string;
+                                organizationId: string;
+                                source: string | null;
+                                corridor: string | null;
+                                total: number;
+                                created: number;
+                                existing: number;
+                                failed: number;
+                                createdById: string | null;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/customer-imports/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get customer import */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Import receipt with per-row outcomes */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            source: string | null;
+                            corridor: string | null;
+                            total: number;
+                            created: number;
+                            existing: number;
+                            failed: number;
+                            createdById: string | null;
+                            createdAt: string;
+                            rows: {
+                                index: number;
+                                externalId: string | null;
+                                /** @enum {string} */
+                                outcome: "created" | "existing" | "failed";
+                                customerId?: string;
+                                dealId?: string;
+                                error?: string;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Import receipt not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -18386,6 +18612,9 @@ export interface paths {
                             needsHuman: boolean | null;
                             needsHumanReason: string | null;
                             priorityScore: number | null;
+                            customFields: {
+                                [key: string]: string;
+                            };
                             createdAt: string;
                             updatedAt: string;
                         };
@@ -18461,6 +18690,9 @@ export interface paths {
                         needsHuman?: boolean | null;
                         needsHumanReason?: string | null;
                         priorityScore?: number | null;
+                        customFields?: {
+                            [key: string]: string | null;
+                        };
                     };
                 };
             };
@@ -18488,6 +18720,9 @@ export interface paths {
                             needsHuman: boolean | null;
                             needsHumanReason: string | null;
                             priorityScore: number | null;
+                            customFields: {
+                                [key: string]: string;
+                            };
                             createdAt: string;
                             updatedAt: string;
                         };
@@ -19536,6 +19771,9 @@ export interface paths {
                                 needsHumanReason: string | null;
                                 priorityScore: number | null;
                                 contactIds: string[];
+                                customFields: {
+                                    [key: string]: string;
+                                };
                                 createdAt: string;
                                 updatedAt: string;
                             }[];
@@ -19581,6 +19819,9 @@ export interface paths {
                         needsHuman?: boolean | null;
                         needsHumanReason?: string | null;
                         priorityScore?: number | null;
+                        customFields?: {
+                            [key: string]: string | null;
+                        };
                     };
                 };
             };
@@ -19612,6 +19853,9 @@ export interface paths {
                                 needsHumanReason: string | null;
                                 priorityScore: number | null;
                                 contactIds: string[];
+                                customFields: {
+                                    [key: string]: string;
+                                };
                                 createdAt: string;
                                 updatedAt: string;
                             };
@@ -19645,6 +19889,9 @@ export interface paths {
                                 needsHumanReason: string | null;
                                 priorityScore: number | null;
                                 contactIds: string[];
+                                customFields: {
+                                    [key: string]: string;
+                                };
                                 createdAt: string;
                                 updatedAt: string;
                             };
@@ -19713,6 +19960,9 @@ export interface paths {
                                 needsHumanReason: string | null;
                                 priorityScore: number | null;
                                 contactIds: string[];
+                                customFields: {
+                                    [key: string]: string;
+                                };
                                 createdAt: string;
                                 updatedAt: string;
                             };
@@ -19781,6 +20031,9 @@ export interface paths {
                         needsHuman?: boolean | null;
                         needsHumanReason?: string | null;
                         priorityScore?: number | null;
+                        customFields?: {
+                            [key: string]: string | null;
+                        };
                     };
                 };
             };
@@ -19812,6 +20065,9 @@ export interface paths {
                                 needsHumanReason: string | null;
                                 priorityScore: number | null;
                                 contactIds: string[];
+                                customFields: {
+                                    [key: string]: string;
+                                };
                                 createdAt: string;
                                 updatedAt: string;
                             };
@@ -19983,6 +20239,9 @@ export interface paths {
                                 needsHumanReason: string | null;
                                 priorityScore: number | null;
                                 contactIds: string[];
+                                customFields: {
+                                    [key: string]: string;
+                                };
                                 createdAt: string;
                                 updatedAt: string;
                             }[];

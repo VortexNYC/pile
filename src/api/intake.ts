@@ -280,11 +280,12 @@ export function registerIntakeRoutes(app: OpenAPIHono<AppContext>) {
         input.pipelineStatusId &&
         customer.statusId !== input.pipelineStatusId
       ) {
-        customer = await stub.updateCustomer(
-          customer.id,
-          { statusId: input.pipelineStatusId },
-          identity.id
-        );
+        customer =
+          (await stub.updateCustomer(
+            customer.id,
+            { statusId: input.pipelineStatusId },
+            identity.id
+          )) ?? customer;
       }
     } else {
       customer = await stub.createCustomer({

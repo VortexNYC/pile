@@ -26,6 +26,13 @@ import {
   listStageTemplatesForStatus,
   seedStageTemplates,
   setFieldValue,
+  setFieldValuesByName,
+  customFieldMap,
+  listFieldDefinitions,
+  FieldValueError,
+  importCustomers,
+  getImportReceipt,
+  listImportReceipts,
   stageKey,
   updateStageTemplate,
   createTriageRule,
@@ -1783,5 +1790,126 @@ describe("notification types (PILE-428)", () => {
     // file, matching the notifyIssueEvent call on draft_output creation.
     const t: NotificationType = "draft_pending";
     expect(t).toBe("draft_pending");
+  });
+});
+
+describe("custom fields by name + bulk import (PILE-383/403)", () => {
+  beforeAll(async () => {
+    await getStub().listWorkspaceComments();
+  });
+
+  it("setFieldValuesByName auto-creates missing definitions and validates typed ones", async () => {
+    await withDb(async (db) => {
+      const customer = await createCustomer(db, {
+        organizationId: WORKSPACE_ID,
+        name: "Field target",
+      });
+      setFieldValuesByName(db, WORKSPACE_ID, "customer", customer.id, {
+        processor: "square",
+      });
+      expect(customFieldMap(db, WORKSPACE_ID, "customer", customer.id)).toEqual(
+        { processor: "square" }
+      );
+      const defs = listFieldDefinitions(db, WORKSPACE_ID, "customer");
+      expect(defs.find((d) => d.name === "processor")?.type).toBe("text");
+
+      // A declared select field rejects out-of-options values.
+      createFieldDefinition(db, {
+        organizationId: WORKSPACE_ID,
+        entityType: "customer",
+        name: "size",
+        type: "select",
+        options: ["s", "m"],
+      });
+      expect(() =>
+        setFieldValuesByName(db, WORKSPACE_ID, "customer", customer.id, {
+          size: "xl",
+        })
+      ).toThrow(FieldValueError);
+      setFieldValuesByName(db, WORKSPACE_ID, "customer", customer.id, {
+        size: "m",
+      });
+      expect(
+        customFieldMap(db, WORKSPACE_ID, "customer", customer.id).size
+      ).toBe("m");
+
+      // null clears a value.
+      setFieldValuesByName(db, WORKSPACE_ID, "customer", customer.id, {
+        size: null,
+      });
+      expect(
+        customFieldMap(db, WORKSPACE_ID, "customer", customer.id).size
+      ).toBeUndefined();
+    });
+  });
+
+  it("importCustomers dedupes on gplace externalId and writes a receipt", async () => {
+    await withDb(async (db) => {
+      const first = importCustomers(db, WORKSPACE_ID, {
+        source: "scout",
+        corridor: "test-corridor",
+        rows: [
+          { placeId: "imp-1", name: "One", deal: {} },
+          { placeId: "imp-2", name: "Two" },
+        ],
+      });
+      expect(first).toMatchObject({
+        source: "scout",
+        corridor: "test-corridor",
+        total: 2,
+        created: 2,
+        existing: 0,
+        failed: 0,
+      });
+      expect(first.rows[0]?.externalId).toBe("gplace:imp-1");
+      expect(first.rows[0]?.dealId).toBeTruthy();
+
+      const replay = importCustomers(db, WORKSPACE_ID, {
+        source: "scout",
+        rows: [
+          { placeId: "imp-1", name: "One", deal: {} },
+          { placeId: "imp-2", name: "Two" },
+        ],
+      });
+      expect(replay.created).toBe(0);
+      expect(replay.existing).toBe(2);
+      expect(replay.rows[0]?.customerId).toBe(first.rows[0]?.customerId);
+      expect(replay.rows[0]?.dealId).toBe(first.rows[0]?.dealId);
+
+      const stored = getImportReceipt(db, WORKSPACE_ID, first.id);
+      expect(stored?.rows).toHaveLength(2);
+      expect(listImportReceipts(db, WORKSPACE_ID).map((r) => r.id)).toContain(
+        first.id
+      );
+    });
+  });
+
+  it("failed rows carry a reason and write nothing", async () => {
+    await withDb(async (db) => {
+      createFieldDefinition(db, {
+        organizationId: WORKSPACE_ID,
+        entityType: "customer",
+        name: "tier_check",
+        type: "number",
+      });
+      const receipt = importCustomers(db, WORKSPACE_ID, {
+        rows: [
+          { placeId: "good", name: "Fine" },
+          {
+            placeId: "bad",
+            name: "Broken",
+            customFields: { tier_check: "not-a-number" },
+          },
+        ],
+      });
+      expect(receipt.created).toBe(1);
+      expect(receipt.failed).toBe(1);
+      expect(receipt.rows[1]?.outcome).toBe("failed");
+      expect(receipt.rows[1]?.error).toContain("tier_check");
+      // Pre-validation ran before the write — no partial record.
+      expect(
+        getCustomerByExternalId(db, WORKSPACE_ID, "gplace:bad")
+      ).toBeUndefined();
+    });
   });
 });

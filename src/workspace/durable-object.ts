@@ -1835,13 +1835,21 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   // ---- deals ----
-  createDeal(input: Omit<data.DealInput, "organizationId">) {
+  createDeal(
+    input: Omit<data.DealInput, "organizationId"> & {
+      customFields?: Record<string, string | null>;
+    }
+  ) {
+    const { customFields, ...dealInput } = input;
     const deal = data.createDeal(this.db, {
-      ...input,
+      ...dealInput,
       organizationId: this.organizationId,
     });
+    // Runs on the dedupe-return path too — a replayed create still gets
+    // its field values applied to the existing record.
+    this.applyCustomFields("deal", deal.id, customFields);
     this.audit("deal.created", "deal", deal.id);
-    return deal;
+    return this.withEntityFields("deal", deal);
   }
 
   listDeals(opts?: {
@@ -1851,15 +1859,24 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     cold?: boolean;
     needsHuman?: boolean;
   }) {
-    return data.listDeals(this.db, this.organizationId, opts);
+    return this.withEntityFieldsList(
+      "deal",
+      data.listDeals(this.db, this.organizationId, opts)
+    );
   }
 
   getDeal(id: string) {
-    return data.getDeal(this.db, this.organizationId, id);
+    const deal = data.getDeal(this.db, this.organizationId, id);
+    return deal ? this.withEntityFields("deal", deal) : undefined;
   }
 
   getDealByExternalId(externalId: string) {
-    return data.getDealByExternalId(this.db, this.organizationId, externalId);
+    const deal = data.getDealByExternalId(
+      this.db,
+      this.organizationId,
+      externalId
+    );
+    return deal ? this.withEntityFields("deal", deal) : undefined;
   }
 
   async updateDeal(
@@ -1867,15 +1884,19 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     patch: Partial<Omit<data.DealInput, "organizationId" | "contactIds">> & {
       contactIds?: string[];
       archivedAt?: string | null;
+      customFields?: Record<string, string | null>;
     },
     actorId?: string
   ) {
+    const { customFields, ...dealPatch } = patch;
     const before = data.getDeal(this.db, this.organizationId, id);
-    const deal = data.updateDeal(this.db, this.organizationId, id, patch);
-    if (deal) this.audit("deal.updated", "deal", id, actorId);
+    const deal = data.updateDeal(this.db, this.organizationId, id, dealPatch);
+    if (!deal) return undefined;
+    this.applyCustomFields("deal", id, customFields);
+    this.audit("deal.updated", "deal", id, actorId);
     // PILE-411 — entering a templated stage materializes sub-steps under the
     // deal's linked parent issues.
-    if (deal && patch.stage !== undefined && deal.stage !== before?.stage) {
+    if (dealPatch.stage !== undefined && deal.stage !== before?.stage) {
       await this.applyStageTemplates(
         "deal",
         deal.stage,
@@ -1884,7 +1905,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         actorId
       );
     }
-    return deal;
+    return this.withEntityFields("deal", deal);
   }
 
   linkDealIssue(dealId: string, issueId: string) {
@@ -1902,7 +1923,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   listDealsForIssue(issueId: string) {
-    return data.listDealsForIssue(this.db, this.organizationId, issueId);
+    return this.withEntityFieldsList(
+      "deal",
+      data.listDealsForIssue(this.db, this.organizationId, issueId)
+    );
   }
 
   deleteDeal(id: string, actorId?: string) {
@@ -2452,13 +2476,81 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   // ---- customers ----
-  createCustomer(input: Omit<data.CustomerInput, "organizationId">) {
+  /** Name-keyed custom field values folded onto entity records — the
+   *  API/MCP surface speaks field names ("processor", "batch_week"), not
+   *  definition uuids (PILE-383). */
+  private withEntityFields<T extends { id: string }>(
+    entityType: string,
+    record: T
+  ): T & { customFields: Record<string, string> } {
+    return {
+      ...record,
+      customFields: data.customFieldMap(
+        this.db,
+        this.organizationId,
+        entityType,
+        record.id
+      ),
+    };
+  }
+
+  private withEntityFieldsList<T extends { id: string }>(
+    entityType: string,
+    records: T[]
+  ): Array<T & { customFields: Record<string, string> }> {
+    const maps = data.customFieldMaps(
+      this.db,
+      this.organizationId,
+      entityType,
+      records.map((r) => r.id)
+    );
+    return records.map((r) => ({
+      ...r,
+      customFields: maps.get(r.id) ?? {},
+    }));
+  }
+
+  private applyCustomFields(
+    entityType: string,
+    entityId: string,
+    fields: Record<string, string | null> | undefined
+  ) {
+    if (!fields || Object.keys(fields).length === 0) return;
+    try {
+      data.setFieldValuesByName(
+        this.db,
+        this.organizationId,
+        entityType,
+        entityId,
+        fields
+      );
+    } catch (error) {
+      if (error instanceof data.FieldValueError) {
+        throw new VortexError({
+          code: "BAD_REQUEST",
+          status: 400,
+          message: error.message,
+        });
+      }
+      throw error;
+    }
+  }
+
+  createCustomer(
+    input: Omit<data.CustomerInput, "organizationId"> & {
+      customFields?: Record<string, string | null>;
+    }
+  ) {
+    const { customFields, ...customerInput } = input;
     const customer = data.createCustomer(this.db, {
-      ...input,
+      ...customerInput,
       organizationId: this.organizationId,
     });
+    // Runs on the dedupe-return path too — a replayed create still gets
+    // its field values applied to the existing record.
+    this.applyCustomFields("customer", customer.id, customFields);
     this.audit("customer.created", "customer", customer.id, input.ownerId);
-    return customer;
+    return this.withEntityFields("customer", customer);
   }
 
   listCustomers(opts?: {
@@ -2466,44 +2558,58 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     dueBefore?: string;
     needsHuman?: boolean;
   }) {
-    return data.listCustomers(this.db, this.organizationId, opts);
+    return this.withEntityFieldsList(
+      "customer",
+      data.listCustomers(this.db, this.organizationId, opts)
+    );
   }
 
   getCustomerByDomain(domain: string) {
-    return data.getCustomerByDomain(this.db, this.organizationId, domain);
+    const customer = data.getCustomerByDomain(
+      this.db,
+      this.organizationId,
+      domain
+    );
+    return customer ? this.withEntityFields("customer", customer) : undefined;
   }
 
   getCustomerByExternalId(externalId: string) {
-    return data.getCustomerByExternalId(
+    const customer = data.getCustomerByExternalId(
       this.db,
       this.organizationId,
       externalId
     );
+    return customer ? this.withEntityFields("customer", customer) : undefined;
   }
 
   getCustomer(id: string) {
-    return data.getCustomer(this.db, this.organizationId, id);
+    const customer = data.getCustomer(this.db, this.organizationId, id);
+    return customer ? this.withEntityFields("customer", customer) : undefined;
   }
 
   async updateCustomer(
     id: string,
-    patch: Partial<Omit<data.CustomerInput, "organizationId">>,
+    patch: Partial<Omit<data.CustomerInput, "organizationId">> & {
+      customFields?: Record<string, string | null>;
+    },
     actorId?: string
   ) {
+    const { customFields, ...customerPatch } = patch;
     const before = data.getCustomer(this.db, this.organizationId, id);
     const customer = data.updateCustomer(
       this.db,
       this.organizationId,
       id,
-      patch
+      customerPatch
     );
-    if (customer) this.audit("customer.updated", "customer", id, actorId);
+    if (!customer) return undefined;
+    this.applyCustomFields("customer", id, customFields);
+    this.audit("customer.updated", "customer", id, actorId);
     // PILE-411 — the merchant's stage is its customer status: entering a
     // templated status materializes sub-steps under the linked deal issues.
     // Templates key on the status's name, not the statusId uuid.
     if (
-      customer &&
-      patch.statusId !== undefined &&
+      customerPatch.statusId !== undefined &&
       customer.statusId !== before?.statusId &&
       customer.statusId
     ) {
@@ -2520,7 +2626,33 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         actorId
       );
     }
-    return customer;
+    return this.withEntityFields("customer", customer);
+  }
+
+  // Bulk customer import — Scout's write path (PILE-403). Idempotent on
+  // externalId ("gplace:<place_id>"), lands a durable per-row receipt.
+  importCustomers(
+    input: {
+      source?: string | null;
+      corridor?: string | null;
+      rows: data.ImportCustomerRow[];
+    },
+    actorId?: string
+  ) {
+    const receipt = data.importCustomers(this.db, this.organizationId, {
+      ...input,
+      createdById: actorId,
+    });
+    this.audit("customers.imported", "import_receipt", receipt.id, actorId);
+    return receipt;
+  }
+
+  getImportReceipt(id: string) {
+    return data.getImportReceipt(this.db, this.organizationId, id);
+  }
+
+  listImportReceipts() {
+    return data.listImportReceipts(this.db, this.organizationId);
   }
 
   async deleteCustomer(id: string, actorId?: string) {

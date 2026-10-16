@@ -1697,6 +1697,34 @@ export const workspaceFieldValues = sqliteTable(
   ]
 );
 
+// Import receipts: every bulk customer write lands a durable receipt —
+// source/corridor, per-row outcomes (created/existing/failed + why) — so a
+// re-run is auditable and agents can read batch history later (PILE-403).
+export const workspaceImportReceipts = sqliteTable(
+  "import_receipts" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    source: text("source" as string),
+    corridor: text("corridor" as string),
+    rowCount: integer("row_count" as string).notNull(),
+    createdCount: integer("created_count" as string).notNull(),
+    existingCount: integer("existing_count" as string).notNull(),
+    failedCount: integer("failed_count" as string).notNull(),
+    // JSON array of per-row receipts: {index, externalId, outcome,
+    // customerId?, dealId?, error?}.
+    rows: text("rows" as string).notNull(),
+    createdById: text("created_by_id" as string),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    index("import_receipts_org_idx" as string).on(
+      table.organizationId,
+      table.createdAt
+    ),
+  ]
+);
+
 export const workspaceEntityLinks = sqliteTable(
   "entity_links" as string,
   {

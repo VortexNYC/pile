@@ -30,6 +30,9 @@ const customerSchema = z.object({
   needsHuman: z.boolean().nullable(),
   needsHumanReason: z.string().nullable(),
   priorityScore: z.number().nullable(),
+  // Name-keyed custom field values (definitions live under
+  // /workspaces/{org}/fields with entityType="customer").
+  customFields: z.record(z.string(), z.string()),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -49,6 +52,9 @@ const createCustomerSchema = z.object({
   needsHuman: z.boolean().nullable().optional(),
   needsHumanReason: z.string().nullable().optional(),
   priorityScore: z.number().nullable().optional(),
+  // Field values keyed by field name — unknown names auto-create a text
+  // field definition; null clears a value.
+  customFields: z.record(z.string(), z.string().nullable()).optional(),
 });
 
 const updateCustomerSchema = createCustomerSchema.partial().extend({
@@ -108,6 +114,73 @@ const uploadCustomerAttachmentSchema = z.object({
   fileName: z.string().min(1),
   contentType: z.string().optional(),
   contentBase64: z.string().min(1),
+});
+
+const importDealSchema = z.object({
+  name: z.string().optional(),
+  stage: z
+    .enum(["lead", "qualified", "proposal", "negotiation", "won", "lost"])
+    .optional(),
+  amountCents: z.number().int().nonnegative().nullable().optional(),
+  currency: z.string().length(3).nullable().optional(),
+  expectedCloseAt: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
+  priorityScore: z.number().nullable().optional(),
+});
+
+const importRowSchema = z.object({
+  // Google Places corridor pulls dedupe on place_id → externalId
+  // "gplace:<place_id>" (the PILE-402 dedupe contract).
+  placeId: z.string().min(1).optional(),
+  externalId: z.string().min(1).max(255).optional(),
+  name: z.string().min(1),
+  url: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
+  // Pipeline column name — resolved or created. statusId wins when both
+  // are provided.
+  status: z.string().min(1).optional(),
+  statusId: z.string().optional(),
+  tierId: z.string().optional(),
+  ownerId: z.string().optional(),
+  nextStepText: z.string().nullable().optional(),
+  nextStepDueAt: z.string().nullable().optional(),
+  needsHuman: z.boolean().nullable().optional(),
+  needsHumanReason: z.string().nullable().optional(),
+  priorityScore: z.number().nullable().optional(),
+  customFields: z.record(z.string(), z.string().nullable()).optional(),
+  deal: importDealSchema.optional(),
+});
+
+const importCustomersBodySchema = z.object({
+  source: z.string().optional(),
+  corridor: z.string().optional(),
+  rows: z.array(importRowSchema).min(1).max(1000),
+});
+
+const importRowReceiptSchema = z.object({
+  index: z.number().int(),
+  externalId: z.string().nullable(),
+  outcome: z.enum(["created", "existing", "failed"]),
+  customerId: z.string().optional(),
+  dealId: z.string().optional(),
+  error: z.string().optional(),
+});
+
+const importReceiptSummarySchema = z.object({
+  id: z.string(),
+  organizationId: z.string(),
+  source: z.string().nullable(),
+  corridor: z.string().nullable(),
+  total: z.number().int(),
+  created: z.number().int(),
+  existing: z.number().int(),
+  failed: z.number().int(),
+  createdById: z.string().nullable(),
+  createdAt: z.string(),
+});
+
+const importReceiptSchema = importReceiptSummarySchema.extend({
+  rows: z.array(importRowReceiptSchema),
 });
 
 const intakeAttachmentSchema = z.object({
@@ -206,6 +279,62 @@ const createCustomerRoute = createRoute({
     409: {
       description: "dedupe=block and externalId is already used",
     },
+  },
+});
+
+const importCustomersRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/customers/import",
+  tags: ["customers"],
+  middleware: [rls("customer:create")],
+  description:
+    'Bulk merchant import — Scout\'s write path. Each row becomes a customer deduped on externalId (placeId maps to "gplace:<place_id>"); re-runs return existing records and fill empty slots rather than duplicating. Optionally creates an initial deal per row (stage defaults to "lead"). Every row lands a receipt (created/existing/failed + why) and the batch itself is persisted as an import receipt readable via GET /customer-imports/{id}.',
+  request: {
+    params: orgParam,
+    body: {
+      content: { "application/json": { schema: importCustomersBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Import receipt — per-row outcomes included",
+      content: { "application/json": { schema: importReceiptSchema } },
+    },
+  },
+});
+
+const listImportReceiptsRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/customer-imports",
+  tags: ["customers"],
+  middleware: [rls("customer:view")],
+  request: { params: orgParam },
+  responses: {
+    200: {
+      description: "Import receipt history (summaries — no row details)",
+      content: {
+        "application/json": {
+          schema: z.object({
+            imports: z.array(importReceiptSummarySchema),
+          }),
+        },
+      },
+    },
+  },
+});
+
+const getImportReceiptRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/customer-imports/{id}",
+  tags: ["customers"],
+  middleware: [rls("customer:view")],
+  request: { params: orgIdParam },
+  responses: {
+    200: {
+      description: "Import receipt with per-row outcomes",
+      content: { "application/json": { schema: importReceiptSchema } },
+    },
+    404: { description: "Import receipt not found" },
   },
 });
 
@@ -707,6 +836,32 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     }
     const customer = await stub.createCustomer(input);
     return c.json(customer, 201);
+  });
+
+  app.openapi(importCustomersRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const identity = c.var.workspaceIdentity;
+    const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
+    const receipt = await stub.importCustomers(input, identity.id);
+    return c.json(receipt, 200);
+  });
+
+  app.openapi(listImportReceiptsRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
+    return c.json({ imports: await stub.listImportReceipts() });
+  });
+
+  app.openapi(getImportReceiptRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
+    const receipt = await stub.getImportReceipt(id);
+    if (!receipt) return notFound("Import receipt not found");
+    return c.json(receipt);
   });
 
   app.openapi(getCustomerRoute, async (c) => {

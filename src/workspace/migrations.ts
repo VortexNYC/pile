@@ -1256,6 +1256,25 @@ CREATE INDEX IF NOT EXISTS draft_outputs_entity_idx ON draft_outputs (organizati
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS draft_outputs_status_idx ON draft_outputs (organization_id, status, created_at)`;
 
+// PILE-403 — bulk customer import receipts. Every batch write lands one
+// row here (source/corridor + per-row outcomes as JSON in `rows`) so a
+// re-run is auditable and agents can read import history later.
+const v85 = `CREATE TABLE IF NOT EXISTS import_receipts (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  source TEXT,
+  corridor TEXT,
+  row_count INTEGER NOT NULL,
+  created_count INTEGER NOT NULL,
+  existing_count INTEGER NOT NULL,
+  failed_count INTEGER NOT NULL,
+  rows TEXT NOT NULL,
+  created_by_id TEXT,
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS import_receipts_org_idx ON import_receipts (organization_id, created_at)`;
+
 const v69 = `CREATE TABLE comments_new (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -1514,6 +1533,7 @@ export const workspaceMigrations = {
       { idx: 81, when: 81, tag: "v82", breakpoints: true },
       { idx: 82, when: 82, tag: "v83", breakpoints: true },
       { idx: 83, when: 83, tag: "v84", breakpoints: true },
+      { idx: 84, when: 84, tag: "v85", breakpoints: true },
     ],
   },
   migrations: {
@@ -1601,5 +1621,6 @@ export const workspaceMigrations = {
     m0081: v82,
     m0082: v83,
     m0083: v84,
+    m0084: v85,
   },
 } satisfies Parameters<typeof migrate>[1];
