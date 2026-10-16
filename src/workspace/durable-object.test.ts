@@ -2708,3 +2708,212 @@ describe("pipeline hygiene via DO RPC", () => {
     expect((await stub.listGuidancePackVersions(pack.id)).length).toBe(2);
   });
 });
+
+describe("stage templates (PILE-411)", () => {
+  const ACTOR = "user-1";
+
+  it("materializes sub-issues when an issue enters a templated status", async () => {
+    const stub = getStub();
+    await withWorkspace(stub, (instance) =>
+      instance.createStageTemplate(
+        {
+          entityType: "issue",
+          status: "in progress",
+          stepKey: "kickoff",
+          title: "Kickoff",
+          required: true,
+          ownerAgent: "scout",
+          position: 0,
+        },
+        { actorId: ACTOR }
+      )
+    );
+    await withWorkspace(stub, (instance) =>
+      instance.createStageTemplate(
+        {
+          entityType: "issue",
+          status: "in progress",
+          stepKey: "audit",
+          title: "Audit",
+          required: false,
+          ownerAgent: null,
+          position: 1,
+        },
+        { actorId: ACTOR }
+      )
+    );
+
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Stage parent" }, ACTOR)
+    );
+    await withWorkspace(stub, (instance) =>
+      instance.updateIssue(issue.id, { status: "in_progress" }, ACTOR)
+    );
+
+    const children = await withWorkspace(stub, (instance) =>
+      instance.getIssueChildren(issue.id)
+    );
+    const byStep = new Map(children.map((c) => [c.stepKey, c]));
+    expect([...byStep.keys()].sort()).toEqual(["audit", "kickoff"]);
+    expect(byStep.get("kickoff")).toMatchObject({
+      title: "Kickoff",
+      required: true,
+      ownerAgent: "scout",
+      status: "todo",
+      parentId: issue.id,
+      teamId: issue.teamId,
+    });
+    expect(byStep.get("audit")?.required).toBe(false);
+
+    // Re-entering the stage is idempotent — no duplicate step_keys.
+    await withWorkspace(stub, (instance) =>
+      instance.updateIssue(issue.id, { status: "todo" }, ACTOR)
+    );
+    await withWorkspace(stub, (instance) =>
+      instance.updateIssue(issue.id, { status: "in_progress" }, ACTOR)
+    );
+    const after = await withWorkspace(stub, (instance) =>
+      instance.getIssueChildren(issue.id)
+    );
+    expect(after.length).toBe(2);
+  });
+
+  it("skips conditional steps whose rule fails, and fires them when the field is set", async () => {
+    const stub = getStub();
+    await withWorkspace(stub, (instance) =>
+      instance.createStageTemplate(
+        {
+          entityType: "issue",
+          status: "backlog",
+          stepKey: "ship_hardware",
+          title: "Ship hardware",
+          required: false,
+          ownerAgent: "outfitter",
+          condition: { field: "hardware_needed" },
+        },
+        { actorId: ACTOR }
+      )
+    );
+    const field = await withWorkspace(stub, (instance) =>
+      instance.createFieldDefinition({
+        entityType: "issue",
+        name: "hardware_needed",
+        type: "boolean",
+      })
+    );
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "No hardware" }, ACTOR)
+    );
+    expect(
+      await withWorkspace(stub, (instance) =>
+        instance.getIssueChildren(issue.id)
+      )
+    ).toEqual([]);
+
+    // Set the field and re-enter the stage — the gated step now appears.
+    await withWorkspace(stub, (instance) =>
+      instance.setFieldValue(field.id, issue.id, "true")
+    );
+    await withWorkspace(stub, (instance) =>
+      instance.updateIssue(issue.id, { status: "todo" }, ACTOR)
+    );
+    await withWorkspace(stub, (instance) =>
+      instance.updateIssue(issue.id, { status: "backlog" }, ACTOR)
+    );
+    const children = await withWorkspace(stub, (instance) =>
+      instance.getIssueChildren(issue.id)
+    );
+    expect(children.map((c) => c.stepKey)).toEqual(["ship_hardware"]);
+  });
+
+  it("materializes sub-steps on a linked deal issue when the customer's status enters a stage", async () => {
+    const stub = getStub();
+    const seeded = await withWorkspace(stub, (instance) =>
+      instance.seedStageTemplates({ actorId: ACTOR })
+    );
+    expect(seeded.created.length).toBe(22);
+
+    const status = await withWorkspace(stub, (instance) =>
+      instance.createCustomerStatus({ name: "Prospect" })
+    );
+    const customer = await withWorkspace(stub, (instance) =>
+      instance.createCustomer({ name: "Acme Pizza" })
+    );
+    const deal = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Deal — Acme Pizza" }, ACTOR)
+    );
+    await withWorkspace(stub, (instance) =>
+      instance.linkEntities({
+        fromType: "customer",
+        fromId: customer.id,
+        toType: "issue",
+        toId: deal.id,
+      })
+    );
+
+    await withWorkspace(stub, (instance) =>
+      instance.updateCustomer(customer.id, { statusId: status.id }, ACTOR)
+    );
+    const children = await withWorkspace(stub, (instance) =>
+      instance.getIssueChildren(deal.id)
+    );
+    const steps = children.map((c) => c.stepKey).sort();
+    expect(steps).toEqual(
+      [
+        "contact_found",
+        "field_visit",
+        "profiled",
+        "ready_for_outreach",
+        "sourced",
+      ].sort()
+    );
+
+    // A customer with no linked issue creates nothing.
+    const orphan = await withWorkspace(stub, (instance) =>
+      instance.createCustomer({ name: "No deal" })
+    );
+    await withWorkspace(stub, (instance) =>
+      instance.updateCustomer(orphan.id, { statusId: status.id }, ACTOR)
+    );
+    const all = await withWorkspace(stub, (instance) =>
+      instance.listIssues({})
+    );
+    expect(all.filter((i) => i.title.startsWith("Deal — No deal")).length).toBe(
+      0
+    );
+  });
+
+  it("does not cascade templates onto sub-issues", async () => {
+    const stub = getStub();
+    // "todo" is the status materialized sub-steps are created in — a
+    // template on it must not create grandchildren (sub-issues only nest
+    // one level).
+    await withWorkspace(stub, (instance) =>
+      instance.createStageTemplate(
+        {
+          entityType: "issue",
+          status: "todo",
+          stepKey: "nested",
+          title: "Nested",
+          required: true,
+        },
+        { actorId: ACTOR }
+      )
+    );
+    const parent = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Cascade parent", status: "todo" }, ACTOR)
+    );
+    const children = await withWorkspace(stub, (instance) =>
+      instance.getIssueChildren(parent.id)
+    );
+    expect(children.map((c) => c.stepKey)).toEqual(["nested"]);
+    // The materialized child itself entered "todo" but got no children.
+    for (const child of children) {
+      expect(
+        await withWorkspace(stub, (instance) =>
+          instance.getIssueChildren(child.id)
+        )
+      ).toEqual([]);
+    }
+  });
+});

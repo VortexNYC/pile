@@ -1525,7 +1525,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.getDealByExternalId(this.db, this.organizationId, externalId);
   }
 
-  updateDeal(
+  async updateDeal(
     id: string,
     patch: Partial<Omit<data.DealInput, "organizationId" | "contactIds">> & {
       contactIds?: string[];
@@ -1533,8 +1533,20 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     },
     actorId?: string
   ) {
+    const before = data.getDeal(this.db, this.organizationId, id);
     const deal = data.updateDeal(this.db, this.organizationId, id, patch);
     if (deal) this.audit("deal.updated", "deal", id, actorId);
+    // PILE-411 — entering a templated stage materializes sub-steps under the
+    // deal's linked parent issues.
+    if (deal && patch.stage !== undefined && deal.stage !== before?.stage) {
+      await this.applyStageTemplates(
+        "deal",
+        deal.stage,
+        deal,
+        await this.linkedParentIssues("deal", deal.id),
+        actorId
+      );
+    }
     return deal;
   }
 
@@ -2132,11 +2144,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.getCustomer(this.db, this.organizationId, id);
   }
 
-  updateCustomer(
+  async updateCustomer(
     id: string,
     patch: Partial<Omit<data.CustomerInput, "organizationId">>,
     actorId?: string
   ) {
+    const before = data.getCustomer(this.db, this.organizationId, id);
     const customer = data.updateCustomer(
       this.db,
       this.organizationId,
@@ -2144,6 +2157,28 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       patch
     );
     if (customer) this.audit("customer.updated", "customer", id, actorId);
+    // PILE-411 — the merchant's stage is its customer status: entering a
+    // templated status materializes sub-steps under the linked deal issues.
+    // Templates key on the status's name, not the statusId uuid.
+    if (
+      customer &&
+      patch.statusId !== undefined &&
+      customer.statusId !== before?.statusId &&
+      customer.statusId
+    ) {
+      const status = data.getCustomerStatus(
+        this.db,
+        this.organizationId,
+        customer.statusId
+      );
+      await this.applyStageTemplates(
+        "customer",
+        status?.name ?? customer.statusId,
+        customer,
+        await this.linkedParentIssues("customer", customer.id),
+        actorId
+      );
+    }
     return customer;
   }
 
@@ -3231,6 +3266,116 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       );
     }
     return ok;
+  }
+
+  // ---- stage templates (PILE-411 — sub-step definitions materialized as
+  // sub-issues when a record enters the template's status) ----
+
+  listStageTemplates(filter?: {
+    entityType?: data.StageEntityType;
+    status?: string;
+  }) {
+    return data.listStageTemplates(this.db, this.organizationId, filter);
+  }
+
+  getStageTemplate(id: string) {
+    return data.getStageTemplate(this.db, this.organizationId, id);
+  }
+
+  async createStageTemplate(
+    input: Omit<data.StageTemplateInput, "organizationId">,
+    actor: { actorId?: string | null; actorType?: string | null }
+  ) {
+    await this.ready;
+    const template = data.createStageTemplate(this.db, {
+      ...input,
+      organizationId: this.organizationId,
+      createdBy: actor.actorId,
+    });
+    this.audit(
+      "stage_template.created",
+      "stage_template",
+      template.id,
+      actor.actorId,
+      {
+        status: { from: null, to: template.status },
+        stepKey: { from: null, to: template.stepKey },
+      },
+      { actorType: actor.actorType }
+    );
+    return template;
+  }
+
+  async updateStageTemplate(
+    id: string,
+    patch: data.StageTemplatePatch,
+    actor: { actorId?: string | null; actorType?: string | null }
+  ) {
+    await this.ready;
+    const template = data.updateStageTemplate(
+      this.db,
+      this.organizationId,
+      id,
+      patch
+    );
+    if (template) {
+      this.audit(
+        "stage_template.updated",
+        "stage_template",
+        id,
+        actor.actorId,
+        null,
+        { actorType: actor.actorType }
+      );
+    }
+    return template;
+  }
+
+  async deleteStageTemplate(
+    id: string,
+    actor: { actorId?: string | null; actorType?: string | null }
+  ): Promise<boolean> {
+    await this.ready;
+    const ok = data.deleteStageTemplate(this.db, this.organizationId, id);
+    if (ok) {
+      this.audit(
+        "stage_template.deleted",
+        "stage_template",
+        id,
+        actor.actorId,
+        null,
+        { actorType: actor.actorType }
+      );
+    }
+    return ok;
+  }
+
+  /** Installs the default pipeline stages (the seven-stage sales-led
+   *  merchant pipeline). Idempotent: existing (entity, status, stepKey)
+   *  rows are skipped, deleted ones re-created. */
+  async seedStageTemplates(
+    actor: { actorId?: string | null; actorType?: string | null } = {}
+  ) {
+    await this.ready;
+    const result = data.seedStageTemplates(
+      this.db,
+      this.organizationId,
+      actor.actorId
+    );
+    if (result.created.length > 0) {
+      this.audit(
+        "stage_template.seeded",
+        "stage_template",
+        this.organizationId,
+        actor.actorId,
+        {
+          created: { from: 0, to: result.created.length },
+          skipped: { from: null, to: result.skipped },
+        },
+        { actorType: actor.actorType }
+      );
+    }
+    return result;
   }
 
   /** PILE-420 — minutes of silence (no activity, no heartbeat) before a
@@ -4976,6 +5121,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         snoozedUntil: input.snoozedUntil ?? null,
         assigneeId: resolvedAssigneeId,
         delegateId: input.delegateId ?? null,
+        stepKey: input.stepKey ?? null,
+        required: input.required ?? false,
+        ownerAgent: input.ownerAgent ?? null,
         projectId: resolvedProjectId,
         cycleId: resolvedCycleId,
         labelIds: input.labelIds ?? null,
@@ -5051,6 +5199,17 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       );
     }
     this.startTriageLane(issue, actorId);
+    // PILE-411 — creating a record already inside a templated stage enters
+    // that stage: materialize its sub-steps the same as a status change.
+    if (!issue.parentId && !issue.isDraft) {
+      await this.applyStageTemplates(
+        "issue",
+        issue.status,
+        issue,
+        [issue],
+        actorId
+      );
+    }
     return { issue, possibleDuplicates };
   }
 
@@ -5070,6 +5229,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     // the team first so a workspace without triage never warms the index.
     if (issue.isDraft || issue.status === "done" || issue.status === "canceled")
       return;
+    // PILE-411 — a stage sub-step is machine-materialized work with its own
+    // owner_agent, not an inbound issue needing triage.
+    if (issue.stepKey) return;
     const env = this.env;
     this.ctx.waitUntil(
       getTeamById(createD1(env.D1), issue.teamId, this.organizationId)
@@ -5774,6 +5936,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       { key: "snoozedUntil", field: "snoozed_until" },
       { key: "assigneeId", field: "assignee_id" },
       { key: "delegateId", field: "delegate_id" },
+      { key: "stepKey", field: "step_key" },
+      { key: "required", field: "required" },
+      { key: "ownerAgent", field: "owner_agent" },
       { key: "projectId", field: "project_id" },
       { key: "cycleId", field: "cycle_id" },
       { key: "labelIds", field: "label_ids" },
@@ -5869,6 +6034,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }
     if (patch.assigneeId !== undefined) set.assigneeId = patch.assigneeId;
     if (patch.delegateId !== undefined) set.delegateId = patch.delegateId;
+    if (patch.stepKey !== undefined) set.stepKey = patch.stepKey;
+    if (patch.required !== undefined) set.required = patch.required;
+    if (patch.ownerAgent !== undefined) set.ownerAgent = patch.ownerAgent;
     if (
       patch.assigneeId === undefined &&
       !old.assigneeId &&
@@ -6107,6 +6275,109 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           );
         }
       }
+    }
+
+    // PILE-411 — entering a status that has a stage template materializes
+    // its sub-steps as sub-issues. Drafts and sub-issues don't fire (a
+    // sub-step can't hold a deeper level; a draft isn't a live record).
+    if (!issue.parentId && !issue.isDraft) {
+      await this.applyStageTemplates(
+        "issue",
+        issue.status,
+        issue,
+        [issue],
+        actorId
+      );
+    }
+  }
+
+  // PILE-411 — stage templates: resolve the (entityType, status) step
+  // definitions and materialize one sub-issue per applicable def on each
+  // parent issue. For issues the record is its own parent; for
+  // deals/customers the parents are the linked deal-issues (a deal is a
+  // parent issue linked to the customer). Idempotent per (parent, stepKey):
+  // a step that already exists under the parent is never re-created.
+  private async applyStageTemplates(
+    entityType: data.StageEntityType,
+    statusValue: string | null,
+    record: { id: string },
+    parents: Issue[],
+    actorId?: string
+  ): Promise<void> {
+    if (!statusValue) return;
+    const defs = data.listStageTemplatesForStatus(
+      this.db,
+      this.organizationId,
+      entityType,
+      statusValue
+    );
+    if (defs.length === 0) return;
+    const context = data.buildStepContext(
+      this.db,
+      this.organizationId,
+      entityType,
+      record.id,
+      record
+    );
+    for (const parent of parents) {
+      // Sub-steps hang on top-level issues only — one level of nesting.
+      if (parent.parentId || parent.isDraft) continue;
+      const applicable = defs.filter(
+        (def) => def.teamId === null || def.teamId === parent.teamId
+      );
+      await this.materializeSubSteps(parent, applicable, context, actorId);
+    }
+  }
+
+  /** Parent issues a non-issue record's stage transition materializes
+   *  sub-steps under — the issues linked to the deal/customer. */
+  private async linkedParentIssues(
+    entityType: "deal" | "customer",
+    recordId: string
+  ): Promise<Issue[]> {
+    const linked = data.listLinkedIssueIds(
+      this.db,
+      this.organizationId,
+      entityType,
+      recordId
+    );
+    const found = await Promise.all(
+      linked.map((issueId) => this.getIssue(issueId))
+    );
+    return found.filter((issue): issue is Issue => issue !== undefined);
+  }
+
+  private async materializeSubSteps(
+    parent: Issue,
+    defs: data.StageTemplate[],
+    context: Record<string, unknown>,
+    actorId?: string
+  ): Promise<void> {
+    // The (parent, step_key) pair is the idempotency key — re-entering a
+    // stage never duplicates a sub-step that already exists, whatever its
+    // status (even canceled counts as "exists").
+    const existing = new Set(
+      (await this.getIssueChildren(parent.id))
+        .map((child) => child.stepKey)
+        .filter((key): key is string => key !== null)
+    );
+    for (const def of defs) {
+      if (existing.has(def.stepKey)) continue;
+      if (!data.evaluateStepCondition(def.condition, context)) continue;
+      const { issue } = await this.createIssueRecord(
+        {
+          title: def.title,
+          description: null,
+          status: "todo",
+          parentId: parent.id,
+          stepKey: def.stepKey,
+          required: def.required,
+          ownerAgent: def.ownerAgent,
+          subIssueSortOrder: def.position,
+        },
+        actorId
+      );
+      if (issue) existing.add(def.stepKey);
     }
   }
 

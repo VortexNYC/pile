@@ -1031,6 +1031,46 @@ ALTER TABLE agent_sessions ADD COLUMN step_key TEXT`;
 // JSON [{content, status}] with status pending | inProgress | completed |
 // canceled. Whole-array replace semantics; null means no plan published.
 const v78 = `ALTER TABLE agent_sessions ADD COLUMN plan TEXT`;
+
+// PILE-411 — stage templates (Salesforce Flow Orchestration style): a
+// template row is one sub-step definition for a (entity_type, status) pair —
+// when a record enters that status/stage the workspace materializes one
+// sub-issue per applicable definition. `status`/`step_key` are normalized
+// slug keys (see stageKey() in the data layer); `condition` is a JSON rule
+// ({field, equals?}) evaluated against the transitioning record's own fields
+// plus its custom field values — e.g. {"field":"hardware_needed"} skips the
+// step unless the record carries a truthy hardware_needed. On issues,
+// step_key/required/owner_agent mark a row as a materialized sub-step: the
+// (parent, step_key) pair is the idempotency key so re-entering a stage never
+// duplicates a step, and owner_agent is the named agent the step dispatches
+// to (kept off delegate_id — owner names are roles, not registered agents).
+const v79 = `CREATE TABLE IF NOT EXISTS stage_templates (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  entity_type TEXT NOT NULL DEFAULT 'issue',
+  status TEXT NOT NULL,
+  step_key TEXT NOT NULL,
+  title TEXT NOT NULL,
+  required INTEGER NOT NULL DEFAULT 1,
+  owner_agent TEXT,
+  condition TEXT,
+  position INTEGER NOT NULL DEFAULT 0,
+  team_id TEXT,
+  created_by TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS stage_templates_status_step_idx ON stage_templates (organization_id, entity_type, status, step_key)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS stage_templates_lookup_idx ON stage_templates (organization_id, entity_type, status)
+--> statement-breakpoint
+ALTER TABLE issues ADD COLUMN step_key TEXT
+--> statement-breakpoint
+ALTER TABLE issues ADD COLUMN required INTEGER NOT NULL DEFAULT 0
+--> statement-breakpoint
+ALTER TABLE issues ADD COLUMN owner_agent TEXT`;
+
 const v69 = `CREATE TABLE comments_new (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -1283,6 +1323,7 @@ export const workspaceMigrations = {
       { idx: 75, when: 75, tag: "v76", breakpoints: true },
       { idx: 76, when: 76, tag: "v77", breakpoints: true },
       { idx: 77, when: 77, tag: "v78", breakpoints: true },
+      { idx: 78, when: 78, tag: "v79", breakpoints: true },
     ],
   },
   migrations: {
@@ -1364,5 +1405,6 @@ export const workspaceMigrations = {
     m0075: v76,
     m0076: v77,
     m0077: v78,
+    m0078: v79,
   },
 } satisfies Parameters<typeof migrate>[1];
