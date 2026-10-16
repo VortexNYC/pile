@@ -16,6 +16,9 @@ export const LANE_TOOL_PERMISSIONS = [
   "review:write",
   "checks:write",
   "lane:report",
+  "ws:read",
+  "ws:write",
+  "web:fetch",
 ] as const;
 
 export type LaneToolPermission = (typeof LANE_TOOL_PERMISSIONS)[number];
@@ -31,6 +34,9 @@ export const LANE_TOOL_TIERS = {
     "review:write",
     "checks:write",
   ],
+  // Pipeline lanes (Scout & co.) — workspace records + outbound fetch, no
+  // repo surface. The profile's tools allowlist narrows further via deny.
+  pipeline: ["lane:report", "ws:read", "ws:write", "web:fetch"],
 } as const satisfies Record<string, readonly LaneToolPermission[]>;
 
 export type LaneToolTier = keyof typeof LANE_TOOL_TIERS;
@@ -783,4 +789,218 @@ export const LANE_TOOLS: readonly LaneTool[] = [
 
 export function allowedLaneTools(policy: LaneToolPolicy): LaneTool[] {
   return LANE_TOOLS.filter((tool) => laneToolAllowed(policy, tool));
+}
+
+
+// ---- workspace-domain tools (pipeline lanes) -----------------------------
+
+/** The slice of the workspace DO a pipeline lane needs — the concrete stub
+ *  satisfies this structurally; kept narrow so tests can fake it. */
+export interface LaneWorkspace {
+  getIssue(id: string): Promise<{
+    id: string;
+    identifier?: string | null;
+    title?: string | null;
+    status?: string | null;
+    customerId?: string | null;
+    description?: string | null;
+  } | undefined>;
+  createComment(values: {
+    issueId: string;
+    body: string;
+    externalAuthor?: string;
+    externalSource?: string;
+  }): Promise<unknown>;
+  updateIssue(
+    id: string,
+    patch: { status?: string },
+    actorId?: string
+  ): Promise<unknown>;
+  createCustomer(input: {
+    name: string;
+    domain?: string | null;
+    externalId?: string | null;
+    [key: string]: unknown;
+  }): Promise<unknown>;
+  getCustomer(id: string): Promise<unknown>;
+  getCustomerByDomain(domain: string): Promise<unknown>;
+  getCustomerByExternalId(externalId: string): Promise<unknown>;
+  listCustomers(): Promise<unknown[]>;
+}
+
+export interface WorkspaceLaneToolContext {
+  ws: LaneWorkspace;
+  organizationId: string;
+  sessionId: string;
+  /** The dispatch's issue — the merchant deal / pipeline step. */
+  issueId: string;
+  /** Attributed on comments the lane writes. */
+  agentSlug: string;
+  report(input: {
+    message?: string;
+    result?: string;
+    plan?: SessionPlan;
+  }): Promise<void>;
+  policy: LaneToolPolicy;
+}
+
+interface WorkspaceToolDef<S extends z.ZodObject> {
+  name: string;
+  description: string;
+  permission: LaneToolPermission;
+  inputSchema: S;
+  run(ctx: WorkspaceLaneToolContext, input: z.infer<S>): Promise<unknown>;
+}
+
+export interface WorkspaceLaneTool {
+  name: string;
+  description: string;
+  permission: LaneToolPermission;
+  inputSchema: z.ZodObject;
+  run(ctx: WorkspaceLaneToolContext, input: unknown): Promise<unknown>;
+}
+
+function defineWorkspaceTool<S extends z.ZodObject>(
+  def: WorkspaceToolDef<S>
+): WorkspaceLaneTool {
+  return {
+    name: def.name,
+    description: def.description,
+    permission: def.permission,
+    inputSchema: def.inputSchema,
+    run: async (ctx, input) => def.run(ctx, def.inputSchema.parse(input)),
+  };
+}
+
+const BLOCKED_HOSTS = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|[\[f]|[0:]+$)/i;
+
+export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
+  defineWorkspaceTool({
+    name: "issue_get",
+    description:
+      "Read the pipeline issue this lane is working — title, status, customer link, description.",
+    permission: "ws:read",
+    inputSchema: z.object({}),
+    async run(ctx) {
+      const issue = await ctx.ws.getIssue(ctx.issueId);
+      if (!issue) throw new LaneToolError("issue not found");
+      return issue;
+    },
+  }),
+  defineWorkspaceTool({
+    name: "issue_comment",
+    description:
+      "Post a finding/progress comment on the pipeline issue — visible on the board.",
+    permission: "ws:write",
+    inputSchema: z.object({ body: z.string().min(1).max(10_000) }),
+    async run(ctx, input) {
+      await ctx.ws.createComment({
+        issueId: ctx.issueId,
+        body: input.body,
+        externalAuthor: ctx.agentSlug,
+        externalSource: "lane",
+      });
+      return { ok: true };
+    },
+  }),
+  defineWorkspaceTool({
+    name: "issue_set_status",
+    description:
+      "Move the pipeline issue's status (e.g. in_progress → done) when its work finishes.",
+    permission: "ws:write",
+    inputSchema: z.object({
+      status: z
+        .enum(["backlog", "todo", "in_progress", "done", "canceled"])
+        .describe("Target status"),
+    }),
+    async run(ctx, input) {
+      const updated = await ctx.ws.updateIssue(
+        ctx.issueId,
+        { status: input.status },
+        ctx.agentSlug
+      );
+      if (!updated) throw new LaneToolError("issue not found");
+      return { ok: true };
+    },
+  }),
+  defineWorkspaceTool({
+    name: "customer_lookup",
+    description:
+      "Find a merchant by id, domain, or externalId — pass exactly one key.",
+    permission: "ws:read",
+    inputSchema: z.object({
+      id: z.string().optional(),
+      domain: z.string().optional(),
+      externalId: z.string().optional(),
+    }),
+    async run(ctx, input) {
+      const keys = [input.id, input.domain, input.externalId].filter(Boolean);
+      if (keys.length !== 1) {
+        throw new LaneToolError(
+          "pass exactly one of id / domain / externalId"
+        );
+      }
+      const found = input.id
+        ? await ctx.ws.getCustomer(input.id)
+        : input.domain
+          ? await ctx.ws.getCustomerByDomain(input.domain)
+          : await ctx.ws.getCustomerByExternalId(input.externalId!);
+      return found ?? { found: false };
+    },
+  }),
+  defineWorkspaceTool({
+    name: "customer_upsert",
+    description:
+      "Create a merchant record — or return the existing one if a customer with this domain/externalId already exists.",
+    permission: "ws:write",
+    inputSchema: z.object({
+      name: z.string().min(1),
+      domain: z.string().optional(),
+      externalId: z.string().optional(),
+      notes: z.string().optional(),
+    }),
+    async run(ctx, input) {
+      const existing = input.domain
+        ? await ctx.ws.getCustomerByDomain(input.domain)
+        : input.externalId
+          ? await ctx.ws.getCustomerByExternalId(input.externalId)
+          : undefined;
+      if (existing) return { created: false, customer: existing };
+      const customer = await ctx.ws.createCustomer({
+        name: input.name,
+        domain: input.domain ?? null,
+        externalId: input.externalId ?? null,
+      });
+      return { created: true, customer };
+    },
+  }),
+  defineWorkspaceTool({
+    name: "web_fetch",
+    description:
+      "Fetch a public URL (NYC Open Data, a state business registry, a merchant site). GET only, https only, text response capped.",
+    permission: "web:fetch",
+    inputSchema: z.object({
+      url: z.string().url().describe("https URL to GET"),
+    }),
+    async run(_ctx, input) {
+      const url = new URL(input.url);
+      if (url.protocol !== "https:" || BLOCKED_HOSTS.test(url.hostname)) {
+        throw new LaneToolError("https public hosts only");
+      }
+      const res = await fetch(url, { redirect: "follow" });
+      if (!res.ok) {
+        throw new LaneToolError(`fetch ${url.hostname}: ${res.status}`);
+      }
+      const text = await res.text();
+      return truncateHead(text);
+    },
+  }),
+];
+
+export function allowedWorkspaceLaneTools(
+  policy: LaneToolPolicy
+): WorkspaceLaneTool[] {
+  return WORKSPACE_LANE_TOOLS.filter((tool) =>
+    laneToolAllowed(policy, tool)
+  );
 }

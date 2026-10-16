@@ -1,4 +1,5 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
+import { z } from "zod";
 import {
   McpServer,
   WebStandardStreamableHTTPServerTransport,
@@ -7,13 +8,22 @@ import { eq } from "drizzle-orm";
 
 import { verifySessionToken } from "../agents/credentials.js";
 import {
+  LANE_TOOLS,
   allowedLaneTools,
+  allowedWorkspaceLaneTools,
   createLaneGithub,
   laneToolAllowed,
+  laneToolPolicy,
   laneToolPolicyForRepo,
   type LaneGithub,
+  type LaneTool,
   type LaneToolContext,
+  type LaneToolPermission,
+  WORKSPACE_LANE_TOOLS,
+  type WorkspaceLaneTool,
+  type WorkspaceLaneToolContext,
 } from "../agents/lane-tools.js";
+import type { SessionPlan } from "../agents/session-plan.js";
 import { createD1 } from "../global/db.js";
 import { getInstallationTokenForRepo } from "../global/github-auth.js";
 import { organization } from "../global/schema.js";
@@ -87,23 +97,48 @@ export function registerLaneMcpRoutes(app: OpenAPIHono<AppContext>) {
         return c.json({ message: "Session is terminal" }, 409);
       }
       const issue = await stub.getIssue(session.issueId);
-      const [owner, name] = (issue?.repo ?? "").split("/");
-      if (!issue || !owner || !name) {
-        return c.json({ message: "Session issue has no repository" }, 422);
-      }
-      const branch = session.branch ?? issue.branch ?? `issue-${issue.id}`;
-      const policy = laneToolPolicyForRepo(
-        await orgMetadata(c.env, organizationId),
-        `${owner}/${name}`
-      );
+      if (!issue) return c.json({ message: "Session issue not found" }, 404);
 
-      const ctx: LaneToolContext = {
-        gh: lazyGithub(c.env, owner, name),
-        owner,
-        repo: name,
-        branch,
-        policy,
-        async report(input) {
+      // Profile allowlist — the agent type's `tools` field narrows the
+      // policy by denying every registered tool it doesn't name. Absent or
+      // unparseable means "tier governs" (no extra deny).
+      const agentType = session.agentId
+        ? await stub.getAgentTypeBySlug(session.agentId)
+        : undefined;
+      let profileDeny: string[] = [];
+      if (agentType?.tools) {
+        try {
+          const allow: unknown = JSON.parse(agentType.tools);
+          if (Array.isArray(allow)) {
+            const names = new Set(
+              allow.filter((t): t is string => typeof t === "string")
+            );
+            profileDeny = [...LANE_TOOLS, ...WORKSPACE_LANE_TOOLS]
+              .map((t) => t.name)
+              .filter((n) => !names.has(n));
+          }
+        } catch {
+          /* malformed tools field — tier governs */
+        }
+      }
+
+      const [owner, name] = (issue.repo ?? "").split("/");
+      const repoScoped = Boolean(owner && name);
+      const policy = repoScoped
+        ? laneToolPolicyForRepo(
+            await orgMetadata(c.env, organizationId),
+            `${owner}/${name}`
+          )
+        : laneToolPolicy("pipeline", profileDeny);
+
+      const branch =
+        session.branch ?? issue.branch ?? `issue-${issue.id}`;
+      const report = async (input: {
+        message?: string;
+        result?: string;
+        prUrl?: string;
+        plan?: SessionPlan;
+      }) => {
           const now = new Date().toISOString();
           if (input.message !== undefined) {
             await stub.addAgentSessionEvent({
@@ -122,11 +157,39 @@ export function registerLaneMcpRoutes(app: OpenAPIHono<AppContext>) {
             ...(input.result !== undefined ? { result: input.result } : {}),
             ...(input.prUrl !== undefined ? { prUrl: input.prUrl } : {}),
           });
-        },
       };
 
+      const wsCtx: WorkspaceLaneToolContext = {
+        ws: stub,
+        organizationId,
+        sessionId,
+        issueId: issue.id,
+        agentSlug: session.agentId ?? agentType?.slug ?? "lane",
+        report,
+        policy,
+      };
+      const repoCtx: LaneToolContext | null = repoScoped
+        ? {
+            gh: lazyGithub(c.env, owner!, name!),
+            owner: owner!,
+            repo: name!,
+            branch,
+            policy,
+            report,
+          }
+        : null;
+
       const server = new McpServer({ name: "pile-lane", version: "0.1.0" });
-      for (const tool of allowedLaneTools(policy)) {
+      const registerTool = <C>(
+        tool: {
+          name: string;
+          description: string;
+          permission: LaneToolPermission;
+          inputSchema: z.ZodObject;
+          run(ctx: C, input: unknown): Promise<unknown>;
+        },
+        ctx: C
+      ) => {
         server.registerTool(
           tool.name,
           {
@@ -164,6 +227,14 @@ export function registerLaneMcpRoutes(app: OpenAPIHono<AppContext>) {
             return { content: [{ type: "text" as const, text }], isError: !ok };
           }
         );
+      };
+      if (repoCtx) {
+        for (const tool of allowedLaneTools(policy)) {
+          registerTool(tool as LaneTool, repoCtx);
+        }
+      }
+      for (const tool of allowedWorkspaceLaneTools(policy)) {
+        registerTool(tool as WorkspaceLaneTool, wsCtx);
       }
 
       const transport = new WebStandardStreamableHTTPServerTransport({

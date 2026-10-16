@@ -247,6 +247,79 @@ describe("lane MCP endpoint", () => {
     ).toEqual(expect.arrayContaining(["get_lane_context", "set_output"]));
   });
 
+  it("serves workspace tools on a repo-less lane and honors the profile allowlist", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    // repo-less issue — a pipeline lane, not a code lane
+    const issue = await stub.createIssue({ title: "Prospect merchant" });
+    // the lane's agent type carries a tools allowlist
+    await stub.upsertAgentType({
+      slug: "scout",
+      name: "Scout",
+      providerAgentId: "flue",
+      kind: "agent",
+      tools: JSON.stringify(["issue_get", "issue_comment"]),
+    });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "scout",
+      provider: "flue",
+      actorId: "test",
+      actorType: "agent",
+      status: "running",
+      conversationKey: `${issue.id}-scout`,
+    });
+    const laneToken = await agentLogToken(
+      env as unknown as WorkerEnv,
+      organizationId,
+      session.id
+    );
+    const path = `/workspaces/${organizationId}/agent/sessions/${session.id}/mcp`;
+
+    // tools/list — only the allowlisted workspace tools; no repo tools
+    const list = await mcp(path, laneToken, {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/list",
+    });
+    expect(list.status).toBe(200);
+    const names = (
+      rpcResponse.parse(await list.json()).result?.tools ?? []
+    ).map((t) => t.name);
+    expect(names).toContain("issue_get");
+    expect(names).toContain("issue_comment");
+    expect(names).not.toContain("create_pull_request");
+    expect(names).not.toContain("web_fetch"); // not in the profile allowlist
+
+    // tools/call — an allowlisted tool runs
+    const call = await mcp(path, laneToken, {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: { name: "issue_get", arguments: {} },
+    });
+    const parsed = rpcResponse.parse(await call.json());
+    expect(parsed.error).toBeUndefined();
+    const issueOut = JSON.parse(
+      parsed.result?.content?.[0]?.text ?? "{}"
+    ) as { id: string; title?: string };
+    expect(issueOut.id).toBe(issue.id);
+
+    // a denied tool refuses at call time too
+    const denied = await mcp(path, laneToken, {
+      jsonrpc: "2.0",
+      id: 3,
+      method: "tools/call",
+      params: { name: "web_fetch", arguments: { url: "https://x.com" } },
+    });
+    const deniedParsed = rpcResponse.parse(await denied.json());
+    expect(
+      deniedParsed.error !== undefined ||
+        deniedParsed.result?.isError === true
+    ).toBe(true);
+  });
+
   it("publishes the session plan via the set_plan tool (PILE-426)", async () => {
     const { session, laneToken, stub } = await registerLane("VortexNYC/pile");
     const plan = [
