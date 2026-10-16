@@ -226,8 +226,44 @@ async function handleSubstepActionable(
   const owner = await resolveOwner(stub, issue.ownerAgent);
   if (owner?.kind === "human") return;
   if (!owner) {
-    // PILE-413 — ownerless/unresolvable sub-steps go to the Chief of Staff
-    // queue: flagged for a human rather than silently undispatched.
+    // Unresolvable sub-steps escalate to the chief of staff — a registered
+    // "chief_of_staff" agent type gets dispatched with the orphan step;
+    // if none exists, fall back to a comment a human can triage.
+    const chief = await resolveOwner(stub, "chief_of_staff");
+    if (chief && chief.kind !== "human") {
+      const parent = await stub.getIssue(payload.parentId);
+      await dispatchAgent(
+        env,
+        chief.agentId,
+        organizationId,
+        issue,
+        { ...PIPELINE_ACTOR, organizationId },
+        undefined,
+        ctx,
+        {
+          instructions: [
+            chief.jobSpec ??
+              "Triage an orphaned pipeline sub-step.",
+            "",
+            `Unassigned sub-step: ${issue.title} (owner_agent "${issue.ownerAgent}" has no registered agent type)`,
+            parent
+              ? `Parent deal issue: ${parent.identifier ?? parent.id} — ${parent.title}`
+              : "",
+          ]
+            .filter((part) => part !== "")
+            .join("\n"),
+          stepKey: issue.stepKey ?? undefined,
+          agentProfile: {
+            slug: chief.slug,
+            name: chief.name,
+            jobSpec: chief.jobSpec,
+            toolScope: chief.toolScope,
+          },
+          conversationKey: conversationKey(payload.parentId, chief.slug),
+        }
+      );
+      return;
+    }
     await stub.createComment({
       issueId: issue.id,
       body: `No registered agent type for owner_agent "${issue.ownerAgent}" — routed to Chief of Staff queue.`,
