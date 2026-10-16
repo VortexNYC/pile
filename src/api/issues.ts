@@ -41,7 +41,8 @@ import {
   getVisibleTeamIds,
   listTeams,
 } from "../global/teams.js";
-import { getTemplate } from "../global/templates.js";
+import { getTemplate, issueTemplateDataSchema } from "../global/templates.js";
+import { runTriageRules } from "../global/triage-rules.js";
 import {
   getCycle,
   getLabel,
@@ -81,20 +82,7 @@ import {
   summarizeText,
 } from "./page-summary.js";
 
-const templateDataSchema = z
-  .object({
-    title: z.string().optional(),
-    description: z.string().optional(),
-    status: z.enum(ISSUE_STATUSES).optional(),
-    priority: z.enum(ISSUE_PRIORITIES).optional(),
-    estimate: z.number().int().min(0).optional(),
-    assigneeId: z.string().optional(),
-    delegateId: z.string().optional(),
-    projectId: z.string().optional(),
-    cycleId: z.string().optional(),
-    labelIds: z.string().optional(),
-  })
-  .partial();
+const templateDataSchema = issueTemplateDataSchema;
 
 async function resolveTemplateDefaults(
   db: ReturnType<typeof createD1>,
@@ -1520,7 +1508,44 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       identity,
       getExecutionCtx(c)
     );
-    return c.json({ ...issue, possibleDuplicates }, 201);
+    // PILE-427 — a created issue is an inbound record for triage rules
+    // (first match may set delegate/status and dispatch a lane; the
+    // evaluation is logged either way). Re-read after a match so the
+    // response reflects what the rule stamped.
+    const triage = await runTriageRules(
+      c.env,
+      db,
+      organizationId,
+      {
+        recordType: "issue",
+        recordId: issue.id,
+        title: issue.title,
+        text: [issue.title, issue.description ?? ""].join("\n"),
+        source: issue.externalRef ?? null,
+        teamId: issue.teamId,
+        labelIds: issue.labelIds?.split(",").filter(Boolean) ?? [],
+        priority: issue.priority,
+        status: issue.status,
+        fields: {
+          identifier: issue.identifier,
+          teamId: issue.teamId,
+          status: issue.status,
+          priority: issue.priority,
+          projectId: issue.projectId ?? null,
+          cycleId: issue.cycleId ?? null,
+          assigneeId: issue.assigneeId ?? null,
+          delegateId: issue.delegateId ?? null,
+          repo: issue.repo ?? null,
+          externalRef: issue.externalRef ?? null,
+        },
+      },
+      { ctx: getExecutionCtx(c) }
+    );
+    const responseIssue =
+      triage?.outcome === "matched"
+        ? ((await stub.getIssue(issue.id)) ?? issue)
+        : issue;
+    return c.json({ ...responseIssue, possibleDuplicates }, 201);
   });
 
   app.openapi(captureIssueRoute, async (c) => {

@@ -1722,3 +1722,68 @@ export const workspaceShares = sqliteTable(
     ),
   ]
 );
+
+// Triage auto-delegate rules (PILE-427 — Linear triage rules: inbound
+// records match ordered conditions, first match wins, and the matched rule
+// delegates/sets status on the record's working issue). `conditions` and
+// `action` are JSON validated by the zod schemas in
+// src/global/triage-rules.ts; recordType scopes which inbound record a
+// rule evaluates (lead, intake_item, customer, deal, issue,
+// support_ticket).
+export const workspaceTriageRules = sqliteTable(
+  "triage_rules" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    name: text("name" as string).notNull(),
+    recordType: text("record_type" as string).notNull(),
+    isActive: integer("is_active" as string, { mode: "boolean" })
+      .notNull()
+      .default(true),
+    sortOrder: integer("sort_order" as string)
+      .notNull()
+      .default(0),
+    conditions: text("conditions" as string).notNull(),
+    action: text("action" as string).notNull(),
+    createdBy: text("created_by" as string),
+    createdAt: text("created_at" as string).notNull(),
+    updatedAt: text("updated_at" as string).notNull(),
+  },
+  (table) => [
+    index("triage_rules_org_type_idx" as string).on(
+      table.organizationId,
+      table.recordType,
+      table.isActive,
+      table.sortOrder
+    ),
+  ]
+);
+
+// The evaluation log — one row per inbound record evaluated against the
+// active rules (when at least one exists): which rule matched (null on
+// no_match), the outcome, and a JSON detail of what the action applied.
+export const workspaceTriageRuleEvaluations = sqliteTable(
+  "triage_rule_evaluations" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    recordType: text("record_type" as string).notNull(),
+    recordId: text("record_id" as string).notNull(),
+    ruleId: text("rule_id" as string),
+    ruleName: text("rule_name" as string),
+    outcome: text("outcome" as string).notNull(),
+    detail: text("detail" as string),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    index("triage_rule_evaluations_record_idx" as string).on(
+      table.organizationId,
+      table.recordType,
+      table.recordId
+    ),
+    index("triage_rule_evaluations_org_idx" as string).on(
+      table.organizationId,
+      table.createdAt
+    ),
+  ]
+);

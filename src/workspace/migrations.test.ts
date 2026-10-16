@@ -259,3 +259,47 @@ describe("v81 spend caps + run receipts (PILE-425)", () => {
     );
   });
 });
+
+describe("v82 triage rules (PILE-427)", () => {
+  it("creates triage_rules keyed by (org, record_type) with ordered evaluation", () => {
+    const sql = workspaceMigrations.migrations.m0081;
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS triage_rules");
+    for (const col of [
+      "organization_id",
+      "name",
+      "record_type",
+      "is_active",
+      "sort_order",
+      "conditions",
+      "action",
+      "created_by",
+    ]) {
+      expect(sql).toContain(col);
+    }
+    expect(sql).toContain(
+      "CREATE INDEX IF NOT EXISTS triage_rules_org_type_idx ON triage_rules (organization_id, record_type, is_active, sort_order)"
+    );
+  });
+
+  it("creates triage_rule_evaluations logging matched rule per record", () => {
+    const sql = workspaceMigrations.migrations.m0081;
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS triage_rule_evaluations");
+    for (const col of [
+      "organization_id",
+      "record_type",
+      "record_id",
+      "rule_id",
+      "rule_name",
+      "outcome",
+      "detail",
+    ]) {
+      expect(sql).toContain(col);
+    }
+    expect(sql).toContain(
+      "CREATE INDEX IF NOT EXISTS triage_rule_evaluations_record_idx ON triage_rule_evaluations (organization_id, record_type, record_id)"
+    );
+    expect(sql).toContain(
+      "CREATE INDEX IF NOT EXISTS triage_rule_evaluations_org_idx ON triage_rule_evaluations (organization_id, created_at)"
+    );
+  });
+});

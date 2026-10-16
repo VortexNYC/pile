@@ -289,3 +289,54 @@ describe("buildIntakeMarkdown", () => {
     expect(md).toContain("- none captured");
   });
 });
+
+describe("triage rules on customer create (PILE-427)", () => {
+  let organizationId: string;
+  let token: string;
+
+  beforeAll(async () => {
+    ({ organizationId, token } = await seedWorkspace());
+  });
+
+  it("delegates a new intake customer per its rule", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const agentId = `mock-cust-${crypto.randomUUID().slice(0, 8)}`;
+    const { registerAgentProvider, MockAgentProvider } =
+      await import("../agents/index.js").then(async (m) => ({
+        registerAgentProvider: m.registerAgentProvider,
+        MockAgentProvider: (await import("../agents/harness.js"))
+          .MockAgentProvider,
+      }));
+    registerAgentProvider(agentId, () => new MockAgentProvider(agentId, {}));
+    await stub.createTriageRule(
+      {
+        name: "customers to profiler",
+        recordType: "customer",
+        conditions: "{}",
+        action: JSON.stringify({ type: "delegate", agentId }),
+      },
+      { actorId: "user-intake" }
+    );
+
+    const res = await api(
+      `/workspaces/${organizationId}/intake`,
+      {
+        method: "POST",
+        body: JSON.stringify({ businessName: "Triage Bodega" }),
+      },
+      token
+    );
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { customerId: string };
+    const issue = await stub.getIssue(`triage:customer:${body.customerId}`);
+    expect(issue?.delegateId).toBe(agentId);
+    const evals = await stub.listTriageEvaluations({
+      recordType: "customer",
+      recordId: body.customerId,
+    });
+    expect(evals[0]?.outcome).toBe("matched");
+  });
+});

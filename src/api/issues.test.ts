@@ -1949,3 +1949,45 @@ describe("grant-only issue visibility (scoped keys)", () => {
     expect(session.stepKey).toBe("contacted");
   });
 });
+
+describe("triage rules on issue create (PILE-427)", () => {
+  let organizationId: string;
+  let token: string;
+
+  beforeAll(async () => {
+    ({ organizationId, token } = await seedWorkspace());
+  });
+
+  it("applies a delegate rule to a new issue and logs the match", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const rule = await stub.createTriageRule(
+      {
+        name: "issues to agent",
+        recordType: "issue",
+        conditions: "{}",
+        action: JSON.stringify({
+          type: "delegate",
+          agentId: `mock-issue-${crypto.randomUUID().slice(0, 8)}`,
+          dispatch: false,
+        }),
+      },
+      { actorId: "user-1" }
+    );
+
+    const res = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      { method: "POST", body: JSON.stringify({ title: "triaged issue" }) },
+      token
+    );
+    expect(res.status).toBe(201);
+    const issue = (await res.json()) as { id: string; delegateId: string };
+    expect(issue.delegateId).toBeTruthy();
+
+    const evals = await stub.listTriageEvaluations({ recordId: issue.id });
+    expect(evals[0]?.ruleId).toBe(rule.id);
+    expect(evals[0]?.outcome).toBe("matched");
+  });
+});

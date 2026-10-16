@@ -176,7 +176,7 @@ const emailIntakePayloadSchema = z.object({
 // customer. Idempotent on `externalId` (the Message-ID / raw-MIME hash) via
 // the customer_intake_items unique index, so queue retries can't double-file.
 export async function processEmailIntakePayload(
-  _db: D1Client,
+  db: D1Client,
   env: WorkerEnv,
   payload: unknown
 ) {
@@ -213,6 +213,31 @@ export async function processEmailIntakePayload(
     attachments: data.attachments,
     receivedAt: data.receivedAt,
   });
+
+  // PILE-427 — a newly filed intake item is an inbound record: triage
+  // rules decide delegation/status, and the evaluation is logged. Only
+  // fires on isNew so a queue retry doesn't re-run the rule list.
+  if (isNew && item) {
+    const { runTriageRules } = await import("../global/triage-rules.js");
+    await runTriageRules(env, db, data.organizationId, {
+      recordType: "intake_item",
+      recordId: item.id,
+      title: `Intake: ${data.subject || data.from}`,
+      text: [data.subject, data.text].filter(Boolean).join("\n"),
+      source: item.source ?? "email",
+      channel: "email",
+      customerEmail: data.from,
+      customerId,
+      fields: {
+        fromAddress: data.from,
+        fromName: data.fromName ?? null,
+        toAddress: data.to,
+        inboxId: data.inboxId ?? null,
+        subject: data.subject ?? null,
+        messageId: data.messageId ?? null,
+      },
+    });
+  }
 
   return {
     customerId,

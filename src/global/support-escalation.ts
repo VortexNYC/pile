@@ -357,6 +357,46 @@ function getWorkspaceStub(env: WorkerEnv, organizationId: string) {
   return env.WORKSPACE_DURABLE_OBJECT.get(doId);
 }
 
+/** Links an issue back onto a ticket — the conditional UPDATE keeps the
+ *  single-issue invariant under retries/concurrency, and the link_added
+ *  event records which rule acted. Shared by the legacy escalation path
+ *  and the triage delegate action (PILE-427). Returns false when the
+ *  ticket already points at an issue. */
+export async function linkIssueToTicket(
+  db: D1Client,
+  organizationId: string,
+  ticketId: string,
+  issueId: string,
+  actorId: string,
+  metadata: Record<string, unknown> = {}
+): Promise<boolean> {
+  const now = new Date().toISOString();
+  const updated = await db
+    .update(supportTickets)
+    .set({ issueId, updatedAt: now })
+    .where(
+      and(
+        eq(supportTickets.id, ticketId),
+        eq(supportTickets.organizationId, organizationId),
+        isNull(supportTickets.issueId)
+      )
+    )
+    .returning({ issueId: supportTickets.issueId })
+    .get();
+  if (!updated) return false;
+
+  await db.insert(supportTicketEvents).values({
+    id: crypto.randomUUID(),
+    ticketId,
+    type: "link_added",
+    actorType: "automation",
+    actorId,
+    metadata: JSON.stringify({ issueId, ...metadata }),
+    createdAt: now,
+  });
+  return true;
+}
+
 export async function maybeEscalate(
   env: WorkerEnv,
   db: D1Client,
@@ -365,6 +405,37 @@ export async function maybeEscalate(
   ctx: EscalationContext
 ): Promise<Issue | null> {
   if (ticket.issueId) return null;
+
+  // PILE-427 — workspace triage rules evaluate before the legacy
+  // escalation rules. A matched delegate action stamps ticket.issueId
+  // (stopping this path anyway); any matched rule owns the record, so
+  // escalation stands down. A triage error falls through so the legacy
+  // safety net still applies while the broken rule shows in the log.
+  const { runTriageRules } = await import("./triage-rules.js");
+  const triage = await runTriageRules(env, db, organizationId, {
+    recordType: "support_ticket",
+    recordId: ticket.id,
+    title: ticket.title,
+    text: [ctx.subject ?? "", ctx.text ?? "", ticket.title].join("\n"),
+    source: ctx.source ?? ticket.externalSource,
+    channel: ctx.channel ?? ticket.sourceChannel,
+    customerEmail: ctx.customer?.email ?? null,
+    priority: ticket.priority,
+    status: ticket.status,
+    fields: {
+      number: ticket.number,
+      externalSource: ticket.externalSource,
+      sourceChannel: ticket.sourceChannel,
+      priority: ticket.priority,
+      status: ticket.status,
+    },
+  });
+  if (triage?.outcome === "matched") {
+    if (!triage.issueId) return null;
+    const stub = getWorkspaceStub(env, organizationId);
+    await stub.setOrganizationId(organizationId);
+    return (await stub.getIssue(triage.issueId)) ?? null;
+  }
 
   const rules = await getActiveEscalationRules(db, organizationId);
 
@@ -425,36 +496,22 @@ async function createIssueFromTicket(
     updatedAt: now,
   });
 
-  const updated = await db
-    .update(supportTickets)
-    .set({ issueId, updatedAt: now })
-    .where(
-      and(
-        eq(supportTickets.id, ticket.id),
-        eq(supportTickets.organizationId, organizationId),
-        isNull(supportTickets.issueId)
-      )
-    )
-    .returning({ issueId: supportTickets.issueId })
-    .get();
+  const linked = await linkIssueToTicket(
+    db,
+    organizationId,
+    ticket.id,
+    issueId,
+    ruleId,
+    { ruleId }
+  );
 
-  if (!updated) {
+  if (!linked) {
     const existing = await stub.getIssue(issueId);
     if (!existing) {
       throw new Error("Escalated issue not found");
     }
     return existing;
   }
-
-  await db.insert(supportTicketEvents).values({
-    id: crypto.randomUUID(),
-    ticketId: ticket.id,
-    type: "link_added",
-    actorType: "automation",
-    actorId: ruleId,
-    metadata: JSON.stringify({ issueId, ruleId }),
-    createdAt: now,
-  });
 
   if (action.agentId) {
     try {

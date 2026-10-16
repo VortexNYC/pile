@@ -444,3 +444,71 @@ describe("customer email intake", () => {
     expect(message.rejectedReason).toBe("No active destination for recipient");
   });
 });
+
+describe("triage rules on email intake (PILE-427)", () => {
+  it("evaluates a newly filed intake item and logs the match", async () => {
+    const db = createD1(env.D1);
+    const now = new Date();
+    await db
+      .insert(userTable)
+      .values({
+        id: "user-triage-intake",
+        name: "Triage Intake",
+        email: "triage-intake@example.com",
+        emailVerified: false,
+        image: null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({ target: [userTable.email] });
+    const headers = await createAdminHeaders(env, "user-triage-intake");
+    const workspace = await createWorkspace(db, env, headers, {
+      name: "Intake triage",
+      slug: `intake-triage-${crypto.randomUUID()}`,
+      ownerId: "user-triage-intake",
+    });
+    const orgId = workspace!.id;
+
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(orgId)
+    );
+    await stub.setOrganizationId(orgId);
+    const rule = await stub.createTriageRule(
+      {
+        name: "inbound mail keyword",
+        recordType: "intake_item",
+        conditions: JSON.stringify({ keywords: ["statement"] }),
+        action: JSON.stringify({ type: "set_status", status: "noop" }),
+      },
+      { actorId: "user-triage-intake" }
+    );
+    void rule;
+
+    const { processEmailIntakePayload } = await import("./email.js");
+    const result = await processEmailIntakePayload(db, env, {
+      organizationId: orgId,
+      inboxId: null,
+      customerId: null,
+      to: "intake@x.com",
+      from: "owner@acme.com",
+      fromName: "Owner",
+      subject: "statement attached",
+      text: "here is my statement",
+      html: null,
+      messageId: "<m1@x>",
+      externalId: `ext-${crypto.randomUUID()}`,
+      receivedAt: new Date().toISOString(),
+      attachments: [],
+    });
+    expect(result.isNew).toBe(true);
+
+    // The set_status targets a bogus customer status id — outcome is
+    // "error", which still proves the rule matched and was logged.
+    const evals = await stub.listTriageEvaluations({
+      recordId: result.intakeItemId!,
+    });
+    expect(evals).toHaveLength(1);
+    expect(evals[0]?.ruleId).toBeTruthy();
+    expect(["matched", "error"]).toContain(evals[0]?.outcome);
+  });
+});

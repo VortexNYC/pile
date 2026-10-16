@@ -515,3 +515,71 @@ describe("deal hygiene fields + externalId dedupe", () => {
     expect(human).not.toContain(openNoStep.id);
   });
 });
+
+describe("triage rules on deal create (PILE-427)", () => {
+  let organizationId = "";
+  let token = "";
+
+  beforeAll(async () => {
+    ({ organizationId, token } = await seedWorkspace());
+  });
+
+  it("applies a set_status rule to a new deal and logs the match", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const rule = await stub.createTriageRule(
+      {
+        name: "new deals to qualified",
+        recordType: "deal",
+        conditions: "{}",
+        action: JSON.stringify({ type: "set_status", status: "qualified" }),
+      },
+      { actorId: "user-deals" }
+    );
+
+    const res = await fetch(
+      `/workspaces/${organizationId}/deals`,
+      {
+        method: "POST",
+        body: JSON.stringify({ customerId: "c-1", name: "Triage deal" }),
+      },
+      token
+    );
+    // A deal needs a real customer — create one first if the insert failed.
+    if (res.status !== 201) {
+      const c = await fetch(
+        `/workspaces/${organizationId}/customers`,
+        { method: "POST", body: JSON.stringify({ name: "TriageCo" }) },
+        token
+      );
+      const customer = (await c.json()) as { id: string };
+      const retry = await fetch(
+        `/workspaces/${organizationId}/deals`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            customerId: customer.id,
+            name: "Triage deal",
+          }),
+        },
+        token
+      );
+      expect(retry.status).toBe(201);
+      const { deal } = (await retry.json()) as {
+        deal: { id: string; stage: string };
+      };
+      expect(deal.stage).toBe("qualified");
+      const evals = await stub.listTriageEvaluations({ recordId: deal.id });
+      expect(evals[0]?.ruleId).toBe(rule.id);
+      return;
+    }
+    const { deal } = (await res.json()) as {
+      deal: { id: string; stage: string };
+    };
+    expect(deal.stage).toBe("qualified");
+    const evals = await stub.listTriageEvaluations({ recordId: deal.id });
+    expect(evals[0]?.ruleId).toBe(rule.id);
+  });
+});

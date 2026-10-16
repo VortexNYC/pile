@@ -6,6 +6,7 @@ import {
   findOrCreateCustomerByEmail,
   updateCustomer as updateSupportCustomer,
 } from "../global/support-contacts.js";
+import { runTriageRules } from "../global/triage-rules.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
@@ -292,6 +293,36 @@ export function registerIntakeRoutes(app: OpenAPIHono<AppContext>) {
         externalId: intakeId,
         statusId: input.pipelineStatusId ?? null,
       });
+      // PILE-427 — a newly created customer record is inbound to the
+      // pipeline: triage rules may delegate it (Scout/Profiler) or move
+      // its status. Deduped retries skip evaluation. Re-read the customer
+      // after a match so the reported statusId reflects the rule.
+      const triage = await runTriageRules(c.env, db, organizationId, {
+        recordType: "customer",
+        recordId: customer.id,
+        title: `Customer: ${customer.name}`,
+        text: [
+          input.businessName,
+          input.address,
+          input.websiteUrl,
+          input.discovery?.fitNotes,
+          input.repNotes,
+        ]
+          .filter((part): part is string => Boolean(part))
+          .join("\n"),
+        source: "intake",
+        customerId: customer.id,
+        fields: {
+          name: customer.name,
+          url: customer.url ?? null,
+          externalId: intakeId,
+          statusId: customer.statusId ?? null,
+          domain: customer.domain ?? null,
+        },
+      });
+      if (triage?.outcome === "matched") {
+        customer = (await stub.getCustomer(customer.id)) ?? customer;
+      }
     }
 
     // Owner contact — support contacts key on email, so a phone-only owner is
