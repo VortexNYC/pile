@@ -23,8 +23,8 @@ const dispatchBodySchema = z.object({
       repo: z.string().nullable().optional(),
       branch: z.string().nullable().optional(),
       status: z.string().optional(),
-      priority: z.number().optional(),
-      labelIds: z.array(z.string()).optional(),
+      priority: z.union([z.number(), z.string()]).optional(),
+      labelIds: z.array(z.string()).nullable().optional(),
     })
     .passthrough(),
   profile: z
