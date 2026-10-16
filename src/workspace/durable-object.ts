@@ -1071,7 +1071,6 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return row;
   }
 
-
   async getDraftOutput(id: string) {
     await this.ready;
     return this.db

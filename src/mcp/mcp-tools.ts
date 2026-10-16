@@ -13531,6 +13531,72 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdDrafts",
+    "description": "Create draft (POST /workspaces/{organizationId}/drafts) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: entityType*, entityId*, issueId, kind*, payload*, sessionId, agentSlug, promptVersion (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/drafts",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "entityType": {
+              "type": "string",
+              "enum": [
+                "issue",
+                "deal",
+                "customer"
+              ]
+            },
+            "entityId": {
+              "type": "string"
+            },
+            "issueId": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "comment",
+                "field_change",
+                "message",
+                "artifact"
+              ]
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": {
+                "nullable": true
+              }
+            },
+            "sessionId": {
+              "type": "string"
+            },
+            "agentSlug": {
+              "type": "string"
+            },
+            "promptVersion": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "entityType",
+            "entityId",
+            "kind",
+            "payload"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdDraftsIdDiscard",
     "description": "Create draft discard (POST /workspaces/{organizationId}/drafts/{id}/discard) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: note.",
     "method": "POST",

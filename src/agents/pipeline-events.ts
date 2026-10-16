@@ -2,8 +2,8 @@ import type { WorkerEnv } from "../platform/middleware.js";
 import type { Issue } from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
 import { dispatchAgent } from "./index.js";
-import { fireEventAutomations } from "./sweep.js";
 import { automationEventTarget } from "./repo-triggers.js";
+import { fireEventAutomations } from "./sweep.js";
 
 /** PILE-401/405/413 — drains the DO's domain-event outbox into agent
  *  dispatches and stage policy. The DO emits events inside mutations (it
@@ -161,7 +161,11 @@ async function fireStageAutomations(
   if (payload.entityType === "issue") return;
   const stageName = payload.toName ?? payload.to ?? "";
   const target = automationEventTarget(() =>
-    pipelineIssueFor(stub, payload.entityType as "customer" | "deal", payload.entityId)
+    pipelineIssueFor(
+      stub,
+      payload.entityType as "customer" | "deal",
+      payload.entityId
+    )
   );
   await fireEventAutomations(
     env,

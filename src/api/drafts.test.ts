@@ -377,4 +377,82 @@ describe("draft review API (PILE-428)", () => {
         .drafts
     ).toHaveLength(0);
   });
+
+  it("artifact drafts on records gate send behind human approve/edit (PILE-404)", async () => {
+    const { organizationId, userToken, agentToken } = await seedWorkspace();
+    const cust = await fetch(
+      `/workspaces/${organizationId}/customers`,
+      { method: "POST", body: JSON.stringify({ name: "Draft Co" }) },
+      userToken
+    );
+    const customer = z.object({ id: z.string() }).parse(await cust.json());
+
+    // Agent (token) drafts an artifact on the customer record — provenance
+    // travels with it.
+    const create = await fetch(
+      `/workspaces/${organizationId}/drafts`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          entityType: "customer",
+          entityId: customer.id,
+          kind: "artifact",
+          agentSlug: "merchant-courier",
+          promptVersion: "v3",
+          payload: { markdown: "# Proposal\n\nWe noticed you pay 2.9%." },
+        }),
+      },
+      agentToken
+    );
+    expect(create.status).toBe(201);
+    const draft = z
+      .object({
+        id: z.string(),
+        status: z.string(),
+        agentSlug: z.string().nullable(),
+        promptVersion: z.string().nullable(),
+        originalPayload: z.unknown().nullable(),
+        slaBreached: z.boolean(),
+      })
+      .parse(await create.json());
+    expect(draft.status).toBe("pending");
+    expect(draft.agentSlug).toBe("merchant-courier");
+    expect(draft.promptVersion).toBe("v3");
+    expect(draft.originalPayload).toBeNull();
+    expect(draft.slaBreached).toBe(false);
+
+    // Human edits the draft — the agent's original is snapshotted.
+    const edit = await fetch(
+      `/workspaces/${organizationId}/drafts/${draft.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          payload: { markdown: "# Proposal (edited)" },
+        }),
+      },
+      userToken
+    );
+    expect(edit.status).toBe(200);
+    const edited = z
+      .object({
+        payload: z.object({ markdown: z.string() }),
+        originalPayload: z.object({ markdown: z.string() }).nullable(),
+      })
+      .parse(await edit.json());
+    expect(edited.payload.markdown).toBe("# Proposal (edited)");
+    expect(edited.originalPayload?.markdown).toContain("2.9%");
+
+    // Approve → publish: reviewedById records who decided.
+    const approve = await fetch(
+      `/workspaces/${organizationId}/drafts/${draft.id}/publish`,
+      { method: "POST", body: JSON.stringify({ note: "looks good" }) },
+      userToken
+    );
+    expect(approve.status).toBe(200);
+    const published = z
+      .object({ status: z.string(), reviewedById: z.string().nullable() })
+      .parse(await approve.json());
+    expect(published.status).toBe("published");
+    expect(published.reviewedById).toBe("user-drafts");
+  });
 });

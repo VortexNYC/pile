@@ -2413,27 +2413,6 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
-  "issues drafts list": {
-    method: "GET",
-    path: "/workspaces/{organizationId}/issues/{issueId}/drafts",
-    params: [
-      {
-        name: "organizationId",
-        flag: "workspace",
-      },
-      {
-        name: "issueId",
-        flag: "issue",
-      },
-    ],
-    query: [
-      {
-        name: "status",
-        flag: "status",
-      },
-    ],
-    body: [],
-  },
   "drafts list": {
     method: "GET",
     path: "/workspaces/{organizationId}/drafts",
@@ -2451,6 +2430,72 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "issueId",
         flag: "issue",
+      },
+    ],
+    body: [],
+  },
+  "drafts create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/drafts",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "entityType",
+        flag: "entity-type",
+      },
+      {
+        name: "entityId",
+        flag: "entity-id",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+      {
+        name: "kind",
+        flag: "kind",
+      },
+      {
+        name: "payload",
+        flag: "payload",
+      },
+      {
+        name: "sessionId",
+        flag: "session",
+      },
+      {
+        name: "agentSlug",
+        flag: "agent-slug",
+      },
+      {
+        name: "promptVersion",
+        flag: "prompt-version",
+      },
+    ],
+  },
+  "issues drafts list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/issues/{issueId}/drafts",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+    ],
+    query: [
+      {
+        name: "status",
+        flag: "status",
       },
     ],
     body: [],

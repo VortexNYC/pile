@@ -210,7 +210,8 @@ const createDraftRoute = createRoute({
   },
 });
 
-export function registerDraftRoutes(app: OpenAPIHono<AppContext>) {  app.openapi(createDraftRoute, async (c) => {
+export function registerDraftRoutes(app: OpenAPIHono<AppContext>) {
+  app.openapi(createDraftRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const body = c.req.valid("json");
     const identity = c.get("workspaceIdentity");
@@ -231,7 +232,6 @@ export function registerDraftRoutes(app: OpenAPIHono<AppContext>) {  app.openapi
     });
     return c.json(serializeDraft(draft), 201);
   });
-
 
   app.openapi(listIssueDraftsRoute, async (c) => {
     const { organizationId, issueId } = c.req.valid("param");
