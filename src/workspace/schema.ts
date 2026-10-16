@@ -900,6 +900,10 @@ export const workspaceAgentSessions = sqliteTable(
     createdAt: text("created_at" as string).notNull(),
     updatedAt: text("updated_at" as string).notNull(),
     lastProgressAt: text("last_progress_at" as string),
+    // PILE-418 — set on the first recorded activity; sessions that sit
+    // past the first-ack window with it still null are flagged
+    // `awaitingFirstAck` in the API.
+    firstActivityAt: text("first_activity_at" as string),
     lastStateHash: text("last_state_hash" as string),
     retryOf: text("retry_of" as string),
     retryCount: integer("retry_count" as string)

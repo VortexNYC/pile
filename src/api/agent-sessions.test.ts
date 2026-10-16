@@ -161,6 +161,15 @@ describe("agent sessions API", () => {
     const list = await listRes.json<{ sessions: unknown[] }>();
     expect(list.sessions.length).toBe(1);
 
+    // PILE-418 — a fresh dispatch sits inside the ~10s first-ack window:
+    // firstActivityAt is unset and the lane is not flagged.
+    expect(
+      (session as { firstActivityAt?: string | null }).firstActivityAt ?? null
+    ).toBeNull();
+    expect(
+      (session as { awaitingFirstAck?: boolean }).awaitingFirstAck ?? false
+    ).toBe(false);
+
     const getRes = await app.fetch(
       request(`/workspaces/${organizationId}/agent/sessions/${session.id}`, {
         token,
@@ -1796,6 +1805,15 @@ describe("agent sessions API", () => {
     );
     expect(listRes.status).toBe(200);
 
+    // PILE-418 — a fresh dispatch sits inside the ~10s first-ack window:
+    // firstActivityAt is unset and the lane is not flagged.
+    expect(
+      (session as { firstActivityAt?: string | null }).firstActivityAt ?? null
+    ).toBeNull();
+    expect(
+      (session as { awaitingFirstAck?: boolean }).awaitingFirstAck ?? false
+    ).toBe(false);
+
     const getRes = await app.fetch(
       request(`/workspaces/${organizationId}/agent/sessions/${session.id}`, {
         token: agentToken,
@@ -2789,6 +2807,15 @@ describe("agent sessions API", () => {
       organizationId,
       session.id
     );
+
+    // PILE-418 — a fresh dispatch sits inside the ~10s first-ack window:
+    // firstActivityAt is unset and the lane is not flagged.
+    expect(
+      (session as { firstActivityAt?: string | null }).firstActivityAt ?? null
+    ).toBeNull();
+    expect(
+      (session as { awaitingFirstAck?: boolean }).awaitingFirstAck ?? false
+    ).toBe(false);
 
     const getRes = await app.fetch(
       request(`/workspaces/${organizationId}/agent/sessions/${session.id}`, {
@@ -3874,4 +3901,5 @@ describe("spend caps + run receipts (PILE-425)", () => {
     expect(row?.runs).toBe(1);
     expect(row?.totalTokens).toBe(110_000);
   });
+
 });

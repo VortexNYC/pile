@@ -152,6 +152,7 @@ function failedSession(
     createdAt: ts,
     updatedAt: ts,
     lastProgressAt: null,
+    firstActivityAt: null,
     lastStateHash: null,
     retryOf: null,
     retryCount: 0,

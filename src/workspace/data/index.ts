@@ -1312,6 +1312,10 @@ const agentSessionSummaryColumns = {
   // PILE-419 — summary rows carry the open-elicitation marker so the
   // fleet/summary views can derive `needs_input` without activity blobs.
   awaitingActivityId: workspaceAgentSessions.awaitingActivityId,
+  // PILE-418 — summary rows carry these so the list can flag lanes that
+  // never produced a first activity (queued lanes are exempt).
+  firstActivityAt: workspaceAgentSessions.firstActivityAt,
+  queuedAfter: workspaceAgentSessions.queuedAfter,
 };
 
 export type AgentSessionSummary = Pick<
@@ -1354,6 +1358,9 @@ export async function updateAgentSession(
     providerSessionId: string | null;
     lastProgressAt: string | null;
     lastStateHash: string | null;
+    /** PILE-418 — stamped on the first recorded activity; written once
+     *  (subsequent writes are ignored so the original ack time wins). */
+    firstActivityAt: string | null;
     retryOf: string | null;
     retryCount: number;
     /** Queue promotion rewinds createdAt — the provision/run clocks anchor
@@ -1420,6 +1427,9 @@ export async function updateAgentSession(
     set.providerSessionId = input.providerSessionId;
   if (input.lastProgressAt !== undefined)
     set.lastProgressAt = input.lastProgressAt;
+  // PILE-418 — first ack is write-once; later activities don't push it.
+  if (input.firstActivityAt !== undefined && !existing.firstActivityAt)
+    set.firstActivityAt = input.firstActivityAt;
   if (input.lastStateHash !== undefined)
     set.lastStateHash = input.lastStateHash;
   if (input.retryOf !== undefined) set.retryOf = input.retryOf;
@@ -3271,6 +3281,9 @@ export interface AgentActivityInput {
   payload?: Record<string, unknown>;
   /** Parent activity id — links child events under a span. */
   parentId?: string;
+  /** PILE-418 — system-side bookkeeping (dispatch status lines, stale
+   *  markers) doesn't count as the lane's first ack. */
+  system?: boolean;
   /** Span timing. `startedAt` alone marks an open span; pair with `endedAt`
    *  (or `durationMs`) to record a completed span. */
   startedAt?: string;

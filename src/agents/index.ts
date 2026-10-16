@@ -548,6 +548,7 @@ export async function dispatchAgent(
               sessionId: session.id,
               actorId: actor.id,
               type: "error",
+              system: true,
               message: `Lane DB provisioning failed: ${err instanceof Error ? err.message : String(err)}`,
             })
             .catch(() => {});
@@ -583,6 +584,7 @@ export async function dispatchAgent(
     sessionId: session.id,
     actorId: actor.id,
     type: "thought",
+    system: true,
     message: `Dispatching to ${agentId}… (effort ${effort}${resolvedModel ? `, model ${resolvedModel}` : ""}${maxDurationMinutes ? `, max ${maxDurationMinutes}m` : ""})`,
   });
 
@@ -624,6 +626,7 @@ export async function dispatchAgent(
             sessionId: session.id,
             actorId: actor.id,
             type: "error",
+              system: true,
             message: `Pile API credential unavailable: ${!parsed.success ? "unexpected createApiKey response" : "PUBLIC_API_URL unset"}`,
           })
           .catch(() => {});
@@ -635,6 +638,7 @@ export async function dispatchAgent(
           sessionId: session.id,
           actorId: actor.id,
           type: "error",
+              system: true,
           message: `Pile API credential mint failed: ${err instanceof Error ? err.message : String(err)}`,
         })
         .catch(() => {});
@@ -651,6 +655,7 @@ export async function dispatchAgent(
           sessionId: session.id,
           actorId: actor.id,
           type: "error",
+              system: true,
           message: `Lane permissions locked to push=disabled shell=disabled: ${lanePermissions.lockedReason}`,
         })
         .catch(() => {});

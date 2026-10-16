@@ -256,6 +256,11 @@ export const agentSessionSchema = z.object({
    *  (or, for pre-suspend rows, the latest activity is an elicitation).
    *  Never stored. */
   derivedStatus: z.enum(["stalled", "needs_input"]).nullable().optional(),
+  /** PILE-418 — the lane produced no first activity within the ~10s ack
+   *  window after dispatch: likely a provider-side dead start. */
+  awaitingFirstAck: z.boolean().optional(),
+  firstActivityAt: z.string().nullable().optional(),
+  queuedAfter: z.string().nullable().optional(),
   /** PILE-425 — the run's usage/cost receipt, populated on the session
    *  detail GET when the lane reported usage or reached terminal state. */
   receipt: runReceiptSchema.nullable().optional(),
@@ -297,6 +302,9 @@ const agentSessionSummarySchema = agentSessionSchema
     derivedStatus: true,
     label: true,
     awaitingActivityId: true,
+    // PILE-418 — the list route derives awaitingFirstAck from these.
+    firstActivityAt: true,
+    queuedAfter: true,
   })
   .extend({
     startedAt: z.string().nullable(),
@@ -413,12 +421,32 @@ function parseGuidanceRefs(value: string | null): SessionGuidanceRef[] | null {
   return refs;
 }
 
+/** PILE-418 — ~10s first-ack window: a lane that dispatched but recorded
+ *  no activity is surfaced as `awaitingFirstAck` so the console/API can
+ *  flag a dead start rather than a silently idle one. Terminal and
+ *  waiting lanes are excluded — they already carry their signal. */
+const FIRST_ACK_WINDOW_MS = 10_000;
+function firstAckMissing(
+  row: Pick<
+    AgentSession,
+    "status" | "createdAt" | "firstActivityAt" | "queuedAfter"
+  >
+): boolean {
+  if (row.firstActivityAt) return false;
+  if (["completed", "failed", "canceled"].includes(row.status)) return false;
+  // Queue-parked lanes haven't started — don't fault them for silence.
+  if (row.queuedAfter) return false;
+  const created = Date.parse(row.createdAt);
+  return Number.isFinite(created) && Date.now() - created > FIRST_ACK_WINDOW_MS;
+}
+
 export function toSessionResponse(
   row: AgentSession,
   activities?: AgentActivity[]
 ) {
   return {
     ...row,
+    awaitingFirstAck: firstAckMissing(row),
     resultSchema: parseJsonObject(row.resultSchema),
     structuredResult: parseJsonColumn(row.structuredResult),
     resultSchemaErrors: parseStringArray(row.resultSchemaErrors),
@@ -447,6 +475,7 @@ function toSessionSummary(row: AgentSessionSummary) {
     lastProgressAt: row.lastProgressAt,
     label: row.label,
     awaitingActivityId: row.awaitingActivityId,
+    awaitingFirstAck: firstAckMissing(row),
     derivedStatus: deriveSessionStatus(row),
   };
 }
