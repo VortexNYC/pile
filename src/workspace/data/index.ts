@@ -1242,6 +1242,24 @@ function agentSessionListConditions(
   return conditions;
 }
 
+export function getAgentSessionByConversationKey(
+  db: WorkspaceDb,
+  organizationId: string,
+  conversationKey: string
+) {
+  return db
+    .select()
+    .from(workspaceAgentSessions)
+    .where(
+      and(
+        eq(workspaceAgentSessions.organizationId, organizationId),
+        eq(workspaceAgentSessions.conversationKey, conversationKey)
+      )
+    )
+    .orderBy(desc(workspaceAgentSessions.createdAt))
+    .get();
+}
+
 export function listAgentSessions(
   db: WorkspaceDb,
   organizationId: string,
