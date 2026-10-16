@@ -4,6 +4,7 @@ import type { AppEnv } from "../platform/env.js";
 import { VortexError } from "../platform/errors.js";
 import type { AgentSessionStatus, Issue } from "../types/workspace.js";
 import type {
+  AgentDispatchContext,
   AgentProvider,
   AgentProviderHealth,
   AgentProviderSession,
@@ -72,7 +73,7 @@ export class CfAgentProvider implements AgentProvider {
     organizationId: string,
     issue: Issue,
     _model?: string,
-    sessionContext?: { sessionId: string }
+    sessionContext?: AgentDispatchContext
   ): Promise<AgentProviderSession> {
     const config = cfAgentConfigSchema.parse(
       this.env.AGENT_PROVIDER_CONFIG
@@ -91,7 +92,7 @@ export class CfAgentProvider implements AgentProvider {
       },
       body: JSON.stringify({
         sessionId: sessionContext?.sessionId,
-        agent: config.agent,
+        agent: sessionContext?.agentProfile?.slug ?? config.agent,
         organizationId,
         issue: {
           id: issue.id,
@@ -104,6 +105,12 @@ export class CfAgentProvider implements AgentProvider {
           priority: issue.priority,
           labelIds: issue.labelIds,
         },
+        // PILE-435 follow-on — the registry profile + memory key, when the
+        // dispatch carries them. The flue worker builds the agent from
+        // profile and resumes the conversation by conversationKey.
+        profile: sessionContext?.agentProfile ?? null,
+        conversationKey:
+          sessionContext?.conversationKey ?? sessionContext?.sessionId ?? null,
       }),
     });
     const res = this.env.FLUE_WORKER

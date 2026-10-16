@@ -231,6 +231,18 @@ export async function dispatchAgent(
      *  Step-scoped guidance packs resolve against it; persisted on the
      *  session so promotion/retries keep the same scope. */
     stepKey?: string;
+    /** Resolved agent_type registry entry the lane runs as — providers
+     *  with profile support hydrate the agent from this at dispatch. */
+    agentProfile?: {
+      slug: string;
+      name: string;
+      jobSpec?: string | null;
+      toolScope?: string | null;
+    };
+    /** Durable conversation key for provider-side memory — the drainer
+     *  passes `{merchantId}-{agentSlug}` so per-merchant context survives
+     *  across dispatches. */
+    conversationKey?: string;
   }
 ): Promise<AgentSession> {
   const label = sessionLabel(issue, agentId, options?.purpose);
@@ -684,6 +696,8 @@ export async function dispatchAgent(
           : undefined,
         comments,
         pileApi,
+        agentProfile: options?.agentProfile,
+        conversationKey: options?.conversationKey,
         instructions:
           [
             guidanceText,
