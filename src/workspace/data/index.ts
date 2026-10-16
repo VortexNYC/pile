@@ -28,6 +28,9 @@ import type { workspaceSchema } from "../schema-map.js";
 import {
   workspaceAgentActivities,
   workspaceAgentAutomations,
+  workspaceAgentTypes,
+  workspaceDomainEvents,
+  workspaceStageConfigs,
   workspaceAgentPauses,
   workspaceAgentRunReceipts,
   workspaceAgentSessionEvents,
@@ -3587,6 +3590,343 @@ export async function deleteAgentAutomation(
   await db
     .delete(workspaceAgentAutomations)
     .where(eq(workspaceAgentAutomations.id, id));
+  return true;
+}
+
+// ---- pipeline runtime: domain events, stage configs, agent types ----
+// (PILE-401/405/413)
+
+export type DomainEventType =
+  | "record.stage_entered"
+  | "substep.actionable"
+  | "substeps.all_required_done";
+export type DomainEvent = typeof workspaceDomainEvents.$inferSelect;
+export type StageConfig = typeof workspaceStageConfigs.$inferSelect;
+export type AgentType = typeof workspaceAgentTypes.$inferSelect;
+
+/** Append an outbox event; `dedupeKey` makes the write idempotent — the same
+ *  logical event can be emitted twice (e.g. a retried transition) without
+ *  double-dispatching. */
+export async function emitDomainEvent(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: {
+    type: DomainEventType;
+    payload: Record<string, unknown>;
+    dedupeKey?: string;
+  }
+): Promise<DomainEvent | undefined> {
+  const id = crypto.randomUUID();
+  const dedupeKey = input.dedupeKey ?? null;
+  if (dedupeKey) {
+    const existing = db
+      .select({ id: workspaceDomainEvents.id })
+      .from(workspaceDomainEvents)
+      .where(
+        and(
+          eq(workspaceDomainEvents.organizationId, organizationId),
+          eq(workspaceDomainEvents.type, input.type),
+          eq(workspaceDomainEvents.dedupeKey, dedupeKey)
+        )
+      )
+      .get();
+    if (existing) return undefined;
+  }
+  await db.insert(workspaceDomainEvents).values({
+    id,
+    organizationId,
+    type: input.type,
+    payload: JSON.stringify(input.payload),
+    dedupeKey,
+    status: "pending",
+    attempts: 0,
+    createdAt: new Date().toISOString(),
+  });
+  return db
+    .select()
+    .from(workspaceDomainEvents)
+    .where(eq(workspaceDomainEvents.id, id))
+    .get();
+}
+
+export function listPendingDomainEvents(
+  db: WorkspaceDb,
+  organizationId: string
+) {
+  return db
+    .select()
+    .from(workspaceDomainEvents)
+    .where(
+      and(
+        eq(workspaceDomainEvents.organizationId, organizationId),
+        eq(workspaceDomainEvents.status, "pending")
+      )
+    )
+    .orderBy(workspaceDomainEvents.createdAt)
+    .all();
+}
+
+export async function markDomainEvent(
+  db: WorkspaceDb,
+  id: string,
+  status: "delivered" | "failed",
+  error?: string
+) {
+  await db
+    .update(workspaceDomainEvents)
+    .set({
+      status,
+      error: error ?? null,
+      attempts: sql`${workspaceDomainEvents.attempts} + 1`,
+      deliveredAt: status === "delivered" ? new Date().toISOString() : null,
+    })
+    .where(eq(workspaceDomainEvents.id, id));
+}
+
+export interface StageConfigInput {
+  entityType?: "issue" | "deal" | "customer";
+  status: string;
+  ownerAgent?: string | null;
+  instructions?: string | null;
+  advancePolicy?: "none" | "auto" | "ready_flag";
+  enabled?: boolean;
+  createdBy?: string | null;
+}
+
+/** Upsert keyed on (entityType, status) — a stage has one owning config. */
+export async function upsertStageConfig(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: StageConfigInput
+): Promise<StageConfig> {
+  const statusKey = stageKey(input.status);
+  const entityType = input.entityType ?? "issue";
+  const existing = db
+    .select()
+    .from(workspaceStageConfigs)
+    .where(
+      and(
+        eq(workspaceStageConfigs.organizationId, organizationId),
+        eq(workspaceStageConfigs.entityType, entityType),
+        eq(workspaceStageConfigs.status, statusKey)
+      )
+    )
+    .get();
+  const now = new Date().toISOString();
+  if (existing) {
+    await db
+      .update(workspaceStageConfigs)
+      .set({
+        ownerAgent: input.ownerAgent ?? existing.ownerAgent,
+        instructions: input.instructions ?? existing.instructions,
+        advancePolicy: input.advancePolicy ?? existing.advancePolicy,
+        enabled:
+          input.enabled === undefined
+            ? existing.enabled
+            : input.enabled
+              ? 1
+              : 0,
+        updatedAt: now,
+      })
+      .where(eq(workspaceStageConfigs.id, existing.id));
+    return db
+      .select()
+      .from(workspaceStageConfigs)
+      .where(eq(workspaceStageConfigs.id, existing.id))
+      .get() as StageConfig;
+  }
+  const id = crypto.randomUUID();
+  const row: typeof workspaceStageConfigs.$inferInsert = {
+    id,
+    organizationId,
+    entityType,
+    status: statusKey,
+    ownerAgent: input.ownerAgent ?? null,
+    instructions: input.instructions ?? null,
+    advancePolicy: input.advancePolicy ?? "none",
+    enabled: input.enabled === false ? 0 : 1,
+    createdBy: input.createdBy ?? null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await db.insert(workspaceStageConfigs).values(row);
+  return db
+    .select()
+    .from(workspaceStageConfigs)
+    .where(eq(workspaceStageConfigs.id, id))
+    .get() as StageConfig;
+}
+
+export function getStageConfig(
+  db: WorkspaceDb,
+  organizationId: string,
+  entityType: "issue" | "deal" | "customer",
+  status: string
+): StageConfig | undefined {
+  return db
+    .select()
+    .from(workspaceStageConfigs)
+    .where(
+      and(
+        eq(workspaceStageConfigs.organizationId, organizationId),
+        eq(workspaceStageConfigs.entityType, entityType),
+        eq(workspaceStageConfigs.status, stageKey(status)),
+        eq(workspaceStageConfigs.enabled, 1)
+      )
+    )
+    .get();
+}
+
+export function listStageConfigs(db: WorkspaceDb, organizationId: string) {
+  return db
+    .select()
+    .from(workspaceStageConfigs)
+    .where(eq(workspaceStageConfigs.organizationId, organizationId))
+    .orderBy(workspaceStageConfigs.createdAt)
+    .all();
+}
+
+export async function deleteStageConfig(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+): Promise<boolean> {
+  const existing = db
+    .select({ id: workspaceStageConfigs.id })
+    .from(workspaceStageConfigs)
+    .where(
+      and(
+        eq(workspaceStageConfigs.organizationId, organizationId),
+        eq(workspaceStageConfigs.id, id)
+      )
+    )
+    .get();
+  if (!existing) return false;
+  await db
+    .delete(workspaceStageConfigs)
+    .where(eq(workspaceStageConfigs.id, id));
+  return true;
+}
+
+export interface AgentTypeInput {
+  slug: string;
+  name: string;
+  providerAgentId: string;
+  jobSpec?: string | null;
+  toolScope?: string | null;
+  permissionsTier?: string | null;
+  enabled?: boolean;
+  createdBy?: string | null;
+}
+
+/** Upsert keyed on slug — registry rows are workspace-scoped. */
+export async function upsertAgentType(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: AgentTypeInput
+): Promise<AgentType> {
+  const slug = stageKey(input.slug);
+  const existing = db
+    .select()
+    .from(workspaceAgentTypes)
+    .where(
+      and(
+        eq(workspaceAgentTypes.organizationId, organizationId),
+        eq(workspaceAgentTypes.slug, slug)
+      )
+    )
+    .get();
+  const now = new Date().toISOString();
+  if (existing) {
+    await db
+      .update(workspaceAgentTypes)
+      .set({
+        name: input.name,
+        providerAgentId: input.providerAgentId,
+        jobSpec: input.jobSpec ?? existing.jobSpec,
+        toolScope: input.toolScope ?? existing.toolScope,
+        permissionsTier: input.permissionsTier ?? existing.permissionsTier,
+        enabled:
+          input.enabled === undefined
+            ? existing.enabled
+            : input.enabled
+              ? 1
+              : 0,
+        updatedAt: now,
+      })
+      .where(eq(workspaceAgentTypes.id, existing.id));
+    return db
+      .select()
+      .from(workspaceAgentTypes)
+      .where(eq(workspaceAgentTypes.id, existing.id))
+      .get() as AgentType;
+  }
+  const id = crypto.randomUUID();
+  await db.insert(workspaceAgentTypes).values({
+    id,
+    organizationId,
+    slug,
+    name: input.name,
+    providerAgentId: input.providerAgentId,
+    jobSpec: input.jobSpec ?? null,
+    toolScope: input.toolScope ?? null,
+    permissionsTier: input.permissionsTier ?? null,
+    enabled: input.enabled === false ? 0 : 1,
+    createdBy: input.createdBy ?? null,
+    createdAt: now,
+    updatedAt: now,
+  });
+  return db
+    .select()
+    .from(workspaceAgentTypes)
+    .where(eq(workspaceAgentTypes.id, id))
+    .get() as AgentType;
+}
+
+export function getAgentTypeBySlug(
+  db: WorkspaceDb,
+  organizationId: string,
+  slug: string
+): AgentType | undefined {
+  return db
+    .select()
+    .from(workspaceAgentTypes)
+    .where(
+      and(
+        eq(workspaceAgentTypes.organizationId, organizationId),
+        eq(workspaceAgentTypes.slug, stageKey(slug)),
+        eq(workspaceAgentTypes.enabled, 1)
+      )
+    )
+    .get();
+}
+
+export function listAgentTypes(db: WorkspaceDb, organizationId: string) {
+  return db
+    .select()
+    .from(workspaceAgentTypes)
+    .where(eq(workspaceAgentTypes.organizationId, organizationId))
+    .orderBy(workspaceAgentTypes.slug)
+    .all();
+}
+
+export async function deleteAgentType(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+): Promise<boolean> {
+  const existing = db
+    .select({ id: workspaceAgentTypes.id })
+    .from(workspaceAgentTypes)
+    .where(
+      and(
+        eq(workspaceAgentTypes.organizationId, organizationId),
+        eq(workspaceAgentTypes.id, id)
+      )
+    )
+    .get();
+  if (!existing) return false;
+  await db.delete(workspaceAgentTypes).where(eq(workspaceAgentTypes.id, id));
   return true;
 }
 

@@ -2,12 +2,14 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 
+import { drainDomainEvents } from "../agents/pipeline-events.js";
 import { createD1 } from "../global/db.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { isAdminIdentity } from "../platform/permissions.js";
 import { rls } from "../platform/rls.js";
 import type { workspaceEntityAttachments } from "../workspace/schema.js";
+import { getExecutionCtx } from "./execution-ctx.js";
 import {
   hiddenIssueIdsForIdentity,
   resolveVisibleIssueRef,
@@ -895,6 +897,11 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     await stub.setOrganizationId(organizationId);
     const customer = await stub.updateCustomer(id, input, identity.id);
     if (!customer) return notFound("Customer not found");
+    // PILE-401 — stage transitions emit domain events; drain them into
+    // dispatches after the write (sweep is the backstop).
+    getExecutionCtx(c)?.waitUntil(
+      drainDomainEvents(c.env, stub, organizationId, getExecutionCtx(c))
+    );
     return c.json(customer);
   });
 

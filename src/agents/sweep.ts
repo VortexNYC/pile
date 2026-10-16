@@ -28,6 +28,7 @@ import {
 import { getLaneDbProvider, type LaneDbRef } from "./lane-db.js";
 import { reapLaneGithubTokens } from "./lane-github-token.js";
 import { nudgeLane } from "./nudge.js";
+import { drainDomainEvents } from "./pipeline-events.js";
 import type {
   AgentProvider,
   AgentProviderSession,
@@ -1346,6 +1347,14 @@ export async function sweepAgentSessions(
       // CoS; runs even with zero live sessions (a day of finished runs can
       // breach while nothing is in flight).
       await enforceSpendCaps(env, stub, id, sessions, ctx);
+      // PILE-401/413 — pipeline runtime: drain domain events (stage
+      // entries, actionable sub-steps, all-required-done) into dispatches.
+      await drainDomainEvents(env, stub, id, ctx).catch((err: unknown) => {
+        console.error("domain event drain failed", {
+          organizationId: id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
       if (sessions.length === 0) continue;
       // Sessions are swept in parallel with a bounded fan-out — one session
       // whose provider probes all stall can burn ~3x probeTimeoutMs serially,

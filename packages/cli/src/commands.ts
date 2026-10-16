@@ -3466,6 +3466,140 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "stage configs list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/stage-configs",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "stage configs create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/stage-configs",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "entityType",
+        flag: "entity-type",
+      },
+      {
+        name: "status",
+        flag: "status",
+      },
+      {
+        name: "ownerAgent",
+        flag: "owner-agent",
+      },
+      {
+        name: "instructions",
+        flag: "instructions",
+      },
+      {
+        name: "advancePolicy",
+        flag: "advance-policy",
+      },
+      {
+        name: "enabled",
+        flag: "enabled",
+      },
+    ],
+  },
+  "stage configs delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/stage-configs/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "agent types list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/agent-types",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "agent types create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/agent-types",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "slug",
+        flag: "slug",
+      },
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "providerAgentId",
+        flag: "provider-agent-id",
+      },
+      {
+        name: "jobSpec",
+        flag: "job-spec",
+      },
+      {
+        name: "toolScope",
+        flag: "tool-scope",
+      },
+      {
+        name: "permissionsTier",
+        flag: "permissions-tier",
+      },
+      {
+        name: "enabled",
+        flag: "enabled",
+      },
+    ],
+  },
+  "agent types delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/agent-types/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "external events create": {
     method: "POST",
     path: "/workspaces/{organizationId}/external-events/{source}",

@@ -1,6 +1,7 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
+import { drainDomainEvents } from "../agents/pipeline-events.js";
 import { createD1 } from "../global/db.js";
 import { runTriageRules } from "../global/triage-rules.js";
 import { VortexError } from "../platform/errors.js";
@@ -8,6 +9,7 @@ import type { AppContext } from "../platform/middleware.js";
 import { isAdminIdentity } from "../platform/permissions.js";
 import { rls } from "../platform/rls.js";
 import type { DealStage } from "../workspace/data/index.js";
+import { getExecutionCtx } from "./execution-ctx.js";
 import { getWorkspaceStub } from "./stub.js";
 
 const stageEnum = z.enum([
@@ -321,6 +323,9 @@ export function registerDealRoutes(app: OpenAPIHono<AppContext>) {
     const stub = getWorkspaceStub(c.env, organizationId);
     const deal = await stub.getDeal(dealId);
     if (!deal) notFound();
+    getExecutionCtx(c)?.waitUntil(
+      drainDomainEvents(c.env, stub, organizationId, getExecutionCtx(c))
+    );
     return c.json({ deal }, 200);
   });
 
