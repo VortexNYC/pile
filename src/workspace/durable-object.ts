@@ -7987,6 +7987,17 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.listStageConfigs(this.db, this.organizationId);
   }
 
+  getStageConfigById(id: string) {
+    return data.getStageConfigById(this.db, this.organizationId, id);
+  }
+
+  updateStageConfig(
+    id: string,
+    patch: Partial<Omit<data.StageConfigInput, "entityType" | "status">>
+  ) {
+    return data.updateStageConfig(this.db, this.organizationId, id, patch);
+  }
+
   deleteStageConfig(id: string) {
     return data.deleteStageConfig(this.db, this.organizationId, id);
   }
@@ -8001,6 +8012,14 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   listAgentTypes() {
     return data.listAgentTypes(this.db, this.organizationId);
+  }
+
+  getAgentTypeById(id: string) {
+    return data.getAgentTypeById(this.db, this.organizationId, id);
+  }
+
+  updateAgentType(id: string, patch: Partial<data.AgentTypeInput>) {
+    return data.updateAgentType(this.db, this.organizationId, id, patch);
   }
 
   deleteAgentType(id: string) {
