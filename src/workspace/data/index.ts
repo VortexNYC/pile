@@ -3820,6 +3820,47 @@ export async function upsertStageConfig(
     .get() as StageConfig;
 }
 
+export function getStageConfigById(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+): StageConfig | undefined {
+  return db
+    .select()
+    .from(workspaceStageConfigs)
+    .where(
+      and(
+        eq(workspaceStageConfigs.organizationId, organizationId),
+        eq(workspaceStageConfigs.id, id)
+      )
+    )
+    .get();
+}
+
+/** PILE-437 — partial update by id (the upsert keys on entityType+status,
+ *  which makes targeted edits awkward for callers holding an id). */
+export async function updateStageConfig(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string,
+  patch: Partial<Omit<StageConfigInput, "entityType" | "status">>
+): Promise<StageConfig | undefined> {
+  const existing = getStageConfigById(db, organizationId, id);
+  if (!existing) return undefined;
+  const set: Partial<typeof workspaceStageConfigs.$inferInsert> = {
+    updatedAt: new Date().toISOString(),
+  };
+  if (patch.ownerAgent !== undefined) set.ownerAgent = patch.ownerAgent;
+  if (patch.instructions !== undefined) set.instructions = patch.instructions;
+  if (patch.advancePolicy !== undefined) set.advancePolicy = patch.advancePolicy;
+  if (patch.enabled !== undefined) set.enabled = patch.enabled ? 1 : 0;
+  await db
+    .update(workspaceStageConfigs)
+    .set(set)
+    .where(eq(workspaceStageConfigs.id, id));
+  return getStageConfigById(db, organizationId, id);
+}
+
 export function getStageConfig(
   db: WorkspaceDb,
   organizationId: string,
@@ -3972,6 +4013,53 @@ export function listAgentTypes(db: WorkspaceDb, organizationId: string) {
     .orderBy(workspaceAgentTypes.slug)
     .all();
 }
+
+export function getAgentTypeById(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+): AgentType | undefined {
+  return db
+    .select()
+    .from(workspaceAgentTypes)
+    .where(
+      and(
+        eq(workspaceAgentTypes.organizationId, organizationId),
+        eq(workspaceAgentTypes.id, id)
+      )
+    )
+    .get();
+}
+
+/** PILE-437 — partial update by id (upsert keys on slug; PATCH-by-id is
+ *  the friendlier contract for a registry entry). */
+export async function updateAgentType(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string,
+  patch: Partial<AgentTypeInput>
+): Promise<AgentType | undefined> {
+  const existing = getAgentTypeById(db, organizationId, id);
+  if (!existing) return undefined;
+  const set: Partial<typeof workspaceAgentTypes.$inferInsert> = {
+    updatedAt: new Date().toISOString(),
+  };
+  if (patch.slug !== undefined) set.slug = stageKey(patch.slug);
+  if (patch.name !== undefined) set.name = patch.name;
+  if (patch.providerAgentId !== undefined)
+    set.providerAgentId = patch.providerAgentId;
+  if (patch.jobSpec !== undefined) set.jobSpec = patch.jobSpec;
+  if (patch.toolScope !== undefined) set.toolScope = patch.toolScope;
+  if (patch.permissionsTier !== undefined)
+    set.permissionsTier = patch.permissionsTier;
+  if (patch.enabled !== undefined) set.enabled = patch.enabled ? 1 : 0;
+  await db
+    .update(workspaceAgentTypes)
+    .set(set)
+    .where(eq(workspaceAgentTypes.id, id));
+  return getAgentTypeById(db, organizationId, id);
+}
+
 
 export async function deleteAgentType(
   db: WorkspaceDb,
