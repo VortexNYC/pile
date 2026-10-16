@@ -108,6 +108,13 @@ export function registerAgentProvider(
   providers[agentId] = factory;
 }
 
+/** Whether a provider id resolves — registry entries plus runtime-registered
+ *  lanes (tests, plugins). Used to validate providerAgentId at write time
+ *  (PILE-437) so a typo fails at registration, not at dispatch. */
+export function hasAgentProvider(agentId: string): boolean {
+  return agentId in providers;
+}
+
 /** Whether a provider parks its sandbox after a terminal result for
  *  follow-up resumes — the population the kept-sandbox cap reaps and
  *  fleet-health counts (PILE-253). Capability is descriptor-level, so the

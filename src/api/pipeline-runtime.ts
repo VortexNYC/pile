@@ -5,6 +5,7 @@ import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 import { getWorkspaceStub } from "./stub.js";
+import { hasAgentProvider } from "../agents/index.js";
 
 const entityTypeSchema = z.enum(["issue", "deal", "customer"]);
 const params = z.object({ organizationId: z.string() });
@@ -172,6 +173,127 @@ const deleteAgentTypeRoute = createRoute({
   },
 });
 
+const getStageConfigRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/stage-configs/{id}",
+  tags: ["pipeline"],
+  middleware: [rls("workspace:read")],
+  request: { params: idParams },
+  responses: {
+    200: {
+      description: "Stage config",
+      content: { "application/json": { schema: stageConfigSchema } },
+    },
+    404: { description: "Stage config not found" },
+  },
+});
+
+const patchStageConfigSchema = z
+  .object({
+    ownerAgent: z.string().nullable().optional(),
+    instructions: z.string().nullable().optional(),
+    advancePolicy: z.enum(["none", "auto", "ready_flag"]).optional(),
+    enabled: z.boolean().optional(),
+  })
+  .strict();
+
+const patchStageConfigRoute = createRoute({
+  method: "patch",
+  path: "/workspaces/{organizationId}/stage-configs/{id}",
+  tags: ["pipeline"],
+  middleware: [rls("settings:edit")],
+  request: {
+    params: idParams,
+    body: {
+      content: { "application/json": { schema: patchStageConfigSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Stage config updated",
+      content: { "application/json": { schema: stageConfigSchema } },
+    },
+    404: { description: "Stage config not found" },
+  },
+});
+
+const getAgentTypeRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/agent-types/{id}",
+  tags: ["pipeline"],
+  middleware: [rls("workspace:read")],
+  request: { params: idParams },
+  responses: {
+    200: {
+      description: "Agent type",
+      content: { "application/json": { schema: agentTypeSchema } },
+    },
+    404: { description: "Agent type not found" },
+  },
+});
+
+const patchAgentTypeSchema = z
+  .object({
+    slug: z.string().min(1).optional(),
+    name: z.string().min(1).optional(),
+    providerAgentId: z.string().min(1).optional(),
+    jobSpec: z.string().nullable().optional(),
+    toolScope: z.string().nullable().optional(),
+    permissionsTier: z.string().nullable().optional(),
+    enabled: z.boolean().optional(),
+  })
+  .strict();
+
+const patchAgentTypeRoute = createRoute({
+  method: "patch",
+  path: "/workspaces/{organizationId}/agent-types/{id}",
+  tags: ["pipeline"],
+  middleware: [rls("settings:edit")],
+  request: {
+    params: idParams,
+    body: {
+      content: { "application/json": { schema: patchAgentTypeSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Agent type updated",
+      content: { "application/json": { schema: agentTypeSchema } },
+    },
+    400: { description: "Unknown providerAgentId" },
+    404: { description: "Agent type not found" },
+  },
+});
+
+const lintFindingSchema = z.object({
+  kind: z.enum([
+    "unknown_provider",
+    "unresolved_owner_template",
+    "unresolved_owner_config",
+  ]),
+  id: z.string(),
+  detail: z.string(),
+});
+
+const pipelineLintRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/pipeline/lint",
+  tags: ["pipeline"],
+  middleware: [rls("workspace:read")],
+  request: { params },
+  responses: {
+    200: {
+      description:
+        "Referential-integrity lint: agent types pointing at unknown providers, and stage templates/configs whose ownerAgent slug has no agent type",
+      content: {
+        "application/json": {
+          schema: z.object({ findings: z.array(lintFindingSchema) }),
+        },
+      },
+    },
+  },
+});
+
 function notFound(what: string): never {
   throw new VortexError({ code: "NOT_FOUND", status: 404, message: what });
 }
@@ -213,12 +335,109 @@ export function registerPipelineRuntimeRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId } = c.req.valid("param");
     const input = c.req.valid("json");
     const identity = c.var.workspaceIdentity;
+    // PILE-437 — reject provider ids that don't resolve at write time;
+    // a typo'd providerAgentId otherwise fails silently at dispatch.
+    if (!hasAgentProvider(input.providerAgentId)) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: `Unknown agent provider: ${input.providerAgentId}`,
+      });
+    }
     const stub = getWorkspaceStub(c.env, organizationId);
     const agentType = await stub.upsertAgentType({
       ...input,
       createdBy: identity.id,
     });
     return c.json(agentType, 200);
+  });
+
+  app.openapi(getStageConfigRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const config = await stub.getStageConfigById(id);
+    if (!config) notFound("Stage config not found");
+    return c.json(config, 200);
+  });
+
+  app.openapi(patchStageConfigRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const patch = c.req.valid("json");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const config = await stub.updateStageConfig(id, patch);
+    if (!config) notFound("Stage config not found");
+    return c.json(config, 200);
+  });
+
+  app.openapi(getAgentTypeRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const agentType = await stub.getAgentTypeById(id);
+    if (!agentType) notFound("Agent type not found");
+    return c.json(agentType, 200);
+  });
+
+  app.openapi(patchAgentTypeRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const patch = c.req.valid("json");
+    if (patch.providerAgentId && !hasAgentProvider(patch.providerAgentId)) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: `Unknown agent provider: ${patch.providerAgentId}`,
+      });
+    }
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const agentType = await stub.updateAgentType(id, patch);
+    if (!agentType) notFound("Agent type not found");
+    return c.json(agentType, 200);
+  });
+
+  app.openapi(pipelineLintRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const [types, templates, configs] = await Promise.all([
+      stub.listAgentTypes(),
+      stub.listStageTemplates(),
+      stub.listStageConfigs(),
+    ]);
+    const slugs = new Set(types.map((t) => t.slug));
+    const findings: Array<{
+      kind:
+        | "unknown_provider"
+        | "unresolved_owner_template"
+        | "unresolved_owner_config";
+      id: string;
+      detail: string;
+    }> = [];
+    for (const t of types) {
+      if (!hasAgentProvider(t.providerAgentId)) {
+        findings.push({
+          kind: "unknown_provider",
+          id: t.id,
+          detail: `agent type "${t.slug}" binds unknown provider "${t.providerAgentId}"`,
+        });
+      }
+    }
+    for (const t of templates) {
+      if (t.ownerAgent && !slugs.has(t.ownerAgent)) {
+        findings.push({
+          kind: "unresolved_owner_template",
+          id: t.id,
+          detail: `template "${t.title}" (${t.entityType}/${t.status}) owns to unregistered slug "${t.ownerAgent}"`,
+        });
+      }
+    }
+    for (const cfg of configs) {
+      if (cfg.ownerAgent && !slugs.has(cfg.ownerAgent)) {
+        findings.push({
+          kind: "unresolved_owner_config",
+          id: cfg.id,
+          detail: `stage config (${cfg.entityType}/${cfg.status}) owns to unregistered slug "${cfg.ownerAgent}"`,
+        });
+      }
+    }
+    return c.json({ findings }, 200);
   });
 
   app.openapi(deleteAgentTypeRoute, async (c) => {

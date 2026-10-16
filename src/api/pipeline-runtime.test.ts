@@ -70,6 +70,9 @@ describe("pipeline runtime (PILE-401/405/413)", () => {
     const seeded = await seedWorkspace();
     org = seeded.organizationId;
     admin = seeded.token;
+    // PILE-437 — providerAgentId must resolve at write time; register the
+    // mock the CRUD test binds.
+    registerAgentProvider("mock-scout", () => new MockAgentProvider("mock-scout"));
   });
 
   it("CRUDs agent types and stage configs", async () => {
@@ -278,5 +281,78 @@ describe("pipeline runtime (PILE-401/405/413)", () => {
     const drained = await drainDomainEvents(env, stub, org);
     expect(drained).toBeGreaterThan(0);
     expect(dispatched.length).toBeGreaterThan(0);
+  });
+
+  it("rejects unknown providers, patches by id, and lints unresolved owners (PILE-437)", async () => {
+    // providerAgentId must resolve at write time
+    const bad = await fetch(
+      `/workspaces/${org}/agent-types`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          slug: "ghost",
+          name: "Ghost",
+          providerAgentId: "not-a-real-provider",
+        }),
+      },
+      admin
+    );
+    expect(bad.status).toBe(400);
+
+    // PATCH agent type by id
+    const create = await fetch(
+      `/workspaces/${org}/agent-types`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          slug: "scout",
+          name: "Scout",
+          providerAgentId: "mock-scout",
+        }),
+      },
+      admin
+    );
+    const created = (await create.json()) as { id: string; slug: string };
+    const patch = await fetch(
+      `/workspaces/${org}/agent-types/${created.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ jobSpec: "profile merchants" }),
+      },
+      admin
+    );
+    expect(patch.status).toBe(200);
+    const patched = (await patch.json()) as { jobSpec: string };
+    expect(patched.jobSpec).toBe("profile merchants");
+
+    // an ownerAgent that has no registered agent type shows up in lint
+    const cfg = await fetch(
+      `/workspaces/${org}/stage-configs`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          entityType: "customer",
+          status: "Proposal",
+          ownerAgent: "unregistered-owner",
+        }),
+      },
+      admin
+    );
+    expect(cfg.status).toBe(200);
+    const lint = await fetch(
+      `/workspaces/${org}/pipeline/lint`,
+      {},
+      admin
+    );
+    const lintBody = (await lint.json()) as {
+      findings: Array<{ kind: string; detail: string }>;
+    };
+    expect(
+      lintBody.findings.some(
+        (f) =>
+          f.kind === "unresolved_owner_config" &&
+          f.detail.includes("unregistered-owner")
+      )
+    ).toBe(true);
   });
 });
