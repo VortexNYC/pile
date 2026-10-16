@@ -1077,6 +1077,7 @@ export async function markAllNotificationsRead(
 // ---- agent_sessions / agent_activities ----
 
 export interface AgentSessionInput {
+  /** Flue profile memory — resume key ({merchantId}-{agentSlug}). */
   organizationId: string;
   issueId: string;
   agentId: string;
@@ -1153,6 +1154,7 @@ export async function createAgentSession(
     resultSchema: input.resultSchema ?? null,
     stepKey: input.stepKey ?? null,
     guidance: input.guidance ?? null,
+    conversationKey: input.conversationKey ?? null,
     updatedAt: ts,
   });
   const row = await db
