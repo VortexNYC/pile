@@ -15,13 +15,14 @@ import {
   buildStepContext,
   createDeal,
   createFieldDefinition,
+  createExternalEventMapping,
   createStageTemplate,
+  deleteExternalEventMapping,
   deleteStageTemplate,
   evaluateStepCondition,
   getStageTemplate,
   linkEntities,
   listLinkedIssueIds,
-  listStageTemplates,
   listStageTemplatesForStatus,
   seedStageTemplates,
   setFieldValue,
@@ -30,8 +31,14 @@ import {
   createDocument,
   createDocumentSpace,
   documentAccessLevel,
+  extractEventField,
   getCustomerByExternalId,
   getDealByExternalId,
+  getExternalEventDeliveryByDedupeKey,
+  getExternalEventMapping,
+  insertExternalEventDelivery,
+  listExternalEventDeliveries,
+  listExternalEventMappings,
   listDeals,
   listDocumentsVisibleTo,
   setDocumentPermission,
@@ -62,8 +69,11 @@ import {
   reanchorQueuedDependents,
   replaceDocumentLinks,
   resolveGuidancePacks,
+  resolvePayloadPath,
   resolveCustomerForEmail,
   updateAgentSession,
+  updateExternalEventDelivery,
+  updateExternalEventMapping,
   updateGuidancePack,
   upsertNotificationPreferences,
   type WorkspaceDb,
@@ -1275,5 +1285,148 @@ describe("stage template data layer", () => {
         listLinkedIssueIds(db, WORKSPACE_ID, "customer", crypto.randomUUID())
       ).toEqual([]);
     });
+  });
+});
+
+describe("external event data (PILE-422)", () => {
+  it("CRUDs mappings with slug-normalized source and stepKey", async () => {
+    await withDb(async (db) => {
+      const mapping = createExternalEventMapping(db, {
+        organizationId: WORKSPACE_ID,
+        source: "Finix",
+        eventType: "merchant.approved",
+        entityType: "deal",
+        matchPath: "data.entity_id",
+        stepKey: "Approved",
+        secret: "whsec_test",
+      });
+      expect(mapping.source).toBe("finix");
+      expect(mapping.stepKey).toBe("approved");
+      // Provider event names are literals — never normalized.
+      expect(mapping.eventType).toBe("merchant.approved");
+      expect(mapping.enabled).toBe(true);
+
+      const listed = listExternalEventMappings(db, WORKSPACE_ID, {
+        source: "finix",
+      });
+      expect(listed.map((m) => m.id)).toContain(mapping.id);
+      expect(
+        getExternalEventMapping(db, WORKSPACE_ID, mapping.id)?.matchPath
+      ).toBe("data.entity_id");
+
+      const patched = updateExternalEventMapping(db, WORKSPACE_ID, mapping.id, {
+        matchPath: "data.merchant.id",
+        enabled: false,
+      });
+      expect(patched?.matchPath).toBe("data.merchant.id");
+      expect(
+        listExternalEventMappings(db, WORKSPACE_ID, {
+          source: "finix",
+          enabledOnly: true,
+        })
+      ).toHaveLength(0);
+
+      expect(deleteExternalEventMapping(db, WORKSPACE_ID, mapping.id)).toBe(
+        true
+      );
+      expect(
+        getExternalEventMapping(db, WORKSPACE_ID, mapping.id)
+      ).toBeUndefined();
+    });
+  });
+
+  it("dedupes deliveries on (org, source, dedupeKey) and finalizes rows", async () => {
+    await withDb(async (db) => {
+      const first = insertExternalEventDelivery(db, {
+        organizationId: WORKSPACE_ID,
+        source: "finix",
+        eventType: "merchant.approved",
+        eventId: "evt_1",
+        dedupeKey: "evt_1",
+        status: "processing",
+        payload: "{}",
+      });
+      expect(first).toBeDefined();
+      // Same dedupe key — the insert loses and returns undefined.
+      const dupe = insertExternalEventDelivery(db, {
+        organizationId: WORKSPACE_ID,
+        source: "finix",
+        dedupeKey: "evt_1",
+        status: "processing",
+      });
+      expect(dupe).toBeUndefined();
+      // A different source can reuse the same event id.
+      const otherSource = insertExternalEventDelivery(db, {
+        organizationId: WORKSPACE_ID,
+        source: "seal",
+        dedupeKey: "evt_1",
+        status: "processing",
+      });
+      expect(otherSource).toBeDefined();
+
+      const finalized = updateExternalEventDelivery(
+        db,
+        WORKSPACE_ID,
+        first!.id,
+        {
+          status: "applied",
+          entityType: "deal",
+          entityId: "deal-1",
+          completedIssueIds: ["i-1", "i-2"],
+        }
+      );
+      expect(finalized?.status).toBe("applied");
+      expect(JSON.parse(finalized!.completedIssueIds!)).toEqual(["i-1", "i-2"]);
+      expect(
+        getExternalEventDeliveryByDedupeKey(db, WORKSPACE_ID, "finix", "evt_1")
+          ?.status
+      ).toBe("applied");
+
+      const deliveries = listExternalEventDeliveries(db, WORKSPACE_ID, {
+        source: "finix",
+      });
+      expect(deliveries).toHaveLength(1);
+      expect(
+        listExternalEventDeliveries(db, WORKSPACE_ID, {
+          status: "processing",
+        }).map((d) => d.source)
+      ).toEqual(["seal"]);
+    });
+  });
+
+  it("resolves payload paths through objects and array indexes", () => {
+    const payload = {
+      type: "merchant.updated",
+      data: {
+        entity: { id: "mu_123" },
+        transfers: [{ id: "t_1" }],
+        count: 3,
+      },
+    };
+    expect(resolvePayloadPath(payload, "data.entity.id")).toBe("mu_123");
+    expect(resolvePayloadPath(payload, "data.transfers.0.id")).toBe("t_1");
+    expect(resolvePayloadPath(payload, "data.count")).toBe("3");
+    expect(resolvePayloadPath(payload, "data.missing")).toBeNull();
+    expect(resolvePayloadPath(payload, "data.entity.id.deeper")).toBeNull();
+    expect(resolvePayloadPath(null, "data.id")).toBeNull();
+    // Non-scalar terminals don't resolve.
+    expect(resolvePayloadPath(payload, "data.entity")).toBeNull();
+  });
+
+  it("extracts the event type and id across provider envelope spellings", () => {
+    expect(
+      extractEventField({ type: "merchant.approved" }, ["type", "event_type"])
+    ).toBe("merchant.approved");
+    expect(
+      extractEventField({ event_type: "signed" }, ["type", "event_type"])
+    ).toBe("signed");
+    expect(extractEventField({ event: "delivered" }, ["type", "event"])).toBe(
+      "delivered"
+    );
+    expect(extractEventField({ id: "evt_9" }, ["id", "event_id"])).toBe(
+      "evt_9"
+    );
+    expect(extractEventField("nope", ["type"])).toBeNull();
+    expect(extractEventField({}, ["type"])).toBeNull();
   });
 });

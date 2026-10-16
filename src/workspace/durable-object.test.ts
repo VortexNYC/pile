@@ -2,6 +2,7 @@ import { env, evictDurableObject, runInDurableObject } from "cloudflare:test";
 import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
+import { hmacSha256Hex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
 import {
   githubUsers,
@@ -2754,7 +2755,7 @@ describe("stage templates (PILE-411)", () => {
       instance.getIssueChildren(issue.id)
     );
     const byStep = new Map(children.map((c) => [c.stepKey, c]));
-    expect([...byStep.keys()].sort()).toEqual(["audit", "kickoff"]);
+    expect([...byStep.keys()].toSorted()).toEqual(["audit", "kickoff"]);
     expect(byStep.get("kickoff")).toMatchObject({
       title: "Kickoff",
       required: true,
@@ -2857,7 +2858,7 @@ describe("stage templates (PILE-411)", () => {
     const children = await withWorkspace(stub, (instance) =>
       instance.getIssueChildren(deal.id)
     );
-    const steps = children.map((c) => c.stepKey).sort();
+    const steps = children.map((c) => c.stepKey).toSorted();
     expect(steps).toEqual(
       [
         "contact_found",
@@ -2865,7 +2866,7 @@ describe("stage templates (PILE-411)", () => {
         "profiled",
         "ready_for_outreach",
         "sourced",
-      ].sort()
+      ].toSorted()
     );
 
     // A customer with no linked issue creates nothing.
@@ -2915,5 +2916,366 @@ describe("stage templates (PILE-411)", () => {
         )
       ).toEqual([]);
     }
+  });
+});
+
+function deliveries(instance: WorkspaceDO, source: string) {
+  return instance.listExternalEventDeliveries({ source });
+}
+
+describe("external event ingest (PILE-422)", () => {
+  beforeAll(ensureWorkspace);
+  const SECRET = "whsec_test_secret";
+
+  async function signed(
+    instance: WorkspaceDO,
+    input: {
+      source: string;
+      eventId?: string | null;
+      body: unknown;
+      secret?: string;
+      signaturePrefix?: string;
+    }
+  ) {
+    const body =
+      typeof input.body === "string" ? input.body : JSON.stringify(input.body);
+    const hex = await hmacSha256Hex(input.secret ?? SECRET, body);
+    return instance.ingestExternalEvent({
+      source: input.source,
+      signatures: [`${input.signaturePrefix ?? "sha256="}${hex}`],
+      eventId: input.eventId ?? null,
+      body,
+    });
+  }
+
+  it("completes the mapped sub-step under the matched issue's parent", async () => {
+    const stub = getStub();
+    await withWorkspace(stub, async (instance) => {
+      await instance.createExternalEventMapping(
+        {
+          source: "finix",
+          eventType: "merchant.approved",
+          entityType: "issue",
+          matchPath: "data.merchant_id",
+          stepKey: "approved",
+          secret: SECRET,
+        },
+        {}
+      );
+      const parent = await instance.createIssue({
+        title: "Deal — Acme",
+        externalRef: "finix-mu-1",
+      });
+      const child = await instance.createIssue({
+        title: "Approved",
+        parentId: parent.id,
+        stepKey: "approved",
+      });
+      const sibling = await instance.createIssue({
+        title: "Submitted to Finix",
+        parentId: parent.id,
+        stepKey: "submitted_to_finix",
+      });
+
+      const result = await signed(instance, {
+        source: "finix",
+        eventId: "evt_approved_1",
+        body: {
+          id: "evt_approved_1",
+          type: "merchant.approved",
+          data: { merchant_id: "finix-mu-1" },
+        },
+      });
+      expect(result.status).toBe("applied");
+      expect(result.completedIssueIds).toEqual([child.id]);
+
+      const updated = await instance.getIssue(child.id);
+      expect(updated?.status).toBe("done");
+      expect(updated?.resolution).toBe("resolved");
+      // Sibling steps are untouched.
+      expect((await instance.getIssue(sibling.id))?.status).toBe("backlog");
+
+      // The payload lands as evidence on the completed sub-step.
+      const comments = await instance.listComments(child.id);
+      const evidence = comments.find(
+        (c) => c.externalSource === "external-event:finix"
+      );
+      expect(evidence?.externalId).toBe("evt_approved_1");
+      expect(evidence?.body).toContain("merchant.approved");
+      expect(evidence?.body).toContain("finix-mu-1");
+
+      const rows = await deliveries(instance, "finix");
+      expect(rows).toHaveLength(1);
+      expect(rows[0].status).toBe("applied");
+      expect(rows[0].entityId).toBe(parent.id);
+      expect(JSON.parse(rows[0].completedIssueIds!)).toEqual([child.id]);
+      expect(rows[0].payload).toContain("finix-mu-1");
+    });
+  });
+
+  it("resolves through a deal's externalId to its linked parent issue", async () => {
+    const stub = getStub();
+    await withWorkspace(stub, async (instance) => {
+      await instance.createExternalEventMapping(
+        {
+          source: "seal",
+          eventType: "agreement.signed",
+          entityType: "deal",
+          matchPath: "agreement.deal_ref",
+          stepKey: "agreement_signed",
+          secret: SECRET,
+        },
+        {}
+      );
+      const customer = await instance.createCustomer({ name: "Seal Corp" });
+      const deal = await instance.createDeal({
+        customerId: customer.id,
+        name: "Seal deal",
+        externalId: "deal-ext-7",
+        stage: "contracting",
+      });
+      const parent = await instance.createIssue({ title: "Deal — Seal" });
+      await instance.linkDealIssue(deal.id, parent.id);
+      const child = await instance.createIssue({
+        title: "Agreement signed",
+        parentId: parent.id,
+        stepKey: "agreement_signed",
+      });
+
+      const result = await signed(instance, {
+        source: "seal",
+        body: {
+          id: "seal-evt-1",
+          type: "agreement.signed",
+          agreement: { deal_ref: "deal-ext-7" },
+        },
+      });
+      expect(result.status).toBe("applied");
+      expect(result.completedIssueIds).toEqual([child.id]);
+      expect((await instance.getIssue(child.id))?.status).toBe("done");
+    });
+  });
+
+  it("completes the matched issue directly when it carries the stepKey", async () => {
+    const stub = getStub();
+    await withWorkspace(stub, async (instance) => {
+      await instance.createExternalEventMapping(
+        {
+          source: "shipping",
+          eventType: "package.delivered",
+          entityType: "issue",
+          matchPath: "tracking.ticket",
+          stepKey: "hardware_shipped",
+          secret: SECRET,
+        },
+        {}
+      );
+      const parent = await instance.createIssue({ title: "Onboard Acme" });
+      const step = await instance.createIssue({
+        title: "Hardware shipped",
+        parentId: parent.id,
+        stepKey: "hardware_shipped",
+        externalRef: "tracking-77",
+      });
+
+      const result = await signed(instance, {
+        source: "shipping",
+        body: {
+          id: "ship-1",
+          type: "package.delivered",
+          tracking: { ticket: "tracking-77" },
+        },
+      });
+      expect(result.status).toBe("applied");
+      expect(result.completedIssueIds).toEqual([step.id]);
+      expect((await instance.getIssue(step.id))?.status).toBe("done");
+    });
+  });
+
+  it("rejects a bad signature without touching state", async () => {
+    const stub = getStub();
+    await withWorkspace(stub, async (instance) => {
+      const parent = await instance.createIssue({
+        title: "Deal — BadSig",
+        externalRef: "finix-mu-bad",
+      });
+      const child = await instance.createIssue({
+        title: "Approved",
+        parentId: parent.id,
+        stepKey: "approved",
+      });
+
+      const result = await signed(instance, {
+        source: "finix",
+        secret: "wrong-secret",
+        body: {
+          id: "evt_bad_sig",
+          type: "merchant.approved",
+          data: { merchant_id: "finix-mu-bad" },
+        },
+      });
+      expect(result.status).toBe("invalid_signature");
+      expect((await instance.getIssue(child.id))?.status).toBe("backlog");
+
+      const rows = await deliveries(instance, "finix");
+      const row = rows.find((r) => r.eventId === "evt_bad_sig");
+      expect(row?.status).toBe("invalid_signature");
+    });
+  });
+
+  it("makes replays a no-op — no second write, no second comment", async () => {
+    const stub = getStub();
+    await withWorkspace(stub, async (instance) => {
+      const parent = await instance.createIssue({
+        title: "Deal — Replay",
+        externalRef: "finix-mu-replay",
+      });
+      const child = await instance.createIssue({
+        title: "Approved",
+        parentId: parent.id,
+        stepKey: "approved",
+      });
+      const body = JSON.stringify({
+        id: "evt_replay",
+        type: "merchant.approved",
+        data: { merchant_id: "finix-mu-replay" },
+      });
+
+      const first = await signed(instance, {
+        source: "finix",
+        body,
+      });
+      expect(first.status).toBe("applied");
+      const second = await signed(instance, {
+        source: "finix",
+        body,
+      });
+      expect(second.status).toBe("replay");
+      expect(second.outcome).toBe("applied");
+      expect(second.deliveryId).toBe(first.deliveryId);
+
+      const rows = (await deliveries(instance, "finix")).filter(
+        (r) => r.eventId === "evt_replay"
+      );
+      expect(rows).toHaveLength(1);
+      const comments = (await instance.listComments(child.id)).filter(
+        (c) => c.externalId === "evt_replay"
+      );
+      expect(comments).toHaveLength(1);
+    });
+  });
+
+  it("logs unmapped and unmatched events without changing state", async () => {
+    const stub = getStub();
+    await withWorkspace(stub, async (instance) => {
+      const parent = await instance.createIssue({
+        title: "Deal — Unmatched",
+        externalRef: "finix-mu-unknown",
+      });
+      const child = await instance.createIssue({
+        title: "Approved",
+        parentId: parent.id,
+        stepKey: "approved",
+      });
+
+      // Verified signature, but no mapping for this event type.
+      const unmapped = await signed(instance, {
+        source: "finix",
+        body: {
+          id: "evt_unmapped",
+          type: "merchant.declined",
+          data: { merchant_id: "finix-mu-unknown" },
+        },
+      });
+      expect(unmapped.status).toBe("unmapped");
+
+      // Mapped event type, but the payload resolves to no record.
+      const noRecord = await signed(instance, {
+        source: "finix",
+        body: {
+          id: "evt_no_record",
+          type: "merchant.approved",
+          data: { merchant_id: "finix-mu-ghost" },
+        },
+      });
+      expect(noRecord.status).toBe("no_record");
+
+      // Mapped event and record, but no sub-step carries the key.
+      const noStepParent = await instance.createIssue({
+        title: "Deal — NoStep",
+        externalRef: "finix-mu-nostep",
+      });
+      await instance.createIssue({
+        title: "Other step",
+        parentId: noStepParent.id,
+        stepKey: "sourced",
+      });
+      const noStep = await signed(instance, {
+        source: "finix",
+        body: {
+          id: "evt_no_step",
+          type: "merchant.approved",
+          data: { merchant_id: "finix-mu-nostep" },
+        },
+      });
+      expect(noStep.status).toBe("no_step");
+
+      // The step exists but is already terminal — a second event (e.g. the
+      // provider's own correction event with a fresh id) changes nothing.
+      const doneParent = await instance.createIssue({
+        title: "Deal — Done",
+        externalRef: "finix-mu-done",
+      });
+      await instance.createIssue({
+        title: "Approved",
+        parentId: doneParent.id,
+        stepKey: "approved",
+        status: "done",
+        resolution: "resolved",
+      });
+      const alreadyDone = await signed(instance, {
+        source: "finix",
+        body: {
+          id: "evt_already_done",
+          type: "merchant.approved",
+          data: { merchant_id: "finix-mu-done" },
+        },
+      });
+      expect(alreadyDone.status).toBe("already_done");
+
+      expect((await instance.getIssue(child.id))?.status).toBe("backlog");
+      const rows = await deliveries(instance, "finix");
+      const byEvent = new Map(rows.map((r) => [r.eventId, r.status]));
+      expect(byEvent.get("evt_unmapped")).toBe("unmapped");
+      expect(byEvent.get("evt_no_record")).toBe("no_record");
+      expect(byEvent.get("evt_no_step")).toBe("no_step");
+      expect(byEvent.get("evt_already_done")).toBe("already_done");
+    });
+  });
+
+  it("dedupes id-less events on a body hash", async () => {
+    const stub = getStub();
+    await withWorkspace(stub, async (instance) => {
+      const body = JSON.stringify({
+        type: "merchant.approved",
+        data: { merchant_id: "finix-mu-idless" },
+      });
+      const first = await signed(instance, { source: "finix", body });
+      expect(first.status).toBe("no_record");
+      const second = await signed(instance, { source: "finix", body });
+      expect(second.status).toBe("replay");
+      expect(second.outcome).toBe("no_record");
+    });
+  });
+
+  it("reports unknown_source when no mapping exists for the source", async () => {
+    const stub = getStub();
+    await withWorkspace(stub, async (instance) => {
+      const result = await signed(instance, {
+        source: "nonexistent-source",
+        body: { id: "x", type: "anything" },
+      });
+      expect(result.status).toBe("unknown_source");
+    });
   });
 });

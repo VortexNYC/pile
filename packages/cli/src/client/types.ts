@@ -7644,6 +7644,330 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/external-events/{source}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create external event
+         * @description Inbound provider webhook. The raw JSON body is verified with HMAC-SHA256 against the source's mapping secret — send the hex digest in any *-signature header (X-Pile-Signature, Finix-Signature, sha256=<hex>, or t=...,v1=<hex> envelopes all work). The provider event id for dedupe comes from a *-Event-Id header or the payload's id field.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    source: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            responses: {
+                /** @description Event received and recorded */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                            status: string;
+                            deliveryId?: string;
+                            outcome?: string;
+                            completedIssueIds?: string[];
+                        };
+                    };
+                };
+                /** @description Invalid webhook signature */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description External event source not configured */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/external-event-mappings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List external event mappings */
+        get: {
+            parameters: {
+                query?: {
+                    source?: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description External event mapping list */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            mappings: components["schemas"]["ExternalEventMapping"][];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Create external event mapping
+         * @description Bind an inbound provider event to a stage sub-step. source and stepKey slug-normalize; eventType is the provider's literal event name ("*" is a catch-all). The matcher resolves the payload at matchPath to the record's externalId (deal/customer) or externalRef (issue).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        source: string;
+                        eventType: string;
+                        /** @enum {string} */
+                        entityType: "issue" | "deal" | "customer";
+                        /** @description Dotted path into the event payload resolving to the record's external id — e.g. "data.merchant_id". */
+                        matchPath: string;
+                        stepKey: string;
+                        /** @description HMAC-SHA256 signing secret for this source's deliveries. */
+                        secret: string;
+                        enabled?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description External event mapping created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            mapping: components["schemas"]["ExternalEventMapping"];
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/external-event-mappings/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get external event mapping */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description External event mapping */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            mapping: components["schemas"]["ExternalEventMapping"];
+                        };
+                    };
+                };
+                /** @description External event mapping not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /** Delete external event mapping */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description External event mapping deleted */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                        };
+                    };
+                };
+                /** @description External event mapping not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** Update external event mapping */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        source?: string;
+                        eventType?: string;
+                        /** @enum {string} */
+                        entityType?: "issue" | "deal" | "customer";
+                        matchPath?: string;
+                        stepKey?: string;
+                        secret?: string;
+                        enabled?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description External event mapping updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            mapping: components["schemas"]["ExternalEventMapping"];
+                        };
+                    };
+                };
+                /** @description External event mapping not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/external-event-deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List external event deliveries
+         * @description The inbound event ledger — every delivery lands one row recording its outcome (applied, already_done, no_step, no_record, unmapped, invalid_payload, invalid_signature). Replays return the original outcome without writing a row.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    source?: string;
+                    status?: string;
+                    limit?: number;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description External event delivery log */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            deliveries: components["schemas"]["ExternalEventDelivery"][];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/external-links": {
         parameters: {
             query?: never;
@@ -30165,6 +30489,34 @@ export interface components {
             createdBy: string | null;
             createdAt: string;
             updatedAt: string;
+        };
+        ExternalEventMapping: {
+            id: string;
+            organizationId: string;
+            source: string;
+            eventType: string;
+            /** @enum {string} */
+            entityType: "issue" | "deal" | "customer";
+            matchPath: string;
+            stepKey: string;
+            enabled: boolean;
+            createdBy: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+        ExternalEventDelivery: {
+            id: string;
+            organizationId: string;
+            source: string;
+            eventType: string | null;
+            eventId: string | null;
+            dedupeKey: string;
+            status: string;
+            entityType: string | null;
+            entityId: string | null;
+            completedIssueIds: string[];
+            payload: string | null;
+            createdAt: string;
         };
     };
     responses: never;

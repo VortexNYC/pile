@@ -46,6 +46,11 @@ import {
   TRIAGE_PURPOSE,
 } from "../agents/triage.js";
 import { sendEmail } from "../email/send.js";
+import {
+  hmacSha256Hex,
+  sha256Hex,
+  timingSafeEqualHex,
+} from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
 import { sanitizeLaneResult } from "../global/lane-guard.js";
 import {
@@ -86,6 +91,9 @@ import {
   type AgentSessionResult,
   type AgentSessionStatus,
   type Comment,
+  type ExternalEventDeliveryStatus,
+  type ExternalEventIngestInput,
+  type ExternalEventIngestResult,
   type GitIdentity,
   type Issue,
   type IssueClaim,
@@ -211,6 +219,26 @@ async function wouldCreateCycle(
   const next = issue?.parentId ?? null;
   if (next === null) return false;
   return wouldCreateCycle(getIssue, issueId, next, seen);
+}
+
+// PILE-422 — cap on the raw payload retained on a delivery row (evidence).
+const EXTERNAL_EVENT_PAYLOAD_MAX_CHARS = 64_000;
+// Cap on the payload quoted into the evidence comment on the completed
+// sub-step — the full body stays on the delivery row.
+const EXTERNAL_EVENT_COMMENT_PAYLOAD_CHARS = 2_000;
+
+/** Signature headers carry provider-specific envelopes — bare hex,
+ *  "sha256=<hex>" (GitHub-style), or "t=<ms>,v1=<hex>" (Stripe-style). The
+ *  verification contract is one MAC — hex HMAC-SHA256 of the raw body — so a
+ *  presented signature matches when any 64-hex token in it equals it. */
+function externalSignatureTokens(headers: string[]): string[] {
+  const tokens: string[] = [];
+  for (const header of headers) {
+    for (const match of header.matchAll(/[0-9a-fA-F]{64}/g)) {
+      tokens.push(match[0].toLowerCase());
+    }
+  }
+  return tokens;
 }
 
 function validateIssueResolution(
@@ -3376,6 +3404,346 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       );
     }
     return result;
+  }
+
+  // ---- external events (PILE-422 — inbound provider webhooks complete
+  // stage sub-steps; mappings bind source+eventType to a stepKey) ----
+
+  listExternalEventMappings(filter?: { source?: string }) {
+    return data.listExternalEventMappings(this.db, this.organizationId, {
+      source: filter?.source,
+    });
+  }
+
+  getExternalEventMapping(id: string) {
+    return data.getExternalEventMapping(this.db, this.organizationId, id);
+  }
+
+  async createExternalEventMapping(
+    input: Omit<data.ExternalEventMappingInput, "organizationId">,
+    actor: { actorId?: string | null; actorType?: string | null }
+  ) {
+    await this.ready;
+    const mapping = data.createExternalEventMapping(this.db, {
+      ...input,
+      organizationId: this.organizationId,
+      createdBy: actor.actorId,
+    });
+    this.audit(
+      "external_event_mapping.created",
+      "external_event_mapping",
+      mapping.id,
+      actor.actorId,
+      {
+        source: { from: null, to: mapping.source },
+        eventType: { from: null, to: mapping.eventType },
+        stepKey: { from: null, to: mapping.stepKey },
+      },
+      { actorType: actor.actorType }
+    );
+    return mapping;
+  }
+
+  async updateExternalEventMapping(
+    id: string,
+    patch: data.ExternalEventMappingPatch,
+    actor: { actorId?: string | null; actorType?: string | null }
+  ) {
+    await this.ready;
+    const mapping = data.updateExternalEventMapping(
+      this.db,
+      this.organizationId,
+      id,
+      patch
+    );
+    if (mapping) {
+      // Secret rotation is audited as a boolean flip — the credential never
+      // lands in the log.
+      this.audit(
+        "external_event_mapping.updated",
+        "external_event_mapping",
+        id,
+        actor.actorId,
+        Object.fromEntries(
+          Object.entries(patch).map(([key, value]) => [
+            key,
+            {
+              from: null,
+              to: key === "secret" ? "<rotated>" : value,
+            },
+          ])
+        ),
+        { actorType: actor.actorType }
+      );
+    }
+    return mapping;
+  }
+
+  async deleteExternalEventMapping(
+    id: string,
+    actor: { actorId?: string | null; actorType?: string | null }
+  ) {
+    await this.ready;
+    const ok = data.deleteExternalEventMapping(
+      this.db,
+      this.organizationId,
+      id
+    );
+    if (ok) {
+      this.audit(
+        "external_event_mapping.deleted",
+        "external_event_mapping",
+        id,
+        actor.actorId,
+        null,
+        { actorType: actor.actorType }
+      );
+    }
+    return ok;
+  }
+
+  listExternalEventDeliveries(filter?: {
+    source?: string;
+    status?: string;
+    limit?: number;
+  }) {
+    return data.listExternalEventDeliveries(this.db, this.organizationId, {
+      source: filter?.source,
+      status: filter?.status,
+      limit: filter?.limit,
+    });
+  }
+
+  /** PILE-422 — one inbound provider event in, one recorded outcome out.
+   *  Pipeline: claim the dedupe slot → verify the source's HMAC → resolve
+   *  the mapping by event type → resolve the record by the matcher's
+   *  payload path → mark the sub-step issue(s) done with the payload as
+   *  evidence. Every outcome lands on the delivery row, so unmatched and
+   *  invalid events are logged without changing state and replays
+   *  short-circuit on (org, source, dedupeKey). */
+  async ingestExternalEvent(
+    input: ExternalEventIngestInput
+  ): Promise<ExternalEventIngestResult> {
+    await this.ready;
+    const source = data.stageKey(input.source);
+    const mappings = data.listExternalEventMappings(
+      this.db,
+      this.organizationId,
+      { source, enabledOnly: true }
+    );
+    if (mappings.length === 0) return { status: "unknown_source" };
+
+    // The body is parsed before verification — the event type only picks
+    // which mapping/secret applies; nothing unverified can change state.
+    let payload: unknown = null;
+    try {
+      payload = JSON.parse(input.body);
+    } catch {
+      payload = null;
+    }
+    const eventType = data.extractEventField(payload, [
+      "type",
+      "event_type",
+      "event",
+    ]);
+    const eventId =
+      input.eventId ?? data.extractEventField(payload, ["id", "event_id"]);
+    // The provider event id is the dedupe key when present; id-less sources
+    // collapse on a content hash so a byte-identical replay still does
+    // nothing.
+    const dedupeKey = eventId ?? (await sha256Hex(`${source}:${input.body}`));
+
+    // Claim the dedupe slot up front — the claim is a synchronous pair of
+    // statements, so a concurrent replay of the same event loses the race
+    // before either side touches an issue.
+    const claimed = data.insertExternalEventDelivery(this.db, {
+      organizationId: this.organizationId,
+      source,
+      eventType,
+      eventId,
+      dedupeKey,
+      status: "processing",
+      payload: input.body.slice(0, EXTERNAL_EVENT_PAYLOAD_MAX_CHARS),
+    });
+    if (!claimed) {
+      const existing = data.getExternalEventDeliveryByDedupeKey(
+        this.db,
+        this.organizationId,
+        source,
+        dedupeKey
+      );
+      return {
+        status: "replay",
+        deliveryId: existing?.id,
+        outcome: existing?.status,
+      };
+    }
+
+    const finish = (
+      status: ExternalEventDeliveryStatus,
+      extra?: {
+        entityType?: string | null;
+        entityId?: string | null;
+        completedIssueIds?: string[];
+      }
+    ): ExternalEventIngestResult => {
+      data.updateExternalEventDelivery(
+        this.db,
+        this.organizationId,
+        claimed.id,
+        {
+          status,
+          ...extra,
+        }
+      );
+      return {
+        status,
+        deliveryId: claimed.id,
+        ...(extra?.completedIssueIds
+          ? { completedIssueIds: extra.completedIssueIds }
+          : {}),
+      };
+    };
+
+    // HMAC-SHA256 hex over the raw body, tried against every enabled
+    // mapping for the source — providers commonly share one webhook
+    // secret across their event types.
+    const tokens = externalSignatureTokens(input.signatures);
+    let verified = false;
+    for (const mapping of mappings) {
+      const expected = await hmacSha256Hex(mapping.secret, input.body);
+      if (tokens.some((token) => timingSafeEqualHex(token, expected))) {
+        verified = true;
+        break;
+      }
+    }
+    if (!verified) {
+      return finish("invalid_signature");
+    }
+    if (payload === null || eventType === null) {
+      return finish("invalid_payload");
+    }
+
+    const mapping =
+      mappings.find((m) => m.eventType === eventType) ??
+      // "*" is the catch-all for sources that don't split event types.
+      mappings.find((m) => m.eventType === "*");
+    if (!mapping) {
+      return finish("unmapped");
+    }
+
+    // Resolve the record: the matcher's payload path yields the external
+    // id — deal/customer external_id or issue external_ref.
+    const externalValue = data.resolvePayloadPath(payload, mapping.matchPath);
+    let entityId: string | null = null;
+    let directTarget: Issue | undefined;
+    let sawStep = false;
+    const parents: Issue[] = [];
+    if (externalValue !== null) {
+      if (mapping.entityType === "deal") {
+        const deal = data.getDealByExternalId(
+          this.db,
+          this.organizationId,
+          externalValue
+        );
+        if (deal) {
+          entityId = deal.id;
+          parents.push(...(await this.linkedParentIssues("deal", deal.id)));
+        }
+      } else if (mapping.entityType === "customer") {
+        const customer = data.getCustomerByExternalId(
+          this.db,
+          this.organizationId,
+          externalValue
+        );
+        if (customer) {
+          entityId = customer.id;
+          parents.push(
+            ...(await this.linkedParentIssues("customer", customer.id))
+          );
+        }
+      } else {
+        const issue = await this.getIssueByExternalRef(externalValue);
+        if (issue) {
+          entityId = issue.id;
+          // The matched issue may itself carry the step (it IS the
+          // sub-step) or be the parent the sub-step hangs under.
+          if (issue.stepKey === mapping.stepKey) {
+            directTarget = issue;
+            sawStep = true;
+          } else {
+            parents.push(issue);
+          }
+        }
+      }
+    }
+    if (entityId === null) {
+      return finish("no_record");
+    }
+
+    // Collect open sub-steps with the mapped stepKey under the record's
+    // parent issues (or the record issue itself).
+    const targets = new Map<string, Issue>();
+    if (directTarget && !isTerminalStatus(directTarget.status)) {
+      targets.set(directTarget.id, directTarget);
+    }
+    for (const parent of parents) {
+      if (parent.parentId || parent.isDraft) continue;
+      for (const child of await this.getIssueChildren(parent.id)) {
+        if (child.stepKey !== mapping.stepKey) continue;
+        sawStep = true;
+        if (!isTerminalStatus(child.status)) {
+          targets.set(child.id, child);
+        }
+      }
+    }
+
+    const actorId = `external-event:${source}`;
+    const completedIssueIds: string[] = [];
+    for (const target of targets.values()) {
+      const updated = await this.updateIssue(
+        target.id,
+        { status: "done", resolution: "resolved" },
+        actorId
+      );
+      if (!updated) continue;
+      const evidence =
+        input.body.length > EXTERNAL_EVENT_COMMENT_PAYLOAD_CHARS
+          ? `${input.body.slice(0, EXTERNAL_EVENT_COMMENT_PAYLOAD_CHARS)}…`
+          : input.body;
+      await this.createComment({
+        issueId: target.id,
+        body: `Sub-step completed by external event \`${mapping.eventType}\` from \`${source}\`${eventId ? ` (\`${eventId}\`)` : ""}. Evidence:\n\n\`\`\`json\n${evidence}\n\`\`\``,
+        externalId: dedupeKey,
+        externalSource: `external-event:${source}`,
+        externalAuthor: source,
+        internal: true,
+      });
+      completedIssueIds.push(target.id);
+    }
+
+    if (completedIssueIds.length === 0) {
+      return finish(sawStep ? "already_done" : "no_step", {
+        entityType: mapping.entityType,
+        entityId,
+      });
+    }
+    this.audit(
+      "external_event.applied",
+      "external_event_delivery",
+      claimed.id,
+      actorId,
+      {
+        stepKey: { from: null, to: mapping.stepKey },
+        completed: { from: 0, to: completedIssueIds.length },
+      },
+      { actorType: "system" }
+    );
+    return finish("applied", {
+      entityType: mapping.entityType,
+      entityId,
+      completedIssueIds,
+    });
   }
 
   /** PILE-420 — minutes of silence (no activity, no heartbeat) before a

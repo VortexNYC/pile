@@ -385,6 +385,126 @@
           "createdAt",
           "updatedAt"
         ]
+      },
+      "ExternalEventMapping": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "organizationId": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "eventType": {
+            "type": "string"
+          },
+          "entityType": {
+            "type": "string",
+            "enum": [
+              "issue",
+              "deal",
+              "customer"
+            ]
+          },
+          "matchPath": {
+            "type": "string"
+          },
+          "stepKey": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "createdBy": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "organizationId",
+          "source",
+          "eventType",
+          "entityType",
+          "matchPath",
+          "stepKey",
+          "enabled",
+          "createdBy",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "ExternalEventDelivery": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "organizationId": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "eventType": {
+            "type": "string",
+            "nullable": true
+          },
+          "eventId": {
+            "type": "string",
+            "nullable": true
+          },
+          "dedupeKey": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "entityType": {
+            "type": "string",
+            "nullable": true
+          },
+          "entityId": {
+            "type": "string",
+            "nullable": true
+          },
+          "completedIssueIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "payload": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "organizationId",
+          "source",
+          "eventType",
+          "eventId",
+          "dedupeKey",
+          "status",
+          "entityType",
+          "entityId",
+          "completedIssueIds",
+          "payload",
+          "createdAt"
+        ]
       }
     },
     "parameters": {}
@@ -17158,6 +17278,481 @@
           }
         },
         "summary": "Create stage template seed"
+      }
+    },
+    "/workspaces/{organizationId}/external-events/{source}": {
+      "post": {
+        "tags": [
+          "external-events"
+        ],
+        "description": "Inbound provider webhook. The raw JSON body is verified with HMAC-SHA256 against the source's mapping secret — send the hex digest in any *-signature header (X-Pile-Signature, Finix-Signature, sha256=<hex>, or t=...,v1=<hex> envelopes all work). The provider event id for dedupe comes from a *-Event-Id header or the payload's id field.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "source",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {
+                  "nullable": true
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Event received and recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "deliveryId": {
+                      "type": "string"
+                    },
+                    "outcome": {
+                      "type": "string"
+                    },
+                    "completedIssueIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid webhook signature"
+          },
+          "404": {
+            "description": "External event source not configured"
+          }
+        },
+        "summary": "Create external event"
+      }
+    },
+    "/workspaces/{organizationId}/external-event-mappings": {
+      "get": {
+        "tags": [
+          "external-events"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "source",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "External event mapping list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mappings": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ExternalEventMapping"
+                      }
+                    }
+                  },
+                  "required": [
+                    "mappings"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List external event mappings"
+      },
+      "post": {
+        "tags": [
+          "external-events"
+        ],
+        "description": "Bind an inbound provider event to a stage sub-step. source and stepKey slug-normalize; eventType is the provider's literal event name (\"*\" is a catch-all). The matcher resolves the payload at matchPath to the record's externalId (deal/customer) or externalRef (issue).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "eventType": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "entityType": {
+                    "type": "string",
+                    "enum": [
+                      "issue",
+                      "deal",
+                      "customer"
+                    ]
+                  },
+                  "matchPath": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Dotted path into the event payload resolving to the record's external id — e.g. \"data.merchant_id\"."
+                  },
+                  "stepKey": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "secret": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "HMAC-SHA256 signing secret for this source's deliveries."
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "source",
+                  "eventType",
+                  "entityType",
+                  "matchPath",
+                  "stepKey",
+                  "secret"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "External event mapping created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mapping": {
+                      "$ref": "#/components/schemas/ExternalEventMapping"
+                    }
+                  },
+                  "required": [
+                    "mapping"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create external event mapping"
+      }
+    },
+    "/workspaces/{organizationId}/external-event-mappings/{id}": {
+      "get": {
+        "tags": [
+          "external-events"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "External event mapping",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mapping": {
+                      "$ref": "#/components/schemas/ExternalEventMapping"
+                    }
+                  },
+                  "required": [
+                    "mapping"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "External event mapping not found"
+          }
+        },
+        "summary": "Get external event mapping"
+      },
+      "patch": {
+        "tags": [
+          "external-events"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "eventType": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "entityType": {
+                    "type": "string",
+                    "enum": [
+                      "issue",
+                      "deal",
+                      "customer"
+                    ]
+                  },
+                  "matchPath": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "stepKey": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "secret": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "External event mapping updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mapping": {
+                      "$ref": "#/components/schemas/ExternalEventMapping"
+                    }
+                  },
+                  "required": [
+                    "mapping"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "External event mapping not found"
+          }
+        },
+        "summary": "Update external event mapping"
+      },
+      "delete": {
+        "tags": [
+          "external-events"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "External event mapping deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "External event mapping not found"
+          }
+        },
+        "summary": "Delete external event mapping"
+      }
+    },
+    "/workspaces/{organizationId}/external-event-deliveries": {
+      "get": {
+        "tags": [
+          "external-events"
+        ],
+        "description": "The inbound event ledger — every delivery lands one row recording its outcome (applied, already_done, no_step, no_record, unmapped, invalid_payload, invalid_signature). Replays return the original outcome without writing a row.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "source",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "External event delivery log",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deliveries": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ExternalEventDelivery"
+                      }
+                    }
+                  },
+                  "required": [
+                    "deliveries"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List external event deliveries"
       }
     },
     "/workspaces/{organizationId}/external-links": {

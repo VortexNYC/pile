@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 import { workspaceSchema } from "./schema-map.js";
 import {
   workspaceEntityAttachments,
+  workspaceExternalEventDeliveries,
+  workspaceExternalEventMappings,
   workspaceGuidancePacks,
   workspaceGuidancePackVersions,
 } from "./schema.js";
@@ -26,6 +28,23 @@ describe("workspaceSchema map", () => {
     expect(getTableName(workspaceGuidancePacks)).toBe("guidance_packs");
     expect(getTableName(workspaceGuidancePackVersions)).toBe(
       "guidance_pack_versions"
+    );
+  });
+});
+
+describe("external event tables (PILE-422)", () => {
+  it("registers external_event_mappings and external_event_deliveries", () => {
+    expect(workspaceSchema.workspaceExternalEventMappings).toBe(
+      workspaceExternalEventMappings
+    );
+    expect(workspaceSchema.workspaceExternalEventDeliveries).toBe(
+      workspaceExternalEventDeliveries
+    );
+    expect(getTableName(workspaceExternalEventMappings)).toBe(
+      "external_event_mappings"
+    );
+    expect(getTableName(workspaceExternalEventDeliveries)).toBe(
+      "external_event_deliveries"
     );
   });
 });

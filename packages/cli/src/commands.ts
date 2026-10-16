@@ -3170,6 +3170,182 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "external events create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/external-events/{source}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "source",
+        flag: "source",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "external event mappings list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/external-event-mappings",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "source",
+        flag: "source",
+      },
+    ],
+    body: [],
+  },
+  "external event mappings create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/external-event-mappings",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "source",
+        flag: "source",
+      },
+      {
+        name: "eventType",
+        flag: "event-type",
+      },
+      {
+        name: "entityType",
+        flag: "entity-type",
+      },
+      {
+        name: "matchPath",
+        flag: "match-path",
+      },
+      {
+        name: "stepKey",
+        flag: "step-key",
+      },
+      {
+        name: "secret",
+        flag: "secret",
+      },
+      {
+        name: "enabled",
+        flag: "enabled",
+      },
+    ],
+  },
+  "external event mappings get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/external-event-mappings/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "external event mappings update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/external-event-mappings/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "source",
+        flag: "source",
+      },
+      {
+        name: "eventType",
+        flag: "event-type",
+      },
+      {
+        name: "entityType",
+        flag: "entity-type",
+      },
+      {
+        name: "matchPath",
+        flag: "match-path",
+      },
+      {
+        name: "stepKey",
+        flag: "step-key",
+      },
+      {
+        name: "secret",
+        flag: "secret",
+      },
+      {
+        name: "enabled",
+        flag: "enabled",
+      },
+    ],
+  },
+  "external event mappings delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/external-event-mappings/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "external event deliveries list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/external-event-deliveries",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "source",
+        flag: "source",
+      },
+      {
+        name: "status",
+        flag: "status",
+      },
+      {
+        name: "limit",
+        flag: "limit",
+      },
+    ],
+    body: [],
+  },
   "external links list": {
     method: "GET",
     path: "/workspaces/{organizationId}/external-links",

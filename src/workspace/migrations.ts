@@ -1071,6 +1071,53 @@ ALTER TABLE issues ADD COLUMN required INTEGER NOT NULL DEFAULT 0
 --> statement-breakpoint
 ALTER TABLE issues ADD COLUMN owner_agent TEXT`;
 
+// PILE-422 — inbound external events complete stage sub-steps (Stripe
+// Connect requirements-style: the provider's server-side event, not an
+// agent claim, is what clears the step). external_event_mappings binds
+// (source, event_type) to a step_key plus the matcher that resolves the
+// record (entity_type + match_path → externalId/externalRef); `secret` is
+// the HMAC-SHA256 credential the source's deliveries are verified against.
+// external_event_deliveries is the dedupe ledger AND the event log: one row
+// per inbound event keyed by (source, dedupe_key) — replays short-circuit
+// on the unique index, and unmatched/invalid rows record why nothing moved.
+const v80 = `CREATE TABLE IF NOT EXISTS external_event_mappings (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  source TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  match_path TEXT NOT NULL,
+  step_key TEXT NOT NULL,
+  secret TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  created_by TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS external_event_mappings_event_idx ON external_event_mappings (organization_id, source, event_type)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS external_event_mappings_source_idx ON external_event_mappings (organization_id, source)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS external_event_deliveries (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  source TEXT NOT NULL,
+  event_type TEXT,
+  event_id TEXT,
+  dedupe_key TEXT NOT NULL,
+  status TEXT NOT NULL,
+  entity_type TEXT,
+  entity_id TEXT,
+  completed_issue_ids TEXT,
+  payload TEXT,
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS external_event_deliveries_dedupe_idx ON external_event_deliveries (organization_id, source, dedupe_key)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS external_event_deliveries_org_idx ON external_event_deliveries (organization_id, created_at)`;
+
 const v69 = `CREATE TABLE comments_new (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -1324,6 +1371,7 @@ export const workspaceMigrations = {
       { idx: 76, when: 76, tag: "v77", breakpoints: true },
       { idx: 77, when: 77, tag: "v78", breakpoints: true },
       { idx: 78, when: 78, tag: "v79", breakpoints: true },
+      { idx: 79, when: 79, tag: "v80", breakpoints: true },
     ],
   },
   migrations: {
@@ -1406,5 +1454,6 @@ export const workspaceMigrations = {
     m0076: v77,
     m0077: v78,
     m0078: v79,
+    m0079: v80,
   },
 } satisfies Parameters<typeof migrate>[1];

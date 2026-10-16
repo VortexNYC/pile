@@ -1122,6 +1122,80 @@ export const workspaceStageTemplates = sqliteTable(
   ]
 );
 
+// PILE-422 — inbound external events complete stage sub-steps (the Stripe
+// Connect requirements model: a server-side provider event, not an agent
+// claim, clears the step). A mapping binds (source, eventType) to a
+// stepKey; `entityType` + `matchPath` resolve the payload to a record —
+// deal/customer external_id or issue external_ref. `secret` is the
+// HMAC-SHA256 credential each delivery's signature is verified against.
+export const workspaceExternalEventMappings = sqliteTable(
+  "external_event_mappings" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    source: text("source" as string).notNull(),
+    eventType: text("event_type" as string).notNull(),
+    entityType: text("entity_type" as string, {
+      enum: ["issue", "deal", "customer"],
+    }).notNull(),
+    matchPath: text("match_path" as string).notNull(),
+    stepKey: text("step_key" as string).notNull(),
+    secret: text("secret" as string).notNull(),
+    enabled: integer("enabled" as string, { mode: "boolean" })
+      .notNull()
+      .default(true),
+    createdBy: text("created_by" as string),
+    createdAt: text("created_at" as string).notNull(),
+    updatedAt: text("updated_at" as string).notNull(),
+  },
+  (table) => [
+    uniqueIndex("external_event_mappings_event_idx" as string).on(
+      table.organizationId,
+      table.source,
+      table.eventType
+    ),
+    index("external_event_mappings_source_idx" as string).on(
+      table.organizationId,
+      table.source
+    ),
+  ]
+);
+
+// PILE-422 — dedupe ledger and event log for inbound external events. One
+// row per delivery keyed by (organization_id, source, dedupe_key); dedupe
+// key is the provider event id when the source sends one, else a SHA-256
+// of the raw body so id-less replays still collapse. `status` records the
+// outcome (applied / already_done / no_step / no_record / unmapped /
+// invalid_payload / invalid_signature); `payload` is the evidence.
+export const workspaceExternalEventDeliveries = sqliteTable(
+  "external_event_deliveries" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    source: text("source" as string).notNull(),
+    eventType: text("event_type" as string),
+    eventId: text("event_id" as string),
+    dedupeKey: text("dedupe_key" as string).notNull(),
+    status: text("status" as string).notNull(),
+    entityType: text("entity_type" as string),
+    entityId: text("entity_id" as string),
+    completedIssueIds: text("completed_issue_ids" as string),
+    payload: text("payload" as string),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    uniqueIndex("external_event_deliveries_dedupe_idx" as string).on(
+      table.organizationId,
+      table.source,
+      table.dedupeKey
+    ),
+    index("external_event_deliveries_org_idx" as string).on(
+      table.organizationId,
+      table.createdAt
+    ),
+  ]
+);
+
 // PILE-211: declarative lane triggers. `triggerKind` is "cron" or "event";
 // `triggerValue` is the 5-field cron expression or the event name
 // (issue.assigned / issue.commented / pr.ci_failed). concurrencyKey defaults

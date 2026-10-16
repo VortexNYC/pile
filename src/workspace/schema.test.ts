@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 import {
   workspaceAgentSessions,
   workspaceCustomers,
+  workspaceExternalEventDeliveries,
+  workspaceExternalEventMappings,
   workspaceDeals,
   workspaceEntityAttachments,
   workspaceGuidancePacks,
@@ -262,5 +264,61 @@ describe("workspaceStageTemplates schema (PILE-411)", () => {
     const required = byName("required");
     expect(required?.notNull).toBe(true);
     expect(required?.hasDefault).toBe(true);
+  });
+});
+
+describe("external event tables (PILE-422)", () => {
+  it("maps one (org, source, event_type) to a step_key with a matcher", () => {
+    const config = getTableConfig(workspaceExternalEventMappings);
+    const names = config.columns.map((c) => c.name);
+    for (const col of [
+      "organization_id",
+      "source",
+      "event_type",
+      "entity_type",
+      "match_path",
+      "step_key",
+      "secret",
+      "enabled",
+      "created_by",
+      "created_at",
+      "updated_at",
+    ]) {
+      expect(names).toContain(col);
+    }
+    const unique = config.indexes.find(
+      (i) => i.config.name === "external_event_mappings_event_idx"
+    );
+    expect(unique?.config.unique).toBe(true);
+    expect(
+      unique?.config.columns.map((c) => ("name" in c ? c.name : String(c)))
+    ).toEqual(["organization_id", "source", "event_type"]);
+  });
+
+  it("dedupes deliveries on (org, source, dedupe_key)", () => {
+    const config = getTableConfig(workspaceExternalEventDeliveries);
+    const names = config.columns.map((c) => c.name);
+    for (const col of [
+      "organization_id",
+      "source",
+      "event_type",
+      "event_id",
+      "dedupe_key",
+      "status",
+      "entity_type",
+      "entity_id",
+      "completed_issue_ids",
+      "payload",
+      "created_at",
+    ]) {
+      expect(names).toContain(col);
+    }
+    const unique = config.indexes.find(
+      (i) => i.config.name === "external_event_deliveries_dedupe_idx"
+    );
+    expect(unique?.config.unique).toBe(true);
+    expect(
+      unique?.config.columns.map((c) => ("name" in c ? c.name : String(c)))
+    ).toEqual(["organization_id", "source", "dedupe_key"]);
   });
 });

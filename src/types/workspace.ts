@@ -3,6 +3,8 @@ import type { InferSelectModel } from "drizzle-orm";
 import type { FilterCondition } from "../workspace/filter.js";
 import {
   workspaceAgentSessions,
+  workspaceExternalEventDeliveries,
+  workspaceExternalEventMappings,
   workspaceStageTemplates,
 } from "../workspace/schema.js";
 import type { Id, Timestamp } from "./index.js";
@@ -246,6 +248,68 @@ export interface StageTemplateInput {
   condition?: StepCondition | null;
   position?: number;
   teamId?: string | null;
+}
+
+// PILE-422 — external events complete sub-steps. A mapping binds
+// (source, eventType) to a stepKey; the matcher resolves the payload to a
+// record (entityType + matchPath → externalId/externalRef). `secret` is the
+// HMAC-SHA256 credential the source's deliveries are verified against —
+// never returned by the API.
+export type ExternalEventMapping = InferSelectModel<
+  typeof workspaceExternalEventMappings
+>;
+export type ExternalEventDelivery = InferSelectModel<
+  typeof workspaceExternalEventDeliveries
+>;
+export type ExternalEventEntityType = ExternalEventMapping["entityType"];
+
+/** Delivery outcomes. "replay" is returned for a dedupe hit — the stored
+ *  row keeps the original outcome; everything else is written once. */
+export const EXTERNAL_EVENT_DELIVERY_STATUSES = [
+  "applied",
+  "already_done",
+  "no_step",
+  "no_record",
+  "unmapped",
+  "invalid_payload",
+  "invalid_signature",
+] as const;
+export type ExternalEventDeliveryStatus =
+  (typeof EXTERNAL_EVENT_DELIVERY_STATUSES)[number];
+
+export interface ExternalEventMappingInput {
+  source: string;
+  eventType: string;
+  entityType: ExternalEventEntityType;
+  /** Dotted path into the payload resolving to the record's external id —
+   *  e.g. "data.merchant_id". Array indexes are numeric segments. */
+  matchPath: string;
+  stepKey: string;
+  secret: string;
+  enabled?: boolean;
+  createdBy?: string | null;
+}
+
+export type ExternalEventMappingPatch = Partial<
+  Omit<ExternalEventMappingInput, "createdBy">
+>;
+
+export interface ExternalEventIngestInput {
+  source: string;
+  /** Candidate signature header values collected by the route. */
+  signatures: string[];
+  /** Provider event id header when present (payload `id` is the fallback). */
+  eventId?: string | null;
+  /** Raw request body — signature input, evidence, and JSON source. */
+  body: string;
+}
+
+export interface ExternalEventIngestResult {
+  status: ExternalEventDeliveryStatus | "replay" | "unknown_source";
+  deliveryId?: string;
+  /** For replays: the status the original delivery recorded. */
+  outcome?: string;
+  completedIssueIds?: string[];
 }
 
 export interface Comment {
