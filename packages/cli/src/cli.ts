@@ -523,6 +523,167 @@ function getSetCookie(headers: Headers): readonly string[] {
   return [raw];
 }
 
+// `pile customers import --workspace <org> --file merchants.csv` — or
+// .json. CSV headers map to row fields (snake_case or camelCase both
+// work); extra columns become customFields. POSTs one import call and
+// prints the receipt (created/existing/failed + id for GET
+// /customer-imports/{id}). Agents call this, not just humans.
+const IMPORT_FIELD_ALIASES: Record<string, string> = {
+  place_id: "placeId",
+  external_id: "externalId",
+  status_id: "statusId",
+  tier_id: "tierId",
+  owner_id: "ownerId",
+  next_step_text: "nextStepText",
+  next_step_due_at: "nextStepDueAt",
+  needs_human: "needsHuman",
+  needs_human_reason: "needsHumanReason",
+  priority_score: "priorityScore",
+  custom_fields: "customFields",
+};
+
+function parseCsvRows(content: string): Array<Record<string, string>> {
+  const rows: string[][] = [];
+  let field = "";
+  let row: string[] = [];
+  let inQuotes = false;
+  for (let i = 0; i < content.length; i += 1) {
+    const ch = content[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (content[i + 1] === '"') {
+          field += '"';
+          i += 1;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += ch;
+      }
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ",") {
+      row.push(field);
+      field = "";
+    } else if (ch === "\n" || ch === "\r") {
+      row.push(field);
+      field = "";
+      if (row.length > 1 || row[0] !== "") rows.push(row);
+      row = [];
+      if (ch === "\r" && content[i + 1] === "\n") i += 1;
+    } else {
+      field += ch;
+    }
+  }
+  row.push(field);
+  if (row.length > 1 || row[0] !== "") rows.push(row);
+  if (rows.length === 0) return [];
+  const headers = rows[0].map((h) => h.trim());
+  return rows.slice(1).map((cells) => {
+    const out: Record<string, string> = {};
+    for (let i = 0; i < headers.length; i += 1) {
+      out[headers[i]] = cells[i] ?? "";
+    }
+    return out;
+  });
+}
+
+const IMPORT_ROW_KEYS = new Set([
+  "placeId", "externalId", "name", "url", "notes", "status", "statusId",
+  "tierId", "ownerId", "nextStepText", "nextStepDueAt", "needsHuman",
+  "needsHumanReason", "priorityScore", "customFields", "deal",
+]);
+
+function csvRowToImportRow(record: Record<string, string>): Json {
+  const row: Record<string, Json> = {};
+  const custom: Record<string, string> = {};
+  for (const [rawKey, value] of Object.entries(record)) {
+    if (value === "") continue;
+    const key = IMPORT_FIELD_ALIASES[rawKey] ?? rawKey;
+    if (key === "priorityScore") {
+      const n = Number(value);
+      if (Number.isFinite(n)) row.priorityScore = n;
+    } else if (key === "needsHuman") {
+      row.needsHuman = ["1", "true", "yes"].includes(value.toLowerCase());
+    } else if (IMPORT_ROW_KEYS.has(key)) {
+      row[key] = value;
+    } else {
+      custom[rawKey] = value;
+    }
+  }
+  if (Object.keys(custom).length > 0) row.customFields = custom;
+  return row as Json;
+}
+
+async function customersImportCommand(
+  flags: Readonly<Record<string, string | boolean>>,
+  deps: CliDeps = {}
+): Promise<number> {
+  const workspace =
+    flagString(flags, "workspace") ?? flagString(flags, "workspace-id");
+  if (workspace === undefined || workspace.length === 0) {
+    throw new Error("Missing --workspace. Use --workspace <org>.");
+  }
+  const file = flagString(flags, "file");
+  if (file === undefined) {
+    throw new Error(
+      "Usage: pile customers import --workspace <org> --file rows.csv|rows.json [--source <name>] [--corridor <name>]"
+    );
+  }
+  const content = readFileSync(file, "utf8");
+  const rows: Json[] = file.toLowerCase().endsWith(".csv")
+    ? parseCsvRows(content).map(csvRowToImportRow)
+    : (() => {
+        const parsed = parseJson(content);
+        if (Array.isArray(parsed)) return parsed;
+        if (isJsonObject(parsed) && Array.isArray(parsed.rows)) {
+          return parsed.rows;
+        }
+        throw new Error(
+          "Expected --file to be CSV or a JSON array / {rows: []} object"
+        );
+      })();
+  if (rows.length === 0) {
+    throw new Error("Import file contained no rows");
+  }
+
+  const config = resolveConfig();
+  if (config.apiKey === undefined || config.apiKey.length === 0) {
+    throw new Error(
+      "Missing API key. Set PILE_API_KEY or run `pile config set --api-key <key>`."
+    );
+  }
+  const baseUrl = config.baseUrl.replace(/\/$/u, "");
+  const doFetch = deps.fetch ?? fetch;
+  const res = await doFetch(`${baseUrl}/workspaces/${workspace}/customers/import`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${config.apiKey}`,
+    },
+    body: JSON.stringify({
+      source: flagString(flags, "source"),
+      corridor: flagString(flags, "corridor"),
+      rows,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Import failed (${res.status}): ${text}`);
+  }
+  const receipt = (await res.json()) as {
+    id: string;
+    total: number;
+    created: number;
+    existing: number;
+    failed: number;
+  };
+  console.log(
+    `imported ${receipt.total} rows: ${receipt.created} created, ${receipt.existing} existing, ${receipt.failed} failed — receipt ${receipt.id}`
+  );
+  return receipt.failed > 0 ? 1 : 0;
+}
+
 async function authLoginCommand(
   flags: Readonly<Record<string, string | boolean>>,
   deps: CliDeps = {}
@@ -1124,6 +1285,7 @@ function printUsage(): void {
     "support --workspace <org>",
     "inbox --workspace <org>",
     "agent dispatch-batch --workspace <org> --file batch.json",
+    "customers import --workspace <org> --file rows.csv",
     "memberships invite --workspace <org> --email <e> [--role member|admin|owner] [--team <id>]",
     "issues dispatch <id> --workspace <org> --follow [--timeout <min>]",
     "tui-check — verify OpenTUI (module + native library) loads",
@@ -1479,6 +1641,10 @@ export async function runCli(
 
     if (scope === "agent" && positionals[1] === "dispatch-batch") {
       return await agentDispatchBatchCommand(flags, multi, deps);
+    }
+
+    if (scope === "customers" && positionals[1] === "import") {
+      return await customersImportCommand(flags, deps);
     }
 
     if (

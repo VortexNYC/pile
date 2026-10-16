@@ -1269,4 +1269,52 @@ describe("CLI integration", () => {
 
     expect(exitCode).toBe(1);
   });
+
+  it("customers import parses a CSV file and posts rows", async () => {
+    const { writeFileSync, mkdtempSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const dir = mkdtempSync(join(tmpdir(), "pile-import-"));
+    const file = join(dir, "merchants.csv");
+    writeFileSync(
+      file,
+      [
+        "place_id,name,url,priority_score,processor_detected",
+        'plc_1,"Acme, Inc.",https://acme.test,42,square',
+        "plc_2,Beta Diner,,,",
+      ].join("\n")
+    );
+    const captured: Array<{ url: string; body: string }> = [];
+    const mockFetch = vi
+      .fn()
+      .mockImplementation(async (url: string | URL, init?: { body?: string }) => {
+        captured.push({ url: String(url), body: String(init?.body ?? "") });
+        return new Response(
+          JSON.stringify({ id: "imp-1", total: 2, created: 2, existing: 0, failed: 0 }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      });
+    const spy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    const exitCode = await runCli(
+      ["customers", "import", "--workspace", "ws-1", "--file", file],
+      { fetch: mockFetch }
+    );
+
+    expect(exitCode).toBe(0);
+    expect(captured[0].url).toContain("/workspaces/ws-1/customers/import");
+    const body = JSON.parse(captured[0].body) as {
+      rows: Array<Record<string, unknown>>;
+    };
+    expect(body.rows).toHaveLength(2);
+    expect(body.rows[0]).toMatchObject({
+      placeId: "plc_1",
+      name: "Acme, Inc.",
+      url: "https://acme.test",
+      priorityScore: 42,
+      customFields: { processor_detected: "square" },
+    });
+    expect(body.rows[1]).toMatchObject({ placeId: "plc_2", name: "Beta Diner" });
+    spy.mockRestore();
+  });
 });
