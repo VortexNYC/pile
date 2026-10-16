@@ -39,6 +39,13 @@ export const draftOutputSchema = z
     reviewedAt: z.string().nullable(),
     reviewNote: z.string().nullable(),
     publishedCommentId: z.string().nullable(),
+    /** PILE-404 — provenance + edit-diff bookkeeping for artifact drafts. */
+    agentSlug: z.string().nullable(),
+    promptVersion: z.string().nullable(),
+    originalPayload: z.record(z.string(), z.unknown()).nullable(),
+    /** PILE-404 — pending longer than the review SLA: a stale artifact is
+     *  a dropped merchant, so the queue flags it. */
+    slaBreached: z.boolean(),
     createdAt: z.string(),
     updatedAt: z.string(),
   })
@@ -56,6 +63,19 @@ function parsePayload(raw: string): Record<string, unknown> {
   return {};
 }
 
+/** PILE-404 — the review SLA on pending drafts; past it, the queue flags
+ *  the row so a stale artifact (a dropped merchant) surfaces. */
+export const DRAFT_SLA_MS = 24 * 60 * 60 * 1000;
+
 export function serializeDraft(draft: DraftOutput) {
-  return { ...draft, payload: parsePayload(draft.payload) };
+  return {
+    ...draft,
+    payload: parsePayload(draft.payload),
+    originalPayload: draft.originalPayload
+      ? parsePayload(draft.originalPayload)
+      : null,
+    slaBreached:
+      draft.status === "pending" &&
+      Date.now() - Date.parse(draft.createdAt) > DRAFT_SLA_MS,
+  };
 }

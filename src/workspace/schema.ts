@@ -205,7 +205,7 @@ export const workspaceDraftOutputs = sqliteTable(
     // carries context (notifications, permissions) for other entities.
     issueId: text("issue_id" as string),
     kind: text("kind" as string, {
-      enum: ["comment", "field_change", "message"],
+      enum: ["comment", "field_change", "message", "artifact"],
     }).notNull(),
     payload: text("payload" as string).notNull(),
     status: text("status" as string, {
@@ -219,6 +219,13 @@ export const workspaceDraftOutputs = sqliteTable(
     reviewedAt: text("reviewed_at" as string),
     reviewNote: text("review_note" as string),
     publishedCommentId: text("published_comment_id" as string),
+    // PILE-404 — provenance + edit-diff bookkeeping for artifact drafts:
+    // which agent/prompt produced it, and the pre-edit payload snapshot
+    // (the diff between it and payload IS the human's edit — the eval
+    // signal the spec asks for).
+    agentSlug: text("agent_slug" as string),
+    promptVersion: text("prompt_version" as string),
+    originalPayload: text("original_payload" as string),
     createdAt: text("created_at" as string).notNull(),
     updatedAt: text("updated_at" as string).notNull(),
   },

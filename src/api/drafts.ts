@@ -7,7 +7,10 @@ import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { AppContext } from "../platform/middleware.js";
 import { isAdminIdentity } from "../platform/permissions.js";
 import { rls } from "../platform/rls.js";
-import { DRAFT_OUTPUT_STATUSES } from "../types/workspace.js";
+import {
+  DRAFT_OUTPUT_KINDS,
+  DRAFT_OUTPUT_STATUSES,
+} from "../types/workspace.js";
 import type { DraftOutput } from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
 import {
@@ -174,7 +177,62 @@ const discardDraftRoute = createRoute({
   },
 });
 
+const createDraftRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/drafts",
+  tags: ["drafts"],
+  middleware: [rls("issue:edit")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            entityType: z.enum(["issue", "deal", "customer"]),
+            entityId: z.string(),
+            issueId: z.string().optional(),
+            kind: z.enum(DRAFT_OUTPUT_KINDS),
+            payload: z.record(z.string(), z.unknown()),
+            sessionId: z.string().optional(),
+            agentSlug: z.string().optional(),
+            promptVersion: z.string().optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description:
+        "Draft created pending review — for artifact kinds, nothing reaches the merchant until a human publishes",
+      content: { "application/json": { schema: draftOutputSchema } },
+    },
+  },
+});
+
 export function registerDraftRoutes(app: OpenAPIHono<AppContext>) {
+  app.openapi(createDraftRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const identity = c.get("workspaceIdentity");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    // Drafts hang on records; when the record isn't itself an issue, the
+    // optional issueId links the review queue to the pipeline issue.
+    const draft = await stub.createDraftOutput({
+      entityType: body.entityType,
+      entityId: body.entityId,
+      issueId:
+        body.issueId ?? (body.entityType === "issue" ? body.entityId : null),
+      kind: body.kind,
+      payload: body.payload,
+      createdById: identity.id,
+      sessionId: body.sessionId ?? null,
+      agentSlug: body.agentSlug ?? null,
+      promptVersion: body.promptVersion ?? null,
+    });
+    return c.json(serializeDraft(draft), 201);
+  });
+
   app.openapi(listIssueDraftsRoute, async (c) => {
     const { organizationId, issueId } = c.req.valid("param");
     const { status } = c.req.valid("query");
@@ -271,6 +329,16 @@ export function registerDraftRoutes(app: OpenAPIHono<AppContext>) {
     } else if (draft.kind === "field_change") {
       const fields = updateIssueSchema.parse(payload.fields);
       nextPayload = { fields };
+    } else if (draft.kind === "artifact") {
+      // PILE-404 — merchant-facing artifacts carry markdown + an optional
+      // rendered payload; the human's edit is validated here, not at send.
+      nextPayload = z
+        .object({
+          markdown: z.string().min(1),
+          rendered: z.string().optional(),
+        })
+        .passthrough()
+        .parse(payload);
     } else {
       throw new VortexError({
         code: "BAD_REQUEST",

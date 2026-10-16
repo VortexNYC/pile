@@ -6502,49 +6502,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{organizationId}/issues/{issueId}/drafts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List issue drafts */
-        get: {
-            parameters: {
-                query?: {
-                    status?: "pending" | "published" | "discarded";
-                };
-                header?: never;
-                path: {
-                    organizationId: string;
-                    issueId: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Draft outputs held on this record */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            drafts: components["schemas"]["DraftOutput"][];
-                        };
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/workspaces/{organizationId}/drafts": {
         parameters: {
             query?: never;
@@ -6568,6 +6525,88 @@ export interface paths {
             requestBody?: never;
             responses: {
                 /** @description The workspace draft-review queue — pending agent output awaiting a human publish/discard decision */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            drafts: components["schemas"]["DraftOutput"][];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create draft */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        entityType: "issue" | "deal" | "customer";
+                        entityId: string;
+                        issueId?: string;
+                        /** @enum {string} */
+                        kind: "comment" | "field_change" | "message" | "artifact";
+                        payload: {
+                            [key: string]: unknown;
+                        };
+                        sessionId?: string;
+                        agentSlug?: string;
+                        promptVersion?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Draft created pending review — for artifact kinds, nothing reaches the merchant until a human publishes */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DraftOutput"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/issues/{issueId}/drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List issue drafts */
+        get: {
+            parameters: {
+                query?: {
+                    status?: "pending" | "published" | "discarded";
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                    issueId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Draft outputs held on this record */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -32662,7 +32701,7 @@ export interface components {
             entityId: string;
             issueId: string | null;
             /** @enum {string} */
-            kind: "comment" | "field_change" | "message";
+            kind: "comment" | "field_change" | "message" | "artifact";
             payload: {
                 [key: string]: unknown;
             };
@@ -32674,6 +32713,12 @@ export interface components {
             reviewedAt: string | null;
             reviewNote: string | null;
             publishedCommentId: string | null;
+            agentSlug: string | null;
+            promptVersion: string | null;
+            originalPayload: {
+                [key: string]: unknown;
+            } | null;
+            slaBreached: boolean;
             createdAt: string;
             updatedAt: string;
         };

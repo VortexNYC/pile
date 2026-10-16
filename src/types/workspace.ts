@@ -363,6 +363,9 @@ export const DRAFT_OUTPUT_KINDS = [
   "comment",
   "field_change",
   "message",
+  // PILE-404 — merchant-facing artifact drafts (proposal, comparison
+  // piece, email): markdown + rendered payload gated on human approval.
+  "artifact",
 ] as const;
 export type DraftOutputKind = (typeof DRAFT_OUTPUT_KINDS)[number];
 

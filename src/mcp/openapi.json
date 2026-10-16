@@ -350,7 +350,8 @@
             "enum": [
               "comment",
               "field_change",
-              "message"
+              "message",
+              "artifact"
             ]
           },
           "payload": {
@@ -391,6 +392,24 @@
             "type": "string",
             "nullable": true
           },
+          "agentSlug": {
+            "type": "string",
+            "nullable": true
+          },
+          "promptVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "originalPayload": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "nullable": true
+            }
+          },
+          "slaBreached": {
+            "type": "boolean"
+          },
           "createdAt": {
             "type": "string"
           },
@@ -413,6 +432,10 @@
           "reviewedAt",
           "reviewNote",
           "publishedCommentId",
+          "agentSlug",
+          "promptVersion",
+          "originalPayload",
+          "slaBreached",
           "createdAt",
           "updatedAt"
         ]
@@ -16720,6 +16743,151 @@
         "summary": "Create approval respond"
       }
     },
+    "/workspaces/{organizationId}/drafts": {
+      "post": {
+        "tags": [
+          "drafts"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "entityType": {
+                    "type": "string",
+                    "enum": [
+                      "issue",
+                      "deal",
+                      "customer"
+                    ]
+                  },
+                  "entityId": {
+                    "type": "string"
+                  },
+                  "issueId": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "comment",
+                      "field_change",
+                      "message",
+                      "artifact"
+                    ]
+                  },
+                  "payload": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "nullable": true
+                    }
+                  },
+                  "sessionId": {
+                    "type": "string"
+                  },
+                  "agentSlug": {
+                    "type": "string"
+                  },
+                  "promptVersion": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "entityType",
+                  "entityId",
+                  "kind",
+                  "payload"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Draft created pending review — for artifact kinds, nothing reaches the merchant until a human publishes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftOutput"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create draft"
+      },
+      "get": {
+        "tags": [
+          "drafts"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "published",
+                "discarded"
+              ]
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "issueId",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The workspace draft-review queue — pending agent output awaiting a human publish/discard decision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "drafts": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/DraftOutput"
+                      }
+                    }
+                  },
+                  "required": [
+                    "drafts"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List drafts"
+      }
+    },
     "/workspaces/{organizationId}/issues/{issueId}/drafts": {
       "get": {
         "tags": [
@@ -16780,68 +16948,6 @@
           }
         },
         "summary": "List issue drafts"
-      }
-    },
-    "/workspaces/{organizationId}/drafts": {
-      "get": {
-        "tags": [
-          "drafts"
-        ],
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": true,
-            "name": "organizationId",
-            "in": "path"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "enum": [
-                "pending",
-                "published",
-                "discarded"
-              ]
-            },
-            "required": false,
-            "name": "status",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string"
-            },
-            "required": false,
-            "name": "issueId",
-            "in": "query"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "The workspace draft-review queue — pending agent output awaiting a human publish/discard decision",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "drafts": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/DraftOutput"
-                      }
-                    }
-                  },
-                  "required": [
-                    "drafts"
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "summary": "List drafts"
       }
     },
     "/workspaces/{organizationId}/drafts/{id}": {

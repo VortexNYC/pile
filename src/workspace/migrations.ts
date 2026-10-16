@@ -1336,6 +1336,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS agent_types_slug_idx ON agent_types (organizat
 // PILE-418 — first-ack tracking: sessions that dispatch but never record a
 // first activity get flagged in the API instead of hanging silently.
 const v88 = `ALTER TABLE agent_sessions ADD COLUMN first_activity_at TEXT`;
+
+// PILE-404 — draft-approval provenance + edit-diff snapshot.
+const v89 = `ALTER TABLE draft_outputs ADD COLUMN agent_slug TEXT
+--> statement-breakpoint
+ALTER TABLE draft_outputs ADD COLUMN prompt_version TEXT
+--> statement-breakpoint
+ALTER TABLE draft_outputs ADD COLUMN original_payload TEXT`;
 const v69 = `CREATE TABLE comments_new (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -1598,6 +1605,7 @@ export const workspaceMigrations = {
       { idx: 85, when: 85, tag: "v86", breakpoints: true },
       { idx: 86, when: 86, tag: "v87", breakpoints: true },
       { idx: 87, when: 87, tag: "v88", breakpoints: true },
+      { idx: 88, when: 88, tag: "v89", breakpoints: true },
     ],
   },
   migrations: {
@@ -1689,5 +1697,6 @@ export const workspaceMigrations = {
     m0085: v86,
     m0086: v87,
     m0087: v88,
+    m0088: v89,
   },
 } satisfies Parameters<typeof migrate>[1];
