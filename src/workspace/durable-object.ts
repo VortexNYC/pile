@@ -2788,7 +2788,6 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         await this.linkedParentIssues("customer", customer.id),
         actorId
       );
-    }
       // PILE-401 — stage-entered event for the customer pipeline stage.
       await this.emitDomainEvent(
         "record.stage_entered",
@@ -2801,6 +2800,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         },
         `stage:${customer.id}:${customer.statusId}`
       );
+    }
     return this.withEntityFields("customer", customer);
   }
 

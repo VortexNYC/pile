@@ -93,6 +93,7 @@ import {
   registerSlackRoutes,
 } from "./slack.js";
 import { registerStageTemplateRoutes } from "./stage-templates.js";
+import { registerPipelineRuntimeRoutes } from "./pipeline-runtime.js";
 import { registerStateRoutes } from "./states.js";
 import { registerSupportCaptureRoutes } from "./support-capture.js";
 import { registerSupportChannelRoutes } from "./support-channels.js";
@@ -243,6 +244,7 @@ registerActivityRoutes(app);
 registerActivityFeedRoutes(app);
 registerWorkspaceEntityRoutes(app);
 registerStageTemplateRoutes(app);
+registerPipelineRuntimeRoutes(app);
 registerExternalEventRoutes(app);
 registerExternalLinkRoutes(app);
 registerProjectDetailRoutes(app);

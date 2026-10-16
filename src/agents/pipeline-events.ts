@@ -1,5 +1,3 @@
-import type { DurableObjectStub } from "@cloudflare/workers-types";
-
 import type { WorkspaceDO } from "../workspace/durable-object.js";
 import type { Issue } from "../types/workspace.js";
 import type { WorkerEnv } from "../platform/middleware.js";

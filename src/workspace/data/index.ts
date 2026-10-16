@@ -28,6 +28,9 @@ import type { workspaceSchema } from "../schema-map.js";
 import {
   workspaceAgentActivities,
   workspaceAgentAutomations,
+  workspaceAgentTypes,
+  workspaceDomainEvents,
+  workspaceStageConfigs,
   workspaceAgentPauses,
   workspaceAgentRunReceipts,
   workspaceAgentSessionEvents,
@@ -3714,7 +3717,11 @@ export async function upsertStageConfig(
         updatedAt: now,
       })
       .where(eq(workspaceStageConfigs.id, existing.id));
-    return { ...existing, updatedAt: now } as StageConfig;
+    return db
+      .select()
+      .from(workspaceStageConfigs)
+      .where(eq(workspaceStageConfigs.id, existing.id))
+      .get() as StageConfig;
   }
   const id = crypto.randomUUID();
   const row: typeof workspaceStageConfigs.$inferInsert = {
@@ -3735,7 +3742,7 @@ export async function upsertStageConfig(
     .select()
     .from(workspaceStageConfigs)
     .where(eq(workspaceStageConfigs.id, id))
-    .get() as Promise<StageConfig>;
+    .get() as StageConfig;
 }
 
 export function getStageConfig(
@@ -3833,7 +3840,7 @@ export async function upsertAgentType(
       .select()
       .from(workspaceAgentTypes)
       .where(eq(workspaceAgentTypes.id, existing.id))
-      .get() as Promise<AgentType>;
+      .get() as AgentType;
   }
   const id = crypto.randomUUID();
   await db.insert(workspaceAgentTypes).values({
@@ -3854,7 +3861,7 @@ export async function upsertAgentType(
     .select()
     .from(workspaceAgentTypes)
     .where(eq(workspaceAgentTypes.id, id))
-    .get() as Promise<AgentType>;
+    .get() as AgentType;
 }
 
 export function getAgentTypeBySlug(
