@@ -99,6 +99,7 @@ async function resolveOwner(
   agentId: string;
   slug: string;
   name: string;
+  kind: string;
   jobSpec: string | null;
   toolScope: string | null;
 } | null> {
@@ -109,6 +110,7 @@ async function resolveOwner(
     agentId: type.providerAgentId,
     slug: type.slug,
     name: type.name,
+    kind: type.kind ?? "agent",
     jobSpec: type.jobSpec,
     toolScope: type.toolScope,
   };
