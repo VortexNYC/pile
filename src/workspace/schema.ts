@@ -38,8 +38,12 @@ export const workspaceIssues = sqliteTable(
         "not_reproducible",
         "obsolete",
         "resolved",
+        "skipped",
       ] as const,
     }),
+    // PILE-412 — the stage-gate's skip justification; also free text for
+    // other resolutions (side paths like Passed/Declined record a reason).
+    resolutionReason: text("resolution_reason" as string),
     assigneeId: text("assignee_id" as string),
     // PILE-417 — Linear's delegate model: assigneeId is the accountable
     // human; delegateId is the agent acting on their behalf.

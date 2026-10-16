@@ -19,6 +19,7 @@ const issue: Issue = {
   status: "todo",
   priority: "medium",
   resolution: null,
+  resolutionReason: null,
   parentId: null,
   subIssueSortOrder: null,
   estimate: null,

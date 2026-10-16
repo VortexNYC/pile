@@ -452,6 +452,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "resolution",
       },
       {
+        name: "resolutionReason",
+        flag: "resolution-reason",
+      },
+      {
         name: "parentId",
         flag: "parent",
       },
@@ -785,6 +789,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "resolution",
       },
       {
+        name: "resolutionReason",
+        flag: "resolution-reason",
+      },
+      {
         name: "parentId",
         flag: "parent",
       },
@@ -859,6 +867,10 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "prState",
         flag: "pr-state",
+      },
+      {
+        name: "stageGateOverride",
+        flag: "stage-gate-override",
       },
     ],
   },
@@ -7425,6 +7437,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "customFields",
         flag: "custom-fields",
       },
+      {
+        name: "stageGateOverride",
+        flag: "stage-gate-override",
+      },
     ],
   },
   "customers delete": {
@@ -8084,6 +8100,10 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "customFields",
         flag: "custom-fields",
+      },
+      {
+        name: "stageGateOverride",
+        flag: "stage-gate-override",
       },
     ],
   },

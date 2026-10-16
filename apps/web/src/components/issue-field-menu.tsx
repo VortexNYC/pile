@@ -2,7 +2,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { FieldMenu } from "@/components/field-menu";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
-import { api, unwrap } from "@/lib/api";
+import { api, stageGateBlockMessage, unwrap } from "@/lib/api";
+import { toastError, toastManager } from "@/lib/toast";
 
 /** Linear's inline edit — click a field chip, pick a value from the
  * popover, PATCH in place. No edit mode. */
@@ -33,6 +34,13 @@ export function IssueFieldMenu({
       void queryClient.invalidateQueries({
         queryKey: wsKey(workspace.id),
       }),
+    // PILE-412 — a stage-gate 409 names the blocking sub-steps; show them
+    // instead of letting the transition fail silently.
+    onError: (error) => {
+      const blocked = stageGateBlockMessage(error);
+      if (blocked) toastManager.add({ title: blocked, variant: "error" });
+      else toastError(error);
+    },
   });
 
   return (

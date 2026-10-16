@@ -60,8 +60,13 @@
               "not_reproducible",
               "obsolete",
               "resolved",
+              "skipped",
               null
             ]
+          },
+          "resolutionReason": {
+            "type": "string",
+            "nullable": true
           },
           "parentId": {
             "type": "string",
@@ -172,6 +177,7 @@
           "status",
           "priority",
           "resolution",
+          "resolutionReason",
           "parentId",
           "subIssueSortOrder",
           "estimate",
@@ -2272,8 +2278,13 @@
                       "not_reproducible",
                       "obsolete",
                       "resolved",
+                      "skipped",
                       null
                     ]
+                  },
+                  "resolutionReason": {
+                    "type": "string",
+                    "nullable": true
                   },
                   "parentId": {
                     "type": "string",
@@ -3027,8 +3038,13 @@
                       "not_reproducible",
                       "obsolete",
                       "resolved",
+                      "skipped",
                       null
                     ]
+                  },
+                  "resolutionReason": {
+                    "type": "string",
+                    "nullable": true
                   },
                   "parentId": {
                     "type": "string",
@@ -3113,6 +3129,19 @@
                       "closed",
                       null
                     ]
+                  },
+                  "stageGateOverride": {
+                    "type": "object",
+                    "properties": {
+                      "reason": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2000
+                      }
+                    },
+                    "required": [
+                      "reason"
+                    ]
                   }
                 }
               }
@@ -3147,6 +3176,12 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "stageGateOverride was supplied by a non-admin identity"
+          },
+          "409": {
+            "description": "Stage gate — required sub-steps are still open; details.blockingSubSteps lists them (id, identifier, stepKey, ownerAgent). Retry after completing or skipping them, or pass stageGateOverride (admin only)"
           }
         },
         "summary": "Update issue"
@@ -3873,8 +3908,13 @@
                           "not_reproducible",
                           "obsolete",
                           "resolved",
+                          "skipped",
                           null
                         ]
+                      },
+                      "resolutionReason": {
+                        "type": "string",
+                        "nullable": true
                       },
                       "parentId": {
                         "type": "string",
@@ -3958,6 +3998,19 @@
                           "merged",
                           "closed",
                           null
+                        ]
+                      },
+                      "stageGateOverride": {
+                        "type": "object",
+                        "properties": {
+                          "reason": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 2000
+                          }
+                        },
+                        "required": [
+                          "reason"
                         ]
                       }
                     }
@@ -38683,6 +38736,19 @@
                       "type": "string",
                       "nullable": true
                     }
+                  },
+                  "stageGateOverride": {
+                    "type": "object",
+                    "properties": {
+                      "reason": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2000
+                      }
+                    },
+                    "required": [
+                      "reason"
+                    ]
                   }
                 }
               }
@@ -41385,6 +41451,19 @@
                       "type": "string",
                       "nullable": true
                     }
+                  },
+                  "stageGateOverride": {
+                    "type": "object",
+                    "properties": {
+                      "reason": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2000
+                      }
+                    },
+                    "required": [
+                      "reason"
+                    ]
                   }
                 }
               }

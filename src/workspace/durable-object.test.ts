@@ -2766,7 +2766,12 @@ describe("stage templates (PILE-411)", () => {
     });
     expect(byStep.get("audit")?.required).toBe(false);
 
-    // Re-entering the stage is idempotent — no duplicate step_keys.
+    // Re-entering the stage is idempotent — no duplicate step_keys. The
+    // stage gate (PILE-412) holds the parent until required steps resolve,
+    // so close kickoff before leaving the status.
+    await withWorkspace(stub, (instance) =>
+      instance.updateIssue(byStep.get("kickoff")!.id, { status: "done" }, ACTOR)
+    );
     await withWorkspace(stub, (instance) =>
       instance.updateIssue(issue.id, { status: "todo" }, ACTOR)
     );

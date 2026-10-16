@@ -20,6 +20,7 @@ function issue(id: string, title: string, overrides: Partial<Issue> = {}) {
     status: "backlog",
     priority: "medium",
     resolution: null,
+    resolutionReason: null,
     parentId: null,
     subIssueSortOrder: null,
     estimate: null,

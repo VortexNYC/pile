@@ -7385,7 +7385,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdCustomersId",
-    "description": "Update customer (PATCH /workspaces/{organizationId}/customers/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, url, bookingUrl, notes, logoUrl, externalId, tierId, statusId, ownerId, nextStepText, nextStepDueAt, needsHuman, needsHumanReason, priorityScore, customFields.",
+    "description": "Update customer (PATCH /workspaces/{organizationId}/customers/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, url, bookingUrl, notes, logoUrl, externalId, tierId, statusId, ownerId, nextStepText, nextStepDueAt, needsHuman, needsHumanReason, priorityScore, customFields, stageGateOverride.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/customers/{id}",
     "inputSchema": {
@@ -7459,6 +7459,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "type": "string",
                 "nullable": true
               }
+            },
+            "stageGateOverride": {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                }
+              },
+              "required": [
+                "reason"
+              ]
             }
           }
         }
@@ -7599,7 +7612,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdDealsDealId",
-    "description": "Update deal (PATCH /workspaces/{organizationId}/deals/{dealId}) Path params (top-level, required): organizationId, dealId. Request body goes in the \"body\" object; fields: customerId, name, externalId, stage, amountCents, currency, expectedCloseAt, archivedAt, contactIds, issueIds, nextStepText, nextStepDueAt, needsHuman, needsHumanReason, priorityScore, customFields.",
+    "description": "Update deal (PATCH /workspaces/{organizationId}/deals/{dealId}) Path params (top-level, required): organizationId, dealId. Request body goes in the \"body\" object; fields: customerId, name, externalId, stage, amountCents, currency, expectedCloseAt, archivedAt, contactIds, issueIds, nextStepText, nextStepDueAt, needsHuman, needsHumanReason, priorityScore, customFields, stageGateOverride.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/deals/{dealId}",
     "inputSchema": {
@@ -7695,6 +7708,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "type": "string",
                 "nullable": true
               }
+            },
+            "stageGateOverride": {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                }
+              },
+              "required": [
+                "reason"
+              ]
             }
           }
         }
@@ -8156,7 +8182,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdIssuesId",
-    "description": "Update issue (PATCH /workspaces/{organizationId}/issues/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: title, externalRef, teamId, teamKey, description, status, priority, resolution, parentId, subIssueSortOrder, estimate, isDraft, sensitive, templateId, snoozedUntil, assigneeId, delegateId, stepKey, required, ownerAgent, projectId, cycleId, labelIds, repo, branch, prUrl, prState.",
+    "description": "Update issue (PATCH /workspaces/{organizationId}/issues/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: title, externalRef, teamId, teamKey, description, status, priority, resolution, resolutionReason, parentId, subIssueSortOrder, estimate, isDraft, sensitive, templateId, snoozedUntil, assigneeId, delegateId, stepKey, required, ownerAgent, projectId, cycleId, labelIds, repo, branch, prUrl, prState, stageGateOverride.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/issues/{id}",
     "inputSchema": {
@@ -8221,8 +8247,13 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "not_reproducible",
                 "obsolete",
                 "resolved",
+                "skipped",
                 null
               ]
+            },
+            "resolutionReason": {
+              "type": "string",
+              "nullable": true
             },
             "parentId": {
               "type": "string",
@@ -8306,6 +8337,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "merged",
                 "closed",
                 null
+              ]
+            },
+            "stageGateOverride": {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                }
+              },
+              "required": [
+                "reason"
               ]
             }
           }
@@ -14486,7 +14530,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssues",
-    "description": "Create issue — The 201 response includes possibleDuplicates: open issues (in teams you can see) whose titles closely match, best first. Non-blocking — if one is the same work, comment on or update it instead of keeping the new issue. Pass dedupe=block to get 409 with the matches in details.possibleDuplicates instead of creating. (POST /workspaces/{organizationId}/issues) Path params (top-level, required): organizationId. Query params (top-level, optional): dedupe. Request body goes in the \"body\" object; fields: title*, externalRef, teamId, teamKey, description, status, priority, resolution, parentId, subIssueSortOrder, estimate, isDraft, sensitive, templateId, snoozedUntil, assigneeId, delegateId, stepKey, required, ownerAgent, projectId, cycleId, labelIds, repo, branch (* = required).",
+    "description": "Create issue — The 201 response includes possibleDuplicates: open issues (in teams you can see) whose titles closely match, best first. Non-blocking — if one is the same work, comment on or update it instead of keeping the new issue. Pass dedupe=block to get 409 with the matches in details.possibleDuplicates instead of creating. (POST /workspaces/{organizationId}/issues) Path params (top-level, required): organizationId. Query params (top-level, optional): dedupe. Request body goes in the \"body\" object; fields: title*, externalRef, teamId, teamKey, description, status, priority, resolution, resolutionReason, parentId, subIssueSortOrder, estimate, isDraft, sensitive, templateId, snoozedUntil, assigneeId, delegateId, stepKey, required, ownerAgent, projectId, cycleId, labelIds, repo, branch (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues",
     "inputSchema": {
@@ -14556,8 +14600,13 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "not_reproducible",
                 "obsolete",
                 "resolved",
+                "skipped",
                 null
               ]
+            },
+            "resolutionReason": {
+              "type": "string",
+              "nullable": true
             },
             "parentId": {
               "type": "string",
@@ -14714,8 +14763,13 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                     "not_reproducible",
                     "obsolete",
                     "resolved",
+                    "skipped",
                     null
                   ]
+                },
+                "resolutionReason": {
+                  "type": "string",
+                  "nullable": true
                 },
                 "parentId": {
                   "type": "string",
@@ -14799,6 +14853,19 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                     "merged",
                     "closed",
                     null
+                  ]
+                },
+                "stageGateOverride": {
+                  "type": "object",
+                  "properties": {
+                    "reason": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 2000
+                    }
+                  },
+                  "required": [
+                    "reason"
                   ]
                 }
               }
