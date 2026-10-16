@@ -355,4 +355,64 @@ describe("pipeline runtime (PILE-401/405/413)", () => {
       )
     ).toBe(true);
   });
+
+  it("in-pile /dispatch/pile creates a session by key and resumes on the same key", async () => {
+    env.AGENT_PROVIDER_TOKEN = "test-dispatch-token";
+    const headers = { Authorization: "Bearer test-dispatch-token" };
+    const key = `merchant-9-flue-scout-${crypto.randomUUID().slice(0, 8)}`;
+    const issue = await fetch(
+      `/workspaces/${org}/issues`,
+      {
+        method: "POST",
+        body: JSON.stringify({ title: "deal issue", status: "todo" }),
+      },
+      admin
+    );
+    const { id: issueId } = (await issue.json()) as { id: string };
+    const payload = JSON.stringify({
+      organizationId: org,
+      issue: { id: issueId, title: "deal issue" },
+      profile: {
+        slug: "sales-scout",
+        name: "Sales Scout",
+        jobSpec: "Find merchants",
+      },
+      conversationKey: key,
+    });
+    const first = await app.fetch(
+      new Request("https://example.com/dispatch/pile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...headers },
+        body: payload,
+      }),
+      env
+    );
+    expect(first.status).toBe(200);
+    const firstBody = (await first.json()) as { conversationId: string };
+
+    const second = await app.fetch(
+      new Request("https://example.com/dispatch/pile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...headers },
+        body: payload,
+      }),
+      env
+    );
+    const secondBody = (await second.json()) as { conversationId: string };
+    // same conversation key resumes the same session — no new lane
+    expect(secondBody.conversationId).toBe(firstBody.conversationId);
+
+    const badAuth = await app.fetch(
+      new Request("https://example.com/dispatch/pile", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer wrong",
+        },
+        body: payload,
+      }),
+      env
+    );
+    expect(badAuth.status).toBe(401);
+  });
 });

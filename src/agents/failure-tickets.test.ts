@@ -153,6 +153,7 @@ function failedSession(
     updatedAt: ts,
     lastProgressAt: null,
     firstActivityAt: null,
+    conversationKey: null,
     lastStateHash: null,
     retryOf: null,
     retryCount: 0,

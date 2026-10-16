@@ -921,6 +921,9 @@ export const workspaceAgentSessions = sqliteTable(
     // past the first-ack window with it still null are flagged
     // `awaitingFirstAck` in the API.
     firstActivityAt: text("first_activity_at" as string),
+    // Flue profile memory — the durable conversation key ({merchantId}-
+    // {agentSlug}) a lane's context is pinned to across dispatches.
+    conversationKey: text("conversation_key" as string),
     lastStateHash: text("last_state_hash" as string),
     retryOf: text("retry_of" as string),
     retryCount: integer("retry_count" as string)
@@ -1006,6 +1009,10 @@ export const workspaceAgentSessions = sqliteTable(
       table.id
     ),
     index("agent_sessions_issue_idx" as string).on(table.issueId),
+    index("agent_sessions_conversation_key_idx" as string).on(
+      table.organizationId,
+      table.conversationKey
+    ),
     index("agent_sessions_provider_session_idx" as string).on(
       table.organizationId,
       table.providerSessionId

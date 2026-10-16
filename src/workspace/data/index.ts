@@ -1116,6 +1116,8 @@ export interface AgentSessionInput {
   /** PILE-423 — JSON [{id, name, scope, scopeKey, version}] of the guidance
    *  packs injected into this lane's dispatch prompt. */
   guidance?: string | null;
+  /** Flue profile memory — resume key ({merchantId}-{agentSlug}). */
+  conversationKey?: string | null;
 }
 
 export async function createAgentSession(
@@ -1153,6 +1155,7 @@ export async function createAgentSession(
     resultSchema: input.resultSchema ?? null,
     stepKey: input.stepKey ?? null,
     guidance: input.guidance ?? null,
+    conversationKey: input.conversationKey ?? null,
     updatedAt: ts,
   });
   const row = await db
@@ -1240,6 +1243,24 @@ function agentSessionListConditions(
     );
   }
   return conditions;
+}
+
+export function getAgentSessionByConversationKey(
+  db: WorkspaceDb,
+  organizationId: string,
+  conversationKey: string
+) {
+  return db
+    .select()
+    .from(workspaceAgentSessions)
+    .where(
+      and(
+        eq(workspaceAgentSessions.organizationId, organizationId),
+        eq(workspaceAgentSessions.conversationKey, conversationKey)
+      )
+    )
+    .orderBy(desc(workspaceAgentSessions.createdAt))
+    .get();
 }
 
 export function listAgentSessions(

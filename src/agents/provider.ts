@@ -57,6 +57,19 @@ export interface AgentDispatchContext {
   secondaryRepos?: SecondaryRepo[];
   /** Lane push/shell tiers (PILE-276); absent means fully enabled. */
   permissions?: LanePermissions;
+  /** Pipeline profile (PILE-405) — the resolved agent_type the lane runs as.
+   *  Providers that host profiles (Flue) forward this so the agent hydrates
+   *  from the registry entry rather than a static config string. */
+  agentProfile?: {
+    slug: string;
+    name: string;
+    jobSpec?: string | null;
+    toolScope?: string | null;
+  };
+  /** Explicit durable-conversation key for the run (PILE-435 follow-on) —
+   *  callers pass `{merchantId}-{agentSlug}` so a profile's memory for a
+   *  merchant survives across dispatches. */
+  conversationKey?: string;
   /** PILE-293 — model tier the lane was dispatched at. The model is already
    *  resolved from it; providers with a native effort knob may also use it. */
   effort?: DispatchEffort;

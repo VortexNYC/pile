@@ -3569,6 +3569,14 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.getAgentSession(this.db, this.organizationId, id);
   }
 
+  getAgentSessionByConversationKey(conversationKey: string) {
+    return data.getAgentSessionByConversationKey(
+      this.db,
+      this.organizationId,
+      conversationKey
+    );
+  }
+
   // Encrypted GitHub installation token currently held by each lane, keyed by
   // session. Swapping returns the previous one so callers can revoke it; the
   // reaper takes and revokes whatever is left once a session is terminal.

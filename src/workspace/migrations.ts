@@ -1337,6 +1337,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS agent_types_slug_idx ON agent_types (organizat
 // first activity get flagged in the API instead of hanging silently.
 const v88 = `ALTER TABLE agent_sessions ADD COLUMN first_activity_at TEXT`;
 
+// Flue profiles — the durable conversation key a lane's memory is pinned
+// to ({merchantId}-{agentSlug}); resume finds the session by this key.
+const v90 = `ALTER TABLE agent_sessions ADD COLUMN conversation_key TEXT
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS agent_sessions_conversation_key_idx ON agent_sessions (organization_id, conversation_key)`;
+
 // PILE-404 — draft-approval provenance + edit-diff snapshot.
 // PILE-438 — immutable status key + active/terminal marker.
 const v91 = `ALTER TABLE customer_statuses ADD COLUMN key TEXT
@@ -1614,6 +1620,7 @@ export const workspaceMigrations = {
       { idx: 87, when: 87, tag: "v88", breakpoints: true },
       { idx: 88, when: 88, tag: "v89", breakpoints: true },
       { idx: 89, when: 89, tag: "v91", breakpoints: true },
+      { idx: 90, when: 90, tag: "v90", breakpoints: true },
     ],
   },
   migrations: {
@@ -1707,5 +1714,6 @@ export const workspaceMigrations = {
     m0087: v88,
     m0088: v89,
     m0089: v91,
+    m0090: v90,
   },
 } satisfies Parameters<typeof migrate>[1];
