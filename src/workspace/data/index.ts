@@ -5177,6 +5177,9 @@ export function resolveCustomerStatusId(
   const trimmed = name.trim();
   const statuses = listCustomerStatuses(db, organizationId);
   const match =
+    // key match first — immutable across renames (PILE-438); fall back to
+    // name for rows/imports that still speak display names.
+    statuses.find((s) => s.key === stageKey(trimmed)) ??
     statuses.find((s) => s.name === trimmed) ??
     statuses.find((s) => stageKey(s.name) === stageKey(trimmed));
   if (match) return match.id;
@@ -6862,7 +6865,13 @@ export function deleteCustomerTier(
 export function createCustomerStatus(
   db: WorkspaceDb,
   organizationId: string,
-  input: { name: string; color?: string | null; position?: number }
+  input: {
+    name: string;
+    color?: string | null;
+    position?: number;
+    key?: string;
+    type?: "active" | "terminal";
+  }
 ) {
   return db
     .insert(workspaceCustomerStatuses)
@@ -6870,12 +6879,43 @@ export function createCustomerStatus(
       id: crypto.randomUUID(),
       organizationId,
       name: input.name,
+      // PILE-438 — the key is minted once at create (from name unless an
+      // explicit key is supplied) and is never re-derived on rename; that
+      // immutability is what keeps stage templates/configs bound.
+      key: input.key ?? stageKey(input.name),
+      type: input.type ?? "active",
       color: input.color ?? null,
       position: input.position ?? 0,
       createdAt: new Date().toISOString(),
     })
     .returning()
     .get();
+}
+
+/** PILE-438 — persist a key on rows that predate the column. Called from
+ *  DO initialize after migrations so renames stop orphaning stage
+ *  bindings. */
+export async function backfillCustomerStatusKeys(
+  db: WorkspaceDb,
+  organizationId: string
+): Promise<number> {
+  const missing = db
+    .select()
+    .from(workspaceCustomerStatuses)
+    .where(
+      and(
+        eq(workspaceCustomerStatuses.organizationId, organizationId),
+        isNull(workspaceCustomerStatuses.key)
+      )
+    )
+    .all();
+  for (const row of missing) {
+    await db
+      .update(workspaceCustomerStatuses)
+      .set({ key: stageKey(row.name) })
+      .where(eq(workspaceCustomerStatuses.id, row.id));
+  }
+  return missing.length;
 }
 
 export function listCustomerStatuses(db: WorkspaceDb, organizationId: string) {
@@ -6907,7 +6947,12 @@ export function updateCustomerStatus(
   db: WorkspaceDb,
   organizationId: string,
   id: string,
-  input: { name?: string; color?: string | null; position?: number }
+  input: {
+    name?: string;
+    color?: string | null;
+    position?: number;
+    type?: "active" | "terminal";
+  }
 ) {
   return db
     .update(workspaceCustomerStatuses)
@@ -6915,6 +6960,7 @@ export function updateCustomerStatus(
       name: input.name,
       color: input.color,
       position: input.position,
+      type: input.type,
     })
     .where(
       and(

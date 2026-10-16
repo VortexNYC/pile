@@ -684,6 +684,11 @@ export const workspaceCustomerTiers = sqliteTable(
     id: text("id" as string).primaryKey(),
     organizationId: text("organization_id" as string).notNull(),
     name: text("name" as string).notNull(),
+    // PILE-438 — immutable binding key: set once from the name at create,
+    // never re-derived on rename. Templates/configs bind to this.
+    key: text("key" as string),
+    // "active" | "terminal" — Passed/Lost close the pipeline.
+    type: text("type" as string).notNull().default("active"),
     color: text("color" as string),
     position: integer("position" as string)
       .notNull()
@@ -701,6 +706,11 @@ export const workspaceCustomerStatuses = sqliteTable(
     id: text("id" as string).primaryKey(),
     organizationId: text("organization_id" as string).notNull(),
     name: text("name" as string).notNull(),
+    // PILE-438 — immutable binding key: set once from the name at create,
+    // never re-derived on rename. Templates/configs bind to this.
+    key: text("key" as string),
+    // "active" | "terminal" — Passed/Lost close the pipeline.
+    type: text("type" as string).notNull().default("active"),
     color: text("color" as string),
     position: integer("position" as string)
       .notNull()
