@@ -23,6 +23,8 @@ async function withProbe<T>(
   }
 }
 
+const chunk = (s: string) => new TextEncoder().encode(s);
+
 describe("verifyExternalUrl (PILE-429)", () => {
   it("returns unchecked for non-http(s) URLs without probing", async () => {
     let probed = false;
@@ -55,7 +57,6 @@ describe("verifyExternalUrl (PILE-429)", () => {
   });
 
   it("assembles a title split across response chunks", async () => {
-    const chunk = (s: string) => new TextEncoder().encode(s);
     const result = await withProbe(
       async () =>
         new Response(
