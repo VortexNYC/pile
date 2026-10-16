@@ -9,6 +9,7 @@ import {
 } from "../agents/followup.js";
 import { getAgentProvider } from "../agents/index.js";
 import { dispatchAgent } from "../agents/index.js";
+import { decryptSecret } from "../agents/credentials.js";
 import { triggerPlanMode } from "../agents/plan-dispatch.js";
 import { parsePlanCommand } from "../agents/plan.js";
 import { createD1 } from "../global/db.js";
@@ -336,9 +337,13 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
         if (kind === "human") continue;
         if (kind === "external") {
           if (!agentType.endpointUrl) continue;
+          const secret = await decryptSecret(c.env, agentType.endpointSecret);
           await fetch(agentType.endpointUrl, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Content-Type": "application/json",
+              ...(secret ? { Authorization: `Bearer ${secret}` } : {}),
+            },
             body: JSON.stringify({
               event: "agent.mentioned",
               organizationId,

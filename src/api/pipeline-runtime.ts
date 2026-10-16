@@ -315,6 +315,15 @@ const pipelineLintRoute = createRoute({
   },
 });
 
+/** Strip the encrypted webhook bearer from responses — the wire exposes
+ *  hasEndpointSecret, never the ciphertext or plaintext. */
+function serializeAgentType<T extends { endpointSecret?: unknown }>(
+  t: T
+): Omit<T, "endpointSecret"> & { hasEndpointSecret: boolean } {
+  const { endpointSecret, ...rest } = t;
+  return { ...rest, hasEndpointSecret: Boolean(endpointSecret) };
+}
+
 function notFound(what: string): never {
   throw new VortexError({ code: "NOT_FOUND", status: 404, message: what });
 }
@@ -349,7 +358,8 @@ export function registerPipelineRuntimeRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listAgentTypesRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
-    return c.json({ agentTypes: await stub.listAgentTypes() }, 200);
+    const types = await stub.listAgentTypes();
+    return c.json({ agentTypes: types.map(serializeAgentType) }, 200);
   });
 
   app.openapi(upsertAgentTypeRoute, async (c) => {
@@ -370,7 +380,7 @@ export function registerPipelineRuntimeRoutes(app: OpenAPIHono<AppContext>) {
       ...input,
       createdBy: identity.id,
     });
-    return c.json(agentType, 200);
+    return c.json(serializeAgentType(agentType), 200);
   });
 
   app.openapi(getStageConfigRoute, async (c) => {
@@ -395,7 +405,7 @@ export function registerPipelineRuntimeRoutes(app: OpenAPIHono<AppContext>) {
     const stub = getWorkspaceStub(c.env, organizationId);
     const agentType = await stub.getAgentTypeById(id);
     if (!agentType) notFound("Agent type not found");
-    return c.json(agentType, 200);
+    return c.json(serializeAgentType(agentType), 200);
   });
 
   app.openapi(patchAgentTypeRoute, async (c) => {
@@ -411,7 +421,7 @@ export function registerPipelineRuntimeRoutes(app: OpenAPIHono<AppContext>) {
     const stub = getWorkspaceStub(c.env, organizationId);
     const agentType = await stub.updateAgentType(id, patch);
     if (!agentType) notFound("Agent type not found");
-    return c.json(agentType, 200);
+    return c.json(serializeAgentType(agentType), 200);
   });
 
   app.openapi(pipelineLintRoute, async (c) => {

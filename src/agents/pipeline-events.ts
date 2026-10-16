@@ -2,6 +2,7 @@ import type { WorkerEnv } from "../platform/middleware.js";
 import type { Issue } from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
 import { dispatchAgent } from "./index.js";
+import { decryptSecret } from "./credentials.js";
 import { automationEventTarget } from "./repo-triggers.js";
 import { fireEventAutomations } from "./sweep.js";
 
@@ -101,6 +102,7 @@ async function resolveOwner(
   name: string;
   kind: string;
   endpointUrl: string | null;
+  endpointSecret: string | null;
   jobSpec: string | null;
   toolScope: string | null;
 } | null> {
@@ -113,6 +115,7 @@ async function resolveOwner(
     name: type.name,
     kind: type.kind ?? "agent",
     endpointUrl: type.endpointUrl ?? null,
+    endpointSecret: type.endpointSecret ?? null,
     jobSpec: type.jobSpec,
     toolScope: type.toolScope,
   };
@@ -123,14 +126,23 @@ async function resolveOwner(
  *  pile lane — same payload contract a CfAgentProvider would receive. */
 async function dispatchExternal(
   env: WorkerEnv,
-  owner: { endpointUrl: string | null; slug: string; name: string },
+  owner: {
+    endpointUrl: string | null;
+    endpointSecret: string | null;
+    slug: string;
+    name: string;
+  },
   payload: Record<string, unknown>,
   ctx?: { waitUntil: (promise: Promise<unknown>) => void }
 ): Promise<void> {
   if (!owner.endpointUrl) return;
+  const secret = await decryptSecret(env, owner.endpointSecret);
   const task = fetch(owner.endpointUrl, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(secret ? { Authorization: `Bearer ${secret}` } : {}),
+    },
     body: JSON.stringify(payload),
   }).then(async (res) => {
     if (!res.ok) {
