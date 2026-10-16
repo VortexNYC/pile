@@ -233,20 +233,21 @@ export class CfAgentProvider implements AgentProvider {
     };
     const rawOutcome = record.outcome;
     const rawStatus = record.status;
+    // Provider-pushed statuses only — "stale" is derived internally by the
+    // sweep from silence, so a webhook can never report it.
+    const pushedStatuses = [
+      "created",
+      "running",
+      "waiting",
+      "completed",
+      "failed",
+      "canceled",
+    ] as const satisfies readonly AgentSessionStatus[];
     const status =
       typeof rawOutcome === "string"
         ? outcomeMap[rawOutcome]
         : typeof rawStatus === "string" &&
-            (
-              [
-                "created",
-                "running",
-                "waiting",
-                "completed",
-                "failed",
-                "canceled",
-              ] as const satisfies readonly AgentSessionStatus[]
-            ).includes(rawStatus as AgentSessionStatus)
+            (pushedStatuses as readonly string[]).includes(rawStatus)
           ? (rawStatus as AgentSessionStatus)
           : undefined;
 

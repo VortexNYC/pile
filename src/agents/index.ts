@@ -431,9 +431,7 @@ export async function dispatchAgent(
       createdAt: promotedAt,
       // An explicit stepKey on promote wins; otherwise the parked row's
       // stored key (set when the dispatch was queued) drives resolution.
-      ...(options?.stepKey !== undefined
-        ? { stepKey: options.stepKey }
-        : {}),
+      ...(options?.stepKey !== undefined ? { stepKey: options.stepKey } : {}),
     })) ??
       // A null return means the row didn't take the write — the fallback
       // must still reflect the promotion or the stale queue timestamp

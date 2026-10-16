@@ -1763,7 +1763,7 @@ export function listGuidancePackVersions(
   db: WorkspaceDb,
   organizationId: string,
   packId: string
-) {
+): GuidancePackVersion[] {
   return db
     .select()
     .from(workspaceGuidancePackVersions)
