@@ -129,7 +129,10 @@ function webhookSecretFromConfig(
 }
 
 async function redact(env: WorkerEnv, row: ProviderConfigRow) {
-  row = (await decryptProviderConfigRow(env, row)) ?? row;
+  // PILE-436 — a corrupt or key-rotated row must not 500 the listing. The
+  // response only exposes hasToken-style markers, so undecryptable rows
+  // degrade to "secret present" rather than taking the endpoint down.
+  row = (await decryptProviderConfigRow(env, row).catch(() => null)) ?? row;
   let parsedConfig: Record<string, unknown> | null = null;
   if (row.config) {
     try {

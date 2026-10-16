@@ -127,4 +127,24 @@ describe("agent provider catalog API", () => {
     );
     expect(res.status).toBe(400);
   });
+
+  it("survives a provider config whose secrets fail to decrypt (PILE-436)", async () => {
+    // Corrupt/rotated-key ciphertext must not 500 the listing — secrets are
+    // redacted in the response anyway, so a bad blob should degrade to
+    // hasToken-style markers, not an internal error.
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    await stub.upsertAgentProviderConfig({
+      agentId: "corrupt-row",
+      token: "enc:v1:not-base64!!!:also-not-base64",
+      config: { mode: "hosted" },
+    });
+    const res = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/providers`, { token }),
+      env
+    );
+    expect(res.status).toBe(200);
+  });
 });
