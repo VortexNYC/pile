@@ -37627,6 +37627,12 @@
                             "type": "number",
                             "nullable": true
                           },
+                          "customFields": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
                           "createdAt": {
                             "type": "string"
                           },
@@ -37651,6 +37657,7 @@
                           "needsHuman",
                           "needsHumanReason",
                           "priorityScore",
+                          "customFields",
                           "createdAt",
                           "updatedAt"
                         ]
@@ -37751,6 +37758,13 @@
                   "priorityScore": {
                     "type": "number",
                     "nullable": true
+                  },
+                  "customFields": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string",
+                      "nullable": true
+                    }
                   }
                 },
                 "required": [
@@ -37829,6 +37843,12 @@
                       "type": "number",
                       "nullable": true
                     },
+                    "customFields": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -37853,6 +37873,7 @@
                     "needsHuman",
                     "needsHumanReason",
                     "priorityScore",
+                    "customFields",
                     "createdAt",
                     "updatedAt"
                   ]
@@ -37928,6 +37949,12 @@
                       "type": "number",
                       "nullable": true
                     },
+                    "customFields": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -37952,6 +37979,7 @@
                     "needsHuman",
                     "needsHumanReason",
                     "priorityScore",
+                    "customFields",
                     "createdAt",
                     "updatedAt"
                   ]
@@ -37964,6 +37992,472 @@
           }
         },
         "summary": "Create customer"
+      }
+    },
+    "/workspaces/{organizationId}/customers/import": {
+      "post": {
+        "tags": [
+          "customers"
+        ],
+        "description": "Bulk merchant import — Scout's write path. Each row becomes a customer deduped on externalId (placeId maps to \"gplace:<place_id>\"); re-runs return existing records and fill empty slots rather than duplicating. Optionally creates an initial deal per row (stage defaults to \"lead\"). Every row lands a receipt (created/existing/failed + why) and the batch itself is persisted as an import receipt readable via GET /customer-imports/{id}.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string"
+                  },
+                  "corridor": {
+                    "type": "string"
+                  },
+                  "rows": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "placeId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "externalId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 255
+                        },
+                        "name": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "url": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "notes": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "status": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "statusId": {
+                          "type": "string"
+                        },
+                        "tierId": {
+                          "type": "string"
+                        },
+                        "ownerId": {
+                          "type": "string"
+                        },
+                        "nextStepText": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "nextStepDueAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "needsHuman": {
+                          "type": "boolean",
+                          "nullable": true
+                        },
+                        "needsHumanReason": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "priorityScore": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "customFields": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "deal": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "stage": {
+                              "type": "string",
+                              "enum": [
+                                "lead",
+                                "qualified",
+                                "proposal",
+                                "negotiation",
+                                "won",
+                                "lost"
+                              ]
+                            },
+                            "amountCents": {
+                              "type": "integer",
+                              "nullable": true,
+                              "minimum": 0
+                            },
+                            "currency": {
+                              "type": "string",
+                              "nullable": true,
+                              "minLength": 3,
+                              "maxLength": 3
+                            },
+                            "expectedCloseAt": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "description": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "priorityScore": {
+                              "type": "number",
+                              "nullable": true
+                            }
+                          }
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 1000
+                  }
+                },
+                "required": [
+                  "rows"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Import receipt — per-row outcomes included",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "corridor": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "created": {
+                      "type": "integer"
+                    },
+                    "existing": {
+                      "type": "integer"
+                    },
+                    "failed": {
+                      "type": "integer"
+                    },
+                    "createdById": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "index": {
+                            "type": "integer"
+                          },
+                          "externalId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "outcome": {
+                            "type": "string",
+                            "enum": [
+                              "created",
+                              "existing",
+                              "failed"
+                            ]
+                          },
+                          "customerId": {
+                            "type": "string"
+                          },
+                          "dealId": {
+                            "type": "string"
+                          },
+                          "error": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "index",
+                          "externalId",
+                          "outcome"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "source",
+                    "corridor",
+                    "total",
+                    "created",
+                    "existing",
+                    "failed",
+                    "createdById",
+                    "createdAt",
+                    "rows"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create customer import"
+      }
+    },
+    "/workspaces/{organizationId}/customer-imports": {
+      "get": {
+        "tags": [
+          "customers"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Import receipt history (summaries — no row details)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "imports": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "source": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "corridor": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "total": {
+                            "type": "integer"
+                          },
+                          "created": {
+                            "type": "integer"
+                          },
+                          "existing": {
+                            "type": "integer"
+                          },
+                          "failed": {
+                            "type": "integer"
+                          },
+                          "createdById": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "source",
+                          "corridor",
+                          "total",
+                          "created",
+                          "existing",
+                          "failed",
+                          "createdById",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "imports"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List customer imports"
+      }
+    },
+    "/workspaces/{organizationId}/customer-imports/{id}": {
+      "get": {
+        "tags": [
+          "customers"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Import receipt with per-row outcomes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "source": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "corridor": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "created": {
+                      "type": "integer"
+                    },
+                    "existing": {
+                      "type": "integer"
+                    },
+                    "failed": {
+                      "type": "integer"
+                    },
+                    "createdById": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "index": {
+                            "type": "integer"
+                          },
+                          "externalId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "outcome": {
+                            "type": "string",
+                            "enum": [
+                              "created",
+                              "existing",
+                              "failed"
+                            ]
+                          },
+                          "customerId": {
+                            "type": "string"
+                          },
+                          "dealId": {
+                            "type": "string"
+                          },
+                          "error": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "index",
+                          "externalId",
+                          "outcome"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "source",
+                    "corridor",
+                    "total",
+                    "created",
+                    "existing",
+                    "failed",
+                    "createdById",
+                    "createdAt",
+                    "rows"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Import receipt not found"
+          }
+        },
+        "summary": "Get customer import"
       }
     },
     "/workspaces/{organizationId}/customers/{id}": {
@@ -38058,6 +38552,12 @@
                       "type": "number",
                       "nullable": true
                     },
+                    "customFields": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -38082,6 +38582,7 @@
                     "needsHuman",
                     "needsHumanReason",
                     "priorityScore",
+                    "customFields",
                     "createdAt",
                     "updatedAt"
                   ]
@@ -38175,6 +38676,13 @@
                   "priorityScore": {
                     "type": "number",
                     "nullable": true
+                  },
+                  "customFields": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string",
+                      "nullable": true
+                    }
                   }
                 }
               }
@@ -38250,6 +38758,12 @@
                       "type": "number",
                       "nullable": true
                     },
+                    "customFields": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
                     "createdAt": {
                       "type": "string"
                     },
@@ -38274,6 +38788,7 @@
                     "needsHuman",
                     "needsHumanReason",
                     "priorityScore",
+                    "customFields",
                     "createdAt",
                     "updatedAt"
                   ]
@@ -40163,6 +40678,12 @@
                               "type": "string"
                             }
                           },
+                          "customFields": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
                           "createdAt": {
                             "type": "string"
                           },
@@ -40189,6 +40710,7 @@
                           "needsHumanReason",
                           "priorityScore",
                           "contactIds",
+                          "customFields",
                           "createdAt",
                           "updatedAt"
                         ]
@@ -40306,6 +40828,13 @@
                   "priorityScore": {
                     "type": "number",
                     "nullable": true
+                  },
+                  "customFields": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string",
+                      "nullable": true
+                    }
                   }
                 },
                 "required": [
@@ -40404,6 +40933,12 @@
                             "type": "string"
                           }
                         },
+                        "customFields": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -40430,6 +40965,7 @@
                         "needsHumanReason",
                         "priorityScore",
                         "contactIds",
+                        "customFields",
                         "createdAt",
                         "updatedAt"
                       ]
@@ -40529,6 +41065,12 @@
                             "type": "string"
                           }
                         },
+                        "customFields": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -40555,6 +41097,7 @@
                         "needsHumanReason",
                         "priorityScore",
                         "contactIds",
+                        "customFields",
                         "createdAt",
                         "updatedAt"
                       ]
@@ -40685,6 +41228,12 @@
                             "type": "string"
                           }
                         },
+                        "customFields": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -40711,6 +41260,7 @@
                         "needsHumanReason",
                         "priorityScore",
                         "contactIds",
+                        "customFields",
                         "createdAt",
                         "updatedAt"
                       ]
@@ -40828,6 +41378,13 @@
                   "priorityScore": {
                     "type": "number",
                     "nullable": true
+                  },
+                  "customFields": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string",
+                      "nullable": true
+                    }
                   }
                 }
               }
@@ -40922,6 +41479,12 @@
                             "type": "string"
                           }
                         },
+                        "customFields": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
                         "createdAt": {
                           "type": "string"
                         },
@@ -40948,6 +41511,7 @@
                         "needsHumanReason",
                         "priorityScore",
                         "contactIds",
+                        "customFields",
                         "createdAt",
                         "updatedAt"
                       ]
@@ -41285,6 +41849,12 @@
                               "type": "string"
                             }
                           },
+                          "customFields": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
                           "createdAt": {
                             "type": "string"
                           },
@@ -41311,6 +41881,7 @@
                           "needsHumanReason",
                           "priorityScore",
                           "contactIds",
+                          "customFields",
                           "createdAt",
                           "updatedAt"
                         ]

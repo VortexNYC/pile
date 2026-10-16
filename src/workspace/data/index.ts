@@ -52,6 +52,7 @@ import {
   workspaceFieldValues,
   workspaceGuidancePacks,
   workspaceGuidancePackVersions,
+  workspaceImportReceipts,
   workspaceStageTemplates,
   workspaceTriageRuleEvaluations,
   workspaceTriageRules,
@@ -4696,6 +4697,342 @@ export function deleteCustomer(
   );
 }
 
+// ---- bulk customer import (PILE-403) ----
+// Scout's write path: a batch of merchant rows → deduped customer records
+// (+ optional initial deals) with a durable per-row receipt. Idempotent —
+// the same corridor re-run produces zero new records because externalId
+// ("gplace:<place_id>" for Places pulls) is a hard dedupe key.
+
+export interface ImportDealSpec {
+  name?: string;
+  stage?: DealStage;
+  amountCents?: number | null;
+  currency?: string | null;
+  expectedCloseAt?: string | null;
+  description?: string | null;
+  priorityScore?: number | null;
+}
+
+export interface ImportCustomerRow {
+  placeId?: string | null;
+  externalId?: string | null;
+  name: string;
+  url?: string | null;
+  notes?: string | null;
+  /** Customer status *name* — resolved case-insensitively, auto-created
+   *  when the pipeline column doesn't exist yet. `statusId` wins when
+   *  both are provided. */
+  status?: string | null;
+  statusId?: string | null;
+  tierId?: string | null;
+  ownerId?: string | null;
+  nextStepText?: string | null;
+  nextStepDueAt?: string | null;
+  needsHuman?: boolean | null;
+  needsHumanReason?: string | null;
+  priorityScore?: number | null;
+  /** Custom field values keyed by field name — missing definitions are
+   *  auto-created as text fields (PILE-383). */
+  customFields?: Record<string, string | null>;
+  deal?: ImportDealSpec;
+}
+
+export interface ImportRowReceipt {
+  index: number;
+  externalId: string | null;
+  outcome: "created" | "existing" | "failed";
+  customerId?: string;
+  dealId?: string;
+  error?: string;
+}
+
+export interface ImportReceipt {
+  id: string;
+  organizationId: string;
+  source: string | null;
+  corridor: string | null;
+  total: number;
+  created: number;
+  existing: number;
+  failed: number;
+  rows: ImportRowReceipt[];
+  createdById: string | null;
+  createdAt: string;
+}
+
+export interface ImportReceiptSummary extends Omit<ImportReceipt, "rows"> {}
+
+/** Resolve a customer status by name — importers speak pipeline column
+ *  names ("New", "Contacted"), not uuids. A missing name becomes a new
+ *  status appended at the end so a corridor file can introduce its own
+ *  stages. */
+export function resolveCustomerStatusId(
+  db: WorkspaceDb,
+  organizationId: string,
+  name: string
+): string {
+  const trimmed = name.trim();
+  const statuses = listCustomerStatuses(db, organizationId);
+  const match =
+    statuses.find((s) => s.name === trimmed) ??
+    statuses.find((s) => stageKey(s.name) === stageKey(trimmed));
+  if (match) return match.id;
+  return createCustomerStatus(db, organizationId, {
+    name: trimmed,
+    position: statuses.length,
+  }).id;
+}
+
+function importRowDeal(
+  db: WorkspaceDb,
+  organizationId: string,
+  customer: { id: string; name: string },
+  externalId: string | null,
+  spec: ImportDealSpec
+): string {
+  // Deals dedupe on the same externalId — a re-run reuses the record
+  // instead of minting a second pipeline entry.
+  if (externalId) {
+    const existing = getDealByExternalId(db, organizationId, externalId);
+    if (existing) return existing.id;
+  }
+  return createDeal(db, {
+    organizationId,
+    customerId: customer.id,
+    name: spec.name ?? customer.name,
+    externalId,
+    stage: spec.stage ?? "lead",
+    amountCents: spec.amountCents ?? null,
+    currency: spec.currency ?? null,
+    expectedCloseAt: spec.expectedCloseAt ?? null,
+    description: spec.description ?? null,
+    priorityScore: spec.priorityScore ?? null,
+  }).id;
+}
+
+export function importCustomers(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: {
+    source?: string | null;
+    corridor?: string | null;
+    rows: ImportCustomerRow[];
+    createdById?: string | null;
+  }
+): ImportReceipt {
+  const rows: ImportRowReceipt[] = [];
+  let createdCount = 0;
+  let existingCount = 0;
+  let failedCount = 0;
+
+  input.rows.forEach((row, index) => {
+    const externalId = row.placeId
+      ? `gplace:${row.placeId}`
+      : (row.externalId ?? null);
+    try {
+      if (typeof row.name !== "string" || row.name.trim() === "") {
+        throw new Error("Row requires a name");
+      }
+      // Validate before any write so a failed row leaves no partial
+      // record behind — the re-run can then retry the same place_id.
+      if (row.customFields) {
+        assertFieldValuesValid(
+          db,
+          organizationId,
+          "customer",
+          row.customFields
+        );
+      }
+      let statusId = row.statusId ?? null;
+      if (!statusId && row.status) {
+        statusId = resolveCustomerStatusId(db, organizationId, row.status);
+      }
+      let customer = externalId
+        ? getCustomerByExternalId(db, organizationId, externalId)
+        : undefined;
+      let outcome: ImportRowReceipt["outcome"];
+      if (customer) {
+        outcome = "existing";
+        existingCount += 1;
+        // Enrich, never clobber: importer-provided scalars only fill
+        // slots that are still empty, so a human's edits survive
+        // re-runs. Custom fields below always upsert.
+        const patch: Partial<Omit<CustomerInput, "organizationId">> = {};
+        if (row.url != null && customer.url === null) patch.url = row.url;
+        if (row.notes != null && customer.notes === null)
+          patch.notes = row.notes;
+        if (row.tierId != null && customer.tierId === null)
+          patch.tierId = row.tierId;
+        if (statusId != null && customer.statusId === null)
+          patch.statusId = statusId;
+        if (row.ownerId != null && customer.ownerId === null)
+          patch.ownerId = row.ownerId;
+        if (row.nextStepText != null && customer.nextStepText === null)
+          patch.nextStepText = row.nextStepText;
+        if (row.nextStepDueAt != null && customer.nextStepDueAt === null)
+          patch.nextStepDueAt = row.nextStepDueAt;
+        if (row.needsHuman != null && customer.needsHuman === null)
+          patch.needsHuman = row.needsHuman;
+        if (row.needsHumanReason != null && customer.needsHumanReason === null)
+          patch.needsHumanReason = row.needsHumanReason;
+        if (row.priorityScore != null && customer.priorityScore === null)
+          patch.priorityScore = row.priorityScore;
+        if (Object.keys(patch).length > 0) {
+          customer = updateCustomer(db, organizationId, customer.id, patch);
+        }
+      } else {
+        customer = createCustomer(db, {
+          organizationId,
+          name: row.name,
+          url: row.url ?? null,
+          notes: row.notes ?? null,
+          externalId,
+          tierId: row.tierId ?? null,
+          statusId,
+          ownerId: row.ownerId ?? null,
+          nextStepText: row.nextStepText ?? null,
+          nextStepDueAt: row.nextStepDueAt ?? null,
+          needsHuman: row.needsHuman ?? null,
+          needsHumanReason: row.needsHumanReason ?? null,
+          priorityScore: row.priorityScore ?? null,
+        });
+        outcome = "created";
+        createdCount += 1;
+      }
+      if (customer === undefined) {
+        throw new Error("Customer write returned no record");
+      }
+      if (row.customFields) {
+        setFieldValuesByName(
+          db,
+          organizationId,
+          "customer",
+          customer.id,
+          row.customFields
+        );
+      }
+      const dealId = row.deal
+        ? importRowDeal(db, organizationId, customer, externalId, row.deal)
+        : undefined;
+      rows.push({
+        index,
+        externalId,
+        outcome,
+        customerId: customer.id,
+        dealId,
+      });
+    } catch (error) {
+      failedCount += 1;
+      rows.push({
+        index,
+        externalId,
+        outcome: "failed",
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  return createImportReceipt(db, organizationId, {
+    source: input.source ?? null,
+    corridor: input.corridor ?? null,
+    rowCount: input.rows.length,
+    createdCount,
+    existingCount,
+    failedCount,
+    rows,
+    createdById: input.createdById ?? null,
+  });
+}
+
+type ImportReceiptRow = typeof workspaceImportReceipts.$inferSelect;
+
+function toImportReceipt(row: ImportReceiptRow): ImportReceipt {
+  return {
+    ...toImportReceiptSummary(row),
+    rows: JSON.parse(row.rows) as ImportRowReceipt[],
+  };
+}
+
+function toImportReceiptSummary(row: ImportReceiptRow): ImportReceiptSummary {
+  return {
+    id: row.id,
+    organizationId: row.organizationId,
+    source: row.source,
+    corridor: row.corridor,
+    total: row.rowCount,
+    created: row.createdCount,
+    existing: row.existingCount,
+    failed: row.failedCount,
+    createdById: row.createdById,
+    createdAt: row.createdAt,
+  };
+}
+
+export function createImportReceipt(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: {
+    source?: string | null;
+    corridor?: string | null;
+    rowCount: number;
+    createdCount: number;
+    existingCount: number;
+    failedCount: number;
+    rows: ImportRowReceipt[];
+    createdById?: string | null;
+  }
+): ImportReceipt {
+  const row = db
+    .insert(workspaceImportReceipts)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId,
+      source: input.source ?? null,
+      corridor: input.corridor ?? null,
+      rowCount: input.rowCount,
+      createdCount: input.createdCount,
+      existingCount: input.existingCount,
+      failedCount: input.failedCount,
+      rows: JSON.stringify(input.rows),
+      createdById: input.createdById ?? null,
+      createdAt: new Date().toISOString(),
+    })
+    .returning()
+    .get();
+  return toImportReceipt(row);
+}
+
+export function getImportReceipt(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+): ImportReceipt | undefined {
+  const row = db
+    .select()
+    .from(workspaceImportReceipts)
+    .where(
+      and(
+        eq(workspaceImportReceipts.id, id),
+        eq(workspaceImportReceipts.organizationId, organizationId)
+      )
+    )
+    .get();
+  return row ? toImportReceipt(row) : undefined;
+}
+
+export function listImportReceipts(
+  db: WorkspaceDb,
+  organizationId: string
+): ImportReceiptSummary[] {
+  return db
+    .select()
+    .from(workspaceImportReceipts)
+    .where(eq(workspaceImportReceipts.organizationId, organizationId))
+    .orderBy(desc(workspaceImportReceipts.createdAt))
+    .all()
+    .map(toImportReceiptSummary);
+}
+
 // ---- deals ----
 // The CRM pipeline: deals belong to a customer (company), carry a stage,
 // amount + currency + expected close, and link to contact people.
@@ -5351,6 +5688,156 @@ export function listFieldValues(
       )
     )
     .all();
+}
+
+/** Raised when a custom field value fails type validation — the API maps
+ *  this to a 400 and importers record it as the row's failure reason. */
+export class FieldValueError extends Error {}
+
+function validateFieldValue(
+  definition: { name: string; type: FieldType; options: string[] | null },
+  value: string
+) {
+  switch (definition.type) {
+    case "number":
+      if (value.trim() === "" || !Number.isFinite(Number(value))) {
+        throw new FieldValueError(
+          `Field "${definition.name}" expects a number, got "${value}"`
+        );
+      }
+      break;
+    case "boolean":
+      if (value !== "true" && value !== "false") {
+        throw new FieldValueError(
+          `Field "${definition.name}" expects "true" or "false", got "${value}"`
+        );
+      }
+      break;
+    case "date":
+      if (Number.isNaN(Date.parse(value))) {
+        throw new FieldValueError(
+          `Field "${definition.name}" expects a date, got "${value}"`
+        );
+      }
+      break;
+    case "select":
+      if (definition.options && !definition.options.includes(value)) {
+        throw new FieldValueError(
+          `Field "${definition.name}" expects one of ${definition.options.join(", ")}, got "${value}"`
+        );
+      }
+      break;
+    default:
+      break;
+  }
+}
+
+/** Name-keyed custom field values for a set of entities — the shape
+ *  callers (imports, API responses) actually work with. Definitions are
+ *  scoped by entityType so a value stored under another entity type's
+ *  field id is ignored. */
+export function customFieldMaps(
+  db: WorkspaceDb,
+  organizationId: string,
+  entityType: string,
+  entityIds: string[]
+): Map<string, Record<string, string>> {
+  const result = new Map<string, Record<string, string>>();
+  if (entityIds.length === 0) return result;
+  const definitions = db
+    .select()
+    .from(workspaceFieldDefinitions)
+    .where(
+      and(
+        eq(workspaceFieldDefinitions.organizationId, organizationId),
+        eq(workspaceFieldDefinitions.entityType, entityType)
+      )
+    )
+    .all();
+  const nameById = new Map(definitions.map((d) => [d.id, d.name]));
+  const values = db
+    .select()
+    .from(workspaceFieldValues)
+    .where(
+      and(
+        eq(workspaceFieldValues.organizationId, organizationId),
+        inArray(workspaceFieldValues.entityId, entityIds)
+      )
+    )
+    .all();
+  for (const row of values) {
+    const name = nameById.get(row.fieldId);
+    if (!name || row.value === null) continue;
+    const map = result.get(row.entityId) ?? {};
+    map[name] = row.value;
+    result.set(row.entityId, map);
+  }
+  return result;
+}
+
+export function customFieldMap(
+  db: WorkspaceDb,
+  organizationId: string,
+  entityType: string,
+  entityId: string
+): Record<string, string> {
+  return (
+    customFieldMaps(db, organizationId, entityType, [entityId]).get(entityId) ??
+    {}
+  );
+}
+
+/** Upsert custom field values addressed by field name. Missing
+ *  definitions are auto-created as text fields so importers can write
+ *  `customFields` without a two-pass definition setup; a name that
+ *  already exists keeps its declared type and the value is validated
+ *  against it. `null` clears the value. */
+export function setFieldValuesByName(
+  db: WorkspaceDb,
+  organizationId: string,
+  entityType: string,
+  entityId: string,
+  fields: Record<string, string | null>
+) {
+  const definitions = listFieldDefinitions(db, organizationId, entityType);
+  const byName = new Map(definitions.map((d) => [d.name, d]));
+  for (const [rawName, value] of Object.entries(fields)) {
+    const name = rawName.trim();
+    if (!name) {
+      throw new FieldValueError("Custom field name must not be empty");
+    }
+    let definition = byName.get(name);
+    if (!definition) {
+      definition = createFieldDefinition(db, {
+        organizationId,
+        entityType,
+        name,
+        type: "text",
+      });
+      byName.set(name, definition);
+    }
+    if (value !== null) validateFieldValue(definition, value);
+    setFieldValue(db, organizationId, definition.id, entityId, value);
+  }
+}
+
+/** Pre-flight check for batch writers: reject values that violate an
+ *  existing definition's type *before* the row's record is created, so a
+ *  failed import row leaves nothing behind. Missing definitions are
+ *  always valid — they will be auto-created as text fields on write. */
+export function assertFieldValuesValid(
+  db: WorkspaceDb,
+  organizationId: string,
+  entityType: string,
+  fields: Record<string, string | null>
+) {
+  const definitions = listFieldDefinitions(db, organizationId, entityType);
+  const byName = new Map(definitions.map((d) => [d.name, d]));
+  for (const [rawName, value] of Object.entries(fields)) {
+    if (value === null) continue;
+    const definition = byName.get(rawName.trim());
+    if (definition) validateFieldValue(definition, value);
+  }
 }
 
 // ---- entity attachments ----

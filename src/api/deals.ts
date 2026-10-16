@@ -37,6 +37,9 @@ const dealSchema = z.object({
   needsHumanReason: z.string().nullable(),
   priorityScore: z.number().nullable(),
   contactIds: z.array(z.string()),
+  // Name-keyed custom field values (definitions live under
+  // /workspaces/{org}/fields with entityType="deal").
+  customFields: z.record(z.string(), z.string()),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -56,6 +59,9 @@ const createDealSchema = z.object({
   needsHuman: z.boolean().nullable().optional(),
   needsHumanReason: z.string().nullable().optional(),
   priorityScore: z.number().nullable().optional(),
+  // Field values keyed by field name — unknown names auto-create a text
+  // field definition; null clears a value.
+  customFields: z.record(z.string(), z.string().nullable()).optional(),
 });
 
 const updateDealSchema = z.object({
@@ -74,6 +80,7 @@ const updateDealSchema = z.object({
   needsHuman: z.boolean().nullable().optional(),
   needsHumanReason: z.string().nullable().optional(),
   priorityScore: z.number().nullable().optional(),
+  customFields: z.record(z.string(), z.string().nullable()).optional(),
 });
 
 function notFound(): never {
@@ -267,6 +274,7 @@ export function registerDealRoutes(app: OpenAPIHono<AppContext>) {
       needsHuman: body.needsHuman ?? null,
       needsHumanReason: body.needsHumanReason ?? null,
       priorityScore: body.priorityScore ?? null,
+      customFields: body.customFields,
     });
     // PILE-427 — a created deal is an inbound record for triage rules.
     // The externalId idempotent path returns early above, so retries
@@ -328,6 +336,7 @@ export function registerDealRoutes(app: OpenAPIHono<AppContext>) {
       needsHuman: body.needsHuman,
       needsHumanReason: body.needsHumanReason,
       priorityScore: body.priorityScore,
+      customFields: body.customFields,
     });
     if (!deal) notFound();
     return c.json({ deal }, 200);

@@ -465,3 +465,365 @@ describe("customer hygiene fields + externalId dedupe", () => {
     expect(human).not.toContain(cold.id);
   });
 });
+
+describe("customer custom fields (PILE-383)", () => {
+  let organizationId = "";
+  let token = "";
+
+  const customerShape = z.object({
+    id: z.string(),
+    name: z.string(),
+    customFields: z.record(z.string(), z.string()),
+  });
+
+  beforeAll(async () => {
+    ({ organizationId, token } = await seedWorkspace());
+  });
+
+  it("writes name-keyed custom fields on create and reads them back", async () => {
+    const res = await fetch(
+      `/workspaces/${organizationId}/customers`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "Fielded Merchant",
+          customFields: {
+            merchant_type: "restaurant",
+            processor: "square",
+            address: "123 Main St",
+            phone: "+1 212 555 0100",
+            batch_week: "2026-W42",
+          },
+        }),
+      },
+      token
+    );
+    expect(res.status).toBe(201);
+    const created = customerShape.parse(await res.json());
+    expect(created.customFields.processor).toBe("square");
+    expect(created.customFields.batch_week).toBe("2026-W42");
+
+    // Unknown field names auto-create text definitions the workspace can
+    // later re-type via /fields.
+    const fields = await fetch(
+      `/workspaces/${organizationId}/fields?entityType=customer`,
+      {},
+      token
+    );
+    const defs = z
+      .object({
+        fields: z.array(z.object({ name: z.string(), type: z.string() })),
+      })
+      .parse(await fields.json());
+    expect(defs.fields.map((f) => f.name)).toContain("processor");
+
+    const got = await fetch(
+      `/workspaces/${organizationId}/customers/${created.id}`,
+      {},
+      token
+    );
+    expect(customerShape.parse(await got.json()).customFields.address).toBe(
+      "123 Main St"
+    );
+  });
+
+  it("patches field values and clears them with null", async () => {
+    const created = await fetch(
+      `/workspaces/${organizationId}/customers`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "Patchable",
+          customFields: { processor: "toast" },
+        }),
+      },
+      token
+    );
+    const customer = customerShape.parse(await created.json());
+
+    const patched = await fetch(
+      `/workspaces/${organizationId}/customers/${customer.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          customFields: { processor: "stripe", batch_week: null },
+        }),
+      },
+      token
+    );
+    expect(patched.status).toBe(200);
+    const body = customerShape.parse(await patched.json());
+    expect(body.customFields.processor).toBe("stripe");
+    expect(body.customFields.batch_week).toBeUndefined();
+  });
+
+  it("rejects values that violate a declared field type", async () => {
+    // Declare a select field, then write a value outside its options.
+    const define = await fetch(
+      `/workspaces/${organizationId}/fields`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          entityType: "customer",
+          name: "merchant_size",
+          type: "select",
+          options: ["small", "mid", "enterprise"],
+        }),
+      },
+      token
+    );
+    expect(define.status).toBe(201);
+
+    const res = await fetch(
+      `/workspaces/${organizationId}/customers`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "Bad field value",
+          customFields: { merchant_size: "huge" },
+        }),
+      },
+      token
+    );
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("bulk customer import (PILE-403)", () => {
+  let organizationId = "";
+  let token = "";
+
+  const rowReceipt = z.object({
+    index: z.number().int(),
+    externalId: z.string().nullable(),
+    outcome: z.enum(["created", "existing", "failed"]),
+    customerId: z.string().optional(),
+    dealId: z.string().optional(),
+    error: z.string().optional(),
+  });
+  const receiptShape = z.object({
+    id: z.string(),
+    organizationId: z.string(),
+    source: z.string().nullable(),
+    corridor: z.string().nullable(),
+    total: z.number().int(),
+    created: z.number().int(),
+    existing: z.number().int(),
+    failed: z.number().int(),
+    rows: z.array(rowReceipt),
+    createdAt: z.string(),
+  });
+
+  async function postImport(body: Record<string, unknown>) {
+    return fetch(
+      `/workspaces/${organizationId}/customers/import`,
+      { method: "POST", body: JSON.stringify(body) },
+      token
+    );
+  }
+
+  beforeAll(async () => {
+    ({ organizationId, token } = await seedWorkspace());
+  });
+
+  it("imports rows as deduped customers + deals and persists a receipt", async () => {
+    const res = await postImport({
+      source: "scout",
+      corridor: "nyc-bakeries",
+      rows: [
+        {
+          placeId: "b-1",
+          name: "Bakery One",
+          url: "https://bakery-one.example",
+          status: "New",
+          priorityScore: 88.5,
+          customFields: { processor: "square", review_count: "412" },
+          deal: { priorityScore: 88.5 },
+        },
+        {
+          placeId: "b-2",
+          name: "Bakery Two",
+          priorityScore: 40,
+        },
+      ],
+    });
+    expect(res.status).toBe(200);
+    const receipt = receiptShape.parse(await res.json());
+    expect(receipt.source).toBe("scout");
+    expect(receipt.corridor).toBe("nyc-bakeries");
+    expect(receipt).toMatchObject({
+      total: 2,
+      created: 2,
+      existing: 0,
+      failed: 0,
+    });
+    expect(receipt.rows[0]).toMatchObject({
+      index: 0,
+      externalId: "gplace:b-1",
+      outcome: "created",
+    });
+    expect(receipt.rows[0]?.dealId).toBeTruthy();
+    expect(receipt.rows[1]?.dealId).toBeUndefined();
+
+    const first = z
+      .object({
+        id: z.string(),
+        externalId: z.string().nullable(),
+        statusId: z.string().nullable(),
+        priorityScore: z.number().nullable(),
+        customFields: z.record(z.string(), z.string()),
+      })
+      .parse(
+        await (
+          await fetch(
+            `/workspaces/${organizationId}/customers/${receipt.rows[0]?.customerId}`,
+            {},
+            token
+          )
+        ).json()
+      );
+    expect(first.externalId).toBe("gplace:b-1");
+    expect(first.priorityScore).toBe(88.5);
+    expect(first.statusId).toBeTruthy();
+    expect(first.customFields.processor).toBe("square");
+
+    // The pipeline column was materialized by name, not uuid.
+    const statuses = await fetch(
+      `/workspaces/${organizationId}/customer-statuses`,
+      {},
+      token
+    );
+    const statusList = z
+      .object({ statuses: z.array(z.object({ name: z.string() })) })
+      .parse(await statuses.json());
+    expect(statusList.statuses.map((s) => s.name)).toContain("New");
+
+    // Receipt is durable — agents can read it back later.
+    const stored = await fetch(
+      `/workspaces/${organizationId}/customer-imports/${receipt.id}`,
+      {},
+      token
+    );
+    expect(stored.status).toBe(200);
+    expect(receiptShape.parse(await stored.json()).rows).toHaveLength(2);
+
+    const history = await fetch(
+      `/workspaces/${organizationId}/customer-imports`,
+      {},
+      token
+    );
+    const summaries = z
+      .object({ imports: z.array(receiptShape.omit({ rows: true })) })
+      .parse(await history.json());
+    expect(summaries.imports.map((i) => i.id)).toContain(receipt.id);
+  });
+
+  it("re-runs produce zero new records — every row reports existing", async () => {
+    const rows = [
+      { placeId: "r-1", name: "Replay One", priorityScore: 10 },
+      { placeId: "r-2", name: "Replay Two", priorityScore: 20 },
+    ];
+    const first = receiptShape.parse(
+      await (await postImport({ source: "scout", rows })).json()
+    );
+    expect(first.created).toBe(2);
+
+    const replay = receiptShape.parse(
+      await (await postImport({ source: "scout", rows })).json()
+    );
+    expect(replay).toMatchObject({
+      total: 2,
+      created: 0,
+      existing: 2,
+      failed: 0,
+    });
+    expect(replay.rows[0]?.customerId).toBe(first.rows[0]?.customerId);
+    expect(replay.rows[1]?.customerId).toBe(first.rows[1]?.customerId);
+  });
+
+  it("dedupe enriches empty slots but never clobbers set fields", async () => {
+    const first = receiptShape.parse(
+      await (
+        await postImport({
+          rows: [{ placeId: "e-1", name: "Enrich Me", url: null }],
+        })
+      ).json()
+    );
+
+    const second = receiptShape.parse(
+      await (
+        await postImport({
+          rows: [
+            {
+              placeId: "e-1",
+              name: "Enrich Me Renamed",
+              url: "https://enriched.example",
+              priorityScore: 55,
+            },
+          ],
+        })
+      ).json()
+    );
+    expect(second.rows[0]?.outcome).toBe("existing");
+
+    const customer = z
+      .object({
+        name: z.string(),
+        url: z.string().nullable(),
+        priorityScore: z.number().nullable(),
+      })
+      .parse(
+        await (
+          await fetch(
+            `/workspaces/${organizationId}/customers/${first.rows[0]?.customerId}`,
+            {},
+            token
+          )
+        ).json()
+      );
+    // Empty slots fill in; the name the record already had is kept.
+    expect(customer.url).toBe("https://enriched.example");
+    expect(customer.priorityScore).toBe(55);
+    expect(customer.name).toBe("Enrich Me");
+  });
+
+  it("records per-row failures without aborting the batch", async () => {
+    // A declared select field rejects out-of-options values.
+    await fetch(
+      `/workspaces/${organizationId}/fields`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          entityType: "customer",
+          name: "region",
+          type: "select",
+          options: ["north", "south"],
+        }),
+      },
+      token
+    );
+
+    const receipt = receiptShape.parse(
+      await (
+        await postImport({
+          rows: [
+            { placeId: "ok-1", name: "Good Row" },
+            {
+              placeId: "bad-1",
+              name: "Bad Region",
+              customFields: { region: "west" },
+            },
+          ],
+        })
+      ).json()
+    );
+    expect(receipt.created).toBe(1);
+    expect(receipt.failed).toBe(1);
+    expect(receipt.rows[1]?.outcome).toBe("failed");
+    expect(receipt.rows[1]?.error).toContain("region");
+
+    // The failed row never created a customer — a corrected re-run can
+    // retry just that place_id.
+    expect(receipt.rows[1]?.customerId).toBeUndefined();
+  });
+});

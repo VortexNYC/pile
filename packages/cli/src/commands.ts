@@ -7275,7 +7275,64 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "priorityScore",
         flag: "priority-score",
       },
+      {
+        name: "customFields",
+        flag: "custom-fields",
+      },
     ],
+  },
+  "customers import create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/import",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "source",
+        flag: "source",
+      },
+      {
+        name: "corridor",
+        flag: "corridor",
+      },
+      {
+        name: "rows",
+        flag: "rows",
+      },
+    ],
+  },
+  "customer imports list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/customer-imports",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "customer imports get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/customer-imports/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
   },
   "customers get": {
     method: "GET",
@@ -7363,6 +7420,10 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "priorityScore",
         flag: "priority-score",
+      },
+      {
+        name: "customFields",
+        flag: "custom-fields",
       },
     ],
   },
@@ -7923,6 +7984,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "priorityScore",
         flag: "priority-score",
       },
+      {
+        name: "customFields",
+        flag: "custom-fields",
+      },
     ],
   },
   "deals get": {
@@ -8015,6 +8080,10 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "priorityScore",
         flag: "priority-score",
+      },
+      {
+        name: "customFields",
+        flag: "custom-fields",
       },
     ],
   },
