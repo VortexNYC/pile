@@ -150,6 +150,13 @@ FEEDBACK_CHANNEL_ID = "cc2f808d-007e-48a1-870f-bd4c68ae0cd6"
 # ADMIN_TOKEN.
 CF_ADMISSION_URL = "https://cloudflare-ci.vortex-nyc.workers.dev"
 
+# Self-binding: the flue agent provider targets pile's own /dispatch/pile
+# over an in-process service binding — zone loopback fetch is blocked (1016).
+[[env.production.services]]
+binding = "FLUE_WORKER"
+service = "pile"
+entrypoint = "default"
+
 [[env.production.d1_databases]]
 binding = "D1"
 database_name = "pile-global"
