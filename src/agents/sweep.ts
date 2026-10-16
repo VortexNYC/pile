@@ -1,9 +1,7 @@
 import { createD1 } from "../global/db.js";
 import { getInstallationTokenForRepo } from "../global/github-auth.js";
 import type { PileRepoConfig } from "../global/pile-repo-config.js";
-import { scrubCaptureText } from "../global/redact.js";
 import { organization } from "../global/schema.js";
-import { processIncomingMessage } from "../global/support-channels.js";
 import { replyLaneResultToTicket } from "../global/support-escalation.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkerEnv } from "../platform/middleware.js";
@@ -13,6 +11,7 @@ import type { ComputeBackend } from "./compute.js";
 import { resolveGeneratedConflict } from "./conflict-fix.js";
 import { loadProviderConfig } from "./credentials.js";
 import { resolveAgentEnv } from "./daytona.js";
+import { ingestFailedAgentSession } from "./failure-tickets.js";
 import { FLEET_UNHEALTHY_STREAK, fleetInfraStreak } from "./fleet-health.js";
 import {
   buildHangReport,
@@ -277,53 +276,6 @@ async function cancelSession(
     },
     undefined
   );
-}
-
-// Provider-reported task failures land in the workspace support inbox as a
-// ticket keyed on the session id — dedup'd by externalTicketId, scrubbed of
-// credentials, and deliberately NOT auto-escalated to an issue.
-export async function ingestFailedAgentSession(
-  env: WorkerEnv,
-  organizationId: string,
-  session: AgentSession,
-  polled: AgentProviderSession
-): Promise<void> {
-  try {
-    const db = createD1(env.D1);
-    const detail = scrubCaptureText(
-      [
-        `Session: ${session.id}`,
-        `Agent: ${session.agentId}`,
-        `Provider: ${session.provider}`,
-        polled.providerSessionId
-          ? `Provider session: ${polled.providerSessionId}`
-          : null,
-        session.issueId ? `Issue: ${session.issueId}` : null,
-        polled.url ? `Provider URL: ${polled.url}` : null,
-        polled.infraFailure ? `Infra failure: yes` : null,
-        "",
-        polled.result ?? "Provider reported failure with no details.",
-      ]
-        .filter((line): line is string => line !== null)
-        .join("\n")
-    );
-    await processIncomingMessage(db, organizationId, {
-      channel: "api",
-      externalSource: "api",
-      fromEmail: "agent-sessions@pile.internal",
-      fromName: "Pile Agents",
-      subject: `Agent session failed: ${session.agentId} (${session.id.slice(0, 8)})`,
-      text: detail,
-      externalTicketId: `agent-session-${session.id}`,
-      externalMessageId: `agent-session-${session.id}-failed`,
-      subType: "agent-failure",
-    });
-  } catch (err) {
-    console.error("failed-session ingest failed", {
-      session: session.id,
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
 }
 
 // PILE-293 — a lane that exhausts its dispatch-time maxDuration is canceled
