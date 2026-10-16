@@ -1618,9 +1618,9 @@ export const workspaceMigrations = {
       { idx: 85, when: 85, tag: "v86", breakpoints: true },
       { idx: 86, when: 86, tag: "v87", breakpoints: true },
       { idx: 87, when: 87, tag: "v88", breakpoints: true },
-      { idx: 88, when: 88, tag: "v90", breakpoints: true },
       { idx: 88, when: 88, tag: "v89", breakpoints: true },
       { idx: 89, when: 89, tag: "v91", breakpoints: true },
+      { idx: 90, when: 90, tag: "v90", breakpoints: true },
     ],
   },
   migrations: {
@@ -1712,8 +1712,8 @@ export const workspaceMigrations = {
     m0085: v86,
     m0086: v87,
     m0087: v88,
-    m0088: v90,
     m0088: v89,
     m0089: v91,
+    m0090: v90,
   },
 } satisfies Parameters<typeof migrate>[1];
