@@ -3901,5 +3901,4 @@ describe("spend caps + run receipts (PILE-425)", () => {
     expect(row?.runs).toBe(1);
     expect(row?.totalTokens).toBe(110_000);
   });
-
 });

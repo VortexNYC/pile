@@ -1956,6 +1956,9 @@ export interface paths {
                             }[] | null;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
+                            awaitingFirstAck?: boolean;
+                            firstActivityAt?: string | null;
+                            queuedAfter?: string | null;
                             receipt?: {
                                 id: string;
                                 organizationId: string;
@@ -2101,6 +2104,9 @@ export interface paths {
                                 }[] | null;
                                 /** @enum {string|null} */
                                 derivedStatus?: "stalled" | "needs_input" | null;
+                                awaitingFirstAck?: boolean;
+                                firstActivityAt?: string | null;
+                                queuedAfter?: string | null;
                                 receipt?: {
                                     id: string;
                                     organizationId: string;
@@ -2357,6 +2363,9 @@ export interface paths {
                                 }[] | null;
                                 /** @enum {string|null} */
                                 derivedStatus?: "stalled" | "needs_input" | null;
+                                awaitingFirstAck?: boolean;
+                                firstActivityAt?: string | null;
+                                queuedAfter?: string | null;
                                 receipt?: {
                                     id: string;
                                     organizationId: string;
@@ -2465,6 +2474,9 @@ export interface paths {
                                 }[] | null;
                                 /** @enum {string|null} */
                                 derivedStatus?: "stalled" | "needs_input" | null;
+                                awaitingFirstAck?: boolean;
+                                firstActivityAt?: string | null;
+                                queuedAfter?: string | null;
                                 receipt?: {
                                     id: string;
                                     organizationId: string;
@@ -2687,6 +2699,9 @@ export interface paths {
                                 }[] | null;
                                 /** @enum {string|null} */
                                 derivedStatus?: "stalled" | "needs_input" | null;
+                                awaitingFirstAck?: boolean;
+                                firstActivityAt?: string | null;
+                                queuedAfter?: string | null;
                                 receipt?: {
                                     id: string;
                                     organizationId: string;
@@ -2747,6 +2762,8 @@ export interface paths {
                                 derivedStatus?: "stalled" | "needs_input" | null;
                                 label?: string | null;
                                 awaitingActivityId?: string | null;
+                                firstActivityAt?: string | null;
+                                queuedAfter?: string | null;
                                 startedAt: string | null;
                                 endedAt: string | null;
                             }[];
@@ -2942,6 +2959,9 @@ export interface paths {
                                 }[] | null;
                                 /** @enum {string|null} */
                                 derivedStatus?: "stalled" | "needs_input" | null;
+                                awaitingFirstAck?: boolean;
+                                firstActivityAt?: string | null;
+                                queuedAfter?: string | null;
                                 receipt?: {
                                     id: string;
                                     organizationId: string;
@@ -3091,6 +3111,9 @@ export interface paths {
                             }[] | null;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
+                            awaitingFirstAck?: boolean;
+                            firstActivityAt?: string | null;
+                            queuedAfter?: string | null;
                             receipt?: {
                                 id: string;
                                 organizationId: string;
@@ -3149,6 +3172,8 @@ export interface paths {
                             derivedStatus?: "stalled" | "needs_input" | null;
                             label?: string | null;
                             awaitingActivityId?: string | null;
+                            firstActivityAt?: string | null;
+                            queuedAfter?: string | null;
                             startedAt: string | null;
                             endedAt: string | null;
                         };
@@ -3255,6 +3280,9 @@ export interface paths {
                             }[] | null;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
+                            awaitingFirstAck?: boolean;
+                            firstActivityAt?: string | null;
+                            queuedAfter?: string | null;
                             receipt?: {
                                 id: string;
                                 organizationId: string;
@@ -3685,6 +3713,9 @@ export interface paths {
                             }[] | null;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
+                            awaitingFirstAck?: boolean;
+                            firstActivityAt?: string | null;
+                            queuedAfter?: string | null;
                             receipt?: {
                                 id: string;
                                 organizationId: string;
@@ -3830,6 +3861,9 @@ export interface paths {
                             }[] | null;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
+                            awaitingFirstAck?: boolean;
+                            firstActivityAt?: string | null;
+                            queuedAfter?: string | null;
                             receipt?: {
                                 id: string;
                                 organizationId: string;
@@ -4393,6 +4427,9 @@ export interface paths {
                             }[] | null;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
+                            awaitingFirstAck?: boolean;
+                            firstActivityAt?: string | null;
+                            queuedAfter?: string | null;
                             receipt?: {
                                 id: string;
                                 organizationId: string;
@@ -4531,6 +4568,9 @@ export interface paths {
                                 }[] | null;
                                 /** @enum {string|null} */
                                 derivedStatus?: "stalled" | "needs_input" | null;
+                                awaitingFirstAck?: boolean;
+                                firstActivityAt?: string | null;
+                                queuedAfter?: string | null;
                                 receipt?: {
                                     id: string;
                                     organizationId: string;
@@ -4698,6 +4738,9 @@ export interface paths {
                                 }[] | null;
                                 /** @enum {string|null} */
                                 derivedStatus?: "stalled" | "needs_input" | null;
+                                awaitingFirstAck?: boolean;
+                                firstActivityAt?: string | null;
+                                queuedAfter?: string | null;
                                 receipt?: {
                                     id: string;
                                     organizationId: string;
@@ -4871,6 +4914,9 @@ export interface paths {
                             }[] | null;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
+                            awaitingFirstAck?: boolean;
+                            firstActivityAt?: string | null;
+                            queuedAfter?: string | null;
                             receipt?: {
                                 id: string;
                                 organizationId: string;
@@ -5023,6 +5069,9 @@ export interface paths {
                             }[] | null;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
+                            awaitingFirstAck?: boolean;
+                            firstActivityAt?: string | null;
+                            queuedAfter?: string | null;
                             receipt?: {
                                 id: string;
                                 organizationId: string;
@@ -5181,6 +5230,9 @@ export interface paths {
                             }[] | null;
                             /** @enum {string|null} */
                             derivedStatus?: "stalled" | "needs_input" | null;
+                            awaitingFirstAck?: boolean;
+                            firstActivityAt?: string | null;
+                            queuedAfter?: string | null;
                             receipt?: {
                                 id: string;
                                 organizationId: string;
@@ -32575,6 +32627,12 @@ export interface components {
             prCheckState: string | null;
             createdAt: string;
             updatedAt: string;
+            subStepProgress?: {
+                total: number;
+                done: number;
+                blocked: number;
+                ownerAgent: string | null;
+            } | null;
         };
         CreatedIssue: components["schemas"]["Issue"] & {
             possibleDuplicates: components["schemas"]["PossibleDuplicate"][];

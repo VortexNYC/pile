@@ -502,6 +502,18 @@ const issueApiSchema = z
     prCheckState: z.string().nullable(),
     createdAt: z.string(),
     updatedAt: z.string(),
+    /** PILE-414 — present only on list responses: required sub-step counts
+     *  for the board chip (`2/4`), the owner_agent of the next open
+     *  required step, and the count of still-open required steps. */
+    subStepProgress: z
+      .object({
+        total: z.number().int(),
+        done: z.number().int(),
+        blocked: z.number().int(),
+        ownerAgent: z.string().nullable(),
+      })
+      .nullable()
+      .optional(),
   })
   .openapi("Issue") satisfies z.ZodType<Issue>;
 
@@ -1353,6 +1365,11 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     args.teamIds = visibleTeamIds;
     args.viewer = await issueViewer(db, identity);
     const issues = await stub.listIssues(args);
+    // PILE-414 — attach sub-step progress for the board chip in one batch
+    // call instead of per-issue children fetches.
+    const progress = await stub.subStepProgressFor(
+      issues.map((issue) => issue.id)
+    );
     const nextCursor =
       issues.length === query.limit && issues.length > 0
         ? encodeCursor({
@@ -1360,6 +1377,10 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
             id: issues[issues.length - 1].id,
           })
         : undefined;
+    for (const issue of issues) {
+      (issue as Issue & { subStepProgress?: unknown }).subStepProgress =
+        progress[issue.id] ?? null;
+    }
     return c.json({ issues, nextCursor });
   });
 
@@ -1470,6 +1491,11 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     args.teamIds = visibleTeamIds;
     args.viewer = await issueViewer(db, identity);
     const issues = await stub.listIssues(args);
+    // PILE-414 — attach sub-step progress for the board chip in one batch
+    // call instead of per-issue children fetches.
+    const progress = await stub.subStepProgressFor(
+      issues.map((issue) => issue.id)
+    );
     const nextCursor =
       issues.length === query.limit && issues.length > 0
         ? encodeCursor({
@@ -1477,6 +1503,10 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
             id: issues[issues.length - 1].id,
           })
         : undefined;
+    for (const issue of issues) {
+      (issue as Issue & { subStepProgress?: unknown }).subStepProgress =
+        progress[issue.id] ?? null;
+    }
     return c.json({ issues, nextCursor });
   });
 

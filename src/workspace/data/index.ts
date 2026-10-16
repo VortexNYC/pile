@@ -3586,6 +3586,56 @@ export function getAgentAutomation(
     .get();
 }
 
+/** PILE-414 — board chip: per-parent {done, total, blocked, owner} over
+ *  required step-keyed sub-issues, one grouped query. "Done" matches the
+ *  stage gate: status done, or canceled with resolution=skipped. */
+export function subStepProgressByParent(
+  db: WorkspaceDb,
+  organizationId: string,
+  parentIds: string[]
+): Map<
+  string,
+  { total: number; done: number; blocked: number; ownerAgent: string | null }
+> {
+  const out = new Map<
+    string,
+    { total: number; done: number; blocked: number; ownerAgent: string | null }
+  >();
+  if (parentIds.length === 0) return out;
+  const rows = db
+    .select()
+    .from(workspaceIssues)
+    .where(
+      and(
+        eq(workspaceIssues.organizationId, organizationId),
+        inArray(workspaceIssues.parentId, parentIds),
+        eq(workspaceIssues.required, true)
+      )
+    )
+    .all();
+  for (const row of rows) {
+    const parent = row.parentId as string;
+    const acc = out.get(parent) ?? {
+      total: 0,
+      done: 0,
+      blocked: 0,
+      ownerAgent: null,
+    };
+    acc.total += 1;
+    const satisfied =
+      row.status === "done" ||
+      (row.status === "canceled" && row.resolution === "skipped");
+    if (satisfied) {
+      acc.done += 1;
+    } else {
+      acc.blocked += 1;
+      if (acc.ownerAgent === null) acc.ownerAgent = row.ownerAgent;
+    }
+    out.set(parent, acc);
+  }
+  return out;
+}
+
 export async function markAgentAutomationFired(db: WorkspaceDb, id: string) {
   await db
     .update(workspaceAgentAutomations)

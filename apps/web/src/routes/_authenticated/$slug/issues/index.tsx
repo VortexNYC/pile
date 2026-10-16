@@ -32,6 +32,7 @@ import { ProjectsList } from "@/components/projects-list";
 import { SessionsList } from "@/components/sessions-list";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { IssueStatusIcon } from "@/components/status-icon";
+import { SubStepChip } from "@/components/substep-chip";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap } from "@/lib/api";
@@ -308,6 +309,9 @@ function IssuesList() {
                                           {issue.title}
                                         </span>
                                         <PrChip issue={issue} />
+                                        <SubStepChip
+                                          progress={issue.subStepProgress}
+                                        />
                                         <IssueFieldMenu
                                           issue={issue}
                                           field="priority"

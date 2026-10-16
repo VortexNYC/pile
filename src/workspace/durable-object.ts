@@ -7938,6 +7938,14 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     });
   }
 
+  /** PILE-414 — batch chip data: parent issue id → required sub-step
+   *  counts + the owner_agent of the next open required step. */
+  subStepProgressFor(parentIds: string[]) {
+    return Object.fromEntries(
+      data.subStepProgressByParent(this.db, this.organizationId, parentIds)
+    );
+  }
+
   listPendingDomainEvents() {
     return data.listPendingDomainEvents(this.db, this.organizationId);
   }

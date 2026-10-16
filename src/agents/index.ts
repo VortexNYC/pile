@@ -626,7 +626,7 @@ export async function dispatchAgent(
             sessionId: session.id,
             actorId: actor.id,
             type: "error",
-              system: true,
+            system: true,
             message: `Pile API credential unavailable: ${!parsed.success ? "unexpected createApiKey response" : "PUBLIC_API_URL unset"}`,
           })
           .catch(() => {});
@@ -638,7 +638,7 @@ export async function dispatchAgent(
           sessionId: session.id,
           actorId: actor.id,
           type: "error",
-              system: true,
+          system: true,
           message: `Pile API credential mint failed: ${err instanceof Error ? err.message : String(err)}`,
         })
         .catch(() => {});
@@ -655,7 +655,7 @@ export async function dispatchAgent(
           sessionId: session.id,
           actorId: actor.id,
           type: "error",
-              system: true,
+          system: true,
           message: `Lane permissions locked to push=disabled shell=disabled: ${lanePermissions.lockedReason}`,
         })
         .catch(() => {});
