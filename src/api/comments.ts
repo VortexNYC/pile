@@ -82,9 +82,10 @@ async function resolveAgentMentions(
   );
   const types = [];
   for (const handle of handles) {
-    const agentType = await stub
-      .getAgentTypeBySlug(handle)
-      .catch(() => undefined);
+    const agentType = await stub.getAgentTypeBySlug(handle).catch((e) => {
+      console.error("agentType lookup failed", handle, e);
+      return undefined;
+    });
     if (agentType) types.push(agentType);
   }
   return types;
@@ -328,16 +329,17 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
     if (identity.type !== "agent") {
       const agentTypes = await resolveAgentMentions(issueStub, body);
       for (const agentType of agentTypes) {
-        const ctx = getExecutionCtx(c);
         const request = body.replace(AGENT_MENTION_RE, "").trim();
-        const promise = dispatchAgent(
+        // Awaited inline — the same contract the drainer uses; a mention
+        // is a deliberate human action, not a background fan-out.
+        await dispatchAgent(
           c.env,
           agentType.providerAgentId,
           organizationId,
           issue,
           identity,
           undefined,
-          ctx,
+          getExecutionCtx(c),
           {
             instructions: [
               agentType.jobSpec ?? "",
@@ -354,7 +356,6 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
             error: err instanceof Error ? err.message : String(err),
           });
         });
-        ctx?.waitUntil(promise);
       }
     }
     if (!created) {

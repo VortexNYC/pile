@@ -6,6 +6,8 @@ import { createD1 } from "../global/db.js";
 import { user as userTable } from "../global/schema.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
+import { MockAgentProvider } from "../agents/harness.js";
+import { registerAgentProvider } from "../agents/index.js";
 import { createAuth } from "../platform/auth.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
 
@@ -330,5 +332,66 @@ describe("sensitive records (PILE-428)", () => {
       agent
     );
     expect(res.status).toBe(201);
+  });
+
+  it("@agent-slug mention dispatches the registered agent (PILE-435)", async () => {
+    const seeded = await seedWorkspace();
+    const dispatched: string[] = [];
+    const providerId = `mock-mention-${crypto.randomUUID().slice(0, 8)}`;
+    registerAgentProvider(
+      providerId,
+      () =>
+        new MockAgentProvider(providerId, {
+          dispatch: (_org, issue) => {
+            dispatched.push(issue.id);
+            return {
+              id: `sess-${crypto.randomUUID()}`,
+              agentId: providerId,
+              issueId: issue.id,
+              status: "created" as const,
+            };
+          },
+        })
+    );
+    // Register the agent type the mention resolves through.
+    const type = await fetch(
+      `/workspaces/${seeded.organizationId}/agent-types`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          slug: "scout",
+          name: "Scout",
+          providerAgentId: providerId,
+        }),
+      },
+      seeded.token
+    );
+    expect(type.status).toBe(200);
+
+    const issueRes = await fetch(
+      `/workspaces/${seeded.organizationId}/issues`,
+      { method: "POST", body: JSON.stringify({ title: "mention test" }) },
+      seeded.token
+    );
+    const issue = (await issueRes.json()) as { id: string };
+
+    const res = await fetch(
+      `/workspaces/${seeded.organizationId}/issues/${issue.id}/comments`,
+      {
+        method: "POST",
+        body: JSON.stringify({ body: "@scout can you look at this merchant?" }),
+      },
+      seeded.token
+    );
+    expect(res.status).toBe(201);
+    // A dispatched session row is the observable result.
+    const sessionsRes = await fetch(
+      `/workspaces/${seeded.organizationId}/agent/sessions?issueId=${issue.id}`,
+      {},
+      seeded.token
+    );
+    const sessions = (await sessionsRes.json()) as { sessions: unknown[] };
+    expect(sessions.sessions.length).toBe(1);
+    expect(dispatched).toContain(issue.id);
   });
 });
