@@ -8,6 +8,7 @@ import {
   laneFollowupThrottled,
 } from "../agents/followup.js";
 import { getAgentProvider } from "../agents/index.js";
+import { dispatchAgent } from "../agents/index.js";
 import { triggerPlanMode } from "../agents/plan-dispatch.js";
 import { parsePlanCommand } from "../agents/plan.js";
 import { createD1 } from "../global/db.js";
@@ -18,7 +19,6 @@ import { rls } from "../platform/rls.js";
 import { draftOutputSchema, serializeDraft } from "./draft-outputs.js";
 import { getExecutionCtx } from "./execution-ctx.js";
 import { assertIssueAccess } from "./issue-access.js";
-import { dispatchAgent } from "../agents/index.js";
 import { resolveMentions } from "./mentions.js";
 import { syncCommentToRepoMapping } from "./repo-comment-sync.js";
 
@@ -82,10 +82,9 @@ async function resolveAgentMentions(
   );
   const types = [];
   for (const handle of handles) {
-    const agentType = await stub.getAgentTypeBySlug(handle).catch((e) => {
-      console.error("agentType lookup failed", handle, e);
-      return undefined;
-    });
+    const agentType = await stub
+      .getAgentTypeBySlug(handle)
+      .catch(() => undefined);
     if (agentType) types.push(agentType);
   }
   return types;

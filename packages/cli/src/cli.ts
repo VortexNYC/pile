@@ -589,9 +589,22 @@ function parseCsvRows(content: string): Array<Record<string, string>> {
 }
 
 const IMPORT_ROW_KEYS = new Set([
-  "placeId", "externalId", "name", "url", "notes", "status", "statusId",
-  "tierId", "ownerId", "nextStepText", "nextStepDueAt", "needsHuman",
-  "needsHumanReason", "priorityScore", "customFields", "deal",
+  "placeId",
+  "externalId",
+  "name",
+  "url",
+  "notes",
+  "status",
+  "statusId",
+  "tierId",
+  "ownerId",
+  "nextStepText",
+  "nextStepDueAt",
+  "needsHuman",
+  "needsHumanReason",
+  "priorityScore",
+  "customFields",
+  "deal",
 ]);
 
 function csvRowToImportRow(record: Record<string, string>): Json {
@@ -655,18 +668,21 @@ async function customersImportCommand(
   }
   const baseUrl = config.baseUrl.replace(/\/$/u, "");
   const doFetch = deps.fetch ?? fetch;
-  const res = await doFetch(`${baseUrl}/workspaces/${workspace}/customers/import`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${config.apiKey}`,
-    },
-    body: JSON.stringify({
-      source: flagString(flags, "source"),
-      corridor: flagString(flags, "corridor"),
-      rows,
-    }),
-  });
+  const res = await doFetch(
+    `${baseUrl}/workspaces/${workspace}/customers/import`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.apiKey}`,
+      },
+      body: JSON.stringify({
+        source: flagString(flags, "source"),
+        corridor: flagString(flags, "corridor"),
+        rows,
+      }),
+    }
+  );
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(`Import failed (${res.status}): ${text}`);
