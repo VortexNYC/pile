@@ -1443,6 +1443,17 @@ export const externalLinks = sqliteTable(
     entityId: text("entity_id" as string).notNull(),
     url: text("url" as string).notNull(),
     label: text("label" as string),
+    // Best-effort probe recorded when the URL is written —
+    // verified | failed | unreachable | unchecked (PILE-429).
+    verificationStatus: text("verification_status" as string, {
+      enum: ["verified", "failed", "unreachable", "unchecked"],
+    })
+      .notNull()
+      .default("unchecked"),
+    verifiedAt: text("verified_at" as string),
+    resolvedUrl: text("resolved_url" as string),
+    resolvedTitle: text("resolved_title" as string),
+    httpStatus: integer("http_status" as string),
     createdAt: text("created_at" as string).notNull(),
   },
   (table) => [

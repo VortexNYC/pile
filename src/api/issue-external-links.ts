@@ -8,6 +8,7 @@ import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 import { assertIssueAccess } from "./issue-access.js";
 import { getWorkspaceStub } from "./stub.js";
+import { verifyExternalUrl } from "./url-verification.js";
 
 const linkSchema = z.object({
   id: z.string(),
@@ -16,13 +17,25 @@ const linkSchema = z.object({
   entityId: z.string(),
   url: z.string(),
   label: z.string().nullable(),
+  verificationStatus: z.enum([
+    "verified",
+    "failed",
+    "unreachable",
+    "unchecked",
+  ]),
+  verifiedAt: z.string().nullable(),
+  resolvedUrl: z.string().nullable(),
+  resolvedTitle: z.string().nullable(),
+  httpStatus: z.number().nullable(),
   createdAt: z.string(),
 });
 
-const bodySchema = z.object({
-  url: z.string().url(),
-  label: z.string().optional(),
-});
+const bodySchema = z
+  .object({
+    url: z.string().url(),
+    label: z.string().optional(),
+  })
+  .strict();
 
 const listRoute = createRoute({
   method: "get",
@@ -181,6 +194,7 @@ export function registerIssueExternalLinkRoutes(app: OpenAPIHono<AppContext>) {
         entityId: issue.id,
         url: input.url,
         label: input.label ?? null,
+        verification: await verifyExternalUrl(input.url),
       },
       identity.id
     );
@@ -233,7 +247,18 @@ export function registerIssueExternalLinkRoutes(app: OpenAPIHono<AppContext>) {
         message: "External link not found",
       });
     }
-    const link = await stub.updateExternalLink(id, input, identity.id);
+    const link = await stub.updateExternalLink(
+      id,
+      {
+        url: input.url,
+        label: input.label,
+        verification:
+          input.url !== undefined && input.url !== existing.url
+            ? await verifyExternalUrl(input.url)
+            : undefined,
+      },
+      identity.id
+    );
     return c.json(link!);
   });
 

@@ -22,7 +22,7 @@ curl -s -X POST \
   }'
 ```
 
-`kind` is free-form — `relates`, `blocks`, `implements`, `caused_by`, whatever makes the story readable. `label` gives the edge a human label. The body fields are `toType`/`toId`/`kind`/`label` — unknown fields are silently dropped, so a wrong key name leaves `kind` at its `relates` default.
+`kind` is free-form — `relates`, `blocks`, `implements`, `caused_by`, whatever makes the story readable. `label` gives the edge a human label. The body fields are `toType`/`toId`/`kind`/`label` — the schema is strict, so an unknown key (e.g. `linkType` or `targetEntityType`) fails with a 400 rather than being silently dropped.
 
 ## Read links
 

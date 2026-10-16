@@ -2111,7 +2111,11 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   async updateExternalLink(
     id: string,
-    input: { url?: string; label?: string | null },
+    input: {
+      url?: string;
+      label?: string | null;
+      verification?: data.ExternalLinkVerification;
+    },
     actorId?: string
   ) {
     const link = await data.updateExternalLink(

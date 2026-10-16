@@ -9,6 +9,7 @@ import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 import { assertIssueAccess, issueViewer } from "./issue-access.js";
 import { getWorkspaceStub } from "./stub.js";
+import { verifyExternalUrl } from "./url-verification.js";
 
 const entityTypeSchema = z.enum(["issue", "project", "customer", "document"]);
 
@@ -19,15 +20,27 @@ const linkSchema = z.object({
   entityId: z.string(),
   url: z.string(),
   label: z.string().nullable(),
+  verificationStatus: z.enum([
+    "verified",
+    "failed",
+    "unreachable",
+    "unchecked",
+  ]),
+  verifiedAt: z.string().nullable(),
+  resolvedUrl: z.string().nullable(),
+  resolvedTitle: z.string().nullable(),
+  httpStatus: z.number().nullable(),
   createdAt: z.string(),
 });
 
-const bodySchema = z.object({
-  entityType: entityTypeSchema,
-  entityId: z.string(),
-  url: z.string().url(),
-  label: z.string().optional(),
-});
+const bodySchema = z
+  .object({
+    entityType: entityTypeSchema,
+    entityId: z.string(),
+    url: z.string().url(),
+    label: z.string().optional(),
+  })
+  .strict();
 
 const listRoute = createRoute({
   method: "get",
@@ -245,6 +258,7 @@ export function registerExternalLinkRoutes(app: OpenAPIHono<AppContext>) {
         entityId,
         url: input.url,
         label: input.label ?? null,
+        verification: await verifyExternalUrl(input.url),
       },
       identity.id
     );
@@ -320,6 +334,10 @@ export function registerExternalLinkRoutes(app: OpenAPIHono<AppContext>) {
       {
         url: input.url,
         label: input.label,
+        verification:
+          input.url !== undefined && input.url !== existing.url
+            ? await verifyExternalUrl(input.url)
+            : undefined,
       },
       identity.id
     );

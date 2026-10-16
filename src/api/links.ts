@@ -18,12 +18,17 @@ const linkSchema = z.object({
   createdAt: z.string(),
 });
 
-const createLinkSchema = z.object({
-  toType: z.string().min(1),
-  toId: z.string().min(1),
-  kind: z.string().default("relates"),
-  label: z.string().optional(),
-});
+// Strict — a mis-keyed field (e.g. `linkType` instead of `kind`, or the
+// docs' old `targetEntityType` names) used to be silently dropped and
+// `kind` defaulted to "relates". Now unknown keys 400 (PILE-429).
+const createLinkSchema = z
+  .object({
+    toType: z.string().min(1),
+    toId: z.string().min(1),
+    kind: z.string().default("relates"),
+    label: z.string().optional(),
+  })
+  .strict();
 
 const entityParam = z.object({
   organizationId: z.string(),

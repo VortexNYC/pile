@@ -1212,6 +1212,18 @@ CREATE INDEX IF NOT EXISTS triage_rule_evaluations_record_idx ON triage_rule_eva
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS triage_rule_evaluations_org_idx ON triage_rule_evaluations (organization_id, created_at)`;
 
+// PILE-429 — link verification: the API probes external URLs on
+// create/update and records the outcome so agents can check a link's
+// reachability instead of trusting a syntactically valid URL.
+const v83 = `ALTER TABLE external_links ADD COLUMN verification_status TEXT NOT NULL DEFAULT 'unchecked'
+--> statement-breakpoint
+ALTER TABLE external_links ADD COLUMN verified_at TEXT
+--> statement-breakpoint
+ALTER TABLE external_links ADD COLUMN resolved_url TEXT
+--> statement-breakpoint
+ALTER TABLE external_links ADD COLUMN resolved_title TEXT
+--> statement-breakpoint
+ALTER TABLE external_links ADD COLUMN http_status INTEGER`;
 const v69 = `CREATE TABLE comments_new (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -1468,6 +1480,7 @@ export const workspaceMigrations = {
       { idx: 79, when: 79, tag: "v80", breakpoints: true },
       { idx: 80, when: 80, tag: "v81", breakpoints: true },
       { idx: 81, when: 81, tag: "v82", breakpoints: true },
+      { idx: 82, when: 82, tag: "v83", breakpoints: true },
     ],
   },
   migrations: {
@@ -1553,5 +1566,6 @@ export const workspaceMigrations = {
     m0079: v80,
     m0080: v81,
     m0081: v82,
+    m0082: v83,
   },
 } satisfies Parameters<typeof migrate>[1];

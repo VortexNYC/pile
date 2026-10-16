@@ -432,18 +432,29 @@ describe("issues API", () => {
     expect(relation.fromIssueId).toBe(issue.id);
     expect(relation.toIssueId).toBe(other.id);
 
-    const linkRes = await fetch(
-      `/workspaces/${organizationId}/issues/${ref}/external-links`,
-      {
-        method: "POST",
-        body: JSON.stringify({ url: "https://example.com/spec" }),
-      },
-      token
-    );
+    // The create probes the URL (PILE-429) — stub the outbound fetch so
+    // the verification is deterministic and the suite stays offline.
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response("ok", { status: 200 });
+    let linkRes: Response;
+    try {
+      linkRes = await fetch(
+        `/workspaces/${organizationId}/issues/${ref}/external-links`,
+        {
+          method: "POST",
+          body: JSON.stringify({ url: "https://example.com/spec" }),
+        },
+        token
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
     expect(linkRes.status).toBe(201);
-    expect(
-      z.object({ entityId: z.string() }).parse(await linkRes.json()).entityId
-    ).toBe(issue.id);
+    const link = z
+      .object({ entityId: z.string(), verificationStatus: z.string() })
+      .parse(await linkRes.json());
+    expect(link.entityId).toBe(issue.id);
+    expect(link.verificationStatus).toBe("verified");
 
     const reactionRes = await fetch(
       `/workspaces/${organizationId}/issues/${ref}/reactions`,
