@@ -1312,6 +1312,10 @@ const agentSessionSummaryColumns = {
   // PILE-419 — summary rows carry the open-elicitation marker so the
   // fleet/summary views can derive `needs_input` without activity blobs.
   awaitingActivityId: workspaceAgentSessions.awaitingActivityId,
+  // PILE-418 — summary rows carry these so the list can flag lanes that
+  // never produced a first activity (queued lanes are exempt).
+  firstActivityAt: workspaceAgentSessions.firstActivityAt,
+  queuedAfter: workspaceAgentSessions.queuedAfter,
 };
 
 export type AgentSessionSummary = Pick<
@@ -1354,6 +1358,9 @@ export async function updateAgentSession(
     providerSessionId: string | null;
     lastProgressAt: string | null;
     lastStateHash: string | null;
+    /** PILE-418 — stamped on the first recorded activity; written once
+     *  (subsequent writes are ignored so the original ack time wins). */
+    firstActivityAt: string | null;
     retryOf: string | null;
     retryCount: number;
     /** Queue promotion rewinds createdAt — the provision/run clocks anchor
@@ -1420,6 +1427,9 @@ export async function updateAgentSession(
     set.providerSessionId = input.providerSessionId;
   if (input.lastProgressAt !== undefined)
     set.lastProgressAt = input.lastProgressAt;
+  // PILE-418 — first ack is write-once; later activities don't push it.
+  if (input.firstActivityAt !== undefined && !existing.firstActivityAt)
+    set.firstActivityAt = input.firstActivityAt;
   if (input.lastStateHash !== undefined)
     set.lastStateHash = input.lastStateHash;
   if (input.retryOf !== undefined) set.retryOf = input.retryOf;
@@ -3271,6 +3281,9 @@ export interface AgentActivityInput {
   payload?: Record<string, unknown>;
   /** Parent activity id — links child events under a span. */
   parentId?: string;
+  /** PILE-418 — system-side bookkeeping (dispatch status lines, stale
+   *  markers) doesn't count as the lane's first ack. */
+  system?: boolean;
   /** Span timing. `startedAt` alone marks an open span; pair with `endedAt`
    *  (or `durationMs`) to record a completed span. */
   startedAt?: string;
@@ -3571,6 +3584,56 @@ export function getAgentAutomation(
       )
     )
     .get();
+}
+
+/** PILE-414 — board chip: per-parent {done, total, blocked, owner} over
+ *  required step-keyed sub-issues, one grouped query. "Done" matches the
+ *  stage gate: status done, or canceled with resolution=skipped. */
+export function subStepProgressByParent(
+  db: WorkspaceDb,
+  organizationId: string,
+  parentIds: string[]
+): Map<
+  string,
+  { total: number; done: number; blocked: number; ownerAgent: string | null }
+> {
+  const out = new Map<
+    string,
+    { total: number; done: number; blocked: number; ownerAgent: string | null }
+  >();
+  if (parentIds.length === 0) return out;
+  const rows = db
+    .select()
+    .from(workspaceIssues)
+    .where(
+      and(
+        eq(workspaceIssues.organizationId, organizationId),
+        inArray(workspaceIssues.parentId, parentIds),
+        eq(workspaceIssues.required, true)
+      )
+    )
+    .all();
+  for (const row of rows) {
+    const parent = row.parentId as string;
+    const acc = out.get(parent) ?? {
+      total: 0,
+      done: 0,
+      blocked: 0,
+      ownerAgent: null,
+    };
+    acc.total += 1;
+    const satisfied =
+      row.status === "done" ||
+      (row.status === "canceled" && row.resolution === "skipped");
+    if (satisfied) {
+      acc.done += 1;
+    } else {
+      acc.blocked += 1;
+      if (acc.ownerAgent === null) acc.ownerAgent = row.ownerAgent;
+    }
+    out.set(parent, acc);
+  }
+  return out;
 }
 
 export async function markAgentAutomationFired(db: WorkspaceDb, id: string) {

@@ -165,6 +165,31 @@
           },
           "updatedAt": {
             "type": "string"
+          },
+          "subStepProgress": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "total": {
+                "type": "integer"
+              },
+              "done": {
+                "type": "integer"
+              },
+              "blocked": {
+                "type": "integer"
+              },
+              "ownerAgent": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "total",
+              "done",
+              "blocked",
+              "ownerAgent"
+            ]
           }
         },
         "required": [
@@ -4400,6 +4425,17 @@
                         null
                       ]
                     },
+                    "awaitingFirstAck": {
+                      "type": "boolean"
+                    },
+                    "firstActivityAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "queuedAfter": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "receipt": {
                       "type": "object",
                       "nullable": true,
@@ -4906,6 +4942,17 @@
                             "needs_input",
                             null
                           ]
+                        },
+                        "awaitingFirstAck": {
+                          "type": "boolean"
+                        },
+                        "firstActivityAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "queuedAfter": {
+                          "type": "string",
+                          "nullable": true
                         },
                         "receipt": {
                           "type": "object",
@@ -5554,6 +5601,17 @@
                             null
                           ]
                         },
+                        "awaitingFirstAck": {
+                          "type": "boolean"
+                        },
+                        "firstActivityAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "queuedAfter": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "receipt": {
                           "type": "object",
                           "nullable": true,
@@ -6016,6 +6074,17 @@
                             "needs_input",
                             null
                           ]
+                        },
+                        "awaitingFirstAck": {
+                          "type": "boolean"
+                        },
+                        "firstActivityAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "queuedAfter": {
+                          "type": "string",
+                          "nullable": true
                         },
                         "receipt": {
                           "type": "object",
@@ -6716,6 +6785,17 @@
                                   null
                                 ]
                               },
+                              "awaitingFirstAck": {
+                                "type": "boolean"
+                              },
+                              "firstActivityAt": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "queuedAfter": {
+                                "type": "string",
+                                "nullable": true
+                              },
                               "receipt": {
                                 "type": "object",
                                 "nullable": true,
@@ -7003,6 +7083,14 @@
                                 "nullable": true
                               },
                               "awaitingActivityId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "firstActivityAt": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "queuedAfter": {
                                 "type": "string",
                                 "nullable": true
                               },
@@ -7450,6 +7538,17 @@
                             "needs_input",
                             null
                           ]
+                        },
+                        "awaitingFirstAck": {
+                          "type": "boolean"
+                        },
+                        "firstActivityAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "queuedAfter": {
+                          "type": "string",
+                          "nullable": true
                         },
                         "receipt": {
                           "type": "object",
@@ -7998,6 +8097,17 @@
                             null
                           ]
                         },
+                        "awaitingFirstAck": {
+                          "type": "boolean"
+                        },
+                        "firstActivityAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "queuedAfter": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "receipt": {
                           "type": "object",
                           "nullable": true,
@@ -8274,6 +8384,14 @@
                           "nullable": true
                         },
                         "awaitingActivityId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "firstActivityAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "queuedAfter": {
                           "type": "string",
                           "nullable": true
                         },
@@ -8613,6 +8731,17 @@
                         "needs_input",
                         null
                       ]
+                    },
+                    "awaitingFirstAck": {
+                      "type": "boolean"
+                    },
+                    "firstActivityAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "queuedAfter": {
+                      "type": "string",
+                      "nullable": true
                     },
                     "receipt": {
                       "type": "object",
@@ -9641,6 +9770,17 @@
                         null
                       ]
                     },
+                    "awaitingFirstAck": {
+                      "type": "boolean"
+                    },
+                    "firstActivityAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "queuedAfter": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "receipt": {
                       "type": "object",
                       "nullable": true,
@@ -10121,6 +10261,17 @@
                         "needs_input",
                         null
                       ]
+                    },
+                    "awaitingFirstAck": {
+                      "type": "boolean"
+                    },
+                    "firstActivityAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "queuedAfter": {
+                      "type": "string",
+                      "nullable": true
                     },
                     "receipt": {
                       "type": "object",
@@ -11512,6 +11663,17 @@
                         null
                       ]
                     },
+                    "awaitingFirstAck": {
+                      "type": "boolean"
+                    },
+                    "firstActivityAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "queuedAfter": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "receipt": {
                       "type": "object",
                       "nullable": true,
@@ -11980,6 +12142,17 @@
                             "needs_input",
                             null
                           ]
+                        },
+                        "awaitingFirstAck": {
+                          "type": "boolean"
+                        },
+                        "firstActivityAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "queuedAfter": {
+                          "type": "string",
+                          "nullable": true
                         },
                         "receipt": {
                           "type": "object",
@@ -12512,6 +12685,17 @@
                             "needs_input",
                             null
                           ]
+                        },
+                        "awaitingFirstAck": {
+                          "type": "boolean"
+                        },
+                        "firstActivityAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "queuedAfter": {
+                          "type": "string",
+                          "nullable": true
                         },
                         "receipt": {
                           "type": "object",
@@ -13066,6 +13250,17 @@
                         null
                       ]
                     },
+                    "awaitingFirstAck": {
+                      "type": "boolean"
+                    },
+                    "firstActivityAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "queuedAfter": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "receipt": {
                       "type": "object",
                       "nullable": true,
@@ -13553,6 +13748,17 @@
                         "needs_input",
                         null
                       ]
+                    },
+                    "awaitingFirstAck": {
+                      "type": "boolean"
+                    },
+                    "firstActivityAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "queuedAfter": {
+                      "type": "string",
+                      "nullable": true
                     },
                     "receipt": {
                       "type": "object",
@@ -14058,6 +14264,17 @@
                         "needs_input",
                         null
                       ]
+                    },
+                    "awaitingFirstAck": {
+                      "type": "boolean"
+                    },
+                    "firstActivityAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "queuedAfter": {
+                      "type": "string",
+                      "nullable": true
                     },
                     "receipt": {
                       "type": "object",

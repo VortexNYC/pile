@@ -4,13 +4,13 @@ import { z } from "zod";
 
 import { MockAgentProvider } from "../agents/harness.js";
 import { registerAgentProvider } from "../agents/index.js";
+import { drainDomainEvents } from "../agents/pipeline-events.js";
 import { createD1 } from "../global/db.js";
 import { user as userTable } from "../global/schema.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
-import { drainDomainEvents } from "../agents/pipeline-events.js";
 import { getWorkspaceStub } from "./stub.js";
 
 async function seedWorkspace() {
@@ -154,6 +154,31 @@ describe("pipeline runtime (PILE-401/405/413)", () => {
 
     // Domain events land in the DO outbox — inspectable via listPending
     // through the drainer; close the required step to fire all_required_done.
+    // PILE-414 — the list response carries the board chip's sub-step
+    // progress for parents with required children.
+    const board = await fetch(`/workspaces/${org}/issues`, {}, admin);
+    const boardIssues = z
+      .object({
+        issues: z.array(
+          z.object({
+            id: z.string(),
+            subStepProgress: z
+              .object({
+                total: z.number(),
+                done: z.number(),
+                blocked: z.number(),
+                ownerAgent: z.string().nullable(),
+              })
+              .nullable()
+              .optional(),
+          })
+        ),
+      })
+      .parse(await board.json());
+    const parentRow = boardIssues.issues.find((row) => row.id === parent.id);
+    expect(parentRow?.subStepProgress?.total).toBe(1);
+    expect(parentRow?.subStepProgress?.blocked).toBe(1);
+
     const done = await fetch(
       `/workspaces/${org}/issues/${child.id}`,
       { method: "PATCH", body: JSON.stringify({ status: "done" }) },
@@ -232,7 +257,9 @@ describe("pipeline runtime (PILE-401/405/413)", () => {
       { method: "POST", body: JSON.stringify({ name: "Dispatch Co" }) },
       admin
     );
-    const customer = z.object({ id: z.string() }).parse(await customerRes.json());
+    const customer = z
+      .object({ id: z.string() })
+      .parse(await customerRes.json());
     const statusRes = await fetch(
       `/workspaces/${org}/customer-statuses`,
       { method: "POST", body: JSON.stringify({ name: "Prospect" }) },

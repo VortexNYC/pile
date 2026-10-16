@@ -4821,6 +4821,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       sessionId,
       type: "status",
       message,
+      system: true,
     });
     try {
       const humanAssignee =
@@ -4987,6 +4988,17 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         ? { ...input, startedAt: new Date().toISOString() }
         : input;
     const activity = await data.addAgentActivity(this.db, enriched);
+    // PILE-418 — the first lane-authored activity arms firstActivityAt
+    // (status/prompt are system or human-originated, not the lane's ack).
+    // Sessions past the ~10s first-ack window with this still null surface
+    // as `awaitingFirstAck` in the API.
+    if (!input.system && input.type !== "status" && input.type !== "prompt") {
+      await data
+        .updateAgentSession(this.db, this.organizationId, input.sessionId, {
+          firstActivityAt: activity.createdAt,
+        })
+        .catch(() => undefined);
+    }
     await data.addAgentSessionEvent(this.db, {
       sessionId: input.sessionId,
       type: "activity",
@@ -5299,6 +5311,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     await this.addAgentActivity({
       sessionId,
       type: "status",
+      system: true,
       message:
         askedAt === null
           ? "Elicitation unanswered — escalated"
@@ -7923,6 +7936,14 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       payload,
       dedupeKey,
     });
+  }
+
+  /** PILE-414 — batch chip data: parent issue id → required sub-step
+   *  counts + the owner_agent of the next open required step. */
+  subStepProgressFor(parentIds: string[]) {
+    return Object.fromEntries(
+      data.subStepProgressByParent(this.db, this.organizationId, parentIds)
+    );
   }
 
   listPendingDomainEvents() {

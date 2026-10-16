@@ -2,6 +2,8 @@ import type { WorkerEnv } from "../platform/middleware.js";
 import type { Issue } from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
 import { dispatchAgent } from "./index.js";
+import { fireEventAutomations } from "./sweep.js";
+import { automationEventTarget } from "./repo-triggers.js";
 
 /** PILE-401/405/413 — drains the DO's domain-event outbox into agent
  *  dispatches and stage policy. The DO emits events inside mutations (it
@@ -146,6 +148,45 @@ async function handleStageEntered(
   );
 }
 
+/** PILE-376 — status-triggered schedules ride the domain-event spine:
+ *  an automation with trigger `record.stage_entered` fires on any record
+ *  advance; `record.stage_entered:<stage>` binds to one stage. */
+async function fireStageAutomations(
+  env: WorkerEnv,
+  stub: Stub,
+  organizationId: string,
+  payload: StageEnteredPayload,
+  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
+): Promise<void> {
+  if (payload.entityType === "issue") return;
+  const stageName = payload.toName ?? payload.to ?? "";
+  const target = automationEventTarget(() =>
+    pipelineIssueFor(stub, payload.entityType as "customer" | "deal", payload.entityId)
+  );
+  await fireEventAutomations(
+    env,
+    stub,
+    organizationId,
+    "record.stage_entered",
+    target,
+    `Record ${payload.entityType} ${payload.entityId} entered stage ${stageName}`,
+    ctx,
+    { body: stageName }
+  );
+  if (stageName) {
+    await fireEventAutomations(
+      env,
+      stub,
+      organizationId,
+      `record.stage_entered:${stageName.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`,
+      target,
+      `Record ${payload.entityType} ${payload.entityId} entered stage ${stageName}`,
+      ctx,
+      { body: stageName }
+    );
+  }
+}
+
 async function handleSubstepActionable(
   env: WorkerEnv,
   stub: Stub,
@@ -238,9 +279,9 @@ async function nextStage(
   }
 ): Promise<{ patch: Record<string, unknown>; label: string | null }> {
   if (record.entityType === "customer") {
-    const statuses = (await stub.listCustomerStatuses())
-      .slice()
-      .sort((a, b) => a.position - b.position);
+    const statuses = (await stub.listCustomerStatuses()).toSorted(
+      (a, b) => a.position - b.position
+    );
     const current = await stub.getCustomer(record.id);
     const idx = statuses.findIndex((s) => s.id === current?.statusId);
     const next = idx >= 0 ? statuses[idx + 1] : undefined;
@@ -322,6 +363,13 @@ export async function drainDomainEvents(
       const payload = JSON.parse(event.payload) as Record<string, unknown>;
       if (event.type === "record.stage_entered") {
         await handleStageEntered(
+          env,
+          stub,
+          organizationId,
+          payload as unknown as StageEnteredPayload,
+          ctx
+        );
+        await fireStageAutomations(
           env,
           stub,
           organizationId,
