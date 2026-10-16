@@ -3723,6 +3723,99 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return result;
   }
 
+  // ---- triage auto-delegate rules (PILE-427 — ordered match rules on
+  // inbound records; the evaluation log lives here too) ----
+
+  listTriageRules(filter?: { recordType?: string; activeOnly?: boolean }) {
+    return data.listTriageRules(this.db, this.organizationId, filter);
+  }
+
+  getTriageRule(id: string) {
+    return data.getTriageRule(this.db, this.organizationId, id);
+  }
+
+  async createTriageRule(
+    input: Omit<data.TriageRuleInput, "organizationId">,
+    actor: { actorId?: string | null; actorType?: string | null }
+  ) {
+    await this.ready;
+    const rule = data.createTriageRule(this.db, {
+      ...input,
+      organizationId: this.organizationId,
+      createdBy: actor.actorId,
+    });
+    this.audit(
+      "triage_rule.created",
+      "triage_rule",
+      rule.id,
+      actor.actorId,
+      {
+        recordType: { from: null, to: rule.recordType },
+        name: { from: null, to: rule.name },
+      },
+      { actorType: actor.actorType }
+    );
+    return rule;
+  }
+
+  async updateTriageRule(
+    id: string,
+    patch: data.TriageRulePatch,
+    actor: { actorId?: string | null; actorType?: string | null }
+  ) {
+    await this.ready;
+    const rule = data.updateTriageRule(this.db, this.organizationId, id, patch);
+    if (rule) {
+      this.audit(
+        "triage_rule.updated",
+        "triage_rule",
+        id,
+        actor.actorId,
+        null,
+        { actorType: actor.actorType }
+      );
+    }
+    return rule;
+  }
+
+  async deleteTriageRule(
+    id: string,
+    actor: { actorId?: string | null; actorType?: string | null }
+  ): Promise<boolean> {
+    await this.ready;
+    const ok = data.deleteTriageRule(this.db, this.organizationId, id);
+    if (ok) {
+      this.audit(
+        "triage_rule.deleted",
+        "triage_rule",
+        id,
+        actor.actorId,
+        null,
+        { actorType: actor.actorType }
+      );
+    }
+    return ok;
+  }
+
+  /** The evaluation log is the audit — no separate audit row per entry. */
+  recordTriageEvaluation(
+    input: Omit<data.TriageEvaluationInput, "organizationId">
+  ) {
+    return data.recordTriageEvaluation(this.db, {
+      ...input,
+      organizationId: this.organizationId,
+    });
+  }
+
+  listTriageEvaluations(filter?: {
+    recordType?: string;
+    recordId?: string;
+    ruleId?: string;
+    limit?: number;
+  }) {
+    return data.listTriageEvaluations(this.db, this.organizationId, filter);
+  }
+
   // ---- external events (PILE-422 — inbound provider webhooks complete
   // stage sub-steps; mappings bind source+eventType to a stepKey) ----
 

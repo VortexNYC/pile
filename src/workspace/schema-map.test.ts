@@ -8,6 +8,8 @@ import {
   workspaceExternalEventMappings,
   workspaceGuidancePacks,
   workspaceGuidancePackVersions,
+  workspaceTriageRuleEvaluations,
+  workspaceTriageRules,
 } from "./schema.js";
 
 describe("workspaceSchema map", () => {
@@ -45,6 +47,19 @@ describe("external event tables (PILE-422)", () => {
     );
     expect(getTableName(workspaceExternalEventDeliveries)).toBe(
       "external_event_deliveries"
+    );
+  });
+});
+
+describe("triage tables (PILE-427)", () => {
+  it("maps the triage rule + evaluation tables", () => {
+    expect(workspaceSchema.workspaceTriageRules).toBe(workspaceTriageRules);
+    expect(workspaceSchema.workspaceTriageRuleEvaluations).toBe(
+      workspaceTriageRuleEvaluations
+    );
+    expect(getTableName(workspaceTriageRules)).toBe("triage_rules");
+    expect(getTableName(workspaceTriageRuleEvaluations)).toBe(
+      "triage_rule_evaluations"
     );
   });
 });

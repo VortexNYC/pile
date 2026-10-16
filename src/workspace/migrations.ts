@@ -1175,6 +1175,43 @@ CREATE INDEX IF NOT EXISTS agent_run_receipts_org_step_idx ON agent_run_receipts
 CREATE INDEX IF NOT EXISTS agent_run_receipts_issue_idx ON agent_run_receipts (issue_id)
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS agent_run_receipts_deal_idx ON agent_run_receipts (organization_id, deal_id)`;
+
+// PILE-427 — triage auto-delegate rules: ordered match rules evaluated on
+// inbound records (leads, intake items, customers, deals, issues, support
+// tickets) plus the evaluation log — one row per evaluation so the record
+// shows which rule matched (or that none did).
+const v82 = `CREATE TABLE IF NOT EXISTS triage_rules (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  record_type TEXT NOT NULL,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  conditions TEXT NOT NULL,
+  action TEXT NOT NULL,
+  created_by TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS triage_rules_org_type_idx ON triage_rules (organization_id, record_type, is_active, sort_order)
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS triage_rule_evaluations (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  record_type TEXT NOT NULL,
+  record_id TEXT NOT NULL,
+  rule_id TEXT,
+  rule_name TEXT,
+  outcome TEXT NOT NULL,
+  detail TEXT,
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS triage_rule_evaluations_record_idx ON triage_rule_evaluations (organization_id, record_type, record_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS triage_rule_evaluations_org_idx ON triage_rule_evaluations (organization_id, created_at)`;
+
 const v69 = `CREATE TABLE comments_new (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -1430,6 +1467,7 @@ export const workspaceMigrations = {
       { idx: 78, when: 78, tag: "v79", breakpoints: true },
       { idx: 79, when: 79, tag: "v80", breakpoints: true },
       { idx: 80, when: 80, tag: "v81", breakpoints: true },
+      { idx: 81, when: 81, tag: "v82", breakpoints: true },
     ],
   },
   migrations: {
@@ -1514,5 +1552,6 @@ export const workspaceMigrations = {
     m0078: v79,
     m0079: v80,
     m0080: v81,
+    m0081: v82,
   },
 } satisfies Parameters<typeof migrate>[1];

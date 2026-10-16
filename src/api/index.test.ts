@@ -3733,3 +3733,22 @@ describe("API integration", () => {
     ).toBeDefined();
   });
 });
+
+describe("triage routes registration (PILE-427)", () => {
+  it("exposes the triage rule + evaluation surface in the OpenAPI doc", async () => {
+    const res = await app.fetch(
+      new Request("http://localhost/openapi.json"),
+      env
+    );
+    const spec = (await res.json()) as { paths: Record<string, unknown> };
+    expect(
+      spec.paths["/workspaces/{organizationId}/triage/rules"]
+    ).toBeTruthy();
+    expect(
+      spec.paths["/workspaces/{organizationId}/triage/rules/{ruleId}"]
+    ).toBeTruthy();
+    expect(
+      spec.paths["/workspaces/{organizationId}/triage/evaluations"]
+    ).toBeTruthy();
+  });
+});

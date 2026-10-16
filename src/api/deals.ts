@@ -1,6 +1,8 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
+import { createD1 } from "../global/db.js";
+import { runTriageRules } from "../global/triage-rules.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
@@ -266,7 +268,37 @@ export function registerDealRoutes(app: OpenAPIHono<AppContext>) {
       needsHumanReason: body.needsHumanReason ?? null,
       priorityScore: body.priorityScore ?? null,
     });
-    return c.json({ deal }, 201);
+    // PILE-427 — a created deal is an inbound record for triage rules.
+    // The externalId idempotent path returns early above, so retries
+    // never double-evaluate. Re-read after a match so the response
+    // reflects what the rule stamped.
+    const triage = await runTriageRules(
+      c.env,
+      createD1(c.env.D1),
+      organizationId,
+      {
+        recordType: "deal",
+        recordId: deal.id,
+        title: `Deal: ${deal.name}`,
+        text: [deal.name, deal.description].filter(Boolean).join("\n"),
+        status: deal.stage,
+        dealId: deal.id,
+        customerId: deal.customerId,
+        fields: {
+          stage: deal.stage,
+          amountCents: deal.amountCents ?? null,
+          currency: deal.currency ?? null,
+          customerId: deal.customerId,
+          externalId: deal.externalId ?? null,
+          expectedCloseAt: deal.expectedCloseAt ?? null,
+        },
+      }
+    );
+    const responseDeal =
+      triage?.outcome === "matched"
+        ? ((await stub.getDeal(deal.id)) ?? deal)
+        : deal;
+    return c.json({ deal: responseDeal }, 201);
   });
 
   app.openapi(getDealRoute, async (c) => {

@@ -1,7 +1,28 @@
 import { and, eq } from "drizzle-orm";
+import { z } from "zod";
 
+import { ISSUE_PRIORITIES, ISSUE_STATUSES } from "../types/workspace.js";
 import type { D1Client } from "./db.js";
 import { templates } from "./schema.js";
+
+/** The issue fields a template can stamp — shared by the issue-create
+ *  defaults resolver and the triage delegate action (PILE-427). */
+export const issueTemplateDataSchema = z
+  .object({
+    title: z.string().optional(),
+    description: z.string().optional(),
+    status: z.enum(ISSUE_STATUSES).optional(),
+    priority: z.enum(ISSUE_PRIORITIES).optional(),
+    estimate: z.number().int().min(0).optional(),
+    assigneeId: z.string().optional(),
+    delegateId: z.string().optional(),
+    projectId: z.string().optional(),
+    cycleId: z.string().optional(),
+    labelIds: z.string().optional(),
+  })
+  .partial();
+
+export type IssueTemplateData = z.infer<typeof issueTemplateDataSchema>;
 
 export function listTemplates(db: D1Client, organizationId: string) {
   return db

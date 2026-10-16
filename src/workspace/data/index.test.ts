@@ -28,6 +28,13 @@ import {
   setFieldValue,
   stageKey,
   updateStageTemplate,
+  createTriageRule,
+  getTriageRule,
+  listTriageRules,
+  updateTriageRule,
+  deleteTriageRule,
+  recordTriageEvaluation,
+  listTriageEvaluations,
   createDocument,
   createDocumentSpace,
   documentAccessLevel,
@@ -1613,6 +1620,97 @@ describe("spend caps + run receipts (PILE-425)", () => {
       expect(byDeal).toHaveLength(1);
       expect(byDeal[0]?.runs).toBe(3);
       expect(byDeal[0]?.costMicros).toBe(600);
+    });
+  });
+});
+
+describe("triage rules data (PILE-427)", () => {
+  beforeAll(async () => {
+    await getStub().listWorkspaceComments();
+  });
+
+  it("orders rules by sortOrder then createdAt and logs evaluations", async () => {
+    await withDb(async (db) => {
+      const second = createTriageRule(db, {
+        organizationId: WORKSPACE_ID,
+        name: "second",
+        recordType: "lead",
+        sortOrder: 1,
+        conditions: "{}",
+        action: "{}",
+      });
+      const first = createTriageRule(db, {
+        organizationId: WORKSPACE_ID,
+        name: "first",
+        recordType: "lead",
+        sortOrder: 0,
+        conditions: "{}",
+        action: "{}",
+      });
+      const inactive = createTriageRule(db, {
+        organizationId: WORKSPACE_ID,
+        name: "inactive",
+        recordType: "lead",
+        isActive: false,
+        sortOrder: 2,
+        conditions: "{}",
+        action: "{}",
+      });
+      const other = createTriageRule(db, {
+        organizationId: WORKSPACE_ID,
+        name: "other type",
+        recordType: "deal",
+        conditions: "{}",
+        action: "{}",
+      });
+
+      const all = listTriageRules(db, WORKSPACE_ID, { recordType: "lead" });
+      expect(all.map((r) => r.id)).toEqual([first.id, second.id, inactive.id]);
+      const active = listTriageRules(db, WORKSPACE_ID, {
+        recordType: "lead",
+        activeOnly: true,
+      });
+      expect(active.map((r) => r.id)).toEqual([first.id, second.id]);
+      expect(getTriageRule(db, WORKSPACE_ID, other.id)?.name).toBe(
+        "other type"
+      );
+
+      const renamed = updateTriageRule(db, WORKSPACE_ID, first.id, {
+        name: "renamed",
+        sortOrder: 9,
+      });
+      expect(renamed?.name).toBe("renamed");
+      expect(
+        listTriageRules(db, WORKSPACE_ID, { recordType: "lead" })[0]?.id
+      ).toBe(second.id);
+
+      const evalRow = recordTriageEvaluation(db, {
+        organizationId: WORKSPACE_ID,
+        recordType: "lead",
+        recordId: "rec-1",
+        ruleId: second.id,
+        ruleName: second.name,
+        outcome: "matched",
+        detail: JSON.stringify({ issueId: "i-1" }),
+      });
+      expect(evalRow.outcome).toBe("matched");
+      recordTriageEvaluation(db, {
+        organizationId: WORKSPACE_ID,
+        recordType: "lead",
+        recordId: "rec-2",
+        outcome: "no_match",
+      });
+      const evals = listTriageEvaluations(db, WORKSPACE_ID, {
+        recordType: "lead",
+        recordId: "rec-1",
+      });
+      expect(evals.map((e) => e.id)).toEqual([evalRow.id]);
+      expect(
+        listTriageEvaluations(db, WORKSPACE_ID, { ruleId: second.id })
+      ).toHaveLength(1);
+
+      expect(deleteTriageRule(db, WORKSPACE_ID, inactive.id)).toBe(true);
+      expect(getTriageRule(db, WORKSPACE_ID, inactive.id)).toBeUndefined();
     });
   });
 });

@@ -3441,3 +3441,52 @@ describe("spend caps + run receipts (PILE-425)", () => {
     expect(receipt?.stopReason).toContain("per-run tokens cap");
   });
 });
+
+describe("triage rules via DO RPC (PILE-427)", () => {
+  beforeAll(ensureWorkspace);
+
+  it("manages rules and the evaluation log through the stub", async () => {
+    const stub = getStub();
+    const rule = await stub.createTriageRule(
+      {
+        name: "leads to scout",
+        recordType: "lead",
+        sortOrder: 0,
+        conditions: JSON.stringify({ sources: ["form"] }),
+        action: JSON.stringify({ type: "delegate", agentId: "scout" }),
+      },
+      { actorId: "user-1", actorType: "user" }
+    );
+    expect(rule.id).toBeTruthy();
+
+    const listed = await stub.listTriageRules({ recordType: "lead" });
+    expect(listed.some((r) => r.id === rule.id)).toBe(true);
+    const inactive = await stub.updateTriageRule(
+      rule.id,
+      { isActive: false },
+      { actorId: "user-1" }
+    );
+    expect(inactive?.isActive).toBe(false);
+    expect(
+      (
+        await stub.listTriageRules({ recordType: "lead", activeOnly: true })
+      ).some((r) => r.id === rule.id)
+    ).toBe(false);
+
+    const evalRow = await stub.recordTriageEvaluation({
+      recordType: "lead",
+      recordId: "lead-1",
+      ruleId: rule.id,
+      ruleName: rule.name,
+      outcome: "matched",
+      detail: JSON.stringify({ issueId: "i-1" }),
+    });
+    const evals = await stub.listTriageEvaluations({ recordId: "lead-1" });
+    expect(evals.map((e) => e.id)).toEqual([evalRow.id]);
+
+    expect(await stub.deleteTriageRule(rule.id, { actorId: "user-1" })).toBe(
+      true
+    );
+    expect(await stub.getTriageRule(rule.id)).toBeUndefined();
+  });
+});

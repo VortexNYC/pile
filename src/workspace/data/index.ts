@@ -5,6 +5,7 @@
 // sessions, webhook subs, linear users).
 import {
   and,
+  asc,
   desc,
   eq,
   gt,
@@ -52,6 +53,8 @@ import {
   workspaceGuidancePacks,
   workspaceGuidancePackVersions,
   workspaceStageTemplates,
+  workspaceTriageRuleEvaluations,
+  workspaceTriageRules,
   workspaceExternalEventDeliveries,
   workspaceExternalEventMappings,
   workspaceCustomerStatuses,
@@ -7233,4 +7236,209 @@ export function getCustomerByDomain(
       )
     )
     .get();
+}
+
+// ---- triage auto-delegate rules (PILE-427) ----
+//
+// Ordered match rules evaluated against inbound records; the first matching
+// rule applies its action (delegate an agent, set a status) and the outcome
+// is recorded in triage_rule_evaluations. conditions/action are opaque JSON
+// here — the zod contract lives in src/global/triage-rules.ts.
+
+export type TriageRule = typeof workspaceTriageRules.$inferSelect;
+export type TriageRuleEvaluation =
+  typeof workspaceTriageRuleEvaluations.$inferSelect;
+
+export interface TriageRuleInput {
+  organizationId: string;
+  name: string;
+  recordType: string;
+  isActive?: boolean;
+  sortOrder?: number;
+  conditions: string;
+  action: string;
+  createdBy?: string | null;
+}
+
+export interface TriageRulePatch {
+  name?: string;
+  recordType?: string;
+  isActive?: boolean;
+  sortOrder?: number;
+  conditions?: string;
+  action?: string;
+}
+
+export function createTriageRule(db: WorkspaceDb, input: TriageRuleInput) {
+  const now = new Date().toISOString();
+  return db
+    .insert(workspaceTriageRules)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId: input.organizationId,
+      name: input.name,
+      recordType: input.recordType,
+      isActive: input.isActive ?? true,
+      sortOrder: input.sortOrder ?? 0,
+      conditions: input.conditions,
+      action: input.action,
+      createdBy: input.createdBy ?? null,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning()
+    .get();
+}
+
+export function getTriageRule(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return db
+    .select()
+    .from(workspaceTriageRules)
+    .where(
+      and(
+        eq(workspaceTriageRules.organizationId, organizationId),
+        eq(workspaceTriageRules.id, id)
+      )
+    )
+    .get();
+}
+
+export function listTriageRules(
+  db: WorkspaceDb,
+  organizationId: string,
+  filter: { recordType?: string; activeOnly?: boolean } = {}
+) {
+  const conditions = [eq(workspaceTriageRules.organizationId, organizationId)];
+  if (filter.recordType !== undefined) {
+    conditions.push(eq(workspaceTriageRules.recordType, filter.recordType));
+  }
+  if (filter.activeOnly) {
+    conditions.push(eq(workspaceTriageRules.isActive, true));
+  }
+  return db
+    .select()
+    .from(workspaceTriageRules)
+    .where(and(...conditions))
+    .orderBy(
+      asc(workspaceTriageRules.sortOrder),
+      asc(workspaceTriageRules.createdAt)
+    )
+    .all();
+}
+
+export function updateTriageRule(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string,
+  patch: TriageRulePatch
+) {
+  const set: Partial<typeof workspaceTriageRules.$inferInsert> = {
+    updatedAt: new Date().toISOString(),
+  };
+  if (patch.name !== undefined) set.name = patch.name;
+  if (patch.recordType !== undefined) set.recordType = patch.recordType;
+  if (patch.isActive !== undefined) set.isActive = patch.isActive;
+  if (patch.sortOrder !== undefined) set.sortOrder = patch.sortOrder;
+  if (patch.conditions !== undefined) set.conditions = patch.conditions;
+  if (patch.action !== undefined) set.action = patch.action;
+  return db
+    .update(workspaceTriageRules)
+    .set(set)
+    .where(
+      and(
+        eq(workspaceTriageRules.organizationId, organizationId),
+        eq(workspaceTriageRules.id, id)
+      )
+    )
+    .returning()
+    .get();
+}
+
+export function deleteTriageRule(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return (
+    db
+      .delete(workspaceTriageRules)
+      .where(
+        and(
+          eq(workspaceTriageRules.organizationId, organizationId),
+          eq(workspaceTriageRules.id, id)
+        )
+      )
+      .returning()
+      .all().length > 0
+  );
+}
+
+export interface TriageEvaluationInput {
+  organizationId: string;
+  recordType: string;
+  recordId: string;
+  ruleId?: string | null;
+  ruleName?: string | null;
+  outcome: string;
+  detail?: string | null;
+}
+
+export function recordTriageEvaluation(
+  db: WorkspaceDb,
+  input: TriageEvaluationInput
+) {
+  return db
+    .insert(workspaceTriageRuleEvaluations)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId: input.organizationId,
+      recordType: input.recordType,
+      recordId: input.recordId,
+      ruleId: input.ruleId ?? null,
+      ruleName: input.ruleName ?? null,
+      outcome: input.outcome,
+      detail: input.detail ?? null,
+      createdAt: new Date().toISOString(),
+    })
+    .returning()
+    .get();
+}
+
+export function listTriageEvaluations(
+  db: WorkspaceDb,
+  organizationId: string,
+  filter: {
+    recordType?: string;
+    recordId?: string;
+    ruleId?: string;
+    limit?: number;
+  } = {}
+) {
+  const conditions = [
+    eq(workspaceTriageRuleEvaluations.organizationId, organizationId),
+  ];
+  if (filter.recordType !== undefined) {
+    conditions.push(
+      eq(workspaceTriageRuleEvaluations.recordType, filter.recordType)
+    );
+  }
+  if (filter.recordId !== undefined) {
+    conditions.push(
+      eq(workspaceTriageRuleEvaluations.recordId, filter.recordId)
+    );
+  }
+  if (filter.ruleId !== undefined) {
+    conditions.push(eq(workspaceTriageRuleEvaluations.ruleId, filter.ruleId));
+  }
+  return db
+    .select()
+    .from(workspaceTriageRuleEvaluations)
+    .where(and(...conditions))
+    .orderBy(desc(workspaceTriageRuleEvaluations.createdAt))
+    .limit(Math.min(Math.max(filter.limit ?? 50, 1), 200))
+    .all();
 }

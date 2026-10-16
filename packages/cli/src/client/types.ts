@@ -25479,6 +25479,508 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/triage/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List triage rules */
+        get: {
+            parameters: {
+                query?: {
+                    recordType?: "lead" | "intake_item" | "customer" | "deal" | "issue" | "support_ticket";
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Triage rules */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            rules: {
+                                id: string;
+                                organizationId: string;
+                                name: string;
+                                /** @enum {string} */
+                                recordType: "lead" | "intake_item" | "customer" | "deal" | "issue" | "support_ticket";
+                                isActive: boolean;
+                                sortOrder: number;
+                                conditions: {
+                                    keywords?: string[];
+                                    sources?: string[];
+                                    channels?: string[];
+                                    customerDomains?: string[];
+                                    teamIds?: string[];
+                                    labelIds?: string[];
+                                    priorities?: string[];
+                                    statuses?: string[];
+                                    fields?: {
+                                        field: string;
+                                        equals?: string | number | boolean;
+                                    }[];
+                                };
+                                action: {
+                                    /** @enum {string} */
+                                    type: "delegate";
+                                    agentId: string;
+                                    teamId?: string;
+                                    templateId?: string;
+                                    title?: string;
+                                    /** @enum {string} */
+                                    status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
+                                    /** @enum {string} */
+                                    priority?: "low" | "medium" | "high" | "urgent";
+                                    labelIds?: string[];
+                                    repo?: string;
+                                    instructions?: string;
+                                    dispatch?: boolean;
+                                } | {
+                                    /** @enum {string} */
+                                    type: "set_status";
+                                    status: string;
+                                };
+                                createdAt: string;
+                                updatedAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Create triage rule
+         * @description Ordered auto-delegate rules evaluated on inbound records (lead, intake_item, customer, deal, issue, support_ticket). Rules run in sortOrder then createdAt order; the first match wins and the evaluation is logged to /triage/evaluations.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        name: string;
+                        /** @enum {string} */
+                        recordType: "lead" | "intake_item" | "customer" | "deal" | "issue" | "support_ticket";
+                        isActive?: boolean;
+                        sortOrder?: number;
+                        conditions: {
+                            keywords?: string[];
+                            sources?: string[];
+                            channels?: string[];
+                            customerDomains?: string[];
+                            teamIds?: string[];
+                            labelIds?: string[];
+                            priorities?: string[];
+                            statuses?: string[];
+                            fields?: {
+                                field: string;
+                                equals?: string | number | boolean;
+                            }[];
+                        };
+                        action: {
+                            /** @enum {string} */
+                            type: "delegate";
+                            agentId: string;
+                            teamId?: string;
+                            templateId?: string;
+                            title?: string;
+                            /** @enum {string} */
+                            status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
+                            /** @enum {string} */
+                            priority?: "low" | "medium" | "high" | "urgent";
+                            labelIds?: string[];
+                            repo?: string;
+                            instructions?: string;
+                            dispatch?: boolean;
+                        } | {
+                            /** @enum {string} */
+                            type: "set_status";
+                            status: string;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Rule created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            rule: {
+                                id: string;
+                                organizationId: string;
+                                name: string;
+                                /** @enum {string} */
+                                recordType: "lead" | "intake_item" | "customer" | "deal" | "issue" | "support_ticket";
+                                isActive: boolean;
+                                sortOrder: number;
+                                conditions: {
+                                    keywords?: string[];
+                                    sources?: string[];
+                                    channels?: string[];
+                                    customerDomains?: string[];
+                                    teamIds?: string[];
+                                    labelIds?: string[];
+                                    priorities?: string[];
+                                    statuses?: string[];
+                                    fields?: {
+                                        field: string;
+                                        equals?: string | number | boolean;
+                                    }[];
+                                };
+                                action: {
+                                    /** @enum {string} */
+                                    type: "delegate";
+                                    agentId: string;
+                                    teamId?: string;
+                                    templateId?: string;
+                                    title?: string;
+                                    /** @enum {string} */
+                                    status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
+                                    /** @enum {string} */
+                                    priority?: "low" | "medium" | "high" | "urgent";
+                                    labelIds?: string[];
+                                    repo?: string;
+                                    instructions?: string;
+                                    dispatch?: boolean;
+                                } | {
+                                    /** @enum {string} */
+                                    type: "set_status";
+                                    status: string;
+                                };
+                                createdAt: string;
+                                updatedAt: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/triage/rules/{ruleId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get triage rule */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    ruleId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Rule */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            rule: {
+                                id: string;
+                                organizationId: string;
+                                name: string;
+                                /** @enum {string} */
+                                recordType: "lead" | "intake_item" | "customer" | "deal" | "issue" | "support_ticket";
+                                isActive: boolean;
+                                sortOrder: number;
+                                conditions: {
+                                    keywords?: string[];
+                                    sources?: string[];
+                                    channels?: string[];
+                                    customerDomains?: string[];
+                                    teamIds?: string[];
+                                    labelIds?: string[];
+                                    priorities?: string[];
+                                    statuses?: string[];
+                                    fields?: {
+                                        field: string;
+                                        equals?: string | number | boolean;
+                                    }[];
+                                };
+                                action: {
+                                    /** @enum {string} */
+                                    type: "delegate";
+                                    agentId: string;
+                                    teamId?: string;
+                                    templateId?: string;
+                                    title?: string;
+                                    /** @enum {string} */
+                                    status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
+                                    /** @enum {string} */
+                                    priority?: "low" | "medium" | "high" | "urgent";
+                                    labelIds?: string[];
+                                    repo?: string;
+                                    instructions?: string;
+                                    dispatch?: boolean;
+                                } | {
+                                    /** @enum {string} */
+                                    type: "set_status";
+                                    status: string;
+                                };
+                                createdAt: string;
+                                updatedAt: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /** Delete triage rule */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    ruleId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Deleted */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** Update triage rule */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    ruleId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        name?: string;
+                        /** @enum {string} */
+                        recordType?: "lead" | "intake_item" | "customer" | "deal" | "issue" | "support_ticket";
+                        isActive?: boolean;
+                        sortOrder?: number;
+                        conditions?: {
+                            keywords?: string[];
+                            sources?: string[];
+                            channels?: string[];
+                            customerDomains?: string[];
+                            teamIds?: string[];
+                            labelIds?: string[];
+                            priorities?: string[];
+                            statuses?: string[];
+                            fields?: {
+                                field: string;
+                                equals?: string | number | boolean;
+                            }[];
+                        };
+                        action?: {
+                            /** @enum {string} */
+                            type: "delegate";
+                            agentId: string;
+                            teamId?: string;
+                            templateId?: string;
+                            title?: string;
+                            /** @enum {string} */
+                            status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
+                            /** @enum {string} */
+                            priority?: "low" | "medium" | "high" | "urgent";
+                            labelIds?: string[];
+                            repo?: string;
+                            instructions?: string;
+                            dispatch?: boolean;
+                        } | {
+                            /** @enum {string} */
+                            type: "set_status";
+                            status: string;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Rule updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            rule: {
+                                id: string;
+                                organizationId: string;
+                                name: string;
+                                /** @enum {string} */
+                                recordType: "lead" | "intake_item" | "customer" | "deal" | "issue" | "support_ticket";
+                                isActive: boolean;
+                                sortOrder: number;
+                                conditions: {
+                                    keywords?: string[];
+                                    sources?: string[];
+                                    channels?: string[];
+                                    customerDomains?: string[];
+                                    teamIds?: string[];
+                                    labelIds?: string[];
+                                    priorities?: string[];
+                                    statuses?: string[];
+                                    fields?: {
+                                        field: string;
+                                        equals?: string | number | boolean;
+                                    }[];
+                                };
+                                action: {
+                                    /** @enum {string} */
+                                    type: "delegate";
+                                    agentId: string;
+                                    teamId?: string;
+                                    templateId?: string;
+                                    title?: string;
+                                    /** @enum {string} */
+                                    status?: "triage" | "backlog" | "todo" | "in_progress" | "done" | "canceled";
+                                    /** @enum {string} */
+                                    priority?: "low" | "medium" | "high" | "urgent";
+                                    labelIds?: string[];
+                                    repo?: string;
+                                    instructions?: string;
+                                    dispatch?: boolean;
+                                } | {
+                                    /** @enum {string} */
+                                    type: "set_status";
+                                    status: string;
+                                };
+                                createdAt: string;
+                                updatedAt: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/triage/evaluations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List triage evaluations
+         * @description The rule evaluation log — one row per inbound record evaluated while at least one active rule existed for its record type: which rule matched (ruleId null on no_match), the outcome, and what the action applied.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    recordType?: "lead" | "intake_item" | "customer" | "deal" | "issue" | "support_ticket";
+                    recordId?: string;
+                    ruleId?: string;
+                    limit?: number;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Evaluation log */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            evaluations: {
+                                id: string;
+                                organizationId: string;
+                                recordType: string;
+                                recordId: string;
+                                ruleId: string | null;
+                                ruleName: string | null;
+                                /** @enum {string} */
+                                outcome: "matched" | "no_match" | "error";
+                                detail: {
+                                    [key: string]: unknown;
+                                } | null;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/csv-exports": {
         parameters: {
             query?: never;

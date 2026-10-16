@@ -14,6 +14,8 @@ import {
   workspaceIssues,
   workspaceNotificationPreferences,
   workspaceStageTemplates,
+  workspaceTriageRuleEvaluations,
+  workspaceTriageRules,
 } from "./schema.js";
 
 describe("workspaceAgentSessions schema", () => {
@@ -422,6 +424,27 @@ describe("workspaceAgentRunReceipts schema (PILE-425)", () => {
       "stop_reason",
     ]) {
       expect(config.columns.find((c) => c.name === col)?.notNull).toBe(false);
+    }
+  });
+});
+
+describe("triage rule tables (PILE-427)", () => {
+  it("stores ordered rules per (org, record_type) plus the eval log", () => {
+    const rules = getTableConfig(workspaceTriageRules);
+    expect(rules.name).toBe("triage_rules");
+    for (const col of [
+      "record_type",
+      "is_active",
+      "sort_order",
+      "conditions",
+      "action",
+    ]) {
+      expect(rules.columns.some((c) => c.name === col)).toBe(true);
+    }
+    const evals = getTableConfig(workspaceTriageRuleEvaluations);
+    expect(evals.name).toBe("triage_rule_evaluations");
+    for (const col of ["record_id", "rule_id", "rule_name", "outcome"]) {
+      expect(evals.columns.some((c) => c.name === col)).toBe(true);
     }
   });
 });

@@ -1,9 +1,13 @@
 import { env } from "cloudflare:test";
+import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { createAdminHeaders } from "../platform/test-auth.js";
 import { createD1 } from "./db.js";
-import { user as userTable } from "./schema.js";
+import {
+  supportTickets as supportTicketsTable,
+  user as userTable,
+} from "./schema.js";
 import { createCustomer } from "./support-contacts.js";
 import {
   createEscalationRule,
@@ -103,5 +107,59 @@ describe("maybeEscalate team defaultRepo (PILE-321)", () => {
   it("stays repo-less when the action binds no team", async () => {
     const issue = await escalate("panic-gamma", { type: "create_issue" });
     expect(issue?.repo).toBeNull();
+  });
+});
+
+describe("triage precedence over escalation (PILE-427)", () => {
+  it("a matched triage rule owns the ticket and escalation stands down", async () => {
+    const db = createD1(env.D1);
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const keyword = `triage-wins-${crypto.randomUUID().slice(0, 8)}`;
+    await stub.createTriageRule(
+      {
+        name: "ticket triage",
+        recordType: "support_ticket",
+        conditions: JSON.stringify({ keywords: [keyword] }),
+        action: JSON.stringify({ type: "set_status", status: "snoozed" }),
+      },
+      { actorId: "user-esc-global" }
+    );
+    await createEscalationRule(db, {
+      organizationId,
+      name: `esc-${keyword}`,
+      conditions: { keywords: [keyword] },
+      action: { type: "create_issue" },
+    });
+    const customer = await createCustomer(db, {
+      organizationId,
+      email: `${crypto.randomUUID()}@example.com`,
+    });
+    const ticket = await createTicket(db, {
+      organizationId,
+      customerId: customer.id,
+      title: "ticket title",
+      sourceChannel: "api",
+      status: "todo",
+      externalSource: "api",
+    });
+    const issue = await maybeEscalate(env, db, organizationId, ticket, {
+      text: keyword,
+      channel: "api",
+    });
+    // The set_status triage rule matched and owned the record — no
+    // escalation issue was materialized and the ticket moved to snoozed.
+    expect(issue).toBeNull();
+    const refreshed = await db
+      .select()
+      .from(supportTicketsTable)
+      .where(eq(supportTicketsTable.id, ticket.id))
+      .get();
+    expect(refreshed?.status).toBe("snoozed");
+    expect(refreshed?.issueId).toBeNull();
+    const evals = await stub.listTriageEvaluations({ recordId: ticket.id });
+    expect(evals[0]?.outcome).toBe("matched");
   });
 });

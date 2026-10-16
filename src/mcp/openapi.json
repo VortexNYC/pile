@@ -55060,6 +55060,1673 @@
         "summary": "Delete support tier member"
       }
     },
+    "/workspaces/{organizationId}/triage/rules": {
+      "get": {
+        "tags": [
+          "triage"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "lead",
+                "intake_item",
+                "customer",
+                "deal",
+                "issue",
+                "support_ticket"
+              ]
+            },
+            "required": false,
+            "name": "recordType",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Triage rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "rules": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "recordType": {
+                            "type": "string",
+                            "enum": [
+                              "lead",
+                              "intake_item",
+                              "customer",
+                              "deal",
+                              "issue",
+                              "support_ticket"
+                            ]
+                          },
+                          "isActive": {
+                            "type": "boolean"
+                          },
+                          "sortOrder": {
+                            "type": "number"
+                          },
+                          "conditions": {
+                            "type": "object",
+                            "properties": {
+                              "keywords": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "sources": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "channels": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "customerDomains": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "teamIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "labelIds": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "priorities": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "statuses": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "fields": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "field": {
+                                      "type": "string",
+                                      "minLength": 1
+                                    },
+                                    "equals": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "number"
+                                        },
+                                        {
+                                          "type": "boolean"
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "field"
+                                  ]
+                                }
+                              }
+                            }
+                          },
+                          "action": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "delegate"
+                                    ]
+                                  },
+                                  "agentId": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "teamId": {
+                                    "type": "string"
+                                  },
+                                  "templateId": {
+                                    "type": "string"
+                                  },
+                                  "title": {
+                                    "type": "string"
+                                  },
+                                  "status": {
+                                    "type": "string",
+                                    "enum": [
+                                      "triage",
+                                      "backlog",
+                                      "todo",
+                                      "in_progress",
+                                      "done",
+                                      "canceled"
+                                    ]
+                                  },
+                                  "priority": {
+                                    "type": "string",
+                                    "enum": [
+                                      "low",
+                                      "medium",
+                                      "high",
+                                      "urgent"
+                                    ]
+                                  },
+                                  "labelIds": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string",
+                                      "minLength": 1
+                                    }
+                                  },
+                                  "repo": {
+                                    "type": "string"
+                                  },
+                                  "instructions": {
+                                    "type": "string"
+                                  },
+                                  "dispatch": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "agentId"
+                                ]
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "enum": [
+                                      "set_status"
+                                    ]
+                                  },
+                                  "status": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "status"
+                                ]
+                              }
+                            ]
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "name",
+                          "recordType",
+                          "isActive",
+                          "sortOrder",
+                          "conditions",
+                          "action",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "rules"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List triage rules"
+      },
+      "post": {
+        "tags": [
+          "triage"
+        ],
+        "description": "Ordered auto-delegate rules evaluated on inbound records (lead, intake_item, customer, deal, issue, support_ticket). Rules run in sortOrder then createdAt order; the first match wins and the evaluation is logged to /triage/evaluations.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "recordType": {
+                    "type": "string",
+                    "enum": [
+                      "lead",
+                      "intake_item",
+                      "customer",
+                      "deal",
+                      "issue",
+                      "support_ticket"
+                    ]
+                  },
+                  "isActive": {
+                    "type": "boolean"
+                  },
+                  "sortOrder": {
+                    "type": "integer"
+                  },
+                  "conditions": {
+                    "type": "object",
+                    "properties": {
+                      "keywords": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "sources": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "channels": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "customerDomains": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "teamIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "labelIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "priorities": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "statuses": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "fields": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "field": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "equals": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "boolean"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "field"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "action": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "delegate"
+                            ]
+                          },
+                          "agentId": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "teamId": {
+                            "type": "string"
+                          },
+                          "templateId": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "triage",
+                              "backlog",
+                              "todo",
+                              "in_progress",
+                              "done",
+                              "canceled"
+                            ]
+                          },
+                          "priority": {
+                            "type": "string",
+                            "enum": [
+                              "low",
+                              "medium",
+                              "high",
+                              "urgent"
+                            ]
+                          },
+                          "labelIds": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "repo": {
+                            "type": "string"
+                          },
+                          "instructions": {
+                            "type": "string"
+                          },
+                          "dispatch": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "agentId"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "set_status"
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "status"
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "recordType",
+                  "conditions",
+                  "action"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Rule created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "rule": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "recordType": {
+                          "type": "string",
+                          "enum": [
+                            "lead",
+                            "intake_item",
+                            "customer",
+                            "deal",
+                            "issue",
+                            "support_ticket"
+                          ]
+                        },
+                        "isActive": {
+                          "type": "boolean"
+                        },
+                        "sortOrder": {
+                          "type": "number"
+                        },
+                        "conditions": {
+                          "type": "object",
+                          "properties": {
+                            "keywords": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "sources": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "channels": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "customerDomains": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "teamIds": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "labelIds": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "priorities": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "statuses": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "fields": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "field": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "equals": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "number"
+                                      },
+                                      {
+                                        "type": "boolean"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "field"
+                                ]
+                              }
+                            }
+                          }
+                        },
+                        "action": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "delegate"
+                                  ]
+                                },
+                                "agentId": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "teamId": {
+                                  "type": "string"
+                                },
+                                "templateId": {
+                                  "type": "string"
+                                },
+                                "title": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "enum": [
+                                    "triage",
+                                    "backlog",
+                                    "todo",
+                                    "in_progress",
+                                    "done",
+                                    "canceled"
+                                  ]
+                                },
+                                "priority": {
+                                  "type": "string",
+                                  "enum": [
+                                    "low",
+                                    "medium",
+                                    "high",
+                                    "urgent"
+                                  ]
+                                },
+                                "labelIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                },
+                                "repo": {
+                                  "type": "string"
+                                },
+                                "instructions": {
+                                  "type": "string"
+                                },
+                                "dispatch": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "agentId"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "set_status"
+                                  ]
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "status"
+                              ]
+                            }
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "name",
+                        "recordType",
+                        "isActive",
+                        "sortOrder",
+                        "conditions",
+                        "action",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "rule"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create triage rule"
+      }
+    },
+    "/workspaces/{organizationId}/triage/rules/{ruleId}": {
+      "get": {
+        "tags": [
+          "triage"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "ruleId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Rule",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "rule": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "recordType": {
+                          "type": "string",
+                          "enum": [
+                            "lead",
+                            "intake_item",
+                            "customer",
+                            "deal",
+                            "issue",
+                            "support_ticket"
+                          ]
+                        },
+                        "isActive": {
+                          "type": "boolean"
+                        },
+                        "sortOrder": {
+                          "type": "number"
+                        },
+                        "conditions": {
+                          "type": "object",
+                          "properties": {
+                            "keywords": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "sources": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "channels": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "customerDomains": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "teamIds": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "labelIds": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "priorities": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "statuses": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "fields": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "field": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "equals": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "number"
+                                      },
+                                      {
+                                        "type": "boolean"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "field"
+                                ]
+                              }
+                            }
+                          }
+                        },
+                        "action": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "delegate"
+                                  ]
+                                },
+                                "agentId": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "teamId": {
+                                  "type": "string"
+                                },
+                                "templateId": {
+                                  "type": "string"
+                                },
+                                "title": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "enum": [
+                                    "triage",
+                                    "backlog",
+                                    "todo",
+                                    "in_progress",
+                                    "done",
+                                    "canceled"
+                                  ]
+                                },
+                                "priority": {
+                                  "type": "string",
+                                  "enum": [
+                                    "low",
+                                    "medium",
+                                    "high",
+                                    "urgent"
+                                  ]
+                                },
+                                "labelIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                },
+                                "repo": {
+                                  "type": "string"
+                                },
+                                "instructions": {
+                                  "type": "string"
+                                },
+                                "dispatch": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "agentId"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "set_status"
+                                  ]
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "status"
+                              ]
+                            }
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "name",
+                        "recordType",
+                        "isActive",
+                        "sortOrder",
+                        "conditions",
+                        "action",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "rule"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "summary": "Get triage rule"
+      },
+      "patch": {
+        "tags": [
+          "triage"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "ruleId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "recordType": {
+                    "type": "string",
+                    "enum": [
+                      "lead",
+                      "intake_item",
+                      "customer",
+                      "deal",
+                      "issue",
+                      "support_ticket"
+                    ]
+                  },
+                  "isActive": {
+                    "type": "boolean"
+                  },
+                  "sortOrder": {
+                    "type": "integer"
+                  },
+                  "conditions": {
+                    "type": "object",
+                    "properties": {
+                      "keywords": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "sources": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "channels": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "customerDomains": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "teamIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "labelIds": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "priorities": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "statuses": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "fields": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "field": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "equals": {
+                              "anyOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "number"
+                                },
+                                {
+                                  "type": "boolean"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "field"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "action": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "delegate"
+                            ]
+                          },
+                          "agentId": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "teamId": {
+                            "type": "string"
+                          },
+                          "templateId": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "triage",
+                              "backlog",
+                              "todo",
+                              "in_progress",
+                              "done",
+                              "canceled"
+                            ]
+                          },
+                          "priority": {
+                            "type": "string",
+                            "enum": [
+                              "low",
+                              "medium",
+                              "high",
+                              "urgent"
+                            ]
+                          },
+                          "labelIds": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "repo": {
+                            "type": "string"
+                          },
+                          "instructions": {
+                            "type": "string"
+                          },
+                          "dispatch": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "agentId"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "set_status"
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "status"
+                        ]
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Rule updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "rule": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "recordType": {
+                          "type": "string",
+                          "enum": [
+                            "lead",
+                            "intake_item",
+                            "customer",
+                            "deal",
+                            "issue",
+                            "support_ticket"
+                          ]
+                        },
+                        "isActive": {
+                          "type": "boolean"
+                        },
+                        "sortOrder": {
+                          "type": "number"
+                        },
+                        "conditions": {
+                          "type": "object",
+                          "properties": {
+                            "keywords": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "sources": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "channels": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "customerDomains": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "teamIds": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "labelIds": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "priorities": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "statuses": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "fields": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "field": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  },
+                                  "equals": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "number"
+                                      },
+                                      {
+                                        "type": "boolean"
+                                      }
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "field"
+                                ]
+                              }
+                            }
+                          }
+                        },
+                        "action": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "delegate"
+                                  ]
+                                },
+                                "agentId": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "teamId": {
+                                  "type": "string"
+                                },
+                                "templateId": {
+                                  "type": "string"
+                                },
+                                "title": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "enum": [
+                                    "triage",
+                                    "backlog",
+                                    "todo",
+                                    "in_progress",
+                                    "done",
+                                    "canceled"
+                                  ]
+                                },
+                                "priority": {
+                                  "type": "string",
+                                  "enum": [
+                                    "low",
+                                    "medium",
+                                    "high",
+                                    "urgent"
+                                  ]
+                                },
+                                "labelIds": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                },
+                                "repo": {
+                                  "type": "string"
+                                },
+                                "instructions": {
+                                  "type": "string"
+                                },
+                                "dispatch": {
+                                  "type": "boolean"
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "agentId"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "set_status"
+                                  ]
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "status"
+                              ]
+                            }
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "name",
+                        "recordType",
+                        "isActive",
+                        "sortOrder",
+                        "conditions",
+                        "action",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "rule"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "summary": "Update triage rule"
+      },
+      "delete": {
+        "tags": [
+          "triage"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "ruleId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "summary": "Delete triage rule"
+      }
+    },
+    "/workspaces/{organizationId}/triage/evaluations": {
+      "get": {
+        "tags": [
+          "triage"
+        ],
+        "description": "The rule evaluation log — one row per inbound record evaluated while at least one active rule existed for its record type: which rule matched (ruleId null on no_match), the outcome, and what the action applied.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "lead",
+                "intake_item",
+                "customer",
+                "deal",
+                "issue",
+                "support_ticket"
+              ]
+            },
+            "required": false,
+            "name": "recordType",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "recordId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "ruleId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Evaluation log",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "evaluations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "organizationId": {
+                            "type": "string"
+                          },
+                          "recordType": {
+                            "type": "string"
+                          },
+                          "recordId": {
+                            "type": "string"
+                          },
+                          "ruleId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "ruleName": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "outcome": {
+                            "type": "string",
+                            "enum": [
+                              "matched",
+                              "no_match",
+                              "error"
+                            ]
+                          },
+                          "detail": {
+                            "type": "object",
+                            "nullable": true,
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "organizationId",
+                          "recordType",
+                          "recordId",
+                          "ruleId",
+                          "ruleName",
+                          "outcome",
+                          "detail",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "evaluations"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List triage evaluations"
+      }
+    },
     "/workspaces/{organizationId}/csv-exports": {
       "post": {
         "tags": [

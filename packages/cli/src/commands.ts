@@ -10045,6 +10045,162 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "triage rules list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/triage/rules",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "recordType",
+        flag: "record-type",
+      },
+    ],
+    body: [],
+  },
+  "triage rules create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/triage/rules",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "recordType",
+        flag: "record-type",
+      },
+      {
+        name: "isActive",
+        flag: "is-active",
+      },
+      {
+        name: "sortOrder",
+        flag: "sort-order",
+      },
+      {
+        name: "conditions",
+        flag: "conditions",
+      },
+      {
+        name: "action",
+        flag: "action",
+      },
+    ],
+  },
+  "triage rules get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/triage/rules/{ruleId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ruleId",
+        flag: "rule-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "triage rules update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/triage/rules/{ruleId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ruleId",
+        flag: "rule-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "recordType",
+        flag: "record-type",
+      },
+      {
+        name: "isActive",
+        flag: "is-active",
+      },
+      {
+        name: "sortOrder",
+        flag: "sort-order",
+      },
+      {
+        name: "conditions",
+        flag: "conditions",
+      },
+      {
+        name: "action",
+        flag: "action",
+      },
+    ],
+  },
+  "triage rules delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/triage/rules/{ruleId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "ruleId",
+        flag: "rule-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "triage evaluations list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/triage/evaluations",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "recordType",
+        flag: "record-type",
+      },
+      {
+        name: "recordId",
+        flag: "record-id",
+      },
+      {
+        name: "ruleId",
+        flag: "rule-id",
+      },
+      {
+        name: "limit",
+        flag: "limit",
+      },
+    ],
+    body: [],
+  },
   "csv exports create": {
     method: "POST",
     path: "/workspaces/{organizationId}/csv-exports",
