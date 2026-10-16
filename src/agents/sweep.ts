@@ -28,6 +28,7 @@ import {
 import { getLaneDbProvider, type LaneDbRef } from "./lane-db.js";
 import { reapLaneGithubTokens } from "./lane-github-token.js";
 import { nudgeLane } from "./nudge.js";
+import { drainDomainEvents } from "./pipeline-events.js";
 import type {
   AgentProvider,
   AgentProviderSession,
@@ -51,7 +52,6 @@ import {
   requestPrReview,
 } from "./review.js";
 import { parseStoredSecondaryRepos } from "./secondary-repos.js";
-import { drainDomainEvents } from "./pipeline-events.js";
 import {
   type CapBreach,
   describeCapBreach,

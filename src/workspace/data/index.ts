@@ -3610,7 +3610,11 @@ export type AgentType = typeof workspaceAgentTypes.$inferSelect;
 export async function emitDomainEvent(
   db: WorkspaceDb,
   organizationId: string,
-  input: { type: DomainEventType; payload: Record<string, unknown>; dedupeKey?: string }
+  input: {
+    type: DomainEventType;
+    payload: Record<string, unknown>;
+    dedupeKey?: string;
+  }
 ): Promise<DomainEvent | undefined> {
   const id = crypto.randomUUID();
   const dedupeKey = input.dedupeKey ?? null;
@@ -3645,7 +3649,10 @@ export async function emitDomainEvent(
     .get();
 }
 
-export function listPendingDomainEvents(db: WorkspaceDb, organizationId: string) {
+export function listPendingDomainEvents(
+  db: WorkspaceDb,
+  organizationId: string
+) {
   return db
     .select()
     .from(workspaceDomainEvents)
@@ -3713,7 +3720,12 @@ export async function upsertStageConfig(
         ownerAgent: input.ownerAgent ?? existing.ownerAgent,
         instructions: input.instructions ?? existing.instructions,
         advancePolicy: input.advancePolicy ?? existing.advancePolicy,
-        enabled: input.enabled === undefined ? existing.enabled : input.enabled ? 1 : 0,
+        enabled:
+          input.enabled === undefined
+            ? existing.enabled
+            : input.enabled
+              ? 1
+              : 0,
         updatedAt: now,
       })
       .where(eq(workspaceStageConfigs.id, existing.id));
@@ -3790,7 +3802,9 @@ export async function deleteStageConfig(
     )
     .get();
   if (!existing) return false;
-  await db.delete(workspaceStageConfigs).where(eq(workspaceStageConfigs.id, id));
+  await db
+    .delete(workspaceStageConfigs)
+    .where(eq(workspaceStageConfigs.id, id));
   return true;
 }
 
@@ -3832,7 +3846,12 @@ export async function upsertAgentType(
         jobSpec: input.jobSpec ?? existing.jobSpec,
         toolScope: input.toolScope ?? existing.toolScope,
         permissionsTier: input.permissionsTier ?? existing.permissionsTier,
-        enabled: input.enabled === undefined ? existing.enabled : input.enabled ? 1 : 0,
+        enabled:
+          input.enabled === undefined
+            ? existing.enabled
+            : input.enabled
+              ? 1
+              : 0,
         updatedAt: now,
       })
       .where(eq(workspaceAgentTypes.id, existing.id));

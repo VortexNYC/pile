@@ -7937,11 +7937,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.upsertStageConfig(this.db, this.organizationId, input);
   }
 
-  getStageConfig(
-    entityType: "issue" | "deal" | "customer",
-    status: string
-  ) {
-    return data.getStageConfig(this.db, this.organizationId, entityType, status);
+  getStageConfig(entityType: "issue" | "deal" | "customer", status: string) {
+    return data.getStageConfig(
+      this.db,
+      this.organizationId,
+      entityType,
+      status
+    );
   }
 
   listStageConfigs() {

@@ -15,6 +15,7 @@ import {
   inheritTeamDefaultRepo,
 } from "../agents/index.js";
 import { resolveResultSchema } from "../agents/lane-result.js";
+import { drainDomainEvents } from "../agents/pipeline-events.js";
 import {
   notePlanSource,
   planLaneOptions,
@@ -72,7 +73,6 @@ import {
 } from "./agent-sessions.js";
 import { draftOutputSchema, serializeDraft } from "./draft-outputs.js";
 import { getExecutionCtx } from "./execution-ctx.js";
-import { drainDomainEvents } from "../agents/pipeline-events.js";
 import { assertIssueAccess, issueViewer } from "./issue-access.js";
 import {
   encodeCursor,

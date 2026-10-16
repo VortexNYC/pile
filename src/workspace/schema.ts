@@ -1304,7 +1304,9 @@ export const workspaceDomainEvents = sqliteTable(
       .notNull()
       .default("pending"),
     error: text("error" as string),
-    attempts: integer("attempts" as string).notNull().default(0),
+    attempts: integer("attempts" as string)
+      .notNull()
+      .default(0),
     createdAt: text("created_at" as string).notNull(),
     deliveredAt: text("delivered_at" as string),
   },
@@ -1346,7 +1348,9 @@ export const workspaceStageConfigs = sqliteTable(
     })
       .notNull()
       .default("none"),
-    enabled: integer("enabled" as string).notNull().default(1),
+    enabled: integer("enabled" as string)
+      .notNull()
+      .default(1),
     createdBy: text("created_by" as string),
     createdAt: text("created_at" as string).notNull(),
     updatedAt: text("updated_at" as string).notNull(),
@@ -1375,7 +1379,9 @@ export const workspaceAgentTypes = sqliteTable(
     jobSpec: text("job_spec" as string),
     toolScope: text("tool_scope" as string),
     permissionsTier: text("permissions_tier" as string),
-    enabled: integer("enabled" as string).notNull().default(1),
+    enabled: integer("enabled" as string)
+      .notNull()
+      .default(1),
     createdBy: text("created_by" as string),
     createdAt: text("created_at" as string).notNull(),
     updatedAt: text("updated_at" as string).notNull(),

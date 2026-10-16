@@ -77,6 +77,7 @@ import { registerNotionWebhookRoute } from "./notion-webhook.js";
 import { registerNotionRoutes } from "./notion.js";
 import { registerOAuthClientRoutes } from "./oauth-clients.js";
 import { registerObservabilityRoutes } from "./observability.js";
+import { registerPipelineRuntimeRoutes } from "./pipeline-runtime.js";
 import { registerPrRoutes } from "./pr.js";
 import { registerProjectMemberRoutes } from "./project-members.js";
 import { registerProjectDetailRoutes } from "./projects.js";
@@ -93,7 +94,6 @@ import {
   registerSlackRoutes,
 } from "./slack.js";
 import { registerStageTemplateRoutes } from "./stage-templates.js";
-import { registerPipelineRuntimeRoutes } from "./pipeline-runtime.js";
 import { registerStateRoutes } from "./states.js";
 import { registerSupportCaptureRoutes } from "./support-capture.js";
 import { registerSupportChannelRoutes } from "./support-channels.js";

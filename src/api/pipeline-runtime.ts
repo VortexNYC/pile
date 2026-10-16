@@ -110,7 +110,9 @@ const deleteStageConfigRoute = createRoute({
   responses: {
     200: {
       description: "Stage config deleted",
-      content: { "application/json": { schema: z.object({ ok: z.boolean() }) } },
+      content: {
+        "application/json": { schema: z.object({ ok: z.boolean() }) },
+      },
     },
     404: { description: "Stage config not found" },
   },
@@ -162,7 +164,9 @@ const deleteAgentTypeRoute = createRoute({
   responses: {
     200: {
       description: "Agent type deleted",
-      content: { "application/json": { schema: z.object({ ok: z.boolean() }) } },
+      content: {
+        "application/json": { schema: z.object({ ok: z.boolean() }) },
+      },
     },
     404: { description: "Agent type not found" },
   },
@@ -172,9 +176,7 @@ function notFound(what: string): never {
   throw new VortexError({ code: "NOT_FOUND", status: 404, message: what });
 }
 
-export function registerPipelineRuntimeRoutes(
-  app: OpenAPIHono<AppContext>
-) {
+export function registerPipelineRuntimeRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listStageConfigsRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);

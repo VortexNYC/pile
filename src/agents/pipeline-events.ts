@@ -1,6 +1,6 @@
-import type { WorkspaceDO } from "../workspace/durable-object.js";
-import type { Issue } from "../types/workspace.js";
 import type { WorkerEnv } from "../platform/middleware.js";
+import type { Issue } from "../types/workspace.js";
+import type { WorkspaceDO } from "../workspace/durable-object.js";
 import { dispatchAgent } from "./index.js";
 
 /** PILE-401/405/413 — drains the DO's domain-event outbox into agent
@@ -113,7 +113,11 @@ async function handleStageEntered(
   if (!config?.ownerAgent) return;
   const owner = await resolveOwner(stub, config.ownerAgent);
   if (!owner) return;
-  const issue = await pipelineIssueFor(stub, payload.entityType, payload.entityId);
+  const issue = await pipelineIssueFor(
+    stub,
+    payload.entityType,
+    payload.entityId
+  );
   if (!issue) return;
   const record =
     payload.entityType === "customer"
@@ -167,10 +171,13 @@ async function handleSubstepActionable(
   }
   const parent = await stub.getIssue(payload.parentId);
   const instructions = [
-    owner.jobSpec ?? `Complete pipeline sub-step "${issue.stepKey ?? issue.title}".`,
+    owner.jobSpec ??
+      `Complete pipeline sub-step "${issue.stepKey ?? issue.title}".`,
     "",
     `Sub-step: ${issue.title} (${issue.stepKey ?? "unkeyed"})`,
-    parent ? `Parent deal issue: ${parent.identifier ?? parent.id} — ${parent.title}` : "",
+    parent
+      ? `Parent deal issue: ${parent.identifier ?? parent.id} — ${parent.title}`
+      : "",
   ]
     .filter((part) => part !== "")
     .join("\n");
@@ -204,11 +211,16 @@ async function linkedRecord(
       const customer = await stub.getCustomer(otherId);
       if (!customer?.statusId) continue;
       const status = await stub.getCustomerStatus(customer.statusId);
-      return { entityType: "customer", id: otherId, stageKey: status?.name ?? customer.statusId };
+      return {
+        entityType: "customer",
+        id: otherId,
+        stageKey: status?.name ?? customer.statusId,
+      };
     }
     if (otherType === "deal") {
       const deal = await stub.getDeal(otherId);
-      if (deal) return { entityType: "deal", id: otherId, stageKey: deal.stage };
+      if (deal)
+        return { entityType: "deal", id: otherId, stageKey: deal.stage };
     }
   }
   const parent = await stub.getIssue(parentId);
@@ -219,7 +231,11 @@ async function linkedRecord(
 
 async function nextStage(
   stub: Stub,
-  record: { entityType: "customer" | "deal" | "issue"; id: string; stageKey: string }
+  record: {
+    entityType: "customer" | "deal" | "issue";
+    id: string;
+    stageKey: string;
+  }
 ): Promise<{ patch: Record<string, unknown>; label: string | null }> {
   if (record.entityType === "customer") {
     const statuses = (await stub.listCustomerStatuses())

@@ -2,12 +2,12 @@ import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { MockAgentProvider } from "../agents/harness.js";
+import { registerAgentProvider } from "../agents/index.js";
 import { createD1 } from "../global/db.js";
 import { user as userTable } from "../global/schema.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
-import { registerAgentProvider } from "../agents/index.js";
-import { MockAgentProvider } from "../agents/harness.js";
 import { createAuth } from "../platform/auth.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
 
