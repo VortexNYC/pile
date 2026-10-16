@@ -1,7 +1,10 @@
 import type { InferSelectModel } from "drizzle-orm";
 
 import type { FilterCondition } from "../workspace/filter.js";
-import { workspaceAgentSessions } from "../workspace/schema.js";
+import {
+  workspaceAgentSessions,
+  workspaceStageTemplates,
+} from "../workspace/schema.js";
 import type { Id, Timestamp } from "./index.js";
 
 export const AGENT_SESSION_STATUSES = [
@@ -99,6 +102,12 @@ export interface IssueInput {
   assigneeId?: string | null;
   /** Agent executing the issue on the assignee's behalf (PILE-417). */
   delegateId?: string | null;
+  /** PILE-411 — stage-template sub-step fields. stepKey marks the issue as
+   *  a materialized sub-step (idempotency key with the parent); required is
+   *  the stage gate's blocking flag; ownerAgent is the named owning agent. */
+  stepKey?: string | null;
+  required?: boolean;
+  ownerAgent?: string | null;
   projectId?: string | null;
   cycleId?: string | null;
   labelIds?: string | null;
@@ -188,6 +197,14 @@ export interface Issue {
   claimedLeaseExpiresAt: string | null;
   /** Fencing token bumped on every claim-state write (PILE-430). */
   claimEpoch: number;
+  /** PILE-411 — the stage sub-step this issue was materialized for; null on
+   *  ordinary issues. */
+  stepKey: string | null;
+  /** Whether this sub-step is required for the parent's stage to complete. */
+  required: boolean;
+  /** Named pipeline agent owning the sub-step (e.g. "scout"); free-form —
+   *  resolved to a registered agent/provider at dispatch time (PILE-413). */
+  ownerAgent: string | null;
   projectId: Id | null;
   cycleId: Id | null;
   labelIds: string | null;
@@ -200,6 +217,35 @@ export interface Issue {
   prCheckState: string | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+}
+
+// PILE-411 — stage templates. A template row is one sub-step definition for
+// a (entityType, status) stage: when a record of that type enters the status
+// the workspace materializes one sub-issue per applicable definition.
+export type StageTemplate = InferSelectModel<typeof workspaceStageTemplates>;
+export type StageEntityType = StageTemplate["entityType"];
+
+/** Optional JSON rule gating a sub-step definition: {field, equals?}.
+ *  Evaluated against the transitioning record's fields plus its custom field
+ *  values — `field` names normalize identically on both sides ("hardware
+ *  needed", "hardware_needed", and a custom field of either spelling all
+ *  resolve to the same key). Without `equals` the step is created only when
+ *  the field resolves truthy; with `equals` the stored value must match. */
+export interface StepCondition {
+  field: string;
+  equals?: string | number | boolean;
+}
+
+export interface StageTemplateInput {
+  entityType?: StageEntityType;
+  status: string;
+  stepKey: string;
+  title: string;
+  required?: boolean;
+  ownerAgent?: string | null;
+  condition?: StepCondition | null;
+  position?: number;
+  teamId?: string | null;
 }
 
 export interface Comment {

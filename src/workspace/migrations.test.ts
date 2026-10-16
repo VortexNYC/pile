@@ -127,3 +127,36 @@ describe("v78 session plan", () => {
     );
   });
 });
+
+describe("v79 stage templates", () => {
+  it("creates stage_templates keyed by (org, entity, status, step)", () => {
+    const sql = workspaceMigrations.migrations.m0078;
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS stage_templates");
+    for (const col of [
+      "organization_id",
+      "entity_type",
+      "status",
+      "step_key",
+      "title",
+      "required",
+      "owner_agent",
+      "condition",
+      "position",
+      "team_id",
+    ]) {
+      expect(sql).toContain(col);
+    }
+    expect(sql).toContain(
+      "CREATE UNIQUE INDEX IF NOT EXISTS stage_templates_status_step_idx ON stage_templates (organization_id, entity_type, status, step_key)"
+    );
+  });
+
+  it("marks sub-issues as materialized sub-steps", () => {
+    const sql = workspaceMigrations.migrations.m0078;
+    expect(sql).toContain("ALTER TABLE issues ADD COLUMN step_key TEXT");
+    expect(sql).toContain(
+      "ALTER TABLE issues ADD COLUMN required INTEGER NOT NULL DEFAULT 0"
+    );
+    expect(sql).toContain("ALTER TABLE issues ADD COLUMN owner_agent TEXT");
+  });
+});

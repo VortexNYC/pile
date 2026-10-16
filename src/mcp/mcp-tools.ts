@@ -1367,6 +1367,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdStagetemplatesId",
+    "description": "Delete stage template (DELETE /workspaces/{organizationId}/stage-templates/{id}) Path params (top-level, required): organizationId, id.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/stage-templates/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdStatesId",
     "description": "Delete state (DELETE /workspaces/{organizationId}/states/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
@@ -5110,6 +5131,55 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdStagetemplates",
+    "description": "List stage templates (GET /workspaces/{organizationId}/stage-templates) Path params (top-level, required): organizationId. Query params (top-level, optional): entityType, status.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/stage-templates",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "entityType": {
+          "type": "string",
+          "enum": [
+            "issue",
+            "deal",
+            "customer"
+          ]
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdStagetemplatesId",
+    "description": "Get stage template (GET /workspaces/{organizationId}/stage-templates/{id}) Path params (top-level, required): organizationId, id.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/stage-templates/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdStates",
     "description": "List states (GET /workspaces/{organizationId}/states) Path params (top-level, required): organizationId.",
     "method": "GET",
@@ -7554,7 +7624,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdIssuesId",
-    "description": "Update issue (PATCH /workspaces/{organizationId}/issues/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: title, externalRef, teamId, teamKey, description, status, priority, resolution, parentId, subIssueSortOrder, estimate, isDraft, templateId, snoozedUntil, assigneeId, delegateId, projectId, cycleId, labelIds, repo, branch, prUrl, prState.",
+    "description": "Update issue (PATCH /workspaces/{organizationId}/issues/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: title, externalRef, teamId, teamKey, description, status, priority, resolution, parentId, subIssueSortOrder, estimate, isDraft, templateId, snoozedUntil, assigneeId, delegateId, stepKey, required, ownerAgent, projectId, cycleId, labelIds, repo, branch, prUrl, prState.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/issues/{id}",
     "inputSchema": {
@@ -7650,6 +7720,17 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "nullable": true
             },
             "delegateId": {
+              "type": "string",
+              "nullable": true
+            },
+            "stepKey": {
+              "type": "string",
+              "nullable": true
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "ownerAgent": {
               "type": "string",
               "nullable": true
             },
@@ -8273,6 +8354,94 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               }
             }
           }
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "patchWorkspacesOrganizationIdStagetemplatesId",
+    "description": "Update stage template (PATCH /workspaces/{organizationId}/stage-templates/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: entityType, status, stepKey, title, required, ownerAgent, condition, position, teamId.",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/stage-templates/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "entityType": {
+              "type": "string",
+              "enum": [
+                "issue",
+                "deal",
+                "customer"
+              ]
+            },
+            "status": {
+              "type": "string",
+              "minLength": 1
+            },
+            "stepKey": {
+              "type": "string",
+              "minLength": 1
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "ownerAgent": {
+              "type": "string",
+              "nullable": true
+            },
+            "condition": {
+              "type": "object",
+              "nullable": true,
+              "properties": {
+                "field": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "equals": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "field"
+              ],
+              "description": "Optional gate — `{field}` creates the step only when the record's field (column or custom field) is truthy; `{field, equals}` compares for equality. Field names normalize: \"Hardware needed\" == \"hardware_needed\"."
+            },
+            "position": {
+              "type": "integer"
+            },
+            "teamId": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          "additionalProperties": false
         }
       },
       "required": [
@@ -13246,7 +13415,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssues",
-    "description": "Create issue — The 201 response includes possibleDuplicates: open issues (in teams you can see) whose titles closely match, best first. Non-blocking — if one is the same work, comment on or update it instead of keeping the new issue. Pass dedupe=block to get 409 with the matches in details.possibleDuplicates instead of creating. (POST /workspaces/{organizationId}/issues) Path params (top-level, required): organizationId. Query params (top-level, optional): dedupe. Request body goes in the \"body\" object; fields: title*, externalRef, teamId, teamKey, description, status, priority, resolution, parentId, subIssueSortOrder, estimate, isDraft, templateId, snoozedUntil, assigneeId, delegateId, projectId, cycleId, labelIds, repo, branch (* = required).",
+    "description": "Create issue — The 201 response includes possibleDuplicates: open issues (in teams you can see) whose titles closely match, best first. Non-blocking — if one is the same work, comment on or update it instead of keeping the new issue. Pass dedupe=block to get 409 with the matches in details.possibleDuplicates instead of creating. (POST /workspaces/{organizationId}/issues) Path params (top-level, required): organizationId. Query params (top-level, optional): dedupe. Request body goes in the \"body\" object; fields: title*, externalRef, teamId, teamKey, description, status, priority, resolution, parentId, subIssueSortOrder, estimate, isDraft, templateId, snoozedUntil, assigneeId, delegateId, stepKey, required, ownerAgent, projectId, cycleId, labelIds, repo, branch (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues",
     "inputSchema": {
@@ -13347,6 +13516,17 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "nullable": true
             },
             "delegateId": {
+              "type": "string",
+              "nullable": true
+            },
+            "stepKey": {
+              "type": "string",
+              "nullable": true
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "ownerAgent": {
               "type": "string",
               "nullable": true
             },
@@ -13491,6 +13671,17 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                   "nullable": true
                 },
                 "delegateId": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "stepKey": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "required": {
+                  "type": "boolean"
+                },
+                "ownerAgent": {
                   "type": "string",
                   "nullable": true
                 },
@@ -15049,6 +15240,112 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "Create slack install (POST /workspaces/{organizationId}/slack/install) Path params (top-level, required): organizationId.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/slack/install",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdStagetemplates",
+    "description": "Create stage template — Create a sub-step definition for a (entityType, status) stage. status and stepKey normalize to slug keys. entityType picks the transition that fires it: issue.status, deal.stage, or the customer's status name. (POST /workspaces/{organizationId}/stage-templates) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: entityType, status*, stepKey*, title*, required, ownerAgent, condition, position, teamId (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/stage-templates",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "entityType": {
+              "type": "string",
+              "enum": [
+                "issue",
+                "deal",
+                "customer"
+              ]
+            },
+            "status": {
+              "type": "string",
+              "minLength": 1
+            },
+            "stepKey": {
+              "type": "string",
+              "minLength": 1
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "ownerAgent": {
+              "type": "string",
+              "nullable": true
+            },
+            "condition": {
+              "type": "object",
+              "nullable": true,
+              "properties": {
+                "field": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "equals": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "field"
+              ],
+              "description": "Optional gate — `{field}` creates the step only when the record's field (column or custom field) is truthy; `{field, equals}` compares for equality. Field names normalize: \"Hardware needed\" == \"hardware_needed\"."
+            },
+            "position": {
+              "type": "integer"
+            },
+            "teamId": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          "required": [
+            "status",
+            "stepKey",
+            "title"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdStagetemplatesSeed",
+    "description": "Create stage template seed — Install the default sales-led merchant pipeline stages (Prospect → Onboarding & go-live) as stage templates. Idempotent — existing (entityType, status, stepKey) rows are skipped so operator edits survive a re-seed; deleted rows are re-created. (POST /workspaces/{organizationId}/stage-templates/seed) Path params (top-level, required): organizationId.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/stage-templates/seed",
     "inputSchema": {
       "type": "object",
       "properties": {

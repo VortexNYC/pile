@@ -484,6 +484,18 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "delegate-id",
       },
       {
+        name: "stepKey",
+        flag: "step-key",
+      },
+      {
+        name: "required",
+        flag: "required",
+      },
+      {
+        name: "ownerAgent",
+        flag: "owner-agent",
+      },
+      {
         name: "projectId",
         flag: "project",
       },
@@ -799,6 +811,18 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "delegateId",
         flag: "delegate-id",
+      },
+      {
+        name: "stepKey",
+        flag: "step-key",
+      },
+      {
+        name: "required",
+        flag: "required",
+      },
+      {
+        name: "ownerAgent",
+        flag: "owner-agent",
       },
       {
         name: "projectId",
@@ -2974,6 +2998,173 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "id",
         flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "stage templates list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/stage-templates",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "entityType",
+        flag: "entity-type",
+      },
+      {
+        name: "status",
+        flag: "status",
+      },
+    ],
+    body: [],
+  },
+  "stage templates create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/stage-templates",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "entityType",
+        flag: "entity-type",
+      },
+      {
+        name: "status",
+        flag: "status",
+      },
+      {
+        name: "stepKey",
+        flag: "step-key",
+      },
+      {
+        name: "title",
+        flag: "title",
+      },
+      {
+        name: "required",
+        flag: "required",
+      },
+      {
+        name: "ownerAgent",
+        flag: "owner-agent",
+      },
+      {
+        name: "condition",
+        flag: "condition",
+      },
+      {
+        name: "position",
+        flag: "position",
+      },
+      {
+        name: "teamId",
+        flag: "team",
+      },
+    ],
+  },
+  "stage templates get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/stage-templates/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "stage templates update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/stage-templates/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "entityType",
+        flag: "entity-type",
+      },
+      {
+        name: "status",
+        flag: "status",
+      },
+      {
+        name: "stepKey",
+        flag: "step-key",
+      },
+      {
+        name: "title",
+        flag: "title",
+      },
+      {
+        name: "required",
+        flag: "required",
+      },
+      {
+        name: "ownerAgent",
+        flag: "owner-agent",
+      },
+      {
+        name: "condition",
+        flag: "condition",
+      },
+      {
+        name: "position",
+        flag: "position",
+      },
+      {
+        name: "teamId",
+        flag: "team",
+      },
+    ],
+  },
+  "stage templates delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/stage-templates/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "stage templates seed create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/stage-templates/seed",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
       },
     ],
     query: [],

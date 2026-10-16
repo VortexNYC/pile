@@ -48,6 +48,7 @@ import {
   workspaceFieldValues,
   workspaceGuidancePacks,
   workspaceGuidancePackVersions,
+  workspaceStageTemplates,
   workspaceCustomerStatuses,
   workspaceCustomerTiers,
   workspaceIssueApprovals,
@@ -1832,6 +1833,571 @@ export async function resolveGuidancePacks(
       a.createdAt.localeCompare(b.createdAt) ||
       a.id.localeCompare(b.id)
   );
+}
+
+// ---- stage_templates (PILE-411 — sub-steps auto-created on entering a
+// status; Salesforce Flow Orchestration model) ----
+
+export type StageEntityType = "issue" | "deal" | "customer";
+export type StageTemplate = typeof workspaceStageTemplates.$inferSelect;
+
+/** Optional JSON rule gating a sub-step definition. `{field}` alone means
+ *  "create only when the record's field resolves truthy"; `{field, equals}`
+ *  compares the stored value for equality. */
+export interface StepCondition {
+  field: string;
+  equals?: string | number | boolean;
+}
+
+export interface StageTemplateInput {
+  organizationId: string;
+  entityType?: StageEntityType;
+  status: string;
+  stepKey: string;
+  title: string;
+  required?: boolean;
+  ownerAgent?: string | null;
+  condition?: StepCondition | null;
+  position?: number;
+  teamId?: string | null;
+  createdBy?: string | null;
+}
+
+export interface StageTemplatePatch {
+  entityType?: StageEntityType;
+  status?: string;
+  stepKey?: string;
+  title?: string;
+  required?: boolean;
+  ownerAgent?: string | null;
+  condition?: StepCondition | null;
+  position?: number;
+  teamId?: string | null;
+}
+
+/** Stage/status and step keys are slug-normalized at write AND match time,
+ *  so "Prospect", "prospect", and "Onboarding & go-live" all resolve to one
+ *  canonical key ("prospect", "onboarding_go_live"). */
+export function stageKey(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+/** Condition field names normalize more aggressively than stage keys — all
+ *  separators collapse away so a `hardware_needed` rule matches a custom
+ *  field named "Hardware needed" or "hardwareNeeded" alike. */
+function conditionFieldKey(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function isTruthy(value: unknown): boolean {
+  if (value === null || value === undefined || value === false) return false;
+  if (value === 0) return false;
+  if (typeof value === "string") {
+    const lowered = value.trim().toLowerCase();
+    return (
+      lowered !== "" &&
+      lowered !== "false" &&
+      lowered !== "0" &&
+      lowered !== "no"
+    );
+  }
+  return true;
+}
+
+/** The context a condition rule reads: the record's own columns plus its
+ *  custom field values, keyed by normalized field name. */
+export function buildStepContext(
+  db: WorkspaceDb,
+  organizationId: string,
+  entityType: string,
+  entityId: string,
+  record: object
+): Record<string, unknown> {
+  const context: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(record)) {
+    if (value !== null && value !== undefined) {
+      context[conditionFieldKey(key)] = value;
+    }
+  }
+  const definitions = db
+    .select()
+    .from(workspaceFieldDefinitions)
+    .where(
+      and(
+        eq(workspaceFieldDefinitions.organizationId, organizationId),
+        eq(workspaceFieldDefinitions.entityType, entityType)
+      )
+    )
+    .all();
+  const nameById = new Map(definitions.map((d) => [d.id, d.name]));
+  const values = db
+    .select()
+    .from(workspaceFieldValues)
+    .where(
+      and(
+        eq(workspaceFieldValues.organizationId, organizationId),
+        eq(workspaceFieldValues.entityId, entityId)
+      )
+    )
+    .all();
+  // Custom fields land last — a named field beats a same-keyed column.
+  for (const value of values) {
+    const name = nameById.get(value.fieldId);
+    if (name && value.value !== null) {
+      context[conditionFieldKey(name)] = value.value;
+    }
+  }
+  return context;
+}
+
+/** Fails closed: an unparseable or field-less rule skips the step rather
+ *  than creating work nobody verified the precondition for. */
+export function evaluateStepCondition(
+  raw: string | null,
+  context: Record<string, unknown>
+): boolean {
+  if (raw === null || raw === "") return true;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return false;
+  }
+  if (typeof parsed !== "object" || parsed === null) return false;
+  const condition = parsed as { field?: unknown; equals?: unknown };
+  if (typeof condition.field !== "string" || condition.field === "") {
+    return false;
+  }
+  const value = context[conditionFieldKey(condition.field)];
+  if (condition.equals !== undefined) {
+    if (value === undefined || value === null) return false;
+    return String(value) === String(condition.equals);
+  }
+  return isTruthy(value);
+}
+
+function serializeCondition(condition: StepCondition | null | undefined) {
+  return condition ? JSON.stringify(condition) : null;
+}
+
+export function createStageTemplate(
+  db: WorkspaceDb,
+  input: StageTemplateInput
+) {
+  const now = new Date().toISOString();
+  return db
+    .insert(workspaceStageTemplates)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId: input.organizationId,
+      entityType: input.entityType ?? "issue",
+      status: stageKey(input.status),
+      stepKey: stageKey(input.stepKey),
+      title: input.title,
+      required: input.required ?? true,
+      ownerAgent: input.ownerAgent ?? null,
+      condition: serializeCondition(input.condition),
+      position: input.position ?? 0,
+      teamId: input.teamId ?? null,
+      createdBy: input.createdBy ?? null,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning()
+    .get();
+}
+
+export function getStageTemplate(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return db
+    .select()
+    .from(workspaceStageTemplates)
+    .where(
+      and(
+        eq(workspaceStageTemplates.organizationId, organizationId),
+        eq(workspaceStageTemplates.id, id)
+      )
+    )
+    .get();
+}
+
+export function listStageTemplates(
+  db: WorkspaceDb,
+  organizationId: string,
+  filter: { entityType?: StageEntityType; status?: string } = {}
+) {
+  const conditions = [
+    eq(workspaceStageTemplates.organizationId, organizationId),
+  ];
+  if (filter.entityType !== undefined) {
+    conditions.push(eq(workspaceStageTemplates.entityType, filter.entityType));
+  }
+  if (filter.status !== undefined) {
+    conditions.push(
+      eq(workspaceStageTemplates.status, stageKey(filter.status))
+    );
+  }
+  return db
+    .select()
+    .from(workspaceStageTemplates)
+    .where(and(...conditions))
+    .orderBy(
+      workspaceStageTemplates.position,
+      workspaceStageTemplates.createdAt
+    )
+    .all();
+}
+
+/** The step definitions a record entering `status` materializes — the
+ *  trigger path (status transition) resolves through this one lookup. */
+export function listStageTemplatesForStatus(
+  db: WorkspaceDb,
+  organizationId: string,
+  entityType: StageEntityType,
+  status: string
+) {
+  return listStageTemplates(db, organizationId, {
+    entityType,
+    status: stageKey(status),
+  });
+}
+
+export function updateStageTemplate(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string,
+  patch: StageTemplatePatch
+) {
+  const set: Partial<typeof workspaceStageTemplates.$inferInsert> = {
+    updatedAt: new Date().toISOString(),
+  };
+  if (patch.entityType !== undefined) set.entityType = patch.entityType;
+  if (patch.status !== undefined) set.status = stageKey(patch.status);
+  if (patch.stepKey !== undefined) set.stepKey = stageKey(patch.stepKey);
+  if (patch.title !== undefined) set.title = patch.title;
+  if (patch.required !== undefined) set.required = patch.required;
+  if (patch.ownerAgent !== undefined) set.ownerAgent = patch.ownerAgent;
+  if (patch.condition !== undefined)
+    set.condition = serializeCondition(patch.condition);
+  if (patch.position !== undefined) set.position = patch.position;
+  if (patch.teamId !== undefined) set.teamId = patch.teamId;
+  return db
+    .update(workspaceStageTemplates)
+    .set(set)
+    .where(
+      and(
+        eq(workspaceStageTemplates.id, id),
+        eq(workspaceStageTemplates.organizationId, organizationId)
+      )
+    )
+    .returning()
+    .get();
+}
+
+export function deleteStageTemplate(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return (
+    db
+      .delete(workspaceStageTemplates)
+      .where(
+        and(
+          eq(workspaceStageTemplates.id, id),
+          eq(workspaceStageTemplates.organizationId, organizationId)
+        )
+      )
+      .returning({ id: workspaceStageTemplates.id })
+      .all().length > 0
+  );
+}
+
+/** Ids of issues linked to a non-issue record (both link directions — a
+ *  "deal" is a parent issue linked to the customer). These parents are
+ *  where deal/customer stage templates materialize their sub-steps. */
+export function listLinkedIssueIds(
+  db: WorkspaceDb,
+  organizationId: string,
+  entityType: string,
+  entityId: string
+): string[] {
+  return db
+    .select()
+    .from(workspaceEntityLinks)
+    .where(
+      and(
+        eq(workspaceEntityLinks.organizationId, organizationId),
+        or(
+          and(
+            eq(workspaceEntityLinks.fromType, entityType),
+            eq(workspaceEntityLinks.fromId, entityId),
+            eq(workspaceEntityLinks.toType, "issue")
+          ),
+          and(
+            eq(workspaceEntityLinks.toType, entityType),
+            eq(workspaceEntityLinks.toId, entityId),
+            eq(workspaceEntityLinks.fromType, "issue")
+          )
+        )
+      )
+    )
+    .all()
+    .map((row) => (row.fromType === "issue" ? row.fromId : row.toId));
+}
+
+/** The sales-led merchant pipeline's seven stages (design doc
+ *  ffa468a8-82e7-454d-bf66-30ed0988a9be). R = required for stage completion;
+ *  owner_agent is the named pipeline role — dispatch resolves it to a
+ *  registered agent (PILE-413). "Hardware shipped" gates on the record's
+ *  `hardware_needed` field. The stages hang on the customer record: the
+ *  merchant's stage is its customer status, and the deal is the parent
+ *  issue linked to that customer. */
+export const DEFAULT_STAGE_TEMPLATES: ReadonlyArray<{
+  entityType: StageEntityType;
+  status: string;
+  stepKey: string;
+  title: string;
+  required: boolean;
+  ownerAgent: string | null;
+  condition?: StepCondition;
+}> = [
+  // 1. Prospect
+  {
+    entityType: "customer",
+    status: "prospect",
+    stepKey: "sourced",
+    title: "Sourced",
+    required: true,
+    ownerAgent: "scout",
+  },
+  {
+    entityType: "customer",
+    status: "prospect",
+    stepKey: "profiled",
+    title: "Profiled",
+    required: true,
+    ownerAgent: "profiler",
+  },
+  {
+    entityType: "customer",
+    status: "prospect",
+    stepKey: "contact_found",
+    title: "Contact found",
+    required: true,
+    ownerAgent: "detective",
+  },
+  {
+    entityType: "customer",
+    status: "prospect",
+    stepKey: "field_visit",
+    title: "Field visit",
+    required: false,
+    ownerAgent: "field_dispatcher",
+  },
+  {
+    entityType: "customer",
+    status: "prospect",
+    stepKey: "ready_for_outreach",
+    title: "Ready for outreach",
+    required: true,
+    ownerAgent: "ranker",
+  },
+  // 2. Outreach
+  {
+    entityType: "customer",
+    status: "outreach",
+    stepKey: "contacted",
+    title: "Contacted",
+    required: true,
+    ownerAgent: "courier",
+  },
+  {
+    entityType: "customer",
+    status: "outreach",
+    stepKey: "replied",
+    title: "Replied",
+    required: true,
+    ownerAgent: "chaser",
+  },
+  {
+    entityType: "customer",
+    status: "outreach",
+    stepKey: "meeting_booked",
+    title: "Meeting booked",
+    required: true,
+    ownerAgent: "booker",
+  },
+  // 3. Discovery
+  {
+    entityType: "customer",
+    status: "discovery",
+    stepKey: "brief_ready",
+    title: "Brief ready",
+    required: true,
+    ownerAgent: "briefer",
+  },
+  {
+    entityType: "customer",
+    status: "discovery",
+    stepKey: "statement_requested",
+    title: "Statement requested",
+    required: true,
+    ownerAgent: "recorder",
+  },
+  {
+    entityType: "customer",
+    status: "discovery",
+    stepKey: "statement_analyzed",
+    title: "Statement analyzed",
+    required: true,
+    ownerAgent: "analyst",
+  },
+  // 4. Proposal
+  {
+    entityType: "customer",
+    status: "proposal",
+    stepKey: "proposal_drafted",
+    title: "Proposal drafted",
+    required: true,
+    ownerAgent: "quoter",
+  },
+  {
+    entityType: "customer",
+    status: "proposal",
+    stepKey: "proposal_sent",
+    title: "Proposal sent",
+    required: true,
+    ownerAgent: "closer",
+  },
+  {
+    entityType: "customer",
+    status: "proposal",
+    stepKey: "accepted",
+    title: "Accepted",
+    required: true,
+    ownerAgent: "closer",
+  },
+  // 5. Application & underwriting
+  {
+    entityType: "customer",
+    status: "application_underwriting",
+    stepKey: "application_complete",
+    title: "Application complete",
+    required: true,
+    ownerAgent: "clerk",
+  },
+  {
+    entityType: "customer",
+    status: "application_underwriting",
+    stepKey: "submitted_to_finix",
+    title: "Submitted to Finix",
+    required: true,
+    ownerAgent: "underwriter",
+  },
+  {
+    entityType: "customer",
+    status: "application_underwriting",
+    stepKey: "approved",
+    title: "Approved",
+    required: true,
+    ownerAgent: "underwriter",
+  },
+  // 6. Contracting
+  {
+    entityType: "customer",
+    status: "contracting",
+    stepKey: "agreement_signed",
+    title: "Agreement signed",
+    required: true,
+    ownerAgent: "signer",
+  },
+  // 7. Onboarding & go-live
+  {
+    entityType: "customer",
+    status: "onboarding_go_live",
+    stepKey: "plan_ready",
+    title: "Plan ready",
+    required: true,
+    ownerAgent: "tailor",
+  },
+  {
+    entityType: "customer",
+    status: "onboarding_go_live",
+    stepKey: "hardware_shipped",
+    title: "Hardware shipped",
+    required: false,
+    ownerAgent: "outfitter",
+    condition: { field: "hardware_needed" },
+  },
+  {
+    entityType: "customer",
+    status: "onboarding_go_live",
+    stepKey: "live_ready",
+    title: "Live-ready",
+    required: true,
+    ownerAgent: "integrator",
+  },
+  {
+    entityType: "customer",
+    status: "onboarding_go_live",
+    stepKey: "first_dollar_processed",
+    title: "First dollar processed",
+    required: true,
+    ownerAgent: "activator",
+  },
+];
+
+/** Installs the default pipeline templates. Idempotent — existing
+ *  (entity_type, status, step_key) rows are skipped so re-seeding after an
+ *  edit never stomps operator changes; a deleted row is re-created. */
+export function seedStageTemplates(
+  db: WorkspaceDb,
+  organizationId: string,
+  actorId?: string | null
+) {
+  const created: StageTemplate[] = [];
+  let skipped = 0;
+  for (const def of DEFAULT_STAGE_TEMPLATES) {
+    const existing = db
+      .select({ id: workspaceStageTemplates.id })
+      .from(workspaceStageTemplates)
+      .where(
+        and(
+          eq(workspaceStageTemplates.organizationId, organizationId),
+          eq(workspaceStageTemplates.entityType, def.entityType),
+          eq(workspaceStageTemplates.status, stageKey(def.status)),
+          eq(workspaceStageTemplates.stepKey, stageKey(def.stepKey))
+        )
+      )
+      .get();
+    if (existing) {
+      skipped += 1;
+      continue;
+    }
+    created.push(
+      createStageTemplate(db, {
+        organizationId,
+        entityType: def.entityType,
+        status: def.status,
+        stepKey: def.stepKey,
+        title: def.title,
+        required: def.required,
+        ownerAgent: def.ownerAgent,
+        condition: def.condition ?? null,
+        position: created.length + skipped,
+        createdBy: actorId ?? null,
+      })
+    );
+  }
+  return { created, skipped };
 }
 
 /** Re-point still-waiting dependents of a dead session onto its retry —

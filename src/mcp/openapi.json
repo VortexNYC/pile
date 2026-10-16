@@ -90,6 +90,17 @@
             "type": "string",
             "nullable": true
           },
+          "stepKey": {
+            "type": "string",
+            "nullable": true
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "ownerAgent": {
+            "type": "string",
+            "nullable": true
+          },
           "claimedBy": {
             "type": "string",
             "nullable": true
@@ -165,6 +176,9 @@
           "snoozedUntil",
           "assigneeId",
           "delegateId",
+          "stepKey",
+          "required",
+          "ownerAgent",
           "claimedBy",
           "claimedLeaseExpiresAt",
           "claimEpoch",
@@ -275,6 +289,101 @@
           "message",
           "hint",
           "details"
+        ]
+      },
+      "StageTemplate": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "organizationId": {
+            "type": "string"
+          },
+          "entityType": {
+            "type": "string",
+            "enum": [
+              "issue",
+              "deal",
+              "customer"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "stepKey": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "ownerAgent": {
+            "type": "string",
+            "nullable": true
+          },
+          "condition": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "field": {
+                "type": "string",
+                "minLength": 1
+              },
+              "equals": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "field"
+            ],
+            "description": "Optional gate — `{field}` creates the step only when the record's field (column or custom field) is truthy; `{field, equals}` compares for equality. Field names normalize: \"Hardware needed\" == \"hardware_needed\"."
+          },
+          "position": {
+            "type": "integer"
+          },
+          "teamId": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdBy": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "organizationId",
+          "entityType",
+          "status",
+          "stepKey",
+          "title",
+          "required",
+          "ownerAgent",
+          "condition",
+          "position",
+          "teamId",
+          "createdBy",
+          "createdAt",
+          "updatedAt"
         ]
       }
     },
@@ -1982,6 +2091,17 @@
                     "type": "string",
                     "nullable": true
                   },
+                  "stepKey": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "required": {
+                    "type": "boolean"
+                  },
+                  "ownerAgent": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "projectId": {
                     "type": "string",
                     "nullable": true
@@ -2720,6 +2840,17 @@
                     "nullable": true
                   },
                   "delegateId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "stepKey": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "required": {
+                    "type": "boolean"
+                  },
+                  "ownerAgent": {
                     "type": "string",
                     "nullable": true
                   },
@@ -3534,6 +3665,17 @@
                         "nullable": true
                       },
                       "delegateId": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "stepKey": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "required": {
+                        "type": "boolean"
+                      },
+                      "ownerAgent": {
                         "type": "string",
                         "nullable": true
                       },
@@ -16577,6 +16719,445 @@
           }
         },
         "summary": "Delete initiative"
+      }
+    },
+    "/workspaces/{organizationId}/stage-templates": {
+      "get": {
+        "tags": [
+          "stage-templates"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "issue",
+                "deal",
+                "customer"
+              ]
+            },
+            "required": false,
+            "name": "entityType",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stage template list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "templates": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/StageTemplate"
+                      }
+                    }
+                  },
+                  "required": [
+                    "templates"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List stage templates"
+      },
+      "post": {
+        "tags": [
+          "stage-templates"
+        ],
+        "description": "Create a sub-step definition for a (entityType, status) stage. status and stepKey normalize to slug keys. entityType picks the transition that fires it: issue.status, deal.stage, or the customer's status name.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "entityType": {
+                    "type": "string",
+                    "enum": [
+                      "issue",
+                      "deal",
+                      "customer"
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "stepKey": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "required": {
+                    "type": "boolean"
+                  },
+                  "ownerAgent": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "condition": {
+                    "type": "object",
+                    "nullable": true,
+                    "properties": {
+                      "field": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "equals": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "boolean"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "field"
+                    ],
+                    "description": "Optional gate — `{field}` creates the step only when the record's field (column or custom field) is truthy; `{field, equals}` compares for equality. Field names normalize: \"Hardware needed\" == \"hardware_needed\"."
+                  },
+                  "position": {
+                    "type": "integer"
+                  },
+                  "teamId": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "status",
+                  "stepKey",
+                  "title"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Stage template created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "template": {
+                      "$ref": "#/components/schemas/StageTemplate"
+                    }
+                  },
+                  "required": [
+                    "template"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create stage template"
+      }
+    },
+    "/workspaces/{organizationId}/stage-templates/{id}": {
+      "get": {
+        "tags": [
+          "stage-templates"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stage template",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "template": {
+                      "$ref": "#/components/schemas/StageTemplate"
+                    }
+                  },
+                  "required": [
+                    "template"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Stage template not found"
+          }
+        },
+        "summary": "Get stage template"
+      },
+      "patch": {
+        "tags": [
+          "stage-templates"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "entityType": {
+                    "type": "string",
+                    "enum": [
+                      "issue",
+                      "deal",
+                      "customer"
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "stepKey": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "required": {
+                    "type": "boolean"
+                  },
+                  "ownerAgent": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "condition": {
+                    "type": "object",
+                    "nullable": true,
+                    "properties": {
+                      "field": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "equals": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "boolean"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "field"
+                    ],
+                    "description": "Optional gate — `{field}` creates the step only when the record's field (column or custom field) is truthy; `{field, equals}` compares for equality. Field names normalize: \"Hardware needed\" == \"hardware_needed\"."
+                  },
+                  "position": {
+                    "type": "integer"
+                  },
+                  "teamId": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Stage template updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "template": {
+                      "$ref": "#/components/schemas/StageTemplate"
+                    }
+                  },
+                  "required": [
+                    "template"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Stage template not found"
+          }
+        },
+        "summary": "Update stage template"
+      },
+      "delete": {
+        "tags": [
+          "stage-templates"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stage template deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Stage template not found"
+          }
+        },
+        "summary": "Delete stage template"
+      }
+    },
+    "/workspaces/{organizationId}/stage-templates/seed": {
+      "post": {
+        "tags": [
+          "stage-templates"
+        ],
+        "description": "Install the default sales-led merchant pipeline stages (Prospect → Onboarding & go-live) as stage templates. Idempotent — existing (entityType, status, stepKey) rows are skipped so operator edits survive a re-seed; deleted rows are re-created.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Seeded stage templates",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "templates": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/StageTemplate"
+                      }
+                    },
+                    "skipped": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "templates",
+                    "skipped"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create stage template seed"
       }
     },
     "/workspaces/{organizationId}/external-links": {

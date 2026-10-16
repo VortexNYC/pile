@@ -260,6 +260,11 @@ const createIssueSchema = z.object({
   snoozedUntil: z.string().nullable().optional(),
   assigneeId: z.string().nullable().optional(),
   delegateId: z.string().nullable().optional(),
+  // PILE-411 — stage sub-step fields. Normally written by the stage-template
+  // materializer; settable so a step created by hand joins the same model.
+  stepKey: z.string().nullable().optional(),
+  required: z.boolean().optional(),
+  ownerAgent: z.string().nullable().optional(),
   projectId: z.string().nullable().optional(),
   cycleId: z.string().nullable().optional(),
   labelIds: z
@@ -352,6 +357,9 @@ const issueApiSchema = z
     snoozedUntil: z.string().nullable(),
     assigneeId: z.string().nullable(),
     delegateId: z.string().nullable(),
+    stepKey: z.string().nullable(),
+    required: z.boolean(),
+    ownerAgent: z.string().nullable(),
     claimedBy: z.string().nullable(),
     claimedLeaseExpiresAt: z.string().nullable(),
     claimEpoch: z.number(),

@@ -9,6 +9,7 @@ import {
   workspaceGuidancePacks,
   workspaceIssues,
   workspaceNotificationPreferences,
+  workspaceStageTemplates,
 } from "./schema.js";
 
 describe("workspaceAgentSessions schema", () => {
@@ -199,5 +200,67 @@ describe("workspaceGuidancePacks schema (PILE-423)", () => {
     for (const name of names) {
       expect(columns.find((c) => c.name === name)?.notNull).toBe(false);
     }
+  });
+});
+
+describe("workspaceStageTemplates schema (PILE-411)", () => {
+  it("keys templates by (org, entity_type, status, step_key)", () => {
+    const config = getTableConfig(workspaceStageTemplates);
+    expect(config.name).toBe("stage_templates");
+    const names = config.columns.map((c) => c.name);
+    for (const col of [
+      "id",
+      "organization_id",
+      "entity_type",
+      "status",
+      "step_key",
+      "title",
+      "required",
+      "owner_agent",
+      "condition",
+      "position",
+      "team_id",
+      "created_by",
+      "created_at",
+      "updated_at",
+    ]) {
+      expect(names).toContain(col);
+    }
+    // required defaults true — a step is required unless marked optional.
+    const required = config.columns.find((c) => c.name === "required");
+    expect(required?.notNull).toBe(true);
+    expect(required?.hasDefault).toBe(true);
+    // owner_agent/condition/team_id stay nullable.
+    for (const col of ["owner_agent", "condition", "team_id"]) {
+      expect(config.columns.find((c) => c.name === col)?.notNull).toBe(false);
+    }
+  });
+
+  it("uniqueness on (org, entity, status, step) blocks duplicate defs", () => {
+    const config = getTableConfig(workspaceStageTemplates);
+    const unique = config.indexes.find(
+      (i) => i.config.name === "stage_templates_status_step_idx"
+    );
+    expect(unique?.config.unique).toBe(true);
+    const columns = unique?.config.columns.map((c) =>
+      "name" in c ? c.name : String(c)
+    );
+    expect(columns).toEqual([
+      "organization_id",
+      "entity_type",
+      "status",
+      "step_key",
+    ]);
+  });
+
+  it("marks issues materialized from templates via step_key columns", () => {
+    const config = getTableConfig(workspaceIssues);
+    const byName = (name: string) =>
+      config.columns.find((c) => c.name === name);
+    expect(byName("step_key")?.notNull).toBe(false);
+    expect(byName("owner_agent")?.notNull).toBe(false);
+    const required = byName("required");
+    expect(required?.notNull).toBe(true);
+    expect(required?.hasDefault).toBe(true);
   });
 });

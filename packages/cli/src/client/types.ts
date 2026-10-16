@@ -873,6 +873,9 @@ export interface paths {
                         snoozedUntil?: string | null;
                         assigneeId?: string | null;
                         delegateId?: string | null;
+                        stepKey?: string | null;
+                        required?: boolean;
+                        ownerAgent?: string | null;
                         projectId?: string | null;
                         cycleId?: string | null;
                         labelIds?: string[] | null;
@@ -1270,6 +1273,9 @@ export interface paths {
                         snoozedUntil?: string | null;
                         assigneeId?: string | null;
                         delegateId?: string | null;
+                        stepKey?: string | null;
+                        required?: boolean;
+                        ownerAgent?: string | null;
                         projectId?: string | null;
                         cycleId?: string | null;
                         labelIds?: string[] | null;
@@ -1766,6 +1772,9 @@ export interface paths {
                             snoozedUntil?: string | null;
                             assigneeId?: string | null;
                             delegateId?: string | null;
+                            stepKey?: string | null;
+                            required?: boolean;
+                            ownerAgent?: string | null;
                             projectId?: string | null;
                             cycleId?: string | null;
                             labelIds?: string[] | null;
@@ -7369,6 +7378,270 @@ export interface paths {
                 };
             };
         };
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/stage-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List stage templates */
+        get: {
+            parameters: {
+                query?: {
+                    entityType?: "issue" | "deal" | "customer";
+                    status?: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Stage template list */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            templates: components["schemas"]["StageTemplate"][];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Create stage template
+         * @description Create a sub-step definition for a (entityType, status) stage. status and stepKey normalize to slug keys. entityType picks the transition that fires it: issue.status, deal.stage, or the customer's status name.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        entityType?: "issue" | "deal" | "customer";
+                        status: string;
+                        stepKey: string;
+                        title: string;
+                        required?: boolean;
+                        ownerAgent?: string | null;
+                        /** @description Optional gate — `{field}` creates the step only when the record's field (column or custom field) is truthy; `{field, equals}` compares for equality. Field names normalize: "Hardware needed" == "hardware_needed". */
+                        condition?: {
+                            field: string;
+                            equals?: string | number | boolean;
+                        } | null;
+                        position?: number;
+                        teamId?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Stage template created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            template: components["schemas"]["StageTemplate"];
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/stage-templates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get stage template */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Stage template */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            template: components["schemas"]["StageTemplate"];
+                        };
+                    };
+                };
+                /** @description Stage template not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /** Delete stage template */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Stage template deleted */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                        };
+                    };
+                };
+                /** @description Stage template not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** Update stage template */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        entityType?: "issue" | "deal" | "customer";
+                        status?: string;
+                        stepKey?: string;
+                        title?: string;
+                        required?: boolean;
+                        ownerAgent?: string | null;
+                        /** @description Optional gate — `{field}` creates the step only when the record's field (column or custom field) is truthy; `{field, equals}` compares for equality. Field names normalize: "Hardware needed" == "hardware_needed". */
+                        condition?: {
+                            field: string;
+                            equals?: string | number | boolean;
+                        } | null;
+                        position?: number;
+                        teamId?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Stage template updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            template: components["schemas"]["StageTemplate"];
+                        };
+                    };
+                };
+                /** @description Stage template not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/stage-templates/seed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create stage template seed
+         * @description Install the default sales-led merchant pipeline stages (Prospect → Onboarding & go-live) as stage templates. Idempotent — existing (entityType, status, stepKey) rows are skipped so operator edits survive a re-seed; deleted rows are re-created.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Seeded stage templates */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            templates: components["schemas"]["StageTemplate"][];
+                            skipped: number;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/workspaces/{organizationId}/external-links": {
@@ -29832,6 +30105,9 @@ export interface components {
             snoozedUntil: string | null;
             assigneeId: string | null;
             delegateId: string | null;
+            stepKey: string | null;
+            required: boolean;
+            ownerAgent: string | null;
             claimedBy: string | null;
             claimedLeaseExpiresAt: string | null;
             claimEpoch: number;
@@ -29868,6 +30144,27 @@ export interface components {
             details: {
                 possibleDuplicates: components["schemas"]["PossibleDuplicate"][];
             };
+        };
+        StageTemplate: {
+            id: string;
+            organizationId: string;
+            /** @enum {string} */
+            entityType: "issue" | "deal" | "customer";
+            status: string;
+            stepKey: string;
+            title: string;
+            required: boolean;
+            ownerAgent: string | null;
+            /** @description Optional gate — `{field}` creates the step only when the record's field (column or custom field) is truthy; `{field, equals}` compares for equality. Field names normalize: "Hardware needed" == "hardware_needed". */
+            condition: {
+                field: string;
+                equals?: string | number | boolean;
+            } | null;
+            position: number;
+            teamId: string | null;
+            createdBy: string | null;
+            createdAt: string;
+            updatedAt: string;
         };
     };
     responses: never;

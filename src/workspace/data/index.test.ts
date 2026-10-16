@@ -12,7 +12,21 @@ import {
   type AgentSessionInput,
   createAgentSession,
   createGuidancePack,
+  buildStepContext,
   createDeal,
+  createFieldDefinition,
+  createStageTemplate,
+  deleteStageTemplate,
+  evaluateStepCondition,
+  getStageTemplate,
+  linkEntities,
+  listLinkedIssueIds,
+  listStageTemplates,
+  listStageTemplatesForStatus,
+  seedStageTemplates,
+  setFieldValue,
+  stageKey,
+  updateStageTemplate,
   createDocument,
   createDocumentSpace,
   documentAccessLevel,
@@ -1042,6 +1056,224 @@ describe("guidance packs (PILE-423)", () => {
         guidance: refs,
       });
       expect(updated?.guidance).toBe(refs);
+    });
+  });
+});
+
+// ---- PILE-411 — stage templates ----
+
+describe("stageKey", () => {
+  it("slug-normalizes stage and step names to one key", () => {
+    expect(stageKey("Prospect")).toBe("prospect");
+    expect(stageKey(" Application & underwriting ")).toBe(
+      "application_underwriting"
+    );
+    expect(stageKey("Onboarding & go-live")).toBe("onboarding_go_live");
+    expect(stageKey("in_progress")).toBe("in_progress");
+  });
+});
+
+describe("evaluateStepCondition", () => {
+  const context = {
+    hardwareneeded: "yes",
+    plan: "pro",
+    empty: "",
+    zero: 0,
+  };
+
+  it("passes unconditionally when there is no rule", () => {
+    expect(evaluateStepCondition(null, context)).toBe(true);
+    expect(evaluateStepCondition("", context)).toBe(true);
+  });
+
+  it("truthy-checks the field, normalizing the field name", () => {
+    expect(
+      evaluateStepCondition(
+        JSON.stringify({ field: "Hardware needed" }),
+        context
+      )
+    ).toBe(true);
+    expect(
+      evaluateStepCondition(JSON.stringify({ field: "missing" }), context)
+    ).toBe(false);
+    expect(
+      evaluateStepCondition(JSON.stringify({ field: "empty" }), context)
+    ).toBe(false);
+    expect(
+      evaluateStepCondition(JSON.stringify({ field: "zero" }), context)
+    ).toBe(false);
+  });
+
+  it("compares `equals` against the stored value", () => {
+    expect(
+      evaluateStepCondition(
+        JSON.stringify({ field: "plan", equals: "pro" }),
+        context
+      )
+    ).toBe(true);
+    expect(
+      evaluateStepCondition(
+        JSON.stringify({ field: "plan", equals: "enterprise" }),
+        context
+      )
+    ).toBe(false);
+    expect(
+      evaluateStepCondition(
+        JSON.stringify({ field: "missing", equals: true }),
+        context
+      )
+    ).toBe(false);
+  });
+
+  it("fails closed on malformed rules", () => {
+    expect(evaluateStepCondition("not json", context)).toBe(false);
+    expect(evaluateStepCondition(JSON.stringify("nope"), context)).toBe(false);
+    expect(evaluateStepCondition(JSON.stringify({}), context)).toBe(false);
+  });
+});
+
+describe("stage template data layer", () => {
+  it("CRUDs with normalized status/step keys", async () => {
+    await withDb((db) => {
+      const template = createStageTemplate(db, {
+        organizationId: WORKSPACE_ID,
+        entityType: "issue",
+        status: "In Progress",
+        stepKey: "Design Review",
+        title: "Design review",
+        required: true,
+        ownerAgent: "reviewer",
+        condition: { field: "has_design" },
+        position: 2,
+      });
+      expect(template.status).toBe("in_progress");
+      expect(template.stepKey).toBe("design_review");
+      expect(template.condition).toBe(JSON.stringify({ field: "has_design" }));
+
+      expect(getStageTemplate(db, WORKSPACE_ID, template.id)?.title).toBe(
+        "Design review"
+      );
+      expect(
+        listStageTemplatesForStatus(
+          db,
+          WORKSPACE_ID,
+          "issue",
+          "in progress"
+        ).map((t) => t.id)
+      ).toEqual([template.id]);
+
+      const patched = updateStageTemplate(db, WORKSPACE_ID, template.id, {
+        title: "Design review v2",
+        required: false,
+        ownerAgent: null,
+      });
+      expect(patched?.title).toBe("Design review v2");
+      expect(patched?.required).toBe(false);
+      expect(patched?.ownerAgent).toBeNull();
+
+      expect(deleteStageTemplate(db, WORKSPACE_ID, template.id)).toBe(true);
+      expect(getStageTemplate(db, WORKSPACE_ID, template.id)).toBeUndefined();
+      expect(deleteStageTemplate(db, WORKSPACE_ID, template.id)).toBe(false);
+    });
+  });
+
+  it("enforces unique (org, entity, status, step) pairs", async () => {
+    await withDb((db) => {
+      createStageTemplate(db, {
+        organizationId: WORKSPACE_ID,
+        entityType: "issue",
+        status: "backlog",
+        stepKey: "triage",
+        title: "Triage",
+      });
+      expect(() =>
+        createStageTemplate(db, {
+          organizationId: WORKSPACE_ID,
+          entityType: "issue",
+          status: "Backlog",
+          stepKey: "Triage",
+          title: "Duplicate",
+        })
+      ).toThrow();
+    });
+  });
+
+  it("seeds the seven pipeline stages idempotently", async () => {
+    await withDb((db) => {
+      const first = seedStageTemplates(db, WORKSPACE_ID);
+      expect(first.created.length).toBe(22);
+      expect(first.skipped).toBe(0);
+      const statuses = new Set(first.created.map((t) => t.status));
+      expect(statuses.size).toBe(7);
+      expect(statuses.has("prospect")).toBe(true);
+      expect(statuses.has("onboarding_go_live")).toBe(true);
+      // Every seed hangs on the customer record — the merchant's stage is
+      // its customer status.
+      expect(first.created.every((t) => t.entityType === "customer")).toBe(
+        true
+      );
+      // Hardware shipped is optional and gated on hardware_needed.
+      const hardware = first.created.find(
+        (t) => t.stepKey === "hardware_shipped"
+      );
+      expect(hardware?.required).toBe(false);
+      expect(hardware?.condition).toBe(
+        JSON.stringify({ field: "hardware_needed" })
+      );
+
+      // Operator edits survive a re-seed; deleted rows come back.
+      const seeded = seedStageTemplates(db, WORKSPACE_ID);
+      expect(seeded.created.length).toBe(0);
+      expect(seeded.skipped).toBe(22);
+      deleteStageTemplate(db, WORKSPACE_ID, first.created[0]!.id);
+      const again = seedStageTemplates(db, WORKSPACE_ID);
+      expect(again.created.length).toBe(1);
+      expect(again.skipped).toBe(21);
+    });
+  });
+
+  it("buildStepContext folds custom field values in by normalized name", async () => {
+    await withDb((db) => {
+      const entityId = crypto.randomUUID();
+      const field = createFieldDefinition(db, {
+        organizationId: WORKSPACE_ID,
+        entityType: "customer",
+        name: "Hardware needed",
+        type: "boolean",
+      });
+      setFieldValue(db, WORKSPACE_ID, field.id, entityId, "true");
+      const context = buildStepContext(db, WORKSPACE_ID, "customer", entityId, {
+        name: "Acme",
+        statusId: "s1",
+      });
+      expect(context["name"]).toBe("Acme");
+      expect(context["hardwareneeded"]).toBe("true");
+      expect(
+        evaluateStepCondition(
+          JSON.stringify({ field: "hardware_needed" }),
+          context
+        )
+      ).toBe(true);
+    });
+  });
+
+  it("listLinkedIssueIds finds issues on either side of the link", async () => {
+    await withDb((db) => {
+      const customerId = crypto.randomUUID();
+      const issueId = crypto.randomUUID();
+      linkEntities(db, {
+        organizationId: WORKSPACE_ID,
+        fromType: "customer",
+        fromId: customerId,
+        toType: "issue",
+        toId: issueId,
+      });
+      expect(
+        listLinkedIssueIds(db, WORKSPACE_ID, "customer", customerId)
+      ).toEqual([issueId]);
+      expect(
+        listLinkedIssueIds(db, WORKSPACE_ID, "customer", crypto.randomUUID())
+      ).toEqual([]);
     });
   });
 });

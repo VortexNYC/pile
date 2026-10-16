@@ -53,6 +53,17 @@ export const workspaceIssues = sqliteTable(
     claimEpoch: integer("claim_epoch" as string)
       .notNull()
       .default(0),
+    // PILE-411 — stage-template sub-steps: an issue materialized from a
+    // stage_templates row carries its step_key (the (parent, step_key) pair
+    // is the re-entry idempotency key), whether the step is required for the
+    // stage to complete, and the owning agent's name. ownerAgent stays off
+    // delegateId — owner names are pipeline roles (Scout, Profiler), not
+    // necessarily registered agent providers.
+    stepKey: text("step_key" as string),
+    required: integer("required" as string, { mode: "boolean" })
+      .notNull()
+      .default(false),
+    ownerAgent: text("owner_agent" as string),
     projectId: text("project_id" as string),
     cycleId: text("cycle_id" as string),
     labelIds: text("label_ids" as string),
@@ -1057,6 +1068,56 @@ export const workspaceGuidancePackVersions = sqliteTable(
     uniqueIndex("guidance_pack_versions_pack_idx" as string).on(
       table.packId,
       table.version
+    ),
+  ]
+);
+
+// PILE-411 — stage templates (Salesforce Flow Orchestration style): one row
+// per sub-step definition for a (entityType, status) stage. Entering the
+// status materializes one sub-issue per applicable definition.
+// `status`/`stepKey` are normalized slug keys (stageKey() in the data
+// layer). `entityType` is the transitioning record: "issue" matches
+// issue.status, "deal" matches deal.stage, "customer" matches the customer
+// status name. `condition` is an optional JSON rule ({field, equals?})
+// evaluated against the record's fields + custom field values. `teamId`
+// restricts firing to issues of one team (null = all).
+export const workspaceStageTemplates = sqliteTable(
+  "stage_templates" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    entityType: text("entity_type" as string, {
+      enum: ["issue", "deal", "customer"],
+    })
+      .notNull()
+      .default("issue"),
+    status: text("status" as string).notNull(),
+    stepKey: text("step_key" as string).notNull(),
+    title: text("title" as string).notNull(),
+    required: integer("required" as string, { mode: "boolean" })
+      .notNull()
+      .default(true),
+    ownerAgent: text("owner_agent" as string),
+    condition: text("condition" as string),
+    position: integer("position" as string)
+      .notNull()
+      .default(0),
+    teamId: text("team_id" as string),
+    createdBy: text("created_by" as string),
+    createdAt: text("created_at" as string).notNull(),
+    updatedAt: text("updated_at" as string).notNull(),
+  },
+  (table) => [
+    uniqueIndex("stage_templates_status_step_idx" as string).on(
+      table.organizationId,
+      table.entityType,
+      table.status,
+      table.stepKey
+    ),
+    index("stage_templates_lookup_idx" as string).on(
+      table.organizationId,
+      table.entityType,
+      table.status
     ),
   ]
 );

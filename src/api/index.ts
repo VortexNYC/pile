@@ -90,6 +90,7 @@ import {
   handleSlackOAuth,
   registerSlackRoutes,
 } from "./slack.js";
+import { registerStageTemplateRoutes } from "./stage-templates.js";
 import { registerStateRoutes } from "./states.js";
 import { registerSupportCaptureRoutes } from "./support-capture.js";
 import { registerSupportChannelRoutes } from "./support-channels.js";
@@ -227,6 +228,7 @@ registerApprovalRoutes(app);
 registerActivityRoutes(app);
 registerActivityFeedRoutes(app);
 registerWorkspaceEntityRoutes(app);
+registerStageTemplateRoutes(app);
 registerExternalLinkRoutes(app);
 registerProjectDetailRoutes(app);
 registerPrRoutes(app);
