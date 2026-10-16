@@ -32,7 +32,13 @@ function b64decode(s: string): Uint8Array<ArrayBuffer> {
   return Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 }
 
-function keyMaterial(env: WorkerEnv): string {
+// Structural minimum — DO/AppEnv and WorkerEnv both carry these fields.
+type SecretEnv = {
+  AGENT_SETTINGS_KEK?: string;
+  BETTER_AUTH_SECRET?: string;
+};
+
+function keyMaterial(env: SecretEnv): string {
   const secret = env.AGENT_SETTINGS_KEK ?? env.BETTER_AUTH_SECRET;
   if (!secret) {
     throw new Error("AGENT_SETTINGS_KEK or BETTER_AUTH_SECRET must be set");
@@ -42,7 +48,7 @@ function keyMaterial(env: WorkerEnv): string {
 
 let cachedKey: Promise<CryptoKey> | null = null;
 
-function getKey(env: WorkerEnv): Promise<CryptoKey> {
+function getKey(env: SecretEnv): Promise<CryptoKey> {
   // Key derivation is deterministic per deployment secret; cache the imported
   // key for the life of the isolate.
   cachedKey ??= crypto.subtle
@@ -61,7 +67,7 @@ export function isEncrypted(value: string | null | undefined): boolean {
 }
 
 export async function encryptSecret(
-  env: WorkerEnv,
+  env: SecretEnv,
   plaintext: string
 ): Promise<string> {
   const key = await getKey(env);
@@ -75,7 +81,7 @@ export async function encryptSecret(
 }
 
 export async function decryptSecret(
-  env: WorkerEnv,
+  env: SecretEnv,
   value: string | null | undefined
 ): Promise<string | null> {
   if (value === null || value === undefined) return null;

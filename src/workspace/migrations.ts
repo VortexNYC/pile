@@ -1344,6 +1344,26 @@ const v90 = `ALTER TABLE agent_sessions ADD COLUMN conversation_key TEXT
 CREATE INDEX IF NOT EXISTS agent_sessions_conversation_key_idx ON agent_sessions (organization_id, conversation_key)`;
 
 // PILE-404 — draft-approval provenance + edit-diff snapshot.
+// Runtime profile fields on agent_types — prompt, model tier, tool
+// allowlist. A profile is data, not a deployed code module.
+const v92 = `ALTER TABLE agent_types ADD COLUMN prompt TEXT
+--> statement-breakpoint
+ALTER TABLE agent_types ADD COLUMN model TEXT
+--> statement-breakpoint
+ALTER TABLE agent_types ADD COLUMN tools TEXT`;
+
+// External agents authenticate their webhook — the receiver verifies
+// the bearer before acting on a dispatch.
+const v95 = `ALTER TABLE agent_types ADD COLUMN endpoint_secret TEXT`;
+
+// External agents — endpoint_url is the webhook the kind="external"
+// dispatch POSTs to (Grokbot's routine, a customer's automation, etc).
+const v94 = `ALTER TABLE agent_types ADD COLUMN endpoint_url TEXT`;
+
+// Human-owned steps — an agent_type row with kind="human" owns a stage
+// step without dispatching a lane (e.g. Ronny's "Field visit").
+const v93 = `ALTER TABLE agent_types ADD COLUMN kind TEXT NOT NULL DEFAULT 'agent'`;
+
 // PILE-438 — immutable status key + active/terminal marker.
 const v91 = `ALTER TABLE customer_statuses ADD COLUMN key TEXT
 --> statement-breakpoint
@@ -1621,6 +1641,10 @@ export const workspaceMigrations = {
       { idx: 88, when: 88, tag: "v89", breakpoints: true },
       { idx: 89, when: 89, tag: "v91", breakpoints: true },
       { idx: 90, when: 90, tag: "v90", breakpoints: true },
+      { idx: 91, when: 91, tag: "v92", breakpoints: true },
+      { idx: 92, when: 92, tag: "v93", breakpoints: true },
+      { idx: 93, when: 93, tag: "v94", breakpoints: true },
+      { idx: 94, when: 94, tag: "v95", breakpoints: true },
     ],
   },
   migrations: {
@@ -1715,5 +1739,9 @@ export const workspaceMigrations = {
     m0088: v89,
     m0089: v91,
     m0090: v90,
+    m0091: v92,
+    m0092: v93,
+    m0093: v94,
+    m0094: v95,
   },
 } satisfies Parameters<typeof migrate>[1];

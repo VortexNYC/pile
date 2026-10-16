@@ -1404,7 +1404,19 @@ export const workspaceAgentTypes = sqliteTable(
     slug: text("slug" as string).notNull(),
     name: text("name" as string).notNull(),
     providerAgentId: text("provider_agent_id" as string).notNull(),
+    // "agent" runs a provider lane; "human" is a person-owned step —
+    // resolves the owner slug for lint but is never dispatched.
+    kind: text("kind" as string).notNull().default("agent"),
+    // kind="external" — the webhook pile POSTs dispatches to.
+    endpointUrl: text("endpoint_url" as string),
+    // Bearer the receiver verifies — encrypted at rest like provider keys.
+    endpointSecret: text("endpoint_secret" as string),
     jobSpec: text("job_spec" as string),
+    // Runtime profile fields — the prompt the agent runs with, the model
+    // tier, and the JSON tool allowlist. Profiles are data, not code.
+    prompt: text("prompt" as string),
+    model: text("model" as string),
+    tools: text("tools" as string),
     toolScope: text("tool_scope" as string),
     permissionsTier: text("permissions_tier" as string),
     enabled: integer("enabled" as string)

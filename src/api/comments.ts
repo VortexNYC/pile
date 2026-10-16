@@ -9,6 +9,7 @@ import {
 } from "../agents/followup.js";
 import { getAgentProvider } from "../agents/index.js";
 import { dispatchAgent } from "../agents/index.js";
+import { decryptSecret } from "../agents/credentials.js";
 import { triggerPlanMode } from "../agents/plan-dispatch.js";
 import { parsePlanCommand } from "../agents/plan.js";
 import { createD1 } from "../global/db.js";
@@ -329,6 +330,37 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
       const agentTypes = await resolveAgentMentions(issueStub, body);
       for (const agentType of agentTypes) {
         const request = body.replace(AGENT_MENTION_RE, "").trim();
+        const kind = agentType.kind ?? "agent";
+        // kind="external" — the owner lives outside pile (Grokbot's chief
+        // of staff); POST the mention to its endpoint instead of a lane.
+        // kind="human" — people don't get lanes; the mention notifies.
+        if (kind === "human") continue;
+        if (kind === "external") {
+          if (!agentType.endpointUrl) continue;
+          const secret = await decryptSecret(c.env, agentType.endpointSecret);
+          await fetch(agentType.endpointUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(secret ? { Authorization: `Bearer ${secret}` } : {}),
+            },
+            body: JSON.stringify({
+              event: "agent.mentioned",
+              organizationId,
+              agent: agentType.slug,
+              issue: { id: issue.id, identifier: issue.identifier, title: issue.title },
+              mentionedBy: identity.id,
+              request: request || "(mention with no request text)",
+              conversationKey: `${issue.id}-${agentType.slug}`,
+            }),
+          }).catch((err: unknown) => {
+            console.error("external mention dispatch failed", {
+              agentSlug: agentType.slug,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          });
+          continue;
+        }
         // Awaited inline — the same contract the drainer uses; a mention
         // is a deliberate human action, not a background fan-out.
         await dispatchAgent(
