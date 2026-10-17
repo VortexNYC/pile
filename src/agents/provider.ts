@@ -70,6 +70,10 @@ export interface AgentDispatchContext {
    *  callers pass `{merchantId}-{agentSlug}` so a profile's memory for a
    *  merchant survives across dispatches. */
   conversationKey?: string;
+  /** A prior pile session pinned to the same conversationKey — the provider
+   *  should resume/message that remote session instead of creating a new
+   *  one (durable per-merchant agent memory). */
+  resumeProviderSessionId?: string;
   /** PILE-293 — model tier the lane was dispatched at. The model is already
    *  resolved from it; providers with a native effort knob may also use it. */
   effort?: DispatchEffort;
