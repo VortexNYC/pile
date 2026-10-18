@@ -661,6 +661,12 @@ export const workspaceCustomers = sqliteTable(
     source: text("source" as string),
     sourceSessionId: text("source_session_id" as string),
     sourceAgentSlug: text("source_agent_slug" as string),
+    readiness: text("readiness" as string),
+    nextAction: text("next_action" as string),
+    fit: text("fit" as string),
+    fitScore: real("fit_score" as string),
+    fitStatus: text("fit_status" as string),
+    evidenceUri: text("evidence_uri" as string),
     tierId: text("tier_id" as string),
     statusId: text("status_id" as string),
     ownerId: text("owner_id" as string),
@@ -704,6 +710,60 @@ export const workspaceCustomerTiers = sqliteTable(
   },
   (table) => [
     index("customer_tiers_organization_idx" as string).on(table.organizationId),
+  ]
+);
+
+export const workspaceSuppression = sqliteTable(
+  "suppression" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    kind: text("kind" as string).notNull(),
+    value: text("value" as string).notNull(),
+    customerId: text("customer_id" as string),
+    reason: text("reason" as string),
+    source: text("source" as string),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    index("suppression_kind_value_idx" as string).on(
+      table.organizationId,
+      table.kind,
+      table.value
+    ),
+  ]
+);
+
+export const workspaceMarketRuns = sqliteTable(
+  "market_runs" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    vertical: text("vertical" as string).notNull(),
+    geo: text("geo" as string).notNull(),
+    source: text("source" as string).notNull(),
+    sourceQuery: text("source_query" as string),
+    coverageTarget: integer("coverage_target" as string),
+    producedCount: integer("produced_count" as string)
+      .notNull()
+      .default(0),
+    status: text("status" as string).notNull().default("running"),
+    issueId: text("issue_id" as string),
+    createdBySlug: text("created_by_slug" as string),
+    sourceSessionId: text("source_session_id" as string),
+    createdAt: text("created_at" as string).notNull(),
+    completedAt: text("completed_at" as string),
+  },
+  (table) => [
+    index("market_runs_coverage_idx" as string).on(
+      table.organizationId,
+      table.vertical,
+      table.geo
+    ),
+    index("market_runs_issue_idx" as string).on(
+      table.organizationId,
+      table.issueId
+    ),
   ]
 );
 
