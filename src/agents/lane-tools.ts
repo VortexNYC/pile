@@ -820,9 +820,29 @@ export interface LaneWorkspace {
     name: string;
     domain?: string | null;
     externalId?: string | null;
+    phone?: string | null;
+    address?: string | null;
+    vertical?: string | null;
+    neighborhood?: string | null;
+    source?: string | null;
+    sourceSessionId?: string | null;
+    sourceAgentSlug?: string | null;
     createdById?: string;
     [key: string]: unknown;
   }): Promise<unknown>;
+  upsertContact(input: {
+    customerId: string;
+    type?: string;
+    role?: string | null;
+    channel: string;
+    value: string;
+    label?: string | null;
+    status?: string;
+    confidence?: string;
+    source?: string | null;
+    evidenceUri?: string | null;
+  }): Promise<unknown>;
+  listContacts(customerId: string): Promise<unknown>;
   getCustomer(id: string): Promise<unknown>;
   getCustomerByDomain(domain: string): Promise<unknown>;
   getCustomerByExternalId(externalId: string): Promise<unknown>;
@@ -1112,6 +1132,11 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
       domain: z.string().optional(),
       externalId: z.string().optional(),
       notes: z.string().optional(),
+      phone: z.string().optional(),
+      address: z.string().optional(),
+      vertical: z.string().optional(),
+      neighborhood: z.string().optional(),
+      source: z.string().optional(),
     }),
     async run(ctx, input) {
       const existing = input.domain
@@ -1124,14 +1149,45 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
         name: input.name,
         domain: input.domain ?? null,
         externalId: input.externalId ?? null,
-        // Provenance stamp — which agent/session sourced this record so a
-        // bad batch is identifiable and cleanable. Upsert is create-or-
-        // return: existing records are never written by lanes.
-        notes:
-          `[sourced-by:${ctx.agentSlug} session:${ctx.sessionId}]` +
-          (input.notes ? ` ${input.notes}` : ""),
+        phone: input.phone ?? null,
+        address: input.address ?? null,
+        vertical: input.vertical ?? null,
+        neighborhood: input.neighborhood ?? null,
+        source: input.source ?? null,
+        notes: input.notes ?? null,
+        // Provenance as real columns — which agent/session sourced this
+        // record so a bad batch is identifiable and purgeable.
+        sourceSessionId: ctx.sessionId,
+        sourceAgentSlug: ctx.agentSlug,
       });
       return { created: true, customer };
+    },
+  }),
+  defineWorkspaceTool({
+    name: "contact_upsert",
+    description:
+      "Attach a contact channel to a customer — an email, phone, form, or social profile. Dedups on (customer, channel, value); set role for named people (owner/founder/manager) and status/confidence for how verified it is.",
+    permission: "ws:write",
+    inputSchema: z.object({
+      customerId: z.string().min(1),
+      type: z.enum(["business_channel", "named_person"]).optional(),
+      role: z.string().optional(),
+      channel: z.enum(["email", "phone", "form", "social", "other"]),
+      value: z.string().min(1),
+      label: z.string().optional(),
+      status: z
+        .enum(["candidate", "verified", "rejected", "no_contact"])
+        .optional(),
+      confidence: z.enum(["low", "medium", "high"]).optional(),
+      source: z.string().optional(),
+      evidenceUri: z.string().optional(),
+    }),
+    async run(ctx, input) {
+      const contact = await ctx.ws.upsertContact({
+        ...input,
+        source: input.source ?? `agent:${ctx.agentSlug}`,
+      });
+      return { contact };
     },
   }),
   defineWorkspaceTool({

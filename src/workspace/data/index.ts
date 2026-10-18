@@ -53,6 +53,7 @@ import {
   workspaceCustomerIntakeItems,
   workspaceCustomerNeeds,
   workspaceCustomers,
+  workspaceCustomerContacts,
   workspaceDeals,
   workspaceFieldDefinitions,
   workspaceFieldValues,
@@ -5193,6 +5194,13 @@ export interface CustomerInput {
   notes?: string | null;
   domain?: string | null;
   externalId?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  vertical?: string | null;
+  neighborhood?: string | null;
+  source?: string | null;
+  sourceSessionId?: string | null;
+  sourceAgentSlug?: string | null;
   tierId?: string | null;
   statusId?: string | null;
   ownerId?: string | null;
@@ -5229,6 +5237,13 @@ export function createCustomer(db: WorkspaceDb, input: CustomerInput) {
       notes: input.notes ?? null,
       domain: input.domain ?? null,
       externalId: input.externalId ?? null,
+      phone: input.phone ?? null,
+      address: input.address ?? null,
+      vertical: input.vertical ?? null,
+      neighborhood: input.neighborhood ?? null,
+      source: input.source ?? null,
+      sourceSessionId: input.sourceSessionId ?? null,
+      sourceAgentSlug: input.sourceAgentSlug ?? null,
       tierId: input.tierId ?? null,
       statusId: input.statusId ?? null,
       ownerId: input.ownerId ?? null,
@@ -5259,6 +5274,79 @@ export function getCustomerByExternalId(
       )
     )
     .get();
+}
+
+export interface ContactInput {
+  customerId: string;
+  type?: "business_channel" | "named_person";
+  role?: string | null;
+  channel: "email" | "phone" | "form" | "social" | "other";
+  value: string;
+  label?: string | null;
+  status?: "candidate" | "verified" | "rejected" | "no_contact";
+  confidence?: "low" | "medium" | "high";
+  source?: string | null;
+  evidenceUri?: string | null;
+}
+
+/** Dedup on (customer, channel, value) — the same contact found twice is
+ *  one row. */
+export function upsertCustomerContact(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: ContactInput
+) {
+  const existing = db
+    .select()
+    .from(workspaceCustomerContacts)
+    .where(
+      and(
+        eq(workspaceCustomerContacts.organizationId, organizationId),
+        eq(workspaceCustomerContacts.customerId, input.customerId),
+        eq(workspaceCustomerContacts.channel, input.channel),
+        eq(workspaceCustomerContacts.value, input.value)
+      )
+    )
+    .all()[0];
+  if (existing) return existing;
+  const now = new Date().toISOString();
+  return db
+    .insert(workspaceCustomerContacts)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId,
+      customerId: input.customerId,
+      type: input.type ?? "business_channel",
+      role: input.role ?? null,
+      channel: input.channel,
+      value: input.value,
+      label: input.label ?? null,
+      status: input.status ?? "candidate",
+      confidence: input.confidence ?? null,
+      source: input.source ?? null,
+      evidenceUri: input.evidenceUri ?? null,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning()
+    .all()[0];
+}
+
+export function listCustomerContacts(
+  db: WorkspaceDb,
+  organizationId: string,
+  customerId: string
+) {
+  return db
+    .select()
+    .from(workspaceCustomerContacts)
+    .where(
+      and(
+        eq(workspaceCustomerContacts.organizationId, organizationId),
+        eq(workspaceCustomerContacts.customerId, customerId)
+      )
+    )
+    .all();
 }
 
 export function listCustomers(
@@ -5318,6 +5406,11 @@ export function updateCustomer(
     "notes",
     "domain",
     "externalId",
+    "phone",
+    "address",
+    "vertical",
+    "neighborhood",
+    "source",
     "tierId",
     "statusId",
     "ownerId",
@@ -5347,6 +5440,14 @@ export function deleteCustomer(
   organizationId: string,
   id: string
 ) {
+  db.delete(workspaceCustomerContacts)
+    .where(
+      and(
+        eq(workspaceCustomerContacts.customerId, id),
+        eq(workspaceCustomerContacts.organizationId, organizationId)
+      )
+    )
+    .run();
   db.delete(workspaceCustomerNeeds)
     .where(
       and(

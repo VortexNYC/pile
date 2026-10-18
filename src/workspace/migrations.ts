@@ -1356,6 +1356,32 @@ ALTER TABLE agent_types ADD COLUMN tools TEXT`;
 // the bearer before acting on a dispatch.
 const v95 = `ALTER TABLE agent_types ADD COLUMN endpoint_secret TEXT`;
 
+const v98 = `ALTER TABLE customers ADD COLUMN phone TEXT;
+ALTER TABLE customers ADD COLUMN address TEXT;
+ALTER TABLE customers ADD COLUMN vertical TEXT;
+ALTER TABLE customers ADD COLUMN neighborhood TEXT;
+ALTER TABLE customers ADD COLUMN source TEXT;
+ALTER TABLE customers ADD COLUMN source_session_id TEXT;
+ALTER TABLE customers ADD COLUMN source_agent_slug TEXT;
+CREATE TABLE IF NOT EXISTS customer_contacts (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  customer_id TEXT NOT NULL,
+  type TEXT NOT NULL DEFAULT 'business_channel',
+  role TEXT,
+  channel TEXT NOT NULL,
+  value TEXT NOT NULL,
+  label TEXT,
+  status TEXT NOT NULL DEFAULT 'candidate',
+  confidence TEXT,
+  source TEXT,
+  evidence_uri TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS customer_contacts_customer_idx ON customer_contacts(organization_id, customer_id);
+CREATE INDEX IF NOT EXISTS customer_contacts_value_idx ON customer_contacts(organization_id, value)`;
+
 const v97 = `CREATE TABLE IF NOT EXISTS lane_costs (
   session_id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -1679,6 +1705,7 @@ export const workspaceMigrations = {
       { idx: 94, when: 94, tag: "v95", breakpoints: true },
       { idx: 95, when: 95, tag: "v96", breakpoints: true },
       { idx: 96, when: 96, tag: "v97", breakpoints: true },
+      { idx: 97, when: 97, tag: "v98", breakpoints: true },
     ],
   },
   migrations: {
@@ -1779,5 +1806,6 @@ export const workspaceMigrations = {
     m0094: v95,
     m0095: v96,
     m0096: v97,
+    m0097: v98,
   },
 } satisfies Parameters<typeof migrate>[1];

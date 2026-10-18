@@ -2687,6 +2687,14 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return this.withEntityFields("customer", customer);
   }
 
+  upsertContact(input: data.ContactInput) {
+    return data.upsertCustomerContact(this.db, this.organizationId, input);
+  }
+
+  listContacts(customerId: string) {
+    return data.listCustomerContacts(this.db, this.organizationId, customerId);
+  }
+
   listCustomers(opts?: {
     cold?: boolean;
     dueBefore?: string;

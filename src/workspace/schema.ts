@@ -654,6 +654,13 @@ export const workspaceCustomers = sqliteTable(
     notes: text("notes" as string),
     domain: text("domain" as string),
     externalId: text("external_id" as string),
+    phone: text("phone" as string),
+    address: text("address" as string),
+    vertical: text("vertical" as string),
+    neighborhood: text("neighborhood" as string),
+    source: text("source" as string),
+    sourceSessionId: text("source_session_id" as string),
+    sourceAgentSlug: text("source_agent_slug" as string),
     tierId: text("tier_id" as string),
     statusId: text("status_id" as string),
     ownerId: text("owner_id" as string),
@@ -697,6 +704,36 @@ export const workspaceCustomerTiers = sqliteTable(
   },
   (table) => [
     index("customer_tiers_organization_idx" as string).on(table.organizationId),
+  ]
+);
+
+export const workspaceCustomerContacts = sqliteTable(
+  "customer_contacts" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    customerId: text("customer_id" as string).notNull(),
+    type: text("type" as string).notNull().default("business_channel"),
+    role: text("role" as string),
+    channel: text("channel" as string).notNull(),
+    value: text("value" as string).notNull(),
+    label: text("label" as string),
+    status: text("status" as string).notNull().default("candidate"),
+    confidence: text("confidence" as string),
+    source: text("source" as string),
+    evidenceUri: text("evidence_uri" as string),
+    createdAt: text("created_at" as string).notNull(),
+    updatedAt: text("updated_at" as string).notNull(),
+  },
+  (table) => [
+    index("customer_contacts_customer_idx" as string).on(
+      table.organizationId,
+      table.customerId
+    ),
+    index("customer_contacts_value_idx" as string).on(
+      table.organizationId,
+      table.value
+    ),
   ]
 );
 
