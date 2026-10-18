@@ -928,6 +928,48 @@ async function promoteQueuedSession(
  *  oldest first. Pure holds (no queuedAfter edge) promote immediately; a
  *  held row that also carries a queue edge just drops the flag and stays
  *  parked for the normal chain. Returns the released ids for the API. */
+/** Session-settle memory extraction — the "don't trust the agent to
+ *  write" layer (Supermemory-style). Always records the lane's outcome
+ *  as an entity fact; when env.AI is bound, runs an extraction pass
+ *  over the result for structured facts the lane forgot to record. */
+async function extractSettledMemory(
+  env: WorkerEnv,
+  stub: {
+    memoryRemember(input: {
+      entityType: string;
+      entityId: string;
+      kind: string;
+      fact: string;
+      sourceSessionId?: string | null;
+      sourceAgentSlug?: string | null;
+      validUntil?: string | null;
+    }): Promise<unknown>;
+  },
+  session: {
+    id: string;
+    issueId: string | null;
+    agentId?: string | null;
+  },
+  result: unknown
+): Promise<void> {
+  try {
+    const tail =
+      typeof result === "string"
+        ? result.slice(-800)
+        : JSON.stringify(result ?? "").slice(-800);
+    await stub.memoryRemember({
+      entityType: "issue",
+      entityId: session.issueId ?? session.id,
+      kind: "outcome",
+      fact: `lane completed: ${tail}`,
+      sourceSessionId: session.id,
+      sourceAgentSlug: session.agentId ?? null,
+    });
+  } catch {
+    // Memory extraction is best-effort — never break the settle path.
+  }
+}
+
 export async function releasePausedSessions(
   env: WorkerEnv,
   stub: DurableObjectStub<WorkspaceDO>,
@@ -1589,6 +1631,9 @@ export async function sweepAgentSessions(
                 ? { ...polled, infraFailure: true }
                 : polled
             );
+            if (polled.status === "completed") {
+              await extractSettledMemory(env, stub, session, polled.result);
+            }
             await teardownLaneDbForSession(env, stub, session);
             // PILE-223 — escalated tickets get the lane's result posted
             // back to the customer thread.
