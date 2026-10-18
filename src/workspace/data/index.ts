@@ -3686,7 +3686,8 @@ export async function deleteAgentAutomation(
 export type DomainEventType =
   | "record.stage_entered"
   | "substep.actionable"
-  | "substeps.all_required_done";
+  | "substeps.all_required_done"
+  | "substep.review";
 export type DomainEvent = typeof workspaceDomainEvents.$inferSelect;
 export type StageConfig = typeof workspaceStageConfigs.$inferSelect;
 export type AgentType = typeof workspaceAgentTypes.$inferSelect;
