@@ -2642,6 +2642,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdAgenttypesId",
+    "description": "Get agent type (GET /workspaces/{organizationId}/agent-types/{id}) Path params (top-level, required): organizationId, id.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/agent-types/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdAuditlog",
     "description": "List audit log (GET /workspaces/{organizationId}/audit-log) Path params (top-level, required): organizationId. Query params (top-level, optional): entityType, entityId, action, actorId, limit.",
     "method": "GET",
@@ -4921,6 +4942,38 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdMemory",
+    "description": "List memory (GET /workspaces/{organizationId}/memory) Path params (top-level, required): organizationId. Query params (top-level, optional): entityType, entityId, kind, search, limit.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/memory",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "entityType": {
+          "type": "string"
+        },
+        "entityId": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "search": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdMePermissions",
     "description": "List me permissions (GET /workspaces/{organizationId}/me/permissions) Path params (top-level, required): organizationId.",
     "method": "GET",
@@ -5081,6 +5134,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "List observability metrics (GET /workspaces/{organizationId}/observability/metrics) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/observability/metrics",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdPipelineLint",
+    "description": "List pipeline lint (GET /workspaces/{organizationId}/pipeline/lint) Path params (top-level, required): organizationId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/pipeline/lint",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -5538,6 +5608,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdStageconfigsId",
+    "description": "Get stage config (GET /workspaces/{organizationId}/stage-configs/{id}) Path params (top-level, required): organizationId, id.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/stage-configs/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
         "organizationId"
       ]
     }
@@ -7359,6 +7450,89 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "patchWorkspacesOrganizationIdAgenttypesId",
+    "description": "Update agent type (PATCH /workspaces/{organizationId}/agent-types/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: slug, name, providerAgentId, kind, endpointUrl, endpointSecret, prompt, model, tools, jobSpec, toolScope, permissionsTier, enabled.",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/agent-types/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "slug": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "providerAgentId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "agent",
+                "human",
+                "external"
+              ]
+            },
+            "endpointUrl": {
+              "type": "string",
+              "nullable": true,
+              "format": "uri"
+            },
+            "endpointSecret": {
+              "type": "string",
+              "nullable": true
+            },
+            "prompt": {
+              "type": "string",
+              "nullable": true
+            },
+            "model": {
+              "type": "string",
+              "nullable": true
+            },
+            "tools": {
+              "type": "string",
+              "nullable": true
+            },
+            "jobSpec": {
+              "type": "string",
+              "nullable": true
+            },
+            "toolScope": {
+              "type": "string",
+              "nullable": true
+            },
+            "permissionsTier": {
+              "type": "string",
+              "nullable": true
+            },
+            "enabled": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "patchWorkspacesOrganizationIdChangelogEntryId",
     "description": "Update changelog (PATCH /workspaces/{organizationId}/changelog/{entryId}) Path params (top-level, required): organizationId, entryId. Request body goes in the \"body\" object; fields: title, body, labels, links.",
     "method": "PATCH",
@@ -7560,7 +7734,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdCustomerstatusesId",
-    "description": "Update customer statuse (PATCH /workspaces/{organizationId}/customer-statuses/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, color, position.",
+    "description": "Update customer statuse (PATCH /workspaces/{organizationId}/customer-statuses/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, key, type, color, position.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/customer-statuses/{id}",
     "inputSchema": {
@@ -7579,6 +7753,17 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string",
               "minLength": 1
             },
+            "key": {
+              "type": "string",
+              "minLength": 1
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "active",
+                "terminal"
+              ]
+            },
             "color": {
               "type": "string"
             },
@@ -7596,7 +7781,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdCustomertiersId",
-    "description": "Update customer tier (PATCH /workspaces/{organizationId}/customer-tiers/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, color, position.",
+    "description": "Update customer tier (PATCH /workspaces/{organizationId}/customer-tiers/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, key, type, color, position.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/customer-tiers/{id}",
     "inputSchema": {
@@ -7614,6 +7799,17 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "name": {
               "type": "string",
               "minLength": 1
+            },
+            "key": {
+              "type": "string",
+              "minLength": 1
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "active",
+                "terminal"
+              ]
             },
             "color": {
               "type": "string"
@@ -9019,6 +9215,52 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "patchWorkspacesOrganizationIdStageconfigsId",
+    "description": "Update stage config (PATCH /workspaces/{organizationId}/stage-configs/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: ownerAgent, instructions, advancePolicy, enabled.",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/stage-configs/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "ownerAgent": {
+              "type": "string",
+              "nullable": true
+            },
+            "instructions": {
+              "type": "string",
+              "nullable": true
+            },
+            "advancePolicy": {
+              "type": "string",
+              "enum": [
+                "none",
+                "auto",
+                "ready_flag"
+              ]
+            },
+            "enabled": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "patchWorkspacesOrganizationIdStagetemplatesId",
     "description": "Update stage template (PATCH /workspaces/{organizationId}/stage-templates/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: entityType, status, stepKey, title, required, ownerAgent, condition, position, teamId.",
     "method": "PATCH",
@@ -10023,6 +10265,132 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "required": [
             "type",
             "data"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "postDispatchPile",
+    "description": "Create dispatch pile (POST /dispatch/pile) Request body goes in the \"body\" object; fields: sessionId, agent, organizationId*, issue*, profile, conversationKey (* = required).",
+    "method": "POST",
+    "path": "/dispatch/pile",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string"
+            },
+            "agent": {
+              "type": "string"
+            },
+            "organizationId": {
+              "type": "string"
+            },
+            "issue": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "identifier": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "title": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "repo": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "branch": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "status": {
+                  "type": "string"
+                },
+                "priority": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                "labelIds": {
+                  "type": "array",
+                  "nullable": true,
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "title"
+              ],
+              "additionalProperties": {
+                "nullable": true
+              }
+            },
+            "profile": {
+              "type": "object",
+              "nullable": true,
+              "properties": {
+                "slug": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "jobSpec": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "toolScope": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "providerAgentId": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "model": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "prompt": {
+                  "type": "string",
+                  "nullable": true
+                }
+              },
+              "required": [
+                "slug",
+                "name"
+              ],
+              "additionalProperties": {
+                "nullable": true
+              }
+            },
+            "conversationKey": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          "required": [
+            "organizationId",
+            "issue"
           ]
         }
       }
@@ -12083,7 +12451,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdAgenttypes",
-    "description": "Create agent type (POST /workspaces/{organizationId}/agent-types) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: slug*, name*, providerAgentId*, jobSpec, toolScope, permissionsTier, enabled (* = required).",
+    "description": "Create agent type (POST /workspaces/{organizationId}/agent-types) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: slug*, name*, providerAgentId*, jobSpec, prompt, model, tools, kind, endpointUrl, endpointSecret, toolScope, permissionsTier, enabled (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/agent-types",
     "inputSchema": {
@@ -12108,6 +12476,35 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "minLength": 1
             },
             "jobSpec": {
+              "type": "string",
+              "nullable": true
+            },
+            "prompt": {
+              "type": "string",
+              "nullable": true
+            },
+            "model": {
+              "type": "string",
+              "nullable": true
+            },
+            "tools": {
+              "type": "string",
+              "nullable": true
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "agent",
+                "human",
+                "external"
+              ]
+            },
+            "endpointUrl": {
+              "type": "string",
+              "nullable": true,
+              "format": "uri"
+            },
+            "endpointSecret": {
               "type": "string",
               "nullable": true
             },
@@ -12906,7 +13303,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdCustomerstatuses",
-    "description": "Create customer statuse (POST /workspaces/{organizationId}/customer-statuses) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, color, position (* = required).",
+    "description": "Create customer statuse (POST /workspaces/{organizationId}/customer-statuses) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, key, type, color, position (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/customer-statuses",
     "inputSchema": {
@@ -12921,6 +13318,17 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "name": {
               "type": "string",
               "minLength": 1
+            },
+            "key": {
+              "type": "string",
+              "minLength": 1
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "active",
+                "terminal"
+              ]
             },
             "color": {
               "type": "string"
@@ -12941,7 +13349,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdCustomertiers",
-    "description": "Create customer tier (POST /workspaces/{organizationId}/customer-tiers) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, color, position (* = required).",
+    "description": "Create customer tier (POST /workspaces/{organizationId}/customer-tiers) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, key, type, color, position (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/customer-tiers",
     "inputSchema": {
@@ -12956,6 +13364,17 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "name": {
               "type": "string",
               "minLength": 1
+            },
+            "key": {
+              "type": "string",
+              "minLength": 1
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "active",
+                "terminal"
+              ]
             },
             "color": {
               "type": "string"
@@ -15777,6 +16196,56 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           },
           "required": [
             "userId"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdMemory",
+    "description": "Create memory (POST /workspaces/{organizationId}/memory) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: entityType*, entityId*, kind*, fact*, validUntil, sourceAgentSlug (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/memory",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "entityType": {
+              "type": "string",
+              "minLength": 1
+            },
+            "entityId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "kind": {
+              "type": "string",
+              "minLength": 1
+            },
+            "fact": {
+              "type": "string",
+              "minLength": 1
+            },
+            "validUntil": {
+              "type": "string"
+            },
+            "sourceAgentSlug": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "entityType",
+            "entityId",
+            "kind",
+            "fact"
           ]
         }
       },
