@@ -1,0 +1,12 @@
+FROM daytonaio/sandbox:0.9.0
+
+USER root
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git python3 curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /root/.local/bin \
+    && (curl -fsSL https://cli.devin.ai/install.sh | bash || true) \
+    && test -x /root/.local/bin/devin
+ENV PATH="/root/.local/bin:${PATH}"
