@@ -129,7 +129,7 @@ export function registerFlueDispatchRoutes(app: OpenAPIHono<AppContext>) {
       body.profile?.providerAgentId &&
       body.profile.providerAgentId !== "flue"
         ? body.profile.providerAgentId
-        : "claude-cli";
+        : "devin-cli";
     const instructions = [
       body.profile?.prompt ?? "",
       body.profile?.jobSpec ?? "",

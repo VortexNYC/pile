@@ -826,6 +826,41 @@ export interface LaneWorkspace {
   getCustomerByDomain(domain: string): Promise<unknown>;
   getCustomerByExternalId(externalId: string): Promise<unknown>;
   listCustomers(): Promise<unknown[]>;
+  getDocument(id: string): Promise<{
+    id: string;
+    title?: string | null;
+    slug?: string | null;
+    content?: unknown;
+    updatedAt?: string | null;
+  } | undefined>;
+  listDocuments(args?: {
+    slug?: string;
+    issueId?: string;
+    isTemplate?: boolean;
+  }): Promise<Array<{
+    id: string;
+    title?: string | null;
+    slug?: string | null;
+    content?: unknown;
+    updatedAt?: string | null;
+  }>>;
+  createDocument(input: {
+    title: string;
+    slug?: string | null;
+    content?: unknown;
+    contentFormat?: "blocks" | "markdown" | "canvas";
+    issueId?: string | null;
+    createdById: string;
+  }): Promise<{ id: string }>;
+  updateDocument(
+    id: string,
+    patch: {
+      title?: string;
+      content?: unknown;
+      contentFormat?: "blocks" | "markdown" | "canvas";
+    },
+    actorId: string
+  ): Promise<unknown>;
   memoryRemember(input: {
     entityType: string;
     entityId: string;
@@ -960,6 +995,85 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
       });
       await ctx.escalate?.(input);
       return { ok: true };
+    },
+  }),
+  defineWorkspaceTool({
+    name: "document_get",
+    description:
+      "Read a workspace document by id or slug — playbooks, coverage ledgers, any durable knowledge the role relies on.",
+    permission: "ws:read",
+    inputSchema: z.object({
+      id: z.string().optional(),
+      slug: z.string().optional(),
+    }),
+    async run(ctx, input) {
+      if (input.id) {
+        const doc = await ctx.ws.getDocument(input.id);
+        if (!doc) throw new LaneToolError("document not found");
+        return doc;
+      }
+      if (input.slug) {
+        const docs = await ctx.ws.listDocuments({ slug: input.slug });
+        const doc = docs[0];
+        if (!doc) throw new LaneToolError("document not found");
+        return doc;
+      }
+      throw new LaneToolError("pass id or slug");
+    },
+  }),
+  defineWorkspaceTool({
+    name: "document_list",
+    description:
+      "List workspace documents — find playbooks, ledgers, and specs by title.",
+    permission: "ws:read",
+    inputSchema: z.object({}),
+    async run(ctx) {
+      const docs = await ctx.ws.listDocuments({});
+      return docs.map((d) => ({
+        id: d.id,
+        title: d.title,
+        slug: d.slug,
+        updatedAt: d.updatedAt,
+      }));
+    },
+  }),
+  defineWorkspaceTool({
+    name: "document_write",
+    description:
+      "Write a workspace document by slug — create it if missing, append the note to content if it exists (coverage ledgers, run logs, durable memory).",
+    permission: "ws:write",
+    inputSchema: z.object({
+      slug: z.string().min(1),
+      title: z.string().min(1),
+      content: z.string().min(1),
+      append: z.boolean().optional(),
+    }),
+    async run(ctx, input) {
+      const docs = await ctx.ws.listDocuments({ slug: input.slug });
+      const existing = docs[0];
+      if (existing) {
+        const body = input.append
+          ? `${typeof existing.content === "string" ? existing.content : ""}\n\n${input.content}`
+          : input.content;
+        await ctx.ws.updateDocument(
+          existing.id,
+          {
+            content: body,
+            contentFormat: "markdown",
+          },
+          ctx.agentSlug
+        );
+        return { id: existing.id, updated: true };
+      }
+      const created = await ctx.ws.createDocument({
+        title: input.title,
+        slug: input.slug,
+        content: input.content,
+        contentFormat: "markdown",
+        issueId: ctx.issueId,
+        createdById: ctx.agentSlug,
+      });
+      return { id: created.id, created: true };
     },
   }),
   defineWorkspaceTool({
