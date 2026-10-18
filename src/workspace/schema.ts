@@ -1322,6 +1322,7 @@ export const workspaceDomainEvents = sqliteTable(
         "record.stage_entered",
         "substep.actionable",
         "substeps.all_required_done",
+        "substep.review",
       ],
     }).notNull(),
     payload: text("payload" as string).notNull(),

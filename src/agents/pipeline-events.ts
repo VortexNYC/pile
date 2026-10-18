@@ -2,6 +2,7 @@ import type { WorkerEnv } from "../platform/middleware.js";
 import type { Issue } from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
 import { dispatchAgent } from "./index.js";
+import { REVIEW_PURPOSE } from "./review.js";
 import { decryptSecret } from "./credentials.js";
 import { automationEventTarget } from "./repo-triggers.js";
 import { fireEventAutomations } from "./sweep.js";
@@ -612,6 +613,19 @@ export async function drainDomainEvents(
         );
       } else if (event.type === "substeps.all_required_done") {
         await handleAllRequiredDone(stub, payload as unknown as AllDonePayload);
+      } else if (event.type === "substep.review") {
+        await handleSubstepReview(
+          env,
+          stub,
+          organizationId,
+          payload as unknown as {
+            issueId: string;
+            parentId: string;
+            stepKey?: string | null;
+            ownerAgent?: string | null;
+          },
+          ctx
+        );
       }
       await stub.markDomainEvent(event.id, "delivered");
       delivered += 1;
@@ -632,4 +646,72 @@ export async function drainDomainEvents(
     }
   }
   return delivered;
+}
+
+/** Review-gated chain — a completed required sub-step gets evaluated by
+ *  a "reviewer" agent lane before the chain advances. Pass → the next
+ *  sibling promotes (its substep.actionable fires on the status move);
+ *  fail → page the chief. The gate keeps the belt from moving junk. */
+async function handleSubstepReview(
+  env: WorkerEnv,
+  stub: Stub,
+  organizationId: string,
+  payload: {
+    issueId: string;
+    parentId: string;
+    stepKey?: string | null;
+    ownerAgent?: string | null;
+  },
+  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
+): Promise<void> {
+  const issue = await stub.getIssue(payload.issueId);
+  if (!issue) return;
+  const reviewer = await resolveOwner(stub, "reviewer");
+  const target = reviewer && reviewer.kind !== "human" ? reviewer : null;
+  const agentId = target?.agentId ?? "devin-cli";
+  const parent = await stub.getIssue(payload.parentId);
+  const instructions = [
+    target?.jobSpec ??
+      "You are the reviewer. Evaluate the completed sub-step's output against its task: is it correct, complete, and ready to hand to the next step?",
+    "",
+    `Sub-step: ${issue.title} (${issue.stepKey ?? "unkeyed"})`,
+    parent
+      ? `Parent deal issue: ${parent.identifier ?? parent.id} — ${parent.title}`
+      : "",
+    "",
+    "Return your verdict as JSON: {\"verdict\": \"pass\"|\"fail\", \"reasons\": \"...\"}.",
+  ]
+    .filter((part) => part !== "")
+    .join("\n");
+  await dispatchAgent(
+    env,
+    agentId,
+    organizationId,
+    issue,
+    { ...PIPELINE_ACTOR, organizationId },
+    undefined,
+    ctx,
+    {
+      instructions,
+      stepKey: issue.stepKey ?? undefined,
+      purpose: REVIEW_PURPOSE,
+      resultSchema: JSON.stringify({
+        type: "object",
+        properties: {
+          verdict: { type: "string", enum: ["pass", "fail"] },
+          reasons: { type: "string" },
+        },
+        required: ["verdict"],
+      }),
+      agentProfile: target
+        ? {
+            slug: target.slug,
+            name: target.name,
+            jobSpec: target.jobSpec,
+            toolScope: target.toolScope,
+          }
+        : undefined,
+      conversationKey: conversationKey(payload.parentId, "reviewer"),
+    }
+  );
 }
