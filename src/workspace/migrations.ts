@@ -1356,6 +1356,22 @@ ALTER TABLE agent_types ADD COLUMN tools TEXT`;
 // the bearer before acting on a dispatch.
 const v95 = `ALTER TABLE agent_types ADD COLUMN endpoint_secret TEXT`;
 
+const v96 = `CREATE TABLE IF NOT EXISTS workspace_memory (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  fact TEXT NOT NULL,
+  source_session_id TEXT,
+  source_agent_slug TEXT,
+  valid_until TEXT,
+  supersedes TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS workspace_memory_entity_idx ON workspace_memory(organization_id, entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS workspace_memory_kind_idx ON workspace_memory(organization_id, kind)`;
+
 // External agents — endpoint_url is the webhook the kind="external"
 // dispatch POSTs to (Grokbot's routine, a customer's automation, etc).
 const v94 = `ALTER TABLE agent_types ADD COLUMN endpoint_url TEXT`;
@@ -1645,6 +1661,7 @@ export const workspaceMigrations = {
       { idx: 92, when: 92, tag: "v93", breakpoints: true },
       { idx: 93, when: 93, tag: "v94", breakpoints: true },
       { idx: 94, when: 94, tag: "v95", breakpoints: true },
+      { idx: 95, when: 95, tag: "v96", breakpoints: true },
     ],
   },
   migrations: {
@@ -1743,5 +1760,6 @@ export const workspaceMigrations = {
     m0092: v93,
     m0093: v94,
     m0094: v95,
+    m0095: v96,
   },
 } satisfies Parameters<typeof migrate>[1];

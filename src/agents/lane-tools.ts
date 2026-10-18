@@ -826,6 +826,21 @@ export interface LaneWorkspace {
   getCustomerByDomain(domain: string): Promise<unknown>;
   getCustomerByExternalId(externalId: string): Promise<unknown>;
   listCustomers(): Promise<unknown[]>;
+  memoryRemember(input: {
+    entityType: string;
+    entityId: string;
+    kind: string;
+    fact: string;
+    sourceSessionId?: string | null;
+    sourceAgentSlug?: string | null;
+    validUntil?: string | null;
+  }): Promise<unknown>;
+  memoryRecall(query: {
+    entityType?: string;
+    entityId?: string;
+    kind?: string;
+    limit?: number;
+  }): Promise<unknown[]>;
 }
 
 export interface WorkspaceLaneToolContext {
@@ -1016,6 +1031,46 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
       }
       const text = await res.text();
       return truncateHead(text);
+    },
+  }),
+  defineWorkspaceTool({
+    name: "memory_remember",
+    description:
+      "Write a fact to workspace memory — coverage sweeps, lessons, entity notes. New facts of the same kind on an entity supersede the old (no dupes, audit trail kept).",
+    permission: "ws:write",
+    inputSchema: z.object({
+      entityType: z.string().min(1),
+      entityId: z.string().min(1),
+      kind: z.string().min(1),
+      fact: z.string().min(1),
+      validUntil: z.string().optional(),
+    }),
+    async run(ctx, input) {
+      await ctx.ws.memoryRemember({
+        entityType: input.entityType,
+        entityId: input.entityId,
+        kind: input.kind,
+        fact: input.fact,
+        validUntil: input.validUntil ?? null,
+        sourceSessionId: ctx.sessionId,
+        sourceAgentSlug: ctx.agentSlug,
+      });
+      return { ok: true };
+    },
+  }),
+  defineWorkspaceTool({
+    name: "memory_recall",
+    description:
+      "Read workspace memory — what we already know about an entity/corridor/merchant/agent before starting work.",
+    permission: "ws:read",
+    inputSchema: z.object({
+      entityType: z.string().optional(),
+      entityId: z.string().optional(),
+      kind: z.string().optional(),
+      limit: z.number().int().min(1).max(50).optional(),
+    }),
+    async run(ctx, input) {
+      return ctx.ws.memoryRecall(input);
     },
   }),
 ];
