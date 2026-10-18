@@ -7795,7 +7795,20 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       subStepSatisfied(issue)
     ) {
       const openRequired = await this.getBlockingSubSteps(issue.parentId);
-      if (openRequired.length === 0) {
+      if (openRequired.length > 0) {
+        // Review-gated chain — a reviewer lane evaluates the completed
+        // step first; the chain only advances on a pass verdict.
+        await this.emitDomainEvent(
+          "substep.review",
+          {
+            issueId: issue.id,
+            parentId: issue.parentId,
+            stepKey: issue.stepKey,
+            ownerAgent: issue.ownerAgent,
+          },
+          `review:${issue.id}`
+        );
+      } else {
         await this.emitDomainEvent(
           "substeps.all_required_done",
           {

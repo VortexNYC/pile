@@ -1633,6 +1633,58 @@ export async function sweepAgentSessions(
             );
             if (polled.status === "completed") {
               await extractSettledMemory(env, stub, session, polled.result);
+              // Review-gated chain — a reviewer lane's verdict decides
+              // whether the next sub-step promotes or the chief gets paged.
+              if (session.purpose === REVIEW_PURPOSE && session.issueId) {
+                let verdict: string | null = null;
+                try {
+                  const parsed: unknown =
+                    typeof polled.result === "string"
+                      ? JSON.parse(polled.result)
+                      : polled.result;
+                  verdict =
+                    typeof parsed === "object" && parsed !== null
+                      ? ((parsed as Record<string, unknown>).verdict as
+                          string | undefined) ?? null
+                      : null;
+                } catch {
+                  verdict = null;
+                }
+                const step = await stub.getIssue(session.issueId);
+                if (verdict === "pass" && step?.parentId) {
+                  const open = await stub
+                    .getIssueChildren(step.parentId)
+                    .then((kids) =>
+                      kids.filter(
+                        (k) => k.required && k.status === "backlog"
+                      )
+                    );
+                  const next = open.sort((a, b) =>
+                    (a.createdAt ?? "").localeCompare(b.createdAt ?? "")
+                  )[0];
+                  if (next) {
+                    await stub.updateIssue(
+                      next.id,
+                      { status: "todo" },
+                      "pipeline"
+                    );
+                  }
+                } else if (verdict && verdict !== "pass") {
+                  await pageChiefOfStaff(
+                    env,
+                    stub,
+                    id,
+                    {
+                      event: "agent.session_failed",
+                      issueId: session.issueId,
+                      sessionId: session.id,
+                      agentSlug: "reviewer",
+                      error: `review verdict: ${verdict}`,
+                    },
+                    ctx
+                  );
+                }
+              }
             }
             await teardownLaneDbForSession(env, stub, session);
             // PILE-223 — escalated tickets get the lane's result posted
