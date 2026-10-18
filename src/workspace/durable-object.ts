@@ -7795,7 +7795,23 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       subStepSatisfied(issue)
     ) {
       const openRequired = await this.getBlockingSubSteps(issue.parentId);
-      if (openRequired.length === 0) {
+      if (openRequired.length > 0) {
+        // Serial chain — promote the next backlog sub-step to todo so its
+        // actionable event fires and the drainer dispatches it. The
+        // pipeline advances itself; the director is for exceptions.
+        const next = openRequired
+          .filter((child) => child.status === "backlog")
+          .sort((a, b) =>
+            (a.createdAt ?? "").localeCompare(b.createdAt ?? "")
+          )[0];
+        if (next) {
+          await this.updateIssue(
+            next.id,
+            { status: "todo" },
+            actorId ?? "pipeline"
+          );
+        }
+      } else {
         await this.emitDomainEvent(
           "substeps.all_required_done",
           {
