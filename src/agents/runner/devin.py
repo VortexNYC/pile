@@ -70,7 +70,31 @@ def inject_followups(proc):
         time.sleep(2)
 
 
+def write_lane_mcp_config():
+    # The lane's workspace tools live on Pile's per-session MCP endpoint —
+    # PILE_LANE_MCP_URL + LANE_TOKEN are injected at provision. Write devin's
+    # MCP config so the agent gets the tools natively (issue/customer/memory/
+    # document writes, escalate) instead of falling back to the read-only
+    # PILE_API_KEY.
+    url = os.environ.get('PILE_LANE_MCP_URL')
+    token = os.environ.get('LANE_TOKEN')
+    if not url or not token:
+        return
+    cfg_dir = os.path.join(REPO_DIR, '.devin')
+    os.makedirs(cfg_dir, exist_ok=True)
+    with open(os.path.join(cfg_dir, 'mcp_config.json'), 'w') as f:
+        json.dump({
+            'mcpServers': {
+                'pile-lane': {
+                    'serverUrl': url,
+                    'headers': {'Authorization': f'Bearer {token}'},
+                }
+            }
+        }, f)
+
+
 def run_agent(devin_bin, prompt=None):
+    write_lane_mcp_config()
     prompt = prompt or lane_prompt()
     model = os.environ.get('MODEL', 'swe-2')
     proc = subprocess.Popen(
