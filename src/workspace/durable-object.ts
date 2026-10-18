@@ -2687,6 +2687,38 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return this.withEntityFields("customer", customer);
   }
 
+  upsertSuppression(input: data.SuppressionInput) {
+    return data.upsertSuppression(this.db, this.organizationId, input);
+  }
+
+  listSuppression(kind?: string) {
+    return data.listSuppression(this.db, this.organizationId, kind);
+  }
+
+  isSuppressed(kind: string, value: string) {
+    return data.isSuppressed(this.db, this.organizationId, kind, value);
+  }
+
+  createMarketRun(input: data.MarketRunInput) {
+    return data.createMarketRun(this.db, this.organizationId, input);
+  }
+
+  updateMarketRun(
+    id: string,
+    patch: { producedCount?: number; status?: string }
+  ) {
+    return data.updateMarketRun(this.db, this.organizationId, id, patch);
+  }
+
+  listMarketRuns(args?: {
+    vertical?: string;
+    geo?: string;
+    issueId?: string;
+    limit?: number;
+  }) {
+    return data.listMarketRuns(this.db, this.organizationId, args);
+  }
+
   upsertContact(input: data.ContactInput) {
     return data.upsertCustomerContact(this.db, this.organizationId, input);
   }
