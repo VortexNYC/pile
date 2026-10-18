@@ -930,6 +930,7 @@ export interface LaneWorkspace {
 
 export interface WorkspaceLaneToolContext {
   ws: LaneWorkspace;
+  env?: Record<string, string | undefined>;
   organizationId: string;
   sessionId: string;
   /** The dispatch's issue — the merchant deal / pipeline step. */
@@ -1304,6 +1305,101 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
           limit: input.limit,
         }),
       };
+    },
+  }),
+  defineWorkspaceTool({
+    name: "firecrawl",
+    description:
+      "Firecrawl — search the web with scraped results, scrape a page to markdown, or extract structured data from URLs. Best for directories, merchant sites, contact pages — pages web_fetch can't read (JS-rendered, blocked).",
+    permission: "web:fetch",
+    inputSchema: z.object({
+      action: z.enum(["search", "scrape", "extract"]),
+      query: z.string().optional().describe("for search"),
+      url: z.string().url().optional().describe("for scrape"),
+      urls: z.array(z.string().url()).optional().describe("for extract"),
+      prompt: z
+        .string()
+        .optional()
+        .describe("what to extract — for extract"),
+      limit: z.number().optional(),
+    }),
+    async run(ctx, input) {
+      const key = ctx.env?.FIRECRAWL_API_KEY;
+      if (!key)
+        throw new LaneToolError("FIRECRAWL_API_KEY not configured");
+      const base =
+        ctx.env?.FIRECRAWL_BASE_URL ?? "https://api.firecrawl.dev";
+      const res = await fetch(`${base}/v1/${input.action}`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${key}`,
+        },
+        body: JSON.stringify(
+          input.action === "search"
+            ? { query: input.query, limit: input.limit ?? 5 }
+            : input.action === "scrape"
+              ? { url: input.url, formats: ["markdown"] }
+              : {
+                  urls: input.urls,
+                  prompt: input.prompt,
+                  enableWebSearch: false,
+                }
+        ),
+      });
+      if (!res.ok)
+        throw new LaneToolError(
+          `firecrawl ${input.action} failed: ${res.status}`
+        );
+      return res.json();
+    },
+  }),
+  defineWorkspaceTool({
+    name: "stealth_fetch",
+    description:
+      "Scrapling stealth scrape — JS-rendered or bot-protected pages (SoS registries, license lookups) that web_fetch and firecrawl can't reach. Returns page text.",
+    permission: "web:fetch",
+    inputSchema: z.object({ url: z.string().url() }),
+    async run(ctx, input) {
+      const base = ctx.env?.SCRAPLING_BASE_URL;
+      if (!base)
+        throw new LaneToolError("SCRAPLING_BASE_URL not configured");
+      const res = await fetch(`${base}/scrape`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": ctx.env?.SCRAPLING_API_KEY ?? "",
+        },
+        body: JSON.stringify({ url: input.url, mode: "stealth" }),
+      });
+      if (!res.ok)
+        throw new LaneToolError(`stealth_fetch failed: ${res.status}`);
+      const text = await res.text();
+      return { text: text.slice(0, 20000) };
+    },
+  }),
+  defineWorkspaceTool({
+    name: "browser_fetch",
+    description:
+      "Browserless headless render — last resort for interactive pages needing real browsing. Returns page content.",
+    permission: "web:fetch",
+    inputSchema: z.object({ url: z.string().url() }),
+    async run(ctx, input) {
+      const base = ctx.env?.BROWSERLESS_BASE_URL;
+      const token = ctx.env?.BROWSERLESS_TOKEN;
+      if (!base || !token)
+        throw new LaneToolError("BROWSERLESS_* not configured");
+      const endpoint = new URL(`${base}/content`);
+      endpoint.searchParams.set("token", token);
+      const res = await fetch(endpoint.href, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url: input.url }),
+      });
+      if (!res.ok)
+        throw new LaneToolError(`browser_fetch failed: ${res.status}`);
+      const text = await res.text();
+      return { text: text.slice(0, 20000) };
     },
   }),
   defineWorkspaceTool({

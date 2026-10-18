@@ -163,6 +163,7 @@ export function registerLaneMcpRoutes(app: OpenAPIHono<AppContext>) {
 
       const wsCtx: WorkspaceLaneToolContext = {
         ws: stub,
+        env: c.env as unknown as Record<string, string | undefined>,
         organizationId,
         sessionId,
         issueId: issue.id,
