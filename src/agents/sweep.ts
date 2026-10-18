@@ -28,7 +28,10 @@ import {
 import { getLaneDbProvider, type LaneDbRef } from "./lane-db.js";
 import { reapLaneGithubTokens } from "./lane-github-token.js";
 import { nudgeLane } from "./nudge.js";
-import { drainDomainEvents } from "./pipeline-events.js";
+import {
+  drainDomainEvents,
+  pageChiefOfStaff,
+} from "./pipeline-events.js";
 import type {
   AgentProvider,
   AgentProviderSession,
@@ -1604,6 +1607,23 @@ export async function sweepAgentSessions(
             }
             if (polled.status === "failed") {
               await ingestFailedAgentSession(env, id, session, polled);
+              await pageChiefOfStaff(
+                env,
+                stub,
+                id,
+                {
+                  event: "agent.session_failed",
+                  issueId: session.issueId,
+                  sessionId: session.id,
+                  agentSlug: session.agentId ?? undefined,
+                  conversationKey: session.conversationKey ?? null,
+                  error:
+                    typeof polled.result === "string"
+                      ? polled.result
+                      : undefined,
+                },
+                ctx
+              );
               if (polled.infraFailure) {
                 await retryDeadLane(
                   env,
