@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "pile-lane": {
+      "serverUrl": "https://pile.nyc/workspaces/org_vortex_main/agent/sessions/2023fdaf-742a-4173-b733-d5b769815861/mcp",
+      "headers": {
+        "Authorization": "Bearer f23264af7b48f8f021047ca7af3fb5ca5d7d585287fff7d314f6d3cb6fd0da99"
+      }
+    }
+  }
+}
