@@ -44,6 +44,7 @@ import {
 } from "./deals.js";
 import { registerDocsSiteRoutes } from "./docs-site.js";
 import { registerDocumentRoutes } from "./documents.js";
+import { registerMemoryRoutes } from "./memory.js";
 import { registerDraftRoutes } from "./drafts.js";
 import { registerEmailInboxRoutes } from "./email-inboxes.js";
 import { registerEmojiRoutes } from "./emojis.js";
@@ -270,6 +271,7 @@ registerGitlabRoutes(app);
 registerCommentRoutes(app);
 registerEntityCommentRoutes(app);
 registerDocumentRoutes(app);
+registerMemoryRoutes(app);
 registerEmojiRoutes(app);
 registerDocsSiteRoutes(app);
 registerAuditRoutes(app);

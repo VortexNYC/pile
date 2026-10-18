@@ -21135,6 +21135,237 @@
           }
         },
         "summary": "Delete stage config"
+      },
+      "get": {
+        "tags": [
+          "pipeline"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stage config",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "entityType": {
+                      "type": "string",
+                      "enum": [
+                        "issue",
+                        "deal",
+                        "customer"
+                      ]
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "ownerAgent": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "instructions": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "advancePolicy": {
+                      "type": "string",
+                      "enum": [
+                        "none",
+                        "auto",
+                        "ready_flag"
+                      ]
+                    },
+                    "enabled": {
+                      "type": "number"
+                    },
+                    "createdBy": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "entityType",
+                    "status",
+                    "ownerAgent",
+                    "instructions",
+                    "advancePolicy",
+                    "enabled",
+                    "createdBy",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Stage config not found"
+          }
+        },
+        "summary": "Get stage config"
+      },
+      "patch": {
+        "tags": [
+          "pipeline"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ownerAgent": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "instructions": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "advancePolicy": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "auto",
+                      "ready_flag"
+                    ]
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Stage config updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "entityType": {
+                      "type": "string",
+                      "enum": [
+                        "issue",
+                        "deal",
+                        "customer"
+                      ]
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "ownerAgent": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "instructions": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "advancePolicy": {
+                      "type": "string",
+                      "enum": [
+                        "none",
+                        "auto",
+                        "ready_flag"
+                      ]
+                    },
+                    "enabled": {
+                      "type": "number"
+                    },
+                    "createdBy": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "entityType",
+                    "status",
+                    "ownerAgent",
+                    "instructions",
+                    "advancePolicy",
+                    "enabled",
+                    "createdBy",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Stage config not found"
+          }
+        },
+        "summary": "Update stage config"
       }
     },
     "/workspaces/{organizationId}/agent-types": {
@@ -21184,6 +21415,28 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "prompt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "model": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "tools": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "endpointUrl": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "hasEndpointSecret": {
+                            "type": "boolean"
+                          },
                           "toolScope": {
                             "type": "string",
                             "nullable": true
@@ -21213,6 +21466,12 @@
                           "name",
                           "providerAgentId",
                           "jobSpec",
+                          "prompt",
+                          "model",
+                          "tools",
+                          "kind",
+                          "endpointUrl",
+                          "hasEndpointSecret",
                           "toolScope",
                           "permissionsTier",
                           "enabled",
@@ -21269,6 +21528,35 @@
                     "type": "string",
                     "nullable": true
                   },
+                  "prompt": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "model": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "tools": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "agent",
+                      "human",
+                      "external"
+                    ]
+                  },
+                  "endpointUrl": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "uri"
+                  },
+                  "endpointSecret": {
+                    "type": "string",
+                    "nullable": true
+                  },
                   "toolScope": {
                     "type": "string",
                     "nullable": true
@@ -21318,6 +21606,28 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "prompt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "model": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "tools": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "endpointUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "hasEndpointSecret": {
+                      "type": "boolean"
+                    },
                     "toolScope": {
                       "type": "string",
                       "nullable": true
@@ -21347,6 +21657,12 @@
                     "name",
                     "providerAgentId",
                     "jobSpec",
+                    "prompt",
+                    "model",
+                    "tools",
+                    "kind",
+                    "endpointUrl",
+                    "hasEndpointSecret",
                     "toolScope",
                     "permissionsTier",
                     "enabled",
@@ -21363,6 +21679,323 @@
       }
     },
     "/workspaces/{organizationId}/agent-types/{id}": {
+      "get": {
+        "tags": [
+          "pipeline"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agent type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "slug": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "providerAgentId": {
+                      "type": "string"
+                    },
+                    "jobSpec": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "prompt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "model": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "tools": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "endpointUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "hasEndpointSecret": {
+                      "type": "boolean"
+                    },
+                    "toolScope": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "permissionsTier": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "enabled": {
+                      "type": "number"
+                    },
+                    "createdBy": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "slug",
+                    "name",
+                    "providerAgentId",
+                    "jobSpec",
+                    "prompt",
+                    "model",
+                    "tools",
+                    "kind",
+                    "endpointUrl",
+                    "hasEndpointSecret",
+                    "toolScope",
+                    "permissionsTier",
+                    "enabled",
+                    "createdBy",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Agent type not found"
+          }
+        },
+        "summary": "Get agent type"
+      },
+      "patch": {
+        "tags": [
+          "pipeline"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "slug": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "providerAgentId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "agent",
+                      "human",
+                      "external"
+                    ]
+                  },
+                  "endpointUrl": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "uri"
+                  },
+                  "endpointSecret": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "prompt": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "model": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "tools": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "jobSpec": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "toolScope": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "permissionsTier": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Agent type updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "slug": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "providerAgentId": {
+                      "type": "string"
+                    },
+                    "jobSpec": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "prompt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "model": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "tools": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "endpointUrl": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "hasEndpointSecret": {
+                      "type": "boolean"
+                    },
+                    "toolScope": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "permissionsTier": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "enabled": {
+                      "type": "number"
+                    },
+                    "createdBy": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "organizationId",
+                    "slug",
+                    "name",
+                    "providerAgentId",
+                    "jobSpec",
+                    "prompt",
+                    "model",
+                    "tools",
+                    "kind",
+                    "endpointUrl",
+                    "hasEndpointSecret",
+                    "toolScope",
+                    "permissionsTier",
+                    "enabled",
+                    "createdBy",
+                    "createdAt",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unknown providerAgentId"
+          },
+          "404": {
+            "description": "Agent type not found"
+          }
+        },
+        "summary": "Update agent type"
+      },
       "delete": {
         "tags": [
           "pipeline"
@@ -21409,6 +22042,224 @@
           }
         },
         "summary": "Delete agent type"
+      }
+    },
+    "/workspaces/{organizationId}/pipeline/lint": {
+      "get": {
+        "tags": [
+          "pipeline"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Referential-integrity lint: agent types pointing at unknown providers, and stage templates/configs whose ownerAgent slug has no agent type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "findings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "unknown_provider",
+                              "unresolved_owner_template",
+                              "unresolved_owner_config"
+                            ]
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "id",
+                          "detail"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "findings"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List pipeline lint"
+      }
+    },
+    "/dispatch/pile": {
+      "post": {
+        "tags": [
+          "agents"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sessionId": {
+                    "type": "string"
+                  },
+                  "agent": {
+                    "type": "string"
+                  },
+                  "organizationId": {
+                    "type": "string"
+                  },
+                  "issue": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "identifier": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "description": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "repo": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "branch": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "status": {
+                        "type": "string"
+                      },
+                      "priority": {
+                        "anyOf": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "string"
+                          }
+                        ]
+                      },
+                      "labelIds": {
+                        "type": "array",
+                        "nullable": true,
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "title"
+                    ],
+                    "additionalProperties": {
+                      "nullable": true
+                    }
+                  },
+                  "profile": {
+                    "type": "object",
+                    "nullable": true,
+                    "properties": {
+                      "slug": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "jobSpec": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "toolScope": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "providerAgentId": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "model": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "prompt": {
+                        "type": "string",
+                        "nullable": true
+                      }
+                    },
+                    "required": [
+                      "slug",
+                      "name"
+                    ],
+                    "additionalProperties": {
+                      "nullable": true
+                    }
+                  },
+                  "conversationKey": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "organizationId",
+                  "issue"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Dispatch admitted — conversationId is the session id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "conversationId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "conversationId"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid dispatch token"
+          }
+        },
+        "summary": "Create dispatch pile"
       }
     },
     "/workspaces/{organizationId}/external-events/{source}": {
@@ -37462,6 +38313,205 @@
         "summary": "Create document history restore"
       }
     },
+    "/workspaces/{organizationId}/memory": {
+      "get": {
+        "tags": [
+          "memory"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "entityType",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "entityId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "kind",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "search",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace memory facts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "memories": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "entityType": {
+                            "type": "string"
+                          },
+                          "entityId": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "fact": {
+                            "type": "string"
+                          },
+                          "sourceSessionId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "sourceAgentSlug": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "validUntil": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "entityType",
+                          "entityId",
+                          "kind",
+                          "fact",
+                          "sourceSessionId",
+                          "sourceAgentSlug",
+                          "validUntil",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "memories"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List memory"
+      },
+      "post": {
+        "tags": [
+          "memory"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "entityType": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "entityId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "kind": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "fact": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "validUntil": {
+                    "type": "string"
+                  },
+                  "sourceAgentSlug": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "entityType",
+                  "entityId",
+                  "kind",
+                  "fact"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Memory written",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create memory"
+      }
+    },
     "/workspaces/{organizationId}/emojis": {
       "get": {
         "tags": [
@@ -40234,6 +41284,13 @@
                           "name": {
                             "type": "string"
                           },
+                          "key": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "type": {
+                            "type": "string"
+                          },
                           "color": {
                             "type": "string",
                             "nullable": true
@@ -40249,6 +41306,8 @@
                           "id",
                           "organizationId",
                           "name",
+                          "key",
+                          "type",
                           "color",
                           "position",
                           "createdAt"
@@ -40290,6 +41349,17 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "key": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "terminal"
+                    ]
+                  },
                   "color": {
                     "type": "string"
                   },
@@ -40321,6 +41391,13 @@
                     "name": {
                       "type": "string"
                     },
+                    "key": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "type": {
+                      "type": "string"
+                    },
                     "color": {
                       "type": "string",
                       "nullable": true
@@ -40336,6 +41413,8 @@
                     "id",
                     "organizationId",
                     "name",
+                    "key",
+                    "type",
                     "color",
                     "position",
                     "createdAt"
@@ -40388,6 +41467,13 @@
                     "name": {
                       "type": "string"
                     },
+                    "key": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "type": {
+                      "type": "string"
+                    },
                     "color": {
                       "type": "string",
                       "nullable": true
@@ -40403,6 +41489,8 @@
                     "id",
                     "organizationId",
                     "name",
+                    "key",
+                    "type",
                     "color",
                     "position",
                     "createdAt"
@@ -40449,6 +41537,17 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "key": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "terminal"
+                    ]
+                  },
                   "color": {
                     "type": "string"
                   },
@@ -40477,6 +41576,13 @@
                     "name": {
                       "type": "string"
                     },
+                    "key": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "type": {
+                      "type": "string"
+                    },
                     "color": {
                       "type": "string",
                       "nullable": true
@@ -40492,6 +41598,8 @@
                     "id",
                     "organizationId",
                     "name",
+                    "key",
+                    "type",
                     "color",
                     "position",
                     "createdAt"
@@ -40576,6 +41684,13 @@
                           "name": {
                             "type": "string"
                           },
+                          "key": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "type": {
+                            "type": "string"
+                          },
                           "color": {
                             "type": "string",
                             "nullable": true
@@ -40591,6 +41706,8 @@
                           "id",
                           "organizationId",
                           "name",
+                          "key",
+                          "type",
                           "color",
                           "position",
                           "createdAt"
@@ -40632,6 +41749,17 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "key": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "terminal"
+                    ]
+                  },
                   "color": {
                     "type": "string"
                   },
@@ -40663,6 +41791,13 @@
                     "name": {
                       "type": "string"
                     },
+                    "key": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "type": {
+                      "type": "string"
+                    },
                     "color": {
                       "type": "string",
                       "nullable": true
@@ -40678,6 +41813,8 @@
                     "id",
                     "organizationId",
                     "name",
+                    "key",
+                    "type",
                     "color",
                     "position",
                     "createdAt"
@@ -40730,6 +41867,13 @@
                     "name": {
                       "type": "string"
                     },
+                    "key": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "type": {
+                      "type": "string"
+                    },
                     "color": {
                       "type": "string",
                       "nullable": true
@@ -40745,6 +41889,8 @@
                     "id",
                     "organizationId",
                     "name",
+                    "key",
+                    "type",
                     "color",
                     "position",
                     "createdAt"
@@ -40791,6 +41937,17 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "key": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "terminal"
+                    ]
+                  },
                   "color": {
                     "type": "string"
                   },
@@ -40819,6 +41976,13 @@
                     "name": {
                       "type": "string"
                     },
+                    "key": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "type": {
+                      "type": "string"
+                    },
                     "color": {
                       "type": "string",
                       "nullable": true
@@ -40834,6 +41998,8 @@
                     "id",
                     "organizationId",
                     "name",
+                    "key",
+                    "type",
                     "color",
                     "position",
                     "createdAt"
