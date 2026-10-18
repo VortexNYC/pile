@@ -401,6 +401,44 @@ const deleteCustomerRoute = createRoute({
   },
 });
 
+const purgeCustomersRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/customers/purge",
+  tags: ["customers"],
+  middleware: [rls("customer:delete")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            // Purge agent-sourced records by provenance stamp — the
+            // agent slug OR a specific session. At least one required:
+            // there is no "purge everything" path.
+            sourcedBy: z.string().optional(),
+            sourceSession: z.string().optional(),
+            dryRun: z.boolean().optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Purged agent-sourced customers",
+      content: {
+        "application/json": {
+          schema: z.object({
+            matched: z.number(),
+            deleted: z.number(),
+            ids: z.array(z.string()),
+          }),
+        },
+      },
+    },
+  },
+});
+
 const attachmentParams = z.object({
   organizationId: z.string(),
   id: z.string(),
@@ -920,6 +958,42 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     const deleted = await stub.deleteCustomer(id, identity.id);
     if (!deleted) return notFound("Customer not found");
     return c.body(null, 204);
+  });
+
+  app.openapi(purgeCustomersRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    if (!body.sourcedBy && !body.sourceSession)
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: "sourcedBy or sourceSession required",
+      });
+    const identity = c.var.workspaceIdentity;
+    const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
+    const customers = await stub.listCustomers();
+    const stamp = body.sourcedBy
+      ? `[sourced-by:${body.sourcedBy}`
+      : " session:";
+    const sessionStamp = body.sourceSession
+      ? `session:${body.sourceSession}`
+      : null;
+    const matches = customers.filter((cust) => {
+      const notes = typeof cust.notes === "string" ? cust.notes : "";
+      if (!notes.includes("[sourced-by:")) return false;
+      if (body.sourcedBy && !notes.includes(stamp)) return false;
+      if (sessionStamp && !notes.includes(sessionStamp)) return false;
+      return true;
+    });
+    const ids = matches.map((cust) => cust.id);
+    let deleted = 0;
+    if (body.dryRun !== true) {
+      for (const id of ids) {
+        if (await stub.deleteCustomer(id, identity.id)) deleted += 1;
+      }
+    }
+    return c.json({ matched: ids.length, deleted, ids }, 200);
   });
 
   app.openapi(listCustomerAttachmentsRoute, async (c) => {
