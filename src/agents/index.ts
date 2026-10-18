@@ -514,6 +514,37 @@ export async function dispatchAgent(
     status: issue.status ?? null,
     stepKey,
   });
+  // Workspace memory — recall prior facts for this entity + the agent's
+  // own lessons, injected ahead of the caller's instructions (the
+  // "right context at the right time" layer; facts keyed by entity).
+  let memoryText: string | null = null;
+  try {
+    const entityFacts = await stub.memoryRecall({
+      entityType: "issue",
+      entityId: issue.id,
+      limit: 15,
+    });
+    const agentFacts = await stub.memoryRecall({
+      entityType: "agent",
+      entityId: options?.agentProfile?.slug ?? agentId,
+      limit: 10,
+    });
+    const facts = [...(entityFacts ?? []), ...(agentFacts ?? [])];
+    if (facts.length > 0) {
+      memoryText =
+        "Workspace memory (prior facts for this work — treat as given):\n" +
+        facts
+          .map(
+            (f) =>
+              `- [${f.kind}] ${f.fact}${f.validUntil ? ` (expires ${f.validUntil})` : ""}`
+          )
+          .join("\n");
+    }
+  } catch {
+    // Memory recall is best-effort — never block a dispatch on it.
+    memoryText = null;
+  }
+
   let guidanceText: string | null = null;
   if (guidancePacks.length > 0) {
     const refs = guidanceRefs(guidancePacks);
@@ -707,6 +738,7 @@ export async function dispatchAgent(
           : undefined,
         instructions:
           [
+            memoryText,
             guidanceText,
             options?.instructions ?? null,
             session.resultSchema
