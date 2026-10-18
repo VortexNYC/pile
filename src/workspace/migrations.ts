@@ -1357,6 +1357,7 @@ ALTER TABLE agent_types ADD COLUMN tools TEXT`;
 const v95 = `ALTER TABLE agent_types ADD COLUMN endpoint_secret TEXT`;
 
 const v99 = `ALTER TABLE customers ADD COLUMN readiness TEXT;
+ALTER TABLE customers ADD COLUMN processor TEXT;
 ALTER TABLE customers ADD COLUMN next_action TEXT;
 ALTER TABLE customers ADD COLUMN fit TEXT;
 ALTER TABLE customers ADD COLUMN fit_score REAL;

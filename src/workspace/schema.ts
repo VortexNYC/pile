@@ -662,6 +662,7 @@ export const workspaceCustomers = sqliteTable(
     sourceSessionId: text("source_session_id" as string),
     sourceAgentSlug: text("source_agent_slug" as string),
     readiness: text("readiness" as string),
+    processor: text("processor" as string),
     nextAction: text("next_action" as string),
     fit: text("fit" as string),
     fitScore: real("fit_score" as string),
