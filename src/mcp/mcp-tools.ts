@@ -2167,6 +2167,32 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdAgentCosts",
+    "description": "List agent costs (GET /workspaces/{organizationId}/agent/costs) Path params (top-level, required): organizationId. Query params (top-level, optional): agentSlug, since, limit.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/agent/costs",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "agentSlug": {
+          "type": "string"
+        },
+        "since": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdAgentEnvironment",
     "description": "List agent environment (GET /workspaces/{organizationId}/agent/environment) Path params (top-level, required): organizationId.",
     "method": "GET",
@@ -13294,6 +13320,37 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "required": [
             "rows"
           ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdCustomersPurge",
+    "description": "Create customer purge (POST /workspaces/{organizationId}/customers/purge) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: sourcedBy, sourceSession, dryRun.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers/purge",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "sourcedBy": {
+              "type": "string"
+            },
+            "sourceSession": {
+              "type": "string"
+            },
+            "dryRun": {
+              "type": "boolean"
+            }
+          }
         }
       },
       "required": [

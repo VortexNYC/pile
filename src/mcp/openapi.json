@@ -38512,6 +38512,119 @@
         "summary": "Create memory"
       }
     },
+    "/workspaces/{organizationId}/agent/costs": {
+      "get": {
+        "tags": [
+          "memory"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "agentSlug",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "since",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lane cost ledger — per-session compute durations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "costs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "sessionId": {
+                            "type": "string"
+                          },
+                          "agentSlug": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "issueId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "provider": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "effort": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "settledAt": {
+                            "type": "string"
+                          },
+                          "durationMs": {
+                            "type": "number"
+                          },
+                          "attempts": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "sessionId",
+                          "agentSlug",
+                          "issueId",
+                          "provider",
+                          "effort",
+                          "status",
+                          "createdAt",
+                          "settledAt",
+                          "durationMs",
+                          "attempts"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "costs"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List agent costs"
+      }
+    },
     "/workspaces/{organizationId}/emojis": {
       "get": {
         "tags": [
@@ -40832,6 +40945,75 @@
           }
         },
         "summary": "Delete customer"
+      }
+    },
+    "/workspaces/{organizationId}/customers/purge": {
+      "post": {
+        "tags": [
+          "customers"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sourcedBy": {
+                    "type": "string"
+                  },
+                  "sourceSession": {
+                    "type": "string"
+                  },
+                  "dryRun": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Purged agent-sourced customers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "matched": {
+                      "type": "number"
+                    },
+                    "deleted": {
+                      "type": "number"
+                    },
+                    "ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "matched",
+                    "deleted",
+                    "ids"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create customer purge"
       }
     },
     "/workspaces/{organizationId}/customers/{id}/attachments": {
