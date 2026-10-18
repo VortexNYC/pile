@@ -266,6 +266,13 @@ export async function dispatchAgent(
   // deployment env before constructing the provider. Fields the workspace
   // hasn't set fall back to env, so self-host defaults still work.
   const providerConfig = await loadProviderConfig(env, stub, agentId);
+  if (isProviderDisabled(providerConfig?.config)) {
+    throw new VortexError({
+      code: "CONFIG_ERROR",
+      status: 409,
+      message: `Agent provider ${agentId} is disabled for this workspace`,
+    });
+  }
   // A promoted session keeps the budget it was queued with.
   const promoteTarget = options?.promoteSessionId
     ? await stub.getAgentSession(options.promoteSessionId)
@@ -816,5 +823,22 @@ export async function dispatchAgent(
       actor.id
     );
     throw error;
+  }
+}
+
+/** Provider isolation switch — `config.disabled` on the workspace provider
+ *  row lets an org pin agent work to one runtime (e.g. devin-cli) without
+ *  deleting integrations. Read from the row's config JSON. */
+function isProviderDisabled(configJson: string | null | undefined): boolean {
+  if (!configJson) return false;
+  try {
+    const parsed: unknown = JSON.parse(configJson);
+    return (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      (parsed as Record<string, unknown>).disabled === true
+    );
+  } catch {
+    return false;
   }
 }
