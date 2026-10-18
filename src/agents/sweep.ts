@@ -1631,6 +1631,41 @@ export async function sweepAgentSessions(
                 ? { ...polled, infraFailure: true }
                 : polled
             );
+            {
+              // Lane-cost ledger — duration + effort + status on every
+              // terminal settle, regardless of outcome.
+              try {
+                const settledAt = new Date().toISOString();
+                const createdMs = session.createdAt
+                  ? Date.parse(session.createdAt)
+                  : Date.parse(settledAt);
+                await stub.recordLaneCost({
+                  sessionId: session.id,
+                  agentSlug:
+                    (session as { agentSlug?: string | null }).agentSlug ??
+                    session.agentId ??
+                    null,
+                  issueId: session.issueId ?? null,
+                  provider:
+                    (session as { provider?: string | null }).provider ??
+                    null,
+                  effort:
+                    (session as { effort?: string | null }).effort ?? null,
+                  status: polled.status,
+                  createdAt: session.createdAt ?? settledAt,
+                  settledAt,
+                  durationMs: Math.max(
+                    0,
+                    Date.parse(settledAt) - createdMs
+                  ),
+                  attempts:
+                    (session as { attempts?: number | null }).attempts ??
+                    1,
+                });
+              } catch {
+                // Cost recording is best-effort.
+              }
+            }
             if (polled.status === "completed") {
               await extractSettledMemory(env, stub, session, polled.result);
             }

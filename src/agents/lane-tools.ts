@@ -820,6 +820,7 @@ export interface LaneWorkspace {
     name: string;
     domain?: string | null;
     externalId?: string | null;
+    createdById?: string;
     [key: string]: unknown;
   }): Promise<unknown>;
   getCustomer(id: string): Promise<unknown>;
@@ -1123,6 +1124,12 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
         name: input.name,
         domain: input.domain ?? null,
         externalId: input.externalId ?? null,
+        // Provenance stamp — which agent/session sourced this record so a
+        // bad batch is identifiable and cleanable. Upsert is create-or-
+        // return: existing records are never written by lanes.
+        notes:
+          `[sourced-by:${ctx.agentSlug} session:${ctx.sessionId}]` +
+          (input.notes ? ` ${input.notes}` : ""),
       });
       return { created: true, customer };
     },

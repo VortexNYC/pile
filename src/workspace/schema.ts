@@ -1431,6 +1431,33 @@ export const workspaceMemory = sqliteTable(
   ]
 );
 
+export const workspaceLaneCosts = sqliteTable(
+  "lane_costs" as string,
+  {
+    sessionId: text("session_id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    agentSlug: text("agent_slug" as string),
+    issueId: text("issue_id" as string),
+    provider: text("provider" as string),
+    effort: text("effort" as string),
+    status: text("status" as string).notNull(),
+    createdAt: text("created_at" as string).notNull(),
+    settledAt: text("settled_at" as string).notNull(),
+    durationMs: integer("duration_ms" as string).notNull(),
+    attempts: integer("attempts" as string).notNull().default(1),
+  },
+  (table) => [
+    index("lane_costs_agent_idx" as string).on(
+      table.organizationId,
+      table.agentSlug
+    ),
+    index("lane_costs_settled_idx" as string).on(
+      table.organizationId,
+      table.settledAt
+    ),
+  ]
+);
+
 export const workspaceAgentTypes = sqliteTable(
   "agent_types" as string,
   {

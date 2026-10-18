@@ -77,6 +77,46 @@ const rememberRoute = createRoute({
   },
 });
 
+const costsRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/agent/costs",
+  tags: ["memory"],
+  middleware: [rls("memory:view")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    query: z.object({
+      agentSlug: z.string().optional(),
+      since: z.string().optional(),
+      limit: z.string().optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Lane cost ledger — per-session compute durations",
+      content: {
+        "application/json": {
+          schema: z.object({
+            costs: z.array(
+              z.object({
+                sessionId: z.string(),
+                agentSlug: z.string().nullable(),
+                issueId: z.string().nullable(),
+                provider: z.string().nullable(),
+                effort: z.string().nullable(),
+                status: z.string(),
+                createdAt: z.string(),
+                settledAt: z.string(),
+                durationMs: z.number(),
+                attempts: z.number(),
+              })
+            ),
+          }),
+        },
+      },
+    },
+  },
+});
+
 export function registerMemoryRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(recallRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
@@ -105,5 +145,17 @@ export function registerMemoryRoutes(app: OpenAPIHono<AppContext>) {
       sourceAgentSlug: body.sourceAgentSlug ?? null,
     });
     return c.json({ id }, 200);
+  });
+
+  app.openapi(costsRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const q = c.req.valid("query");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const costs = await stub.listLaneCosts({
+      agentSlug: q.agentSlug,
+      since: q.since,
+      limit: q.limit ? Number(q.limit) : 200,
+    });
+    return c.json({ costs }, 200);
   });
 }
