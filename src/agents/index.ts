@@ -529,7 +529,16 @@ export async function dispatchAgent(
       entityId: options?.agentProfile?.slug ?? agentId,
       limit: 10,
     });
-    const facts = [...(entityFacts ?? []), ...(agentFacts ?? [])];
+    const sharedFacts = await stub.memoryRecall({
+      entityType: "workspace",
+      entityId: organizationId,
+      limit: 10,
+    });
+    const facts = [
+      ...(entityFacts ?? []),
+      ...(agentFacts ?? []),
+      ...(sharedFacts ?? []),
+    ];
     if (facts.length > 0) {
       memoryText =
         "Workspace memory (prior facts for this work — treat as given):\n" +
@@ -538,7 +547,10 @@ export async function dispatchAgent(
             (f) =>
               `- [${f.kind}] ${f.fact}${f.validUntil ? ` (expires ${f.validUntil})` : ""}`
           )
-          .join("\n");
+          .join("\n") +
+        "\n\nWhen you finish, call memory_remember for durable facts " +
+        "you learned (coverage swept, lessons, entity notes) so the " +
+        "next lane starts with them.";
     }
   } catch {
     // Memory recall is best-effort — never block a dispatch on it.

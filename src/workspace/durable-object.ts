@@ -5486,6 +5486,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     entityType?: string;
     entityId?: string;
     kind?: string;
+    search?: string;
     limit?: number;
   }) {
     return data.memoryRecall(this.db, this.organizationId, query);

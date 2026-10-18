@@ -839,6 +839,7 @@ export interface LaneWorkspace {
     entityType?: string;
     entityId?: string;
     kind?: string;
+    search?: string;
     limit?: number;
   }): Promise<unknown[]>;
 }
@@ -1067,6 +1068,7 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
       entityType: z.string().optional(),
       entityId: z.string().optional(),
       kind: z.string().optional(),
+      search: z.string().optional(),
       limit: z.number().int().min(1).max(50).optional(),
     }),
     async run(ctx, input) {

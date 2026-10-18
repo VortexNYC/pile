@@ -5,6 +5,7 @@
 // sessions, webhook subs, linear users).
 import {
   and,
+  like,
   asc,
   desc,
   eq,
@@ -4399,7 +4400,13 @@ export async function memoryRemember(
 export async function memoryRecall(
   db: WorkspaceDb,
   organizationId: string,
-  query: { entityType?: string; entityId?: string; kind?: string; limit?: number }
+  query: {
+    entityType?: string;
+    entityId?: string;
+    kind?: string;
+    search?: string;
+    limit?: number;
+  }
 ) {
   const conds = [
     eq(workspaceMemory.organizationId, organizationId),
@@ -4408,6 +4415,10 @@ export async function memoryRecall(
   if (query.entityType) conds.push(eq(workspaceMemory.entityType, query.entityType));
   if (query.entityId) conds.push(eq(workspaceMemory.entityId, query.entityId));
   if (query.kind) conds.push(eq(workspaceMemory.kind, query.kind));
+  // Fuzzy fact search — LIKE over the fact text so "did we sweep
+  // Smith?" finds corridor:smith-st without the exact entity key.
+  if (query.search)
+    conds.push(like(workspaceMemory.fact, `%${query.search}%`));
   return db
     .select()
     .from(workspaceMemory)
