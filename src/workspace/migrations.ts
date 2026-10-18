@@ -1356,6 +1356,22 @@ ALTER TABLE agent_types ADD COLUMN tools TEXT`;
 // the bearer before acting on a dispatch.
 const v95 = `ALTER TABLE agent_types ADD COLUMN endpoint_secret TEXT`;
 
+const v97 = `CREATE TABLE IF NOT EXISTS lane_costs (
+  session_id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  agent_slug TEXT,
+  issue_id TEXT,
+  provider TEXT,
+  effort TEXT,
+  status TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  settled_at TEXT NOT NULL,
+  duration_ms INTEGER NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS lane_costs_agent_idx ON lane_costs(organization_id, agent_slug);
+CREATE INDEX IF NOT EXISTS lane_costs_settled_idx ON lane_costs(organization_id, settled_at)`;
+
 const v96 = `CREATE TABLE IF NOT EXISTS workspace_memory (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -1662,6 +1678,7 @@ export const workspaceMigrations = {
       { idx: 93, when: 93, tag: "v94", breakpoints: true },
       { idx: 94, when: 94, tag: "v95", breakpoints: true },
       { idx: 95, when: 95, tag: "v96", breakpoints: true },
+      { idx: 96, when: 96, tag: "v97", breakpoints: true },
     ],
   },
   migrations: {
@@ -1761,5 +1778,6 @@ export const workspaceMigrations = {
     m0093: v94,
     m0094: v95,
     m0095: v96,
+    m0096: v97,
   },
 } satisfies Parameters<typeof migrate>[1];

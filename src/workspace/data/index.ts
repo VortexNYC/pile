@@ -45,6 +45,7 @@ import {
   workspaceEntityLinks,
   workspaceAgentProviderConfigs,
   workspaceMemory,
+  workspaceLaneCosts,
   workspaceAgentSessions,
   workspaceAgentEnvironmentFiles,
   workspaceAttachments,
@@ -4348,6 +4349,66 @@ export interface AgentProviderConfigInput {
   computeVolumeId?: string | null;
   config?: Record<string, unknown> | null;
   teamIds?: string | string[] | null;
+}
+
+export interface LaneCostInput {
+  sessionId: string;
+  agentSlug?: string | null;
+  issueId?: string | null;
+  provider?: string | null;
+  effort?: string | null;
+  status: string;
+  createdAt: string;
+  settledAt: string;
+  durationMs: number;
+  attempts?: number;
+}
+
+export async function recordLaneCost(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: LaneCostInput
+) {
+  await db
+    .insert(workspaceLaneCosts)
+    .values({
+      sessionId: input.sessionId,
+      organizationId,
+      agentSlug: input.agentSlug ?? null,
+      issueId: input.issueId ?? null,
+      provider: input.provider ?? null,
+      effort: input.effort ?? null,
+      status: input.status,
+      createdAt: input.createdAt,
+      settledAt: input.settledAt,
+      durationMs: input.durationMs,
+      attempts: input.attempts ?? 1,
+    })
+    .onConflictDoUpdate({
+      target: workspaceLaneCosts.sessionId,
+      set: {
+        status: input.status,
+        settledAt: input.settledAt,
+        durationMs: input.durationMs,
+      },
+    });
+}
+
+export async function listLaneCosts(
+  db: WorkspaceDb,
+  organizationId: string,
+  args: { agentSlug?: string; since?: string; limit?: number } = {}
+) {
+  const conds = [eq(workspaceLaneCosts.organizationId, organizationId)];
+  if (args.agentSlug) conds.push(eq(workspaceLaneCosts.agentSlug, args.agentSlug));
+  if (args.since) conds.push(gte(workspaceLaneCosts.settledAt, args.since));
+  return db
+    .select()
+    .from(workspaceLaneCosts)
+    .where(and(...conds))
+    .orderBy(desc(workspaceLaneCosts.settledAt))
+    .limit(args.limit ?? 200)
+    .all();
 }
 
 export interface MemoryInput {

@@ -5478,6 +5478,14 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   // ---- agent provider configs ----
+  recordLaneCost(input: data.LaneCostInput) {
+    return data.recordLaneCost(this.db, this.organizationId, input);
+  }
+
+  listLaneCosts(args?: { agentSlug?: string; since?: string; limit?: number }) {
+    return data.listLaneCosts(this.db, this.organizationId, args);
+  }
+
   memoryRemember(input: data.MemoryInput) {
     return data.memoryRemember(this.db, this.organizationId, input);
   }
