@@ -1687,6 +1687,13 @@ export async function sweepAgentSessions(
                 }
                 const step = await stub.getIssue(session.issueId);
                 if (verdict === "pass" && step?.parentId) {
+                  // Pass marks the reviewed step done — the reviewer is
+                  // the only thing that flips a required step satisfied.
+                  await stub.updateIssue(
+                    step.id,
+                    { status: "done" },
+                    "reviewer"
+                  );
                   const open = await stub
                     .getIssueChildren(step.parentId)
                     .then((kids) =>

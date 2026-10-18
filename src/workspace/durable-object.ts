@@ -5918,6 +5918,30 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       }
     }
 
+    // Review-gated chain — a completed non-review lane on a required
+    // sub-step emits substep.review; the reviewer's verdict decides
+    // whether the chain advances (pass marks it done + promotes the
+    // sibling) or the chief gets paged. Review lanes are excluded so
+    // the verdict itself doesn't re-enter review.
+    if (
+      becameTerminal &&
+      newStatus === "completed" &&
+      oldSession.purpose !== "review" &&
+      issue.parentId &&
+      issue.required
+    ) {
+      await this.emitDomainEvent(
+        "substep.review",
+        {
+          issueId: issue.id,
+          parentId: issue.parentId,
+          stepKey: issue.stepKey,
+          ownerAgent: issue.ownerAgent,
+        },
+        `review:${issue.id}`
+      );
+    }
+
     // PILE-229: release the lane's ownership marker when the run ends.
     if (becameTerminal && issue.assigneeId === `lane:${sessionId}`) {
       issueSet.assigneeId = null;
