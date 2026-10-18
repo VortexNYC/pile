@@ -43,6 +43,7 @@ import {
   workspaceEntityAttachments,
   workspaceEntityLinks,
   workspaceAgentProviderConfigs,
+  workspaceMemory,
   workspaceAgentSessions,
   workspaceAgentEnvironmentFiles,
   workspaceAttachments,
@@ -4345,6 +4346,75 @@ export interface AgentProviderConfigInput {
   computeVolumeId?: string | null;
   config?: Record<string, unknown> | null;
   teamIds?: string | string[] | null;
+}
+
+export interface MemoryInput {
+  entityType: string;
+  entityId: string;
+  kind: string;
+  fact: string;
+  sourceSessionId?: string | null;
+  sourceAgentSlug?: string | null;
+  validUntil?: string | null;
+}
+
+export async function memoryRemember(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: MemoryInput
+) {
+  // Supersede: a new fact of the same kind on the same entity marks the
+  // previous row superseded rather than deleting it — contradictions and
+  // temporal updates keep the audit trail.
+  const prior = await db
+    .select({ id: workspaceMemory.id })
+    .from(workspaceMemory)
+    .where(
+      and(
+        eq(workspaceMemory.organizationId, organizationId),
+        eq(workspaceMemory.entityType, input.entityType),
+        eq(workspaceMemory.entityId, input.entityId),
+        eq(workspaceMemory.kind, input.kind),
+        isNull(workspaceMemory.supersedes)
+      )
+    )
+    .get();
+  const id = crypto.randomUUID();
+  await db.insert(workspaceMemory).values({
+    id,
+    organizationId,
+    entityType: input.entityType,
+    entityId: input.entityId,
+    kind: input.kind,
+    fact: input.fact,
+    sourceSessionId: input.sourceSessionId ?? null,
+    sourceAgentSlug: input.sourceAgentSlug ?? null,
+    validUntil: input.validUntil ?? null,
+    supersedes: prior?.id ?? null,
+    createdAt: new Date().toISOString(),
+  });
+  return id;
+}
+
+export async function memoryRecall(
+  db: WorkspaceDb,
+  organizationId: string,
+  query: { entityType?: string; entityId?: string; kind?: string; limit?: number }
+) {
+  const conds = [
+    eq(workspaceMemory.organizationId, organizationId),
+    isNull(workspaceMemory.supersedes),
+  ];
+  if (query.entityType) conds.push(eq(workspaceMemory.entityType, query.entityType));
+  if (query.entityId) conds.push(eq(workspaceMemory.entityId, query.entityId));
+  if (query.kind) conds.push(eq(workspaceMemory.kind, query.kind));
+  return db
+    .select()
+    .from(workspaceMemory)
+    .where(and(...conds))
+    .orderBy(desc(workspaceMemory.createdAt))
+    .limit(query.limit ?? 25)
+    .all();
 }
 
 export async function upsertAgentProviderConfig(

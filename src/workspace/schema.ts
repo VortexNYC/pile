@@ -1396,6 +1396,41 @@ export const workspaceStageConfigs = sqliteTable(
 // provider + job spec + tool scope. `owner_agent` on stage templates and
 // sub-steps resolves through this table; engineering is one registered
 // type, not the implicit whole.
+export const workspaceMemory = sqliteTable(
+  "workspace_memory" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    // What this fact is about — a merchant, corridor, agent, or freeform
+    // entity key. Recall is keyed by (entityType, entityId).
+    entityType: text("entity_type" as string).notNull(),
+    entityId: text("entity_id" as string).notNull(),
+    // Fact classification — e.g. "coverage", "merchant", "lesson",
+    // "preference". Lets recall filter by kind.
+    kind: text("kind" as string).notNull(),
+    fact: text("fact" as string).notNull(),
+    sourceSessionId: text("source_session_id" as string),
+    sourceAgentSlug: text("source_agent_slug" as string),
+    // Stale-memory expiry — null means durable until superseded.
+    validUntil: text("valid_until" as string),
+    // Points at the memory row this fact replaces (contradictions /
+    // temporal updates mark their predecessor superseded, not deleted).
+    supersedes: text("supersedes" as string),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    index("workspace_memory_entity_idx" as string).on(
+      table.organizationId,
+      table.entityType,
+      table.entityId
+    ),
+    index("workspace_memory_kind_idx" as string).on(
+      table.organizationId,
+      table.kind
+    ),
+  ]
+);
+
 export const workspaceAgentTypes = sqliteTable(
   "agent_types" as string,
   {
