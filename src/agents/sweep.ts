@@ -1776,23 +1776,37 @@ export async function sweepAgentSessions(
             }
             if (polled.status === "failed") {
               await ingestFailedAgentSession(env, id, session, polled);
-              await pageChiefOfStaff(
-                env,
-                stub,
-                id,
-                {
-                  event: "agent.session_failed",
-                  issueId: session.issueId,
-                  sessionId: session.id,
-                  agentSlug: session.agentId ?? undefined,
-                  conversationKey: session.conversationKey ?? null,
-                  error:
-                    typeof polled.result === "string"
-                      ? polled.result
-                      : undefined,
-                },
-                ctx
+              // PILE-443 — a required sub-step's lane death rides the
+              // substep.review event to the reviewer (stage owner →
+              // chief fallback). Paging the chief here too would
+              // double-POST the endpoint.
+              const failedStep = session.issueId
+                ? await stub.getIssue(session.issueId).catch(() => null)
+                : null;
+              const reviewCovers = Boolean(
+                failedStep?.parentId &&
+                failedStep.required &&
+                session.purpose !== REVIEW_PURPOSE
               );
+              if (!reviewCovers) {
+                await pageChiefOfStaff(
+                  env,
+                  stub,
+                  id,
+                  {
+                    event: "agent.session_failed",
+                    issueId: session.issueId,
+                    sessionId: session.id,
+                    agentSlug: session.agentId ?? undefined,
+                    conversationKey: session.conversationKey ?? null,
+                    error:
+                      typeof polled.result === "string"
+                        ? polled.result
+                        : undefined,
+                  },
+                  ctx
+                );
+              }
               if (polled.infraFailure) {
                 await retryDeadLane(
                   env,
@@ -1941,6 +1955,15 @@ export async function sweepAgentSessions(
           sessions.slice(i, i + SWEEP_FANOUT).map(sweepSession)
         );
       }
+      // PILE-443 — poll writes emit domain events (substep.review on
+      // lane completion/failure). Drain once more so the reviewer's
+      // POST fires this pass instead of waiting a sweep.
+      await drainDomainEvents(env, stub, id, ctx).catch((err: unknown) => {
+        console.error("post-poll domain event drain failed", {
+          organizationId: id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
     } catch (err) {
       console.error("agent session sweep failed", {
         organizationId: id,
