@@ -841,6 +841,9 @@ export interface WorkspaceLaneToolContext {
     result?: string;
     plan?: SessionPlan;
   }): Promise<void>;
+  /** Page the chief of staff (external owner) — wired at the serving
+   *  boundary where env is available. */
+  escalate?(input: { question: string; context?: string }): Promise<void>;
   policy: LaneToolPolicy;
 }
 
@@ -920,6 +923,26 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
         ctx.agentSlug
       );
       if (!updated) throw new LaneToolError("issue not found");
+      return { ok: true };
+    },
+  }),
+  defineWorkspaceTool({
+    name: "escalate",
+    description:
+      "Page the chief of staff — block on the director: you're stuck, need a decision, or hit something outside your scope. Writes a comment and fires the external dispatch.",
+    permission: "ws:write",
+    inputSchema: z.object({
+      question: z.string().min(1).max(4_000),
+      context: z.string().max(4_000).optional(),
+    }),
+    async run(ctx, input) {
+      await ctx.ws.createComment({
+        issueId: ctx.issueId,
+        body: `@chief_of_staff escalation from ${ctx.agentSlug}: ${input.question}${input.context ? `\n\n${input.context}` : ""}`,
+        externalAuthor: ctx.agentSlug,
+        externalSource: "lane",
+      });
+      await ctx.escalate?.(input);
       return { ok: true };
     },
   }),

@@ -155,6 +155,56 @@ async function dispatchExternal(
   else await task;
 }
 
+/** Page the registered chief_of_staff external owner — the escalation
+ *  path for the org. Fires for lane deaths (agent.session_failed) and
+ *  worker-raised escalations (agent.escalated). No-op when the chief
+ *  isn't registered or isn't external. */
+export async function pageChiefOfStaff(
+  env: WorkerEnv,
+  stub: Stub,
+  organizationId: string,
+  info: {
+    event: "agent.session_failed" | "agent.escalated";
+    issueId?: string;
+    issueTitle?: string;
+    issueIdentifier?: string | null;
+    sessionId?: string;
+    agentSlug?: string;
+    conversationKey?: string | null;
+    error?: string;
+    question?: string;
+  },
+  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
+): Promise<void> {
+  const chief = await resolveOwner(stub, "chief_of_staff");
+  if (!chief || chief.kind !== "external" || !chief.endpointUrl) return;
+  await dispatchExternal(
+    env,
+    chief,
+    {
+      event: info.event,
+      organizationId,
+      session: info.sessionId
+        ? {
+            id: info.sessionId,
+            agentSlug: info.agentSlug ?? null,
+            conversationKey: info.conversationKey ?? null,
+          }
+        : null,
+      issue: info.issueId
+        ? {
+            id: info.issueId,
+            identifier: info.issueIdentifier ?? null,
+            title: info.issueTitle ?? null,
+          }
+        : null,
+      error: info.error ?? null,
+      question: info.question ?? null,
+    },
+    ctx
+  );
+}
+
 /** Durable conversation key for per-merchant agent memory — the flue
  *  worker names the conversation after this, so a profile's context for
  *  a merchant survives across dispatches. */
@@ -364,26 +414,50 @@ async function handleSubstepActionable(
   ]
     .filter((part) => part !== "")
     .join("\n");
-  await dispatchAgent(
-    env,
-    owner.agentId,
-    organizationId,
-    issue,
-    { ...PIPELINE_ACTOR, organizationId },
-    undefined,
-    ctx,
-    {
-      instructions,
-      stepKey: issue.stepKey ?? undefined,
-      agentProfile: {
-        slug: owner.slug,
-        name: owner.name,
-        jobSpec: owner.jobSpec,
-        toolScope: owner.toolScope,
+  try {
+    await dispatchAgent(
+      env,
+      owner.agentId,
+      organizationId,
+      issue,
+      { ...PIPELINE_ACTOR, organizationId },
+      undefined,
+      ctx,
+      {
+        instructions,
+        stepKey: issue.stepKey ?? undefined,
+        agentProfile: {
+          slug: owner.slug,
+          name: owner.name,
+          jobSpec: owner.jobSpec,
+          toolScope: owner.toolScope,
+        },
+        conversationKey: conversationKey(payload.parentId, owner.slug),
+      }
+    );
+  } catch (dispatchErr) {
+    // The lane died at dispatch — page the chief so a failed worker is
+    // never silent. Rethrow so the event still marks failed.
+    await pageChiefOfStaff(
+      env,
+      stub,
+      organizationId,
+      {
+        event: "agent.session_failed",
+        issueId: issue.id,
+        issueTitle: issue.title,
+        issueIdentifier: issue.identifier,
+        agentSlug: owner.slug,
+        conversationKey: conversationKey(payload.parentId, owner.slug),
+        error:
+          dispatchErr instanceof Error
+            ? dispatchErr.message
+            : String(dispatchErr),
       },
-      conversationKey: conversationKey(payload.parentId, owner.slug),
-    }
-  );
+      ctx
+    );
+    throw dispatchErr;
+  }
 }
 
 /** The record a parent's sub-steps belong to — the issue's linked deal or

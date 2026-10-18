@@ -1,4 +1,6 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
+import { getExecutionCtx } from "./execution-ctx.js";
+import { pageChiefOfStaff } from "../agents/pipeline-events.js";
 import { z } from "zod";
 import {
   McpServer,
@@ -166,6 +168,26 @@ export function registerLaneMcpRoutes(app: OpenAPIHono<AppContext>) {
         issueId: issue.id,
         agentSlug: session.agentId ?? agentType?.slug ?? "lane",
         report,
+        escalate: async (input) => {
+          await pageChiefOfStaff(
+            c.env,
+            stub,
+            organizationId,
+            {
+              event: "agent.escalated",
+              issueId: issue.id,
+              issueTitle: issue.title,
+              issueIdentifier: issue.identifier,
+              sessionId,
+              agentSlug: session.agentId ?? agentType?.slug ?? "lane",
+              conversationKey: session.conversationKey ?? null,
+              question: input.context
+                ? `${input.question}\n\n${input.context}`
+                : input.question,
+            },
+            getExecutionCtx(c) ?? undefined
+          );
+        },
         policy,
       };
       const repoCtx: LaneToolContext | null = repoScoped
