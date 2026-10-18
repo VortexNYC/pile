@@ -26,6 +26,7 @@ import {
   providerKeepsTerminalSandbox,
 } from "./index.js";
 import { getLaneDbProvider, type LaneDbRef } from "./lane-db.js";
+import { reapLaneApiKeys } from "./lane-api-key.js";
 import { reapLaneGithubTokens } from "./lane-github-token.js";
 import { nudgeLane } from "./nudge.js";
 import {
@@ -1039,6 +1040,10 @@ async function reapTerminalArtifacts(
   // sandbox itself is kept for follow-ups.
   await reapLaneGithubTokens(env, stub).catch((err: unknown) => {
     console.error("lane github token reap failed:", err);
+  });
+  // PILE-442 — the lane's scoped Pile API key dies with the session too.
+  await reapLaneApiKeys(env, stub).catch((err: unknown) => {
+    console.error("lane api key reap failed:", err);
   });
   const recent = await stub.listAgentSessions({ limit: 200 });
   // PILE-239/253 — first pass: terminal sessions inside the resume window on

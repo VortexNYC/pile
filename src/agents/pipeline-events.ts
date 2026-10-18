@@ -106,6 +106,7 @@ async function resolveOwner(
   endpointSecret: string | null;
   jobSpec: string | null;
   toolScope: string | null;
+  permissionsTier: string | null;
 } | null> {
   if (!slug) return null;
   const type = await stub.getAgentTypeBySlug(slug);
@@ -119,6 +120,7 @@ async function resolveOwner(
     endpointSecret: type.endpointSecret ?? null,
     jobSpec: type.jobSpec,
     toolScope: type.toolScope,
+    permissionsTier: type.permissionsTier,
   };
 }
 
@@ -273,7 +275,17 @@ async function handleStageEntered(
     { ...PIPELINE_ACTOR, organizationId },
     undefined,
     ctx,
-    { instructions, stepKey: stageName }
+    {
+      instructions,
+      stepKey: stageName,
+      agentProfile: {
+        slug: owner.slug,
+        name: owner.name,
+        jobSpec: owner.jobSpec,
+        toolScope: owner.toolScope,
+        permissionsTier: owner.permissionsTier,
+      },
+    }
   );
 }
 
@@ -389,6 +401,7 @@ async function handleSubstepActionable(
             name: chief.name,
             jobSpec: chief.jobSpec,
             toolScope: chief.toolScope,
+            permissionsTier: chief.permissionsTier,
           },
           conversationKey: conversationKey(payload.parentId, chief.slug),
         }
@@ -432,6 +445,7 @@ async function handleSubstepActionable(
           name: owner.name,
           jobSpec: owner.jobSpec,
           toolScope: owner.toolScope,
+          permissionsTier: owner.permissionsTier,
         },
         conversationKey: conversationKey(payload.parentId, owner.slug),
       }
@@ -709,6 +723,7 @@ async function handleSubstepReview(
             name: target.name,
             jobSpec: target.jobSpec,
             toolScope: target.toolScope,
+            permissionsTier: target.permissionsTier,
           }
         : undefined,
       conversationKey: conversationKey(payload.parentId, "reviewer"),

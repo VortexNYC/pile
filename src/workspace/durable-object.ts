@@ -335,6 +335,7 @@ function hasWorkspaceNamespace(env: AppEnv): env is WorkerEnv {
 }
 
 const LANE_GITHUB_TOKEN_PREFIX = "laneGithubToken:";
+const LANE_API_KEY_PREFIX = "laneApiKey:";
 
 // Viewer stamped on each websocket at connect (x-pile-ws-viewer) — used to
 // filter issue-bearing realtime events for restricted issues.
@@ -3606,6 +3607,30 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     });
     return [...entries.keys()].map((key) =>
       key.slice(LANE_GITHUB_TOKEN_PREFIX.length)
+    );
+  }
+
+  // PILE-442 — the D1 apikey row id each lane was minted, keyed by session
+  // (the stored value is JSON {keyId, agent}; the secret itself never lands
+  // here). The sweep revokes the row once the session is terminal.
+  async setLaneApiKey(sessionId: string, record: string): Promise<void> {
+    await this.ctx.storage.put(`${LANE_API_KEY_PREFIX}${sessionId}`, record);
+  }
+
+  async takeLaneApiKey(sessionId: string): Promise<string | null> {
+    const key = `${LANE_API_KEY_PREFIX}${sessionId}`;
+    const record = await this.ctx.storage.get<string>(key);
+    if (record === undefined) return null;
+    await this.ctx.storage.delete(key);
+    return record;
+  }
+
+  async listLaneApiKeySessions(): Promise<string[]> {
+    const entries = await this.ctx.storage.list({
+      prefix: LANE_API_KEY_PREFIX,
+    });
+    return [...entries.keys()].map((key) =>
+      key.slice(LANE_API_KEY_PREFIX.length)
     );
   }
 

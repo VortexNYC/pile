@@ -34,6 +34,7 @@ const dispatchBodySchema = z.object({
       name: z.string(),
       jobSpec: z.string().nullable().optional(),
       toolScope: z.string().nullable().optional(),
+      permissionsTier: z.string().nullable().optional(),
       providerAgentId: z.string().nullable().optional(),
       model: z.string().nullable().optional(),
       prompt: z.string().nullable().optional(),
@@ -168,6 +169,7 @@ export function registerFlueDispatchRoutes(app: OpenAPIHono<AppContext>) {
                   name: body.profile.name,
                   jobSpec: body.profile.jobSpec ?? null,
                   toolScope: body.profile.toolScope ?? null,
+                  permissionsTier: body.profile.permissionsTier ?? null,
                 }
               : undefined,
           }

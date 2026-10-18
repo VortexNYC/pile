@@ -1,5 +1,4 @@
 import { eq } from "drizzle-orm";
-import { z } from "zod";
 
 import { createD1, type D1Client } from "../global/db.js";
 import {
@@ -8,7 +7,6 @@ import {
 } from "../global/pile-repo-config.js";
 import { organization } from "../global/schema.js";
 import { getTeamById } from "../global/teams.js";
-import { createAuth } from "../platform/auth.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { WorkerEnv } from "../platform/middleware.js";
@@ -36,6 +34,7 @@ import { checkDispatchDedupe, type DedupeResult } from "./dedupe.js";
 import { DevinCliAgentProvider } from "./devin-cli.js";
 import { DevinAgentProvider } from "./devin.js";
 import { guidanceRefs, renderGuidancePacks } from "./guidance.js";
+import { mintLaneApiKey } from "./lane-api-key.js";
 import {
   getLaneDbProvider,
   laneDbConfigForRepo,
@@ -238,6 +237,7 @@ export async function dispatchAgent(
       name: string;
       jobSpec?: string | null;
       toolScope?: string | null;
+      permissionsTier?: string | null;
     };
     /** Durable conversation key for provider-side memory — the drainer
      *  passes `{merchantId}-{agentSlug}` so per-merchant context survives
@@ -667,28 +667,32 @@ export async function dispatchAgent(
         body: c.body,
       }));
 
-    // Mint a scoped read-only credential so the dispatched agent can read
-    // linked support tickets and capture artifacts through the API. If minting
-    // fails the dispatch proceeds — the agent just lacks Pile access.
+    // Mint the lane's Pile credential scoped to the agent type's declared
+    // role (permissionsTier bundle + toolScope domains — PILE-442). The
+    // type resolves from the dispatch profile, falling back to the issue's
+    // ownerAgent so retries/sub-step re-dispatches keep the role scope.
+    // If minting fails the dispatch proceeds — the agent just lacks Pile
+    // access.
     let pileApi: { url: string; key: string } | undefined;
     try {
-      const auth = await createAuth(env);
-      const created = await auth.api.createApiKey({
-        body: {
-          userId: actor.id,
-          name: `agent-${session.id.slice(0, 13)}`,
-          rateLimitEnabled: false,
-          metadata: {
-            organizationId,
-            permissions: "read",
-            actorType: "agent",
-          },
-          permissions: { workspace: ["read"] },
-        },
+      const agentSlug = options?.agentProfile?.slug ?? issue.ownerAgent;
+      const agentType = agentSlug
+        ? await stub.getAgentTypeBySlug(agentSlug).catch(() => null)
+        : null;
+      const minted = await mintLaneApiKey(env, stub, {
+        organizationId,
+        sessionId: session.id,
+        agent: agentSlug ?? agentId,
+        permissionsTier:
+          agentType?.permissionsTier ??
+          options?.agentProfile?.permissionsTier ??
+          null,
+        toolScope:
+          agentType?.toolScope ?? options?.agentProfile?.toolScope ?? null,
+        teamId: issue.teamId,
       });
-      const parsed = z.object({ key: z.string() }).safeParse(created);
-      if (parsed.success && env.PUBLIC_API_URL) {
-        pileApi = { url: env.PUBLIC_API_URL, key: parsed.data.key };
+      if (minted) {
+        pileApi = { url: minted.url, key: minted.key };
       } else {
         await stub
           .addAgentActivity({
@@ -696,7 +700,7 @@ export async function dispatchAgent(
             actorId: actor.id,
             type: "error",
             system: true,
-            message: `Pile API credential unavailable: ${!parsed.success ? "unexpected createApiKey response" : "PUBLIC_API_URL unset"}`,
+            message: "Pile API credential unavailable: PUBLIC_API_URL unset",
           })
           .catch(() => {});
       }

@@ -65,6 +65,7 @@ export interface AgentDispatchContext {
     name: string;
     jobSpec?: string | null;
     toolScope?: string | null;
+    permissionsTier?: string | null;
   };
   /** Explicit durable-conversation key for the run (PILE-435 follow-on) —
    *  callers pass `{merchantId}-{agentSlug}` so a profile's memory for a

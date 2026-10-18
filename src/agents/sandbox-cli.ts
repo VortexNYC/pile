@@ -307,7 +307,7 @@ function buildPrompt(
     ...(pileApi
       ? [
           "",
-          "Pile API: a scoped read-only credential is in the environment as $PILE_API_KEY (base URL $PILE_API_URL). If this issue references a support ticket or capture artifacts, fetch them first:",
+          "Pile API: a short-lived credential scoped to this lane's role is in the environment as $PILE_API_KEY (base URL $PILE_API_URL; GET /me/permissions lists its grants). If this issue references a support ticket or capture artifacts, fetch them first:",
           '  curl -s "$PILE_API_URL/workspaces/<org>/support/tickets/<ticketId>/artifacts" -H "Authorization: Bearer $PILE_API_KEY"',
           "Text artifacts (debugger_json, network, log, replay) come back inline; screenshots/video come back as URLs with an available flag.",
         ]
