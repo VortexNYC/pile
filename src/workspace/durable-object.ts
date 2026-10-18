@@ -22,6 +22,7 @@ import { migrate } from "drizzle-orm/durable-sqlite/migrator";
 import { alias } from "drizzle-orm/sqlite-core";
 import { z } from "zod";
 
+import { encryptSecret } from "../agents/credentials.js";
 import {
   LANE_PROGRESS_HEARTBEAT_MS,
   LANE_PROGRESS_THROTTLE_MS,
@@ -119,7 +120,6 @@ import {
   type RealtimeEvent,
 } from "../types/workspace.js";
 import * as data from "./data/index.js";
-import { encryptSecret } from "../agents/credentials.js";
 import { filterToSql } from "./filter.js";
 import { workspaceMigrations } from "./migrations.js";
 import { type ReviewVerdict, rollReviewSummary } from "./review-summary.js";

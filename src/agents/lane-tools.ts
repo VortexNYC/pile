@@ -791,20 +791,22 @@ export function allowedLaneTools(policy: LaneToolPolicy): LaneTool[] {
   return LANE_TOOLS.filter((tool) => laneToolAllowed(policy, tool));
 }
 
-
 // ---- workspace-domain tools (pipeline lanes) -----------------------------
 
 /** The slice of the workspace DO a pipeline lane needs — the concrete stub
  *  satisfies this structurally; kept narrow so tests can fake it. */
 export interface LaneWorkspace {
-  getIssue(id: string): Promise<{
-    id: string;
-    identifier?: string | null;
-    title?: string | null;
-    status?: string | null;
-    customerId?: string | null;
-    description?: string | null;
-  } | undefined>;
+  getIssue(id: string): Promise<
+    | {
+        id: string;
+        identifier?: string | null;
+        title?: string | null;
+        status?: string | null;
+        customerId?: string | null;
+        description?: string | null;
+      }
+    | undefined
+  >;
   createComment(values: {
     issueId: string;
     body: string;
@@ -827,24 +829,29 @@ export interface LaneWorkspace {
   getCustomerByDomain(domain: string): Promise<unknown>;
   getCustomerByExternalId(externalId: string): Promise<unknown>;
   listCustomers(): Promise<unknown[]>;
-  getDocument(id: string): Promise<{
-    id: string;
-    title?: string | null;
-    slug?: string | null;
-    content?: unknown;
-    updatedAt?: string | null;
-  } | undefined>;
+  getDocument(id: string): Promise<
+    | {
+        id: string;
+        title?: string | null;
+        slug?: string | null;
+        content?: unknown;
+        updatedAt?: string | null;
+      }
+    | undefined
+  >;
   listDocuments(args?: {
     slug?: string;
     issueId?: string;
     isTemplate?: boolean;
-  }): Promise<Array<{
-    id: string;
-    title?: string | null;
-    slug?: string | null;
-    content?: unknown;
-    updatedAt?: string | null;
-  }>>;
+  }): Promise<
+    Array<{
+      id: string;
+      title?: string | null;
+      slug?: string | null;
+      content?: unknown;
+      updatedAt?: string | null;
+    }>
+  >;
   createDocument(input: {
     title: string;
     slug?: string | null;
@@ -927,7 +934,8 @@ function defineWorkspaceTool<S extends z.ZodObject>(
   };
 }
 
-const BLOCKED_HOSTS = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|[\[f]|[0:]+$)/i;
+const BLOCKED_HOSTS =
+  /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|[[f]|[0:]+$)/i;
 
 export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
   defineWorkspaceTool({
@@ -1090,9 +1098,7 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
     async run(ctx, input) {
       const keys = [input.id, input.domain, input.externalId].filter(Boolean);
       if (keys.length !== 1) {
-        throw new LaneToolError(
-          "pass exactly one of id / domain / externalId"
-        );
+        throw new LaneToolError("pass exactly one of id / domain / externalId");
       }
       const found = input.id
         ? await ctx.ws.getCustomer(input.id)
@@ -1201,7 +1207,5 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
 export function allowedWorkspaceLaneTools(
   policy: LaneToolPolicy
 ): WorkspaceLaneTool[] {
-  return WORKSPACE_LANE_TOOLS.filter((tool) =>
-    laneToolAllowed(policy, tool)
-  );
+  return WORKSPACE_LANE_TOOLS.filter((tool) => laneToolAllowed(policy, tool));
 }

@@ -301,9 +301,10 @@ describe("lane MCP endpoint", () => {
     });
     const parsed = rpcResponse.parse(await call.json());
     expect(parsed.error).toBeUndefined();
-    const issueOut = JSON.parse(
-      parsed.result?.content?.[0]?.text ?? "{}"
-    ) as { id: string; title?: string };
+    const issueOut = JSON.parse(parsed.result?.content?.[0]?.text ?? "{}") as {
+      id: string;
+      title?: string;
+    };
     expect(issueOut.id).toBe(issue.id);
 
     // a denied tool refuses at call time too
@@ -315,8 +316,7 @@ describe("lane MCP endpoint", () => {
     });
     const deniedParsed = rpcResponse.parse(await denied.json());
     expect(
-      deniedParsed.error !== undefined ||
-        deniedParsed.result?.isError === true
+      deniedParsed.error !== undefined || deniedParsed.result?.isError === true
     ).toBe(true);
   });
 

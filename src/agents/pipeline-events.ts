@@ -1,10 +1,10 @@
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { Issue } from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
-import { dispatchAgent } from "./index.js";
-import { REVIEW_PURPOSE } from "./review.js";
 import { decryptSecret } from "./credentials.js";
+import { dispatchAgent } from "./index.js";
 import { automationEventTarget } from "./repo-triggers.js";
+import { REVIEW_PURPOSE } from "./review.js";
 import { fireEventAutomations } from "./sweep.js";
 
 /** PILE-401/405/413 — drains the DO's domain-event outbox into agent
@@ -385,8 +385,7 @@ async function handleSubstepActionable(
         ctx,
         {
           instructions: [
-            chief.jobSpec ??
-              "Triage an orphaned pipeline sub-step.",
+            chief.jobSpec ?? "Triage an orphaned pipeline sub-step.",
             "",
             `Unassigned sub-step: ${issue.title} (owner_agent "${issue.ownerAgent}" has no registered agent type)`,
             parent
@@ -693,7 +692,7 @@ async function handleSubstepReview(
       ? `Parent deal issue: ${parent.identifier ?? parent.id} — ${parent.title}`
       : "",
     "",
-    "Return your verdict as JSON: {\"verdict\": \"pass\"|\"fail\", \"reasons\": \"...\"}.",
+    'Return your verdict as JSON: {"verdict": "pass"|"fail", "reasons": "..."}.',
   ]
     .filter((part) => part !== "")
     .join("\n");

@@ -372,7 +372,10 @@ describe("sensitive records (PILE-428)", () => {
       {},
       seeded.token
     );
-    const listed = (await typesRes.json()) as { agentTypes: unknown[] };
+    const listed = (await typesRes.json()) as {
+      agentTypes: Array<{ slug: string }>;
+    };
+    expect(listed.agentTypes.some((t) => t.slug === "scout")).toBe(true);
 
     const issueRes = await fetch(
       `/workspaces/${seeded.organizationId}/issues`,

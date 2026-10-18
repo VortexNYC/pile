@@ -2,6 +2,7 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
 import { loadProviderConfig } from "../agents/credentials.js";
+import { decryptSecret } from "../agents/credentials.js";
 import { resolveAgentEnv } from "../agents/daytona.js";
 import {
   followupThrottleWindowMs,
@@ -9,7 +10,6 @@ import {
 } from "../agents/followup.js";
 import { getAgentProvider } from "../agents/index.js";
 import { dispatchAgent } from "../agents/index.js";
-import { decryptSecret } from "../agents/credentials.js";
 import { triggerPlanMode } from "../agents/plan-dispatch.js";
 import { parsePlanCommand } from "../agents/plan.js";
 import { createD1 } from "../global/db.js";
@@ -348,7 +348,11 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
               event: "agent.mentioned",
               organizationId,
               agent: agentType.slug,
-              issue: { id: issue.id, identifier: issue.identifier, title: issue.title },
+              issue: {
+                id: issue.id,
+                identifier: issue.identifier,
+                title: issue.title,
+              },
               mentionedBy: identity.id,
               request: request || "(mention with no request text)",
               conversationKey: `${issue.id}-${agentType.slug}`,
