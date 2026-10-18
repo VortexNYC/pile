@@ -138,6 +138,41 @@ export class DevinAgentProvider implements AgentProvider {
     }
 
     const repo = issue.repo;
+    const resumeId = sessionContext?.resumeProviderSessionId;
+    if (resumeId) {
+      // Resume — message the existing Devin session pinned to this
+      // conversationKey rather than creating a new one.
+      const msg = await fetch(
+        `https://api.devin.ai/v3/organizations/${orgId}/sessions/${resumeId}/message`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${this.env.DEVIN_TOKEN}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            message:
+              sessionContext?.instructions ??
+              `Follow-up on ${issue.identifier ?? issue.id}: ${issue.title}`,
+          }),
+        }
+      );
+      if (!msg.ok) {
+        const text = await msg.text();
+        throw new VortexError({
+          code: "AGENT_ERROR",
+          status: 502,
+          message: `Devin resume failed: ${msg.status} ${text}`,
+        });
+      }
+      return {
+        id: resumeId,
+        agentId: this.id,
+        issueId: issue.id,
+        status: "running",
+        url: `https://app.devin.ai/sessions/${resumeId}`,
+      };
+    }
     const res = await fetch(
       `https://api.devin.ai/v3/organizations/${orgId}/sessions`,
       {
