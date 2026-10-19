@@ -654,6 +654,9 @@ export const workspaceCustomers = sqliteTable(
     notes: text("notes" as string),
     domain: text("domain" as string),
     externalId: text("external_id" as string),
+    // signal-based intake — what event produced this candidate and when
+    signal: text("signal" as string),
+    signalDate: text("signal_date" as string),
     phone: text("phone" as string),
     address: text("address" as string),
     vertical: text("vertical" as string),
@@ -796,6 +799,34 @@ export const workspaceCustomerContacts = sqliteTable(
     index("customer_contacts_value_idx" as string).on(
       table.organizationId,
       table.value
+    ),
+  ]
+);
+
+export const workspaceMerchantSources = sqliteTable(
+  "merchant_sources" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    name: text("name" as string).notNull(),
+    // socrata | usaspending | sam | opencorporates | places | serper
+    kind: text("kind" as string).notNull(),
+    // JSON — domain/dataset/params/field-map per kind
+    config: text("config" as string).notNull().default("{}"),
+    cursorField: text("cursor_field" as string),
+    cursorValue: text("cursor_value" as string),
+    // license_pending | corp_filing | award | violation | registration
+    signal: text("signal" as string).notNull().default("registration"),
+    cadence: text("cadence" as string).notNull().default("daily"),
+    enabled: integer("enabled" as string).notNull().default(1),
+    lastRunAt: text("last_run_at" as string),
+    runCount: integer("run_count" as string).notNull().default(0),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    index("merchant_sources_enabled_idx" as string).on(
+      table.organizationId,
+      table.enabled
     ),
   ]
 );

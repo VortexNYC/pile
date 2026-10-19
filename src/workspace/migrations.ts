@@ -1419,6 +1419,26 @@ CREATE TABLE IF NOT EXISTS customer_contacts (
 CREATE INDEX IF NOT EXISTS customer_contacts_customer_idx ON customer_contacts(organization_id, customer_id);
 CREATE INDEX IF NOT EXISTS customer_contacts_value_idx ON customer_contacts(organization_id, value)`;
 
+const v100 = `CREATE TABLE IF NOT EXISTS merchant_sources (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  config TEXT NOT NULL DEFAULT '{}',
+  cursor_field TEXT,
+  cursor_value TEXT,
+  signal TEXT NOT NULL DEFAULT 'registration',
+  cadence TEXT NOT NULL DEFAULT 'daily',
+  enabled INTEGER NOT NULL DEFAULT 1,
+  last_run_at TEXT,
+  run_count INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS merchant_sources_enabled_idx ON merchant_sources(organization_id, enabled);
+ALTER TABLE customers ADD COLUMN signal TEXT;
+ALTER TABLE customers ADD COLUMN signal_date TEXT;
+ALTER TABLE customers ADD COLUMN priority_score REAL`;
+
 const v97 = `CREATE TABLE IF NOT EXISTS lane_costs (
   session_id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -1744,6 +1764,7 @@ export const workspaceMigrations = {
       { idx: 96, when: 96, tag: "v97", breakpoints: true },
       { idx: 97, when: 97, tag: "v98", breakpoints: true },
       { idx: 98, when: 98, tag: "v99", breakpoints: true },
+      { idx: 99, when: 99, tag: "v100", breakpoints: true },
     ],
   },
   migrations: {
@@ -1846,5 +1867,6 @@ export const workspaceMigrations = {
     m0096: v97,
     m0097: v98,
     m0098: v99,
+    m0099: v100,
   },
 } satisfies Parameters<typeof migrate>[1];

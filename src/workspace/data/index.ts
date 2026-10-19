@@ -56,6 +56,7 @@ import {
   workspaceCustomerContacts,
   workspaceSuppression,
   workspaceMarketRuns,
+  workspaceMerchantSources,
   workspaceDeals,
   workspaceFieldDefinitions,
   workspaceFieldValues,
@@ -5218,6 +5219,8 @@ export interface CustomerInput {
   nextStepDueAt?: string | null;
   needsHuman?: boolean | null;
   needsHumanReason?: string | null;
+  signal?: string | null;
+  signalDate?: string | null;
   priorityScore?: number | null;
   createdAt?: string;
 }
@@ -5282,6 +5285,8 @@ export function createCustomer(db: WorkspaceDb, input: CustomerInput) {
       nextStepDueAt: input.nextStepDueAt ?? null,
       needsHuman: input.needsHuman ?? null,
       needsHumanReason: input.needsHumanReason ?? null,
+      signal: input.signal ?? null,
+      signalDate: input.signalDate ?? null,
       priorityScore: input.priorityScore ?? null,
       createdAt: input.createdAt ?? now,
       updatedAt: now,
@@ -9031,4 +9036,94 @@ export function listTriageEvaluations(
     .orderBy(desc(workspaceTriageRuleEvaluations.createdAt))
     .limit(Math.min(Math.max(filter.limit ?? 50, 1), 200))
     .all();
+}
+
+// ── Merchant sources (signal-based intake) ──────────────────────────────────
+
+export interface MerchantSourceInput {
+  name: string;
+  kind: string;
+  config?: Record<string, unknown> | null;
+  cursorField?: string | null;
+  signal?: string;
+  cadence?: string;
+}
+
+export function upsertMerchantSource(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: MerchantSourceInput
+) {
+  const existing = db
+    .select()
+    .from(workspaceMerchantSources)
+    .where(
+      and(
+        eq(workspaceMerchantSources.organizationId, organizationId),
+        eq(workspaceMerchantSources.name, input.name)
+      )
+    )
+    .all()[0];
+  if (existing) return existing;
+  return db
+    .insert(workspaceMerchantSources)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId,
+      name: input.name,
+      kind: input.kind,
+      config: JSON.stringify(input.config ?? {}),
+      cursorField: input.cursorField ?? null,
+      signal: input.signal ?? "registration",
+      cadence: input.cadence ?? "daily",
+      createdAt: new Date().toISOString(),
+    })
+    .returning()
+    .all()[0];
+}
+
+export function listMerchantSources(
+  db: WorkspaceDb,
+  organizationId: string,
+  args: { enabledOnly?: boolean; kind?: string } = {}
+) {
+  const conds = [eq(workspaceMerchantSources.organizationId, organizationId)];
+  if (args.enabledOnly) conds.push(eq(workspaceMerchantSources.enabled, 1));
+  if (args.kind) conds.push(eq(workspaceMerchantSources.kind, args.kind));
+  return db
+    .select()
+    .from(workspaceMerchantSources)
+    .where(and(...conds))
+    .all();
+}
+
+export function updateMerchantSource(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string,
+  patch: {
+    cursorValue?: string | null;
+    lastRunAt?: string;
+    runCount?: number;
+    enabled?: number;
+    config?: Record<string, unknown>;
+  }
+) {
+  const updates: Record<string, unknown> = {};
+  if (patch.cursorValue !== undefined) updates.cursorValue = patch.cursorValue;
+  if (patch.lastRunAt !== undefined) updates.lastRunAt = patch.lastRunAt;
+  if (patch.runCount !== undefined) updates.runCount = patch.runCount;
+  if (patch.enabled !== undefined) updates.enabled = patch.enabled;
+  if (patch.config !== undefined) updates.config = JSON.stringify(patch.config);
+  return db
+    .update(workspaceMerchantSources)
+    .set(updates)
+    .where(
+      and(
+        eq(workspaceMerchantSources.id, id),
+        eq(workspaceMerchantSources.organizationId, organizationId)
+      )
+    )
+    .returning()
+    .all()[0];
 }
