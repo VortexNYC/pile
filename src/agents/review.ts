@@ -39,6 +39,17 @@ const PR_FILES_PAGE_CAP = 10;
 // Verdicts are published by the sweep; past this age a terminal review
 // session is presumed handled (or abandoned) and no longer scanned.
 const PUBLISH_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+// PILE-445 — a non-completed pile-review check run older than this with no
+// live lane behind it is orphaned: the lane died before it could publish
+// (provisioning failure, lost session record, a dropped resolve PATCH) and
+// nothing will ever complete it. The requester resolves it or takes it over
+// instead of deduping on it. The age gate covers the create→dispatch window
+// where the run exists before the session row/event is visible.
+export const REVIEW_CHECK_STALE_MS = 15 * 60 * 1000;
+// Dispatch attempts per headSha — one automatic retry, mirroring the work
+// lane's MAX_AUTO_RETRIES. A review lane that dies on provisioning gets a
+// second lane via the stale-run takeover, then the check resolves.
+const MAX_REVIEW_ATTEMPTS = 2;
 
 type WorkspaceStub = DurableObjectStub<WorkspaceDO>;
 
@@ -73,6 +84,7 @@ export interface ReviewTarget {
 
 export interface ReviewDeps {
   fetch?: typeof fetch;
+  now?: number;
 }
 
 export type ReviewRequestOutcome =
@@ -492,22 +504,82 @@ async function listPrFiles(
   return files;
 }
 
-async function existingReviewCheck(
+export interface ReviewCheckRun {
+  id: number;
+  status?: string | null;
+  conclusion?: string | null;
+  started_at?: string | null;
+}
+
+/** Every pile-review check run for a head sha — each dispatch attempt opens
+ *  exactly one, so the count doubles as the retry bound when the Pile-side
+ *  record is lost. */
+async function listReviewChecks(
   ghFetch: typeof fetch,
   token: string,
   repoFull: string,
   headSha: string
-): Promise<boolean> {
+): Promise<ReviewCheckRun[]> {
   const raw = await gh(
     ghFetch,
     token,
     "GET",
-    `/repos/${repoFull}/commits/${headSha}/check-runs?check_name=${REVIEW_CHECK_NAME}&per_page=1`
+    `/repos/${repoFull}/commits/${headSha}/check-runs?check_name=${REVIEW_CHECK_NAME}&per_page=100`
   ).catch(() => null);
   const parsed = z
-    .object({ check_runs: z.array(z.object({ id: z.number() })) })
+    .object({
+      check_runs: z.array(
+        z.object({
+          id: z.number(),
+          status: z.string().nullish(),
+          conclusion: z.string().nullish(),
+          started_at: z.string().nullish(),
+        })
+      ),
+    })
     .safeParse(raw);
-  return parsed.success && parsed.data.check_runs.length > 0;
+  return parsed.success ? parsed.data.check_runs : [];
+}
+
+/** A pile-review run is hung when it never reached `completed` and its start
+ *  is older than the stale window. Runs missing a start time stay live —
+ *  without an age we can't rule out the create→dispatch window. */
+export function reviewCheckStale(
+  run: { status?: string | null; started_at?: string | null } | null,
+  now: number
+): boolean {
+  if (!run || run.status === "completed") return false;
+  const started = Date.parse(run.started_at ?? "");
+  return Number.isFinite(started) && now - started > REVIEW_CHECK_STALE_MS;
+}
+
+/** Complete a check run neutral — the lane is dead or never ran, so the run
+ *  must not sit pending forever. Best-effort: a rejected PATCH just leaves
+ *  the run stale for the next pass. */
+async function resolveReviewCheck(
+  ghFetch: typeof fetch,
+  token: string,
+  repoFull: string,
+  checkRunId: number,
+  output: { title: string; summary: string }
+): Promise<void> {
+  await gh(
+    ghFetch,
+    token,
+    "PATCH",
+    `/repos/${repoFull}/check-runs/${checkRunId}`,
+    {
+      status: "completed",
+      conclusion: "neutral",
+      completed_at: new Date().toISOString(),
+      output,
+    }
+  ).catch((err) => {
+    console.error("pile-review check-run resolve failed", {
+      checkRunId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  });
 }
 
 function parsePayload(payload: string | null): unknown {
@@ -519,13 +591,20 @@ function parsePayload(payload: string | null): unknown {
   }
 }
 
-/** Review sessions Pile already started for this headSha. */
+const REVIEW_TERMINAL_STATUSES = new Set(["completed", "failed", "canceled"]);
+
+/** Review sessions Pile already started for this headSha. `live` = one is
+ *  still non-terminal (it owns the sha's check run — dedupe outright);
+ *  `attempts` counts every lane that recorded `review.requested`, so the
+ *  stale-run takeover stays bounded. */
 async function reviewSessionsFor(
   stub: WorkspaceStub,
   issueId: string,
   target: Pick<ReviewTarget, "prUrl" | "headSha">
-): Promise<boolean> {
+): Promise<{ live: boolean; attempts: number }> {
   const sessions = await stub.listAgentSessions({ issueId, limit: 50 });
+  let live = false;
+  let attempts = 0;
   for (const s of sessions) {
     if (s.purpose !== REVIEW_PURPOSE) continue;
     const events = await stub.listAgentSessionEvents(s.id, {
@@ -541,9 +620,11 @@ async function reviewSessionsFor(
         p.data.prUrl === target.prUrl
       );
     });
-    if (hit) return true;
+    if (!hit) continue;
+    attempts += 1;
+    if (!REVIEW_TERMINAL_STATUSES.has(s.status)) live = true;
   }
-  return false;
+  return { live, attempts };
 }
 
 /** Start the review lane for a PR head, at most once per headSha. Opt-in per
@@ -559,8 +640,14 @@ export async function requestPrReview(
   deps: ReviewDeps = {}
 ): Promise<ReviewRequestOutcome> {
   const ghFetch = deps.fetch ?? fetch;
+  const now = deps.now ?? Date.now();
+  // PILE-445 — the run this request opened: once it exists, every failure
+  // path must complete it or the PR carries a pending pile-review check
+  // forever.
+  let openedCheckRunId: number | null = null;
   try {
-    if (await reviewSessionsFor(stub, issue.id, target)) return "deduped";
+    const prior = await reviewSessionsFor(stub, issue.id, target);
+    if (prior.live) return "deduped";
 
     const config = await fetchRepoConfig(
       ghFetch,
@@ -573,11 +660,50 @@ export async function requestPrReview(
     if (config.agents && !config.agents.includes(agentId)) return "disabled";
 
     // The check run is the cross-path marker: it exists before the session
-    // event does, and survives a lost Pile record.
-    if (
-      await existingReviewCheck(ghFetch, token, target.repoFull, target.headSha)
-    ) {
+    // event does, and survives a lost Pile record. A fresh pending run
+    // dedupes; a stale one is an orphan left by a lane that died before
+    // publishing — resolved below so it can't gate the PR forever.
+    const runs = await listReviewChecks(
+      ghFetch,
+      token,
+      target.repoFull,
+      target.headSha
+    );
+    const staleOpens = runs.filter(
+      (r) => r.status !== "completed" && reviewCheckStale(r, now)
+    );
+    // Any fresh pending run means a dispatch is in flight right now.
+    if (runs.some((r) => r.status !== "completed" && !reviewCheckStale(r, now)))
       return "deduped";
+    const delivered = runs.some(
+      (r) => r.status === "completed" && r.conclusion !== "neutral"
+    );
+    const outOfAttempts =
+      prior.attempts >= MAX_REVIEW_ATTEMPTS ||
+      runs.length >= MAX_REVIEW_ATTEMPTS;
+    if (delivered || outOfAttempts) {
+      // Verdict already landed, or the retry budget is spent — still close
+      // any stale orphans so nothing on the PR waits on them.
+      for (const run of staleOpens) {
+        await resolveReviewCheck(ghFetch, token, target.repoFull, run.id, {
+          title: delivered
+            ? "Superseded by a later pile-review run"
+            : "Review did not complete",
+          summary: delivered
+            ? `A completed pile-review check already covers \`${target.headSha.slice(0, 12)}\`.`
+            : `The pile-review lane for \`${target.headSha.slice(0, 12)}\` never reported a verdict and is out of retries.`,
+        });
+      }
+      return "deduped";
+    }
+    // Takeover: one lane + one run per attempt — whichever record survives
+    // (session event or run count) bounds the retries. Resolve the orphaned
+    // run, then fall through to a fresh dispatch for the same sha.
+    for (const run of staleOpens) {
+      await resolveReviewCheck(ghFetch, token, target.repoFull, run.id, {
+        title: "Review lane lost — retrying",
+        summary: `The pile-review lane for \`${target.headSha.slice(0, 12)}\` never reported; dispatching a new attempt.`,
+      });
     }
 
     const files = await listPrFiles(ghFetch, token, target);
@@ -621,7 +747,8 @@ export async function requestPrReview(
       });
       return null;
     });
-    const checkRunId = z.object({ id: z.number() }).safeParse(checkRun);
+    const parsedRun = z.object({ id: z.number() }).safeParse(checkRun);
+    openedCheckRunId = parsedRun.success ? parsedRun.data.id : null;
 
     const skipped = files
       .filter((f) => !reviewable.includes(f))
@@ -632,9 +759,8 @@ export async function requestPrReview(
       skipped
     );
     const providerConfig = await loadProviderConfig(env, stub, agentId);
-    let session: AgentSession;
     try {
-      session = await dispatchAgent(
+      const session = await dispatchAgent(
         resolveAgentEnv(env, providerConfig ?? undefined),
         agentId,
         organizationId,
@@ -655,24 +781,35 @@ export async function requestPrReview(
           concurrent: true,
         }
       );
+      // The publish pass keys on this event — if it can't be written the
+      // lane still runs but its verdict can never land, so the run resolves
+      // like a dispatch failure (PILE-445).
+      const payload: RequestedPayload = {
+        prUrl: target.prUrl,
+        repo: target.repoFull,
+        pullNumber: target.pullNumber,
+        headSha: target.headSha,
+        checkRunId: openedCheckRunId,
+      };
+      await stub.addAgentSessionEvent({
+        sessionId: session.id,
+        type: "review.requested",
+        message: `Review requested for ${target.prUrl} @ ${target.headSha.slice(0, 12)}`,
+        payload,
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      if (checkRunId.success) {
-        await gh(
+      if (openedCheckRunId !== null) {
+        await resolveReviewCheck(
           ghFetch,
           token,
-          "PATCH",
-          `/repos/${target.repoFull}/check-runs/${checkRunId.data.id}`,
+          target.repoFull,
+          openedCheckRunId,
           {
-            status: "completed",
-            conclusion: "neutral",
-            completed_at: new Date().toISOString(),
-            output: {
-              title: "Review lane could not start",
-              summary: message.slice(0, 2000),
-            },
+            title: "Review lane could not start",
+            summary: message.slice(0, 2000),
           }
-        ).catch(() => {});
+        );
       }
       console.error("pile-review dispatch failed", {
         prUrl: target.prUrl,
@@ -680,22 +817,26 @@ export async function requestPrReview(
       });
       return "failed";
     }
-
-    const payload: RequestedPayload = {
-      prUrl: target.prUrl,
-      repo: target.repoFull,
-      pullNumber: target.pullNumber,
-      headSha: target.headSha,
-      checkRunId: checkRunId.success ? checkRunId.data.id : null,
-    };
-    await stub.addAgentSessionEvent({
-      sessionId: session.id,
-      type: "review.requested",
-      message: `Review requested for ${target.prUrl} @ ${target.headSha.slice(0, 12)}`,
-      payload,
-    });
     return "dispatched";
   } catch (err) {
+    // PILE-445 — anything past the check-run create (provider config, event
+    // write, a blown RPC) resolves the run; only a thrown resolve keeps it
+    // pending, and the stale-run sweep picks that up.
+    if (openedCheckRunId !== null) {
+      await resolveReviewCheck(
+        ghFetch,
+        token,
+        target.repoFull,
+        openedCheckRunId,
+        {
+          title: "Review lane could not start",
+          summary: (err instanceof Error ? err.message : String(err)).slice(
+            0,
+            2000
+          ),
+        }
+      );
+    }
     console.error("pile-review request failed", {
       prUrl: target.prUrl,
       error: err instanceof Error ? err.message : String(err),

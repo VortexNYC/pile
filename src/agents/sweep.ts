@@ -53,6 +53,7 @@ import {
   REVIEW_CHECK_NAME,
   REVIEW_PURPOSE,
   requestPrReview,
+  reviewCheckStale,
 } from "./review.js";
 import { parseStoredSecondaryRepos } from "./secondary-repos.js";
 import {
@@ -619,7 +620,8 @@ async function retryDeadLane(
     return;
   }
   // A review side lane redispatched through the issue would come back as a
-  // full implementation lane; the next PR sync re-requests the review.
+  // full implementation lane; the stale pile-review check run its death
+  // orphaned is retried/resolved through requestPrReview instead (PILE-445).
   if (session.purpose === REVIEW_PURPOSE) return;
   const streak = await providerInfraStreak(stub, session.agentId);
   if (streak >= PROVIDER_UNHEALTHY_STREAK) {
@@ -2087,8 +2089,9 @@ export async function syncOpenPrSessions(
         status?: string;
         conclusion?: string | null;
         details_url?: string;
+        started_at?: string;
       }> = [];
-      let hasReviewCheck = false;
+      let reviewRun: (typeof checkRuns)[number] | null = null;
       if (headSha) {
         const checks = (await withTimeout(
           githubApiGet(
@@ -2104,7 +2107,15 @@ export async function syncOpenPrSessions(
         checkRuns = (checks.check_runs ?? []).filter(
           (c) => c.name !== REVIEW_CHECK_NAME
         );
-        hasReviewCheck = checkRuns.length !== (checks.check_runs ?? []).length;
+        // PILE-445 — a still-open pile-review run (a lane died before it
+        // could publish) gets handed back to requestPrReview for takeover;
+        // the latest run wins when a stale one was already superseded.
+        reviewRun =
+          (checks.check_runs ?? []).find(
+            (c) => c.name === REVIEW_CHECK_NAME && c.status !== "completed"
+          ) ??
+          (checks.check_runs ?? []).find((c) => c.name === REVIEW_CHECK_NAME) ??
+          null;
         checkState = summarizeCheckRuns(checkRuns);
       }
       const failingChecks = checkRuns.filter(
@@ -2445,12 +2456,15 @@ export async function syncOpenPrSessions(
       }
 
       // PILE-273 — sweep backstop for the review lane: a missed or failed
-      // pull_request webhook still gets one review per headSha.
+      // pull_request webhook still gets one review per headSha. PILE-445 —
+      // a stale pending pile-review run means its lane died; re-enter
+      // requestPrReview so the run is retried or resolved, not just missed
+      // webhooks.
       const base = pr.base as Record<string, unknown> | undefined;
       if (
         state === "open" &&
         headSha &&
-        !hasReviewCheck &&
+        (!reviewRun || reviewCheckStale(reviewRun, Date.now())) &&
         issue &&
         typeof base?.ref === "string"
       ) {
