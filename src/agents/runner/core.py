@@ -752,6 +752,7 @@ def clone_repo():
         for k, v in NO_HOOKS_GIT_CONFIG:
             run([GIT, '-C', REPO_DIR] + _GIT_SAFE_FLAGS + ['config', k, v], check=True)
     lock_remote()
+    exclude_agent_dirs()
     snapshot_git_config()
 
 
@@ -779,6 +780,7 @@ def resume_repo():
         print('git fetch timed out after 120s — continuing')
     run([GIT, '-C', REPO_DIR] + _GIT_SAFE_FLAGS + ['merge', '--ff-only', f'origin/{BRANCH}'], env=git_env(), check=False)
     lock_remote()
+    exclude_agent_dirs()
 
 
 def run_setup_hook(agent_env):
@@ -1026,8 +1028,34 @@ def refresh_github_token():
         print('github token refresh failed:', e)
 
 
+def exclude_agent_dirs(repo_dir=REPO_DIR):
+    # Agent CLIs drop config dirs in the checkout (devin's .devin/ can carry
+    # an mcp_config.json holding the lane bearer token — PILE-457). A
+    # repo-local exclude keeps .devin/ unstageable without committing a
+    # .gitignore line to every repo. Re-asserted before every stage: .git is
+    # agent-writable, so the agent could have deleted it mid-run.
+    git_dir = os.path.join(repo_dir, '.git')
+    if os.path.islink(git_dir) or not os.path.isdir(git_dir):
+        return
+    try:
+        info = os.path.join(git_dir, 'info')
+        path = os.path.join(info, 'exclude')
+        existing = ''
+        if os.path.exists(path):
+            with open(path) as f:
+                existing = f.read()
+        if any(l.strip() in ('.devin', '.devin/', '/.devin', '/.devin/') for l in existing.splitlines()):
+            return
+        os.makedirs(info, exist_ok=True)
+        with open(path, 'a') as f:
+            f.write('.devin/\n')
+    except OSError:
+        pass
+
+
 def commit_local(agent_env):
     _reset_git_config()
+    exclude_agent_dirs()
     git = [GIT, '-C', REPO_DIR] + _GIT_SAFE_FLAGS
     env = git_env()
     status = run(git + ['status', '--porcelain'], env=env, capture_output=True, text=True, check=True)
@@ -1330,6 +1358,7 @@ def clone_secondary_repos():
                 run(git + ['checkout', '-b', BRANCH], env=git_env(), check=True)
             run(git + ['config', 'user.name', os.environ.get('GIT_AUTHOR_NAME', AGENT_LABEL)], env=git_env(), check=True)
             run(git + ['config', 'user.email', os.environ.get('GIT_AUTHOR_EMAIL', 'agent@pile.nyc')], env=git_env(), check=True)
+        exclude_agent_dirs(dest)
         print(f'cloned secondary repo {repo} ({entry.get("access", "read")}) -> {dest}')
     with open(XREPO_STATE, 'w') as f:
         json.dump([{'repo': e['repo'], 'access': e.get('access', 'read')} for e in entries], f)
@@ -1360,6 +1389,7 @@ def push_secondary_repos(agent_env):
             if BRANCH == base:
                 raise RuntimeError(f'refusing to push lane branch {BRANCH!r}: it is the default branch of {repo}')
             _reset_git_config(dest, secondary_remote_url(repo, token))
+            exclude_agent_dirs(dest)
             git = [GIT, '-C', dest] + _GIT_SAFE_FLAGS
             env = git_env()
             status = run(git + ['status', '--porcelain'], env=env, capture_output=True, text=True, check=True)

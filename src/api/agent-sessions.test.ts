@@ -2262,7 +2262,25 @@ describe("agent sessions API", () => {
   });
 
   it("serves the runner pnpm-store cache with per-session token auth", async () => {
-    const sessionId = crypto.randomUUID();
+    // The lane token is verified against a real session now (PILE-457) — a
+    // terminal session's bearer stops working on cache routes too.
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const issue = await stub.createIssue({
+      title: "Cache lane",
+      repo: "VortexNYC/pile",
+    });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "mock",
+      provider: "mock",
+      actorId: "user-1",
+      actorType: "user",
+      status: "running",
+    });
+    const sessionId = session.id;
     const cacheToken = await agentLogToken(
       env as unknown as WorkerEnv,
       organizationId,
@@ -2358,6 +2376,44 @@ describe("agent sessions API", () => {
       env
     );
     expect(miss.status).toBe(404);
+
+    // A token minted for a session that does not exist verifies
+    // cryptographically but has nothing to authorize — 404.
+    const ghostId = crypto.randomUUID();
+    const ghostToken = await agentLogToken(
+      env as unknown as WorkerEnv,
+      organizationId,
+      ghostId
+    );
+    const ghost = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${ghostId}/cache/pnpm-store/${hash}`,
+        {
+          method: "PUT",
+          body: "x",
+          headers: { Authorization: `Bearer ${ghostToken}` },
+        }
+      ),
+      env
+    );
+    expect(ghost.status).toBe(404);
+
+    // Once the session resolves the lane token is dead — reads and writes
+    // alike return 409, matching /logs, /report and /mcp.
+    await stub.updateAgentSession(sessionId, { status: "completed" });
+    for (const attempt of [
+      request(base, {
+        headers: { Authorization: `Bearer ${cacheToken}` },
+      }),
+      request(base, {
+        method: "PUT",
+        body: "x",
+        headers: { Authorization: `Bearer ${cacheToken}` },
+      }),
+    ]) {
+      const res = await app.fetch(attempt, env);
+      expect(res.status).toBe(409);
+    }
   });
 
   it("registers an external agent session and returns lane credentials", async () => {
@@ -2878,6 +2934,24 @@ describe("agent sessions API", () => {
       env
     );
     expect(wsRes.status).toBe(200);
+
+    // PILE-457 — once the session resolves the lane token dies with it;
+    // workspace tokens are unaffected.
+    await stub.updateAgentSession(session.id, { status: "completed" });
+    const dead = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/sessions/${session.id}`, {
+        headers: { Authorization: `Bearer ${laneToken}` },
+      }),
+      env
+    );
+    expect(dead.status).toBe(409);
+    const wsTerminal = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/sessions/${session.id}`, {
+        token,
+      }),
+      env
+    );
+    expect(wsTerminal.status).toBe(200);
   });
 
   describe("dispatch-batch", () => {
