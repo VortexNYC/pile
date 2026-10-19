@@ -876,3 +876,45 @@ describe("bulk customer import (PILE-403)", () => {
     expect((await term.json() as { type: string }).type).toBe("terminal");
   });
 });
+
+describe("customer sales fields (readiness/fit)", () => {
+  let organizationId = "";
+  let token = "";
+  beforeAll(async () => {
+    ({ organizationId, token } = await seedWorkspace());
+  });
+  it("round-trips readiness, fit fields, and processor through the API", async () => {
+    const created = await fetch(
+      `/workspaces/${organizationId}/customers`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "Sales Co",
+          domain: "salesco.example",
+          readiness: "ready",
+          fit: "strong",
+          fitScore: 0.9,
+          processor: "toast",
+        }),
+      },
+      token
+    );
+    expect(created.status).toBe(201);
+    const body = (await created.json()) as { id?: string; customer?: { id?: string } };
+    const id = body.customer?.id ?? body.id;
+    expect(id).toBeTruthy();
+    const got = await fetch(
+      `/workspaces/${organizationId}/customers/${id}`,
+      {},
+      token
+    );
+    const record = (await got.json()) as {
+      customer?: { fitScore?: number; processor?: string };
+      fitScore?: number;
+      processor?: string;
+    };
+    const customer = record.customer ?? record;
+    expect(customer.fitScore).toBe(0.9);
+    expect(customer.processor).toBe("toast");
+  });
+});

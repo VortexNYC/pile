@@ -1913,3 +1913,39 @@ describe("custom fields by name + bulk import (PILE-383/403)", () => {
     });
   });
 });
+
+describe("CRM intake fns — suppression + market runs", () => {
+  it("suppression upsert dedupes on kind+value", async () => {
+    await withDb(async (db) => {
+      const { upsertSuppression } = await import("./index.js");
+      const a = upsertSuppression(db, WORKSPACE_ID, {
+        kind: "domain",
+        value: "spammy.example",
+        reason: "junk lead",
+      });
+      const b = upsertSuppression(db, WORKSPACE_ID, {
+        kind: "domain",
+        value: "spammy.example",
+      });
+      expect(b.id).toBe(a.id);
+    });
+  });
+
+  it("market run records a scout pull and patches counts", async () => {
+    await withDb(async (db) => {
+      const { createMarketRun, updateMarketRun } = await import("./index.js");
+      const run = createMarketRun(db, WORKSPACE_ID, {
+        vertical: "restaurants",
+        geo: "nyc",
+        source: "socrata",
+      });
+      expect(run.status).toBe("running");
+      const done = updateMarketRun(db, WORKSPACE_ID, run.id, {
+        producedCount: 42,
+        status: "completed",
+      });
+      expect(done.producedCount).toBe(42);
+      expect(done.completedAt).toBeTruthy();
+    });
+  });
+});

@@ -13,6 +13,7 @@ import {
   workspaceEntityAttachments,
   workspaceGuidancePacks,
   workspaceIssues,
+  workspaceSuppression,
   workspaceNotificationPreferences,
   workspaceStageTemplates,
   workspaceTriageRuleEvaluations,
@@ -490,5 +491,16 @@ describe("draft review schema (PILE-428)", () => {
     const indexNames = config.indexes.map((i) => i.config.name);
     expect(indexNames).toContain("draft_outputs_entity_idx");
     expect(indexNames).toContain("draft_outputs_status_idx");
+  });
+});
+
+describe("workspaceSuppression schema", () => {
+  it("carries kind/value/customer + reason for the blocklist", () => {
+    const cols = getTableConfig(workspaceSuppression).columns.map(
+      (c) => c.name
+    );
+    for (const col of ["kind", "value", "customer_id", "reason", "source"]) {
+      expect(cols).toContain(col);
+    }
   });
 });

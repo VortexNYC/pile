@@ -5208,6 +5208,7 @@ export interface CustomerInput {
   fit?: string | null;
   fitScore?: number | null;
   fitStatus?: string | null;
+  processor?: string | null;
   evidenceUri?: string | null;
   tierId?: string | null;
   statusId?: string | null;
@@ -5271,6 +5272,7 @@ export function createCustomer(db: WorkspaceDb, input: CustomerInput) {
       fit: input.fit ?? null,
       fitScore: input.fitScore ?? null,
       fitStatus: input.fitStatus ?? null,
+      processor: input.processor ?? null,
       evidenceUri: input.evidenceUri ?? null,
       tierId: input.tierId ?? null,
       statusId: input.statusId ?? null,

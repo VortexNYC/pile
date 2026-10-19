@@ -7,6 +7,7 @@ import {
   LANE_TOOLS,
   laneToolPolicy,
   laneToolPolicyForRepo,
+  WORKSPACE_LANE_TOOLS,
   type LaneToolContext,
 } from "./lane-tools.js";
 
@@ -269,5 +270,30 @@ describe("lane tools", () => {
     // Every lane tier can report — set_plan rides the lane:report grant.
     const readonly = laneToolPolicy("readonly");
     expect(allowedLaneTools(readonly).map((t) => t.name)).toContain("set_plan");
+  });
+});
+
+describe("workspace lane tools — CRM surface", () => {
+  const names = WORKSPACE_LANE_TOOLS.map((t) => t.name);
+  it("registers the CRM/contact/suppression/market tools", () => {
+    for (const n of [
+      "customer_upsert",
+      "contact_upsert",
+      "suppress",
+      "suppression_check",
+      "market_run_report",
+    ]) {
+      expect(names).toContain(n);
+    }
+  });
+  it("write tools carry ws:write, reads carry ws:read", () => {
+    const byName = Object.fromEntries(
+      WORKSPACE_LANE_TOOLS.map((t) => [t.name, t.permission])
+    );
+    expect(byName["customer_upsert"]).toBe("ws:write");
+    expect(byName["contact_upsert"]).toBe("ws:write");
+    expect(byName["suppress"]).toBe("ws:write");
+    expect(byName["suppression_check"]).toBe("ws:read");
+    expect(byName["market_run_report"]).toBe("ws:write");
   });
 });
