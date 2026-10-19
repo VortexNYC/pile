@@ -3995,23 +3995,20 @@ describe("spend caps + run receipts (PILE-425)", () => {
       conversationKey: `${issue.id}-patch-bot`,
     });
     const res = await app.fetch(
-      request(
-        `/workspaces/${organizationId}/agent/sessions/${session.id}`,
-        {
-          method: "PATCH",
-          token,
-          body: JSON.stringify({
-            status: "completed",
-            result: "done",
-            usage: {
-              model: "claude-sonnet-4-5",
-              inputTokens: 40_000,
-              outputTokens: 4_000,
-              costMicros: 132_000,
-            },
-          }),
-        }
-      ),
+      request(`/workspaces/${organizationId}/agent/sessions/${session.id}`, {
+        method: "PATCH",
+        token,
+        body: JSON.stringify({
+          status: "completed",
+          result: "done",
+          usage: {
+            model: "claude-sonnet-4-5",
+            inputTokens: 40_000,
+            outputTokens: 4_000,
+            costMicros: 132_000,
+          },
+        }),
+      }),
       env
     );
     expect(res.status).toBe(200);

@@ -963,10 +963,7 @@ export interface LaneWorkspace {
     search?: string;
     limit?: number;
   }): Promise<unknown[]>;
-  recordSessionUsage(
-    sessionId: string,
-    usage: AgentRunUsage
-  ): Promise<unknown>;
+  recordSessionUsage(sessionId: string, usage: AgentRunUsage): Promise<unknown>;
 }
 
 export interface WorkspaceLaneToolContext {
