@@ -85,6 +85,7 @@ import {
   resolveGuidancePacks,
   resolvePayloadPath,
   resolveCustomerForEmail,
+  subStepProgressByParent,
   countAgentSessionsSince,
   deleteAgentSpendCap,
   getAgentSpendCap,
@@ -1974,6 +1975,53 @@ describe("merchant-source registry", () => {
         cursorValue: "2026-10-19",
       });
       expect(updated.cursorValue).toBe("2026-10-19");
+    });
+  });
+});
+
+describe("subStepProgressByParent (PILE-448)", () => {
+  it("answers a full 100-parent page under the ~100 bound-variable cap", () => {
+    return withDb((db) => {
+      const now = new Date().toISOString();
+      const parentIds = Array.from({ length: 100 }, (_, i) => {
+        const id = `parent-${i}-${crypto.randomUUID()}`;
+        db.insert(workspaceIssues)
+          .values({
+            id,
+            organizationId: WORKSPACE_ID,
+            teamId: "team-1",
+            title: `Board parent ${i}`,
+            status: "backlog",
+            priority: "medium",
+            createdAt: now,
+            updatedAt: now,
+          })
+          .run();
+        return id;
+      });
+      db.insert(workspaceIssues)
+        .values({
+          id: crypto.randomUUID(),
+          organizationId: WORKSPACE_ID,
+          teamId: "team-1",
+          title: "Required gate",
+          status: "todo",
+          priority: "medium",
+          parentId: parentIds[0],
+          required: true,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .run();
+      // 100 ids + org + required used to bind 102 vars and throw.
+      const progress = subStepProgressByParent(db, WORKSPACE_ID, parentIds);
+      expect(progress.get(parentIds[0])).toEqual({
+        total: 1,
+        done: 0,
+        blocked: 1,
+        ownerAgent: null,
+      });
+      expect(progress.has(parentIds[1])).toBe(false);
     });
   });
 });

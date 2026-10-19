@@ -3,7 +3,6 @@ import {
   eq,
   gt,
   gte,
-  inArray,
   isNotNull,
   isNull,
   like,
@@ -11,7 +10,6 @@ import {
   lte,
   ne,
   not,
-  notInArray,
   or,
   type SQL,
   sql,
@@ -19,6 +17,7 @@ import {
 import { z } from "zod";
 
 import { workspaceIssues } from "./schema.js";
+import { inArrayJson, notInArrayJson } from "./sql.js";
 
 export const filterFieldSchema = z.enum([
   "teamId",
@@ -182,9 +181,9 @@ export function filterToSql(filter: FilterCondition): SQL<unknown> {
     case "lte":
       return lte(fieldColumn(filter.field), filter.value);
     case "in":
-      return inArray(fieldColumn(filter.field), filter.values);
+      return inArrayJson(fieldColumn(filter.field), filter.values);
     case "notIn":
-      return notInArray(fieldColumn(filter.field), filter.values);
+      return notInArrayJson(fieldColumn(filter.field), filter.values);
     case "contains": {
       const column = fieldColumn(filter.field);
       if (filter.field === "labelIds") {
