@@ -55,7 +55,12 @@ type FixerOutcome =
 
 interface FixerEvent {
   headSha: string | null;
-  state: "started" | "resolved" | "source_conflict" | "failed";
+  state:
+    | "started"
+    | "resolved"
+    | "source_conflict"
+    | "rescue"
+    | "failed";
   createdAtMs: number;
 }
 
