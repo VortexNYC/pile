@@ -3963,4 +3963,27 @@ describe("spend caps (PILE-425)", () => {
     const comments = await stub.listComments(issue.id);
     expect(comments.some((c) => c.externalSource === "spend-cap")).toBe(true);
   });
+
+  it("releasePausedSessions staggers the drain — bounded per pass (PILE-476)", async () => {
+    for (let i = 0; i < 5; i++) {
+      await stub.createAgentSession({
+        agentId: `pause-agent-${i}`,
+        issueId: "issue-1",
+        provider: "devin-cli",
+        status: "waiting",
+        paused: 1,
+        actorId: "u1",
+        actorType: "user",
+      });
+    }
+    const { releasePausedSessions } = await import("./sweep.js");
+    const released = await releasePausedSessions(
+      env,
+      stub,
+      organizationId,
+      "pause-agent-0",
+      { waitUntil: () => {} }
+    );
+    expect(released.length).toBeLessThanOrEqual(3);
+  });
 });

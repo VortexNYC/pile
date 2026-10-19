@@ -610,6 +610,32 @@ async function retryDeadLane(
   ctx?: { waitUntil: (promise: Promise<unknown>) => void }
 ): Promise<void> {
   if ((session.retryCount ?? 0) >= MAX_AUTO_RETRIES) return;
+  // PILE-476 — per-issue breaker: cap failed starts for the same issue per
+  // hour so a doomed lane stops burning spawn attempts. Distinct from the
+  // fleet/agent breakers — those catch substrate outages, this catches a
+  // single-issue poison lane.
+  const issueSessions = await stub
+    .listAgentSessions({ issueId: session.issueId, limit: 10 })
+    .catch(() => []);
+  const hourAgo = Date.now() - 60 * 60 * 1000;
+  const failedStarts = issueSessions.filter(
+    (s) =>
+      s.infraFailure === 1 &&
+      TERMINAL_STATUSES.has(s.status) &&
+      new Date(s.createdAt).getTime() > hourAgo
+  ).length;
+  if (failedStarts >= 3) {
+    await stub
+      .addAgentActivity({
+        sessionId: session.id,
+        actorId: session.actorId,
+        type: "error",
+        message: `issue breaker open — ${failedStarts} failed starts on this issue in the last hour; redispatch paused`,
+        payload: { issueId: session.issueId, failedStarts },
+      })
+      .catch(() => {});
+    return;
+  }
   // Fleet-wide breaker: during a substrate outage every retry spends a spawn
   // attempt on the thing that's failing. Per-agent streaks miss a partial
   // outage (successes interleave), so this looks across all agents.
@@ -984,7 +1010,12 @@ export async function releasePausedSessions(
 ): Promise<string[]> {
   const held = await stub.listPauseHeldSessions(agentId);
   const released: string[] = [];
-  for (const session of held) {
+  // PILE-476 — stagger post-pause releases: bounded drain per call so a big
+  // held backlog doesn't stampede the provider on resume. Remaining holds
+  // release on subsequent passes; stored instructions ride each session
+  // unchanged (promoteQueuedSession reuses the row).
+  const RELEASE_PER_PASS = 3;
+  for (const session of held.slice(0, RELEASE_PER_PASS)) {
     await stub
       .updateAgentSession(session.id, { paused: 0 })
       .catch((err: unknown) => {
