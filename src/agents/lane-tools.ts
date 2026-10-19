@@ -1469,6 +1469,136 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
     },
   }),
   defineWorkspaceTool({
+    name: "browse",
+    description:
+      "Interactive browser session (obscura stealth engine). Drives pages: navigate, click, type, press, wait, extract, eval, screenshot. Use for forms, registries, pagination — anything needing a real browser session. Create a session first, chain ops, close when done.",
+    permission: "web:fetch",
+    inputSchema: z.object({
+      op: z.enum([
+        "create",
+        "navigate",
+        "click",
+        "type",
+        "press",
+        "wait",
+        "extract",
+        "eval",
+        "screenshot",
+        "close",
+      ]),
+      sessionId: z.string().optional(),
+      url: z.string().optional(),
+      selector: z.string().optional(),
+      text: z.string().optional(),
+      key: z.string().optional(),
+      keyCode: z.number().optional(),
+      waitMs: z.number().optional(),
+      ms: z.number().optional(),
+      expression: z.string().optional(),
+    }),
+    async run(ctx, input) {
+      const base = ctx.env?.BROWSE_BASE_URL;
+      if (!base) throw new LaneToolError("BROWSE_BASE_URL not configured");
+      if (input.op === "create") {
+        const r = await fetch(`${base}/session`, { method: "POST" });
+        if (!r.ok) throw new LaneToolError(`browse create failed: ${r.status}`);
+        return r.json();
+      }
+      const sid = input.sessionId;
+      if (!sid) throw new LaneToolError("sessionId required");
+      if (input.op === "close") {
+        const r = await fetch(`${base}/session/${sid}`, { method: "DELETE" });
+        if (!r.ok) throw new LaneToolError(`browse close failed: ${r.status}`);
+        return r.json();
+      }
+      const body: Record<string, unknown> = {};
+      for (const k of ["url","selector","text","key","keyCode","waitMs","ms","expression"] as const)
+        if (input[k] !== undefined) body[k] = input[k];
+      const r = await fetch(`${base}/session/${sid}/${input.op}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) throw new LaneToolError(`browse ${input.op} failed: ${r.status}`);
+      return r.json();
+    },
+  }),
+  defineWorkspaceTool({
+    name: "socrata_query",
+    description:
+      "Socrata open-data query — NYC inspections, licenses, permits, business records. dataset_id + optional SoQL filters. E.g. 43nn-pn8j = NYC DOHMH restaurant inspections.",
+    permission: "web:fetch",
+    inputSchema: z.object({
+      dataset: z.string().min(1),
+      domain: z.string().optional().default("data.cityofnewyork.us"),
+      where: z.string().optional(),
+      select: z.string().optional(),
+      limit: z.number().optional(),
+    }),
+    async run(ctx, input) {
+      const params = new URLSearchParams();
+      params.set("$limit", String(input.limit ?? 25));
+      if (input.where) params.set("$where", input.where);
+      if (input.select) params.set("$select", input.select);
+      const appToken = ctx.env?.SOCRATA_APP_TOKEN;
+      const headers: Record<string, string> = {};
+      if (appToken) headers["X-App-Token"] = appToken;
+      const res = await fetch(
+        `https://${input.domain}/resource/${input.dataset}.json?${params}`,
+        { headers }
+      );
+      if (!res.ok)
+        throw new LaneToolError(`socrata failed: ${res.status}`);
+      return { rows: await res.json() };
+    },
+  }),
+  defineWorkspaceTool({
+    name: "wayback",
+    description:
+      "Wayback Machine — site history: first/last snapshot, how long a merchant has been online, old prices/menus (migration + pain signals). Free, no key.",
+    permission: "web:fetch",
+    inputSchema: z.object({
+      url: z.string().url(),
+      mode: z.enum(["availability", "snapshots"]).optional().default("availability"),
+      limit: z.number().optional(),
+    }),
+    async run(ctx, input) {
+      if (input.mode === "availability") {
+        const res = await fetch(
+          `https://archive.org/wayback/available?url=${encodeURIComponent(input.url)}`
+        );
+        if (!res.ok) throw new LaneToolError(`wayback failed: ${res.status}`);
+        return res.json();
+      }
+      const res = await fetch(
+        `https://web.archive.org/cdx/search/cdx?url=${encodeURIComponent(input.url)}&output=json&limit=${input.limit ?? 10}&filter=statuscode:200&fl=timestamp,original,statuscode&collapse=timestamp:6`
+      );
+      if (!res.ok) throw new LaneToolError(`wayback failed: ${res.status}`);
+      return { snapshots: await res.json() };
+    },
+  }),
+  defineWorkspaceTool({
+    name: "serper_search",
+    description:
+      "Serper — Google SERP results as JSON (~$1/1k). What a human searching sees: reviews sites, directories, 'who owns X' answers.",
+    permission: "web:fetch",
+    inputSchema: z.object({
+      query: z.string().min(1),
+      limit: z.number().optional(),
+    }),
+    async run(ctx, input) {
+      const key = ctx.env?.SERPER_API_KEY;
+      if (!key) throw new LaneToolError("SERPER_API_KEY not configured");
+      const res = await fetch("https://google.serper.dev/search", {
+        method: "POST",
+        headers: { "content-type": "application/json", "X-API-KEY": key },
+        body: JSON.stringify({ q: input.query, num: input.limit ?? 10 }),
+      });
+      if (!res.ok) throw new LaneToolError(`serper failed: ${res.status}`);
+      return res.json();
+    },
+  }),
+  defineWorkspaceTool({
     name: "web_fetch",
     description:
       "Fetch a public URL (NYC Open Data, a state business registry, a merchant site). GET only, https only, text response capped.",
