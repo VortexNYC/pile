@@ -1387,14 +1387,40 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
   defineWorkspaceTool({
     name: "browser_fetch",
     description:
-      "Browserless headless render — last resort for interactive pages needing real browsing. Returns page content.",
+      "Browserless headless browsing — two modes. url only: render the page and return content. script: run custom Puppeteer code against the page (multi-step navigation, form fills, pagination, click-throughs) — the script is the body of async ({ page, context }) => { ...return JSON data }, where context is { url }. Self-hosted Tinyfish equivalent.",
     permission: "web:fetch",
-    inputSchema: z.object({ url: z.string().url() }),
+    inputSchema: z.object({
+      url: z.string().url(),
+      script: z
+        .string()
+        .optional()
+        .describe(
+          "Puppeteer code — the body of async ({ page, context }) => {...}; context = { url }. Return JSON-serializable data."
+        ),
+    }),
     async run(ctx, input) {
       const base = ctx.env?.BROWSERLESS_BASE_URL;
       const token = ctx.env?.BROWSERLESS_TOKEN;
       if (!base || !token)
         throw new LaneToolError("BROWSERLESS_* not configured");
+      if (input.script) {
+        const endpoint = new URL(`${base}/function`);
+        endpoint.searchParams.set("token", token);
+        const res = await fetch(endpoint.href, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            code: `module.exports = async ({ page, context }) => { ${input.script} }`,
+            context: { url: input.url },
+          }),
+        });
+        if (!res.ok)
+          throw new LaneToolError(
+            `browser_fetch /function failed: ${res.status}`
+          );
+        const data: unknown = await res.json().catch(() => null);
+        return { data };
+      }
       const endpoint = new URL(`${base}/content`);
       endpoint.searchParams.set("token", token);
       const res = await fetch(endpoint.href, {
