@@ -8,9 +8,11 @@ import { createWorkspace } from "../global/workspaces.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
 import { DEFAULT_GIT_IDENTITY_REPO } from "../types/workspace.js";
+import { ComputeError } from "./compute.js";
 import { MockAgentProvider } from "./harness.js";
 import {
   dispatchAgent,
+  failedDispatchSessionId,
   getAgentProvider,
   inheritTeamDefaultRepo,
   registerAgentProvider,
@@ -1216,5 +1218,107 @@ describe("spend caps (PILE-425)", () => {
     const pause = await stub.getAgentPause(agentId);
     expect(pause?.createdBy).toBe("spend-cap");
     expect(pause?.reason).toContain("daily runs cap");
+  });
+});
+
+// PILE-452 — Daytona start/provision failures must classify as infra: they
+// feed the retry path and the fleet breaker, not the task-failure trail.
+describe("infra classification of dispatch failures (PILE-452)", () => {
+  const stub = () =>
+    env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
+    );
+
+  const substrateErrors = [
+    "Daytona sandbox create failed: 400 sandbox exited with code 1 before becoming ready",
+    "Daytona process session create failed: 400 SANDBOX_NOT_RUNNING",
+    "Daytona sandbox failed: failed to resolve container IP",
+    "compute sandbox error",
+    "devin-cli provision timed out after 300000ms",
+  ];
+
+  for (const message of substrateErrors) {
+    it(`records infraFailure=1 for "${message.slice(0, 45)}…"`, async () => {
+      const agentId = `mock-infra-${crypto.randomUUID().slice(0, 8)}`;
+      registerAgentProvider(
+        agentId,
+        () =>
+          new MockAgentProvider(agentId, {
+            dispatch: () => {
+              throw new ComputeError({
+                code: "AGENT_ERROR",
+                status: 502,
+                message,
+              });
+            },
+          })
+      );
+      const issue = await stub().createIssue({ title: "infra test" });
+
+      let thrown: unknown;
+      try {
+        await dispatchAgent(env, agentId, actor.organizationId, issue, actor);
+      } catch (err) {
+        thrown = err;
+      }
+      expect(thrown).toBeInstanceOf(ComputeError);
+
+      const sessions = await stub().listAgentSessions({ issueId: issue.id });
+      expect(sessions[0]?.status).toBe("failed");
+      expect(sessions[0]?.infraFailure).toBe(1);
+      expect(sessions[0]?.result).toBe(message);
+      // The corpse's id rides the throw so redispatch can link retryOf.
+      expect(failedDispatchSessionId(thrown)).toBe(sessions[0]?.id);
+    });
+  }
+
+  it("keeps ordinary provider failures off the infra path", async () => {
+    const agentId = `mock-task-${crypto.randomUUID().slice(0, 8)}`;
+    registerAgentProvider(
+      agentId,
+      () =>
+        new MockAgentProvider(agentId, {
+          dispatch: () => {
+            throw new Error("model exploded");
+          },
+        })
+    );
+    const issue = await stub().createIssue({ title: "task failure" });
+    await expect(
+      dispatchAgent(env, agentId, actor.organizationId, issue, actor)
+    ).rejects.toThrow("model exploded");
+    const sessions = await stub().listAgentSessions({ issueId: issue.id });
+    expect(sessions[0]?.status).toBe("failed");
+    expect(sessions[0]?.infraFailure).toBe(0);
+  });
+
+  it("throws AGENT_PAUSED instead of parking when onPaused is fail", async () => {
+    const agentId = `mock-nohold-${crypto.randomUUID().slice(0, 8)}`;
+    registerAgentProvider(agentId, () => new MockAgentProvider(agentId));
+    const s = stub();
+    await s.pauseAgentType(agentId, {
+      reason: "frozen",
+      actorId: actor.id,
+      actorType: "user",
+    });
+    const issue = await s.createIssue({ title: "no holds" });
+    await expect(
+      dispatchAgent(
+        env,
+        agentId,
+        actor.organizationId,
+        issue,
+        actor,
+        undefined,
+        undefined,
+        { onPaused: "fail" }
+      )
+    ).rejects.toMatchObject({ code: "AGENT_PAUSED" });
+    const sessions = await s.listAgentSessions({ issueId: issue.id });
+    expect(sessions).toHaveLength(0);
+    await s.resumeAgentType(agentId, {
+      actorId: actor.id,
+      actorType: "user",
+    });
   });
 });

@@ -26,7 +26,7 @@ import type {
   GitIdentity,
   Issue,
 } from "../types/workspace.js";
-import { computeBackend } from "./compute.js";
+import { asComputeInfraError, computeBackend } from "./compute.js";
 import type { ComputeBackend, ComputeSandbox } from "./compute.js";
 import {
   agentCacheUrl,
@@ -807,7 +807,12 @@ export class SandboxCliAgentProvider implements AgentProvider {
         },
         { parentId: spanId }
       );
-      throw err;
+      // PILE-452 — everything inside the provision block is substrate work
+      // (sandbox create/start, env write, runner launch). A failure there is
+      // infra-class even when it arrives as a plain Error — the provision
+      // deadline, a DNS failure, a toolbox reset — so coerce before the
+      // dispatch classifier sees it.
+      throw asComputeInfraError(err);
     } finally {
       await this.closeSpan(organizationId, spanId);
     }

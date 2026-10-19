@@ -27,7 +27,7 @@ import { CfAgentProvider } from "./cf-agent.js";
 import { ClaudeCliAgentProvider } from "./claude-cli.js";
 import { CodexCliAgentProvider } from "./codex-cli.js";
 import { CodexAgentProvider } from "./codex.js";
-import { computeBackend } from "./compute.js";
+import { computeBackend, isComputeInfraError } from "./compute.js";
 import { loadProviderConfig } from "./credentials.js";
 import { CursorCliAgentProvider } from "./cursor-cli.js";
 import { CursorAgentProvider } from "./cursor.js";
@@ -269,6 +269,12 @@ export async function dispatchAgent(
     /** Dedupe GitHub/auth overrides — tests inject stubs; production
      *  callers leave this unset so real installation tokens apply. */
     dedupeDeps?: DedupeDeps;
+    /** PILE-452 — what a paused agent type does to this dispatch. "hold"
+     *  (default) parks a `waiting` + `paused` row per PILE-420 — right for
+     *  explicit user dispatch. "fail" throws AGENT_PAUSED instead:
+     *  system-initiated dispatches (sweep redispatch, retries, triggers)
+     *  must not leak held rows while the agent type is frozen. */
+    onPaused?: "hold" | "fail";
   }
 ): Promise<AgentSession> {
   const label = sessionLabel(issue, agentId, options?.purpose);
@@ -440,6 +446,13 @@ export async function dispatchAgent(
       }
     }
     if (pause) {
+      if (options?.onPaused === "fail") {
+        throw new VortexError({
+          code: "AGENT_PAUSED",
+          status: 409,
+          message: `Agent type "${agentId}" is paused${pause.reason ? `: ${pause.reason}` : ""}`,
+        });
+      }
       const parked = await stub.createAgentSession({
         issueId: issue.id,
         agentId,
@@ -845,15 +858,19 @@ export async function dispatchAgent(
     return updated ?? session;
   } catch (error) {
     // Dispatch-time substrate failure (container spawn 503, RPC transport
-    // reset, compute I/O timeout) is infra-class — it gets the retry path
-    // and feeds the fleet breaker, not the task-failure trail.
-    let infraFailure = false;
+    // reset, compute I/O timeout, Daytona sandbox-create/provision errors)
+    // is infra-class — it gets the retry path and feeds the fleet breaker,
+    // not the task-failure trail. Compute-layer failures arrive flagged as
+    // ComputeError (PILE-452); everything else falls back to status and the
+    // sandbox SDK's transient classifiers.
+    let infraFailure = isComputeInfraError(error);
     if (
+      !infraFailure &&
       error instanceof VortexError &&
       (error.status === 503 || error.status === 504)
     ) {
       infraFailure = true;
-    } else {
+    } else if (!infraFailure) {
       try {
         const sandboxSdk = (await import("@cloudflare/sandbox")) as {
           isPlatformTransientError?: (e: unknown) => boolean;
@@ -876,8 +893,23 @@ export async function dispatchAgent(
       },
       actor.id
     );
+    // The session row exists and is marked failed — carry its id on the
+    // throw so callers that redispatch can still link retryOf on the
+    // corpse (PILE-452). Without it a failed cold-dispatch left no visible
+    // chain and the sweep retried invisibly every pass.
+    if (error instanceof Error) {
+      (error as { failedSessionId?: string }).failedSessionId = session.id;
+    }
     throw error;
   }
+}
+
+/** The session row a failed dispatchAgent left behind, when it got far
+ *  enough to create one. */
+export function failedDispatchSessionId(error: unknown): string | undefined {
+  if (!(error instanceof Error)) return undefined;
+  const id = (error as { failedSessionId?: unknown }).failedSessionId;
+  return typeof id === "string" ? id : undefined;
 }
 
 /** Provider isolation switch — `config.disabled` on the workspace provider
