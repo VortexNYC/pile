@@ -1438,6 +1438,20 @@ CREATE INDEX IF NOT EXISTS merchant_sources_enabled_idx ON merchant_sources(orga
 ALTER TABLE customers ADD COLUMN signal TEXT;
 ALTER TABLE customers ADD COLUMN signal_date TEXT`;
 
+const v101 = `CREATE TABLE IF NOT EXISTS space_permissions (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  space_id TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  actor_type TEXT NOT NULL DEFAULT 'user',
+  level TEXT NOT NULL DEFAULT 'view',
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS space_permissions_space_actor_idx ON space_permissions (space_id, actor_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS space_permissions_org_idx ON space_permissions (organization_id)`;
+
 const v97 = `CREATE TABLE IF NOT EXISTS lane_costs (
   session_id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -1764,6 +1778,7 @@ export const workspaceMigrations = {
       { idx: 97, when: 97, tag: "v98", breakpoints: true },
       { idx: 98, when: 98, tag: "v99", breakpoints: true },
       { idx: 99, when: 99, tag: "v100", breakpoints: true },
+      { idx: 100, when: 100, tag: "v101", breakpoints: true },
     ],
   },
   migrations: {
@@ -1867,5 +1882,6 @@ export const workspaceMigrations = {
     m0097: v98,
     m0098: v99,
     m0099: v100,
+    m0100: v101,
   },
 } satisfies Parameters<typeof migrate>[1];

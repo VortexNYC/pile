@@ -3765,3 +3765,29 @@ describe("merchant sources (feed registry)", () => {
     ).toBe("2026-10-19");
   });
 });
+
+describe("space permissions via DO (PILE-447)", () => {
+  it("setSpacePermission + revokeSpacePermission round-trip", async () => {
+    const stub = getStub();
+    const out = await withWorkspace(stub, async (instance) => {
+      const space = instance.createDocumentSpace({
+        name: "Leadership",
+        restricted: true,
+        createdById: WORKSPACE_ID,
+      });
+      const perm = instance.setSpacePermission(
+        WORKSPACE_ID,
+        space.id,
+        "member-1",
+        "user",
+        "view"
+      );
+      const list = instance.listSpacePermissions(space.id);
+      const revoked = instance.revokeSpacePermission(space.id, "member-1");
+      return { perm, list, revoked };
+    });
+    expect(out.perm.level).toBe("view");
+    expect(out.list).toHaveLength(1);
+    expect(out.revoked).toBe(true);
+  });
+});

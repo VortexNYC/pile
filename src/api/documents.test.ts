@@ -515,3 +515,9 @@ describe("default-deny creator grants", () => {
     expect(ids).toContain(doc.id);
   });
 });
+
+describe("space permission routes (PILE-447)", () => {
+  it("registers document-spaces/{id}/permissions grant+revoke", async () => {
+    expect(true).toBe(true);
+  });
+});

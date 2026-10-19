@@ -436,6 +436,56 @@ const updateSpaceRoute = createRoute({
   },
 });
 
+const listSpacePermsRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/document-spaces/{id}/permissions",
+  tags: ["documents"],
+  middleware: [rls("document:view")],
+  request: { params: z.object({ organizationId: z.string(), id: z.string() }) },
+  responses: {
+    200: {
+      description: "Space permissions",
+      content: { "application/json": { schema: z.object({ permissions: z.array(z.object({ id: z.string(), spaceId: z.string(), actorId: z.string(), actorType: z.string(), level: z.string(), createdAt: z.string() })) } ) } },
+    },
+  },
+});
+
+const grantSpacePermRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/document-spaces/{id}/permissions",
+  tags: ["documents"],
+  middleware: [rls("document:edit")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            actorId: z.string().min(1),
+            actorType: z.enum(["user", "team"]).optional(),
+            level: z.enum(["view", "edit"]).optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    201: { description: "Space permission granted", content: { "application/json": { schema: z.object({ id: z.string() }) } } },
+  },
+});
+
+const revokeSpacePermRoute = createRoute({
+  method: "delete",
+  path: "/workspaces/{organizationId}/document-spaces/{id}/permissions/{actorId}",
+  tags: ["documents"],
+  middleware: [rls("document:edit")],
+  request: { params: z.object({ organizationId: z.string(), id: z.string(), actorId: z.string() }) },
+  responses: {
+    200: { description: "Space permission revoked", content: { "application/json": { schema: z.object({ ok: z.boolean() }) } } },
+  },
+});
+
+
 const deleteSpaceRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/document-spaces/{id}",
@@ -962,6 +1012,34 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
         createdAt: h.createdAt,
       })),
     });
+  });
+
+  app.openapi(listSpacePermsRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const permissions = await stub.listSpacePermissions(id);
+    return c.json({ permissions }, 200);
+  });
+
+  app.openapi(grantSpacePermRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const { actorId, actorType, level } = c.req.valid("json");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const perm = await stub.setSpacePermission(
+      organizationId,
+      id,
+      actorId,
+      actorType ?? "user",
+      level ?? "view"
+    );
+    return c.json(perm, 201);
+  });
+
+  app.openapi(revokeSpacePermRoute, async (c) => {
+    const { organizationId, id, actorId } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const ok = await stub.revokeSpacePermission(id, actorId);
+    return c.json({ ok }, 200);
   });
 
   app.openapi(listSpacesRoute, async (c) => {
