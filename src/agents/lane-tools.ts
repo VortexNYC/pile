@@ -1429,6 +1429,26 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
     },
   }),
   defineWorkspaceTool({
+    name: "light_fetch",
+    description:
+      "Lightpanda — lightweight headless browser (~10x lighter than Chrome). Renders JS pages to DOM. Use for JS-rendered merchant pages before spending the heavy browserless tier.",
+    permission: "web:fetch",
+    inputSchema: z.object({ url: z.string().url() }),
+    async run(ctx, input) {
+      const base = ctx.env?.LIGHTPANDA_BASE_URL;
+      if (!base)
+        throw new LaneToolError("LIGHTPANDA_BASE_URL not configured");
+      const res = await fetch(`${base}/fetch`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url: input.url }),
+      });
+      if (!res.ok)
+        throw new LaneToolError(`light_fetch failed: ${res.status}`);
+      return res.json();
+    },
+  }),
+  defineWorkspaceTool({
     name: "web_fetch",
     description:
       "Fetch a public URL (NYC Open Data, a state business registry, a merchant site). GET only, https only, text response capped.",
