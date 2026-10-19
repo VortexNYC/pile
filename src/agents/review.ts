@@ -513,13 +513,15 @@ export interface ReviewCheckRun {
 
 /** Every pile-review check run for a head sha — each dispatch attempt opens
  *  exactly one, so the count doubles as the retry bound when the Pile-side
- *  record is lost. */
+ *  record is lost. Returns null when the list can't be read or parsed:
+ *  callers must then dedupe conservatively — an invisible pending run can't
+ *  be allowed to silently gate nothing while a duplicate lane dispatches. */
 async function listReviewChecks(
   ghFetch: typeof fetch,
   token: string,
   repoFull: string,
   headSha: string
-): Promise<ReviewCheckRun[]> {
+): Promise<ReviewCheckRun[] | null> {
   const raw = await gh(
     ghFetch,
     token,
@@ -538,7 +540,7 @@ async function listReviewChecks(
       ),
     })
     .safeParse(raw);
-  return parsed.success ? parsed.data.check_runs : [];
+  return parsed.success ? parsed.data.check_runs : null;
 }
 
 /** A pile-review run is hung when it never reached `completed` and its start
@@ -669,6 +671,10 @@ export async function requestPrReview(
       target.repoFull,
       target.headSha
     );
+    // A failed read can't tell a live run from none — dispatching blind
+    // could race a duplicate lane under an existing pending check, so sit
+    // this pass out and let the next request/sweep retry.
+    if (runs === null) return "deduped";
     const staleOpens = runs.filter(
       (r) => r.status !== "completed" && reviewCheckStale(r, now)
     );
@@ -782,8 +788,10 @@ export async function requestPrReview(
         }
       );
       // The publish pass keys on this event — if it can't be written the
-      // lane still runs but its verdict can never land, so the run resolves
-      // like a dispatch failure (PILE-445).
+      // lane still runs but its verdict can never land, and with no
+      // review.requested record a later request sees attempts = 0 and could
+      // dispatch a duplicate. Fail the session so the sweep's reaper cancels
+      // the provider lane instead of it running untracked (PILE-445).
       const payload: RequestedPayload = {
         prUrl: target.prUrl,
         repo: target.repoFull,
@@ -791,12 +799,25 @@ export async function requestPrReview(
         headSha: target.headSha,
         checkRunId: openedCheckRunId,
       };
-      await stub.addAgentSessionEvent({
-        sessionId: session.id,
-        type: "review.requested",
-        message: `Review requested for ${target.prUrl} @ ${target.headSha.slice(0, 12)}`,
-        payload,
-      });
+      try {
+        await stub.addAgentSessionEvent({
+          sessionId: session.id,
+          type: "review.requested",
+          message: `Review requested for ${target.prUrl} @ ${target.headSha.slice(0, 12)}`,
+          payload,
+        });
+      } catch (eventErr) {
+        await stub
+          .applyAgentSessionResult(session.id, {
+            status: "failed",
+            result: `review.requested event write failed: ${
+              eventErr instanceof Error ? eventErr.message : String(eventErr)
+            }`,
+            infraFailure: true,
+          })
+          .catch(() => {});
+        throw eventErr;
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (openedCheckRunId !== null) {

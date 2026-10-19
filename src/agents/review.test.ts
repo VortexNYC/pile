@@ -190,6 +190,8 @@ function fakeGithub(opts: {
   /** "reject" 422s the first review POST (own-PR shape), "fail" 422s both,
    *  "flaky" 500s the first — a non-4xx is never retried. */
   reviewPost?: "ok" | "reject" | "fail" | "flaky";
+  /** 500s the check-runs list — a GitHub read failure, not "no runs". */
+  listChecksFail?: boolean;
 }) {
   const calls: GhCall[] = [];
   let nextCheckId = 500;
@@ -210,6 +212,9 @@ function fakeGithub(opts: {
       });
     }
     if (url.includes("/check-runs?check_name=")) {
+      if (opts.listChecksFail) {
+        return new Response("Internal Server Error", { status: 500 });
+      }
       const runs =
         opts.existingCheck === true
           ? [
@@ -862,6 +867,78 @@ describe("requestPrReview / publishReviewVerdicts", () => {
       conclusion: "neutral",
       output: { title: "Review lane could not start" },
     });
+  });
+
+  // PILE-445 — if the review.requested event can't be written after a
+  // successful dispatch, the lane is failed so it can't keep running
+  // untracked (a later request would otherwise see attempts = 0 and could
+  // double-dispatch), and the check run still resolves.
+  it("fails the dispatched lane when the review.requested event write fails", async () => {
+    const issue = await laneIssue();
+    const gh = fakeGithub({
+      config: REVIEW_CONFIG,
+      files: [{ filename: "src/a.ts", patch: "@@" }],
+    });
+    // dispatchAgent reaches the DO through env — this proxy fails only the
+    // review.ts-side event write. Stub methods are RPC closures, so they're
+    // returned as-is (never rebound — .bind itself is an RPC trap).
+    const failingStub = new Proxy(stub, {
+      get(realStub, prop) {
+        if (prop === "addAgentSessionEvent") {
+          return () => Promise.reject(new Error("do write failed"));
+        }
+        return Reflect.get(realStub, prop);
+      },
+    });
+    const before = dispatched.length;
+    const outcome = await requestPrReview(
+      workerEnv,
+      failingStub,
+      organizationId,
+      issue,
+      target("sha-event-write-fail"),
+      "tok",
+      { fetch: gh.fetch }
+    );
+    expect(outcome).toBe("failed");
+    expect(dispatched.length).toBe(before + 1);
+    const patch = gh.calls.find(
+      (c) => c.method === "PATCH" && c.url.endsWith("/check-runs/500")
+    );
+    expect(patch?.body).toMatchObject({
+      status: "completed",
+      conclusion: "neutral",
+      output: { title: "Review lane could not start" },
+    });
+    const lanes = (await stub.listAgentSessions({ issueId: issue.id })).filter(
+      (s) => s.purpose === REVIEW_PURPOSE
+    );
+    expect(lanes).toHaveLength(1);
+    expect(lanes[0].status).toBe("failed");
+  });
+
+  // PILE-445 review — a failed check-run list is not an empty one: dispatch
+  // can't see a live run, so it must sit out rather than risk a duplicate.
+  it("dedupes when the check-run list can't be read", async () => {
+    const issue = await laneIssue();
+    const gh = fakeGithub({
+      config: REVIEW_CONFIG,
+      files: [{ filename: "src/a.ts", patch: "@@" }],
+      listChecksFail: true,
+    });
+    const before = dispatched.length;
+    const outcome = await requestPrReview(
+      workerEnv,
+      stub,
+      organizationId,
+      issue,
+      target("sha-list-fail"),
+      "tok",
+      { fetch: gh.fetch }
+    );
+    expect(outcome).toBe("deduped");
+    expect(dispatched.length).toBe(before);
+    expect(gh.calls.some((c) => c.method === "POST")).toBe(false);
   });
 
   // PILE-445 — a pending run whose lane died gets resolved and replaced by a
