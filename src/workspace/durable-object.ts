@@ -5783,11 +5783,16 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         lastProgressAt: new Date().toISOString(),
       };
       if (result.status !== undefined) {
-        set.status = result.status;
-        if (terminal.has(result.status) && !oldSession.endedAt)
-          set.endedAt = set.updatedAt;
-        if (!terminal.has(result.status) && oldSession.endedAt)
-          set.endedAt = null;
+        // PILE-467 — terminal stays terminal. A cancel during provisioning
+        // can still see late poll results arrive as 'created'/'running' —
+        // a non-terminal result must not resurrect a dead lane.
+        if (!(terminal.has(oldStatus) && !terminal.has(result.status))) {
+          set.status = result.status;
+          if (terminal.has(result.status) && !oldSession.endedAt)
+            set.endedAt = set.updatedAt;
+          if (!terminal.has(result.status) && oldSession.endedAt)
+            set.endedAt = null;
+        }
         // PILE-419 — leaving `waiting` closes any open elicitation (the
         // lane resumed or died without an answer).
         if (result.status !== "waiting") {
@@ -5836,14 +5841,19 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       lastProgressAt: new Date().toISOString(),
     };
     if (result.status !== undefined) {
-      set.status = result.status;
-      if (terminal.has(result.status) && !oldSession.endedAt)
-        set.endedAt = set.updatedAt;
-      // Resumed lane: clear the anchor so the kept-sandbox window restarts
-      // when it re-ends — otherwise the reaper keys off the ORIGINAL end
-      // and can destroy a sandbox that's actively working a follow-up.
-      if (!terminal.has(result.status) && oldSession.endedAt)
-        set.endedAt = null;
+      // PILE-467 — terminal stays terminal. A cancel during provisioning
+      // can still see late poll results arrive as 'created'/'running' —
+      // a non-terminal result must not resurrect a dead lane.
+      if (!(terminal.has(oldStatus) && !terminal.has(result.status))) {
+        set.status = result.status;
+        if (terminal.has(result.status) && !oldSession.endedAt)
+          set.endedAt = set.updatedAt;
+        // Resumed lane: clear the anchor so the kept-sandbox window restarts
+        // when it re-ends — otherwise the reaper keys off the ORIGINAL end
+        // and can destroy a sandbox that's actively working a follow-up.
+        if (!terminal.has(result.status) && oldSession.endedAt)
+          set.endedAt = null;
+      }
       // PILE-419 — leaving `waiting` closes any open elicitation (answered
       // via /respond, provider un-parked on its own, or went terminal).
       if (result.status !== "waiting") {
