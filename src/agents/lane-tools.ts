@@ -1605,6 +1605,78 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
     },
   }),
   defineWorkspaceTool({
+    name: "usaspending",
+    description:
+      "USAspending API — federal award data. Find SMBs winning government contracts: recipient names, amounts, agencies, NAICS codes, state. mode='recipients' lists top vendors in a NAICS/location; mode='awards' lists actual award records. Free, no key.",
+    permission: "web:fetch",
+    inputSchema: z.object({
+      mode: z.enum(["recipients", "awards"]).default("recipients"),
+      naics: z
+        .array(z.string())
+        .optional()
+        .describe("NAICS codes to filter, e.g. ['541611','236220']"),
+      state: z.string().optional().describe("2-letter state code"),
+      keyword: z.string().optional(),
+      limit: z.number().optional(),
+    }),
+    async run(ctx, input) {
+      const body: Record<string, unknown> = {
+        filters: {},
+        limit: input.limit ?? 25,
+      };
+      const filters = body.filters as Record<string, unknown>;
+      if (input.naics?.length) filters.naics_codes = { require: input.naics };
+      if (input.state)
+        filters.recipient_locations = [{ state: input.state, country: "USA" }];
+      if (input.keyword) filters.recipient_search_text = [input.keyword];
+      const url =
+        input.mode === "recipients"
+          ? "https://api.usaspending.gov/api/v2/recipient/"
+          : "https://api.usaspending.gov/api/v2/search/spending_by_award/";
+      if (input.mode === "awards")
+        filters.award_type_codes = ["A", "B", "C", "D"];
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok)
+        throw new LaneToolError(`usaspending failed: ${res.status}`);
+      return res.json();
+    },
+  }),
+  defineWorkspaceTool({
+    name: "sam_entities",
+    description:
+      "SAM.gov Entity API — registered federal vendors: UEI, CAGE, legal name, certifications (8a, HUBZone, WOSB, SDVOSB), NAICS, address. The federal vendor registry. Needs SAM_API_KEY (free from sam.gov).",
+    permission: "web:fetch",
+    inputSchema: z.object({
+      keyword: z.string().optional(),
+      naics: z.string().optional(),
+      state: z.string().optional(),
+      purposeOfRegistrationCode: z
+        .string()
+        .optional()
+        .describe("Z1=awards/grants"),
+      limit: z.number().optional(),
+    }),
+    async run(ctx, input) {
+      const key = ctx.env?.SAM_API_KEY;
+      if (!key) throw new LaneToolError("SAM_API_KEY not configured");
+      const params = new URLSearchParams({ api_key: key });
+      if (input.keyword) params.set("legalBusinessName", input.keyword);
+      if (input.naics) params.set("naicsCode", input.naics);
+      if (input.state) params.set("physicalAddressStateOrProvinceCode", input.state);
+      if (input.purposeOfRegistrationCode)
+        params.set("purposeOfRegistrationCode", input.purposeOfRegistrationCode);
+      const res = await fetch(
+        `https://api.sam.gov/entity-information/v3/entities?${params}`
+      );
+      if (!res.ok) throw new LaneToolError(`sam failed: ${res.status}`);
+      return res.json();
+    },
+  }),
+  defineWorkspaceTool({
     name: "web_fetch",
     description:
       "Fetch a public URL (NYC Open Data, a state business registry, a merchant site). GET only, https only, text response capped.",
