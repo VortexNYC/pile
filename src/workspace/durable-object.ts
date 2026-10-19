@@ -2719,6 +2719,27 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.listMarketRuns(this.db, this.organizationId, args);
   }
 
+  upsertMerchantSource(input: data.MerchantSourceInput) {
+    return data.upsertMerchantSource(this.db, this.organizationId, input);
+  }
+
+  listMerchantSources(args?: { enabledOnly?: boolean; kind?: string }) {
+    return data.listMerchantSources(this.db, this.organizationId, args);
+  }
+
+  updateMerchantSource(
+    id: string,
+    patch: {
+      cursorValue?: string | null;
+      lastRunAt?: string;
+      runCount?: number;
+      enabled?: number;
+      config?: Record<string, unknown>;
+    }
+  ) {
+    return data.updateMerchantSource(this.db, this.organizationId, id, patch);
+  }
+
   upsertContact(input: data.ContactInput) {
     return data.upsertCustomerContact(this.db, this.organizationId, input);
   }

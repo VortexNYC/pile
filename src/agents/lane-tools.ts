@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { GITHUB_USER_AGENT } from "../global/github-auth.js";
+import { pullSource, scoreCandidate, type MerchantSourceRow } from "./collectors.js";
 import { sessionPlanSchema, type SessionPlan } from "./session-plan.js";
 
 // PILE-284 — purpose-built lane tool surface. Instead of handing a lane a raw
@@ -871,6 +872,28 @@ export interface LaneWorkspace {
     evidenceUri?: string | null;
   }): Promise<unknown>;
   listContacts(customerId: string): Promise<unknown>;
+  upsertMerchantSource(input: {
+    name: string;
+    kind: string;
+    config?: Record<string, unknown> | null;
+    cursorField?: string | null;
+    signal?: string;
+    cadence?: string;
+  }): Promise<unknown>;
+  listMerchantSources(args?: {
+    enabledOnly?: boolean;
+    kind?: string;
+  }): Promise<unknown>;
+  updateMerchantSource(
+    id: string,
+    patch: {
+      cursorValue?: string | null;
+      lastRunAt?: string;
+      runCount?: number;
+      enabled?: number;
+      config?: Record<string, unknown>;
+    }
+  ): Promise<unknown>;
   getCustomer(id: string): Promise<unknown>;
   getCustomerByDomain(domain: string): Promise<unknown>;
   getCustomerByExternalId(externalId: string): Promise<unknown>;
@@ -1668,6 +1691,122 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
       );
       if (!res.ok) throw new LaneToolError(`sam failed: ${res.status}`);
       return res.json();
+    },
+  }),
+  defineWorkspaceTool({
+    name: "source_add",
+    description:
+      "Register a merchant source — a feed that produces candidates on a schedule (Socrata datasets, usaspending, SAM, OpenCorporates). Add the feed once; collect_source pulls deltas later.",
+    permission: "ws:write",
+    inputSchema: z.object({
+      name: z.string().min(1),
+      kind: z.enum(["socrata", "usaspending", "sam", "opencorporates"]),
+      config: z.record(z.string(), z.unknown()).optional(),
+      cursorField: z.string().optional(),
+      signal: z
+        .enum([
+          "license_pending",
+          "corp_filing",
+          "award",
+          "violation",
+          "contact_found",
+          "registration",
+        ])
+        .optional(),
+      cadence: z.enum(["daily", "weekly"]).optional(),
+    }),
+    async run(ctx, input) {
+      return ctx.ws.upsertMerchantSource({
+        name: input.name,
+        kind: input.kind,
+        config: input.config ?? {},
+        cursorField: input.cursorField ?? null,
+        signal: input.signal ?? "registration",
+        cadence: input.cadence ?? "daily",
+      });
+    },
+  }),
+  defineWorkspaceTool({
+    name: "source_list",
+    description: "List registered merchant sources — the feed registry.",
+    permission: "ws:read",
+    inputSchema: z.object({
+      enabledOnly: z.boolean().optional(),
+      kind: z.string().optional(),
+    }),
+    async run(ctx, input) {
+      return ctx.ws.listMerchantSources({
+        enabledOnly: input.enabledOnly,
+        kind: input.kind,
+      });
+    },
+  }),
+  defineWorkspaceTool({
+    name: "source_collect",
+    description:
+      "Pull a merchant source — fetches new rows since its cursor, normalizes them into customer candidates, scores them, upserts into the CRM (deduped by external_id). The intake firehose: run per source or for all enabled feeds.",
+    permission: "ws:write",
+    inputSchema: z.object({
+      sourceId: z.string().optional(),
+      all: z.boolean().optional(),
+      limit: z.number().optional(),
+    }),
+    async run(ctx, input) {
+      const rows = (await ctx.ws.listMerchantSources({
+        enabledOnly: true,
+      })) as unknown as MerchantSourceRow[];
+      const targets = input.sourceId
+        ? rows.filter((r) => r.id === input.sourceId)
+        : rows;
+      if (!targets.length)
+        return { collected: 0, note: "no enabled sources matched" };
+      const run = (await ctx.ws.createMarketRun({
+        vertical: "merchant-sources",
+        geo: "multi",
+        source: "collect",
+        sourceQuery: input.sourceId ?? "all",
+        createdBySlug: ctx.agentSlug,
+        sourceSessionId: ctx.sessionId,
+      })) as { id?: string };
+      const runId = run?.id ?? null;
+      let produced = 0;
+      const perSource: { name: string; candidates: number }[] = [];
+      for (const source of targets.slice(0, input.limit ?? 25)) {
+        try {
+          const { candidates, newCursor } = await pullSource(source, ctx.env);
+          for (const c of candidates) {
+            await ctx.ws.createCustomer({
+              name: c.name,
+              externalId: c.externalId,
+              domain: c.domain,
+              address: c.address,
+              vertical: c.vertical,
+              source: `source:${source.name}`,
+              sourceAgentSlug: ctx.agentSlug,
+              sourceSessionId: ctx.sessionId,
+              signal: c.signal,
+              signalDate: c.signalDate,
+              evidenceUri: c.evidenceUri,
+              priorityScore: scoreCandidate(c),
+            });
+            produced++;
+          }
+          await ctx.ws.updateMerchantSource(source.id, {
+            cursorValue: newCursor ?? source.cursorValue,
+            lastRunAt: new Date().toISOString(),
+            runCount: (candidates.length > 0 ? 1 : 0) + produced,
+          });
+          perSource.push({ name: source.name, candidates: candidates.length });
+        } catch (e) {
+          perSource.push({ name: source.name, candidates: -1 });
+        }
+      }
+      if (runId)
+        await ctx.ws.updateMarketRun(runId, {
+          producedCount: produced,
+          status: "completed",
+        });
+      return { collected: produced, sources: perSource, runId };
     },
   }),
   defineWorkspaceTool({
