@@ -3644,7 +3644,6 @@ describe("customer contacts (CRM)", () => {
     const out = await withWorkspace(stub, async (instance) => {
       const customer = instance.createCustomer({
         name: "Contact Co",
-        organizationId: WORKSPACE_ID,
       });
       const a = instance.upsertContact({
         customerId: customer.id,
