@@ -10,6 +10,7 @@ import { errorCodeFromStatus, VortexError } from "../platform/errors.js";
 import { workspaceRoleSchema } from "../platform/identity.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
+import { sessionHeadersForAuthApi } from "../platform/session.js";
 import { emitWorkspaceAudit } from "./audit-emit.js";
 
 function mapAuthError(error: unknown): never {
@@ -270,9 +271,14 @@ export function registerWorkspaceUserRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(leaveOrganizationRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const auth = await createAuth(c.env);
+    const headers = await sessionHeadersForAuthApi(
+      c.env,
+      c.req.raw.headers,
+      c.var.workspaceIdentity.id
+    );
     try {
       await auth.api.leaveOrganization({
-        headers: c.req.raw.headers,
+        headers,
         body: { organizationId },
       });
     } catch (error) {
@@ -292,7 +298,7 @@ export function registerWorkspaceUserRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId } = c.req.valid("param");
     const input = c.req.valid("json");
     // Owner invitations stay behind a signed-in owner identity. API keys
-    // resolve to the referenceId user's session inside better-auth — and
+    // get a session minted for the referenceId user below — and
     // agent-minted keys point at the workspace owner — so key metadata
     // alone must not be able to grant the top role.
     if (input.role === "owner" && c.var.workspaceIdentity.role !== "owner") {
@@ -303,10 +309,15 @@ export function registerWorkspaceUserRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     const auth = await createAuth(c.env);
+    const headers = await sessionHeadersForAuthApi(
+      c.env,
+      c.req.raw.headers,
+      c.var.workspaceIdentity.id
+    );
     let result: unknown;
     try {
       result = await auth.api.createInvitation({
-        headers: c.req.raw.headers,
+        headers,
         body: {
           email: input.email,
           organizationId,
@@ -454,10 +465,15 @@ export function registerWorkspaceUserRoutes(app: OpenAPIHono<AppContext>) {
     }
 
     const auth = await createAuth(c.env);
+    const headers = await sessionHeadersForAuthApi(
+      c.env,
+      c.req.raw.headers,
+      c.var.workspaceIdentity.id
+    );
     let result: unknown;
     try {
       result = await auth.api.createInvitation({
-        headers: c.req.raw.headers,
+        headers,
         body: {
           email: invite.email,
           organizationId,

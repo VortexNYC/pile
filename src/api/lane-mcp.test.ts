@@ -85,6 +85,7 @@ describe("lane MCP endpoint", () => {
         userId: "user-lane-mcp",
         name: "lane-mcp-admin",
         metadata: { organizationId, permissions: "admin" },
+        permissions: { workspace: ["admin"] },
       },
     });
     apiToken = z.object({ key: z.string() }).parse(result).key;

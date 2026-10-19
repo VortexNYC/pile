@@ -42,6 +42,7 @@ async function seedWorkspace(id: string) {
       name: "test-admin",
       rateLimitEnabled: false,
       metadata: { organizationId: workspace!.id, permissions: "admin" },
+      permissions: { workspace: ["admin"] },
     },
   });
   const parsed = z.object({ key: z.string() }).parse(result);

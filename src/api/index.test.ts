@@ -67,6 +67,7 @@ async function createAdminTokenRecord(organizationId: string) {
       userId: "user-1",
       name: "test-admin",
       metadata: { organizationId, permissions: "admin" },
+      permissions: { workspace: ["admin"] },
     },
   });
   const parsed = z.object({ id: z.string(), key: z.string() }).parse(result);

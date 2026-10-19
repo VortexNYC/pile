@@ -42,6 +42,7 @@ async function seedWorkspace() {
       name: "workspace-key",
       rateLimitEnabled: false,
       metadata: { organizationId: workspace!.id, permissions: "read" },
+      permissions: { workspace: ["read"] },
     },
   });
   const { key } = z.object({ key: z.string() }).parse(keyResult);
@@ -125,6 +126,7 @@ describe("workspaceAuthMiddleware", () => {
         name: "admin-key",
         rateLimitEnabled: false,
         metadata: { organizationId, permissions: "read,write,admin" },
+        permissions: { workspace: ["read", "write", "admin"] },
       },
     });
     const { key } = z.object({ key: z.string() }).parse(keyResult);

@@ -6,7 +6,6 @@ import { createD1 } from "../global/db.js";
 import { user as userTable } from "../global/schema.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
-import { createAdminHeaders } from "../platform/test-auth.js";
 import { MCP_TOOL_ALIASES } from "./mcp-aliases.js";
 import { MCP_TOOLS } from "./mcp-tools.js";
 
@@ -69,6 +68,7 @@ async function workspaceAdminHeaders(
       name: "test-workspace-admin",
       rateLimitEnabled: false,
       metadata: { organizationId, permissions: "admin" },
+      permissions: { workspace: ["admin"] },
     },
   });
   const parsed = z.object({ key: z.string() }).parse(result);
@@ -146,7 +146,15 @@ describe("MCP integration", () => {
         updatedAt: now,
       })
       .onConflictDoNothing({ target: [userTable.email] });
-    const setupHeaders = await createAdminHeaders(env, userId);
+    // A bearer key: /get-session still resolves it to the owner, and
+    // bearer credentials skip the CSRF origin gate on mutating routes.
+    const setupAuth = await createAuth(env);
+    const setupKey = await setupAuth.api.createApiKey({
+      body: { userId, name: "setup", rateLimitEnabled: false },
+    });
+    const setupHeaders = new Headers({
+      Authorization: `Bearer ${z.object({ key: z.string() }).parse(setupKey).key}`,
+    });
 
     const slug = `mcp-e2e-${crypto.randomUUID()}`;
     const workspaceRes = await callTool(

@@ -22,7 +22,10 @@ import {
   requireHumanSession,
   type AppContext,
 } from "../platform/middleware.js";
-import { getSessionUserId } from "../platform/session.js";
+import {
+  getSessionUserId,
+  sessionHeadersForAuthApi,
+} from "../platform/session.js";
 import { emitWorkspaceAudit } from "./audit-emit.js";
 
 const workspaceSchema = z.object({
@@ -315,12 +318,17 @@ export function registerWorkspaceRoutes(app: OpenAPIHono<AppContext>) {
         message: "Session required",
       });
     }
-    const item = await createWorkspace(db, c.env, c.req.raw.headers, {
-      name: input.name,
-      slug: input.slug,
-      key: input.key,
-      ownerId,
-    });
+    const item = await createWorkspace(
+      db,
+      c.env,
+      await sessionHeadersForAuthApi(c.env, c.req.raw.headers, ownerId),
+      {
+        name: input.name,
+        slug: input.slug,
+        key: input.key,
+        ownerId,
+      }
+    );
     await emitWorkspaceAudit(
       c,
       item.id,
@@ -505,12 +513,17 @@ export function registerWorkspaceRoutes(app: OpenAPIHono<AppContext>) {
         message: "Session required",
       });
     }
-    const workspace = await createWorkspace(db, c.env, c.req.raw.headers, {
-      name: input.name,
-      slug: input.slug,
-      key: input.key,
-      ownerId,
-    });
+    const workspace = await createWorkspace(
+      db,
+      c.env,
+      await sessionHeadersForAuthApi(c.env, c.req.raw.headers, ownerId),
+      {
+        name: input.name,
+        slug: input.slug,
+        key: input.key,
+        ownerId,
+      }
+    );
     // createWorkspace already provisions the default team through Better
     // Auth's organization hook; only fall back when it did not run. The
     // fallback goes through setDefaultTeam so the org metadata mirror is
@@ -536,6 +549,9 @@ export function registerWorkspaceRoutes(app: OpenAPIHono<AppContext>) {
           permissions: "admin",
           actorType: "agent",
         },
+        // Server-set grant — the identity layer trusts key permissions
+        // only when they live here, not in client-controlled metadata.
+        permissions: { workspace: ["admin"] },
       },
     });
     const parsed = z.object({ key: z.string() }).parse(keyResult);

@@ -243,6 +243,9 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
         name: input.name,
         email: `agent-${agentId}@${organizationId}.pile.nyc`,
         emailVerified: true,
+        // Agents are not global admins — the column default predates this
+        // path, so set the Better Auth role explicitly.
+        role: "user",
         metadata: JSON.stringify({
           type: "agent",
           provider: input.provider ?? "vortex",
