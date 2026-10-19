@@ -149,7 +149,7 @@ function encodeUtf8Base64(input: string): string {
 // Daytona
 // ---------------------------------------------------------------------------
 
-class DaytonaBackend implements ComputeBackend {
+export class DaytonaBackend implements ComputeBackend {
   readonly kind = "daytona" as const;
 
   constructor(
@@ -158,14 +158,29 @@ class DaytonaBackend implements ComputeBackend {
   ) {}
 
   private async request(path: string, init?: RequestInit): Promise<Response> {
-    return fetch(`${this.config.apiUrl}${path}`, {
-      signal: AbortSignal.timeout(IO_TIMEOUT_MS),
-      ...init,
-      headers: {
-        Authorization: `Bearer ${this.config.apiKey}`,
-        ...init?.headers,
-      },
-    });
+    // PILE-472 — one automatic retry on recoverable responses: 429 honors
+    // the Retry-After header, 5xx a short backoff. Non-recoverable errors
+    // (4xx) pass straight through to the caller's error handling.
+    const doFetch = () =>
+      fetch(`${this.config.apiUrl}${path}`, {
+        signal: AbortSignal.timeout(IO_TIMEOUT_MS),
+        ...init,
+        headers: {
+          Authorization: `Bearer ${this.config.apiKey}`,
+          ...init?.headers,
+        },
+      });
+    let res = await doFetch();
+    const recoverable = res.status === 429 || res.status >= 500;
+    if (recoverable) {
+      const retryAfter = res.headers.get("retry-after");
+      const waitMs = retryAfter
+        ? Math.min(Number(retryAfter) * 1000 || 2000, 15000)
+        : 1500;
+      await delay(waitMs);
+      res = await doFetch();
+    }
+    return res;
   }
 
   async createSandbox(opts: {
@@ -203,6 +218,13 @@ class DaytonaBackend implements ComputeBackend {
     });
     if (!res.ok) {
       const text = await res.text();
+      // PILE-472 — a create that failed on a transport timeout may have
+      // actually landed server-side. Before surfacing the failure, adopt
+      // the sandbox by name so a retried dispatch doesn't orphan it.
+      const adopted = await this.findSandbox(opts.sessionId, opts.name).catch(
+        () => null
+      );
+      if (adopted) return adopted;
       throw computeError(
         `Daytona sandbox create failed: ${res.status} ${text}`
       );
@@ -249,16 +271,29 @@ class DaytonaBackend implements ComputeBackend {
     sessionId: string,
     name: string
   ): Promise<ComputeSandbox | null> {
-    const res = await this.request("/sandbox");
-    if (!res.ok) {
-      const text = await res.text();
-      throw computeError(`Daytona sandbox list failed: ${res.status} ${text}`);
-    }
-    const list = daytonaSandboxListSchema.parse(await res.json());
-    const sandbox =
-      list.items.find(
+    // PILE-472 — the sandbox list paginates; a full fleet can push the
+    // lane's sandbox off page one. Walk pages until it surfaces or runs out.
+    let sandbox: z.infer<typeof daytonaSandboxSchema> | null = null;
+    let page = 1;
+    for (;;) {
+      const res = await this.request(`/sandbox?page=${page}`);
+      if (!res.ok) {
+        const text = await res.text();
+        throw computeError(
+          `Daytona sandbox list failed: ${res.status} ${text}`
+        );
+      }
+      const list = daytonaSandboxListSchema.parse(await res.json());
+      const found = list.items.find(
         (s) => s.labels?.["vortex.session"] === sessionId || s.name === name
-      ) ?? null;
+      );
+      if (found) {
+        sandbox = found;
+        break;
+      }
+      if (list.items.length === 0 || page >= 10) break;
+      page += 1;
+    }
     if (!sandbox) return null;
     return {
       id: sandbox.id,
