@@ -16,6 +16,16 @@ const CF_SLEEP_AFTER = "4h"; // leak ceiling, above the runner's 2h timeout
 // Bound every compute I/O call — a wedged sandbox or dead toolbox must fail
 // fast, not hold the request/DO open indefinitely (PILE-217).
 const IO_TIMEOUT_MS = 30_000;
+// A sandbox create can legitimately run past the shared I/O bound while
+// Daytona schedules and boots the VM — aborting at 30s kills healthy
+// creates (PILE-466). The POST gets its own ceiling; every other call
+// stays at 30s.
+const CREATE_TIMEOUT_MS = 120_000;
+// The toolbox can lag the sandbox's "started" state by a few seconds —
+// right after start, the process-session create 400s with
+// SANDBOX_NOT_RUNNING or an unresolvable container IP. Bound the retries
+// so a real failure still fails fast.
+const SESSION_CREATE_MAX_RETRIES = 3;
 
 function ioTimeout<T>(promise: Promise<T>, what: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -243,6 +253,7 @@ export class DaytonaBackend implements ComputeBackend {
     env: Record<string, string>;
   }): Promise<ComputeSandbox> {
     const res = await this.request("/sandbox", {
+      signal: AbortSignal.timeout(CREATE_TIMEOUT_MS),
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -405,19 +416,27 @@ export class DaytonaBackend implements ComputeBackend {
       await this.writeFile(sandbox, envPath, body);
       command = `set -a && . ${envPath} && set +a && rm -f ${envPath}; ${command}`;
     }
-    const createRes = await this.toolboxFetch(`${base}/process/session`, {
-      method: "POST",
-      body: JSON.stringify({ sessionId }),
-    });
-    if (!createRes.ok && createRes.status !== 409) {
+    for (let i = 0; i <= SESSION_CREATE_MAX_RETRIES; i++) {
+      if (i > 0) await delay(2_000 * 2 ** (i - 1)); // 2s, 4s, 8s
+      const createRes = await this.toolboxFetch(`${base}/process/session`, {
+        method: "POST",
+        body: JSON.stringify({ sessionId }),
+      });
+      if (createRes.ok || createRes.status === 409) break;
       const text = await createRes.text();
-      throw computeError(
-        daytonaFailure(
-          "Daytona process session create failed",
-          createRes.status,
-          text
-        )
-      );
+      const retryable =
+        createRes.status === 400 &&
+        (text.includes("SANDBOX_NOT_RUNNING") ||
+          text.includes("failed to resolve container IP"));
+      if (!retryable || i === SESSION_CREATE_MAX_RETRIES) {
+        throw computeError(
+          daytonaFailure(
+            "Daytona process session create failed",
+            createRes.status,
+            text
+          )
+        );
+      }
     }
     const execRes = await this.toolboxFetch(
       `${base}/process/session/${sessionId}/exec`,

@@ -64,6 +64,170 @@ describe("computeBackend", () => {
   });
 });
 
+const daytonaTestEnv = () =>
+  ({
+    ...baseEnv(),
+    DAYTONA_API_KEY: "k",
+    DAYTONA_API_URL: "https://daytona.test",
+  }) as AppEnv;
+
+const daytonaToolbox = "https://tb.test";
+const daytonaRecord: ComputeSandbox = {
+  id: "sb-1",
+  name: "vortex-devin-x",
+  state: "started",
+  toolboxProxyUrl: daytonaToolbox,
+};
+
+function fetchStub(
+  handler: (url: string, init?: RequestInit) => Response | Promise<Response>
+) {
+  const calls: { url: string; init?: RequestInit }[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(input), init });
+      return Promise.resolve(handler(String(input), init));
+    })
+  );
+  return calls;
+}
+
+describe("DaytonaBackend sandbox create timeout (PILE-466)", () => {
+  it("gives the create POST a 120s signal, not the shared 30s one", async () => {
+    // Map each requested timeout to a distinct signal so the fetch call can
+    // be attributed to its duration.
+    const signals = new Map<number, AbortSignal>();
+    vi.spyOn(AbortSignal, "timeout").mockImplementation((ms) => {
+      let signal = signals.get(ms);
+      if (!signal) {
+        signal = new AbortController().signal;
+        signals.set(ms, signal);
+      }
+      return signal;
+    });
+    const calls = fetchStub((url, init) => {
+      if (url === "https://daytona.test/sandbox" && init?.method === "POST") {
+        return new Response(
+          JSON.stringify({ ...daytonaRecord, state: "creating" }),
+          { status: 200 }
+        );
+      }
+      return new Response(JSON.stringify(daytonaRecord), { status: 200 });
+    });
+
+    const backend = computeBackend(daytonaTestEnv());
+    await backend.createSandbox({
+      name: "vortex-devin-x",
+      sessionId: "sess-1",
+      organizationId: "org-1",
+      agentLabel: "devin-cli",
+      env: {},
+    });
+
+    const create = calls.find(
+      (c) =>
+        c.url === "https://daytona.test/sandbox" && c.init?.method === "POST"
+    );
+    const poll = calls.find(
+      (c) => c.url === "https://daytona.test/sandbox/sb-1" && !c.init?.method
+    );
+    expect(create?.init?.signal).toBe(signals.get(120_000));
+    expect(poll?.init?.signal).toBe(signals.get(30_000));
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+});
+
+const sessionCreateUrl = `${daytonaToolbox}/sb-1/process/session`;
+const ipFailure = () =>
+  new Response(
+    JSON.stringify({
+      message:
+        "failed to resolve container IP after 3 attempts, last error: SANDBOX_NOT_RUNNING",
+    }),
+    { status: 400 }
+  );
+
+describe("DaytonaBackend process-session create retry (PILE-466)", () => {
+  it("retries the container-IP 400 and then starts the runner", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      let sessionCreates = 0;
+      fetchStub((url) => {
+        if (url === sessionCreateUrl) {
+          sessionCreates++;
+          return sessionCreates <= 2
+            ? ipFailure()
+            : new Response(JSON.stringify({ sessionId: "sess-1" }));
+        }
+        return new Response(JSON.stringify({ cmdId: "cmd-1" }));
+      });
+      const backend = computeBackend(daytonaTestEnv());
+      const started = backend.startRunner(
+        daytonaRecord,
+        "sess-1",
+        "python3 /tmp/run.py"
+      );
+      await vi.advanceTimersByTimeAsync(2_000);
+      await vi.advanceTimersByTimeAsync(4_000);
+      await started;
+      expect(sessionCreates).toBe(3);
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("gives up after the third retry", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      let sessionCreates = 0;
+      fetchStub((url) => {
+        if (url === sessionCreateUrl) {
+          sessionCreates++;
+          return ipFailure();
+        }
+        return new Response("{}");
+      });
+      const backend = computeBackend(daytonaTestEnv());
+      const started = backend.startRunner(
+        daytonaRecord,
+        "sess-1",
+        "python3 /tmp/run.py"
+      );
+      const assertion = expect(started).rejects.toThrow(
+        /process session create failed: 400/
+      );
+      await vi.advanceTimersByTimeAsync(15_000); // 2s + 4s + 8s
+      await assertion;
+      expect(sessionCreates).toBe(4);
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("does not retry a session-create 400 that isn't the IP race", async () => {
+    let sessionCreates = 0;
+    fetchStub((url) => {
+      if (url === sessionCreateUrl) {
+        sessionCreates++;
+        return new Response(JSON.stringify({ message: "bad request" }), {
+          status: 400,
+        });
+      }
+      return new Response("{}");
+    });
+    const backend = computeBackend(daytonaTestEnv());
+    await expect(
+      backend.startRunner(daytonaRecord, "sess-1", "python3 /tmp/run.py")
+    ).rejects.toThrow(/process session create failed: 400/);
+    expect(sessionCreates).toBe(1);
+    vi.unstubAllGlobals();
+  });
+});
+
 function fakeProcess(
   status: string,
   exitCode?: number
