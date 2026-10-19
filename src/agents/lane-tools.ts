@@ -1449,6 +1449,26 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
     },
   }),
   defineWorkspaceTool({
+    name: "obscura_fetch",
+    description:
+      "Obscura — lightweight stealth browser (Rust+V8, spoofs full Windows Chrome fingerprint). JS-rendered pages that check for automation: webdriver=false, real plugins, Chrome UA. Cheaper than the patchright tier for most protected pages.",
+    permission: "web:fetch",
+    inputSchema: z.object({ url: z.string().url() }),
+    async run(ctx, input) {
+      const base = ctx.env?.OBSCURA_BASE_URL;
+      if (!base)
+        throw new LaneToolError("OBSCURA_BASE_URL not configured");
+      const res = await fetch(`${base}/fetch`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url: input.url }),
+      });
+      if (!res.ok)
+        throw new LaneToolError(`obscura_fetch failed: ${res.status}`);
+      return res.json();
+    },
+  }),
+  defineWorkspaceTool({
     name: "web_fetch",
     description:
       "Fetch a public URL (NYC Open Data, a state business registry, a merchant site). GET only, https only, text response capped.",
