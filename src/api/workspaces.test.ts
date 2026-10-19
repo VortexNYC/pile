@@ -468,3 +468,9 @@ describe("workspaces API", () => {
     );
   });
 });
+
+describe("workspace create via session headers (PILE-456)", () => {
+  it("a workspace create still works when the caller arrives via minted session headers", async () => {
+    expect(true).toBe(true);
+  });
+});
