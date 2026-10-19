@@ -5,7 +5,11 @@ import { organization } from "../global/schema.js";
 import { replyLaneResultToTicket } from "../global/support-escalation.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkerEnv } from "../platform/middleware.js";
-import type { AgentSession, AgentSessionStatus } from "../types/workspace.js";
+import type {
+  AgentSession,
+  AgentSessionStatus,
+  Issue,
+} from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
 import type { ComputeBackend } from "./compute.js";
 import { resolveGeneratedConflict } from "./conflict-fix.js";
@@ -29,6 +33,7 @@ import { getLaneDbProvider, type LaneDbRef } from "./lane-db.js";
 import { reapLaneGithubTokens } from "./lane-github-token.js";
 import { nudgeLane } from "./nudge.js";
 import { drainDomainEvents, pageChiefOfStaff } from "./pipeline-events.js";
+import { PLAN_PURPOSE } from "./plan.js";
 import type {
   AgentProvider,
   AgentProviderSession,
@@ -60,6 +65,7 @@ import {
   SPEND_CAP_ACTOR,
   WORKSPACE_SPEND_CAP_AGENT,
 } from "./spend.js";
+import { TRIAGE_PURPOSE } from "./triage.js";
 
 export const DEFAULT_TIMEOUT_MINUTES = 60;
 export const DEFAULT_INACTIVITY_MINUTES = 20;
@@ -2023,6 +2029,86 @@ interface PrSyncDeps {
   compute?: (env: WorkerEnv, agentId: string) => ComputeBackend;
 }
 
+// PILE-446 — a merged/closed PR retires its branch: lanes still in flight
+// against it (review fixes, conflict nudges) die here rather than failing at
+// push time against a deleted ref (the VOR-738 race). Non-work purposes
+// (review, triage, plan, preflight) aren't PR-bound — they run to their own
+// terminal state.
+const MERGE_SURVIVOR_PURPOSES = new Set([
+  REVIEW_PURPOSE,
+  TRIAGE_PURPOSE,
+  PLAN_PURPOSE,
+  "preflight",
+]);
+
+function laneBoundToPr(
+  lane: AgentSession,
+  issue: Issue,
+  prUrl: string,
+  headRef: string | null
+): boolean {
+  if (lane.prUrl === prUrl) return true;
+  // Reported PR linkage wins — a lane whose prUrl points elsewhere is not
+  // this PR's worker.
+  if (lane.prUrl !== null) return false;
+  // Nothing reported yet (provisioning, or the run never reached push): infer
+  // the working branch — the session's reported branch, else the issue's
+  // linked branch, else the lane-name default the runner would use.
+  if (headRef === null) return false;
+  const laneBranch = lane.branch ?? issue.branch ?? `issue-${issue.id}`;
+  return laneBranch === headRef;
+}
+
+async function cancelLanesForTerminalPr(
+  env: WorkerEnv,
+  stub: DurableObjectStub<WorkspaceDO>,
+  organizationId: string,
+  issue: Issue,
+  prUrl: string,
+  state: "merged" | "closed",
+  headRef: string | null,
+  probeTimeoutMs: number
+): Promise<void> {
+  const lanes = await stub
+    .listAgentSessions({ issueId: issue.id, limit: 50 })
+    .catch(() => [] as AgentSession[]);
+  for (const lane of lanes) {
+    if (TERMINAL_STATUSES.has(lane.status)) continue;
+    if (lane.purpose && MERGE_SURVIVOR_PURPOSES.has(lane.purpose)) continue;
+    if (!laneBoundToPr(lane, issue, prUrl, headRef)) continue;
+    let provider: AgentProvider | null = null;
+    try {
+      const providerConfig = await loadProviderConfig(env, stub, lane.agentId);
+      provider = getAgentProvider(
+        lane.agentId,
+        resolveAgentEnv(env, providerConfig ?? undefined)
+      );
+    } catch {
+      provider = null;
+    }
+    // Deliberate cancel, not a substrate failure: the lane's work product is
+    // merged/closed underneath it — infraFailure stays unset so this doesn't
+    // feed the provider-unhealthy streak.
+    await cancelSession(
+      stub,
+      lane,
+      provider,
+      `PR ${prUrl} ${state} — in-flight lane on the PR's branch is moot`,
+      probeTimeoutMs,
+      undefined,
+      false
+    );
+    await stub
+      .addAgentSessionEvent({
+        sessionId: lane.id,
+        type: "pr.merge_cancel",
+        message: `PR ${prUrl} ${state} — canceled in-flight lane`,
+        payload: { prUrl, prState: state, headRef },
+      })
+      .catch(() => {});
+  }
+}
+
 // Reconcile terminal sessions' PR state + the issue's PR fields from GitHub.
 // Sessions leave the running/created poll list at terminal, so without this
 // their prState freezes at whatever the runner last reported ("open").
@@ -2132,6 +2218,27 @@ export async function syncOpenPrSessions(
             payload: { prUrl, prState: state, headSha },
           })
           .catch(() => {});
+      }
+      // PILE-446 — the merge race: a lane fixing review feedback or conflicts
+      // mid-flight when its PR lands gets canceled rather than pushing to a
+      // deleted branch. Idempotent — every bound lane cancels exactly once.
+      if ((state === "merged" || state === "closed") && issue) {
+        await cancelLanesForTerminalPr(
+          env,
+          stub,
+          organizationId,
+          issue,
+          prUrl,
+          state,
+          typeof head?.ref === "string" ? head.ref : null,
+          probeTimeoutMs
+        ).catch((err: unknown) =>
+          console.error("merge-cancel sweep failed", {
+            session: session.id,
+            prUrl,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        );
       }
       const ciPrompt =
         `CI is failing on ${prUrl}${headSha ? ` (sha ${headSha})` : ""}.\n` +

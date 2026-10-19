@@ -32,7 +32,12 @@ import { loadProviderConfig } from "./credentials.js";
 import { CursorCliAgentProvider } from "./cursor-cli.js";
 import { CursorAgentProvider } from "./cursor.js";
 import { resolveAgentEnv } from "./daytona.js";
-import { checkDispatchDedupe, type DedupeResult } from "./dedupe.js";
+import {
+  checkDispatchDedupe,
+  type DedupeContinuation,
+  type DedupeDeps,
+  type DedupeResult,
+} from "./dedupe.js";
 import { DevinCliAgentProvider } from "./devin-cli.js";
 import { DevinAgentProvider } from "./devin.js";
 import { guidanceRefs, renderGuidancePacks } from "./guidance.js";
@@ -180,6 +185,24 @@ export async function inheritTeamDefaultRepo(
   );
 }
 
+/** PILE-446 — audit marker for a continuation dispatch: the lane resumes an
+ *  open covering PR's head branch because its original session ended. Written
+ *  on whichever session row carries the run (fresh, parked, or promoted). */
+async function noteContinuation(
+  stub: DurableObjectStub<WorkspaceDO>,
+  sessionId: string,
+  continuation: DedupeContinuation
+): Promise<void> {
+  await stub
+    .addAgentSessionEvent({
+      sessionId,
+      type: "lane.continuation",
+      message: `Continuing open PR ${continuation.prUrl} on branch ${continuation.headRef} — covering session ended`,
+      payload: { ...continuation },
+    })
+    .catch(() => {});
+}
+
 export async function dispatchAgent(
   env: WorkerEnv,
   agentId: string,
@@ -243,6 +266,9 @@ export async function dispatchAgent(
      *  passes `{merchantId}-{agentSlug}` so per-merchant context survives
      *  across dispatches. */
     conversationKey?: string;
+    /** Dedupe GitHub/auth overrides — tests inject stubs; production
+     *  callers leave this unset so real installation tokens apply. */
+    dedupeDeps?: DedupeDeps;
   }
 ): Promise<AgentSession> {
   const label = sessionLabel(issue, agentId, options?.purpose);
@@ -329,17 +355,28 @@ export async function dispatchAgent(
   // session event so coverage gaps are auditable.
   let dedupeAdvisory: DedupeResult | null = null;
   let dedupeError: string | null = null;
+  let continuation: DedupeContinuation | null = null;
   if (!options?.promoteSessionId) {
-    const dedupe = await checkDispatchDedupe(env, stub, issue).catch((err) => {
+    const dedupe = await checkDispatchDedupe(
+      env,
+      stub,
+      issue,
+      options?.dedupeDeps
+    ).catch((err) => {
       dedupeError = err instanceof Error ? err.message : String(err);
       return null;
     });
-    if (dedupe?.hardBlock) {
-      throw new VortexError({
-        code: "CONFLICT",
-        status: 409,
-        message: dedupe.hardBlock.reason,
-      });
+    continuation = dedupe?.continuation ?? null;
+    if (continuation && issue.branch !== continuation.headRef) {
+      // PILE-446 — an open PR covering this issue with no live session makes
+      // this dispatch a continuation: the lane resumes the PR's head branch
+      // instead of a fresh `issue-<id>` fork. Persisted so queued/paused
+      // promotions and retries see the same target (updateIssue can fail on
+      // a repo+branch collision — the in-memory override still applies).
+      const repointed = await stub
+        .updateIssue(issue.id, { branch: continuation.headRef }, actor.id)
+        .catch(() => undefined);
+      issue = repointed ?? { ...issue, branch: continuation.headRef };
     }
     const queueAfter = options?.queueAfter ?? dedupe?.queueAfter;
     if (queueAfter && !options?.skipQueue) {
@@ -371,6 +408,7 @@ export async function dispatchAgent(
           payload: dedupe ? { coverage: dedupe.coverage } : undefined,
         })
         .catch(() => {});
+      if (continuation) await noteContinuation(stub, queued.id, continuation);
       return queued;
     }
     // PILE-420 — the agent type is paused workspace-wide: the dispatch is
@@ -433,6 +471,7 @@ export async function dispatchAgent(
           },
         })
         .catch(() => {});
+      if (continuation) await noteContinuation(stub, parked.id, continuation);
       return parked;
     }
     // Workspace-wide lane ceiling for container-backed lanes — the CF
@@ -648,6 +687,7 @@ export async function dispatchAgent(
       })
       .catch(() => {});
   }
+  if (continuation) await noteContinuation(stub, session.id, continuation);
 
   await stub.addAgentActivity({
     sessionId: session.id,
@@ -759,6 +799,20 @@ export async function dispatchAgent(
           [
             memoryText,
             guidanceText,
+            // PILE-446 — a continuation lane lands on the covering PR's head
+            // branch; the context tells it the PR exists and what to do
+            // there instead of treating the run as fresh work.
+            continuation
+              ? [
+                  `Continuation dispatch: open PR ${continuation.prUrl} already covers this issue and its agent session ended.`,
+                  `Your working branch is the PR's head branch \`${continuation.headRef}\` — pick up where it left off. Resolve any merge conflicts with the base branch, address outstanding review feedback, and push to the same branch. Do not open a second pull request.`,
+                  continuation.changesRequested
+                    ? "The PR has unresolved requested changes — address them."
+                    : null,
+                ]
+                  .filter((line): line is string => line !== null)
+                  .join("\n")
+              : null,
             options?.instructions ?? null,
             session.resultSchema
               ? buildResultSchemaInstructions(session.resultSchema)

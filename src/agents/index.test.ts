@@ -152,6 +152,88 @@ describe("agent providers", () => {
     expect(session.status).toBe("completed");
   });
 
+  it("continues an open covering PR on its head branch instead of conflict (PILE-446)", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
+    );
+    await stub.setOrganizationId(actor.organizationId);
+    const issue = await stub.createIssue({
+      title: "Continue PR work",
+      repo: "acme/widgets",
+    });
+
+    let captured:
+      | {
+          branch?: string | null;
+          instructions?: string;
+        }
+      | undefined;
+    const agentId = `mock-cont-${crypto.randomUUID().slice(0, 8)}`;
+    const provider = new MockAgentProvider(agentId, {
+      dispatch: (_org, dispatchedIssue, _model, ctx) => {
+        captured = {
+          branch: dispatchedIssue.branch,
+          instructions: ctx?.instructions,
+        };
+        return {
+          id: "cont-1",
+          agentId,
+          issueId: dispatchedIssue.id,
+          status: "created",
+        };
+      },
+    });
+    registerAgentProvider(agentId, () => provider);
+
+    const prUrl = "https://github.com/acme/widgets/pull/555";
+    const session = await dispatchAgent(
+      env,
+      agentId,
+      actor.organizationId,
+      issue,
+      actor,
+      undefined,
+      undefined,
+      {
+        dedupeDeps: {
+          tokenForRepo: async () => "gh-token",
+          fetch: async (input: RequestInfo | URL) => {
+            const url = String(input);
+            if (url.includes("/pulls?state=open")) {
+              return new Response(
+                JSON.stringify([
+                  {
+                    number: 555,
+                    html_url: prUrl,
+                    title: `${issue.identifier} continuation target`,
+                    body: null,
+                    head: { ref: "pr-555-branch" },
+                  },
+                ]),
+                { status: 200 }
+              );
+            }
+            return new Response("[]", { status: 200 });
+          },
+        },
+      }
+    );
+
+    expect(session.status).toBe("created");
+    // The covering PR's head branch is persisted on the issue and handed to
+    // the provider as the lane's working branch.
+    const stored = await stub.getIssue(issue.id);
+    expect(stored?.branch).toBe("pr-555-branch");
+    expect(captured?.branch).toBe("pr-555-branch");
+    expect(captured?.instructions).toContain("Continuation dispatch");
+    expect(captured?.instructions).toContain(prUrl);
+    expect(captured?.instructions).toContain("pr-555-branch");
+    const events = await stub.listAgentSessionEvents(session.id, {
+      limit: 100,
+    });
+    expect(events.some((e) => e.type === "lane.continuation")).toBe(true);
+  });
+
   it("blocks a second dispatch while an active session exists", async () => {
     const stub = env.WORKSPACE_DURABLE_OBJECT.get(
       env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)

@@ -110,23 +110,26 @@ describe("checkDispatchDedupe", () => {
       makeIssue({ repo: null })
     );
     expect(result.coverage).toEqual([]);
-    expect(result.hardBlock).toBeNull();
+    expect(result.continuation).toBeNull();
   });
 
-  it("hard-blocks when an identifier-matched open PR has no live session", async () => {
+  it("continues on the head branch when an identifier-matched open PR has no live session", async () => {
     const result = await checkDispatchDedupe(env, noSessions, makeIssue(), {
       tokenForRepo,
       fetch: ghStub(),
     });
-    expect(result.hardBlock?.prUrl).toBe(
-      "https://github.com/acme/widgets/pull/740"
-    );
+    expect(result.continuation).toEqual({
+      prUrl: "https://github.com/acme/widgets/pull/740",
+      prNumber: 740,
+      headRef: "iss-42-invoice-paid",
+      changesRequested: false,
+    });
     expect(result.queueAfter).toBeNull();
     expect(result.coverage).toHaveLength(1);
     expect(result.coverage[0].overlap).toBe("identifier");
   });
 
-  it("does not hard-block when the covering PR has outstanding requested changes", async () => {
+  it("flags review work when the covering PR has outstanding requested changes", async () => {
     const reviews = [
       {
         id: 1,
@@ -138,12 +141,12 @@ describe("checkDispatchDedupe", () => {
       tokenForRepo,
       fetch: ghStub({ "/pulls/740/reviews": reviews }),
     });
-    expect(result.hardBlock).toBeNull();
     expect(result.queueAfter).toBeNull();
     expect(result.coverage[0].changesRequested).toBe(true);
+    expect(result.continuation?.changesRequested).toBe(true);
   });
 
-  it("still hard-blocks once the same reviewer approves", async () => {
+  it("still continues once the same reviewer approves", async () => {
     const reviews = [
       {
         id: 1,
@@ -156,12 +159,13 @@ describe("checkDispatchDedupe", () => {
       tokenForRepo,
       fetch: ghStub({ "/pulls/740/reviews": reviews }),
     });
-    expect(result.hardBlock?.prUrl).toBe(
+    expect(result.continuation?.prUrl).toBe(
       "https://github.com/acme/widgets/pull/740"
     );
+    expect(result.continuation?.changesRequested).toBe(false);
   });
 
-  it("stays unblocked while any reviewer still wants changes", async () => {
+  it("keeps review work flagged while any reviewer still wants changes", async () => {
     const reviews = [
       {
         id: 1,
@@ -175,7 +179,7 @@ describe("checkDispatchDedupe", () => {
       tokenForRepo,
       fetch: ghStub({ "/pulls/740/reviews": reviews }),
     });
-    expect(result.hardBlock).toBeNull();
+    expect(result.continuation?.changesRequested).toBe(true);
     expect(result.coverage[0].changesRequested).toBe(true);
   });
 
@@ -192,9 +196,10 @@ describe("checkDispatchDedupe", () => {
       tokenForRepo,
       fetch: ghStub({ "/pulls/740/reviews": reviews }),
     });
-    expect(result.hardBlock?.prUrl).toBe(
+    expect(result.continuation?.prUrl).toBe(
       "https://github.com/acme/widgets/pull/740"
     );
+    expect(result.continuation?.changesRequested).toBe(false);
   });
 
   it("queues behind the sibling session that owns the covering PR", async () => {
@@ -208,7 +213,7 @@ describe("checkDispatchDedupe", () => {
       fetch: ghStub(),
     });
     expect(result.queueAfter).toBe("sess-owner");
-    expect(result.hardBlock).toBeNull();
+    expect(result.continuation).toBeNull();
   });
 
   it("flags file-surface collisions against sibling lane PRs", async () => {
@@ -255,7 +260,7 @@ describe("checkDispatchDedupe", () => {
       tokenForRepo,
       fetch: fetch2,
     });
-    expect(result.hardBlock).toBeNull();
+    expect(result.continuation).toBeNull();
     expect(result.queueAfter).toBeNull();
     expect(result.coverage[0]?.overlap).toBe("keywords");
   });
