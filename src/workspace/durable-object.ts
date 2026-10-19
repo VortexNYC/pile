@@ -13,7 +13,6 @@ import {
   lt,
   ne,
   not,
-  notInArray,
   or,
   sql,
 } from "drizzle-orm";
@@ -172,6 +171,7 @@ import {
   type CommentForSearch,
   type WorkspaceSearchIndex,
 } from "./search.js";
+import { inArrayJson, notInArrayJson } from "./sql.js";
 import { deliverWebhooks, retryWebhookDeliveries } from "./webhooks.js";
 
 type IssueKey = keyof Issue & keyof IssuePatch;
@@ -1366,7 +1366,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const linearRows = await this.db
       .select({ email: workspaceLinearUsers.email })
       .from(workspaceLinearUsers)
-      .where(inArray(workspaceLinearUsers.linearId, linearIds))
+      .where(inArrayJson(workspaceLinearUsers.linearId, linearIds))
       .all();
     const emails = linearRows
       .map((row) => row.email)
@@ -1378,7 +1378,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const matchedUsers = await createD1(this.env.D1)
       .select({ id: globalUser.id })
       .from(globalUser)
-      .where(inArray(globalUser.email, emails))
+      .where(inArrayJson(globalUser.email, emails))
       .all();
     return matchedUsers.map((matchedUser) => matchedUser.id);
   }
@@ -3260,7 +3260,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
               spaceId: workspaceDocuments.spaceId,
             })
             .from(workspaceDocuments)
-            .where(inArray(workspaceDocuments.id, documentIds))
+            .where(inArrayJson(workspaceDocuments.id, documentIds))
             .all()
         ).map((d) => [d.id, d.spaceId])
       );
@@ -3321,7 +3321,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       const rows = await this.db
         .select()
         .from(workspaceIssues)
-        .where(inArray(workspaceIssues.teamId, teamIds))
+        .where(inArrayJson(workspaceIssues.teamId, teamIds))
         .all();
       return rows
         .flatMap((issue) => {
@@ -4997,7 +4997,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       .from(workspaceAgentSessions)
       .where(
         and(
-          inArray(
+          inArrayJson(
             workspaceAgentSessions.issueId,
             childIssues.map((i) => i.id)
           ),
@@ -6978,7 +6978,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
                 ? isNull(cycles.projectId)
                 : eq(cycles.projectId, cycle.projectId),
               or(isNull(cycles.endDate), gte(cycles.endDate, nowIso)),
-              notInArray(cycles.id, endedIds)
+              notInArrayJson(cycles.id, endedIds)
             )
           )
           .orderBy(asc(cycles.startDate))
@@ -7001,7 +7001,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
               .update(workspaceIssues)
               .set({ cycleId: nextCycle.id, updatedAt: nowIso })
               .where(
-                inArray(
+                inArrayJson(
                   workspaceIssues.id,
                   unfinished.map((row) => row.id)
                 )
@@ -7047,7 +7047,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }
     const conditions = [eq(workspaceIssues.cycleId, cycleId)];
     if (teamIds) {
-      conditions.push(inArray(workspaceIssues.teamId, teamIds));
+      conditions.push(inArrayJson(workspaceIssues.teamId, teamIds));
     }
     const rows = await this.db
       .select({
@@ -7099,7 +7099,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     };
     const column = columns[groupBy];
     const conditions = teamIds
-      ? [inArray(workspaceIssues.teamId, teamIds)]
+      ? [inArrayJson(workspaceIssues.teamId, teamIds)]
       : [];
     const exclude = this.hiddenIssueConditionFor(viewer, workspaceIssues.id);
     if (exclude) conditions.push(exclude);
@@ -7131,7 +7131,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }
     const conditions = [eq(workspaceIssues.cycleId, cycleId)];
     if (teamIds) {
-      conditions.push(inArray(workspaceIssues.teamId, teamIds));
+      conditions.push(inArrayJson(workspaceIssues.teamId, teamIds));
     }
     const exclude = this.hiddenIssueConditionFor(viewer, workspaceIssues.id);
     if (exclude) conditions.push(exclude);
@@ -7157,7 +7157,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         and(
           eq(workspaceIssueHistory.field, "status"),
           inArray(workspaceIssueHistory.toValue, ["done", "canceled"]),
-          inArray(
+          inArrayJson(
             workspaceIssueHistory.issueId,
             rows.map((row) => row.id)
           )
@@ -7178,7 +7178,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           .select({ id: workspaceIssues.id, status: workspaceIssues.status })
           .from(workspaceIssues)
           .where(
-            inArray(
+            inArrayJson(
               workspaceIssues.id,
               rows.map((row) => row.id)
             )
@@ -7305,7 +7305,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       args.teamIds && args.teamIds.length > 0 ? args.teamIds : undefined;
 
     if (visibleTeamIds) {
-      conditions.push(inArray(workspaceIssues.teamId, visibleTeamIds));
+      conditions.push(inArrayJson(workspaceIssues.teamId, visibleTeamIds));
     }
     const exclude = this.hiddenIssueConditionFor(
       args.viewer,
@@ -7395,7 +7395,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       if (issueIds.length === 0) {
         return [];
       }
-      conditions.push(inArray(workspaceIssues.id, issueIds));
+      conditions.push(inArrayJson(workspaceIssues.id, issueIds));
     }
     if (args.cursor) {
       conditions.push(
@@ -8527,7 +8527,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (reactionTargets.length > 0) {
       await this.db
         .delete(workspaceReactions)
-        .where(inArray(workspaceReactions.targetId, reactionTargets));
+        .where(inArrayJson(workspaceReactions.targetId, reactionTargets));
     }
     await this.db
       .delete(workspaceAttachments)
@@ -8545,10 +8545,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (sessionIds.length > 0) {
       await this.db
         .delete(workspaceAgentActivities)
-        .where(inArray(workspaceAgentActivities.sessionId, sessionIds));
+        .where(inArrayJson(workspaceAgentActivities.sessionId, sessionIds));
       await this.db
         .delete(workspaceAgentSessions)
-        .where(inArray(workspaceAgentSessions.id, sessionIds));
+        .where(inArrayJson(workspaceAgentSessions.id, sessionIds));
     }
 
     await this.syncSearchIndex((index) => removeIssueDocuments(index, issueId));

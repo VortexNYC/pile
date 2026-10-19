@@ -1980,6 +1980,77 @@ describe("WorkspaceDO", () => {
     expect(links).toHaveLength(20);
   });
 
+  it("subStepProgressFor answers a 100-parent page — ids ride one JSON param (PILE-448)", async () => {
+    const stub = getStub();
+    const parents = await withWorkspace(stub, (instance) =>
+      Promise.all(
+        Array.from({ length: 100 }, (_, i) =>
+          instance.createIssue({ title: `Chip parent ${i}` })
+        )
+      )
+    );
+    await withWorkspace(stub, (instance) =>
+      instance.createIssue({
+        title: "Required gate",
+        parentId: parents[0].id,
+        stepKey: "gate",
+        required: true,
+      })
+    );
+    // 100 parent ids + org + required used to bind 102 vars and throw.
+    const progress = await withWorkspace(stub, (instance) =>
+      instance.subStepProgressFor(parents.map((parent) => parent.id))
+    );
+    expect(progress[parents[0].id]).toMatchObject({
+      total: 1,
+      done: 0,
+      blocked: 1,
+    });
+    expect(progress[parents[1].id]).toBeUndefined();
+  });
+
+  it("listIssues search survives >95 hit ids — one JSON param, not one ? per id", async () => {
+    const stub = getStub();
+    const needle = `capneedle${crypto.randomUUID().slice(0, 8)}`;
+    await withWorkspace(stub, (instance) =>
+      Promise.all(
+        Array.from({ length: 100 }, (_, i) =>
+          instance.createIssue({ title: `${needle} hit ${i}` })
+        )
+      )
+    );
+    const rows = await withWorkspace(stub, (instance) =>
+      instance.listIssues({ search: needle, limit: 100 })
+    );
+    expect(rows).toHaveLength(100);
+  });
+
+  it("listIssues applies an `in` filter past the ~100 value cap", async () => {
+    const stub = getStub();
+    const issues = await withWorkspace(stub, (instance) =>
+      Promise.all([
+        instance.createIssue({ title: "Filter in probe one" }),
+        instance.createIssue({ title: "Filter in probe two" }),
+        instance.createIssue({ title: "Filter in probe three" }),
+      ])
+    );
+    // Saved-view `in` filters carry caller-sized value lists — a 100-entry
+    // list used to bind one ? per value and throw.
+    const values = [
+      issues[0].identifier!,
+      issues[2].identifier!,
+      ...Array.from({ length: 120 }, (_, i) => `NOPE-${i}`),
+    ];
+    const rows = await withWorkspace(stub, (instance) =>
+      instance.listIssues({
+        filter: { op: "in", field: "identifier", values },
+      })
+    );
+    expect(rows.map((row) => row.id).toSorted()).toEqual(
+      [issues[0].id, issues[2].id].toSorted()
+    );
+  });
+
   it("deduplicates repeated issue references into a single link", async () => {
     const stub = getStub();
     const issue = await withWorkspace(stub, (instance) =>

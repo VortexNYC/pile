@@ -98,6 +98,30 @@ describe("issues API", () => {
     expect(res.status).toBe(200);
   });
 
+  it("serves a max-size page — the sub-step progress query binds parent ids as one param (PILE-448)", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    // DO SQLite caps bound variables per statement at ~100; a 99+ row page
+    // used to overflow the follow-up query that binds one ? per parent id.
+    await Promise.all(
+      Array.from({ length: 100 }, (_, i) =>
+        stub.createIssue({ title: `Variable cap regression ${i}` })
+      )
+    );
+    const res = await fetch(
+      `/workspaces/${organizationId}/issues?limit=100`,
+      {},
+      token
+    );
+    expect(res.status).toBe(200);
+    const body = z
+      .object({ issues: z.array(z.object({ id: z.string() })) })
+      .parse(await res.json());
+    expect(body.issues).toHaveLength(100);
+  });
+
   it("returns an existing issue for an idempotent externalRef create", async () => {
     const externalRef = `test:${crypto.randomUUID()}`;
     const first = await fetch(

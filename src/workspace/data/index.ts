@@ -91,6 +91,7 @@ import {
   workspaceWebhookSubscriptions,
   workspaceOutboundWebhookDeliveries,
 } from "../schema.js";
+import { inArrayJson } from "../sql.js";
 
 export type WorkspaceDb = DrizzleSqliteDODatabase<typeof workspaceSchema>;
 
@@ -3636,7 +3637,7 @@ export function subStepProgressByParent(
     .where(
       and(
         eq(workspaceIssues.organizationId, organizationId),
-        inArray(workspaceIssues.parentId, parentIds),
+        inArrayJson(workspaceIssues.parentId, parentIds),
         eq(workspaceIssues.required, true)
       )
     )
@@ -6751,7 +6752,7 @@ export function customFieldMaps(
     .where(
       and(
         eq(workspaceFieldValues.organizationId, organizationId),
-        inArray(workspaceFieldValues.entityId, entityIds)
+        inArrayJson(workspaceFieldValues.entityId, entityIds)
       )
     )
     .all();
@@ -8696,7 +8697,7 @@ export function hiddenIssueCondition(
     teamIds.length > 0
       ? and(
           eq(workspaceIssuePermissions.actorType, "team"),
-          inArray(workspaceIssuePermissions.actorId, teamIds)
+          inArrayJson(workspaceIssuePermissions.actorId, teamIds)
         )
       : undefined
   );
@@ -8811,7 +8812,7 @@ export function shiftIssueCycle(
   if (ids.length === 0) return 0;
   db.update(workspaceIssues)
     .set({ cycleId: toCycleId, updatedAt: now })
-    .where(inArray(workspaceIssues.id, ids))
+    .where(inArrayJson(workspaceIssues.id, ids))
     .run();
   return ids.length;
 }
