@@ -680,10 +680,22 @@ export async function dispatchAgent(
           rateLimitEnabled: false,
           metadata: {
             organizationId,
-            permissions: "read",
+            permissions: /ws:write/.test(
+              options?.agentProfile?.toolScope ?? ""
+            )
+              ? "write"
+              : "read",
             actorType: "agent",
           },
-          permissions: { workspace: ["read"] },
+          // PILE-442 — scope the lane key to the role's toolScope:
+          // ws:write roles get write; read-scoped keep read.
+          permissions: {
+            workspace: /ws:write/.test(
+              options?.agentProfile?.toolScope ?? ""
+            )
+              ? ["read", "write"]
+              : ["read"],
+          },
         },
       });
       const parsed = z.object({ key: z.string() }).safeParse(created);
