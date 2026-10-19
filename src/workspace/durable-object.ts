@@ -3776,6 +3776,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   listAgentSessions(
     options: {
       issueId?: string;
+      agentSlug?: string;
       status?: AgentSessionStatus;
       openPr?: boolean;
       retryOf?: string;
@@ -3796,6 +3797,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   listAgentSessionSummaries(
     options: {
       issueId?: string;
+      agentSlug?: string;
       status?: AgentSessionStatus;
       openPr?: boolean;
       limit?: number;

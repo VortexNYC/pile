@@ -498,6 +498,7 @@ const listSessionsRoute = createRoute({
     params: z.object({ organizationId: z.string() }),
     query: z.object({
       issueId: z.string().optional(),
+      agentSlug: z.string().optional(),
       limit: z.string().optional(),
       summary: z.string().optional(),
     }),
@@ -2052,6 +2053,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         query.issueId === undefined
           ? undefined
           : await resolveIssueRef(stub, query.issueId),
+      agentSlug: query.agentSlug,
       limit: query.limit ? Number(query.limit) : undefined,
       viewer,
     });
