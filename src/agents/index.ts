@@ -238,6 +238,7 @@ export async function dispatchAgent(
       name: string;
       jobSpec?: string | null;
       toolScope?: string | null;
+      permissionsTier?: string | null;
     };
     /** Durable conversation key for provider-side memory — the drainer
      *  passes `{merchantId}-{agentSlug}` so per-merchant context survives
@@ -680,22 +681,30 @@ export async function dispatchAgent(
           rateLimitEnabled: false,
           metadata: {
             organizationId,
-            permissions: /ws:write/.test(
-              options?.agentProfile?.toolScope ?? ""
+            permissions: /ws:write|write/.test(
+              `${options?.agentProfile?.permissionsTier ?? ""} ${options?.agentProfile?.toolScope ?? ""}`
             )
               ? "write"
               : "read",
             actorType: "agent",
           },
-          // PILE-442 — scope the lane key to the role's toolScope:
-          // ws:write roles get write; read-scoped keep read.
-          permissions: {
-            workspace: /ws:write/.test(
-              options?.agentProfile?.toolScope ?? ""
-            )
-              ? ["read", "write"]
-              : ["read"],
-          },
+          // PILE-442 — scope the lane key to the role's permissionsTier /
+          // toolScope and expire it: the credential dies with the lane's
+          // window instead of living as a standing key.
+          expiresIn: 86400,
+          permissions: /ws:write|write/.test(
+            `${options?.agentProfile?.permissionsTier ?? ""} ${options?.agentProfile?.toolScope ?? ""}`
+          )
+            ? {
+                workspace: ["read", "write"],
+                customer: ["view", "create", "edit"],
+                document: ["view", "create", "edit"],
+                comment: ["view", "create"],
+                issue: ["view", "create", "edit"],
+                session: ["view"],
+                ticket: ["view"],
+              }
+            : { workspace: ["read"] },
         },
       });
       const parsed = z.object({ key: z.string() }).safeParse(created);
