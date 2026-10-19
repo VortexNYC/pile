@@ -77,6 +77,11 @@ export interface ComputeBackend {
     name: string,
     resultPath?: string
   ): Promise<ComputeSandbox | null>;
+  /** PILE-471 — list sandboxes by label prefix for the orphan sweep:
+   *  sandboxes whose owning session is terminal get reaped. */
+  listSandboxes?(
+    labelPrefix: string
+  ): Promise<Array<ComputeSandbox & { labels?: Record<string, string> }>>;
   /**
    * Block until the lane's runner process is actually alive — the runner
    * binds 127.0.0.1:8787 as its readiness signal (PILE-308). Absent on
@@ -255,7 +260,10 @@ export class DaytonaBackend implements ComputeBackend {
           "vortex.agent": opts.agentLabel,
         },
         autoStopInterval: 240, // leak ceiling: 4h, above the runner's 2h timeout
-        autoDeleteInterval: -1,
+        // PILE-471 — a lane's whole lifetime is bounded: 3h wall clock, and
+        // the sandbox deletes itself a day after it stops.
+        ttlMinutes: 180,
+        autoDeleteInterval: 1440,
         ...(this.env.DAYTONA_VOLUME_ID
           ? {
               volumes: [
@@ -357,6 +365,30 @@ export class DaytonaBackend implements ComputeBackend {
       error: sandbox.error ?? null,
       toolboxProxyUrl: sandbox.toolboxProxyUrl,
     };
+  }
+
+  async listSandboxes(
+    labelPrefix: string
+  ): Promise<Array<ComputeSandbox & { labels?: Record<string, string> }>> {
+    const res = await this.request("/sandbox");
+    if (!res.ok) {
+      const text = await res.text();
+      throw computeError(`Daytona sandbox list failed: ${res.status} ${text}`);
+    }
+    const list = daytonaSandboxListSchema.parse(await res.json());
+    return list.items
+      .filter((s) =>
+        Object.keys(s.labels ?? {}).some((k) => k.startsWith(labelPrefix))
+      )
+      .map((s) => ({
+        id: s.id,
+        name: s.name,
+        state: s.state,
+        organizationId: s.labels?.["vortex.org"],
+        error: s.error ?? null,
+        toolboxProxyUrl: s.toolboxProxyUrl,
+        labels: s.labels ?? {},
+      }));
   }
 
   private toolbox(sandbox: ComputeSandbox) {
@@ -1004,4 +1036,36 @@ export function computeBackend(env: AppEnv, agentId?: string): ComputeBackend {
     });
   }
   return new DaytonaBackend(env, config);
+}
+
+/** PILE-471 — label-based orphan sweep: any `vortex.*`-labeled sandbox
+ *  whose owning session is terminal (or unknown) gets deleted. The labels
+ *  minted at createSandbox are the source of truth — no session-row
+ *  bookkeeping needed on the Daytona side. */
+export async function sweepOrphanSandboxes(
+  backend: ComputeBackend,
+  stub: {
+    getAgentSession(
+      id: string
+    ): Promise<{ status: string } | null | undefined>;
+  },
+  opts: { limit?: number } = {}
+): Promise<{ reaped: number; checked: number }> {
+  if (!backend.listSandboxes) return { reaped: 0, checked: 0 };
+  const sandboxes = await backend.listSandboxes("vortex.");
+  const TERMINAL = new Set(["completed", "failed", "canceled"]);
+  let reaped = 0;
+  let checked = 0;
+  for (const s of sandboxes.slice(0, opts.limit ?? 50)) {
+    const sessionId = s.labels?.["vortex.session"];
+    if (!sessionId) continue;
+    checked += 1;
+    const session = await stub.getAgentSession(sessionId).catch(() => null);
+    const orphaned = !session || TERMINAL.has(session.status);
+    if (orphaned && backend.deleteSandbox) {
+      await backend.deleteSandbox(s).catch(() => {});
+      reaped += 1;
+    }
+  }
+  return { reaped, checked };
 }
