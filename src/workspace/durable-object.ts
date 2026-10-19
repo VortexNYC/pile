@@ -3435,6 +3435,29 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.revokeDocumentPermission(this.db, documentId, actorId);
   }
 
+  listSpacePermissions(spaceId: string) {
+    return data.listSpacePermissions(this.db, spaceId);
+  }
+  setSpacePermission(
+    organizationId: string,
+    spaceId: string,
+    actorId: string,
+    actorType: string,
+    level: "view" | "edit"
+  ) {
+    return data.setSpacePermission(
+      this.db,
+      organizationId,
+      spaceId,
+      actorId,
+      actorType,
+      level
+    );
+  }
+  revokeSpacePermission(spaceId: string, actorId: string) {
+    return data.revokeSpacePermission(this.db, spaceId, actorId);
+  }
+
   documentAccessLevel(
     documentId: string,
     actorId: string,

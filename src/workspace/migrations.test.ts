@@ -358,3 +358,11 @@ describe("v100 merchant sources", () => {
     expect(sql).toContain("signal_date");
   });
 });
+
+describe("v101 space permissions", () => {
+  it("creates space_permissions for the space-grant model", () => {
+    const sql = workspaceMigrations.migrations.m0100;
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS space_permissions");
+    expect(sql).toContain("space_permissions_space_actor_idx");
+  });
+});

@@ -529,6 +529,33 @@ export const workspaceDocumentPermissions = sqliteTable(
   ]
 );
 
+// Space-level grants (Cursor pair design): a row grants read/write on every
+// document in the space that has NO explicit document_permissions rows —
+// a doc with any grant is a closed ACL the space grant cannot widen.
+export const workspaceSpacePermissions = sqliteTable(
+  "space_permissions" as string,
+  {
+    id: text("id" as string).primaryKey(),
+    organizationId: text("organization_id" as string).notNull(),
+    spaceId: text("space_id" as string).notNull(),
+    actorId: text("actor_id" as string).notNull(),
+    actorType: text("actor_type" as string)
+      .notNull()
+      .default("user"),
+    level: text("level" as string, { enum: ["view", "edit"] })
+      .notNull()
+      .default("view"),
+    createdAt: text("created_at" as string).notNull(),
+  },
+  (table) => [
+    uniqueIndex("space_permissions_space_actor_idx" as string).on(
+      table.spaceId,
+      table.actorId
+    ),
+    index("space_permissions_org_idx" as string).on(table.organizationId),
+  ]
+);
+
 // Links extracted from document content (issue identifiers, [[doc]] refs).
 export const workspaceDocumentLinks = sqliteTable(
   "document_links" as string,
