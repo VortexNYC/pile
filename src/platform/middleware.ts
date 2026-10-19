@@ -102,41 +102,43 @@ export const workspaceAuthMiddleware = createMiddleware<{
         message: "Token does not belong to this workspace",
       });
     }
-    // User-attributed keys live and die with the membership, and their
+    // Keys live and die with the referenceId's membership, and their
     // permissions clamp to the member's CURRENT role on every request — a
-    // demotion takes effect without re-minting. Agent/lane keys reference
-    // the dispatching owner rather than a member row, so they bypass the
-    // gate: requiring one would 403 every pre-existing shared key.
-    if (identity.type === "user") {
-      const membership = await getWorkspaceMembership(
-        db,
-        identity.organizationId,
-        identity.id
-      );
-      if (!membership) {
-        throw new VortexError({
-          code: "FORBIDDEN",
-          status: 403,
-          message: "Token owner is no longer a member of this workspace",
-        });
-      }
-      const rolePerms = new Set(
-        await resolveRolePermissions(
-          db,
-          identity.organizationId,
-          membership.role
-        )
-      );
-      // Keys may carry bare legacy verbs (read/write/admin) or
-      // resource:action grants — a bare verb counts when the role's
-      // flattened statements include its workspace:-prefixed form.
-      identity = {
-        ...identity,
-        permissions: identity.permissions.filter(
-          (p) => rolePerms.has(p) || rolePerms.has(`workspace:${p}`)
-        ),
-      };
+    // demotion takes effect without re-minting. Agent-typed keys are held
+    // to the same clamp: synthetic lane actors (e.g. "automation") have no
+    // member row, so they clamp to the member-role ceiling rather than
+    // bypassing it; a key claiming actorType "agent" can never exceed what
+    // a workspace member may do.
+    const membership = await getWorkspaceMembership(
+      db,
+      identity.organizationId,
+      identity.id
+    );
+    if (!membership && identity.type !== "agent") {
+      throw new VortexError({
+        code: "FORBIDDEN",
+        status: 403,
+        message: "Token owner is no longer a member of this workspace",
+      });
     }
+    const rolePerms = new Set(
+      membership
+        ? await resolveRolePermissions(
+            db,
+            identity.organizationId,
+            membership.role
+          )
+        : rolePermissionsFor("member")
+    );
+    // Keys may carry bare legacy verbs (read/write/admin) or
+    // resource:action grants — a bare verb counts when the role's
+    // flattened statements include its workspace:-prefixed form.
+    identity = {
+      ...identity,
+      permissions: identity.permissions.filter(
+        (p) => rolePerms.has(p) || rolePerms.has(`workspace:${p}`)
+      ),
+    };
     c.set("workspaceIdentity", identity);
     await next();
     return;

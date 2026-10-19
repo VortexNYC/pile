@@ -96,6 +96,7 @@ describe("lane security: Pile endpoints reachable with a lane token", () => {
         userId: "user-1",
         name: "lane-sec-admin",
         metadata: { organizationId, permissions: "admin" },
+        permissions: { workspace: ["admin"] },
       },
     });
     adminToken = z.object({ key: z.string() }).parse(result).key;

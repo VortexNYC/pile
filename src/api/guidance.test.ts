@@ -74,6 +74,7 @@ describe("guidance packs API", () => {
         userId: "user-guidance",
         name: "guidance-admin",
         metadata: { organizationId, permissions: "admin" },
+        permissions: { workspace: ["admin"] },
       },
     });
     token = z.object({ key: z.string() }).parse(result).key;

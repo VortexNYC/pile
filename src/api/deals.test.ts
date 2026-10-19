@@ -40,6 +40,7 @@ async function seedWorkspace() {
       name: "test-admin",
       rateLimitEnabled: false,
       metadata: { organizationId: workspace!.id, permissions: "admin" },
+      permissions: { workspace: ["admin"] },
     },
   });
   const parsed = z.object({ key: z.string() }).parse(result);
@@ -310,6 +311,7 @@ describe("lead intake", () => {
                 name: "t",
                 rateLimitEnabled: false,
                 metadata: { organizationId: org, permissions: "admin" },
+                permissions: { workspace: ["admin"] },
               },
             });
             return z.object({ key: z.string() }).parse(r).key;

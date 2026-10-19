@@ -70,6 +70,7 @@ describe("agent provider catalog API", () => {
         userId: "user-catalog",
         name: "test-admin",
         metadata: { organizationId, permissions: "admin" },
+        permissions: { workspace: ["admin"] },
       },
     });
     token = z.object({ key: z.string() }).parse(result).key;

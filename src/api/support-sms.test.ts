@@ -71,6 +71,7 @@ describe("support-sms", () => {
         userId: "sms-user-1",
         name: "sms-test-admin",
         metadata: { organizationId, permissions: "admin" },
+        permissions: { workspace: ["admin"] },
       },
     });
   });

@@ -1132,7 +1132,7 @@ export const user = sqliteTable("user" as string, {
   metadata: text("metadata" as string),
   role: text("role" as string)
     .notNull()
-    .default("admin"),
+    .default("user"),
   twoFactorEnabled: integer("two_factor_enabled" as string, {
     mode: "boolean",
   }).default(false),

@@ -49,6 +49,7 @@ async function seedWorkspace() {
       name: "test-admin",
       rateLimitEnabled: false,
       metadata: { organizationId: workspace!.id, permissions: "admin" },
+      permissions: { workspace: ["admin"] },
     },
   });
   const parsed = z.object({ key: z.string() }).parse(result);
@@ -1504,6 +1505,7 @@ describe("possible duplicates on create (PILE-163)", () => {
           permissions: "admin,agent:write",
           actorType: "agent",
         },
+        permissions: { workspace: ["admin", "agent:write"] },
       },
     });
     const agentToken = z.object({ key: z.string() }).parse(keyResult).key;
@@ -1659,6 +1661,7 @@ describe("possible duplicates on create (PILE-163)", () => {
           permissions: "admin,agent:write",
           actorType: "agent",
         },
+        permissions: { workspace: ["admin", "agent:write"] },
       },
     });
     const agentToken = z.object({ key: z.string() }).parse(keyResult).key;
@@ -1888,6 +1891,7 @@ describe("grant-only issue visibility (scoped keys)", () => {
         name: "scoped-view",
         rateLimitEnabled: false,
         metadata: { organizationId, permissions: "issue:view" },
+        permissions: { workspace: ["issue:view"] },
       },
     });
     const scoped = z.object({ key: z.string() }).parse(keyRes).key;

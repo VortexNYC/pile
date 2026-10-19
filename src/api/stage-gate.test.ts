@@ -41,6 +41,9 @@ async function seedWorkspace() {
         name,
         rateLimitEnabled: false,
         metadata: { organizationId: workspace!.id, permissions },
+        permissions: {
+          workspace: permissions.split(",").map((p) => p.trim()),
+        },
       },
     });
     return z.object({ key: z.string() }).parse(result).key;

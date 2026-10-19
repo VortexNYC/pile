@@ -28,7 +28,7 @@ import { registerAppRoute, registerAppSubdomain, serveConsole } from "./app.js";
 import { registerApprovalRoutes } from "./approvals.js";
 import { registerAttachmentRoutes } from "./attachments.js";
 import { registerAuditRoutes } from "./audit.js";
-import { registerAuthRoutes } from "./auth-routes.js";
+import { registerAuthRoutes, stripApiKeySessionToken } from "./auth-routes.js";
 import { registerBillingWebhookRoutes } from "./billing-webhook.js";
 import { registerBillingRoutes } from "./billing.js";
 import { registerChangelogRoutes } from "./changelog.js";
@@ -443,7 +443,8 @@ registerIntakeRoutes(app);
 
 app.all("/api/auth/*", async (c) => {
   try {
-    return await (await createAuth(c.env)).handler(c.req.raw);
+    const result = await (await createAuth(c.env)).handler(c.req.raw);
+    return await stripApiKeySessionToken(c.req.raw, result);
   } catch (err) {
     console.error("better-auth handler failed", {
       error: err instanceof Error ? err.message : String(err),

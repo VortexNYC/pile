@@ -39,6 +39,9 @@ async function createKey(userId: string, organizationId: string) {
         organizationId,
         permissions: userId === ADMIN_ID ? "admin" : "read,write",
       },
+      permissions: {
+        workspace: userId === ADMIN_ID ? ["admin"] : ["read", "write"],
+      },
     },
   });
   return z.object({ key: z.string() }).parse(result).key;

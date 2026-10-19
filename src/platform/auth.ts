@@ -120,9 +120,14 @@ export async function createAuth(env: AppEnv) {
           maxRequests: 600,
         },
         customAPIKeyGetter: (ctx) => {
-          // SCIM managed credentials are bearer tokens too — leave them for
-          // the SCIM plugin's own verifier.
-          if (ctx.path?.startsWith("/scim/")) {
+          // Workspace API keys authenticate our own routes through
+          // verifyApiKey; as Better Auth sessions they resolve on
+          // /get-session only (token introspection for CLI/SDK callers).
+          // Anywhere else — /api-key/* mint/update/delete, organization,
+          // admin, account endpoints — a key must not stand in as its
+          // owner's session. SCIM managed credentials are bearer tokens
+          // too; they stay with the SCIM plugin's own verifier.
+          if (ctx.path !== "/get-session") {
             return null;
           }
           const auth = ctx.headers?.get("Authorization") ?? "";

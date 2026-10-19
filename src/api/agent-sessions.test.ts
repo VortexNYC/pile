@@ -109,6 +109,7 @@ describe("agent sessions API", () => {
         userId: "user-1",
         name: "test-admin",
         metadata: { organizationId, permissions: "admin" },
+        permissions: { workspace: ["admin"] },
       },
     });
     token = z.object({ key: z.string() }).parse(result).key;
@@ -2900,6 +2901,7 @@ describe("agent sessions API", () => {
           userId: "user-1",
           name: "batch-dispatch",
           metadata: { organizationId: batchOrg, permissions: "admin" },
+          permissions: { workspace: ["admin"] },
         },
       });
       batchToken = z.object({ key: z.string() }).parse(result).key;
@@ -3125,6 +3127,7 @@ describe("agent sessions API", () => {
           userId: "user-1",
           name: "default-repo",
           metadata: { organizationId: repoOrg, permissions: "admin" },
+          permissions: { workspace: ["admin"] },
         },
       });
       repoToken = z.object({ key: z.string() }).parse(result).key;
@@ -3725,6 +3728,7 @@ describe("spend caps + run receipts (PILE-425)", () => {
         userId: "user-1",
         name: "caps-admin",
         metadata: { organizationId, permissions: "admin" },
+        permissions: { workspace: ["admin"] },
       },
     });
     token = z.object({ key: z.string() }).parse(result).key;

@@ -2,7 +2,6 @@ import { z } from "zod";
 
 import { adminRole, guestRole, memberRole, ownerRole } from "./access.js";
 import { VortexError } from "./errors.js";
-import { parsePermissionSet } from "./permissions.js";
 
 export const workspaceIdentitySchema = z.object({
   id: z.string(),
@@ -53,16 +52,18 @@ export function toApiKeyWorkspaceIdentity(input: unknown): WorkspaceIdentity {
   }
   const key = keyResult.data;
   const parsed = parseApiKeyMetadata(key.metadata);
-  // Prefer the plugin's native permissions field; metadata.permissions
-  // (legacy CSV) is the fallback so existing keys keep working.
-  const granted = key.permissions?.workspace
-    ? key.permissions.workspace
-    : Array.from(parsePermissionSet(parsed.permissions));
+  // The plugin's `permissions` column is server-only — clients minting keys
+  // through /api/auth/api-key/* get SERVER_ONLY_PROPERTY if they try to set
+  // it — so a `workspace` grant there is trustworthy. `metadata` is
+  // client-controlled: a key without a server grant resolves as a read-only
+  // user identity regardless of what metadata.permissions/actorType claim,
+  // and the membership clamp then constrains it to the owner's role.
+  const granted = key.permissions?.workspace;
   return workspaceIdentitySchema.parse({
     id: key.referenceId,
     organizationId: parsed.organizationId,
-    type: parsed.actorType ?? "user",
-    permissions: granted,
+    type: granted ? (parsed.actorType ?? "user") : "user",
+    permissions: granted ?? ["read"],
   });
 }
 
