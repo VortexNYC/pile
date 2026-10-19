@@ -243,12 +243,20 @@ async function ghFetchFailing(input: RequestInfo | URL) {
   return new Response("not found", { status: 404 });
 }
 
-function ghFetchFailingPr(num: number, sha: string) {
+function ghFetchFailingPr(
+  num: number,
+  sha: string,
+  pr: { state?: string; mergedAt?: string | null } = {}
+) {
   return async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url.endsWith(`/pulls/${num}`)) {
       return new Response(
-        JSON.stringify({ state: "open", merged_at: null, head: { sha } }),
+        JSON.stringify({
+          state: pr.state ?? "open",
+          merged_at: pr.mergedAt ?? null,
+          head: { sha },
+        }),
         { status: 200 }
       );
     }
@@ -4050,30 +4058,10 @@ describe("syncOpenPrSessions terminal-work gating (PILE-452)", () => {
       prUrl: "https://github.com/vortexnyc/pile/pull/4521",
       prState: "open",
     });
-    const ghFetch = async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.endsWith("/pulls/4521")) {
-        return new Response(
-          JSON.stringify({
-            state: "closed",
-            merged_at: "2026-10-19T12:00:00Z",
-            head: { sha: "mrg452" },
-          }),
-          { status: 200 }
-        );
-      }
-      if (url.includes("/commits/mrg452/check-runs")) {
-        return new Response(
-          JSON.stringify({
-            check_runs: [
-              { name: "typecheck", status: "completed", conclusion: "failure" },
-            ],
-          }),
-          { status: 200 }
-        );
-      }
-      return new Response("not found", { status: 404 });
-    };
+    const ghFetch = ghFetchFailingPr(4521, "mrg452", {
+      state: "closed",
+      mergedAt: "2026-10-19T12:00:00Z",
+    });
 
     await syncOpenPrSessions(env, stub, organizationId, {
       tokenForRepo: async () => "gh-test-token",
@@ -4116,30 +4104,7 @@ describe("syncOpenPrSessions terminal-work gating (PILE-452)", () => {
       prUrl: "https://github.com/vortexnyc/pile/pull/4522",
       prState: "open",
     });
-    const ghFetch = async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.endsWith("/pulls/4522")) {
-        return new Response(
-          JSON.stringify({
-            state: "open",
-            merged_at: null,
-            head: { sha: "dn4522" },
-          }),
-          { status: 200 }
-        );
-      }
-      if (url.includes("/commits/dn4522/check-runs")) {
-        return new Response(
-          JSON.stringify({
-            check_runs: [
-              { name: "typecheck", status: "completed", conclusion: "failure" },
-            ],
-          }),
-          { status: 200 }
-        );
-      }
-      return new Response("not found", { status: 404 });
-    };
+    const ghFetch = ghFetchFailingPr(4522, "dn4522");
 
     await syncOpenPrSessions(env, stub, organizationId, {
       tokenForRepo: async () => "gh-test-token",

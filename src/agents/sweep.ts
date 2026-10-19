@@ -809,7 +809,7 @@ async function promoteQueuedSessions(
     let paused = pauseCache.get(session.agentId);
     if (paused === undefined) {
       paused =
-        (await stub.getAgentPause(session.agentId).catch(() => null)) !== null;
+        (await stub.getAgentPause(session.agentId).catch(() => null)) != null;
       pauseCache.set(session.agentId, paused);
     }
     if (paused) continue;

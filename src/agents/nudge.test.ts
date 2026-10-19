@@ -90,6 +90,37 @@ function registerCapturingProvider(agentId: string) {
   return seen;
 }
 
+function registerFailingProvider(agentId: string, error: Error) {
+  let calls = 0;
+  registerAgentProvider(
+    agentId,
+    () =>
+      new MockAgentProvider(agentId, {
+        sendPrompt: () => false,
+        dispatch: () => {
+          calls += 1;
+          throw error;
+        },
+      })
+  );
+  return () => calls;
+}
+
+async function completedLane(
+  stub: ReturnType<typeof getStub>,
+  agentId: string,
+  issueId: string
+) {
+  return stub.createAgentSession({
+    issueId,
+    agentId,
+    provider: agentId,
+    actorId: actor.id,
+    actorType: "user",
+    status: "completed",
+  });
+}
+
 describe("nudgeLane redispatch (PILE-321)", () => {
   it("inherits the team's defaultRepo when redispatching a repo-less issue", async () => {
     const stub = getStub();
@@ -208,37 +239,6 @@ describe("nudgeLane redispatch (PILE-321)", () => {
 // re-failed every pass with no cap, no backoff, and no pause/fleet gate.
 describe("nudgeLane redispatch gating (PILE-452)", () => {
   const prUrl = "https://github.com/VortexNYC/nudge-default/pull/452";
-
-  function registerFailingProvider(agentId: string, error: Error) {
-    let calls = 0;
-    registerAgentProvider(
-      agentId,
-      () =>
-        new MockAgentProvider(agentId, {
-          sendPrompt: () => false,
-          dispatch: () => {
-            calls += 1;
-            throw error;
-          },
-        })
-    );
-    return () => calls;
-  }
-
-  async function completedLane(
-    stub: ReturnType<typeof getStub>,
-    agentId: string,
-    issueId: string
-  ) {
-    return stub.createAgentSession({
-      issueId,
-      agentId,
-      provider: agentId,
-      actorId: actor.id,
-      actorType: "user",
-      status: "completed",
-    });
-  }
 
   it("links the failed child and records the attempt when dispatch dies on the substrate", async () => {
     const stub = getStub();

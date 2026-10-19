@@ -38,6 +38,7 @@ describe("workspace shared types", () => {
       "not_reproducible",
       "obsolete",
       "resolved",
+      "skipped",
     ]);
     expect(AGENT_SESSION_STATUSES).toEqual([
       "created",
@@ -139,7 +140,12 @@ describe("draft output types (PILE-428)", () => {
   it("keeps the draft kind + status picklists stable", () => {
     // kind drives publish replay (comment → createComment, field_change →
     // updateIssue); status order is the review lifecycle.
-    expect(DRAFT_OUTPUT_KINDS).toEqual(["comment", "field_change", "message"]);
+    expect(DRAFT_OUTPUT_KINDS).toEqual([
+      "comment",
+      "field_change",
+      "message",
+      "artifact",
+    ]);
     expect(DRAFT_OUTPUT_STATUSES).toEqual([
       "pending",
       "published",

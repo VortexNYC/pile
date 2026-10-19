@@ -472,31 +472,31 @@ describe("Daytona hardening (PILE-472)", () => {
   });
 });
 
+const daytonaEnv = () =>
+  ({
+    ...baseEnv(),
+    DAYTONA_API_KEY: "k",
+    DAYTONA_API_URL: "https://daytona.test",
+  }) as AppEnv;
+
+function stubResponses(
+  handler: (url: string, init?: RequestInit) => Response | Promise<Response>
+) {
+  const calls: string[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push(`${init?.method ?? "GET"} ${String(input)}`);
+      return Promise.resolve(handler(String(input), init));
+    })
+  );
+  return calls;
+}
+
 // PILE-452 — Daytona backend failures must carry the infra flag so
 // dispatchAgent classifies them without string matching, and quota/
 // concurrency rejections must say so explicitly in the message.
 describe("DaytonaBackend infra classification + quota surfacing (PILE-452)", () => {
-  const daytonaEnv = () =>
-    ({
-      ...baseEnv(),
-      DAYTONA_API_KEY: "k",
-      DAYTONA_API_URL: "https://daytona.test",
-    }) as AppEnv;
-
-  function stubResponses(
-    handler: (url: string, init?: RequestInit) => Response | Promise<Response>
-  ) {
-    const calls: string[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-        calls.push(`${init?.method ?? "GET"} ${String(input)}`);
-        return Promise.resolve(handler(String(input), init));
-      })
-    );
-    return calls;
-  }
-
   it("sandbox create failures are ComputeError and infra-classified", async () => {
     stubResponses(
       () =>

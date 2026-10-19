@@ -966,14 +966,14 @@ describe("agent providers", () => {
   });
 });
 
-function inheritTeamDefaultRepoStub() {
+function workspaceStub() {
   return env.WORKSPACE_DURABLE_OBJECT.get(
     env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
   );
 }
 
 describe("inheritTeamDefaultRepo (PILE-321)", () => {
-  const getStub = inheritTeamDefaultRepoStub;
+  const getStub = workspaceStub;
 
   it("inherits and persists the team's defaultRepo on a repo-less issue", async () => {
     const db = createD1(env.D1);
@@ -1224,10 +1224,7 @@ describe("spend caps (PILE-425)", () => {
 // PILE-452 — Daytona start/provision failures must classify as infra: they
 // feed the retry path and the fleet breaker, not the task-failure trail.
 describe("infra classification of dispatch failures (PILE-452)", () => {
-  const stub = () =>
-    env.WORKSPACE_DURABLE_OBJECT.get(
-      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
-    );
+  const stub = workspaceStub;
 
   const substrateErrors = [
     "Daytona sandbox create failed: 400 sandbox exited with code 1 before becoming ready",
