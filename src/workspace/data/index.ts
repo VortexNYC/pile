@@ -3877,7 +3877,8 @@ export async function updateStageConfig(
   };
   if (patch.ownerAgent !== undefined) set.ownerAgent = patch.ownerAgent;
   if (patch.instructions !== undefined) set.instructions = patch.instructions;
-  if (patch.advancePolicy !== undefined) set.advancePolicy = patch.advancePolicy;
+  if (patch.advancePolicy !== undefined)
+    set.advancePolicy = patch.advancePolicy;
   if (patch.enabled !== undefined) set.enabled = patch.enabled ? 1 : 0;
   await db
     .update(workspaceStageConfigs)
@@ -4118,7 +4119,6 @@ export async function updateAgentType(
     .where(eq(workspaceAgentTypes.id, id));
   return getAgentTypeById(db, organizationId, id);
 }
-
 
 export async function deleteAgentType(
   db: WorkspaceDb,
@@ -4400,7 +4400,8 @@ export async function listLaneCosts(
   args: { agentSlug?: string; since?: string; limit?: number } = {}
 ) {
   const conds = [eq(workspaceLaneCosts.organizationId, organizationId)];
-  if (args.agentSlug) conds.push(eq(workspaceLaneCosts.agentSlug, args.agentSlug));
+  if (args.agentSlug)
+    conds.push(eq(workspaceLaneCosts.agentSlug, args.agentSlug));
   if (args.since) conds.push(gte(workspaceLaneCosts.settledAt, args.since));
   return db
     .select()
@@ -4474,13 +4475,13 @@ export async function memoryRecall(
     eq(workspaceMemory.organizationId, organizationId),
     isNull(workspaceMemory.supersedes),
   ];
-  if (query.entityType) conds.push(eq(workspaceMemory.entityType, query.entityType));
+  if (query.entityType)
+    conds.push(eq(workspaceMemory.entityType, query.entityType));
   if (query.entityId) conds.push(eq(workspaceMemory.entityId, query.entityId));
   if (query.kind) conds.push(eq(workspaceMemory.kind, query.kind));
   // Fuzzy fact search — LIKE over the fact text so "did we sweep
   // Smith?" finds corridor:smith-st without the exact entity key.
-  if (query.search)
-    conds.push(like(workspaceMemory.fact, `%${query.search}%`));
+  if (query.search) conds.push(like(workspaceMemory.fact, `%${query.search}%`));
   return db
     .select()
     .from(workspaceMemory)
