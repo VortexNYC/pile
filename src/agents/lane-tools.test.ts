@@ -297,3 +297,25 @@ describe("workspace lane tools — CRM surface", () => {
     expect(byName["market_run_report"]).toBe("ws:write");
   });
 });
+
+describe("workspace lane tools — merchant sources + fetch shelf", () => {
+  const names = WORKSPACE_LANE_TOOLS.map((t) => t.name);
+  it("registers the source + browse + data-source tools", () => {
+    for (const n of [
+      "source_add",
+      "source_list",
+      "source_collect",
+      "browse",
+      "socrata_query",
+      "wayback",
+      "serper_search",
+      "usaspending",
+      "sam_entities",
+      "light_fetch",
+      "obscura_fetch",
+      "tech_fingerprint",
+    ]) {
+      expect(names).toContain(n);
+    }
+  });
+});

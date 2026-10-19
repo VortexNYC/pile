@@ -14,6 +14,7 @@ import {
   workspaceGuidancePacks,
   workspaceIssues,
   workspaceSuppression,
+  workspaceMerchantSources,
   workspaceNotificationPreferences,
   workspaceStageTemplates,
   workspaceTriageRuleEvaluations,
@@ -500,6 +501,17 @@ describe("workspaceSuppression schema", () => {
       (c) => c.name
     );
     for (const col of ["kind", "value", "customer_id", "reason", "source"]) {
+      expect(cols).toContain(col);
+    }
+  });
+});
+
+describe("workspaceMerchantSources schema", () => {
+  it("carries kind/config/cursor + signal for the feed registry", () => {
+    const cols = getTableConfig(workspaceMerchantSources).columns.map(
+      (c) => c.name
+    );
+    for (const col of ["kind", "config", "cursor_field", "signal", "enabled"]) {
       expect(cols).toContain(col);
     }
   });

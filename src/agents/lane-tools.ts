@@ -1816,6 +1816,84 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
     },
   }),
   defineWorkspaceTool({
+    name: "deepseek_search",
+    description:
+      "DeepSeek web search — cheap merchant discovery (~$0.75/1k). Returns ranked results with snippets for a query.",
+    permission: "web:fetch",
+    inputSchema: z.object({
+      query: z.string().min(1),
+      limit: z.number().optional(),
+    }),
+    async run(ctx, input) {
+      const key = ctx.env?.DEEPSEEK_API_KEY;
+      if (!key) throw new LaneToolError("DEEPSEEK_API_KEY not configured");
+      const res = await fetch("https://api.deepseek.com/v1/search", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${key}`,
+        },
+        body: JSON.stringify({
+          query: input.query,
+          limit: input.limit ?? 10,
+        }),
+      });
+      if (!res.ok)
+        throw new LaneToolError(`deepseek failed: ${res.status}`);
+      return res.json();
+    },
+  }),
+  defineWorkspaceTool({
+    name: "opencorporates",
+    description:
+      "OpenCorporates business registry — officer names, entity status, filings for a company name + jurisdiction. Free tier.",
+    permission: "web:fetch",
+    inputSchema: z.object({
+      query: z.string().min(1),
+      jurisdiction: z.string().optional(),
+      limit: z.number().optional(),
+    }),
+    async run(ctx, input) {
+      const params = new URLSearchParams({
+        q: input.query,
+        format: "json",
+        per_page: String(input.limit ?? 20),
+        order: "score",
+      });
+      if (input.jurisdiction)
+        params.set("jurisdiction_code", input.jurisdiction);
+      if (ctx.env?.OPENCORPORATES_API_KEY)
+        params.set("api_token", ctx.env.OPENCORPORATES_API_KEY);
+      const res = await fetch(
+        `https://api.opencorporates.com/v0.4/companies/search?${params}`
+      );
+      if (!res.ok)
+        throw new LaneToolError(`opencorporates failed: ${res.status}`);
+      return res.json();
+    },
+  }),
+  defineWorkspaceTool({
+    name: "tech_fingerprint",
+    description:
+      "Technology fingerprint — detect a merchant site's POS/ecommerce/CMS stack (Toast, Square, Shopify, Stripe…) via the self-hosted signature service. The ICP-gate call.",
+    permission: "web:fetch",
+    inputSchema: z.object({
+      url: z.string().url(),
+    }),
+    async run(ctx, input) {
+      const base = ctx.env?.WAPPALYZER_BASE_URL;
+      if (!base) throw new LaneToolError("WAPPALYZER_BASE_URL not configured");
+      const res = await fetch(`${base}/fingerprint`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url: input.url }),
+      });
+      if (!res.ok)
+        throw new LaneToolError(`fingerprint failed: ${res.status}`);
+      return res.json();
+    },
+  }),
+  defineWorkspaceTool({
     name: "web_fetch",
     description:
       "Fetch a public URL (NYC Open Data, a state business registry, a merchant site). GET only, https only, text response capped.",

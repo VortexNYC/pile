@@ -1436,8 +1436,7 @@ const v100 = `CREATE TABLE IF NOT EXISTS merchant_sources (
 );
 CREATE INDEX IF NOT EXISTS merchant_sources_enabled_idx ON merchant_sources(organization_id, enabled);
 ALTER TABLE customers ADD COLUMN signal TEXT;
-ALTER TABLE customers ADD COLUMN signal_date TEXT;
-ALTER TABLE customers ADD COLUMN priority_score REAL`;
+ALTER TABLE customers ADD COLUMN signal_date TEXT`;
 
 const v97 = `CREATE TABLE IF NOT EXISTS lane_costs (
   session_id TEXT PRIMARY KEY,
