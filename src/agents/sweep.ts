@@ -50,6 +50,7 @@ import {
 } from "./review-loop.js";
 import {
   publishReviewVerdicts,
+  resolveStaleReviewChecks,
   REVIEW_CHECK_NAME,
   REVIEW_PURPOSE,
   requestPrReview,
@@ -2541,6 +2542,26 @@ export async function syncOpenPrSessions(
     },
   }).catch((err) => {
     console.error("pile-review publish pass failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  });
+  // PILE-445 — non-terminal review lanes older than 30m get their hung
+  // check run resolved neutral so PRs don't carry a permanently-pending gate.
+  await resolveStaleReviewChecks(stub, {
+    fetch: ghFetch,
+    env,
+    organizationId,
+    tokenForRepo: (owner, name) => {
+      const repoKey = `${owner}/${name}`;
+      let tokenP = tokens.get(repoKey);
+      if (!tokenP) {
+        tokenP = tokenForRepo(env, owner, name);
+        tokens.set(repoKey, tokenP);
+      }
+      return tokenP;
+    },
+  }).catch((err) => {
+    console.error("stale review check sweep failed", {
       error: err instanceof Error ? err.message : String(err),
     });
   });

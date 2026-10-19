@@ -979,3 +979,74 @@ export async function publishReviewVerdicts(
   }
   return published;
 }
+
+/** PILE-445 — a review lane that dies mid-provisioning leaves its
+ *  pile-review check run `in_progress` forever: the publish pass only
+ *  resolves terminal sessions, so a lane stuck non-terminal never emits a
+ *  conclusion. Sweep sessions older than STALE_MS that are still
+ *  non-terminal and resolve their check run neutral — the retried lane
+ *  publishes its own check run on the same SHA when it lands. */
+const REVIEW_STALE_MS = 30 * 60 * 1000;
+
+export async function resolveStaleReviewChecks(
+  stub: WorkspaceStub,
+  deps: ReviewDeps & {
+    env: WorkerEnv;
+    organizationId: string;
+    tokenForRepo: (owner: string, name: string) => Promise<string | undefined>;
+    now?: number;
+  }
+): Promise<number> {
+  const ghFetch = deps.fetch ?? fetch;
+  const now = deps.now ?? Date.now();
+  const sessions = await stub.listAgentSessions({ limit: 200 });
+  let resolved = 0;
+  for (const session of sessions) {
+    if (session.purpose !== REVIEW_PURPOSE) continue;
+    if (["completed", "failed", "canceled"].includes(session.status))
+      continue;
+    const touched = Date.parse(session.updatedAt ?? session.createdAt ?? "");
+    if (!Number.isFinite(touched) || now - touched < REVIEW_STALE_MS)
+      continue;
+    try {
+      const events = await stub.listAgentSessionEvents(session.id, {
+        limit: 100,
+        order: "desc",
+      });
+      if (events.some((e) => e.type === "review.published")) continue;
+      const requestedEvent = events.find((e) => e.type === "review.requested");
+      if (!requestedEvent) continue;
+      const requested = requestedPayloadSchema.safeParse(
+        parsePayload(requestedEvent.payload)
+      );
+      if (!requested.success) continue;
+      const req = requested.data;
+      const [owner, name] = req.repo.split("/");
+      const token = await deps.tokenForRepo(owner, name);
+      if (!token) continue;
+      await gh(ghFetch, token, "PATCH", `/repos/${req.repo}/check-runs/${req.checkRunId}`, {
+        status: "completed",
+        conclusion: "neutral",
+        completed_at: new Date(now).toISOString(),
+        output: {
+          title: "Review lane timed out",
+          summary:
+            "The review lane stalled before producing a verdict (provisioning or runner failure). A retried lane publishes a fresh check on the same SHA.",
+        },
+      });
+      await stub.addAgentSessionEvent({
+        sessionId: session.id,
+        type: "review.check_stale_resolved",
+        message: `Stale pile-review check resolved neutral for ${req.prUrl}`,
+        payload: { prUrl: req.prUrl, headSha: req.headSha, checkRunId: req.checkRunId ?? null },
+      });
+      resolved++;
+    } catch (err) {
+      console.error("stale review check resolution failed", {
+        session: session.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  return resolved;
+}
