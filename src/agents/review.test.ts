@@ -192,6 +192,8 @@ function fakeGithub(opts: {
   reviewPost?: "ok" | "reject" | "fail" | "flaky";
   /** 500s the check-runs list — a GitHub read failure, not "no runs". */
   listChecksFail?: boolean;
+  /** GET /pulls/{n} returns this head sha — drives the PILE-470 stale-drop. */
+  prHead?: string;
 }) {
   const calls: GhCall[] = [];
   let nextCheckId = 500;
@@ -234,6 +236,9 @@ function fakeGithub(opts: {
       return json({ check_runs: runs });
     }
     if (url.includes("/files?")) return json(opts.files);
+    if (opts.prHead && method === "GET" && /\/pulls\/\d+$/.test(url)) {
+      return json({ head: { sha: opts.prHead } });
+    }
     if (url.endsWith("/check-runs") && method === "POST") {
       return json({ id: nextCheckId++ }, 201);
     }
@@ -1061,5 +1066,30 @@ describe("requestPrReview / publishReviewVerdicts", () => {
     );
     expect(outcome).toBe("dispatched");
     expect(dispatched.length).toBe(before + 1);
+  });
+
+  it("drops a stale verdict when the PR head moved (PILE-470)", async () => {
+    const issue = await laneIssue();
+    await finishReviewLane(
+      issue,
+      "sha-stale",
+      "```json\n" +
+        JSON.stringify({
+          verdict: "request-changes",
+          summary: "Old head.",
+          findings: [{ severity: "must", title: "Fix it" }],
+        }) +
+        "\n```"
+    );
+    const publishGh = fakeGithub({
+      config: REVIEW_CONFIG,
+      files: [],
+      prHead: "sha-moved",
+    });
+    await publishReviewVerdicts(stub, publishDeps(publishGh));
+    const checkPosts = publishGh.calls.filter((c) =>
+      c.url.includes("check-runs")
+    );
+    expect(checkPosts).toHaveLength(0);
   });
 });
