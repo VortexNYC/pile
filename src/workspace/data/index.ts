@@ -53,6 +53,9 @@ import {
   workspaceCustomerIntakeItems,
   workspaceCustomerNeeds,
   workspaceCustomers,
+  workspaceCustomerContacts,
+  workspaceSuppression,
+  workspaceMarketRuns,
   workspaceDeals,
   workspaceFieldDefinitions,
   workspaceFieldValues,
@@ -5194,6 +5197,20 @@ export interface CustomerInput {
   notes?: string | null;
   domain?: string | null;
   externalId?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  vertical?: string | null;
+  neighborhood?: string | null;
+  source?: string | null;
+  sourceSessionId?: string | null;
+  sourceAgentSlug?: string | null;
+  readiness?: string | null;
+  nextAction?: string | null;
+  fit?: string | null;
+  fitScore?: number | null;
+  fitStatus?: string | null;
+  processor?: string | null;
+  evidenceUri?: string | null;
   tierId?: string | null;
   statusId?: string | null;
   ownerId?: string | null;
@@ -5203,6 +5220,20 @@ export interface CustomerInput {
   needsHumanReason?: string | null;
   priorityScore?: number | null;
   createdAt?: string;
+}
+
+/** Canonical domain for dedup — strips scheme, www., ports, trailing
+ *  slash, path. "www.cloverclubny.com/" ≡ "cloverclubny.com". */
+export function normalizeDomain(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  try {
+    const host = new URL(
+      raw.includes("://") ? raw : `https://${raw}`
+    ).hostname.toLowerCase();
+    return host.replace(/^www\./, "") || null;
+  } catch {
+    return null;
+  }
 }
 
 export function createCustomer(db: WorkspaceDb, input: CustomerInput) {
@@ -5228,8 +5259,22 @@ export function createCustomer(db: WorkspaceDb, input: CustomerInput) {
       logoUrl: input.logoUrl ?? null,
       bookingUrl: input.bookingUrl ?? null,
       notes: input.notes ?? null,
-      domain: input.domain ?? null,
+      domain: normalizeDomain(input.domain),
       externalId: input.externalId ?? null,
+      phone: input.phone ?? null,
+      address: input.address ?? null,
+      vertical: input.vertical ?? null,
+      neighborhood: input.neighborhood ?? null,
+      source: input.source ?? null,
+      sourceSessionId: input.sourceSessionId ?? null,
+      sourceAgentSlug: input.sourceAgentSlug ?? null,
+      readiness: input.readiness ?? null,
+      nextAction: input.nextAction ?? null,
+      fit: input.fit ?? null,
+      fitScore: input.fitScore ?? null,
+      fitStatus: input.fitStatus ?? null,
+      processor: input.processor ?? null,
+      evidenceUri: input.evidenceUri ?? null,
       tierId: input.tierId ?? null,
       statusId: input.statusId ?? null,
       ownerId: input.ownerId ?? null,
@@ -5260,6 +5305,234 @@ export function getCustomerByExternalId(
       )
     )
     .get();
+}
+
+export interface ContactInput {
+  customerId: string;
+  type?: "business_channel" | "named_person";
+  role?: string | null;
+  channel: "email" | "phone" | "form" | "social" | "other";
+  value: string;
+  label?: string | null;
+  status?: "candidate" | "verified" | "rejected" | "no_contact";
+  confidence?: "low" | "medium" | "high";
+  source?: string | null;
+  evidenceUri?: string | null;
+}
+
+/** Dedup on (customer, channel, value) — the same contact found twice is
+ *  one row. */
+export function upsertCustomerContact(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: ContactInput
+) {
+  const existing = db
+    .select()
+    .from(workspaceCustomerContacts)
+    .where(
+      and(
+        eq(workspaceCustomerContacts.organizationId, organizationId),
+        eq(workspaceCustomerContacts.customerId, input.customerId),
+        eq(workspaceCustomerContacts.channel, input.channel),
+        eq(workspaceCustomerContacts.value, input.value)
+      )
+    )
+    .all()[0];
+  if (existing) return existing;
+  const now = new Date().toISOString();
+  return db
+    .insert(workspaceCustomerContacts)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId,
+      customerId: input.customerId,
+      type: input.type ?? "business_channel",
+      role: input.role ?? null,
+      channel: input.channel,
+      value: input.value,
+      label: input.label ?? null,
+      status: input.status ?? "candidate",
+      confidence: input.confidence ?? null,
+      source: input.source ?? null,
+      evidenceUri: input.evidenceUri ?? null,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning()
+    .all()[0];
+}
+
+export function listCustomerContacts(
+  db: WorkspaceDb,
+  organizationId: string,
+  customerId: string
+) {
+  return db
+    .select()
+    .from(workspaceCustomerContacts)
+    .where(
+      and(
+        eq(workspaceCustomerContacts.organizationId, organizationId),
+        eq(workspaceCustomerContacts.customerId, customerId)
+      )
+    )
+    .all();
+}
+
+export interface SuppressionInput {
+  kind: "email" | "domain" | "placeId" | "phone" | "customerId";
+  value: string;
+  customerId?: string | null;
+  reason?: string | null;
+  source?: string | null;
+}
+
+export function upsertSuppression(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: SuppressionInput
+) {
+  const existing = db
+    .select()
+    .from(workspaceSuppression)
+    .where(
+      and(
+        eq(workspaceSuppression.organizationId, organizationId),
+        eq(workspaceSuppression.kind, input.kind),
+        eq(workspaceSuppression.value, input.value)
+      )
+    )
+    .all()[0];
+  if (existing) return existing;
+  return db
+    .insert(workspaceSuppression)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId,
+      kind: input.kind,
+      value: input.value,
+      customerId: input.customerId ?? null,
+      reason: input.reason ?? null,
+      source: input.source ?? null,
+      createdAt: new Date().toISOString(),
+    })
+    .returning()
+    .all()[0];
+}
+
+export function listSuppression(
+  db: WorkspaceDb,
+  organizationId: string,
+  kind?: string
+) {
+  const conds = [eq(workspaceSuppression.organizationId, organizationId)];
+  if (kind) conds.push(eq(workspaceSuppression.kind, kind));
+  return db
+    .select()
+    .from(workspaceSuppression)
+    .where(and(...conds))
+    .all();
+}
+
+export function isSuppressed(
+  db: WorkspaceDb,
+  organizationId: string,
+  kind: string,
+  value: string
+) {
+  const row = db
+    .select()
+    .from(workspaceSuppression)
+    .where(
+      and(
+        eq(workspaceSuppression.organizationId, organizationId),
+        eq(workspaceSuppression.kind, kind),
+        eq(workspaceSuppression.value, value)
+      )
+    )
+    .all()[0];
+  return row ?? null;
+}
+
+export interface MarketRunInput {
+  vertical: string;
+  geo: string;
+  source: string;
+  sourceQuery?: string | null;
+  coverageTarget?: number | null;
+  issueId?: string | null;
+  createdBySlug?: string | null;
+  sourceSessionId?: string | null;
+}
+
+export function createMarketRun(
+  db: WorkspaceDb,
+  organizationId: string,
+  input: MarketRunInput
+) {
+  return db
+    .insert(workspaceMarketRuns)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId,
+      vertical: input.vertical,
+      geo: input.geo,
+      source: input.source,
+      sourceQuery: input.sourceQuery ?? null,
+      coverageTarget: input.coverageTarget ?? null,
+      issueId: input.issueId ?? null,
+      createdBySlug: input.createdBySlug ?? null,
+      sourceSessionId: input.sourceSessionId ?? null,
+      createdAt: new Date().toISOString(),
+    })
+    .returning()
+    .all()[0];
+}
+
+export function updateMarketRun(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string,
+  patch: { producedCount?: number; status?: string }
+) {
+  const updates: Record<string, unknown> = {};
+  if (patch.producedCount !== undefined)
+    updates.producedCount = patch.producedCount;
+  if (patch.status !== undefined) {
+    updates.status = patch.status;
+    if (patch.status === "completed" || patch.status === "failed")
+      updates.completedAt = new Date().toISOString();
+  }
+  return db
+    .update(workspaceMarketRuns)
+    .set(updates)
+    .where(
+      and(
+        eq(workspaceMarketRuns.id, id),
+        eq(workspaceMarketRuns.organizationId, organizationId)
+      )
+    )
+    .returning()
+    .all()[0];
+}
+
+export function listMarketRuns(
+  db: WorkspaceDb,
+  organizationId: string,
+  args: { vertical?: string; geo?: string; issueId?: string; limit?: number } = {}
+) {
+  const conds = [eq(workspaceMarketRuns.organizationId, organizationId)];
+  if (args.vertical) conds.push(eq(workspaceMarketRuns.vertical, args.vertical));
+  if (args.geo) conds.push(eq(workspaceMarketRuns.geo, args.geo));
+  if (args.issueId) conds.push(eq(workspaceMarketRuns.issueId, args.issueId));
+  return db
+    .select()
+    .from(workspaceMarketRuns)
+    .where(and(...conds))
+    .orderBy(desc(workspaceMarketRuns.createdAt))
+    .limit(args.limit ?? 50)
+    .all();
 }
 
 export function listCustomers(
@@ -5319,6 +5592,17 @@ export function updateCustomer(
     "notes",
     "domain",
     "externalId",
+    "phone",
+    "address",
+    "vertical",
+    "neighborhood",
+    "source",
+    "readiness",
+    "nextAction",
+    "fit",
+    "fitScore",
+    "fitStatus",
+    "evidenceUri",
     "tierId",
     "statusId",
     "ownerId",
@@ -5348,6 +5632,14 @@ export function deleteCustomer(
   organizationId: string,
   id: string
 ) {
+  db.delete(workspaceCustomerContacts)
+    .where(
+      and(
+        eq(workspaceCustomerContacts.customerId, id),
+        eq(workspaceCustomerContacts.organizationId, organizationId)
+      )
+    )
+    .run();
   db.delete(workspaceCustomerNeeds)
     .where(
       and(

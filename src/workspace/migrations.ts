@@ -1356,6 +1356,69 @@ ALTER TABLE agent_types ADD COLUMN tools TEXT`;
 // the bearer before acting on a dispatch.
 const v95 = `ALTER TABLE agent_types ADD COLUMN endpoint_secret TEXT`;
 
+const v99 = `ALTER TABLE customers ADD COLUMN readiness TEXT;
+ALTER TABLE customers ADD COLUMN processor TEXT;
+ALTER TABLE customers ADD COLUMN next_action TEXT;
+ALTER TABLE customers ADD COLUMN fit TEXT;
+ALTER TABLE customers ADD COLUMN fit_score REAL;
+ALTER TABLE customers ADD COLUMN fit_status TEXT;
+ALTER TABLE customers ADD COLUMN evidence_uri TEXT;
+CREATE TABLE IF NOT EXISTS suppression (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  value TEXT NOT NULL,
+  customer_id TEXT,
+  reason TEXT,
+  source TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS suppression_kind_value_idx ON suppression(organization_id, kind, value);
+CREATE TABLE IF NOT EXISTS market_runs (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  vertical TEXT NOT NULL,
+  geo TEXT NOT NULL,
+  source TEXT NOT NULL,
+  source_query TEXT,
+  coverage_target INTEGER,
+  produced_count INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'running',
+  issue_id TEXT,
+  created_by_slug TEXT,
+  source_session_id TEXT,
+  created_at TEXT NOT NULL,
+  completed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS market_runs_coverage_idx ON market_runs(organization_id, vertical, geo);
+CREATE INDEX IF NOT EXISTS market_runs_issue_idx ON market_runs(organization_id, issue_id)`;
+
+const v98 = `ALTER TABLE customers ADD COLUMN phone TEXT;
+ALTER TABLE customers ADD COLUMN address TEXT;
+ALTER TABLE customers ADD COLUMN vertical TEXT;
+ALTER TABLE customers ADD COLUMN neighborhood TEXT;
+ALTER TABLE customers ADD COLUMN source TEXT;
+ALTER TABLE customers ADD COLUMN source_session_id TEXT;
+ALTER TABLE customers ADD COLUMN source_agent_slug TEXT;
+CREATE TABLE IF NOT EXISTS customer_contacts (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  customer_id TEXT NOT NULL,
+  type TEXT NOT NULL DEFAULT 'business_channel',
+  role TEXT,
+  channel TEXT NOT NULL,
+  value TEXT NOT NULL,
+  label TEXT,
+  status TEXT NOT NULL DEFAULT 'candidate',
+  confidence TEXT,
+  source TEXT,
+  evidence_uri TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS customer_contacts_customer_idx ON customer_contacts(organization_id, customer_id);
+CREATE INDEX IF NOT EXISTS customer_contacts_value_idx ON customer_contacts(organization_id, value)`;
+
 const v97 = `CREATE TABLE IF NOT EXISTS lane_costs (
   session_id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -1671,14 +1734,16 @@ export const workspaceMigrations = {
       { idx: 86, when: 86, tag: "v87", breakpoints: true },
       { idx: 87, when: 87, tag: "v88", breakpoints: true },
       { idx: 88, when: 88, tag: "v89", breakpoints: true },
-      { idx: 89, when: 89, tag: "v91", breakpoints: true },
-      { idx: 90, when: 90, tag: "v90", breakpoints: true },
+      { idx: 89, when: 89, tag: "v90", breakpoints: true },
+      { idx: 90, when: 90, tag: "v91", breakpoints: true },
       { idx: 91, when: 91, tag: "v92", breakpoints: true },
       { idx: 92, when: 92, tag: "v93", breakpoints: true },
       { idx: 93, when: 93, tag: "v94", breakpoints: true },
       { idx: 94, when: 94, tag: "v95", breakpoints: true },
       { idx: 95, when: 95, tag: "v96", breakpoints: true },
       { idx: 96, when: 96, tag: "v97", breakpoints: true },
+      { idx: 97, when: 97, tag: "v98", breakpoints: true },
+      { idx: 98, when: 98, tag: "v99", breakpoints: true },
     ],
   },
   migrations: {
@@ -1779,5 +1844,7 @@ export const workspaceMigrations = {
     m0094: v95,
     m0095: v96,
     m0096: v97,
+    m0097: v98,
+    m0098: v99,
   },
 } satisfies Parameters<typeof migrate>[1];

@@ -39694,6 +39694,34 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "phone": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "address": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "vertical": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "neighborhood": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "source": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "sourceSessionId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "sourceAgentSlug": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "tierId": {
                             "type": "string",
                             "nullable": true
@@ -39748,6 +39776,13 @@
                           "notes",
                           "logoUrl",
                           "externalId",
+                          "phone",
+                          "address",
+                          "vertical",
+                          "neighborhood",
+                          "source",
+                          "sourceSessionId",
+                          "sourceAgentSlug",
                           "tierId",
                           "statusId",
                           "ownerId",
@@ -39828,6 +39863,21 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 255
+                  },
+                  "phone": {
+                    "type": "string"
+                  },
+                  "address": {
+                    "type": "string"
+                  },
+                  "vertical": {
+                    "type": "string"
+                  },
+                  "neighborhood": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string"
                   },
                   "tierId": {
                     "type": "string"
@@ -39910,6 +39960,34 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "phone": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "address": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "vertical": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "neighborhood": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "source": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "sourceSessionId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "sourceAgentSlug": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "tierId": {
                       "type": "string",
                       "nullable": true
@@ -39964,6 +40042,13 @@
                     "notes",
                     "logoUrl",
                     "externalId",
+                    "phone",
+                    "address",
+                    "vertical",
+                    "neighborhood",
+                    "source",
+                    "sourceSessionId",
+                    "sourceAgentSlug",
                     "tierId",
                     "statusId",
                     "ownerId",
@@ -40016,6 +40101,34 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "phone": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "address": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "vertical": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "neighborhood": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "source": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "sourceSessionId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "sourceAgentSlug": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "tierId": {
                       "type": "string",
                       "nullable": true
@@ -40070,6 +40183,13 @@
                     "notes",
                     "logoUrl",
                     "externalId",
+                    "phone",
+                    "address",
+                    "vertical",
+                    "neighborhood",
+                    "source",
+                    "sourceSessionId",
+                    "sourceAgentSlug",
                     "tierId",
                     "statusId",
                     "ownerId",
@@ -40619,6 +40739,34 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "phone": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "address": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "vertical": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "neighborhood": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "source": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "sourceSessionId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "sourceAgentSlug": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "tierId": {
                       "type": "string",
                       "nullable": true
@@ -40673,6 +40821,13 @@
                     "notes",
                     "logoUrl",
                     "externalId",
+                    "phone",
+                    "address",
+                    "vertical",
+                    "neighborhood",
+                    "source",
+                    "sourceSessionId",
+                    "sourceAgentSlug",
                     "tierId",
                     "statusId",
                     "ownerId",
@@ -40746,6 +40901,21 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 255
+                  },
+                  "phone": {
+                    "type": "string"
+                  },
+                  "address": {
+                    "type": "string"
+                  },
+                  "vertical": {
+                    "type": "string"
+                  },
+                  "neighborhood": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string"
                   },
                   "tierId": {
                     "type": "string"
@@ -40838,6 +41008,34 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "phone": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "address": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "vertical": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "neighborhood": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "source": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "sourceSessionId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "sourceAgentSlug": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "tierId": {
                       "type": "string",
                       "nullable": true
@@ -40892,6 +41090,13 @@
                     "notes",
                     "logoUrl",
                     "externalId",
+                    "phone",
+                    "address",
+                    "vertical",
+                    "neighborhood",
+                    "source",
+                    "sourceSessionId",
+                    "sourceAgentSlug",
                     "tierId",
                     "statusId",
                     "ownerId",

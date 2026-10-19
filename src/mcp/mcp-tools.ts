@@ -7661,7 +7661,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdCustomersId",
-    "description": "Update customer (PATCH /workspaces/{organizationId}/customers/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, url, bookingUrl, notes, logoUrl, externalId, tierId, statusId, ownerId, nextStepText, nextStepDueAt, needsHuman, needsHumanReason, priorityScore, customFields, stageGateOverride.",
+    "description": "Update customer (PATCH /workspaces/{organizationId}/customers/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, url, bookingUrl, notes, logoUrl, externalId, phone, address, vertical, neighborhood, source, tierId, statusId, ownerId, nextStepText, nextStepDueAt, needsHuman, needsHumanReason, priorityScore, customFields, stageGateOverride.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/customers/{id}",
     "inputSchema": {
@@ -7699,6 +7699,21 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string",
               "minLength": 1,
               "maxLength": 255
+            },
+            "phone": {
+              "type": "string"
+            },
+            "address": {
+              "type": "string"
+            },
+            "vertical": {
+              "type": "string"
+            },
+            "neighborhood": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string"
             },
             "tierId": {
               "type": "string"
@@ -13017,7 +13032,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdCustomers",
-    "description": "Create customer — externalId is a hard dedupe key (same contract as issues' externalRef): when a customer with the same externalId exists the call returns that customer with 200 instead of creating a duplicate. Pass dedupe=block to get 409 with the existing record in details.customer instead — the hard guarantee importers need. (POST /workspaces/{organizationId}/customers) Path params (top-level, required): organizationId. Query params (top-level, optional): dedupe. Request body goes in the \"body\" object; fields: name*, url, bookingUrl, notes, logoUrl, externalId, tierId, statusId, ownerId, nextStepText, nextStepDueAt, needsHuman, needsHumanReason, priorityScore, customFields (* = required).",
+    "description": "Create customer — externalId is a hard dedupe key (same contract as issues' externalRef): when a customer with the same externalId exists the call returns that customer with 200 instead of creating a duplicate. Pass dedupe=block to get 409 with the existing record in details.customer instead — the hard guarantee importers need. (POST /workspaces/{organizationId}/customers) Path params (top-level, required): organizationId. Query params (top-level, optional): dedupe. Request body goes in the \"body\" object; fields: name*, url, bookingUrl, notes, logoUrl, externalId, phone, address, vertical, neighborhood, source, tierId, statusId, ownerId, nextStepText, nextStepDueAt, needsHuman, needsHumanReason, priorityScore, customFields (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/customers",
     "inputSchema": {
@@ -13058,6 +13073,21 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string",
               "minLength": 1,
               "maxLength": 255
+            },
+            "phone": {
+              "type": "string"
+            },
+            "address": {
+              "type": "string"
+            },
+            "vertical": {
+              "type": "string"
+            },
+            "neighborhood": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string"
             },
             "tierId": {
               "type": "string"

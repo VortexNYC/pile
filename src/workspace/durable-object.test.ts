@@ -3637,3 +3637,32 @@ describe("draft outputs (PILE-428)", () => {
     });
   });
 });
+
+describe("customer contacts (CRM)", () => {
+  it("upsertContact dedupes on customer+channel+value", async () => {
+    const stub = getStub();
+    const out = await withWorkspace(stub, async (instance) => {
+      const customer = instance.createCustomer({
+        name: "Contact Co",
+      });
+      const a = instance.upsertContact({
+        customerId: customer.id,
+        channel: "email",
+        value: "owner@contactco.example",
+      });
+      const b = instance.upsertContact({
+        customerId: customer.id,
+        channel: "email",
+        value: "owner@contactco.example",
+      });
+      const different = instance.upsertContact({
+        customerId: customer.id,
+        channel: "phone",
+        value: "+15551234567",
+      });
+      return { a, b, different };
+    });
+    expect(out.b.id).toBe(out.a.id);
+    expect(out.different.id).not.toBe(out.a.id);
+  });
+});

@@ -822,9 +822,57 @@ export interface LaneWorkspace {
     name: string;
     domain?: string | null;
     externalId?: string | null;
+    phone?: string | null;
+    address?: string | null;
+    vertical?: string | null;
+    neighborhood?: string | null;
+    source?: string | null;
+    sourceSessionId?: string | null;
+    sourceAgentSlug?: string | null;
     createdById?: string;
     [key: string]: unknown;
   }): Promise<unknown>;
+  upsertSuppression(input: {
+    kind: string;
+    value: string;
+    customerId?: string | null;
+    reason?: string | null;
+    source?: string | null;
+  }): Promise<unknown>;
+  isSuppressed(kind: string, value: string): Promise<unknown>;
+  createMarketRun(input: {
+    vertical: string;
+    geo: string;
+    source: string;
+    sourceQuery?: string | null;
+    coverageTarget?: number | null;
+    issueId?: string | null;
+    createdBySlug?: string | null;
+    sourceSessionId?: string | null;
+  }): Promise<unknown>;
+  updateMarketRun(
+    id: string,
+    patch: { producedCount?: number; status?: string }
+  ): Promise<unknown>;
+  listMarketRuns(args?: {
+    vertical?: string;
+    geo?: string;
+    issueId?: string;
+    limit?: number;
+  }): Promise<unknown>;
+  upsertContact(input: {
+    customerId: string;
+    type?: string;
+    role?: string | null;
+    channel: string;
+    value: string;
+    label?: string | null;
+    status?: string;
+    confidence?: string;
+    source?: string | null;
+    evidenceUri?: string | null;
+  }): Promise<unknown>;
+  listContacts(customerId: string): Promise<unknown>;
   getCustomer(id: string): Promise<unknown>;
   getCustomerByDomain(domain: string): Promise<unknown>;
   getCustomerByExternalId(externalId: string): Promise<unknown>;
@@ -1118,6 +1166,11 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
       domain: z.string().optional(),
       externalId: z.string().optional(),
       notes: z.string().optional(),
+      phone: z.string().optional(),
+      address: z.string().optional(),
+      vertical: z.string().optional(),
+      neighborhood: z.string().optional(),
+      source: z.string().optional(),
     }),
     async run(ctx, input) {
       const existing = input.domain
@@ -1130,14 +1183,133 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
         name: input.name,
         domain: input.domain ?? null,
         externalId: input.externalId ?? null,
-        // Provenance stamp — which agent/session sourced this record so a
-        // bad batch is identifiable and cleanable. Upsert is create-or-
-        // return: existing records are never written by lanes.
-        notes:
-          `[sourced-by:${ctx.agentSlug} session:${ctx.sessionId}]` +
-          (input.notes ? ` ${input.notes}` : ""),
+        phone: input.phone ?? null,
+        address: input.address ?? null,
+        vertical: input.vertical ?? null,
+        neighborhood: input.neighborhood ?? null,
+        source: input.source ?? null,
+        notes: input.notes ?? null,
+        // Provenance as real columns — which agent/session sourced this
+        // record so a bad batch is identifiable and purgeable.
+        sourceSessionId: ctx.sessionId,
+        sourceAgentSlug: ctx.agentSlug,
       });
       return { created: true, customer };
+    },
+  }),
+  defineWorkspaceTool({
+    name: "contact_upsert",
+    description:
+      "Attach a contact channel to a customer — an email, phone, form, or social profile. Dedups on (customer, channel, value); set role for named people (owner/founder/manager) and status/confidence for how verified it is.",
+    permission: "ws:write",
+    inputSchema: z.object({
+      customerId: z.string().min(1),
+      type: z.enum(["business_channel", "named_person"]).optional(),
+      role: z.string().optional(),
+      channel: z.enum(["email", "phone", "form", "social", "other"]),
+      value: z.string().min(1),
+      label: z.string().optional(),
+      status: z
+        .enum(["candidate", "verified", "rejected", "no_contact"])
+        .optional(),
+      confidence: z.enum(["low", "medium", "high"]).optional(),
+      source: z.string().optional(),
+      evidenceUri: z.string().optional(),
+    }),
+    async run(ctx, input) {
+      const contact = await ctx.ws.upsertContact({
+        ...input,
+        source: input.source ?? `agent:${ctx.agentSlug}`,
+      });
+      return { contact };
+    },
+  }),
+  defineWorkspaceTool({
+    name: "suppress",
+    description:
+      "Add an identity to the do-not-contact list (email, domain, placeId, phone). Checked before any outreach.",
+    permission: "ws:write",
+    inputSchema: z.object({
+      kind: z.enum(["email", "domain", "placeId", "phone", "customerId"]),
+      value: z.string().min(1),
+      customerId: z.string().optional(),
+      reason: z.string().optional(),
+    }),
+    async run(ctx, input) {
+      const row = await ctx.ws.upsertSuppression({
+        ...input,
+        source: `agent:${ctx.agentSlug}`,
+      });
+      return { suppressed: row };
+    },
+  }),
+  defineWorkspaceTool({
+    name: "suppression_check",
+    description:
+      "Check whether an identity is on the do-not-contact list before contacting or enriching.",
+    permission: "ws:read",
+    inputSchema: z.object({
+      kind: z.enum(["email", "domain", "placeId", "phone", "customerId"]),
+      value: z.string().min(1),
+    }),
+    async run(ctx, input) {
+      const row = await ctx.ws.isSuppressed(input.kind, input.value);
+      return { suppressed: row !== null && row !== undefined, entry: row };
+    },
+  }),
+  defineWorkspaceTool({
+    name: "market_run_report",
+    description:
+      "Record a sourcing run's outcome — register the run, then update producedCount/status. Coverage at the run level, queryable by vertical + geo.",
+    permission: "ws:write",
+    inputSchema: z.object({
+      action: z.enum(["create", "update", "list"]),
+      id: z.string().optional(),
+      vertical: z.string().optional(),
+      geo: z.string().optional(),
+      source: z.string().optional(),
+      sourceQuery: z.string().optional(),
+      coverageTarget: z.number().optional(),
+      producedCount: z.number().optional(),
+      status: z.string().optional(),
+      limit: z.number().optional(),
+    }),
+    async run(ctx, input) {
+      if (input.action === "create") {
+        if (!input.vertical || !input.geo || !input.source)
+          throw new LaneToolError(
+            "market_run_report create needs vertical, geo, source"
+          );
+        return {
+          run: await ctx.ws.createMarketRun({
+            vertical: input.vertical,
+            geo: input.geo,
+            source: input.source,
+            sourceQuery: input.sourceQuery ?? null,
+            coverageTarget: input.coverageTarget ?? null,
+            issueId: ctx.issueId ?? null,
+            createdBySlug: ctx.agentSlug,
+            sourceSessionId: ctx.sessionId,
+          }),
+        };
+      }
+      if (input.action === "update") {
+        if (!input.id)
+          throw new LaneToolError("market_run_report update needs id");
+        return {
+          run: await ctx.ws.updateMarketRun(input.id, {
+            producedCount: input.producedCount,
+            status: input.status,
+          }),
+        };
+      }
+      return {
+        runs: await ctx.ws.listMarketRuns({
+          vertical: input.vertical,
+          geo: input.geo,
+          limit: input.limit,
+        }),
+      };
     },
   }),
   defineWorkspaceTool({
