@@ -117,16 +117,30 @@ describe("support widget", () => {
       `/workspaces/${organizationId}/support/widget-keys`,
       { headers: { authorization: `Bearer ${token}` } }
     );
+    expect(list.status).toBe(200);
+    const listedRaw = (await list.json()) as {
+      widgetKeys: Array<Record<string, unknown>>;
+    };
     const listed = z
-      .object({ widgetKeys: z.array(widgetKeySchema) })
-      .parse(await list.json());
+      .object({
+        widgetKeys: z.array(widgetKeySchema.omit({ hmacSecret: true })),
+      })
+      .parse(listedRaw);
     expect(listed.widgetKeys.map((k) => k.id)).toContain(key.id);
+    // hmacSecret is disclosed once at creation — list/get must not leak it.
+    for (const k of listedRaw.widgetKeys) {
+      expect(k).not.toHaveProperty("hmacSecret");
+    }
+    expect(JSON.stringify(listedRaw)).not.toContain(key.hmacSecret);
 
     const revoke = await widgetFetch(
       `/workspaces/${organizationId}/support/widget-keys/${key.id}`,
       { method: "DELETE", headers: { authorization: `Bearer ${token}` } }
     );
     expect(revoke.status).toBe(200);
+    const revokedRaw = (await revoke.json()) as Record<string, unknown>;
+    expect(revokedRaw).not.toHaveProperty("hmacSecret");
+    expect(JSON.stringify(revokedRaw)).not.toContain(key.hmacSecret);
 
     const { res } = await startSession(key.key);
     expect(res.status).toBe(404);

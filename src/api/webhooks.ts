@@ -9,14 +9,24 @@ import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 import { getWorkspaceStub } from "./stub.js";
 
+// The signing secret is write-only: callers supply it on create/update, and
+// delivery signing reads it straight from the workspace DO — it is never
+// returned in API responses.
 const webhookSubscriptionSchema = z.object({
   id: z.string(),
   organizationId: z.string(),
   url: z.string(),
   events: z.string(),
-  secret: z.string(),
+  hasSecret: z.boolean(),
   createdAt: z.string(),
 });
+
+function serializeSubscription<T extends { secret?: unknown }>(
+  row: T
+): Omit<T, "secret"> & { hasSecret: boolean } {
+  const { secret, ...rest } = row;
+  return { ...rest, hasSecret: Boolean(secret) };
+}
 
 const createWebhookSubscriptionRoute = createRoute({
   method: "post",
@@ -216,14 +226,21 @@ export function registerWebhookRoutes(app: OpenAPIHono<AppContext>) {
     const input = c.req.valid("json");
     const stub = getWorkspaceStub(c.env, organizationId);
     const item = await stub.createWebhookSubscription(input);
-    return c.json(item, 201);
+    if (!item) {
+      throw new VortexError({
+        code: "INTERNAL_ERROR",
+        status: 500,
+        message: "Webhook subscription was not persisted",
+      });
+    }
+    return c.json(serializeSubscription(item), 201);
   });
 
   app.openapi(listWebhookSubscriptionsRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
     const items = await stub.listWebhookSubscriptions();
-    return c.json({ subscriptions: items });
+    return c.json({ subscriptions: items.map(serializeSubscription) });
   });
 
   app.openapi(getWebhookSubscriptionRoute, async (c) => {
@@ -237,7 +254,7 @@ export function registerWebhookRoutes(app: OpenAPIHono<AppContext>) {
         message: "Webhook subscription not found",
       });
     }
-    return c.json(item);
+    return c.json(serializeSubscription(item));
   });
 
   app.openapi(updateWebhookSubscriptionRoute, async (c) => {
@@ -252,7 +269,7 @@ export function registerWebhookRoutes(app: OpenAPIHono<AppContext>) {
         message: "Webhook subscription not found",
       });
     }
-    return c.json(item);
+    return c.json(serializeSubscription(item));
   });
 
   app.openapi(deleteWebhookSubscriptionRoute, async (c) => {

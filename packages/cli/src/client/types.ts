@@ -12720,7 +12720,6 @@ export interface paths {
                                 id: string;
                                 organizationId: string;
                                 key: string;
-                                hmacSecret: string;
                                 name: string;
                                 allowedOrigins: string[];
                                 greeting: string | null;
@@ -12775,7 +12774,6 @@ export interface paths {
                             id: string;
                             organizationId: string;
                             key: string;
-                            hmacSecret: string;
                             name: string;
                             allowedOrigins: string[];
                             greeting: string | null;
@@ -12786,6 +12784,7 @@ export interface paths {
                             createdBy: string | null;
                             createdAt: string;
                             updatedAt: string;
+                            hmacSecret: string;
                         };
                     };
                 };
@@ -12830,7 +12829,6 @@ export interface paths {
                             id: string;
                             organizationId: string;
                             key: string;
-                            hmacSecret: string;
                             name: string;
                             allowedOrigins: string[];
                             greeting: string | null;
@@ -29225,7 +29223,7 @@ export interface paths {
                                 organizationId: string;
                                 url: string;
                                 events: string;
-                                secret: string;
+                                hasSecret: boolean;
                                 createdAt: string;
                             }[];
                         };
@@ -29266,7 +29264,7 @@ export interface paths {
                             organizationId: string;
                             url: string;
                             events: string;
-                            secret: string;
+                            hasSecret: boolean;
                             createdAt: string;
                         };
                     };
@@ -29310,7 +29308,7 @@ export interface paths {
                             organizationId: string;
                             url: string;
                             events: string;
-                            secret: string;
+                            hasSecret: boolean;
                             createdAt: string;
                         };
                     };
@@ -29376,7 +29374,7 @@ export interface paths {
                             organizationId: string;
                             url: string;
                             events: string;
-                            secret: string;
+                            hasSecret: boolean;
                             createdAt: string;
                         };
                     };

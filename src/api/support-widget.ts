@@ -45,7 +45,6 @@ const widgetKeySchema = z.object({
   id: z.string(),
   organizationId: z.string(),
   key: z.string(),
-  hmacSecret: z.string(),
   name: z.string(),
   allowedOrigins: z.array(z.string()),
   greeting: z.string().nullable(),
@@ -56,6 +55,12 @@ const widgetKeySchema = z.object({
   createdBy: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
+});
+
+// hmacSecret signs verified-identity hashes on the operator's own backend —
+// it is disclosed exactly once, at creation. List/get/revoke never return it.
+const createdWidgetKeySchema = widgetKeySchema.extend({
+  hmacSecret: z.string(),
 });
 
 const createWidgetKeyBodySchema = z.object({
@@ -84,7 +89,7 @@ const createWidgetKeyRoute = createRoute({
     201: {
       description: "Widget key created",
       content: {
-        "application/json": { schema: widgetKeySchema },
+        "application/json": { schema: createdWidgetKeySchema },
       },
     },
   },
@@ -595,7 +600,7 @@ export function registerSupportWidgetRoutes(app: OpenAPIHono<AppContext>) {
       requireChallenge: body.requireChallenge,
       createdBy: identity?.id ?? null,
     });
-    return c.json(widgetKeySchema.parse(widgetKey), 201);
+    return c.json(createdWidgetKeySchema.parse(widgetKey), 201);
   });
 
   app.openapi(listWidgetKeysRoute, async (c) => {
