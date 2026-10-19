@@ -31,12 +31,12 @@ curl -X POST "$PILE_BASE_URL/workspaces/$ORG/support/widget-keys" \
 
 The response contains:
 
-| field            | where it goes                                                                                        |
-| ---------------- | ---------------------------------------------------------------------------------------------------- |
-| `key` (`wgt_…`)  | Publishable. Put it in the page.                                                                     |
-| `hmacSecret`     | Server-only secret, e.g. `PILE_WIDGET_HMAC_SECRET`. Never send it to the browser.                    |
-| `allowedOrigins` | The origins the key works on. An empty list allows every origin, so always set it for a product key. |
-| `requireEmail`   | `false` by default. Signed-in users are identified by `externalId` and never asked for an email.     |
+| field            | where it goes                                                                                                                                                             |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `key` (`wgt_…`)  | Publishable. Put it in the page.                                                                                                                                          |
+| `hmacSecret`     | Server-only secret, e.g. `PILE_WIDGET_HMAC_SECRET`. Returned only in this create response — store it now; list and get never show it again. Never send it to the browser. |
+| `allowedOrigins` | The origins the key works on. An empty list allows every origin, so always set it for a product key.                                                                      |
+| `requireEmail`   | `false` by default. Signed-in users are identified by `externalId` and never asked for an email.                                                                          |
 
 To rotate or retire a key, list keys with `pile support widget keys list` and revoke one with `pile support widget keys delete --key-id …`. A revoked key returns `404` and the widget stays hidden.
 

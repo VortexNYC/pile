@@ -102,6 +102,74 @@ describe("webhooks API", () => {
     expect(res.status).toBe(400);
   });
 
+  it("never returns the signing secret in subscription responses", async () => {
+    const secret = `whsec_${crypto.randomUUID().replace(/-/g, "")}`;
+    const create = await fetch(
+      `/workspaces/${organizationId}/webhook-subscriptions`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          url: "https://example.com/secret-hook",
+          events: "issue.created",
+          secret,
+        }),
+      },
+      token
+    );
+    expect(create.status).toBe(201);
+    const created = (await create.json()) as Record<string, unknown>;
+    expect(created).not.toHaveProperty("secret");
+    expect(created.hasSecret).toBe(true);
+    expect(JSON.stringify(created)).not.toContain(secret);
+
+    const id = created.id as string;
+
+    const list = await fetch(
+      `/workspaces/${organizationId}/webhook-subscriptions`,
+      {},
+      token
+    );
+    expect(list.status).toBe(200);
+    const listedRaw = (await list.json()) as {
+      subscriptions: Array<Record<string, unknown>>;
+    };
+    const mine = listedRaw.subscriptions.find((s) => s.id === id);
+    expect(mine).not.toHaveProperty("secret");
+    expect(mine?.hasSecret).toBe(true);
+    expect(JSON.stringify(listedRaw)).not.toContain(secret);
+
+    const get = await fetch(
+      `/workspaces/${organizationId}/webhook-subscriptions/${id}`,
+      {},
+      token
+    );
+    expect(get.status).toBe(200);
+    const got = (await get.json()) as Record<string, unknown>;
+    expect(got).not.toHaveProperty("secret");
+    expect(got.hasSecret).toBe(true);
+
+    const update = await fetch(
+      `/workspaces/${organizationId}/webhook-subscriptions/${id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ url: "https://example.com/secret-hook-2" }),
+      },
+      token
+    );
+    expect(update.status).toBe(200);
+    const updated = (await update.json()) as Record<string, unknown>;
+    expect(updated).not.toHaveProperty("secret");
+    expect(updated.hasSecret).toBe(true);
+
+    await fetch(
+      `/workspaces/${organizationId}/webhook-subscriptions/${id}`,
+      {
+        method: "DELETE",
+      },
+      token
+    );
+  });
+
   it("rejects an unknown webhook", async () => {
     const res = await fetch(
       `/workspaces/${organizationId}/webhook-subscriptions/00000000-0000-0000-0000-000000000000`,

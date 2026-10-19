@@ -27924,9 +27924,6 @@
                     "key": {
                       "type": "string"
                     },
-                    "hmacSecret": {
-                      "type": "string"
-                    },
                     "name": {
                       "type": "string"
                     },
@@ -27962,13 +27959,15 @@
                     },
                     "updatedAt": {
                       "type": "string"
+                    },
+                    "hmacSecret": {
+                      "type": "string"
                     }
                   },
                   "required": [
                     "id",
                     "organizationId",
                     "key",
-                    "hmacSecret",
                     "name",
                     "allowedOrigins",
                     "greeting",
@@ -27978,7 +27977,8 @@
                     "isActive",
                     "createdBy",
                     "createdAt",
-                    "updatedAt"
+                    "updatedAt",
+                    "hmacSecret"
                   ]
                 }
               }
@@ -28023,9 +28023,6 @@
                           "key": {
                             "type": "string"
                           },
-                          "hmacSecret": {
-                            "type": "string"
-                          },
                           "name": {
                             "type": "string"
                           },
@@ -28067,7 +28064,6 @@
                           "id",
                           "organizationId",
                           "key",
-                          "hmacSecret",
                           "name",
                           "allowedOrigins",
                           "greeting",
@@ -28133,9 +28129,6 @@
                     "key": {
                       "type": "string"
                     },
-                    "hmacSecret": {
-                      "type": "string"
-                    },
                     "name": {
                       "type": "string"
                     },
@@ -28177,7 +28170,6 @@
                     "id",
                     "organizationId",
                     "key",
-                    "hmacSecret",
                     "name",
                     "allowedOrigins",
                     "greeting",
@@ -63336,8 +63328,8 @@
                     "events": {
                       "type": "string"
                     },
-                    "secret": {
-                      "type": "string"
+                    "hasSecret": {
+                      "type": "boolean"
                     },
                     "createdAt": {
                       "type": "string"
@@ -63348,7 +63340,7 @@
                     "organizationId",
                     "url",
                     "events",
-                    "secret",
+                    "hasSecret",
                     "createdAt"
                   ]
                 }
@@ -63397,8 +63389,8 @@
                           "events": {
                             "type": "string"
                           },
-                          "secret": {
-                            "type": "string"
+                          "hasSecret": {
+                            "type": "boolean"
                           },
                           "createdAt": {
                             "type": "string"
@@ -63409,7 +63401,7 @@
                           "organizationId",
                           "url",
                           "events",
-                          "secret",
+                          "hasSecret",
                           "createdAt"
                         ]
                       }
@@ -63469,8 +63461,8 @@
                     "events": {
                       "type": "string"
                     },
-                    "secret": {
-                      "type": "string"
+                    "hasSecret": {
+                      "type": "boolean"
                     },
                     "createdAt": {
                       "type": "string"
@@ -63481,7 +63473,7 @@
                     "organizationId",
                     "url",
                     "events",
-                    "secret",
+                    "hasSecret",
                     "createdAt"
                   ]
                 }
@@ -63554,8 +63546,8 @@
                     "events": {
                       "type": "string"
                     },
-                    "secret": {
-                      "type": "string"
+                    "hasSecret": {
+                      "type": "boolean"
                     },
                     "createdAt": {
                       "type": "string"
@@ -63566,7 +63558,7 @@
                     "organizationId",
                     "url",
                     "events",
-                    "secret",
+                    "hasSecret",
                     "createdAt"
                   ]
                 }
