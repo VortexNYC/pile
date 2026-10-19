@@ -3,6 +3,7 @@ import { z } from "zod";
 import { GITHUB_USER_AGENT } from "../global/github-auth.js";
 import { pullSource, scoreCandidate, type MerchantSourceRow } from "./collectors.js";
 import { sessionPlanSchema, type SessionPlan } from "./session-plan.js";
+import { runUsageSchema, type AgentRunUsage } from "./spend.js";
 
 // PILE-284 — purpose-built lane tool surface. Instead of handing a lane a raw
 // shell + installation token for GitHub ops, Pile exposes named tools that
@@ -194,6 +195,9 @@ export interface LaneToolContext {
     plan?: SessionPlan;
   }): Promise<void>;
   policy: LaneToolPolicy;
+  /** Names of the workspace-domain tools served alongside the repo tools —
+   *  get_lane_context reports the whole callable set. */
+  workspaceToolNames?: readonly string[];
 }
 
 interface LaneToolDef<S extends z.ZodObject> {
@@ -300,9 +304,12 @@ export const LANE_TOOLS: readonly LaneTool[] = [
         branch: ctx.branch,
         tier: ctx.policy.tier,
         permissions: [...ctx.policy.permissions],
-        tools: LANE_TOOLS.filter((t) => laneToolAllowed(ctx.policy, t)).map(
-          (t) => t.name
-        ),
+        tools: [
+          ...LANE_TOOLS.filter((t) => laneToolAllowed(ctx.policy, t)).map(
+            (t) => t.name
+          ),
+          ...(ctx.workspaceToolNames ?? []),
+        ],
       };
     },
   }),
@@ -956,6 +963,10 @@ export interface LaneWorkspace {
     search?: string;
     limit?: number;
   }): Promise<unknown[]>;
+  recordSessionUsage(
+    sessionId: string,
+    usage: AgentRunUsage
+  ): Promise<unknown>;
 }
 
 export interface WorkspaceLaneToolContext {
@@ -1953,6 +1964,17 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
     }),
     async run(ctx, input) {
       return ctx.ws.memoryRecall(input);
+    },
+  }),
+  defineWorkspaceTool({
+    name: "report_usage",
+    description:
+      "Record this run's cumulative token/cost usage on the session's run receipt — call once at run end (values are run totals, not deltas). Fields: model, inputTokens, outputTokens, totalTokens, toolCalls, costMicros (USD micros), externalSpendMicros.",
+    permission: "lane:report",
+    inputSchema: runUsageSchema,
+    async run(ctx, input) {
+      await ctx.ws.recordSessionUsage(ctx.sessionId, input);
+      return { ok: true };
     },
   }),
 ];

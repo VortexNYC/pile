@@ -53,6 +53,7 @@ import type {
 import { DOMAIN_REVIEW_PROMPT } from "./review-prompt.js";
 import { runnerBundle } from "./runner/bundle.js";
 import type { SecondaryRepo } from "./secondary-repos.js";
+import { runUsageSchema } from "./spend.js";
 import {
   parseCredentialPool,
   poolEntriesForKinds,
@@ -88,6 +89,9 @@ const runnerResultSchema = z.object({
   // The runner sets this when the run died on the substrate (git transport,
   // codeload, token mint) rather than on the task — gates the infra retry.
   infraFailure: z.boolean().optional(),
+  // PILE-425 — cumulative run usage the driver extracted from the agent
+  // CLI's output; lands on the session's run receipt.
+  usage: runUsageSchema.optional(),
 });
 
 type RunnerResult = z.infer<typeof runnerResultSchema>;
@@ -1049,6 +1053,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
       prState,
       branch: result.branch ?? null,
       infraFailure: result.infraFailure,
+      usage: result.usage ?? null,
     };
   }
 

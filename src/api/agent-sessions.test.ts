@@ -3979,4 +3979,46 @@ describe("spend caps + run receipts (PILE-425)", () => {
     expect(row?.runs).toBe(1);
     expect(row?.totalTokens).toBe(110_000);
   });
+
+  it("records usage supplied on a session PATCH (PILE-450)", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    const issue = await stub.createIssue({ title: "PATCH usage lane" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "patch-bot",
+      provider: "custom-bot",
+      actorId: "test",
+      actorType: "agent",
+      status: "running",
+      conversationKey: `${issue.id}-patch-bot`,
+    });
+    const res = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}`,
+        {
+          method: "PATCH",
+          token,
+          body: JSON.stringify({
+            status: "completed",
+            result: "done",
+            usage: {
+              model: "claude-sonnet-4-5",
+              inputTokens: 40_000,
+              outputTokens: 4_000,
+              costMicros: 132_000,
+            },
+          }),
+        }
+      ),
+      env
+    );
+    expect(res.status).toBe(200);
+    const receipt = await stub.getRunReceipt(session.id);
+    expect(receipt?.status).toBe("completed");
+    expect(receipt?.totalTokens).toBe(44_000);
+    expect(receipt?.costMicros).toBe(132_000);
+    expect(receipt?.costSource).toBe("reported");
+  });
 });

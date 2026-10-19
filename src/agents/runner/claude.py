@@ -71,6 +71,7 @@ def run_agent(agent_bin):
     tail = []
     last_text = ''
     result_error = None
+    usage = None
     events = open('/tmp/agent-events.ndjson', 'a', buffering=1)
     try:
         for line in proc.stdout:
@@ -88,6 +89,7 @@ def run_agent(agent_bin):
                     last_text = evt['result']
                 if evt.get('is_error'):
                     result_error = evt.get('result') or evt.get('subtype') or 'error'
+                usage = cli_result_usage(evt) or usage
             rendered = _render_event(evt)
             if rendered:
                 print(_redact(rendered))
@@ -102,7 +104,7 @@ def run_agent(agent_bin):
     if proc.returncode != 0 or result_error:
         detail = result_error or output[-500:]
         raise RuntimeError(f'claude -p failed ({proc.returncode}): {_redact(str(detail))}')
-    return output, last_text
+    return output, last_text, usage
 
 
 def main():
@@ -112,9 +114,9 @@ def main():
         create_branch()
         clone_repo()
         warm_pnpm_store()
-    output, report = run_agent(agent_bin)
+    output, report, usage = run_agent(agent_bin)
     pushed = commit_and_push(agent_env()) if REPO else False
-    rc = finalize(output, pushed, report=report)
+    rc = finalize(output, pushed, report=report, usage=usage)
     save_pnpm_store()
     stop_log_ship()
     return rc

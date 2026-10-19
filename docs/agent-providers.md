@@ -479,7 +479,7 @@ Tools live in `src/agents/lane-tools.ts`. Each declares one permission:
 
 | permission     | tools                                                                                                                                                                                                                                                                                                                                  |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `lane:report`  | `get_lane_context`, `report_progress`, `set_output`, `set_plan`                                                                                                                                                                                                                                                                        |
+| `lane:report`  | `get_lane_context`, `report_progress`, `set_output`, `set_plan`, `report_usage` (records the run's cumulative token/cost usage on the session's receipt)                                                                                                                                                                                |
 | `repo:read`    | `get_repository`, `get_file_contents`, `list_pull_requests`, `get_pull_request`, `get_pull_request_diff`, `list_pull_request_files`, `list_pull_request_reviews`, `list_review_comments`, `list_review_threads`, `list_check_runs`, `get_check_run_logs`, `get_issue`, `list_issue_comments`, `find_similar_issues`, `compare_commits` |
 | `pr:write`     | `create_pull_request`, `update_pull_request`, `comment_on_pull_request`, `add_labels`, `update_pull_request_branch` — only on PRs headed at the lane's own branch                                                                                                                                                                      |
 | `review:write` | `create_pull_request_review` (no self-approval), `reply_to_review_comment`, `resolve_review_thread` (lane's PR only)                                                                                                                                                                                                                   |
@@ -488,7 +488,11 @@ Tools live in `src/agents/lane-tools.ts`. Each declares one permission:
 Tiers bundle permissions: `readonly` (`repo:read`, `lane:report`), `review`
 (+ `review:write`), `contribute` (+ `pr:write`; the default), `maintain`
 (+ `checks:write`). Set per repo in organization metadata, keyed by
-`owner/name` with a `*` fallback; `deny` removes individual tools:
+`owner/name` with a `*` fallback; `deny` removes individual tools.
+Workspace-domain tools (`issue_*`, `document_*`, `customer_*`, `memory_*`,
+`web_fetch`, `escalate`, `report_usage`) are served under the `pipeline`
+tier on every lane — repo tiers govern the GitHub surface only, and the
+agent type's `tools` allowlist narrows them further:
 
 ```json
 {

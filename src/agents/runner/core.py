@@ -1711,17 +1711,60 @@ def read_transcript(fallback=''):
         return fallback
 
 
-def write_result(status, pr_url='', result='', report=None, infra=False):
+def write_result(status, pr_url='', result='', report=None, infra=False, usage=None):
     payload = {'status': status, 'prUrl': pr_url, 'branch': BRANCH, 'result': _redact(result)}
     if report:
         payload['report'] = _redact(report)
     if infra:
         payload['infraFailure'] = True
+    # PILE-450 — cumulative run usage (tokens/cost) extracted by the driver;
+    # lands on the session's run receipt so spend caps have real numbers.
+    if usage:
+        payload['usage'] = usage
     with open(RESULT_FILE, 'w') as f:
         json.dump(payload, f)
 
 
-def finalize(output, pushed, report=None):
+def cli_result_usage(evt):
+    # Normalize a stream-json `result` event's usage into the receipt shape
+    # (AgentRunUsage). Absent fields are omitted — the receipt merge treats
+    # missing as "not reported", never zero. Cache tokens fold into
+    # inputTokens: they are billed input, and the rate map has no cache tier.
+    if not isinstance(evt, dict) or evt.get('type') != 'result':
+        return None
+    u = evt.get('usage')
+    if not isinstance(u, dict):
+        return None
+
+    def num(*keys):
+        for k in keys:
+            v = u.get(k)
+            if isinstance(v, (int, float)) and v >= 0:
+                return int(v)
+        return None
+
+    usage = {}
+    inp = num('input_tokens', 'inputTokens') or 0
+    inp += num('cache_read_input_tokens', 'cacheRead') or 0
+    inp += num('cache_creation_input_tokens', 'cacheCreation', 'cacheWrite') or 0
+    out = num('output_tokens', 'outputTokens')
+    if inp:
+        usage['inputTokens'] = inp
+    if out is not None:
+        usage['outputTokens'] = out
+    total = num('total_tokens', 'totalTokens')
+    if total is not None:
+        usage['totalTokens'] = total
+    cost = evt.get('total_cost_usd', u.get('total_cost_usd', u.get('cost_usd')))
+    if isinstance(cost, (int, float)) and cost >= 0:
+        usage['costMicros'] = round(cost * 1_000_000)
+    model = evt.get('model') or os.environ.get('MODEL')
+    if isinstance(model, str) and model:
+        usage['model'] = model
+    return usage or None
+
+
+def finalize(output, pushed, report=None, usage=None):
     # Terminal bookkeeping shared by every driver: digest → PR → result file.
     digest = collect_digest()
     digest['permissions'] = {'push': PUSH_POLICY, 'shell': SHELL_POLICY}
@@ -1732,7 +1775,7 @@ def finalize(output, pushed, report=None):
     if PUSH_POLICY == 'disabled' and REPO:
         payload['patch'] = local_patch()
     result_text = json.dumps(payload)
-    write_result('completed', pr_url, result_text, report=report)
+    write_result('completed', pr_url, result_text, report=report, usage=usage)
     return 0
 
 
