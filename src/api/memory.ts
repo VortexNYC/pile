@@ -1,8 +1,9 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import type { OpenAPIHono } from "@hono/zod-openapi";
+
+import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 import { getWorkspaceStub } from "./stub.js";
-import type { AppContext } from "../platform/middleware.js";
 
 const memorySchema = z.object({
   id: z.string(),

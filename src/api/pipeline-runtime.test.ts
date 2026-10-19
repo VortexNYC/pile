@@ -72,7 +72,10 @@ describe("pipeline runtime (PILE-401/405/413)", () => {
     admin = seeded.token;
     // PILE-437 — providerAgentId must resolve at write time; register the
     // mock the CRUD test binds.
-    registerAgentProvider("mock-scout", () => new MockAgentProvider("mock-scout"));
+    registerAgentProvider(
+      "mock-scout",
+      () => new MockAgentProvider("mock-scout")
+    );
   });
 
   it("CRUDs agent types and stage configs", async () => {
@@ -339,11 +342,7 @@ describe("pipeline runtime (PILE-401/405/413)", () => {
       admin
     );
     expect(cfg.status).toBe(200);
-    const lint = await fetch(
-      `/workspaces/${org}/pipeline/lint`,
-      {},
-      admin
-    );
+    const lint = await fetch(`/workspaces/${org}/pipeline/lint`, {}, admin);
     const lintBody = (await lint.json()) as {
       findings: Array<{ kind: string; detail: string }>;
     };

@@ -688,7 +688,9 @@ export const workspaceCustomerTiers = sqliteTable(
     // never re-derived on rename. Templates/configs bind to this.
     key: text("key" as string),
     // "active" | "terminal" — Passed/Lost close the pipeline.
-    type: text("type" as string).notNull().default("active"),
+    type: text("type" as string)
+      .notNull()
+      .default("active"),
     color: text("color" as string),
     position: integer("position" as string)
       .notNull()
@@ -710,7 +712,9 @@ export const workspaceCustomerStatuses = sqliteTable(
     // never re-derived on rename. Templates/configs bind to this.
     key: text("key" as string),
     // "active" | "terminal" — Passed/Lost close the pipeline.
-    type: text("type" as string).notNull().default("active"),
+    type: text("type" as string)
+      .notNull()
+      .default("active"),
     color: text("color" as string),
     position: integer("position" as string)
       .notNull()
@@ -1445,7 +1449,9 @@ export const workspaceLaneCosts = sqliteTable(
     createdAt: text("created_at" as string).notNull(),
     settledAt: text("settled_at" as string).notNull(),
     durationMs: integer("duration_ms" as string).notNull(),
-    attempts: integer("attempts" as string).notNull().default(1),
+    attempts: integer("attempts" as string)
+      .notNull()
+      .default(1),
   },
   (table) => [
     index("lane_costs_agent_idx" as string).on(
@@ -1469,7 +1475,9 @@ export const workspaceAgentTypes = sqliteTable(
     providerAgentId: text("provider_agent_id" as string).notNull(),
     // "agent" runs a provider lane; "human" is a person-owned step —
     // resolves the owner slug for lint but is never dispatched.
-    kind: text("kind" as string).notNull().default("agent"),
+    kind: text("kind" as string)
+      .notNull()
+      .default("agent"),
     // kind="external" — the webhook pile POSTs dispatches to.
     endpointUrl: text("endpoint_url" as string),
     // Bearer the receiver verifies — encrypted at rest like provider keys.

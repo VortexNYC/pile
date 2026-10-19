@@ -1271,9 +1271,6 @@ describe("CLI integration", () => {
   });
 
   it("customers import parses a CSV file and posts rows", async () => {
-    const { writeFileSync, mkdtempSync } = await import("node:fs");
-    const { tmpdir } = await import("node:os");
-    const { join } = await import("node:path");
     const dir = mkdtempSync(join(tmpdir(), "pile-import-"));
     const file = join(dir, "merchants.csv");
     writeFileSync(

@@ -2111,6 +2111,137 @@ describe("syncOpenPrSessions", () => {
     expect(events.some((e) => e.type === "pr.ci_failed")).toBe(false);
   });
 
+  // PILE-445 — a pile-review check run left pending by a lane that died on
+  // provisioning is retried by the sweep backstop instead of hanging the PR.
+  it("takes over a stale pending pile-review check run", async () => {
+    const agentId = `mock-review-stale-${crypto.randomUUID().slice(0, 8)}`;
+    const dispatches: string[] = [];
+    registerMock(agentId, {
+      dispatch: (_org, issue) => {
+        dispatches.push(issue.id);
+        return { id: "remote-stale", agentId, status: "running" };
+      },
+    });
+    const issue = await stub.createIssue({ title: "Hung review PR" });
+    await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      prUrl: "https://github.com/vortexnyc/pile/pull/893",
+      prState: "open",
+    });
+
+    const writes: Array<{ url: string; body: Record<string, unknown> }> = [];
+    const ghFetchStale = async (
+      input: RequestInfo | URL,
+      init?: RequestInit
+    ) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      if (method !== "GET" && typeof init?.body === "string") {
+        writes.push({
+          url,
+          body: JSON.parse(init.body) as Record<string, unknown>,
+        });
+      }
+      if (method === "GET" && url.endsWith("/pulls/893")) {
+        return new Response(
+          JSON.stringify({
+            state: "open",
+            merged_at: null,
+            head: { sha: "stale893" },
+            base: { ref: "main" },
+          }),
+          { status: 200 }
+        );
+      }
+      if (
+        url.includes("/commits/stale893/check-runs") &&
+        url.includes("check_name=")
+      ) {
+        return new Response(
+          JSON.stringify({
+            check_runs: [
+              {
+                id: 777,
+                name: "pile-review",
+                status: "in_progress",
+                started_at: "2020-01-01T00:00:00Z",
+              },
+            ],
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.includes("/commits/stale893/check-runs")) {
+        return new Response(
+          JSON.stringify({
+            check_runs: [
+              {
+                id: 777,
+                name: "pile-review",
+                status: "in_progress",
+                started_at: "2020-01-01T00:00:00Z",
+              },
+              { name: "test", status: "completed", conclusion: "success" },
+            ],
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.includes("/contents/.pile/config.json")) {
+        return new Response(
+          JSON.stringify({
+            content: btoa(JSON.stringify({ review: { agent: agentId } })),
+            encoding: "base64",
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.includes("/pulls/893/files")) {
+        return new Response(
+          JSON.stringify([{ filename: "src/a.ts", patch: "@@ -1 +1 @@" }]),
+          { status: 200 }
+        );
+      }
+      if (method === "PATCH" && url.endsWith("/check-runs/777")) {
+        return new Response(JSON.stringify({ id: 777 }), { status: 200 });
+      }
+      if (method === "POST" && url.endsWith("/check-runs")) {
+        return new Response(JSON.stringify({ id: 600 }), { status: 201 });
+      }
+      return new Response("not found", { status: 404 });
+    };
+
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: ghFetchStale as typeof fetch,
+    });
+
+    // The orphaned run resolved neutral and a fresh lane + run took over.
+    const resolved = writes.find((w) => w.url.endsWith("/check-runs/777"));
+    expect(resolved?.body).toMatchObject({
+      status: "completed",
+      conclusion: "neutral",
+    });
+    const created = writes.find((w) => w.url.endsWith("/check-runs"));
+    expect(created?.body).toMatchObject({
+      name: "pile-review",
+      head_sha: "stale893",
+      status: "in_progress",
+    });
+    expect(dispatches).toHaveLength(1);
+    const reviewLane = (
+      await stub.listAgentSessions({ issueId: issue.id })
+    ).find((s) => s.purpose === REVIEW_PURPOSE);
+    expect(reviewLane).toBeDefined();
+    const laneEvents = await stub.listAgentSessionEvents(reviewLane!.id);
+    expect(laneEvents.some((e) => e.type === "review.requested")).toBe(true);
+  });
+
   // PILE-315 — the sweep's publish pass hands a terminal review lane's
   // verdict to the work lane: the review goes up as a real
   // pull_request_review and the lane gets a prompt.followup under the same

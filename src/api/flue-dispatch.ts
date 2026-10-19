@@ -1,11 +1,11 @@
 import { createRoute, OpenAPIHono, z } from "@hono/zod-openapi";
 
-import type { AppContext } from "../platform/middleware.js";
-import { getExecutionCtx } from "./execution-ctx.js";
+import { loadProviderConfig } from "../agents/credentials.js";
 import { dispatchAgent } from "../agents/index.js";
 import { VortexError } from "../platform/errors.js";
+import type { AppContext } from "../platform/middleware.js";
+import { getExecutionCtx } from "./execution-ctx.js";
 import { getWorkspaceStub } from "./stub.js";
-import { loadProviderConfig } from "../agents/credentials.js";
 
 // In-pile agent runtime — pile owns the agent. CfAgentProvider POSTs the
 // registry profile + conversationKey here; the durable conversation is an
@@ -126,8 +126,7 @@ export function registerFlueDispatchRoutes(app: OpenAPIHono<AppContext>) {
     // a pile lane on the executor provider (claude-cli by default — a real
     // headless run in the sandbox, not an external call).
     const executor =
-      body.profile?.providerAgentId &&
-      body.profile.providerAgentId !== "flue"
+      body.profile?.providerAgentId && body.profile.providerAgentId !== "flue"
         ? body.profile.providerAgentId
         : "devin-cli";
     const instructions = [

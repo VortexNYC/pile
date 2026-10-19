@@ -1,11 +1,11 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 
+import { hasAgentProvider } from "../agents/index.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 import { getWorkspaceStub } from "./stub.js";
-import { hasAgentProvider } from "../agents/index.js";
 
 const entityTypeSchema = z.enum(["issue", "deal", "customer"]);
 const params = z.object({ organizationId: z.string() });

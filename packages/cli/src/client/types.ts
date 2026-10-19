@@ -8846,7 +8846,51 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Get stage config */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Stage config */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            /** @enum {string} */
+                            entityType: "issue" | "deal" | "customer";
+                            status: string;
+                            ownerAgent: string | null;
+                            instructions: string | null;
+                            /** @enum {string} */
+                            advancePolicy: "none" | "auto" | "ready_flag";
+                            enabled: number;
+                            createdBy: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Stage config not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         put?: never;
         post?: never;
         /** Delete stage config */
@@ -8884,7 +8928,61 @@ export interface paths {
         };
         options?: never;
         head?: never;
-        patch?: never;
+        /** Update stage config */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        ownerAgent?: string | null;
+                        instructions?: string | null;
+                        /** @enum {string} */
+                        advancePolicy?: "none" | "auto" | "ready_flag";
+                        enabled?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Stage config updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            /** @enum {string} */
+                            entityType: "issue" | "deal" | "customer";
+                            status: string;
+                            ownerAgent: string | null;
+                            instructions: string | null;
+                            /** @enum {string} */
+                            advancePolicy: "none" | "auto" | "ready_flag";
+                            enabled: number;
+                            createdBy: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Stage config not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         trace?: never;
     };
     "/workspaces/{organizationId}/agent-types": {
@@ -8920,6 +9018,12 @@ export interface paths {
                                 name: string;
                                 providerAgentId: string;
                                 jobSpec: string | null;
+                                prompt: string | null;
+                                model: string | null;
+                                tools: string | null;
+                                kind: string;
+                                endpointUrl: string | null;
+                                hasEndpointSecret: boolean;
                                 toolScope: string | null;
                                 permissionsTier: string | null;
                                 enabled: number;
@@ -8950,6 +9054,14 @@ export interface paths {
                         name: string;
                         providerAgentId: string;
                         jobSpec?: string | null;
+                        prompt?: string | null;
+                        model?: string | null;
+                        tools?: string | null;
+                        /** @enum {string} */
+                        kind?: "agent" | "human" | "external";
+                        /** Format: uri */
+                        endpointUrl?: string | null;
+                        endpointSecret?: string | null;
                         toolScope?: string | null;
                         permissionsTier?: string | null;
                         enabled?: boolean;
@@ -8970,6 +9082,12 @@ export interface paths {
                             name: string;
                             providerAgentId: string;
                             jobSpec: string | null;
+                            prompt: string | null;
+                            model: string | null;
+                            tools: string | null;
+                            kind: string;
+                            endpointUrl: string | null;
+                            hasEndpointSecret: boolean;
                             toolScope: string | null;
                             permissionsTier: string | null;
                             enabled: number;
@@ -8994,7 +9112,56 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** Get agent type */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Agent type */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            slug: string;
+                            name: string;
+                            providerAgentId: string;
+                            jobSpec: string | null;
+                            prompt: string | null;
+                            model: string | null;
+                            tools: string | null;
+                            kind: string;
+                            endpointUrl: string | null;
+                            hasEndpointSecret: boolean;
+                            toolScope: string | null;
+                            permissionsTier: string | null;
+                            enabled: number;
+                            createdBy: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Agent type not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         put?: never;
         post?: never;
         /** Delete agent type */
@@ -9030,6 +9197,206 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        /** Update agent type */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        slug?: string;
+                        name?: string;
+                        providerAgentId?: string;
+                        /** @enum {string} */
+                        kind?: "agent" | "human" | "external";
+                        /** Format: uri */
+                        endpointUrl?: string | null;
+                        endpointSecret?: string | null;
+                        prompt?: string | null;
+                        model?: string | null;
+                        tools?: string | null;
+                        jobSpec?: string | null;
+                        toolScope?: string | null;
+                        permissionsTier?: string | null;
+                        enabled?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Agent type updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            slug: string;
+                            name: string;
+                            providerAgentId: string;
+                            jobSpec: string | null;
+                            prompt: string | null;
+                            model: string | null;
+                            tools: string | null;
+                            kind: string;
+                            endpointUrl: string | null;
+                            hasEndpointSecret: boolean;
+                            toolScope: string | null;
+                            permissionsTier: string | null;
+                            enabled: number;
+                            createdBy: string | null;
+                            createdAt: string;
+                            updatedAt: string;
+                        };
+                    };
+                };
+                /** @description Unknown providerAgentId */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Agent type not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/pipeline/lint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List pipeline lint */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Referential-integrity lint: agent types pointing at unknown providers, and stage templates/configs whose ownerAgent slug has no agent type */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            findings: {
+                                /** @enum {string} */
+                                kind: "unknown_provider" | "unresolved_owner_template" | "unresolved_owner_config";
+                                id: string;
+                                detail: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dispatch/pile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create dispatch pile */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        sessionId?: string;
+                        agent?: string;
+                        organizationId: string;
+                        issue: {
+                            id: string;
+                            identifier?: string | null;
+                            title: string;
+                            description?: string | null;
+                            repo?: string | null;
+                            branch?: string | null;
+                            status?: string;
+                            priority?: number | string;
+                            labelIds?: string[] | null;
+                        } & {
+                            [key: string]: unknown;
+                        };
+                        profile?: ({
+                            slug: string;
+                            name: string;
+                            jobSpec?: string | null;
+                            toolScope?: string | null;
+                            providerAgentId?: string | null;
+                            model?: string | null;
+                            prompt?: string | null;
+                        } & {
+                            [key: string]: unknown;
+                        }) | null;
+                        conversationKey?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Dispatch admitted — conversationId is the session id */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                            conversationId: string;
+                        };
+                    };
+                };
+                /** @description Invalid dispatch token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -17969,6 +18336,152 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/memory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List memory */
+        get: {
+            parameters: {
+                query?: {
+                    entityType?: string;
+                    entityId?: string;
+                    kind?: string;
+                    search?: string;
+                    limit?: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Workspace memory facts */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            memories: {
+                                id: string;
+                                entityType: string;
+                                entityId: string;
+                                kind: string;
+                                fact: string;
+                                sourceSessionId: string | null;
+                                sourceAgentSlug: string | null;
+                                validUntil: string | null;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create memory */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        entityType: string;
+                        entityId: string;
+                        kind: string;
+                        fact: string;
+                        validUntil?: string;
+                        sourceAgentSlug?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Memory written */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/agent/costs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List agent costs */
+        get: {
+            parameters: {
+                query?: {
+                    agentSlug?: string;
+                    since?: string;
+                    limit?: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Lane cost ledger — per-session compute durations */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            costs: {
+                                sessionId: string;
+                                agentSlug: string | null;
+                                issueId: string | null;
+                                provider: string | null;
+                                effort: string | null;
+                                status: string;
+                                createdAt: string;
+                                settledAt: string;
+                                durationMs: number;
+                                attempts: number;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/emojis": {
         parameters: {
             query?: never;
@@ -19155,6 +19668,56 @@ export interface paths {
         };
         trace?: never;
     };
+    "/workspaces/{organizationId}/customers/purge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create customer purge */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        sourcedBy?: string;
+                        sourceSession?: string;
+                        dryRun?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Purged agent-sourced customers */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            matched: number;
+                            deleted: number;
+                            ids: string[];
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/customers/{id}/attachments": {
         parameters: {
             query?: never;
@@ -19445,6 +20008,8 @@ export interface paths {
                                 id: string;
                                 organizationId: string;
                                 name: string;
+                                key: string | null;
+                                type: string;
                                 color: string | null;
                                 position: number;
                                 createdAt: string;
@@ -19469,6 +20034,9 @@ export interface paths {
                 content: {
                     "application/json": {
                         name: string;
+                        key?: string;
+                        /** @enum {string} */
+                        type?: "active" | "terminal";
                         color?: string;
                         position?: number;
                     };
@@ -19485,6 +20053,8 @@ export interface paths {
                             id: string;
                             organizationId: string;
                             name: string;
+                            key: string | null;
+                            type: string;
                             color: string | null;
                             position: number;
                             createdAt: string;
@@ -19529,6 +20099,8 @@ export interface paths {
                             id: string;
                             organizationId: string;
                             name: string;
+                            key: string | null;
+                            type: string;
                             color: string | null;
                             position: number;
                             createdAt: string;
@@ -19592,6 +20164,9 @@ export interface paths {
                 content: {
                     "application/json": {
                         name?: string;
+                        key?: string;
+                        /** @enum {string} */
+                        type?: "active" | "terminal";
                         color?: string;
                         position?: number;
                     };
@@ -19608,6 +20183,8 @@ export interface paths {
                             id: string;
                             organizationId: string;
                             name: string;
+                            key: string | null;
+                            type: string;
                             color: string | null;
                             position: number;
                             createdAt: string;
@@ -19655,6 +20232,8 @@ export interface paths {
                                 id: string;
                                 organizationId: string;
                                 name: string;
+                                key: string | null;
+                                type: string;
                                 color: string | null;
                                 position: number;
                                 createdAt: string;
@@ -19679,6 +20258,9 @@ export interface paths {
                 content: {
                     "application/json": {
                         name: string;
+                        key?: string;
+                        /** @enum {string} */
+                        type?: "active" | "terminal";
                         color?: string;
                         position?: number;
                     };
@@ -19695,6 +20277,8 @@ export interface paths {
                             id: string;
                             organizationId: string;
                             name: string;
+                            key: string | null;
+                            type: string;
                             color: string | null;
                             position: number;
                             createdAt: string;
@@ -19739,6 +20323,8 @@ export interface paths {
                             id: string;
                             organizationId: string;
                             name: string;
+                            key: string | null;
+                            type: string;
                             color: string | null;
                             position: number;
                             createdAt: string;
@@ -19802,6 +20388,9 @@ export interface paths {
                 content: {
                     "application/json": {
                         name?: string;
+                        key?: string;
+                        /** @enum {string} */
+                        type?: "active" | "terminal";
                         color?: string;
                         position?: number;
                     };
@@ -19818,6 +20407,8 @@ export interface paths {
                             id: string;
                             organizationId: string;
                             name: string;
+                            key: string | null;
+                            type: string;
                             color: string | null;
                             position: number;
                             createdAt: string;
