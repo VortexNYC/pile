@@ -350,3 +350,11 @@ describe("v98-v99 CRM sales model", () => {
     expect(sql).toContain("market_runs");
   });
 });
+
+describe("v100 merchant sources", () => {
+  it("creates merchant_sources + customer signal columns", () => {
+    const sql = workspaceMigrations.migrations.m0099;
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS merchant_sources");
+    expect(sql).toContain("signal_date");
+  });
+});

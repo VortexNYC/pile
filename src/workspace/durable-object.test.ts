@@ -3666,3 +3666,31 @@ describe("customer contacts (CRM)", () => {
     expect(out.different.id).not.toBe(out.a.id);
   });
 });
+
+describe("merchant sources (feed registry)", () => {
+  it("upserts + cursors a source through the DO", async () => {
+    const stub = getStub();
+    const out = await withWorkspace(stub, async (instance) => {
+      const src = instance.upsertMerchantSource({
+        name: "nys-sla-pending",
+        kind: "socrata",
+        config: { domain: "data.ny.gov", dataset: "f8i8-k2gm" },
+        cursorField: "received_date",
+        signal: "license_pending",
+      });
+      const dupe = instance.upsertMerchantSource({
+        name: "nys-sla-pending",
+        kind: "socrata",
+      });
+      instance.updateMerchantSource(src.id, {
+        cursorValue: "2026-10-19",
+      });
+      const list = instance.listMerchantSources({ enabledOnly: true });
+      return { src, dupe, list };
+    });
+    expect(out.dupe.id).toBe(out.src.id);
+    expect(
+      out.list.find((r) => r.id === out.src.id)?.cursorValue
+    ).toBe("2026-10-19");
+  });
+});

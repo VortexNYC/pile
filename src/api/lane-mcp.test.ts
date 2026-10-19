@@ -366,4 +366,27 @@ describe("lane MCP endpoint", () => {
       JSON.parse((await stub.getAgentSession(session.id))?.plan ?? "null")
     ).toEqual(plan);
   });
+
+  it("wires env into tool ctx — env-gated tools fail cleanly, not crash", async () => {
+    const lane = await registerLane("VortexNYC/pile");
+    const res = await mcp(
+      `/workspaces/${organizationId}/agent/sessions/${lane.session.id}/mcp`,
+      lane.laneToken,
+      {
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: { name: "deepseek_search", arguments: { query: "x" } },
+      }
+    );
+    // The wsCtx (env included) builds per call — a clean JSON-RPC response
+    // proves the context constructed, whatever the tool's own outcome.
+    expect(res.status).toBe(200);
+    const parsed = rpcResponse.parse(await res.json());
+    expect(parsed.result !== undefined || parsed.error !== undefined).toBe(
+      true
+    );
+    expect(JSON.stringify(parsed)).not.toContain("TypeError");
+  });
+
 });

@@ -19,6 +19,12 @@ binding = "ASSETS"
 run_worker_first = true
 
 [vars]
+FIRECRAWL_BASE_URL = "https://firecrawl.vortex.nyc"
+SCRAPLING_BASE_URL = "https://scrapling.vortex.nyc"
+BROWSERLESS_BASE_URL = "https://browserless.vortex.nyc"
+WAPPALYZER_BASE_URL = "https://fingerprint.vortex.nyc"
+LIGHTPANDA_BASE_URL = "https://lightpanda.vortex.nyc"
+OBSCURA_BASE_URL = "https://obscura.vortex.nyc"
 # Replace these with your Worker's real URL after the first deploy.
 # Placeholder must remain a syntactically valid URL (Better Auth validates it).
 BETTER_AUTH_URL = "https://pile.example.workers.dev"

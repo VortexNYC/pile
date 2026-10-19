@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { GITHUB_USER_AGENT } from "../global/github-auth.js";
+import { pullSource, scoreCandidate, type MerchantSourceRow } from "./collectors.js";
 import { sessionPlanSchema, type SessionPlan } from "./session-plan.js";
 
 // PILE-284 — purpose-built lane tool surface. Instead of handing a lane a raw
@@ -873,6 +874,28 @@ export interface LaneWorkspace {
     evidenceUri?: string | null;
   }): Promise<unknown>;
   listContacts(customerId: string): Promise<unknown>;
+  upsertMerchantSource(input: {
+    name: string;
+    kind: string;
+    config?: Record<string, unknown> | null;
+    cursorField?: string | null;
+    signal?: string;
+    cadence?: string;
+  }): Promise<unknown>;
+  listMerchantSources(args?: {
+    enabledOnly?: boolean;
+    kind?: string;
+  }): Promise<unknown>;
+  updateMerchantSource(
+    id: string,
+    patch: {
+      cursorValue?: string | null;
+      lastRunAt?: string;
+      runCount?: number;
+      enabled?: number;
+      config?: Record<string, unknown>;
+    }
+  ): Promise<unknown>;
   getCustomer(id: string): Promise<unknown>;
   getCustomerByDomain(domain: string): Promise<unknown>;
   getCustomerByExternalId(externalId: string): Promise<unknown>;
@@ -937,6 +960,7 @@ export interface LaneWorkspace {
 
 export interface WorkspaceLaneToolContext {
   ws: LaneWorkspace;
+  env?: Record<string, string | undefined>;
   organizationId: string;
   sessionId: string;
   /** The dispatch's issue — the merchant deal / pipeline step. */
@@ -1310,6 +1334,563 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
           limit: input.limit,
         }),
       };
+    },
+  }),
+  defineWorkspaceTool({
+    name: "firecrawl",
+    description:
+      "Firecrawl — search the web with scraped results, scrape a page to markdown, or extract structured data from URLs. Best for directories, merchant sites, contact pages — pages web_fetch can't read (JS-rendered, blocked).",
+    permission: "web:fetch",
+    inputSchema: z.object({
+      action: z.enum(["search", "scrape", "extract"]),
+      query: z.string().optional().describe("for search"),
+      url: z.string().url().optional().describe("for scrape"),
+      urls: z.array(z.string().url()).optional().describe("for extract"),
+      prompt: z
+        .string()
+        .optional()
+        .describe("what to extract — for extract"),
+      limit: z.number().optional(),
+    }),
+    async run(ctx, input) {
+      const key = ctx.env?.FIRECRAWL_API_KEY;
+      if (!key)
+        throw new LaneToolError("FIRECRAWL_API_KEY not configured");
+      const base =
+        ctx.env?.FIRECRAWL_BASE_URL ?? "https://api.firecrawl.dev";
+      const res = await fetch(`${base}/v1/${input.action}`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${key}`,
+        },
+        body: JSON.stringify(
+          input.action === "search"
+            ? { query: input.query, limit: input.limit ?? 5 }
+            : input.action === "scrape"
+              ? { url: input.url, formats: ["markdown"] }
+              : {
+                  urls: input.urls,
+                  prompt: input.prompt,
+                  enableWebSearch: false,
+                }
+        ),
+      });
+      if (!res.ok)
+        throw new LaneToolError(
+          `firecrawl ${input.action} failed: ${res.status}`
+        );
+      return res.json();
+    },
+  }),
+  defineWorkspaceTool({
+    name: "stealth_fetch",
+    description:
+      "Scrapling stealth scrape — JS-rendered or bot-protected pages (SoS registries, license lookups) that web_fetch and firecrawl can't reach. Returns page text.",
+    permission: "web:fetch",
+    inputSchema: z.object({ url: z.string().url() }),
+    async run(ctx, input) {
+      const base = ctx.env?.SCRAPLING_BASE_URL;
+      if (!base)
+        throw new LaneToolError("SCRAPLING_BASE_URL not configured");
+      const res = await fetch(`${base}/scrape`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": ctx.env?.SCRAPLING_API_KEY ?? "",
+        },
+        body: JSON.stringify({ url: input.url, mode: "stealth" }),
+      });
+      if (!res.ok)
+        throw new LaneToolError(`stealth_fetch failed: ${res.status}`);
+      const text = await res.text();
+      return { text: text.slice(0, 20000) };
+    },
+  }),
+  defineWorkspaceTool({
+    name: "browser_fetch",
+    description:
+      "Browserless headless browsing — two modes. url only: render the page and return content. script: run custom Puppeteer code against the page (multi-step navigation, form fills, pagination, click-throughs) — the script is the body of async ({ page, context }) => { ...return JSON data }, where context is { url }. Self-hosted Tinyfish equivalent.",
+    permission: "web:fetch",
+    inputSchema: z.object({
+      url: z.string().url(),
+      script: z
+        .string()
+        .optional()
+        .describe(
+          "Puppeteer code — the body of async ({ page, context }) => {...}; context = { url }. Return JSON-serializable data."
+        ),
+    }),
+    async run(ctx, input) {
+      const base = ctx.env?.BROWSERLESS_BASE_URL;
+      const token = ctx.env?.BROWSERLESS_TOKEN;
+      if (!base || !token)
+        throw new LaneToolError("BROWSERLESS_* not configured");
+      if (input.script) {
+        const endpoint = new URL(`${base}/function`);
+        endpoint.searchParams.set("token", token);
+        const res = await fetch(endpoint.href, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            code: `module.exports = async ({ page, context }) => { ${input.script} }`,
+            context: { url: input.url },
+          }),
+        });
+        if (!res.ok)
+          throw new LaneToolError(
+            `browser_fetch /function failed: ${res.status}`
+          );
+        const data: unknown = await res.json().catch(() => null);
+        return { data };
+      }
+      const endpoint = new URL(`${base}/content`);
+      endpoint.searchParams.set("token", token);
+      const res = await fetch(endpoint.href, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url: input.url }),
+      });
+      if (!res.ok)
+        throw new LaneToolError(`browser_fetch failed: ${res.status}`);
+      const text = await res.text();
+      return { text: text.slice(0, 20000) };
+    },
+  }),
+  defineWorkspaceTool({
+    name: "light_fetch",
+    description:
+      "Lightpanda — lightweight headless browser (~10x lighter than Chrome). Renders JS pages to DOM. Use for JS-rendered merchant pages before spending the heavy browserless tier.",
+    permission: "web:fetch",
+    inputSchema: z.object({ url: z.string().url() }),
+    async run(ctx, input) {
+      const base = ctx.env?.LIGHTPANDA_BASE_URL;
+      if (!base)
+        throw new LaneToolError("LIGHTPANDA_BASE_URL not configured");
+      const res = await fetch(`${base}/fetch`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url: input.url }),
+      });
+      if (!res.ok)
+        throw new LaneToolError(`light_fetch failed: ${res.status}`);
+      return res.json();
+    },
+  }),
+  defineWorkspaceTool({
+    name: "obscura_fetch",
+    description:
+      "Obscura — lightweight stealth browser (Rust+V8, spoofs full Windows Chrome fingerprint). JS-rendered pages that check for automation: webdriver=false, real plugins, Chrome UA. Cheaper than the patchright tier for most protected pages.",
+    permission: "web:fetch",
+    inputSchema: z.object({ url: z.string().url() }),
+    async run(ctx, input) {
+      const base = ctx.env?.OBSCURA_BASE_URL;
+      if (!base)
+        throw new LaneToolError("OBSCURA_BASE_URL not configured");
+      const res = await fetch(`${base}/fetch`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url: input.url }),
+      });
+      if (!res.ok)
+        throw new LaneToolError(`obscura_fetch failed: ${res.status}`);
+      return res.json();
+    },
+  }),
+  defineWorkspaceTool({
+    name: "browse",
+    description:
+      "Interactive browser session (obscura stealth engine). Drives pages: navigate, click, type, press, wait, extract, eval, screenshot. Use for forms, registries, pagination — anything needing a real browser session. Create a session first, chain ops, close when done.",
+    permission: "web:fetch",
+    inputSchema: z.object({
+      op: z.enum([
+        "create",
+        "navigate",
+        "click",
+        "type",
+        "press",
+        "wait",
+        "extract",
+        "eval",
+        "screenshot",
+        "close",
+      ]),
+      sessionId: z.string().optional(),
+      url: z.string().optional(),
+      selector: z.string().optional(),
+      text: z.string().optional(),
+      key: z.string().optional(),
+      keyCode: z.number().optional(),
+      waitMs: z.number().optional(),
+      ms: z.number().optional(),
+      expression: z.string().optional(),
+    }),
+    async run(ctx, input) {
+      const base = ctx.env?.BROWSE_BASE_URL;
+      if (!base) throw new LaneToolError("BROWSE_BASE_URL not configured");
+      if (input.op === "create") {
+        const r = await fetch(`${base}/session`, { method: "POST" });
+        if (!r.ok) throw new LaneToolError(`browse create failed: ${r.status}`);
+        return r.json();
+      }
+      const sid = input.sessionId;
+      if (!sid) throw new LaneToolError("sessionId required");
+      if (input.op === "close") {
+        const r = await fetch(`${base}/session/${sid}`, { method: "DELETE" });
+        if (!r.ok) throw new LaneToolError(`browse close failed: ${r.status}`);
+        return r.json();
+      }
+      const body: Record<string, unknown> = {};
+      for (const k of ["url","selector","text","key","keyCode","waitMs","ms","expression"] as const)
+        if (input[k] !== undefined) body[k] = input[k];
+      const r = await fetch(`${base}/session/${sid}/${input.op}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) throw new LaneToolError(`browse ${input.op} failed: ${r.status}`);
+      return r.json();
+    },
+  }),
+  defineWorkspaceTool({
+    name: "socrata_query",
+    description:
+      "Socrata open-data query — NYC inspections, licenses, permits, business records. dataset_id + optional SoQL filters. E.g. 43nn-pn8j = NYC DOHMH restaurant inspections.",
+    permission: "web:fetch",
+    inputSchema: z.object({
+      dataset: z.string().min(1),
+      domain: z.string().optional().default("data.cityofnewyork.us"),
+      where: z.string().optional(),
+      select: z.string().optional(),
+      limit: z.number().optional(),
+    }),
+    async run(ctx, input) {
+      const params = new URLSearchParams();
+      params.set("$limit", String(input.limit ?? 25));
+      if (input.where) params.set("$where", input.where);
+      if (input.select) params.set("$select", input.select);
+      const appToken = ctx.env?.SOCRATA_APP_TOKEN;
+      const headers: Record<string, string> = {};
+      if (appToken) headers["X-App-Token"] = appToken;
+      const res = await fetch(
+        `https://${input.domain}/resource/${input.dataset}.json?${params}`,
+        { headers }
+      );
+      if (!res.ok)
+        throw new LaneToolError(`socrata failed: ${res.status}`);
+      return { rows: await res.json() };
+    },
+  }),
+  defineWorkspaceTool({
+    name: "wayback",
+    description:
+      "Wayback Machine — site history: first/last snapshot, how long a merchant has been online, old prices/menus (migration + pain signals). Free, no key.",
+    permission: "web:fetch",
+    inputSchema: z.object({
+      url: z.string().url(),
+      mode: z.enum(["availability", "snapshots"]).optional().default("availability"),
+      limit: z.number().optional(),
+    }),
+    async run(ctx, input) {
+      if (input.mode === "availability") {
+        const res = await fetch(
+          `https://archive.org/wayback/available?url=${encodeURIComponent(input.url)}`
+        );
+        if (!res.ok) throw new LaneToolError(`wayback failed: ${res.status}`);
+        return res.json();
+      }
+      const res = await fetch(
+        `https://web.archive.org/cdx/search/cdx?url=${encodeURIComponent(input.url)}&output=json&limit=${input.limit ?? 10}&filter=statuscode:200&fl=timestamp,original,statuscode&collapse=timestamp:6`
+      );
+      if (!res.ok) throw new LaneToolError(`wayback failed: ${res.status}`);
+      return { snapshots: await res.json() };
+    },
+  }),
+  defineWorkspaceTool({
+    name: "serper_search",
+    description:
+      "Serper — Google SERP results as JSON (~$1/1k). What a human searching sees: reviews sites, directories, 'who owns X' answers.",
+    permission: "web:fetch",
+    inputSchema: z.object({
+      query: z.string().min(1),
+      limit: z.number().optional(),
+    }),
+    async run(ctx, input) {
+      const key = ctx.env?.SERPER_API_KEY;
+      if (!key) throw new LaneToolError("SERPER_API_KEY not configured");
+      const res = await fetch("https://google.serper.dev/search", {
+        method: "POST",
+        headers: { "content-type": "application/json", "X-API-KEY": key },
+        body: JSON.stringify({ q: input.query, num: input.limit ?? 10 }),
+      });
+      if (!res.ok) throw new LaneToolError(`serper failed: ${res.status}`);
+      return res.json();
+    },
+  }),
+  defineWorkspaceTool({
+    name: "usaspending",
+    description:
+      "USAspending API — federal award data. Find SMBs winning government contracts: recipient names, amounts, agencies, NAICS codes, state. mode='recipients' lists top vendors in a NAICS/location; mode='awards' lists actual award records. Free, no key.",
+    permission: "web:fetch",
+    inputSchema: z.object({
+      mode: z.enum(["recipients", "awards"]).default("recipients"),
+      naics: z
+        .array(z.string())
+        .optional()
+        .describe("NAICS codes to filter, e.g. ['541611','236220']"),
+      state: z.string().optional().describe("2-letter state code"),
+      keyword: z.string().optional(),
+      limit: z.number().optional(),
+    }),
+    async run(ctx, input) {
+      const body: Record<string, unknown> = {
+        filters: {},
+        limit: input.limit ?? 25,
+      };
+      const filters = body.filters as Record<string, unknown>;
+      if (input.naics?.length) filters.naics_codes = { require: input.naics };
+      if (input.state)
+        filters.recipient_locations = [{ state: input.state, country: "USA" }];
+      if (input.keyword) filters.recipient_search_text = [input.keyword];
+      const url =
+        input.mode === "recipients"
+          ? "https://api.usaspending.gov/api/v2/recipient/"
+          : "https://api.usaspending.gov/api/v2/search/spending_by_award/";
+      if (input.mode === "awards")
+        filters.award_type_codes = ["A", "B", "C", "D"];
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok)
+        throw new LaneToolError(`usaspending failed: ${res.status}`);
+      return res.json();
+    },
+  }),
+  defineWorkspaceTool({
+    name: "sam_entities",
+    description:
+      "SAM.gov Entity API — registered federal vendors: UEI, CAGE, legal name, certifications (8a, HUBZone, WOSB, SDVOSB), NAICS, address. The federal vendor registry. Needs SAM_API_KEY (free from sam.gov).",
+    permission: "web:fetch",
+    inputSchema: z.object({
+      keyword: z.string().optional(),
+      naics: z.string().optional(),
+      state: z.string().optional(),
+      purposeOfRegistrationCode: z
+        .string()
+        .optional()
+        .describe("Z1=awards/grants"),
+      limit: z.number().optional(),
+    }),
+    async run(ctx, input) {
+      const key = ctx.env?.SAM_API_KEY;
+      if (!key) throw new LaneToolError("SAM_API_KEY not configured");
+      const params = new URLSearchParams({ api_key: key });
+      if (input.keyword) params.set("legalBusinessName", input.keyword);
+      if (input.naics) params.set("naicsCode", input.naics);
+      if (input.state) params.set("physicalAddressStateOrProvinceCode", input.state);
+      if (input.purposeOfRegistrationCode)
+        params.set("purposeOfRegistrationCode", input.purposeOfRegistrationCode);
+      const res = await fetch(
+        `https://api.sam.gov/entity-information/v3/entities?${params}`
+      );
+      if (!res.ok) throw new LaneToolError(`sam failed: ${res.status}`);
+      return res.json();
+    },
+  }),
+  defineWorkspaceTool({
+    name: "source_add",
+    description:
+      "Register a merchant source — a feed that produces candidates on a schedule (Socrata datasets, usaspending, SAM, OpenCorporates). Add the feed once; collect_source pulls deltas later.",
+    permission: "ws:write",
+    inputSchema: z.object({
+      name: z.string().min(1),
+      kind: z.enum(["socrata", "usaspending", "sam", "opencorporates"]),
+      config: z.record(z.string(), z.unknown()).optional(),
+      cursorField: z.string().optional(),
+      signal: z
+        .enum([
+          "license_pending",
+          "corp_filing",
+          "award",
+          "violation",
+          "contact_found",
+          "registration",
+        ])
+        .optional(),
+      cadence: z.enum(["daily", "weekly"]).optional(),
+    }),
+    async run(ctx, input) {
+      return ctx.ws.upsertMerchantSource({
+        name: input.name,
+        kind: input.kind,
+        config: input.config ?? {},
+        cursorField: input.cursorField ?? null,
+        signal: input.signal ?? "registration",
+        cadence: input.cadence ?? "daily",
+      });
+    },
+  }),
+  defineWorkspaceTool({
+    name: "source_list",
+    description: "List registered merchant sources — the feed registry.",
+    permission: "ws:read",
+    inputSchema: z.object({
+      enabledOnly: z.boolean().optional(),
+      kind: z.string().optional(),
+    }),
+    async run(ctx, input) {
+      return ctx.ws.listMerchantSources({
+        enabledOnly: input.enabledOnly,
+        kind: input.kind,
+      });
+    },
+  }),
+  defineWorkspaceTool({
+    name: "source_collect",
+    description:
+      "Pull a merchant source — fetches new rows since its cursor, normalizes them into customer candidates, scores them, upserts into the CRM (deduped by external_id). The intake firehose: run per source or for all enabled feeds.",
+    permission: "ws:write",
+    inputSchema: z.object({
+      sourceId: z.string().optional(),
+      all: z.boolean().optional(),
+      limit: z.number().optional(),
+    }),
+    async run(ctx, input) {
+      const rows = (await ctx.ws.listMerchantSources({
+        enabledOnly: true,
+      })) as unknown as MerchantSourceRow[];
+      const targets = input.sourceId
+        ? rows.filter((r) => r.id === input.sourceId)
+        : rows;
+      if (!targets.length)
+        return { collected: 0, note: "no enabled sources matched" };
+      const run = (await ctx.ws.createMarketRun({
+        vertical: "merchant-sources",
+        geo: "multi",
+        source: "collect",
+        sourceQuery: input.sourceId ?? "all",
+        createdBySlug: ctx.agentSlug,
+        sourceSessionId: ctx.sessionId,
+      })) as { id?: string };
+      const runId = run?.id ?? null;
+      let produced = 0;
+      const perSource: { name: string; candidates: number }[] = [];
+      for (const source of targets.slice(0, input.limit ?? 25)) {
+        try {
+          const { candidates, newCursor } = await pullSource(source, ctx.env);
+          for (const c of candidates) {
+            await ctx.ws.createCustomer({
+              name: c.name,
+              externalId: c.externalId,
+              domain: c.domain,
+              address: c.address,
+              vertical: c.vertical,
+              source: `source:${source.name}`,
+              sourceAgentSlug: ctx.agentSlug,
+              sourceSessionId: ctx.sessionId,
+              signal: c.signal,
+              signalDate: c.signalDate,
+              evidenceUri: c.evidenceUri,
+              priorityScore: scoreCandidate(c),
+            });
+            produced++;
+          }
+          await ctx.ws.updateMerchantSource(source.id, {
+            cursorValue: newCursor ?? source.cursorValue,
+            lastRunAt: new Date().toISOString(),
+            runCount: (candidates.length > 0 ? 1 : 0) + produced,
+          });
+          perSource.push({ name: source.name, candidates: candidates.length });
+        } catch (e) {
+          perSource.push({ name: source.name, candidates: -1 });
+        }
+      }
+      if (runId)
+        await ctx.ws.updateMarketRun(runId, {
+          producedCount: produced,
+          status: "completed",
+        });
+      return { collected: produced, sources: perSource, runId };
+    },
+  }),
+  defineWorkspaceTool({
+    name: "deepseek_search",
+    description:
+      "DeepSeek web search — cheap merchant discovery (~$0.75/1k). Returns ranked results with snippets for a query.",
+    permission: "web:fetch",
+    inputSchema: z.object({
+      query: z.string().min(1),
+      limit: z.number().optional(),
+    }),
+    async run(ctx, input) {
+      const key = ctx.env?.DEEPSEEK_API_KEY;
+      if (!key) throw new LaneToolError("DEEPSEEK_API_KEY not configured");
+      const res = await fetch("https://api.deepseek.com/v1/search", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${key}`,
+        },
+        body: JSON.stringify({
+          query: input.query,
+          limit: input.limit ?? 10,
+        }),
+      });
+      if (!res.ok)
+        throw new LaneToolError(`deepseek failed: ${res.status}`);
+      return res.json();
+    },
+  }),
+  defineWorkspaceTool({
+    name: "opencorporates",
+    description:
+      "OpenCorporates business registry — officer names, entity status, filings for a company name + jurisdiction. Free tier.",
+    permission: "web:fetch",
+    inputSchema: z.object({
+      query: z.string().min(1),
+      jurisdiction: z.string().optional(),
+      limit: z.number().optional(),
+    }),
+    async run(ctx, input) {
+      const params = new URLSearchParams({
+        q: input.query,
+        format: "json",
+        per_page: String(input.limit ?? 20),
+        order: "score",
+      });
+      if (input.jurisdiction)
+        params.set("jurisdiction_code", input.jurisdiction);
+      if (ctx.env?.OPENCORPORATES_API_KEY)
+        params.set("api_token", ctx.env.OPENCORPORATES_API_KEY);
+      const res = await fetch(
+        `https://api.opencorporates.com/v0.4/companies/search?${params}`
+      );
+      if (!res.ok)
+        throw new LaneToolError(`opencorporates failed: ${res.status}`);
+      return res.json();
+    },
+  }),
+  defineWorkspaceTool({
+    name: "tech_fingerprint",
+    description:
+      "Technology fingerprint — detect a merchant site's POS/ecommerce/CMS stack (Toast, Square, Shopify, Stripe…) via the self-hosted signature service. The ICP-gate call.",
+    permission: "web:fetch",
+    inputSchema: z.object({
+      url: z.string().url(),
+    }),
+    async run(ctx, input) {
+      const base = ctx.env?.WAPPALYZER_BASE_URL;
+      if (!base) throw new LaneToolError("WAPPALYZER_BASE_URL not configured");
+      const res = await fetch(`${base}/fingerprint`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url: input.url }),
+      });
+      if (!res.ok)
+        throw new LaneToolError(`fingerprint failed: ${res.status}`);
+      return res.json();
     },
   }),
   defineWorkspaceTool({
