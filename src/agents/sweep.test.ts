@@ -323,6 +323,27 @@ async function ghFetchReviewCheck(input: RequestInfo | URL) {
   return new Response("not found", { status: 404 });
 }
 
+// PILE-446 / VOR-738: PR 212 merges while a fix lane is still in flight.
+async function ghFetchMerge(input: RequestInfo | URL) {
+  const url = String(input);
+  if (url.endsWith("/pulls/212")) {
+    return new Response(
+      JSON.stringify({
+        state: "closed",
+        merged_at: "2026-10-19T12:00:00Z",
+        head: { sha: "race123", ref: "merge-race-branch" },
+      }),
+      { status: 200 }
+    );
+  }
+  if (url.includes("/commits/race123/check-runs")) {
+    return new Response(JSON.stringify({ check_runs: [] }), {
+      status: 200,
+    });
+  }
+  return new Response("not found", { status: 404 });
+}
+
 // PILE-251 fixtures: PR 890 conflicts only on files the repo declares as
 // generated; PR 891 conflicts on a real source file too.
 const GENERATED_CONFLICT_FILES = [
@@ -2085,6 +2106,52 @@ describe("syncOpenPrSessions", () => {
     expect(issueAfter?.prState).toBe("merged");
     expect(issueAfter?.prCheckState).toBe("passing");
     expect(issueAfter?.status).toBe("done");
+  });
+
+  // PILE-446 — the VOR-738 race: a lane fixing review feedback in flight
+  // when its PR merges must be canceled, not left to push a deleted branch.
+  it("cancels in-flight lanes bound to a PR that merged", async () => {
+    const prUrl = "https://github.com/vortexnyc/pile/pull/212";
+    const issue = await stub.createIssue({
+      title: "Merge race",
+      repo: "vortexnyc/pile",
+      branch: "merge-race-branch",
+    });
+    const mk = (
+      over: Omit<
+        Parameters<typeof stub.createAgentSession>[0],
+        "issueId" | "agentId" | "provider" | "actorId" | "actorType"
+      >
+    ) =>
+      stub.createAgentSession({
+        issueId: issue.id,
+        agentId: "mock-mc",
+        provider: "mock-mc",
+        actorId: userId,
+        actorType: "user",
+        ...over,
+      });
+    // Terminal lane that reported the PR (the reconcile candidate).
+    const done = await mk({ status: "completed", prUrl, prState: "open" });
+    // In-flight fix lane bound by prUrl — the VOR-738 case.
+    const fix = await mk({ status: "running", prUrl, prState: "open" });
+    // Just-dispatched lane: nothing reported yet, bound via issue.branch.
+    const fresh = await mk({ status: "created" });
+    // A review side lane is not the PR's worker — it survives.
+    const reviewer = await mk({ status: "running", purpose: "review" });
+
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: ghFetchMerge as typeof fetch,
+    });
+
+    expect((await stub.getAgentSession(fix.id))?.status).toBe("canceled");
+    expect((await stub.getAgentSession(fix.id))?.infraFailure).toBe(0);
+    expect((await stub.getAgentSession(fresh.id))?.status).toBe("canceled");
+    expect((await stub.getAgentSession(reviewer.id))?.status).toBe("running");
+    expect((await stub.getAgentSession(done.id))?.status).toBe("completed");
+    const events = await stub.listAgentSessionEvents(fix.id);
+    expect(events.some((e) => e.type === "pr.merge_cancel")).toBe(true);
   });
 
   it("does not read a pile-review verdict as CI state (PILE-273)", async () => {

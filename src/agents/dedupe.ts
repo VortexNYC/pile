@@ -6,14 +6,16 @@ import type {
   Issue,
 } from "../types/workspace.js";
 
-// PILE-214 — pre-dispatch dedupe. Advisory on file-surface collisions, hard on
-// open-PR coverage: an open PR that already names this issue's identifier and
-// has no live session is a hard block (duplicate work), while a PR owned by a
-// live sibling lane parks the new session behind it via queuedAfter.
+// PILE-214 — pre-dispatch dedupe. Advisory on file-surface collisions; an open
+// PR that already names this issue's identifier and is owned by a live sibling
+// lane parks the new session behind it via queuedAfter.
 // PILE-249 — the block lifts when the covering PR still has unresolved review
 // feedback (a reviewer's latest decision is CHANGES_REQUESTED): the lane has
 // real work left, so a retry must be able to spin a session back up on the
 // same branch instead of dead-ending here.
+// PILE-446 — an open covering PR with no live session is no longer a hard
+// block: dispatch becomes a continuation on the PR's head branch (resolve
+// conflicts, address review) instead of refusing with CONFLICT.
 
 const GITHUB_PULLS_RE = /^([^/]+)\/([^/]+)$/;
 
@@ -50,10 +52,21 @@ export interface DedupeCollision {
   files: string[];
 }
 
+/** An open PR that covers the issue with no live session — the dispatch
+ *  continues on its head branch instead of refusing (PILE-446). */
+export interface DedupeContinuation {
+  prUrl: string;
+  prNumber: number;
+  /** The covering PR's head branch — the continuation lane's working branch. */
+  headRef: string;
+  /** The PR carries unresolved CHANGES_REQUESTED feedback. */
+  changesRequested: boolean;
+}
+
 export interface DedupeResult {
   coverage: DedupeCoverage[];
   collisions: DedupeCollision[];
-  hardBlock: { reason: string; prUrl: string } | null;
+  continuation: DedupeContinuation | null;
   queueAfter: string | null;
 }
 
@@ -143,7 +156,7 @@ export async function checkDispatchDedupe(
   const result: DedupeResult = {
     coverage: [],
     collisions: [],
-    hardBlock: null,
+    continuation: null,
     queueAfter: null,
   };
   if (!issue.repo) return result;
@@ -216,17 +229,20 @@ export async function checkDispatchDedupe(
     )
   );
   for (const { pull, entry } of needsReviews) {
-    // PILE-249 — before hard-blocking, check whether the covering PR still
-    // has work: unresolved CHANGES_REQUESTED means a new session should
-    // resume the lane branch, not dead-end on "PR already covers issue".
+    // PILE-249/446 — the reviews probe still runs: unresolved
+    // CHANGES_REQUESTED both flags the coverage entry and tells the
+    // continuation lane it has review work queued. Either way the open PR
+    // is now a continuation target, not a refusal — a dead lane's PR must
+    // be resumable instead of dead-ending every dispatch/retry.
     const reviews = reviewsByNumber.get(pull.number);
     if (Array.isArray(reviews) && hasOutstandingChangeRequests(reviews)) {
       entry.changesRequested = true;
-      continue;
     }
-    result.hardBlock = {
-      reason: `Open PR ${pull.html_url} already covers ${identifier ?? issue.title} with no live session`,
+    result.continuation ??= {
       prUrl: pull.html_url,
+      prNumber: pull.number,
+      headRef: pull.head.ref,
+      changesRequested: entry.changesRequested === true,
     };
   }
 
