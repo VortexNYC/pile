@@ -438,3 +438,35 @@ describe("CloudflareBackend lane cache mount (PILE-306)", () => {
     warn.mockRestore();
   });
 });
+
+describe("Daytona hardening (PILE-472)", () => {
+  it("findSandbox paginates until the session's sandbox surfaces", async () => {
+    const { DaytonaBackend } = await import("./compute.js");
+    const calls: string[] = [];
+    const pages = [
+      [{ id: "other-1", name: "a", state: "started", labels: {} }],
+      [{ id: "mine", name: "x", state: "started", labels: { "vortex.session": "sess-1" } }],
+      [],
+    ];
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      calls.push(String(input));
+      const page = calls.length - 1;
+      return new Response(JSON.stringify({ items: pages[page] ?? [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as typeof fetch;
+    try {
+      const backend = new DaytonaBackend(
+        {} as never,
+        { apiKey: "k", apiUrl: "https://day" }
+      );
+      const found = await backend.findSandbox("sess-1", "x");
+      expect(found?.id).toBe("mine");
+      expect(calls.length).toBe(2);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+});
