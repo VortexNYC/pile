@@ -668,8 +668,35 @@ async function handleSubstepReview(
   if (!issue) return;
   const reviewer = await resolveOwner(stub, "reviewer");
   const target = reviewer && reviewer.kind !== "human" ? reviewer : null;
-  const agentId = target?.agentId ?? "devin-cli";
   const parent = await stub.getIssue(payload.parentId);
+  // PILE-443 — an external reviewer (chief_of_staff kind="external") gets
+  // the ready-for-review event POSTed to its endpoint instead of an
+  // internal lane; before this, worker completions silently never woke it.
+  if (target?.kind === "external") {
+    if (!target.endpointUrl) return;
+    await dispatchExternal(
+      env,
+      target,
+      {
+        event: "substep.ready_for_review",
+        organizationId,
+        issue: {
+          id: issue.id,
+          identifier: issue.identifier ?? null,
+          title: issue.title,
+        },
+        substep: {
+          stepKey: issue.stepKey ?? null,
+          parentId: payload.parentId,
+          parentIdentifier: parent?.identifier ?? null,
+          parentTitle: parent?.title ?? null,
+        },
+      },
+      ctx
+    );
+    return;
+  }
+  const agentId = target?.agentId ?? "devin-cli";
   const instructions = [
     target?.jobSpec ??
       "You are the reviewer. Evaluate the completed sub-step's output against its task: is it correct, complete, and ready to hand to the next step?",
