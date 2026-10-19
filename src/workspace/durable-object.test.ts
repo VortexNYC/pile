@@ -3791,3 +3791,33 @@ describe("space permissions via DO (PILE-447)", () => {
     expect(out.revoked).toBe(true);
   });
 });
+
+describe("session terminal guard (PILE-467)", () => {
+  it("a canceled session stays canceled when a late poll result lands", async () => {
+    const stub = getStub();
+    const out = await withWorkspace(stub, async (instance) => {
+      const issue = await instance.createIssue({
+        title: "cancel stays",
+        status: "in_progress",
+      });
+      const session = await instance.createAgentSession({
+        agentId: "devin-cli",
+        issueId: issue.id,
+        status: "created",
+        provider: "devin-cli",
+        actorId: "u1",
+        actorType: "user",
+      });
+      // operator cancels mid-provision
+      await instance.applyAgentSessionResult(session.id, {
+        status: "canceled",
+      });
+      // a stale poll lands 'created' — must not resurrect
+      const updated = await instance.applyAgentSessionResult(session.id, {
+        status: "created",
+      });
+      return { session, updated };
+    });
+    expect(out.updated?.status).toBe("canceled");
+  });
+});
