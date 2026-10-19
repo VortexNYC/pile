@@ -1611,6 +1611,31 @@ const putStoreObject = async (
   return cacheJson({ ok: true });
 };
 
+// Lane-token routes die with the session (PILE-457): once a session resolves
+// to a terminal state the bearer minted for it stops working, matching the
+// /logs, /report, /github-token and /mcp handlers. Returns the error
+// response to send, or null when the session is live.
+const verifyLiveLaneSession = async (
+  env: WorkerEnv,
+  authorization: string | undefined,
+  organizationId: string,
+  sessionId: string
+): Promise<Response | null> => {
+  if (
+    !(await verifySessionToken(env, authorization, organizationId, sessionId))
+  ) {
+    return cacheJson({ message: "Unauthorized" }, 401);
+  }
+  const session = await getWorkspaceStub(env, organizationId).getAgentSession(
+    sessionId
+  );
+  if (!session) return cacheJson({ message: "Session not found" }, 404);
+  if (["completed", "failed", "canceled"].includes(session.status)) {
+    return cacheJson({ message: "Session is terminal" }, 409);
+  }
+  return null;
+};
+
 export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(registerSessionRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
@@ -2693,16 +2718,13 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       if (!/^[a-f0-9]{64}$/.test(hash)) {
         return c.json({ message: "Invalid hash" }, 400);
       }
-      if (
-        !(await verifySessionToken(
-          c.env,
-          c.req.header("authorization"),
-          organizationId,
-          sessionId
-        ))
-      ) {
-        return c.json({ message: "Unauthorized" }, 401);
-      }
+      const denied = await verifyLiveLaneSession(
+        c.env,
+        c.req.header("authorization"),
+        organizationId,
+        sessionId
+      );
+      if (denied) return denied;
       // Multipart store: manifest lists ordered parts; parts are concatenated
       // on the way out. Falls back to a single-shot object for small stores.
       const bucket = c.env.ATTACHMENTS_BUCKET;
@@ -2744,16 +2766,13 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       if (!/^[a-f0-9]{64}$/.test(hash)) {
         return c.json({ message: "Invalid hash" }, 400);
       }
-      if (
-        !(await verifySessionToken(
-          c.env,
-          c.req.header("authorization"),
-          organizationId,
-          sessionId
-        ))
-      ) {
-        return c.json({ message: "Unauthorized" }, 401);
-      }
+      const denied = await verifyLiveLaneSession(
+        c.env,
+        c.req.header("authorization"),
+        organizationId,
+        sessionId
+      );
+      if (denied) return denied;
       return putStoreObject(
         c.env,
         c.req.raw,
@@ -2769,16 +2788,13 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       if (!/^[a-f0-9]{64}$/.test(hash) || !/^\d{1,3}$/.test(index)) {
         return c.json({ message: "Invalid key" }, 400);
       }
-      if (
-        !(await verifySessionToken(
-          c.env,
-          c.req.header("authorization"),
-          organizationId,
-          sessionId
-        ))
-      ) {
-        return c.json({ message: "Unauthorized" }, 401);
-      }
+      const denied = await verifyLiveLaneSession(
+        c.env,
+        c.req.header("authorization"),
+        organizationId,
+        sessionId
+      );
+      if (denied) return denied;
       return putStoreObject(
         c.env,
         c.req.raw,
@@ -2794,16 +2810,13 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       if (!/^[a-f0-9]{64}$/.test(hash)) {
         return c.json({ message: "Invalid hash" }, 400);
       }
-      if (
-        !(await verifySessionToken(
-          c.env,
-          c.req.header("authorization"),
-          organizationId,
-          sessionId
-        ))
-      ) {
-        return c.json({ message: "Unauthorized" }, 401);
-      }
+      const denied = await verifyLiveLaneSession(
+        c.env,
+        c.req.header("authorization"),
+        organizationId,
+        sessionId
+      );
+      if (denied) return denied;
       const body: unknown = await c.req.json().catch(() => null);
       const parts =
         body !== null &&
