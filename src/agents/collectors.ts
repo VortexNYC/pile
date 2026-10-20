@@ -10,6 +10,7 @@ export interface MerchantSourceRow {
   cursorField: string | null;
   cursorValue: string | null;
   signal: string;
+  runCount: number;
 }
 
 export interface MerchantCandidate {
@@ -31,6 +32,28 @@ const SIGNAL_WEIGHT: Record<string, number> = {
   contact_found: 0.6,
   registration: 0.3,
 };
+
+/** SSRF guard for lane-reachable fetch paths — loopback, RFC1918,
+ *  link-local (cloud metadata), and IPv6 local addresses are never
+ *  valid feed endpoints. Lane-writable source configs and tool inputs
+ *  build URLs from user-controlled hosts, so every such path checks. */
+export const BLOCKED_HOSTS =
+  /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|[[f]|[0:]+$)/i;
+
+export function assertPublicHost(hostname: string): void {
+  // Parse before testing — inputs like "legit.com@127.0.0.1" pass a
+  // raw-string check while the URL's real host is the blocked one.
+  let host: string;
+  try {
+    host = new URL(hostname.includes("://") ? hostname : `https://${hostname}`)
+      .hostname;
+  } catch {
+    throw new Error("https public hosts only");
+  }
+  if (BLOCKED_HOSTS.test(host)) {
+    throw new Error("https public hosts only");
+  }
+}
 
 export function scoreCandidate(c: MerchantCandidate): number {
   const w = SIGNAL_WEIGHT[c.signal] ?? 0.4;
@@ -58,14 +81,21 @@ async function pullSocrata(
 ): Promise<{ candidates: MerchantCandidate[]; newCursor: string | null }> {
   const c = cfg(source);
   const domain = str(c.domain) ?? "data.ny.gov";
+  assertPublicHost(domain);
   const dataset = str(c.dataset);
   if (!dataset) throw new Error("socrata source missing dataset");
   const params = new URLSearchParams({ $limit: "500" });
   if (source.cursorField) {
+    // cursorField lands as a bare identifier in $where/$order and
+    // cursorValue inside a quoted literal — both are lane-writable, so
+    // constrain the identifier shape and escape the literal.
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(source.cursorField)) {
+      throw new Error(`socrata cursor field not an identifier`);
+    }
     params.set(
       "$where",
       source.cursorValue
-        ? `${source.cursorField} > '${source.cursorValue}'`
+        ? `${source.cursorField} > '${source.cursorValue.replaceAll("'", "''")}'`
         : `${source.cursorField} IS NOT NULL`
     );
     params.set("$order", `${source.cursorField} DESC`);

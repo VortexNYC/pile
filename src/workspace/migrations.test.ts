@@ -14,11 +14,32 @@ describe("workspaceMigrations", () => {
     const tags = new Set<string>();
     entries.forEach((entry, i) => {
       expect(entry.idx).toBe(i);
-      expect(entry.tag).toBe(`v${i + 1}`);
+      expect(entry.tag).toMatch(/^v\d+$/);
       expect(tags.has(entry.tag)).toBe(false);
       tags.add(entry.tag);
       expect(keys[i]).toBe(`m${String(i).padStart(4, "0")}`);
     });
+    // The tag sequence may reorder (see the idx 89/90 test below) but the
+    // set must still cover v1..vN exactly once.
+    expect(tags).toEqual(
+      new Set(Array.from({ length: entries.length }, (_, i) => `v${i + 1}`))
+    );
+  });
+
+  it("labels reordered migrations with the tag of the SQL they apply", () => {
+    // idx 89/90 carry v91/v90 — the migrations map binds m0089→v91 and
+    // m0090→v90 because the two SQL bodies landed out of tag order, and
+    // drizzle's migrator resolves SQL by m{idx} key. Tags must stay honest
+    // with the map, not with entry position.
+    const { entries } = workspaceMigrations.journal;
+    expect(entries[89]?.tag).toBe("v91");
+    expect(entries[90]?.tag).toBe("v90");
+    expect(workspaceMigrations.migrations.m0089).toContain(
+      "ALTER TABLE customer_statuses ADD COLUMN key"
+    );
+    expect(workspaceMigrations.migrations.m0090).toContain(
+      "ALTER TABLE agent_sessions ADD COLUMN conversation_key"
+    );
   });
 
   it("v51 creates entity_attachments scoped by org + entity type/id", () => {

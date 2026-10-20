@@ -2,6 +2,8 @@ import { z } from "zod";
 
 import { GITHUB_USER_AGENT } from "../global/github-auth.js";
 import {
+  assertPublicHost,
+  BLOCKED_HOSTS,
   pullSource,
   scoreCandidate,
   type MerchantSourceRow,
@@ -1040,9 +1042,6 @@ function isEmptyValue(value: unknown): boolean {
   );
 }
 
-const BLOCKED_HOSTS =
-  /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|[[f]|[0:]+$)/i;
-
 export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
   defineWorkspaceTool({
     name: "issue_get",
@@ -1600,6 +1599,11 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
       limit: z.number().optional(),
     }),
     async run(ctx, input) {
+      try {
+        assertPublicHost(input.domain);
+      } catch {
+        throw new LaneToolError("https public hosts only");
+      }
       const params = new URLSearchParams();
       params.set("$limit", String(input.limit ?? 25));
       if (input.where) params.set("$where", input.where);
@@ -1840,7 +1844,7 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
           await ctx.ws.updateMerchantSource(source.id, {
             cursorValue: newCursor ?? source.cursorValue,
             lastRunAt: new Date().toISOString(),
-            runCount: (candidates.length > 0 ? 1 : 0) + produced,
+            runCount: source.runCount + 1,
           });
           perSource.push({ name: source.name, candidates: candidates.length });
         } catch {

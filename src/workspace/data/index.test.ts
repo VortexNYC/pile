@@ -50,6 +50,7 @@ import {
   createDocumentSpace,
   documentAccessLevel,
   extractEventField,
+  getCustomerByDomain,
   getCustomerByExternalId,
   getDealByExternalId,
   getExternalEventDeliveryByDedupeKey,
@@ -606,6 +607,37 @@ describe("customerUrlHost", () => {
     expect(customerUrlHost("http://acme.example:8080/x")).toBe("acme.example");
     expect(customerUrlHost("")).toBeNull();
     expect(customerUrlHost("   ")).toBeNull();
+  });
+});
+
+describe("getCustomerByDomain", () => {
+  it("canonicalizes the lookup like the create write path", async () => {
+    await withDb(async (db) => {
+      const customer = await createCustomer(db, {
+        organizationId: WORKSPACE_ID,
+        name: "Dedupe Co",
+        domain: "https://www.Dedupe-Co.example/some/path",
+      });
+      expect(customer.domain).toBe("dedupe-co.example");
+      // customer_upsert looks up by the caller's raw input — without the
+      // same normalization these variants miss the stored canonical
+      // domain and the upsert inserts a duplicate row.
+      for (const variant of [
+        "dedupe-co.example",
+        "www.dedupe-co.example",
+        "https://dedupe-co.example",
+        "https://www.dedupe-co.example/",
+        "DEDUPE-CO.EXAMPLE",
+      ]) {
+        expect(getCustomerByDomain(db, WORKSPACE_ID, variant)?.id).toBe(
+          customer.id
+        );
+      }
+      // A different host must still miss.
+      expect(
+        getCustomerByDomain(db, WORKSPACE_ID, "other.example")
+      ).toBeUndefined();
+    });
   });
 });
 

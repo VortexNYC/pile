@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   allowedLaneTools,
@@ -320,6 +320,111 @@ describe("workspace lane tools — merchant sources + fetch shelf", () => {
     ]) {
       expect(names).toContain(n);
     }
+  });
+
+  it("socrata_query refuses loopback and private hosts", async () => {
+    const { ws } = fakeWorkspace();
+    for (const domain of [
+      "localhost",
+      "127.0.0.1",
+      "10.0.0.8",
+      "169.254.169.254",
+      "legit.example@127.0.0.1",
+    ]) {
+      await expect(
+        wsTool("socrata_query").run(wsCtx(ws), {
+          dataset: "43nn-pn8j",
+          domain,
+        })
+      ).rejects.toThrow("https public hosts only");
+    }
+  });
+
+  it("socrata_query fetches the dataset resource on a public host", async () => {
+    const { ws } = fakeWorkspace();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(Response.json([{ name: "Joe's" }]));
+    vi.stubGlobal("fetch", fetchMock);
+    let out: { rows: unknown[] };
+    try {
+      out = (await wsTool("socrata_query").run(wsCtx(ws), {
+        dataset: "43nn-pn8j",
+        domain: "data.cityofnewyork.us",
+        where: "grade = 'A'",
+      })) as { rows: unknown[] };
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(out.rows).toHaveLength(1);
+    const url = String(fetchMock.mock.calls[0]?.[0]);
+    expect(url).toContain(
+      "https://data.cityofnewyork.us/resource/43nn-pn8j.json"
+    );
+    expect(url).toContain("%24where=grade+%3D+%27A%27");
+  });
+
+  it("source_collect increments each source's own runCount", async () => {
+    const updates: { id: string; patch: { runCount?: number } }[] = [];
+    const { ws } = fakeWorkspace();
+    ws.listMerchantSources = async () => [
+      {
+        id: "src-1",
+        name: "feed-a",
+        kind: "socrata",
+        config: JSON.stringify({
+          domain: "data.example.gov",
+          dataset: "aaaa-bbbb",
+          name_field: "name",
+        }),
+        cursorField: null,
+        cursorValue: null,
+        signal: "registration",
+        runCount: 7,
+      },
+      {
+        id: "src-2",
+        name: "feed-b",
+        kind: "socrata",
+        config: JSON.stringify({
+          domain: "data.example.gov",
+          dataset: "cccc-dddd",
+          name_field: "name",
+        }),
+        cursorField: null,
+        cursorValue: null,
+        signal: "registration",
+        runCount: 3,
+      },
+    ];
+    ws.updateMerchantSource = async (id, patch) => {
+      updates.push({ id, patch });
+      return {};
+    };
+    ws.createMarketRun = async () => ({ id: "run-1" });
+    // Fresh Response per call — a shared instance's body is consumed by
+    // the first pull and every later read throws.
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(() => Promise.resolve(Response.json([])));
+    vi.stubGlobal("fetch", fetchMock);
+    let out: { collected: number; sources: { name: string }[] };
+    try {
+      out = (await wsTool("source_collect").run(wsCtx(ws), {
+        all: true,
+      })) as { collected: number; sources: { name: string }[] };
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(out.collected).toBe(0);
+    expect(out.sources).toHaveLength(2);
+    // The regression this guards: runCount used to accumulate the
+    // cross-source produced total — src-2 would have recorded 8+ instead
+    // of its own 3+1.
+    expect(updates).toEqual([
+      { id: "src-1", patch: expect.objectContaining({ runCount: 8 }) },
+      { id: "src-2", patch: expect.objectContaining({ runCount: 4 }) },
+    ]);
   });
 });
 

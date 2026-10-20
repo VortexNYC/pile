@@ -122,6 +122,15 @@ async function resolveOwner(
   };
 }
 
+/** waitUntil carrier threaded through drain handlers — domainEventId
+ *  lets a fire-and-forget external POST report failure back to the
+ *  event that spawned it, so a waitUntil dispatch that dies still
+ *  marks the event failed instead of silently landing `delivered`. */
+type DrainCtx = {
+  waitUntil: (promise: Promise<unknown>) => void;
+  domainEventId?: string;
+};
+
 /** kind="external" owners (Grokbot as chief_of_staff, a customer's own
  *  automation) get the dispatch POSTed to their endpoint instead of a
  *  pile lane — same payload contract a CfAgentProvider would receive.
@@ -140,7 +149,7 @@ async function dispatchExternal(
     name: string;
   },
   payload: Record<string, unknown>,
-  ctx?: { waitUntil: (promise: Promise<unknown>) => void },
+  ctx?: DrainCtx,
   delivery?: { issueId: string }
 ): Promise<void> {
   const endpointUrl = owner.endpointUrl;
@@ -190,8 +199,26 @@ async function dispatchExternal(
       );
     }
   })();
-  if (ctx) ctx.waitUntil(task.catch(() => {}));
-  else await task;
+  if (!ctx) {
+    await task;
+    return;
+  }
+  const domainEventId = ctx.domainEventId;
+  ctx.waitUntil(
+    task.catch(async (err: unknown) => {
+      if (!domainEventId) return;
+      // The drain already marked the event delivered — flip it back so
+      // a transient endpoint blip stays inspectable/replayable instead
+      // of permanently dropping the reviewer notification.
+      await stub
+        .markDomainEvent(
+          domainEventId,
+          "failed",
+          err instanceof Error ? err.message : String(err)
+        )
+        .catch(() => {});
+    })
+  );
 }
 
 /** Page the registered chief_of_staff external owner — the escalation
@@ -203,7 +230,10 @@ export async function pageChiefOfStaff(
   stub: Stub,
   organizationId: string,
   info: {
-    event: "agent.session_failed" | "agent.escalated";
+    event:
+      | "agent.session_failed"
+      | "agent.session_canceled"
+      | "agent.escalated";
     issueId?: string;
     issueTitle?: string;
     issueIdentifier?: string | null;
@@ -213,7 +243,7 @@ export async function pageChiefOfStaff(
     error?: string;
     question?: string;
   },
-  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
+  ctx?: DrainCtx
 ): Promise<void> {
   const chief = await resolveOwner(stub, "chief_of_staff");
   if (!chief || chief.kind !== "external" || !chief.endpointUrl) return;
@@ -258,7 +288,7 @@ async function handleStageEntered(
   stub: Stub,
   organizationId: string,
   payload: StageEnteredPayload,
-  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
+  ctx?: DrainCtx
 ): Promise<void> {
   const stageName = payload.toName ?? payload.to;
   if (!stageName || payload.entityType === "issue") return;
@@ -326,7 +356,7 @@ async function fireStageAutomations(
   stub: Stub,
   organizationId: string,
   payload: StageEnteredPayload,
-  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
+  ctx?: DrainCtx
 ): Promise<void> {
   if (payload.entityType === "issue") return;
   const stageName = payload.toName ?? payload.to ?? "";
@@ -366,7 +396,7 @@ async function handleSubstepActionable(
   stub: Stub,
   organizationId: string,
   payload: ActionablePayload,
-  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
+  ctx?: DrainCtx
 ): Promise<void> {
   const issue = await stub.getIssue(payload.issueId);
   if (!issue || !issue.ownerAgent) return;
@@ -623,7 +653,7 @@ export async function drainDomainEvents(
   env: WorkerEnv,
   stub: Stub,
   organizationId: string,
-  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
+  ctx?: DrainCtx
 ): Promise<number> {
   const events = await stub.listPendingDomainEvents();
   let delivered = 0;
@@ -634,6 +664,12 @@ export async function drainDomainEvents(
       // row and double-POST the external reviewer (PILE-443). The loser
       // of the pending→delivering transition skips the event.
       if (!(await stub.claimDomainEvent(event.id))) continue;
+      // Handlers fire external POSTs under waitUntil — carrying the
+      // event id lets a POST that fails after the drain returned flip
+      // the event back to `failed` instead of leaving it `delivered`.
+      const eventCtx: DrainCtx | undefined = ctx
+        ? { ...ctx, domainEventId: event.id }
+        : undefined;
       const payload = JSON.parse(event.payload) as Record<string, unknown>;
       if (event.type === "record.stage_entered") {
         await handleStageEntered(
@@ -641,14 +677,14 @@ export async function drainDomainEvents(
           stub,
           organizationId,
           payload as unknown as StageEnteredPayload,
-          ctx
+          eventCtx
         );
         await fireStageAutomations(
           env,
           stub,
           organizationId,
           payload as unknown as StageEnteredPayload,
-          ctx
+          eventCtx
         );
       } else if (event.type === "substep.actionable") {
         await handleSubstepActionable(
@@ -656,7 +692,7 @@ export async function drainDomainEvents(
           stub,
           organizationId,
           payload as unknown as ActionablePayload,
-          ctx
+          eventCtx
         );
       } else if (event.type === "substeps.all_required_done") {
         await handleAllRequiredDone(stub, payload as unknown as AllDonePayload);
@@ -666,7 +702,7 @@ export async function drainDomainEvents(
           stub,
           organizationId,
           payload as unknown as SubstepReviewPayload,
-          ctx
+          eventCtx
         );
       }
       await stub.markDomainEvent(event.id, "delivered");
@@ -697,7 +733,7 @@ export function drainDomainEventsInBackground(
   env: WorkerEnv,
   stub: Stub,
   organizationId: string,
-  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
+  ctx?: DrainCtx
 ): void {
   ctx?.waitUntil(
     drainDomainEvents(env, stub, organizationId, ctx).catch((err: unknown) => {
@@ -763,7 +799,7 @@ async function handleSubstepReview(
   stub: Stub,
   organizationId: string,
   payload: SubstepReviewPayload,
-  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
+  ctx?: DrainCtx
 ): Promise<void> {
   const issue = await stub.getIssue(payload.issueId);
   if (!issue) return;
@@ -779,16 +815,25 @@ async function handleSubstepReview(
     : null;
 
   // A dead lane isn't a verdict request — the reviewer (or the chief as
-  // escalation owner) gets agent.session_failed. There's nothing to
-  // score, so internal reviewers escalate instead of getting a lane.
-  if (payload.sessionStatus === "failed") {
+  // escalation owner) gets agent.session_failed / agent.session_canceled.
+  // There's nothing to score, so internal reviewers escalate instead of
+  // getting a lane.
+  const deadStatus =
+    payload.sessionStatus === "failed" || payload.sessionStatus === "canceled"
+      ? payload.sessionStatus
+      : null;
+  if (deadStatus) {
+    const deadEvent =
+      deadStatus === "canceled"
+        ? "agent.session_canceled"
+        : "agent.session_failed";
     if (target?.kind === "external" && target.endpointUrl) {
       await dispatchExternal(
         env,
         stub,
         target,
         {
-          event: "agent.session_failed",
+          event: deadEvent,
           organizationId,
           issueId: issue.id,
           parentId: payload.parentId,
@@ -819,14 +864,14 @@ async function handleSubstepReview(
       stub,
       organizationId,
       {
-        event: "agent.session_failed",
+        event: deadEvent,
         issueId: issue.id,
         issueTitle: issue.title,
         issueIdentifier: issue.identifier,
         sessionId: payload.sessionId ?? undefined,
         agentSlug: issue.ownerAgent ?? undefined,
         conversationKey: payload.conversationKey ?? null,
-        error: "sub-step lane failed — awaiting reviewer triage",
+        error: `sub-step lane ${deadStatus} — awaiting reviewer triage`,
       },
       ctx
     );

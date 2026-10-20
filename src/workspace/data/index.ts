@@ -1301,9 +1301,7 @@ export function listAgentSessions(
   return db
     .select()
     .from(workspaceAgentSessions)
-    .where(
-      and(...agentSessionListConditions(organizationId, resolved))
-    )
+    .where(and(...agentSessionListConditions(organizationId, resolved)))
     .orderBy(
       desc(workspaceAgentSessions.createdAt),
       desc(workspaceAgentSessions.id)
@@ -4909,7 +4907,10 @@ export function listDocumentsVisibleTo(
   // closed ACL the space grant cannot widen.
   const spaceGranted = new Set<string>();
   for (const row of db
-    .select({ spaceId: workspaceSpacePermissions.spaceId, actorId: workspaceSpacePermissions.actorId })
+    .select({
+      spaceId: workspaceSpacePermissions.spaceId,
+      actorId: workspaceSpacePermissions.actorId,
+    })
     .from(workspaceSpacePermissions)
     .where(eq(workspaceSpacePermissions.organizationId, organizationId))
     .all()) {
@@ -4922,7 +4923,9 @@ export function listDocumentsVisibleTo(
         (d.spaceId && restrictedSpaces.has(d.spaceId))
       ) ||
       granted.has(d.id) ||
-      (!restricted.has(d.id) && d.spaceId != null && spaceGranted.has(d.spaceId))
+      (!restricted.has(d.id) &&
+        d.spaceId != null &&
+        spaceGranted.has(d.spaceId))
   );
 }
 
@@ -4948,12 +4951,13 @@ export function listDocumentsForActor(
     grants.filter((g) => g.actorId === actorId).map((g) => g.documentId)
   );
   // Space grants widen guests the same way — only docs with no doc ACL.
-  const granted = new Set(
-    grants.map((g) => g.documentId)
-  );
+  const granted = new Set(grants.map((g) => g.documentId));
   const spaceGranted = new Set<string>();
   for (const row of db
-    .select({ spaceId: workspaceSpacePermissions.spaceId, actorId: workspaceSpacePermissions.actorId })
+    .select({
+      spaceId: workspaceSpacePermissions.spaceId,
+      actorId: workspaceSpacePermissions.actorId,
+    })
     .from(workspaceSpacePermissions)
     .where(eq(workspaceSpacePermissions.organizationId, organizationId))
     .all()) {
@@ -4963,9 +4967,7 @@ export function listDocumentsForActor(
   return all.filter(
     (d) =>
       visible.has(d.id) ||
-      (!granted.has(d.id) &&
-        d.spaceId != null &&
-        spaceGranted.has(d.spaceId))
+      (!granted.has(d.id) && d.spaceId != null && spaceGranted.has(d.spaceId))
   );
 }
 
@@ -9039,13 +9041,18 @@ export function getCustomerByDomain(
   organizationId: string,
   domain: string
 ) {
+  // createCustomer stores normalizeDomain(domain) — the lookup must
+  // canonicalize the same way or non-canonical input ("https://…",
+  // "www.…", case) misses and dedupe inserts a second row. The raw
+  // fallback keeps unparseable input exact-matchable against rows
+  // written before normalization existed.
   return db
     .select()
     .from(workspaceCustomers)
     .where(
       and(
         eq(workspaceCustomers.organizationId, organizationId),
-        eq(workspaceCustomers.domain, domain)
+        eq(workspaceCustomers.domain, normalizeDomain(domain) ?? domain)
       )
     )
     .get();

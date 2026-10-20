@@ -1,4 +1,4 @@
-import { env } from "cloudflare:test";
+import { env, runInDurableObject } from "cloudflare:test";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
@@ -445,7 +445,7 @@ describe("pipeline runtime (PILE-401/405/413)", () => {
 
   async function runTerminalSubStepLane(
     issueId: string,
-    status: "completed" | "failed",
+    status: "completed" | "failed" | "canceled",
     conversationKey: string
   ) {
     const stub = getWorkspaceStub(env, org);
@@ -622,5 +622,74 @@ describe("pipeline runtime (PILE-401/405/413)", () => {
     expect(payload.event).toBe("agent.session_failed");
     expect(payload.issueId).toBe(child.id);
     expect(payload.session?.status).toBe("failed");
+  });
+
+  it("POSTs agent.session_canceled to the reviewer when a gated lane is canceled (PILE-443)", async () => {
+    const { parent, child } = await createRequiredSubStep(
+      "Canceled gated step"
+    );
+    await runTerminalSubStepLane(child.id, "canceled", `${parent.id}-scout`);
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const stub = getWorkspaceStub(env, org);
+      await drainDomainEvents(env, stub, org);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    // stage_reviewer owns the fresh-issue stage (registered by the
+    // failed-lane test above); the chief is the fallback.
+    expect(url).toBe("https://reviewer.example.test/hook");
+    const payload = JSON.parse(init.body as string) as {
+      event: string;
+      session: { status: string } | null;
+    };
+    expect(payload.event).toBe("agent.session_canceled");
+    expect(payload.session?.status).toBe("canceled");
+  });
+
+  it("re-marks the domain event failed when a waitUntil external POST fails (PILE-443)", async () => {
+    const { parent, child } = await createRequiredSubStep(
+      "Flaky endpoint step"
+    );
+    await runTerminalSubStepLane(child.id, "completed", `${parent.id}-flaky`);
+
+    // Awaited drains throw → the event fails inline. waitUntil drains
+    // resolve the handler first, so the dispatch task itself must flip
+    // the event back to failed once the POST settles.
+    const fetchMock = vi.fn().mockRejectedValue(new Error("endpoint down"));
+    vi.stubGlobal("fetch", fetchMock);
+    const tasks: Promise<unknown>[] = [];
+    const ctx = {
+      waitUntil: (task: Promise<unknown>) => {
+        tasks.push(task);
+      },
+    };
+    const stub = getWorkspaceStub(env, org);
+    try {
+      await drainDomainEvents(env, stub, org, ctx);
+      await Promise.all(tasks);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    const rows = await runInDurableObject(stub, async (_instance, state) =>
+      state.storage.sql
+        .exec(
+          "SELECT status, error FROM domain_events WHERE type = 'substep.review' AND json_extract(payload, '$.issueId') = ?",
+          child.id
+        )
+        .toArray()
+    );
+    expect(rows).toEqual([expect.objectContaining({ status: "failed" })]);
   });
 });

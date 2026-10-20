@@ -2744,6 +2744,28 @@ describe("pipeline hygiene via DO RPC", () => {
     expect(due.map((d) => d.id)).toContain(deal.id);
   });
 
+  it("getCustomerByDomain canonicalizes like the create write path", async () => {
+    const stub = getStub();
+    const created = await withWorkspace(stub, (instance) =>
+      instance.createCustomer({
+        name: "Domain Co",
+        domain: "https://www.dupe-example.test/some/path",
+      })
+    );
+    expect(created.domain).toBe("dupe-example.test");
+    for (const probe of [
+      "dupe-example.test",
+      "WWW.DUPE-EXAMPLE.TEST",
+      "https://dupe-example.test/",
+      "www.dupe-example.test",
+    ]) {
+      const found = await withWorkspace(stub, (instance) =>
+        instance.getCustomerByDomain(probe)
+      );
+      expect(found?.id, `lookup by ${probe}`).toBe(created.id);
+    }
+  });
+
   it("updateCustomer lands a customer.updated audit entry with per-field changes", async () => {
     const stub = getStub();
     await withWorkspace(stub, async (instance) => {

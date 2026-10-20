@@ -6107,14 +6107,18 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     // whether the chain advances (pass marks it done + promotes the
     // sibling) or the chief gets paged. Review lanes are excluded so
     // the verdict itself doesn't re-enter review. PILE-443 — failures
-    // emit too (the reviewer sees the death, not just the sweep page),
-    // and the session fields ride the payload so an external reviewer
-    // POST can name the lane + conversation it should inspect. The
-    // dedupe key is status-scoped so a failed-then-retried step still
-    // gets its completion reviewed.
+    // and cancels emit too (the reviewer sees the death, not just the
+    // sweep page; a canceled lane the sweep declines to retry would
+    // otherwise stall the gated chain with nobody paged), and the
+    // session fields ride the payload so an external reviewer POST can
+    // name the lane + conversation it should inspect. The dedupe key
+    // is status-scoped so a failed-then-retried step still gets its
+    // completion reviewed.
     if (
       becameTerminal &&
-      (newStatus === "completed" || newStatus === "failed") &&
+      (newStatus === "completed" ||
+        newStatus === "failed" ||
+        newStatus === "canceled") &&
       oldSession.purpose !== "review" &&
       issue.parentId &&
       issue.required
