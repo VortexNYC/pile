@@ -730,7 +730,10 @@ async function authLoginCommand(
 
   const signInRes = await doFetch(`${baseUrl}/api/auth/sign-in/email`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Origin: new URL(baseUrl).origin,
+    },
     body: JSON.stringify({ email, password, rememberMe: true }),
   });
   const signInText = await signInRes.text();
