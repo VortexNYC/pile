@@ -7,7 +7,11 @@
 // run finish" already lives in the result file the runner writes — the
 // sentinel only needs to answer "is the wrapper still alive".
 import { DurableObject } from "cloudflare:workers";
-import { Files } from "sandbox-1";
+import {
+  DirectoryBackup,
+  Files,
+  type DirectoryBackupRecord,
+} from "sandbox-1";
 
 import type { AppEnv } from "../types/env.js";
 import type { SandboxFile } from "./compute.js";
@@ -39,6 +43,7 @@ export type LaneProcessState = { running: boolean; exitCode: number | null };
 export class LaneSandboxBase extends DurableObject<AppEnv> {
   private readonly container: NonNullable<DurableObjectState["container"]>;
   private readonly files: Files;
+  private readonly backups: DirectoryBackup;
   private setup: Promise<void> | null = null;
 
   constructor(ctx: DurableObjectState, env: AppEnv) {
@@ -49,6 +54,11 @@ export class LaneSandboxBase extends DurableObject<AppEnv> {
     }
     this.container = container;
     this.files = new Files(container);
+    this.backups = new DirectoryBackup(
+      container,
+      ctx.exports.DirectoryBackupGateway,
+      { binding: "LANE_CACHE_BUCKET" }
+    );
     if (container.running) {
       void ctx.blockConcurrencyWhile(() =>
         container.setInactivityTimeout(INACTIVITY_TIMEOUT_MS)
@@ -214,6 +224,75 @@ export class LaneSandboxBase extends DurableObject<AppEnv> {
     if (this.container.running) {
       await this.container.destroy();
     }
+  }
+
+  // --- v1 parity: cache + worktree backups ride LANE_CACHE_BUCKET via
+  // DirectoryBackup, the same mechanism the checks pool uses — no S3
+  // credentials enter the container.
+
+  /** Restore the shared lane cache into `dir`; no-op when nothing is stored. */
+  async restoreCache(prefix: string, dir: string): Promise<string | null> {
+    await this.ensureRunning();
+    const object = await this.env.LANE_CACHE_BUCKET?.get(
+      `cache-idx/${prefix}latest.json`
+    );
+    if (!object) return null;
+    const record = (await object.json()) as DirectoryBackupRecord;
+    await this.container.exec(["mkdir", "-p", dir], { env: BASE_ENV });
+    await this.backups.intercept();
+    await this.backups.restore(record, { dir });
+    return dir;
+  }
+
+  /** Persist the lane cache dir so the next lane on this repo starts warm. */
+  async saveCache(prefix: string, dir: string): Promise<void> {
+    await this.ensureRunning();
+    await this.backups.intercept();
+    const record = await this.backups.backup({
+      dir,
+      exclude: ["node_modules"],
+    });
+    await this.env.LANE_CACHE_BUCKET?.put(
+      `cache-idx/${prefix}latest.json`,
+      JSON.stringify(record)
+    );
+  }
+
+  /** Serialize the lane worktree (/root/repo) — credentials stay in $HOME. */
+  async backupWorktreeDir(): Promise<string | null> {
+    try {
+      await this.ensureRunning();
+      const res = await this.container.exec(
+        [
+          "sh",
+          "-c",
+          "rm -rf /tmp/pile-worktree && mkdir -p /tmp/pile-worktree && " +
+            "cp -a /root/repo/. /tmp/pile-worktree/",
+        ],
+        { env: BASE_ENV }
+      );
+      if ((await res.output()).exitCode !== 0) return null;
+      await this.backups.intercept();
+      const record = await this.backups.backup({
+        dir: "/tmp/pile-worktree",
+        exclude: ["node_modules", ".cache", "*.log"],
+      });
+      return JSON.stringify(record);
+    } catch {
+      return null;
+    }
+  }
+
+  /** Restore a stored worktree record back into /root/repo. */
+  async restoreWorktreeDir(backupJson: string): Promise<void> {
+    await this.ensureRunning();
+    const record = JSON.parse(backupJson) as DirectoryBackupRecord;
+    await this.backups.intercept();
+    await this.backups.restore(record, { dir: "/tmp/pile-worktree" });
+    await this.container.exec(
+      ["sh", "-c", "mkdir -p /root && cp -a /tmp/pile-worktree /root/repo"],
+      { env: BASE_ENV }
+    );
   }
 }
 

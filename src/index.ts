@@ -24,6 +24,11 @@ export {
   LaneSandbox,
 } from "./agents/lane-sandbox.js";
 
+// Named export the lane DOs reach via ctx.exports.DirectoryBackupGateway —
+// routes their container's backup/restore traffic to LANE_CACHE_BUCKET
+// without S3 credentials ever entering the container.
+export { DirectoryBackupGateway } from "sandbox-1";
+
 // The API graph is ~80 route modules — importing it at module init blows the
 // 400ms startup cap. Defer evaluation to the first request; the promise caches
 // per isolate so steady-state requests pay nothing.
