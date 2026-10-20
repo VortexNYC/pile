@@ -198,15 +198,18 @@ export function createTwoPane(options: TwoPaneOptions): TwoPane {
     options.detailFormat === "markdown"
       ? new ot.MarkdownRenderable(renderer, {
           content: "",
-          syntaxStyle: ot.SyntaxStyle.fromStyles({
-            "markup.heading": { fg: "#93c5fd", bold: true },
-            "markup.strong": { bold: true },
-            "markup.italic": { italic: true },
-            "markup.raw": { fg: "#4ade80" },
-            "markup.link": { fg: TUI.link, underline: true },
-            "markup.quote": { fg: TUI.muted, italic: true },
-            "markup.list": { fg: TUI.muted },
-          }),
+          syntaxStyle: ot.SyntaxStyle.fromStyles(
+            {
+              "markup.heading": { fg: "#93c5fd", bold: true },
+              "markup.strong": { bold: true },
+              "markup.italic": { italic: true },
+              "markup.raw": { fg: "#4ade80" },
+              "markup.link": { fg: TUI.link, underline: true },
+              "markup.quote": { fg: TUI.muted, italic: true },
+              "markup.list": { fg: TUI.muted },
+            },
+            renderer.nativeScene
+          ),
           conceal: true,
           width: "100%",
           fg: TUI.fg,
