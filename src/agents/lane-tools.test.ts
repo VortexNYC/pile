@@ -415,6 +415,39 @@ function fakeWorkspace(customers: FakeCustomer[] = []) {
     async memoryRecall() {
       return [];
     },
+    async upsertSuppression() {
+      return {};
+    },
+    async isSuppressed() {
+      return null;
+    },
+    async createMarketRun() {
+      return {};
+    },
+    async updateMarketRun() {
+      return {};
+    },
+    async listMarketRuns() {
+      return [];
+    },
+    async upsertContact() {
+      return {};
+    },
+    async listContacts() {
+      return [];
+    },
+    async upsertMerchantSource() {
+      return {};
+    },
+    async listMerchantSources() {
+      return [];
+    },
+    async updateMerchantSource() {
+      return {};
+    },
+    async recordSessionUsage() {
+      return {};
+    },
   };
   return { ws, calls, customers };
 }
