@@ -2820,6 +2820,28 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         gateOverride = { reason: patch.stageGateOverride.reason, blocked };
       }
     }
+    // Validate custom-field values before any write — a bad value rejects
+    // the whole patch instead of leaving a half-applied record (same
+    // pre-flight contract as the importer's assertFieldValuesValid pass).
+    if (customFields && Object.keys(customFields).length > 0) {
+      try {
+        data.assertFieldValuesValid(
+          this.db,
+          this.organizationId,
+          "customer",
+          customFields
+        );
+      } catch (error) {
+        if (error instanceof data.FieldValueError) {
+          throw new VortexError({
+            code: "BAD_REQUEST",
+            status: 400,
+            message: error.message,
+          });
+        }
+        throw error;
+      }
+    }
     const customer = data.updateCustomer(
       this.db,
       this.organizationId,
@@ -2827,8 +2849,58 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       customerPatch
     );
     if (!customer) return undefined;
-    this.applyCustomFields("customer", id, customFields);
-    this.audit("customer.updated", "customer", id, actorId);
+    // Per-field history: the audit entry carries every changed column plus
+    // each custom-field value diff, so a reviewer can see exactly what an
+    // enrichment write did to the record.
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    for (const key of [
+      "name",
+      "url",
+      "logoUrl",
+      "bookingUrl",
+      "notes",
+      "domain",
+      "externalId",
+      "tierId",
+      "statusId",
+      "ownerId",
+      "nextStepText",
+      "nextStepDueAt",
+      "needsHuman",
+      "needsHumanReason",
+      "priorityScore",
+    ] as const) {
+      if (customerPatch[key] !== undefined && before[key] !== customer[key]) {
+        changes[key] = { from: before[key], to: customer[key] };
+      }
+    }
+    if (customFields && Object.keys(customFields).length > 0) {
+      const beforeFields = data.customFieldMap(
+        this.db,
+        this.organizationId,
+        "customer",
+        id
+      );
+      this.applyCustomFields("customer", id, customFields);
+      const afterFields = data.customFieldMap(
+        this.db,
+        this.organizationId,
+        "customer",
+        id
+      );
+      for (const name of new Set([
+        ...Object.keys(beforeFields),
+        ...Object.keys(afterFields),
+      ])) {
+        if (beforeFields[name] !== afterFields[name]) {
+          changes[`customFields.${name}`] = {
+            from: beforeFields[name] ?? null,
+            to: afterFields[name] ?? null,
+          };
+        }
+      }
+    }
+    this.audit("customer.updated", "customer", id, actorId, changes);
     if (gateOverride) {
       const stageName = (statusId: string | null) =>
         statusId === null
