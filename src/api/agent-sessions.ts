@@ -834,6 +834,8 @@ const patchSessionRoute = createRoute({
             // PILE-426 — publish/replace the plan checklist. Whole-array
             // replace: the agent resends the full ordered list each update.
             plan: sessionPlanSchema.optional(),
+            // PILE-425 — cumulative run usage snapshot → the run receipt.
+            usage: runUsageSchema.optional(),
           }),
         },
       },
@@ -2469,6 +2471,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         prUrl: body.prUrl,
         prState: body.prState,
         branch: body.branch,
+        usage: body.usage,
       },
       identity.id
     );

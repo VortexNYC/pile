@@ -69,6 +69,7 @@ def run_agent(agent_bin, prompt=None):
     )
     tail = []
     last_text = ''
+    usage = None
     events = open('/tmp/agent-events.ndjson', 'a', buffering=1)
     try:
         for line in proc.stdout:
@@ -84,6 +85,8 @@ def run_agent(agent_bin, prompt=None):
                 _t = ''.join(b.get('text', '') for b in _c if isinstance(b, dict))
                 if _t.strip():
                     last_text = _t
+            elif evt.get('type') == 'result':
+                usage = cli_result_usage(evt) or usage
             rendered = _render_event(evt)
             if rendered:
                 print(_redact(rendered))
@@ -97,7 +100,7 @@ def run_agent(agent_bin, prompt=None):
     print('cursor-agent exit:', proc.returncode)
     if proc.returncode != 0:
         raise RuntimeError(f'cursor-agent -p failed ({proc.returncode}): {_redact(output[-500:])}')
-    return output, last_text
+    return output, last_text, usage
 
 
 def main():
@@ -110,14 +113,14 @@ def main():
         warm_pnpm_store()
         run_setup_hook(agent_env)
     apply_tool_policy()
-    output, report = run_agent(agent_bin)
+    output, report, usage = run_agent(agent_bin)
     task = base64.b64decode(os.environ['PROMPT_B64']).decode('utf-8')
     healed = self_heal(agent_env(), lambda p: run_agent(agent_bin, prompt=p), task)
     if healed is not None:
-        output, report = healed
+        output, report, usage = healed
     pushed = commit_and_push(agent_env()) if REPO else False
     push_secondary_repos(agent_env())
-    rc = finalize(output, pushed, report=report)
+    rc = finalize(output, pushed, report=report, usage=usage)
     revoke_github_token()
     save_pnpm_store()
     stop_log_ship()
