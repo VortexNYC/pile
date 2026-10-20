@@ -5785,8 +5785,16 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       if (result.status !== undefined) {
         // PILE-467 — terminal stays terminal. A cancel during provisioning
         // can still see late poll results arrive as 'created'/'running' —
-        // a non-terminal result must not resurrect a dead lane.
-        if (!(terminal.has(oldStatus) && !terminal.has(result.status))) {
+        // a non-terminal result must not resurrect a dead lane. Deliberate
+        // resumes (delivered follow-up on a completed lane, queued prompt
+        // on an externally-managed session) carry `revive` to pass.
+        if (
+          !(
+            terminal.has(oldStatus) &&
+            !terminal.has(result.status) &&
+            !result.revive
+          )
+        ) {
           set.status = result.status;
           if (terminal.has(result.status) && !oldSession.endedAt)
             set.endedAt = set.updatedAt;
@@ -5843,8 +5851,16 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (result.status !== undefined) {
       // PILE-467 — terminal stays terminal. A cancel during provisioning
       // can still see late poll results arrive as 'created'/'running' —
-      // a non-terminal result must not resurrect a dead lane.
-      if (!(terminal.has(oldStatus) && !terminal.has(result.status))) {
+      // a non-terminal result must not resurrect a dead lane. Deliberate
+      // resumes (delivered follow-up on a completed lane, queued prompt
+      // on an externally-managed session) carry `revive` to pass.
+      if (
+        !(
+          terminal.has(oldStatus) &&
+          !terminal.has(result.status) &&
+          !result.revive
+        )
+      ) {
         set.status = result.status;
         if (terminal.has(result.status) && !oldSession.endedAt)
           set.endedAt = set.updatedAt;

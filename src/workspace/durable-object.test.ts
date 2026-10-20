@@ -3760,9 +3760,9 @@ describe("merchant sources (feed registry)", () => {
       return { src, dupe, list };
     });
     expect(out.dupe.id).toBe(out.src.id);
-    expect(
-      out.list.find((r) => r.id === out.src.id)?.cursorValue
-    ).toBe("2026-10-19");
+    expect(out.list.find((r) => r.id === out.src.id)?.cursorValue).toBe(
+      "2026-10-19"
+    );
   });
 });
 
@@ -3819,5 +3819,40 @@ describe("session terminal guard (PILE-467)", () => {
       return { session, updated };
     });
     expect(out.updated?.status).toBe("canceled");
+  });
+
+  it("a revive flag resumes a completed lane (delivered follow-up)", async () => {
+    const stub = getStub();
+    const out = await withWorkspace(stub, async (instance) => {
+      const issue = await instance.createIssue({
+        title: "revive me",
+        status: "in_progress",
+      });
+      const session = await instance.createAgentSession({
+        agentId: "devin-cli",
+        issueId: issue.id,
+        status: "created",
+        provider: "devin-cli",
+        actorId: "u1",
+        actorType: "user",
+      });
+      await instance.applyAgentSessionResult(session.id, {
+        status: "completed",
+      });
+      // A stale 'running' without revive stays completed…
+      const blocked = await instance.applyAgentSessionResult(session.id, {
+        status: "running",
+      });
+      // …but a delivered follow-up revives the lane deliberately.
+      const revived = await instance.applyAgentSessionResult(session.id, {
+        status: "running",
+        result: null,
+        revive: true,
+      });
+      return { session, blocked, revived };
+    });
+    expect(out.blocked?.status).toBe("completed");
+    expect(out.revived?.status).toBe("running");
+    expect(out.revived?.endedAt).toBeNull();
   });
 });

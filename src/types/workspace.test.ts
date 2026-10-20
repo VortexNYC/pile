@@ -11,6 +11,7 @@ import {
   ISSUE_STATUSES,
 } from "./workspace.js";
 import type {
+  AgentSessionResult,
   DraftCommentPayload,
   DraftFieldChangePayload,
   Issue,
@@ -172,5 +173,17 @@ describe("draft output types (PILE-428)", () => {
     expect(flagged.sensitive).toBe(true);
     const input = { sensitive: true } satisfies Partial<IssueInput>;
     expect(input.sensitive).toBe(true);
+  });
+
+  it("AgentSessionResult carries the deliberate-revive flag", () => {
+    // revive bypasses the terminal-stays-terminal guard — the field must
+    // stay on the wire type or delivered follow-ups silently stop resuming
+    // completed lanes.
+    const result = {
+      status: "running",
+      result: null,
+      revive: true,
+    } satisfies AgentSessionResult;
+    expect(result.revive).toBe(true);
   });
 });
