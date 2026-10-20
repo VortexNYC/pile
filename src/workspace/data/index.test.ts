@@ -1957,8 +1957,11 @@ describe("CRM intake fns — suppression + market runs", () => {
 describe("merchant-source registry", () => {
   it("upserts, lists, and updates sources by name", async () => {
     await withDb(async (db) => {
-      const { upsertMerchantSource, listMerchantSources, updateMerchantSource } =
-        await import("./index.js");
+      const {
+        upsertMerchantSource,
+        listMerchantSources,
+        updateMerchantSource,
+      } = await import("./index.js");
       const src = upsertMerchantSource(db, WORKSPACE_ID, {
         name: "nys-sla-pending",
         kind: "socrata",

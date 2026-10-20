@@ -901,7 +901,10 @@ describe("customer sales fields (readiness/fit)", () => {
       token
     );
     expect(created.status).toBe(201);
-    const body = (await created.json()) as { id?: string; customer?: { id?: string } };
+    const body = (await created.json()) as {
+      id?: string;
+      customer?: { id?: string };
+    };
     const id = body.customer?.id ?? body.id;
     expect(id).toBeTruthy();
     const got = await fetch(

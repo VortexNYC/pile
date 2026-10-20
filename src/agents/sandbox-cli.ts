@@ -234,6 +234,61 @@ async function withTimeout<T>(
   }
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// PILE-466 — Daytona start failures that a fresh sandbox clears: the VM
+// died before ready, the toolbox couldn't resolve the container IP yet, or
+// the create/poll request timed out. Up to two retries inside the existing
+// provision budget; anything else — quota/auth/config 4xx, lane-permission
+// errors — is permanent and fails on the first attempt.
+const START_MAX_ATTEMPTS = 3;
+const START_RETRY_BACKOFF_MS = [5_000, 15_000];
+const START_RETRY_JITTER_MS = 2_000;
+// A retry that can't fit a full attempt inside the provision budget would
+// just burn the deadline — skip it and fail with the attempt's error.
+const START_MIN_REMAINING_MS = 45_000;
+
+function transientStartErrorClass(err: unknown): string | null {
+  // Errors arriving over the DO RPC boundary can lose their prototype —
+  // read name/status/message as loose properties, not just off Error.
+  const rec =
+    (typeof err === "object" || typeof err === "function") && err !== null
+      ? (err as Record<string, unknown>)
+      : {};
+  const name = typeof rec.name === "string" ? rec.name : "";
+  const status = typeof rec.status === "number" ? rec.status : undefined;
+  const message =
+    err instanceof Error
+      ? err.message
+      : typeof rec.message === "string"
+        ? rec.message
+        : String(err);
+  if (
+    name === "AbortError" ||
+    name === "TimeoutError" ||
+    status === 504 ||
+    message.includes("aborted due to timeout") ||
+    message.includes("timed out")
+  ) {
+    return "timeout";
+  }
+  if (message.includes("before becoming ready")) return "sandbox-not-ready";
+  if (
+    message.includes("SANDBOX_NOT_RUNNING") ||
+    message.includes("failed to resolve container IP")
+  ) {
+    return "sandbox-not-running";
+  }
+  if (/Daytona[^\n]*: 5\d{2}\b/.test(message)) return "daytona-5xx";
+  return null;
+}
+
+export function isTransientStartError(err: unknown): boolean {
+  return transientStartErrorClass(err) !== null;
+}
+
 function buildPrompt(
   issue: Issue,
   gitIdentity: GitIdentity | null,
@@ -697,6 +752,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
       }
       await withTimeout(
         (async () => {
+          const provisionDeadline = Date.now() + PROVISION_TIMEOUT_MS;
           const existing = await compute.findSandbox(sessionId, name);
           if (existing) {
             await this.note(
@@ -746,52 +802,101 @@ export class SandboxCliAgentProvider implements AgentProvider {
               },
             }
           );
-          const sandbox = await compute.createSandbox({
-            name,
-            sessionId,
-            organizationId,
-            agentLabel: this.id,
-            env: sandboxEnv,
-          });
-          await this.note(
-            organizationId,
-            sessionId,
-            "status",
-            `${this.id} sandbox started`,
-            {
-              sandbox: sandbox.id,
-              state: sandbox.state,
-              backend: compute.kind,
-            },
-            { parentId: spanId }
-          );
-          const cacheEnv = await this.mountLaneCache(
-            compute,
-            sandbox,
-            { organizationId, sessionId, repo: issue.repo, permissions },
-            { parentId: spanId }
-          );
-          await compute.startRunner(
-            sandbox,
-            sessionId,
-            "printf '%s' \"$RUNNER_PY_B64\" | base64 -d > /tmp/run.py && python3 /tmp/run.py",
-            cacheEnv ? { ...sandbox.runnerEnv, ...cacheEnv } : undefined
-          );
-          // Real readiness: the runner binds :8787 when it's alive, so the
-          // 'runner started' marker means the process is actually up — not
-          // just that startProcess returned. Best-effort; a wedge here
-          // throws into the provision-timeout path instead of faking alive.
-          if (compute.waitForRunner) {
-            await compute.waitForRunner(sandbox, sessionId, 60_000);
+          for (let attempt = 1; attempt <= START_MAX_ATTEMPTS; attempt++) {
+            try {
+              const sandbox = await compute.createSandbox({
+                name,
+                sessionId,
+                organizationId,
+                agentLabel: this.id,
+                env: sandboxEnv,
+              });
+              await this.note(
+                organizationId,
+                sessionId,
+                "status",
+                `${this.id} sandbox started`,
+                {
+                  sandbox: sandbox.id,
+                  state: sandbox.state,
+                  backend: compute.kind,
+                },
+                { parentId: spanId }
+              );
+              const cacheEnv = await this.mountLaneCache(
+                compute,
+                sandbox,
+                { organizationId, sessionId, repo: issue.repo, permissions },
+                { parentId: spanId }
+              );
+              await compute.startRunner(
+                sandbox,
+                sessionId,
+                "printf '%s' \"$RUNNER_PY_B64\" | base64 -d > /tmp/run.py && python3 /tmp/run.py",
+                cacheEnv ? { ...sandbox.runnerEnv, ...cacheEnv } : undefined
+              );
+              // Real readiness: the runner binds :8787 when it's alive, so the
+              // 'runner started' marker means the process is actually up — not
+              // just that startProcess returned. Best-effort; a wedge here
+              // throws into the provision-timeout path instead of faking alive.
+              if (compute.waitForRunner) {
+                await compute.waitForRunner(sandbox, sessionId, 60_000);
+              }
+              await this.note(
+                organizationId,
+                sessionId,
+                "action",
+                `${this.id} runner started`,
+                { sandbox: sandbox.id },
+                { parentId: spanId }
+              );
+              return;
+            } catch (err) {
+              // A failed attempt can leave its sandbox behind — remove it so
+              // the retry doesn't collide with it and a terminal failure
+              // doesn't leak it.
+              let deletedSandbox = false;
+              try {
+                const failed = await compute.findSandbox(sessionId, name);
+                if (failed) {
+                  await compute.deleteSandbox(failed);
+                  deletedSandbox = true;
+                }
+              } catch (cleanupErr) {
+                console.warn(
+                  `${this.id} failed-sandbox cleanup errored`,
+                  cleanupErr
+                );
+              }
+              const errorClass = transientStartErrorClass(err);
+              if (!errorClass || attempt === START_MAX_ATTEMPTS) throw err;
+              const backoffMs =
+                START_RETRY_BACKOFF_MS[attempt - 1] +
+                Math.random() * START_RETRY_JITTER_MS;
+              if (
+                provisionDeadline - Date.now() - backoffMs <
+                START_MIN_REMAINING_MS
+              ) {
+                throw err;
+              }
+              await this.note(
+                organizationId,
+                sessionId,
+                "status",
+                `${this.id} sandbox start attempt ${attempt + 1}/${START_MAX_ATTEMPTS} after: ${errorClass}`,
+                {
+                  attempt: attempt + 1,
+                  maxAttempts: START_MAX_ATTEMPTS,
+                  errorClass,
+                  error: err instanceof Error ? err.message : String(err),
+                  backoffMs,
+                  deletedSandbox,
+                },
+                { parentId: spanId }
+              );
+              await delay(backoffMs);
+            }
           }
-          await this.note(
-            organizationId,
-            sessionId,
-            "action",
-            `${this.id} runner started`,
-            { sandbox: sandbox.id },
-            { parentId: spanId }
-          );
         })(),
         PROVISION_TIMEOUT_MS,
         `${this.id} provision`
