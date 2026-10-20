@@ -1539,6 +1539,39 @@ describe("agent sessions API", () => {
     await stub.applyAgentSessionResult(session.id, { status: "canceled" });
   });
 
+  it("a follow-up on a completed externally-managed session revives it (PILE-467)", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const issue = await stub.createIssue({ title: "Externally managed lane" });
+    // providerSessionId stays null — the agent registered itself and polls
+    // /events, so a human prompt is queued, not pushed into a sandbox.
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "mock",
+      provider: "mock",
+      actorId: "user-1",
+      actorType: "user",
+      status: "completed",
+    });
+
+    const promptRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/prompt`,
+        {
+          method: "POST",
+          token,
+          body: JSON.stringify({ prompt: "pick the follow-up up" }),
+        }
+      ),
+      env
+    );
+    expect(promptRes.status).toBe(200);
+    expect((await stub.getAgentSession(session.id))?.status).toBe("running");
+    await stub.applyAgentSessionResult(session.id, { status: "canceled" });
+  });
+
   it("captures a text artifact to the session timeline", async () => {
     const stub = env.WORKSPACE_DURABLE_OBJECT.get(
       env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
