@@ -250,15 +250,26 @@ function fakeSandbox(
 ) {
   const startProcess = vi.fn();
   const readFile = vi.fn();
+  const writeFile = vi.fn(async () => ({ success: true }));
+  const exec = vi.fn(async () => ({}));
   const destroy = vi.fn();
   const getProcess = vi.fn((id: string) =>
     Promise.resolve(processes[id] ?? null)
   );
-  const handle = { getProcess, startProcess, readFile, destroy };
+  const handle = {
+    getProcess,
+    startProcess,
+    readFile,
+    writeFile,
+    exec,
+    destroy,
+  };
   return {
     handle: handle as unknown as SandboxHandle,
     startProcess,
     readFile,
+    writeFile,
+    exec,
     destroy,
     getProcess,
   };
@@ -454,7 +465,7 @@ describe("CloudflareBackend", () => {
     });
   });
 
-  it("readFile returns content and null on failure", async () => {
+  it("getFile returns content and null on failure", async () => {
     const { handle, readFile } = fakeSandbox({});
     readFile
       .mockResolvedValueOnce({
@@ -463,10 +474,25 @@ describe("CloudflareBackend", () => {
       })
       .mockRejectedValueOnce(new Error("no such file"));
     const backend = new CloudflareBackend(() => Promise.resolve(handle));
-    expect(await backend.readFile(sandboxRecord, "/tmp/r.json")).toBe(
+    expect(await backend.getFile(sandboxRecord, "/tmp/r.json")).toBe(
       '{"status":"completed"}'
     );
-    expect(await backend.readFile(sandboxRecord, "/tmp/r.json")).toBeNull();
+    expect(await backend.getFile(sandboxRecord, "/tmp/r.json")).toBeNull();
+  });
+
+  it("putFiles writes each file and chmods when a mode is given", async () => {
+    const { handle, writeFile, exec } = fakeSandbox({});
+    const backend = new CloudflareBackend(() => Promise.resolve(handle));
+    await backend.putFiles(sandboxRecord, [
+      { path: "/tmp/pile/prompt.md", content: "do it" },
+      { path: "/tmp/pile/lane.env", content: "export A='1'", mode: 0o600 },
+    ]);
+    expect(writeFile).toHaveBeenCalledWith("/tmp/pile/prompt.md", "do it");
+    expect(writeFile).toHaveBeenCalledWith(
+      "/tmp/pile/lane.env",
+      "export A='1'"
+    );
+    expect(exec).toHaveBeenCalledWith("chmod 600 /tmp/pile/lane.env");
   });
 
   it("deleteSandbox destroys the sandbox", async () => {
@@ -610,7 +636,14 @@ describe("Daytona hardening (PILE-472)", () => {
     const calls: string[] = [];
     const pages = [
       [{ id: "other-1", name: "a", state: "started", labels: {} }],
-      [{ id: "mine", name: "x", state: "started", labels: { "vortex.session": "sess-1" } }],
+      [
+        {
+          id: "mine",
+          name: "x",
+          state: "started",
+          labels: { "vortex.session": "sess-1" },
+        },
+      ],
       [],
     ];
     const origFetch = globalThis.fetch;
@@ -623,10 +656,10 @@ describe("Daytona hardening (PILE-472)", () => {
       });
     }) as typeof fetch;
     try {
-      const backend = new DaytonaBackend(
-        {} as never,
-        { apiKey: "k", apiUrl: "https://day" }
-      );
+      const backend = new DaytonaBackend({} as never, {
+        apiKey: "k",
+        apiUrl: "https://day",
+      });
       const found = await backend.findSandbox("sess-1", "x");
       expect(found?.id).toBe("mine");
       expect(calls.length).toBe(2);
@@ -718,19 +751,30 @@ describe("DaytonaBackend infra classification + quota surfacing (PILE-452)", () 
           status: 400,
         })
     );
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const backend = computeBackend(daytonaEnv());
     try {
-      await backend.startRunner(
-        { id: "sb-9", name: "sb-9", state: "started" },
-        "s9",
-        "python3 /tmp/run.py"
-      );
-      expect.unreachable();
-    } catch (err) {
+      // The not-ready retry loop backs off 2+4+8s — fast-forward through it.
+      const pending = backend
+        .startRunner(
+          { id: "sb-9", name: "sb-9", state: "started" },
+          "s9",
+          "python3 /tmp/run.py"
+        )
+        .then(
+          () => {
+            throw new Error("unreachable");
+          },
+          (err) => err
+        );
+      await vi.advanceTimersByTimeAsync(20_000);
+      const err = await pending;
       expect(isComputeInfraError(err)).toBe(true);
       expect((err as Error).message).toContain("SANDBOX_NOT_RUNNING");
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
     }
-    vi.unstubAllGlobals();
   });
 
   it("unresolvable toolbox/DNS failures coerce to infra errors", async () => {
@@ -796,10 +840,7 @@ describe("sweepOrphanSandboxes (PILE-471)", () => {
             : { status: "running" },
     };
     const { sweepOrphanSandboxes } = await import("./compute.js");
-    const out = await sweepOrphanSandboxes(
-      backend as never,
-      stub
-    );
+    const out = await sweepOrphanSandboxes(backend as never, stub);
     expect(out.reaped).toBe(2);
     expect(deleted.sort()).toEqual(["s1", "s3"]);
   });

@@ -25,12 +25,15 @@ const fakeBackend = {
   findSandbox: vi.fn(async () => sandbox),
   runnerState: vi.fn(async () => ({ state: "exited" as const, exitCode: 1 })),
   runnerBusy: vi.fn(async () => false),
-  readFile: vi.fn(
+  getFile: vi.fn(
     async (_s: ComputeSandbox, path: string) => files.get(path) ?? null
   ),
-  writeFile: vi.fn(
-    async (_s: ComputeSandbox, path: string, content: string) => {
-      files.set(path, content);
+  putFiles: vi.fn(
+    async (
+      _s: ComputeSandbox,
+      writes: Array<{ path: string; content: string }>
+    ) => {
+      for (const f of writes) files.set(f.path, f.content);
     }
   ),
   startRunner: vi.fn(async () => undefined),
@@ -63,6 +66,10 @@ describe("truncation continuation (VOR-631)", () => {
   it("continues a truncated lane in its kept sandbox instead of failing", async () => {
     files.clear();
     files.set("/tmp/agent-result.json", TRUNCATED_RESULT);
+    files.set(
+      "/tmp/pile/lane.env",
+      "export ISSUE_IDENTIFIER='VOR-631'\nexport REPO=''\nexport BRANCH='issue-x'\nexport ISSUE_TITLE='Dispute money-movement leg'\n"
+    );
     fakeBackend.runnerBusy.mockResolvedValue(false);
     const provider = new DevinCliAgentProvider(env());
     // descriptor seam — replaces the env-derived backend for this provider
@@ -182,12 +189,11 @@ describe("lane cache on follow-ups (PILE-306)", () => {
     expect(backend.startRunner).toHaveBeenCalledWith(
       restored,
       expect.stringContaining("sess1-fu-"),
-      expect.any(String),
-      expect.objectContaining({
-        FOLLOWUP: "1",
-        PILE_CACHE_DIR: "/mnt/pile-cache",
-      })
+      ". /tmp/pile/lane.env && python3 /tmp/pile/run.py"
     );
+    const laneEnv = files.get("/tmp/pile/lane.env");
+    expect(laneEnv).toContain("export FOLLOWUP='1'");
+    expect(laneEnv).toContain("export PILE_CACHE_DIR='/mnt/pile-cache'");
   });
 
   it("mounts for a live sandbox whose record lacks the org, using the caller's", async () => {
@@ -232,9 +238,9 @@ describe("lane cache on follow-ups (PILE-306)", () => {
       repo: "acme/widgets",
       readOnly: false,
     });
-    expect(backend.startRunner.mock.calls[0]?.[3]).toMatchObject({
-      PILE_CACHE_DIR: "/mnt/pile-cache",
-    });
+    expect(files.get("/tmp/pile/lane.env")).toContain(
+      "export PILE_CACHE_DIR='/mnt/pile-cache'"
+    );
   });
 
   it("leaves PILE_CACHE_DIR unset when the mount is unavailable", async () => {
@@ -271,9 +277,9 @@ describe("lane cache on follow-ups (PILE-306)", () => {
       sandbox,
       expect.objectContaining({ readOnly: false })
     );
-    const runnerEnv = backend.startRunner.mock.calls[0]?.[3];
-    expect(runnerEnv).toBeDefined();
-    expect(runnerEnv).not.toHaveProperty("PILE_CACHE_DIR");
+    const laneEnv = files.get("/tmp/pile/lane.env");
+    expect(laneEnv).toBeDefined();
+    expect(laneEnv).not.toContain("PILE_CACHE_DIR");
   });
 });
 
@@ -312,7 +318,7 @@ function startBackend(outcomes: (Error | ComputeSandbox)[]) {
   return {
     kind: "daytona" as const,
     findSandbox: vi.fn(async () => live.values().next().value ?? null),
-    createSandbox: vi.fn(async () => {
+    createSandbox: vi.fn(async (_opts: { env: Record<string, string> }) => {
       const outcome = outcomes[seq] ?? {
         id: `sb-${seq}`,
         name: "vortex-devin-sess1",
@@ -334,8 +340,13 @@ function startBackend(outcomes: (Error | ComputeSandbox)[]) {
     startRunner: vi.fn(async () => undefined),
     waitForRunner: vi.fn(async () => undefined),
     runnerState: vi.fn(async () => ({ exitCode: 0 })),
-    readFile: vi.fn(async () => null),
-    writeFile: vi.fn(async () => undefined),
+    getFile: vi.fn(async () => null),
+    putFiles: vi.fn(
+      async (
+        _s: ComputeSandbox,
+        _files: Array<{ path: string; content: string; mode?: number }>
+      ) => undefined
+    ),
     deleteSandbox: vi.fn(async (s: ComputeSandbox) => {
       live.delete(s.id);
     }),
@@ -353,6 +364,52 @@ function providerWith(backend: unknown) {
   seam.d.compute = backend;
   return { provider, seam };
 }
+
+describe("lane payload files (PILE-595)", () => {
+  it("keeps a 200KB prompt out of the create env and ships it as a file", async () => {
+    const backend = startBackend([]);
+    const { provider } = providerWith(backend);
+    const bigPrompt = "x".repeat(200 * 1024);
+
+    await provider.dispatch(
+      "org-1",
+      { ...repolessIssue(), description: bigPrompt },
+      "swe-2",
+      { sessionId: "sess-1" }
+    );
+
+    const createOpts = backend.createSandbox.mock.calls[0]?.[0];
+    expect(createOpts?.env).toEqual({});
+    const writes = backend.putFiles.mock.calls[0]?.[1] as
+      | Array<{ path: string; content: string; mode?: number }>
+      | undefined;
+    const byPath = new Map(writes?.map((f) => [f.path, f]));
+    expect(byPath.get("/tmp/pile/prompt.md")?.content).toContain(bigPrompt);
+    expect(byPath.get("/tmp/pile/lane.env")?.mode).toBe(0o600);
+    expect(byPath.get("/tmp/pile/run.py")?.content).toContain(
+      "Pile agent runner"
+    );
+    // The runner sources the env file — nothing big rides the command line.
+    expect(backend.startRunner).toHaveBeenCalledWith(
+      expect.anything(),
+      "sess-1",
+      ". /tmp/pile/lane.env && python3 /tmp/pile/run.py"
+    );
+  });
+
+  it("fails fast, without retrying, when an env value exceeds 100KB", async () => {
+    const backend = startBackend([]);
+    const { provider } = providerWith(backend);
+
+    await expect(
+      provider.dispatch("org-1", repolessIssue(), "swe-2", {
+        sessionId: "sess-1",
+        extraEnv: { BLOATED: "x".repeat(101 * 1024) },
+      })
+    ).rejects.toThrow(/100KB|ceiling/);
+    expect(backend.createSandbox).not.toHaveBeenCalled();
+  });
+});
 
 describe("isTransientStartError (PILE-466)", () => {
   it("classifies the transient Daytona start signatures", () => {
@@ -574,4 +631,3 @@ describe("sandbox start retries (PILE-466)", () => {
     }
   });
 });
-

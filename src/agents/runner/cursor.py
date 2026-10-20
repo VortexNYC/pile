@@ -59,14 +59,17 @@ def _render_event(evt):
 
 
 def run_agent(agent_bin, prompt=None):
-    prompt = prompt or lane_prompt()
     model = os.environ.get('MODEL', '')
-    cmd = [agent_bin, '-p', prompt, '--force', '--trust', '--output-format', 'stream-json']
+    # cursor-agent reads the prompt from stdin in -p mode when no positional
+    # arg is given — keeps it off argv, which caps a string at 128KB.
+    cmd = [agent_bin, '-p', '--force', '--trust', '--output-format', 'stream-json']
     if model:
         cmd += ['--model', model]
+    prompt_in = open(prompt_file(prompt if prompt else None))
     proc = subprocess.Popen(
-        cmd, cwd=REPO_DIR if REPO else HOME, env=agent_env(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+        cmd, cwd=REPO_DIR if REPO else HOME, env=agent_env(), stdin=prompt_in, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
     )
+    prompt_in.close()
     tail = []
     last_text = ''
     usage = None
@@ -114,7 +117,7 @@ def main():
         run_setup_hook(agent_env)
     apply_tool_policy()
     output, report, usage = run_agent(agent_bin)
-    task = base64.b64decode(os.environ['PROMPT_B64']).decode('utf-8')
+    task = read_lane_prompt()
     healed = self_heal(agent_env(), lambda p: run_agent(agent_bin, prompt=p), task)
     if healed is not None:
         output, report, usage = healed
