@@ -48,6 +48,8 @@ mod = types.ModuleType("pile_runner_core")
 mod.__dict__["__file__"] = core_path
 with open(core_path) as f:
     exec(compile(f.read(), core_path, "exec"), mod.__dict__)
+if os.environ.get("TEST_PROMPT_PATH"):
+    mod.__dict__["PROMPT_PATH"] = os.environ["TEST_PROMPT_PATH"]
 
 posts = []
 
@@ -203,7 +205,9 @@ describePy("runner PR resolution (PILE-257)", () => {
 
 describePy("runner headless browser (PILE-292)", () => {
   const PROMPT = "# Fix the settings page";
-  const promptB64 = Buffer.from(PROMPT, "utf8").toString("base64");
+  // The lane prompt is a file now (PILE-595), not an env var.
+  const promptPath = join(harnessDir, "prompt.md");
+  writeFileSync(promptPath, PROMPT);
 
   it("wires the baked chromium into the agent env and prompt", () => {
     const binDir = join(harnessDir, "browser-bin");
@@ -213,7 +217,7 @@ describePy("runner headless browser (PILE-292)", () => {
     chmodSync(chromium, 0o755);
     const res = runHarness([], "browser", {
       PATH: binDir,
-      PROMPT_B64: promptB64,
+      TEST_PROMPT_PATH: promptPath,
     });
     expect(res.env).toEqual({
       PILE_BROWSER: chromium,
@@ -238,7 +242,7 @@ describePy("runner headless browser (PILE-292)", () => {
     }
     const res = runHarness([], "browser", {
       PATH: binDir,
-      PROMPT_B64: promptB64,
+      TEST_PROMPT_PATH: promptPath,
     });
     expect(res.prompt).toContain("agent-browser open");
   });
@@ -251,7 +255,7 @@ describePy("runner headless browser (PILE-292)", () => {
     chmodSync(chromium, 0o755);
     const res = runHarness([], "browser", {
       PATH: binDir,
-      PROMPT_B64: promptB64,
+      TEST_PROMPT_PATH: promptPath,
       PILE_SHELL_POLICY: "disabled",
     });
     expect(res.prompt).toBe(PROMPT);
@@ -262,7 +266,7 @@ describePy("runner headless browser (PILE-292)", () => {
     mkdirSync(emptyDir, { recursive: true });
     const res = runHarness([], "browser", {
       PATH: emptyDir,
-      PROMPT_B64: promptB64,
+      TEST_PROMPT_PATH: promptPath,
     });
     expect(res.env).toEqual({});
     expect(res.prompt).toBe(PROMPT);
@@ -292,6 +296,8 @@ mod = types.ModuleType("pile_runner_core")
 mod.__dict__["__file__"] = core_path
 with open(core_path) as f:
     exec(compile(f.read(), core_path, "exec"), mod.__dict__)
+if os.environ.get("TEST_PROMPT_PATH"):
+    mod.__dict__["PROMPT_PATH"] = os.environ["TEST_PROMPT_PATH"]
 ns = mod.__dict__
 repo = ns["REPO_DIR"]
 branch = ns["BRANCH"]

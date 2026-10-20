@@ -60,14 +60,17 @@ def _render_event(evt):
 
 
 def run_agent(agent_bin):
-    prompt = base64.b64decode(os.environ['PROMPT_B64']).decode('utf-8')
     model = os.environ.get('MODEL', '')
-    cmd = [agent_bin, '-p', prompt, '--output-format', 'stream-json', '--verbose', '--dangerously-skip-permissions']
+    # claude -p reads the prompt from stdin when no positional arg is given —
+    # keeps it off argv, which caps a single string at 128KB.
+    cmd = [agent_bin, '-p', '--output-format', 'stream-json', '--verbose', '--dangerously-skip-permissions']
     if model:
         cmd += ['--model', model]
+    prompt_in = open(PROMPT_PATH)
     proc = subprocess.Popen(
-        cmd, cwd=REPO_DIR if REPO else HOME, env=agent_env(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+        cmd, cwd=REPO_DIR if REPO else HOME, env=agent_env(), stdin=prompt_in, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
     )
+    prompt_in.close()
     tail = []
     last_text = ''
     result_error = None

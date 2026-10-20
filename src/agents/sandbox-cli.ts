@@ -26,8 +26,12 @@ import type {
   GitIdentity,
   Issue,
 } from "../types/workspace.js";
-import { asComputeInfraError, computeBackend } from "./compute.js";
-import type { ComputeBackend, ComputeSandbox } from "./compute.js";
+import {
+  asComputeInfraError,
+  computeBackend,
+  serializeLaneEnv,
+} from "./compute.js";
+import type { ComputeBackend, ComputeSandbox, SandboxFile } from "./compute.js";
 import {
   agentCacheUrl,
   agentGithubTokenUrl,
@@ -65,6 +69,21 @@ import {
 } from "./subscription-pool.js";
 
 const RESULT_PATH = "/tmp/agent-result.json";
+// PILE-595 — the lane payload lands on disk, never in env/argv: execve caps
+// a single env string at 128KB (MAX_ARG_STRLEN), and large prompts plus the
+// ~80KB runner bundle sailed past it, killing sandbox create outright.
+const LANE_ENV_PATH = "/tmp/pile/lane.env";
+const PROMPT_PATH = "/tmp/pile/prompt.md";
+const RUNNER_PATH = "/tmp/pile/run.py";
+const RUNNER_COMMAND = `. ${LANE_ENV_PATH} && python3 ${RUNNER_PATH}`;
+// The sourced lane env lands in the runner's process env, so values still
+// ride execve on every subprocess spawn — refuse oversized ones before
+// provision rather than burning a retry on an input that can never start.
+const LANE_ENV_VALUE_MAX = 100 * 1024;
+// Prompt comment block bounds: newest 8 comments, 2KB per body, 24KB total.
+const MAX_PROMPT_COMMENTS = 8;
+const COMMENT_BODY_MAX = 2 * 1024;
+const COMMENTS_BLOCK_MAX = 24 * 1024;
 // Preview comment is once-per-session — poll re-enters while the terminal
 // result is in flight and a second tunnel+comment would double-post.
 const previewPostedSessions = new Set<string>();
@@ -183,12 +202,6 @@ function lanePermissionLines(permissions: LanePermissions): string[] {
   ];
 }
 
-function encodeBase64(input: string): string {
-  const bytes = new TextEncoder().encode(input);
-  const bin = Array.from(bytes, (b) => String.fromCharCode(b)).join("");
-  return btoa(bin);
-}
-
 function parseRepo(repo: string): [string, string] {
   const parts = repo.split("/");
   if (parts.length !== 2 || !parts[0] || !parts[1]) {
@@ -293,6 +306,57 @@ export function isTransientStartError(err: unknown): boolean {
   return transientStartErrorClass(err) !== null;
 }
 
+/** PILE-595 — an env value that can't survive execve is a permanent input
+ *  failure, not a transient start error: throw BAD_REQUEST so it isn't
+ *  retried by the start-attempt loop or marked infra for the sweep. */
+function assertLaneEnvFits(env: Record<string, string>): void {
+  for (const [key, value] of Object.entries(env)) {
+    if (value.length > LANE_ENV_VALUE_MAX) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: `lane env ${key} is ${value.length}B — over the ${LANE_ENV_VALUE_MAX / 1024}KB per-value ceiling; large payloads belong in sandbox files`,
+      });
+    }
+  }
+}
+
+/** Read back the shell-export env file the provision step wrote — used to
+ *  recover lane fields for the truncation-continuation path. Multi-line
+ *  values aren't parsed (the lane keys read here are all single-line). */
+function parseLaneEnv(text: string): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const line of text.split("\n")) {
+    const m = /^export ([A-Za-z_][A-Za-z0-9_]*)='(.*)'$/.exec(line);
+    if (m) env[m[1]!] = m[2]!.replaceAll("'\\''", "'");
+  }
+  return env;
+}
+
+/** Bound the prompt's comment block: newest 8 comments, each body capped
+ *  at 2KB, the formatted block at 24KB — newest comments win the budget. */
+function trimComments(
+  comments: DispatchComment[] | undefined
+): DispatchComment[] {
+  if (!comments?.length) return [];
+  const recent = comments.slice(-MAX_PROMPT_COMMENTS).map((c) => ({
+    ...c,
+    body:
+      c.body.length > COMMENT_BODY_MAX
+        ? `${c.body.slice(0, COMMENT_BODY_MAX)}…`
+        : c.body,
+  }));
+  const kept: DispatchComment[] = [];
+  let total = 0;
+  for (const c of [...recent].toReversed()) {
+    const line = `- ${c.author}${c.createdAt ? ` (${c.createdAt})` : ""}: ${c.body}`;
+    if (total + line.length > COMMENTS_BLOCK_MAX) break;
+    kept.unshift(c);
+    total += line.length;
+  }
+  return kept;
+}
+
 function buildPrompt(
   issue: Issue,
   gitIdentity: GitIdentity | null,
@@ -344,17 +408,20 @@ function buildPrompt(
     `Issue: ${issue.identifier ?? issue.id}`,
     "",
     issue.description ?? "",
-    ...(comments && comments.length > 0
-      ? [
-          "",
-          "## Follow-up comments",
-          "",
-          ...comments.map(
-            (c) =>
-              `- ${c.author}${c.createdAt ? ` (${c.createdAt})` : ""}: ${c.body}`
-          ),
-        ]
-      : []),
+    ...(() => {
+      const trimmed = trimComments(comments);
+      return trimmed.length > 0
+        ? [
+            "",
+            "## Follow-up comments",
+            "",
+            ...trimmed.map(
+              (c) =>
+                `- ${c.author}${c.createdAt ? ` (${c.createdAt})` : ""}: ${c.body}`
+            ),
+          ]
+        : [];
+    })(),
     "",
     ...identityLines,
     ...(instructions ? ["", "## Dispatch instructions", "", instructions] : []),
@@ -575,7 +642,13 @@ export class SandboxCliAgentProvider implements AgentProvider {
     }
   }
 
-  private buildSandboxEnv(
+  /**
+   * Everything a lane run needs, split by delivery channel: `env` is
+   * serialized into /tmp/pile/lane.env (0600) and sourced by the runner
+   * command; `prompt` lands at /tmp/pile/prompt.md. Nothing over the
+   * execve cap rides env anymore (PILE-595).
+   */
+  private buildLanePayload(
     issue: Issue,
     model: string,
     credentialEnv: Record<string, string>,
@@ -598,7 +671,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
       /** Caller env keys (already allowlisted) the agent subprocess may see. */
       agentEnvKeys?: string[];
     }
-  ): Record<string, string> {
+  ): { env: Record<string, string>; prompt: string } {
     const secondaryRepos = options.secondaryRepos ?? [];
     const { permissions } = options;
     // The scoped Pile credential is an env-var secret: lanes whose shell is
@@ -616,7 +689,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
       permissions
     );
     const laneMint = Boolean(options.lane?.tokenUrl && options.lane.token);
-    return {
+    const env: Record<string, string> = {
       ...credentialEnv,
       ...(pileApi
         ? {
@@ -678,17 +751,35 @@ export class SandboxCliAgentProvider implements AgentProvider {
       ISSUE_IDENTIFIER: issue.identifier ?? issue.id,
       AGENT_LABEL: this.d.displayLabel,
       MODEL: model,
-      PROMPT_B64: encodeBase64(prompt),
       // Daytona mounts DAYTONA_VOLUME_ID at /home/daytona/cache; on CF
       // sandboxes this is just a local dir — harmless, keeps the path
       // consistent for the runner's pnpm-store cache.
       npm_config_store_dir: "/home/daytona/cache/pnpm-store",
-      RUNNER_PY_B64: encodeBase64(
-        runnerBundle.core + "\n" + runnerBundle[this.d.driver]
-      ),
       ...laneRestrictionEnv(this.env),
       ...options.extra,
     };
+    assertLaneEnvFits(env);
+    return { env, prompt };
+  }
+
+  /** The three provision files: lane env (0600 — carries the lane's
+   *  secrets), the prompt, and the runner bundle. */
+  private laneFiles(
+    env: Record<string, string>,
+    prompt: string
+  ): SandboxFile[] {
+    return [
+      {
+        path: LANE_ENV_PATH,
+        content: serializeLaneEnv(env),
+        mode: 0o600,
+      },
+      { path: PROMPT_PATH, content: prompt },
+      {
+        path: RUNNER_PATH,
+        content: runnerBundle.core + "\n" + runnerBundle[this.d.driver],
+      },
+    ];
   }
 
   private async start(
@@ -720,6 +811,37 @@ export class SandboxCliAgentProvider implements AgentProvider {
       }))
     );
     const name = this.sandboxName(sessionId);
+    const workerEnv = this.env as WorkerEnv;
+    const logToken = await agentLogToken(workerEnv, organizationId, sessionId);
+    // Built before the provision block on purpose: an oversized env value
+    // throws BAD_REQUEST here — a task-class failure that neither the start
+    // retry loop nor the infra re-dispatch will re-drive (PILE-595).
+    const lanePayload = this.buildLanePayload(
+      issue,
+      model,
+      credential.env,
+      github,
+      gitIdentity,
+      {
+        comments: sessionContext?.comments,
+        instructions: sessionContext?.instructions,
+        pileApi: sessionContext?.pileApi ?? null,
+        extra: sessionContext?.extraEnv,
+        secondaryRepos,
+        permissions,
+        agentEnvKeys: Object.keys(sessionContext?.extraEnv ?? {}),
+        log: {
+          url: agentLogUrl(workerEnv, organizationId, sessionId),
+          token: logToken,
+        },
+        cacheUrl: agentCacheUrl(workerEnv, organizationId, sessionId),
+        lane: {
+          tokenUrl: agentGithubTokenUrl(workerEnv, organizationId, sessionId),
+          token: logToken,
+          mcpUrl: agentMcpUrl(workerEnv, organizationId, sessionId),
+        },
+      }
+    );
 
     const spanId = await this.openSpan(
       organizationId,
@@ -770,42 +892,6 @@ export class SandboxCliAgentProvider implements AgentProvider {
             await compute.deleteSandbox(existing);
           }
 
-          const workerEnv = this.env as WorkerEnv;
-          const logToken = await agentLogToken(
-            workerEnv,
-            organizationId,
-            sessionId
-          );
-          const sandboxEnv = this.buildSandboxEnv(
-            issue,
-            model,
-            credential.env,
-            github,
-            gitIdentity,
-            {
-              comments: sessionContext?.comments,
-              instructions: sessionContext?.instructions,
-              pileApi: sessionContext?.pileApi ?? null,
-              extra: sessionContext?.extraEnv,
-              secondaryRepos,
-              permissions,
-              agentEnvKeys: Object.keys(sessionContext?.extraEnv ?? {}),
-              log: {
-                url: agentLogUrl(workerEnv, organizationId, sessionId),
-                token: logToken,
-              },
-              cacheUrl: agentCacheUrl(workerEnv, organizationId, sessionId),
-              lane: {
-                tokenUrl: agentGithubTokenUrl(
-                  workerEnv,
-                  organizationId,
-                  sessionId
-                ),
-                token: logToken,
-                mcpUrl: agentMcpUrl(workerEnv, organizationId, sessionId),
-              },
-            }
-          );
           for (let attempt = 1; attempt <= START_MAX_ATTEMPTS; attempt++) {
             try {
               const sandbox = await compute.createSandbox({
@@ -813,7 +899,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
                 sessionId,
                 organizationId,
                 agentLabel: this.id,
-                env: sandboxEnv,
+                env: {},
               });
               await this.note(
                 organizationId,
@@ -833,12 +919,14 @@ export class SandboxCliAgentProvider implements AgentProvider {
                 { organizationId, sessionId, repo: issue.repo, permissions },
                 { parentId: spanId }
               );
-              await compute.startRunner(
+              await compute.putFiles(
                 sandbox,
-                sessionId,
-                "printf '%s' \"$RUNNER_PY_B64\" | base64 -d > /tmp/run.py && python3 /tmp/run.py",
-                cacheEnv ? { ...sandbox.runnerEnv, ...cacheEnv } : undefined
+                this.laneFiles(
+                  { ...lanePayload.env, ...cacheEnv },
+                  lanePayload.prompt
+                )
               );
+              await compute.startRunner(sandbox, sessionId, RUNNER_COMMAND);
               // Real readiness: the runner binds :8787 when it's alive, so the
               // 'runner started' marker means the process is actually up — not
               // just that startProcess returned. Best-effort; a wedge here
@@ -1038,7 +1126,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
       return { id: sessionId, agentId: this.id, status: "running" };
     }
 
-    const raw = await compute.readFile(sandbox, RESULT_PATH);
+    const raw = await compute.getFile(sandbox, RESULT_PATH);
     let result: RunnerResult | null = null;
     if (raw) {
       try {
@@ -1075,9 +1163,14 @@ export class SandboxCliAgentProvider implements AgentProvider {
       (await compute.runnerBusy?.(sandbox, sessionId)) !== true
     ) {
       const continued =
-        Number(await compute.readFile(sandbox, CONTINUATION_COUNT_PATH)) || 0;
+        Number(await compute.getFile(sandbox, CONTINUATION_COUNT_PATH)) || 0;
       if (continued < MAX_TRUNCATION_CONTINUATIONS) {
-        const env = sandbox.runnerEnv ?? {};
+        // Lane fields ride /tmp/pile/lane.env now — runnerEnv only existed
+        // while env was still passed at create (pre-PILE-595 lanes).
+        const env = parseLaneEnv(
+          (await compute.getFile(sandbox, LANE_ENV_PATH)) ??
+            serializeLaneEnv(sandbox.runnerEnv ?? {})
+        );
         const resumed = await this.sendPrompt(
           sessionId,
           TRUNCATION_CONTINUATION_PROMPT,
@@ -1096,11 +1189,12 @@ export class SandboxCliAgentProvider implements AgentProvider {
           { organizationId: sandbox.organizationId ?? undefined }
         );
         if (resumed) {
-          await compute.writeFile(
-            sandbox,
-            CONTINUATION_COUNT_PATH,
-            String(continued + 1)
-          );
+          await compute.putFiles(sandbox, [
+            {
+              path: CONTINUATION_COUNT_PATH,
+              content: String(continued + 1),
+            },
+          ]);
           await this.note(
             sandbox.organizationId,
             sessionId,
@@ -1300,11 +1394,12 @@ export class SandboxCliAgentProvider implements AgentProvider {
       // Mid-run injection: the runner's watcher thread feeds files dropped in
       // /tmp/followups into the live agent process's stdin (and drains any
       // never-consumed leftovers as continuation runs after it exits).
-      await compute.writeFile(
-        sandbox,
-        `/tmp/followups/${Date.now().toString(36)}.prompt`,
-        prompt
-      );
+      await compute.putFiles(sandbox, [
+        {
+          path: `/tmp/followups/${Date.now().toString(36)}.prompt`,
+          content: prompt,
+        },
+      ]);
       await this.note(
         sandbox.organizationId,
         trackerSessionId,
@@ -1339,7 +1434,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
       permissions,
     });
     const followupId = `${trackerSessionId}-fu-${Date.now().toString(36)}`;
-    const followupEnv = this.buildSandboxEnv(
+    const followup = this.buildLanePayload(
       issue,
       this.defaultModel(),
       credentialEnv,
@@ -1383,12 +1478,11 @@ export class SandboxCliAgentProvider implements AgentProvider {
       }
     );
 
-    await compute.startRunner(
+    await compute.putFiles(
       sandbox,
-      followupId,
-      "printf '%s' \"$RUNNER_PY_B64\" | base64 -d > /tmp/run.py && python3 /tmp/run.py",
-      followupEnv
+      this.laneFiles(followup.env, followup.prompt)
     );
+    await compute.startRunner(sandbox, followupId, RUNNER_COMMAND);
     await this.note(
       sandbox.organizationId,
       trackerSessionId,
@@ -1442,7 +1536,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
     );
     if (!sandbox) return null;
     const runner = await compute.runnerState(sandbox, providerSessionId);
-    const transcript = await compute.readFile(sandbox, "/tmp/agent.log");
+    const transcript = await compute.getFile(sandbox, "/tmp/agent.log");
     const logs =
       (transcript ? transcript.slice(-131072) : null) ??
       (await compute.runnerLogs?.(sandbox, providerSessionId)) ??

@@ -456,8 +456,8 @@ function fakeComputeBackend(opts: {
       started.push(`${processId}:${command.slice(0, 40)}`);
     },
     runnerState: async () => opts.state ?? "running",
-    readFile: async () => opts.resultFile ?? null,
-    writeFile: async () => {},
+    getFile: async () => opts.resultFile ?? null,
+    putFiles: async () => {},
     deleteSandbox: async () => {},
     health: async () => ({ ok: true }),
   };

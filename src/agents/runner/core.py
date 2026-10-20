@@ -1,7 +1,10 @@
 # Pile agent runner — shared core.
 #
 # This file is concatenated with a per-agent driver (cursor.py, devin.py,
-# codex.py) and shipped to the sandbox as RUNNER_PY_B64. Everything an agent
+# codex.py) and written to the sandbox as /tmp/pile/run.py (PILE-595 — env
+# values cap at 128KB on execve, so the bundle and the prompt travel as
+# files: lane.env is sourced before this runs, prompt.md is read below).
+# Everything an agent
 # lane needs that is NOT agent-specific lives here: transcript tee, redact,
 # agent env allowlist, GitHub token refresh/revoke,
 # repo ops, GitHub API, PR creation, lane digest, GitHub token refresh, log
@@ -113,6 +116,9 @@ GITHUB_TOKEN_EXPIRES_AT = _parse_expiry(os.environ.get('GITHUB_TOKEN_EXPIRES_AT'
 TOKEN_REFRESH_MARGIN_SEC = 300
 REPO_DIR = os.path.join(HOME, 'repo')
 RESULT_FILE = '/tmp/agent-result.json'
+# The lane prompt lives on disk — agent CLIs get it by path or stdin, never
+# argv, which caps a single string at 128KB (PILE-595).
+PROMPT_PATH = '/tmp/pile/prompt.md'
 AGENT_LABEL = os.environ.get('AGENT_LABEL', 'Agent')
 # 'plan' lanes (PILE-283) read the repo and report a plan — never push.
 LANE_MODE = os.environ.get('PILE_LANE_MODE', '')
@@ -191,8 +197,7 @@ SHELL_POLICY = _tier('PILE_SHELL_POLICY')
 RUNNER_SECRET_ENV = {
     'GITHUB_TOKEN', 'GH_TOKEN', 'LANE_TOKEN', 'PILE_TOKEN_URL',
     'PILE_LOG_TOKEN', 'PILE_LOG_URL', 'PILE_CACHE_URL', 'PILE_API_KEY',
-    'DEVIN_CREDENTIALS_B64', 'CODEX_AUTH_JSON_B64', 'RUNNER_PY_B64',
-    'PROMPT_B64',
+    'DEVIN_CREDENTIALS_B64', 'CODEX_AUTH_JSON_B64',
 }
 # Credentials that can write to or mint for the repo — stripped from the
 # agent whenever push is below 'enabled', whatever the shell tier.
@@ -350,7 +355,7 @@ _AGENT_ENV_ALLOW_PREFIXES = ('LC_', 'XDG_')
 _RUNNER_ONLY_ENV = frozenset((
     'GITHUB_TOKEN', 'GITHUB_TOKEN_EXPIRES_AT', 'GH_TOKEN', 'LANE_TOKEN', 'PILE_TOKEN_URL',
     'PILE_LOG_TOKEN', 'PILE_LOG_URL', 'PILE_CACHE_URL', 'PILE_AGENT_ENV_KEYS', 'SECONDARY_REPOS_JSON',
-    'RUNNER_PY_B64', 'PROMPT_B64', 'DEVIN_CREDENTIALS_B64', 'CODEX_AUTH_JSON_B64', 'FOLLOWUP',
+    'DEVIN_CREDENTIALS_B64', 'CODEX_AUTH_JSON_B64', 'FOLLOWUP',
 ))
 
 
@@ -1517,9 +1522,29 @@ def browser_prompt_note():
     return '\n'.join(lines)
 
 
+def read_lane_prompt():
+    # Written by the provision step's file upload — env/argv would cap the
+    # prompt at 128KB (PILE-595).
+    with open(PROMPT_PATH) as f:
+        return f.read()
+
+
 def lane_prompt():
-    prompt = base64.b64decode(os.environ['PROMPT_B64']).decode('utf-8')
-    return prompt + browser_prompt_note()
+    return read_lane_prompt() + browser_prompt_note()
+
+
+def prompt_file(prompt=None):
+    # Agent CLIs get the prompt by path or stdin — argv caps a single string
+    # at 128KB (PILE-595). None means the lane prompt: the run-time browser
+    # note is folded back into PROMPT_PATH so the CLI reads effective text.
+    if prompt is None:
+        prompt = lane_prompt()
+        path = PROMPT_PATH
+    else:
+        path = '/tmp/pile/prompt-turn.md'
+    with open(path, 'w') as f:
+        f.write(prompt)
+    return path
 
 
 # Push appended transcript lines back to Pile so they land in the session

@@ -73,6 +73,21 @@ export interface ComputeSandbox {
 
 export type RunnerState = "pending" | "running" | { exitCode: number };
 
+export interface SandboxFile {
+  path: string;
+  content: string;
+  /** Octal permission bits applied after the write (e.g. 0o600 for the
+   *  lane env file). */
+  mode?: number;
+}
+
+/** Shell-sourceable env file: one `export K='v'` per entry. */
+export function serializeLaneEnv(env: Record<string, string>): string {
+  return Object.entries(env)
+    .map(([k, v]) => `export ${k}='${v.replaceAll("'", "'\\''")}'`)
+    .join("\n");
+}
+
 export interface ComputeBackend {
   readonly kind: "daytona" | "cloudflare";
   createSandbox(opts: {
@@ -110,12 +125,12 @@ export interface ComputeBackend {
     env?: Record<string, string>
   ): Promise<void>;
   runnerState(sandbox: ComputeSandbox, sessionId: string): Promise<RunnerState>;
-  readFile(sandbox: ComputeSandbox, path: string): Promise<string | null>;
-  writeFile(
-    sandbox: ComputeSandbox,
-    path: string,
-    content: string
-  ): Promise<void>;
+  getFile(sandbox: ComputeSandbox, path: string): Promise<string | null>;
+  /** Write whole files into the sandbox over the backend's file API —
+   *  content never traverses argv or env, so multi-hundred-KB payloads
+   *  (prompts, the runner bundle) don't hit the execve per-string cap
+   *  (PILE-595). */
+  putFiles(sandbox: ComputeSandbox, files: SandboxFile[]): Promise<void>;
   /** Any runner process in flight for this session — used to distinguish a
    *  follow-up run from a dead lane after the primary process exits. */
   runnerBusy?(sandbox: ComputeSandbox, sessionId: string): Promise<boolean>;
@@ -197,12 +212,6 @@ function computeError(message: string, status = 502): ComputeError {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function encodeUtf8Base64(input: string): string {
-  const bytes = new TextEncoder().encode(input);
-  const bin = Array.from(bytes, (b) => String.fromCharCode(b)).join("");
-  return btoa(bin);
 }
 
 // ---------------------------------------------------------------------------
@@ -418,7 +427,11 @@ export class DaytonaBackend implements ComputeBackend {
         signal: AbortSignal.timeout(IO_TIMEOUT_MS),
         ...init,
         headers: {
-          "Content-Type": "application/json",
+          // FormData bodies carry their own multipart boundary — forcing a
+          // JSON content type would corrupt the upload.
+          ...(init?.body instanceof FormData
+            ? {}
+            : { "Content-Type": "application/json" }),
           Authorization: `Bearer ${this.config.apiKey}`,
           ...init?.headers,
         },
@@ -442,10 +455,9 @@ export class DaytonaBackend implements ComputeBackend {
     // prefix the command instead. Values are single-quote escaped.
     if (env && Object.keys(env).length > 0) {
       const envPath = `/tmp/pile-env-${sessionId.replace(/[^a-zA-Z0-9-]/g, "")}.sh`;
-      const body = Object.entries(env)
-        .map(([k, v]) => `export ${k}='${v.replaceAll("'", "'\\''")}'`)
-        .join("\n");
-      await this.writeFile(sandbox, envPath, body);
+      await this.putFiles(sandbox, [
+        { path: envPath, content: serializeLaneEnv(env) },
+      ]);
       command = `set -a && . ${envPath} && set +a && rm -f ${envPath}; ${command}`;
     }
     for (let i = 0; i <= SESSION_CREATE_MAX_RETRIES; i++) {
@@ -506,10 +518,7 @@ export class DaytonaBackend implements ComputeBackend {
     return { exitCode: completed.exitCode };
   }
 
-  async readFile(
-    sandbox: ComputeSandbox,
-    path: string
-  ): Promise<string | null> {
+  async getFile(sandbox: ComputeSandbox, path: string): Promise<string | null> {
     const base = this.toolbox(sandbox);
     const res = await this.toolboxFetch(`${base}/process/execute`, {
       method: "POST",
@@ -521,28 +530,73 @@ export class DaytonaBackend implements ComputeBackend {
     return data.result;
   }
 
-  async writeFile(
+  private async uploadFile(
     sandbox: ComputeSandbox,
-    path: string,
-    content: string
+    file: SandboxFile
   ): Promise<void> {
     const base = this.toolbox(sandbox);
-    const res = await this.toolboxFetch(`${base}/process/execute`, {
-      method: "POST",
-      body: JSON.stringify({
-        command: `python3 -c "import base64,sys;open(sys.argv[1],'wb').write(base64.b64decode(sys.argv[2]))" ${path} ${encodeUtf8Base64(content)}`,
-        cwd: "/",
-      }),
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      throw computeError(`Daytona writeFile failed: ${res.status} ${text}`);
-    }
-    const data = daytonaSyncExecSchema.parse(await res.json());
-    if (data.exitCode !== 0) {
-      throw computeError(
-        `Daytona writeFile exited ${data.exitCode}: ${data.result ?? ""}`
+    const res = await this.toolboxFetch(
+      `${base}/files/upload-v2?path=${encodeURIComponent(file.path)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/octet-stream" },
+        body: file.content,
+      }
+    );
+    if (res.ok) return;
+    if (res.status === 404) {
+      // Older toolbox images lack upload-v2 — the legacy endpoint takes a
+      // multipart `file` part instead of a raw body.
+      const form = new FormData();
+      form.set("file", new Blob([file.content]), "file");
+      const legacy = await this.toolboxFetch(
+        `${base}/files/upload?path=${encodeURIComponent(file.path)}`,
+        { method: "POST", body: form }
       );
+      if (legacy.ok) return;
+      const legacyText = await legacy.text();
+      throw computeError(
+        daytonaFailure(
+          `Daytona file upload ${file.path} failed`,
+          legacy.status,
+          legacyText
+        )
+      );
+    }
+    const text = await res.text();
+    throw computeError(
+      daytonaFailure(
+        `Daytona file upload ${file.path} failed`,
+        res.status,
+        text
+      )
+    );
+  }
+
+  async putFiles(sandbox: ComputeSandbox, files: SandboxFile[]): Promise<void> {
+    const base = this.toolbox(sandbox);
+    for (const file of files) {
+      await this.uploadFile(sandbox, file);
+      if (file.mode === undefined) continue;
+      const res = await this.toolboxFetch(`${base}/process/execute`, {
+        method: "POST",
+        body: JSON.stringify({
+          command: `chmod ${file.mode.toString(8)} ${file.path}`,
+          cwd: "/",
+        }),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw computeError(
+          `Daytona chmod ${file.path} failed: ${res.status} ${text}`
+        );
+      }
+      const data = daytonaSyncExecSchema.parse(await res.json());
+      if (data.exitCode !== 0) {
+        throw computeError(
+          `Daytona chmod ${file.path} exited ${data.exitCode}: ${data.result ?? ""}`
+        );
+      }
     }
   }
 
@@ -728,7 +782,7 @@ export class CloudflareBackend implements ComputeBackend {
     // The result file surviving is proof the sandbox (and its disk) is alive.
     if (
       resultPath &&
-      (await this.readFile({ id: name, name, state: "started" }, resultPath))
+      (await this.getFile({ id: name, name, state: "started" }, resultPath))
     ) {
       return { id: name, name, state: "started" };
     }
@@ -797,10 +851,7 @@ export class CloudflareBackend implements ComputeBackend {
     return { exitCode: proc.exitCode ?? (status === "completed" ? 0 : 1) };
   }
 
-  async readFile(
-    sandbox: ComputeSandbox,
-    path: string
-  ): Promise<string | null> {
+  async getFile(sandbox: ComputeSandbox, path: string): Promise<string | null> {
     try {
       const handle = await this.sandbox(sandbox.name);
       const res = await ioTimeout(handle.readFile(path), "sandbox readFile");
@@ -810,20 +861,25 @@ export class CloudflareBackend implements ComputeBackend {
     }
   }
 
-  async writeFile(
-    sandbox: ComputeSandbox,
-    path: string,
-    content: string
-  ): Promise<void> {
-    const res = await ioTimeout(
-      (await ioTimeout(this.sandbox(sandbox.name), "sandbox handle")).writeFile(
-        path,
-        content
-      ),
-      "sandbox writeFile"
+  async putFiles(sandbox: ComputeSandbox, files: SandboxFile[]): Promise<void> {
+    const handle = await ioTimeout(
+      this.sandbox(sandbox.name),
+      "sandbox handle"
     );
-    if (!res.success) {
-      throw computeError(`Cloudflare writeFile failed: ${path}`);
+    for (const file of files) {
+      const res = await ioTimeout(
+        handle.writeFile(file.path, file.content),
+        "sandbox writeFile"
+      );
+      if (!res.success) {
+        throw computeError(`Cloudflare writeFile failed: ${file.path}`);
+      }
+      if (file.mode !== undefined) {
+        await ioTimeout(
+          handle.exec(`chmod ${file.mode.toString(8)} ${file.path}`),
+          "sandbox chmod"
+        );
+      }
     }
   }
 
@@ -1064,9 +1120,7 @@ export function computeBackend(env: AppEnv, agentId?: string): ComputeBackend {
 export async function sweepOrphanSandboxes(
   backend: ComputeBackend,
   stub: {
-    getAgentSession(
-      id: string
-    ): Promise<{ status: string } | null | undefined>;
+    getAgentSession(id: string): Promise<{ status: string } | null | undefined>;
   },
   opts: { limit?: number } = {}
 ): Promise<{ reaped: number; checked: number }> {
