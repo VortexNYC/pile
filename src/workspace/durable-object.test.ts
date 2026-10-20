@@ -3760,9 +3760,9 @@ describe("merchant sources (feed registry)", () => {
       return { src, dupe, list };
     });
     expect(out.dupe.id).toBe(out.src.id);
-    expect(
-      out.list.find((r) => r.id === out.src.id)?.cursorValue
-    ).toBe("2026-10-19");
+    expect(out.list.find((r) => r.id === out.src.id)?.cursorValue).toBe(
+      "2026-10-19"
+    );
   });
 });
 

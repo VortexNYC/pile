@@ -8706,12 +8706,6 @@ export function grantedSpaceIds(
   actorIds: string[]
 ) {
   if (actorIds.length === 0) return new Set<string>();
-  const rows = db
-    .select({ spaceId: workspaceSpacePermissions.spaceId })
-    .from(workspaceSpacePermissions)
-    .where(eq(workspaceSpacePermissions.organizationId, organizationId))
-    .all()
-    .filter((r) => actorIds.includes(r.spaceId) === false);
   // filter by actor — the where above selects org; match actors in JS for
   // the team-ids expansion (small grant sets, same as documents).
   const granted = new Set<string>();
