@@ -873,6 +873,6 @@ describe("bulk customer import (PILE-403)", () => {
       },
       admin
     );
-    expect((await term.json() as { type: string }).type).toBe("terminal");
+    expect(((await term.json()) as { type: string }).type).toBe("terminal");
   });
 });

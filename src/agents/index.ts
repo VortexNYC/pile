@@ -749,11 +749,11 @@ export async function dispatchAgent(
         agentProfile: options?.agentProfile,
         conversationKey: options?.conversationKey,
         resumeProviderSessionId: options?.conversationKey
-          ? (
+          ? ((
               await stub.getAgentSessionByConversationKey(
                 options.conversationKey
               )
-            )?.providerSessionId ?? undefined
+            )?.providerSessionId ?? undefined)
           : undefined,
         instructions:
           [

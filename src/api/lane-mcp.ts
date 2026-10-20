@@ -1,12 +1,10 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
-import { getExecutionCtx } from "./execution-ctx.js";
-import { pageChiefOfStaff } from "../agents/pipeline-events.js";
-import { z } from "zod";
 import {
   McpServer,
   WebStandardStreamableHTTPServerTransport,
 } from "@modelcontextprotocol/server";
 import { eq } from "drizzle-orm";
+import { z } from "zod";
 
 import { verifySessionToken } from "../agents/credentials.js";
 import {
@@ -25,11 +23,13 @@ import {
   type WorkspaceLaneTool,
   type WorkspaceLaneToolContext,
 } from "../agents/lane-tools.js";
+import { pageChiefOfStaff } from "../agents/pipeline-events.js";
 import type { SessionPlan } from "../agents/session-plan.js";
 import { createD1 } from "../global/db.js";
 import { getInstallationTokenForRepo } from "../global/github-auth.js";
 import { organization } from "../global/schema.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
+import { getExecutionCtx } from "./execution-ctx.js";
 import { getWorkspaceStub } from "./stub.js";
 
 const TERMINAL = new Set(["completed", "failed", "canceled"]);
@@ -133,32 +133,31 @@ export function registerLaneMcpRoutes(app: OpenAPIHono<AppContext>) {
           )
         : laneToolPolicy("pipeline", profileDeny);
 
-      const branch =
-        session.branch ?? issue.branch ?? `issue-${issue.id}`;
+      const branch = session.branch ?? issue.branch ?? `issue-${issue.id}`;
       const report = async (input: {
         message?: string;
         result?: string;
         prUrl?: string;
         plan?: SessionPlan;
       }) => {
-          const now = new Date().toISOString();
-          if (input.message !== undefined) {
-            await stub.addAgentSessionEvent({
-              sessionId,
-              type: "log",
-              message: input.message.slice(0, 2000),
-            });
-          }
-          // PILE-426 — set_plan publishes the checklist on the session row
-          // (event + progress-comment refresh ride along in the DO).
-          if (input.plan !== undefined) {
-            await stub.setAgentSessionPlan(sessionId, input.plan);
-          }
-          await stub.updateAgentSession(sessionId, {
-            lastProgressAt: now,
-            ...(input.result !== undefined ? { result: input.result } : {}),
-            ...(input.prUrl !== undefined ? { prUrl: input.prUrl } : {}),
+        const now = new Date().toISOString();
+        if (input.message !== undefined) {
+          await stub.addAgentSessionEvent({
+            sessionId,
+            type: "log",
+            message: input.message.slice(0, 2000),
           });
+        }
+        // PILE-426 — set_plan publishes the checklist on the session row
+        // (event + progress-comment refresh ride along in the DO).
+        if (input.plan !== undefined) {
+          await stub.setAgentSessionPlan(sessionId, input.plan);
+        }
+        await stub.updateAgentSession(sessionId, {
+          lastProgressAt: now,
+          ...(input.result !== undefined ? { result: input.result } : {}),
+          ...(input.prUrl !== undefined ? { prUrl: input.prUrl } : {}),
+        });
       };
 
       const wsCtx: WorkspaceLaneToolContext = {
