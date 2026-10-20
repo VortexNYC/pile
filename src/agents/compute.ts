@@ -1293,6 +1293,96 @@ const LANE_V1_BINDING_BY_AGENT = {
   "codex-cli": "SANDBOX_LANE_CODEX",
 } as const;
 
+// PILE-473/474 — wraps a primary backend and, on an infra-class create
+// failure (Daytona down, env-size cap, pool wedge), retries once on the
+// fallback. Only createSandbox swaps backends: a live sandbox can't be
+// transplanted mid-session, so post-create calls stick with whoever
+// spawned it.
+export class FailoverBackend implements ComputeBackend {
+  get kind(): ComputeBackend["kind"] {
+    return this.switched ? this.fallback.kind : this.primary.kind;
+  }
+  private switched = false;
+
+  constructor(
+    private primary: ComputeBackend,
+    private fallback: ComputeBackend
+  ) {}
+
+  private pick(): ComputeBackend {
+    return this.switched ? this.fallback : this.primary;
+  }
+
+  async createSandbox(opts: Parameters<ComputeBackend["createSandbox"]>[0]) {
+    if (this.switched) return this.fallback.createSandbox(opts);
+    try {
+      return await this.primary.createSandbox(opts);
+    } catch (error) {
+      // Config errors are deterministic — retrying on another substrate
+      // won't fix a missing credential.
+      if (error instanceof VortexError && error.code === "CONFIG_ERROR") {
+        throw error;
+      }
+      this.switched = true;
+      console.error(
+        `[pile] compute failover: ${this.primary.kind} create failed — ` +
+          `retrying on ${this.fallback.kind}`,
+        error instanceof Error ? error.message : error
+      );
+      return this.fallback.createSandbox(opts);
+    }
+  }
+
+  findSandbox(...a: Parameters<ComputeBackend["findSandbox"]>[0] extends never ? never : [string, string, string?]) {
+    return this.pick().findSandbox(...a);
+  }
+  startRunner(...a: [ComputeSandbox, string, string, Record<string, string>?]) {
+    return this.pick().startRunner(...a);
+  }
+  runnerBusy(...a: [ComputeSandbox, string]) {
+    return this.pick().runnerBusy?.(...a) ?? Promise.resolve(false);
+  }
+  runnerState(...a: [ComputeSandbox, string]) {
+    return this.pick().runnerState(...a);
+  }
+  getFile(...a: [ComputeSandbox, string]) {
+    return this.pick().getFile(...a);
+  }
+  putFiles(...a: [ComputeSandbox, SandboxFile[]]) {
+    return this.pick().putFiles(...a);
+  }
+  runnerLogs(...a: [ComputeSandbox, string]) {
+    return this.pick().runnerLogs(...a);
+  }
+  waitForRunner(...a: [ComputeSandbox, string, number]) {
+    return this.pick().waitForRunner?.(...a) ?? Promise.resolve();
+  }
+  deleteSandbox(...a: [ComputeSandbox]) {
+    return this.pick().deleteSandbox?.(...a) ?? Promise.resolve();
+  }
+  backupWorktree(...a: [ComputeSandbox]) {
+    return this.pick().backupWorktree?.(...a) ?? Promise.resolve(null);
+  }
+  restoreWorktree(...a: [string, string]) {
+    return this.pick().restoreWorktree?.(...a) ?? Promise.reject(new Error("no restoreWorktree"));
+  }
+  mountCache(...a: [ComputeSandbox, { organizationId: string; repo: string; readOnly: boolean }]) {
+    return this.pick().mountCache?.(...a) ?? Promise.resolve(null);
+  }
+  saveCache(...a: [ComputeSandbox, { organizationId: string; repo: string }]) {
+    return this.pick().saveCache?.(...a) ?? Promise.resolve();
+  }
+  previewUrl(...a: [ComputeSandbox, number]) {
+    return this.pick().previewUrl?.(...a) ?? Promise.resolve(null);
+  }
+  listSandboxes(...a: [string]) {
+    return this.pick().listSandboxes?.(...a) ?? Promise.resolve([]);
+  }
+  health() {
+    return this.pick().health();
+  }
+}
+
 export function computeBackend(env: AppEnv, agentId?: string): ComputeBackend {
   const provider = env.COMPUTE_PROVIDER ?? "daytona";
   if (provider === "cloudflare") {
@@ -1359,7 +1449,28 @@ export function computeBackend(env: AppEnv, agentId?: string): ComputeBackend {
       message: "DAYTONA_API_KEY is not configured",
     });
   }
-  return new DaytonaBackend(env, config);
+  const daytona = new DaytonaBackend(env, config);
+  // LANE_FAILOVER=v1 wraps Daytona with a lane-pool fallback: an infra-class
+  // create failure (Daytona down, payload cap, wedge) retries once on the
+  // v1 LaneSandbox backend instead of killing the lane (PILE-473/474).
+  if (env.LANE_FAILOVER === "v1") {
+    const specific = agentId
+      ? (
+          LANE_V1_BINDING_BY_AGENT as Record<
+            string,
+            | "SANDBOX_LANE_CURSOR"
+            | "SANDBOX_LANE_DEVIN"
+            | "SANDBOX_LANE_CODEX"
+            | undefined
+          >
+        )[agentId]
+      : undefined;
+    const ns = (specific ? env[specific] : undefined) ?? env.SANDBOX_LANE;
+    if (ns) {
+      return new FailoverBackend(daytona, new LaneSandboxBackend(ns, env));
+    }
+  }
+  return daytona;
 }
 
 /** PILE-471 — label-based orphan sweep: any `vortex.*`-labeled sandbox
