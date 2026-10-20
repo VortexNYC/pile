@@ -610,7 +610,14 @@ describe("Daytona hardening (PILE-472)", () => {
     const calls: string[] = [];
     const pages = [
       [{ id: "other-1", name: "a", state: "started", labels: {} }],
-      [{ id: "mine", name: "x", state: "started", labels: { "vortex.session": "sess-1" } }],
+      [
+        {
+          id: "mine",
+          name: "x",
+          state: "started",
+          labels: { "vortex.session": "sess-1" },
+        },
+      ],
       [],
     ];
     const origFetch = globalThis.fetch;
@@ -623,10 +630,10 @@ describe("Daytona hardening (PILE-472)", () => {
       });
     }) as typeof fetch;
     try {
-      const backend = new DaytonaBackend(
-        {} as never,
-        { apiKey: "k", apiUrl: "https://day" }
-      );
+      const backend = new DaytonaBackend({} as never, {
+        apiKey: "k",
+        apiUrl: "https://day",
+      });
       const found = await backend.findSandbox("sess-1", "x");
       expect(found?.id).toBe("mine");
       expect(calls.length).toBe(2);
@@ -796,11 +803,8 @@ describe("sweepOrphanSandboxes (PILE-471)", () => {
             : { status: "running" },
     };
     const { sweepOrphanSandboxes } = await import("./compute.js");
-    const out = await sweepOrphanSandboxes(
-      backend as never,
-      stub
-    );
+    const out = await sweepOrphanSandboxes(backend as never, stub);
     expect(out.reaped).toBe(2);
-    expect(deleted.sort()).toEqual(["s1", "s3"]);
+    expect(deleted.toSorted()).toEqual(["s1", "s3"]);
   });
 });

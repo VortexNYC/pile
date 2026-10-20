@@ -3984,7 +3984,6 @@ describe("spend caps (PILE-425)", () => {
         actorType: "user",
       });
     }
-    const { releasePausedSessions } = await import("./sweep.js");
     const released = await releasePausedSessions(
       env,
       stub,
