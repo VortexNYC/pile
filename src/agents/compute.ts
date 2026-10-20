@@ -157,6 +157,15 @@ export interface ComputeBackend {
     sandbox: ComputeSandbox,
     opts: { organizationId: string; repo: string; readOnly: boolean }
   ): Promise<string | null>;
+  /**
+   * Persist the lane cache dir back so the next lane on the same org+repo
+   * starts warm. Only meaningful on backends whose mountCache is a restore
+   * (not a live mount) — 0.12's s3fs mount writes through and skips this.
+   */
+  saveCache?(
+    sandbox: ComputeSandbox,
+    opts: { organizationId: string; repo: string }
+  ): Promise<void>;
   /** Public URL for a port on the sandbox — quick tunnel, lives as long as the container. */
   previewUrl?(sandbox: ComputeSandbox, port: number): Promise<string | null>;
   health(): Promise<{ ok: boolean; message?: string }>;
@@ -1209,6 +1218,58 @@ export class LaneSandboxBackend implements ComputeBackend {
     } finally {
       await cfReleaseAdmission(this.env, sandbox.name);
     }
+  }
+
+  // v1 parity (LANE_CACHE_BUCKET + DirectoryBackup): mountCache restores the
+  // shared cache into the lane; saveCache persists it for the next lane on
+  // the same org+repo. backupWorktree/restoreWorktree mirror the Daytona
+  // shape — stage under /tmp, DirectoryBackup of the staged dir.
+  async mountCache(
+    sandbox: ComputeSandbox,
+    opts: { organizationId: string; repo: string; readOnly: boolean }
+  ): Promise<string | null> {
+    if (!this.env?.LANE_CACHE_BUCKET) return null;
+    return ioTimeout(
+      this.stub(sandbox.name).restoreCache(
+        laneCachePrefix(opts.organizationId, opts.repo),
+        LANE_CACHE_MOUNT
+      ),
+      "lane restoreCache"
+    ).catch(() => null);
+  }
+
+  async saveCache(
+    sandbox: ComputeSandbox,
+    opts: { organizationId: string; repo: string }
+  ): Promise<void> {
+    if (!this.env?.LANE_CACHE_BUCKET) return;
+    await ioTimeout(
+      this.stub(sandbox.name).saveCache(
+        laneCachePrefix(opts.organizationId, opts.repo),
+        LANE_CACHE_MOUNT
+      ),
+      "lane saveCache"
+    ).catch(() => undefined);
+  }
+
+  async backupWorktree(sandbox: ComputeSandbox): Promise<string | null> {
+    return ioTimeout(
+      this.stub(sandbox.name).backupWorktreeDir(),
+      "lane backupWorktree"
+    ).catch(() => null);
+  }
+
+  async restoreWorktree(
+    name: string,
+    backupJson: string
+  ): Promise<ComputeSandbox> {
+    await cfAdmit(this.env, name);
+    await ioTimeout(this.stub(name).provision(), "lane provision");
+    await ioTimeout(
+      this.stub(name).restoreWorktreeDir(backupJson),
+      "lane restoreWorktree"
+    );
+    return { id: name, name, state: "started" };
   }
 
   async health(): Promise<{ ok: boolean; message?: string }> {
