@@ -101,8 +101,9 @@ async function mintAgent(
   );
   const parsed = z
     .object({ id: z.string(), token: z.string() })
+    .passthrough()
     .parse(await res.json());
-  return { res, key: parsed.token };
+  return { res, key: parsed.token, body: parsed };
 }
 
 async function visibleTeamCount(
@@ -117,74 +118,232 @@ async function visibleTeamCount(
 }
 
 describe("agent tokens", () => {
-  it("lists installs with actorType, provider, and joined teams", async () => {
-    const { organizationId, adminToken } = await seed();
-    await mintAgent(organizationId, adminToken, {
-      name: "grok-bot",
-      actorType: "agent",
-      provider: "grok",
-      permissions: "read,write",
-    });
-    const res = await fetch(
-      `/workspaces/${organizationId}/tokens`,
-      {},
-      adminToken
-    );
-    const { tokens } = z
-      .object({
-        tokens: z.array(
-          z.object({
-            actorType: z.string().optional(),
-            provider: z.string().optional(),
-            teamIds: z.array(z.string()).optional(),
-          })
-        ),
-      })
-      .parse(await res.json());
-    const agent = tokens.find((t) => t.actorType === "agent");
-    expect(agent?.provider).toBe("grok");
-    expect(agent?.teamIds?.length).toBe(2);
-  });
+  it(
+    "lists installs with actorType, provider, and joined teams",
+    { timeout: 30000 },
+    async () => {
+      const { organizationId, adminToken } = await seed();
+      await mintAgent(organizationId, adminToken, {
+        name: "grok-bot",
+        actorType: "agent",
+        provider: "grok",
+        permissions: "read,write",
+      });
+      const res = await fetch(
+        `/workspaces/${organizationId}/tokens`,
+        {},
+        adminToken
+      );
+      const { tokens } = z
+        .object({
+          tokens: z.array(
+            z.object({
+              actorType: z.string().optional(),
+              provider: z.string().optional(),
+              teamIds: z.array(z.string()).optional(),
+            })
+          ),
+        })
+        .parse(await res.json());
+      const agent = tokens.find((t) => t.actorType === "agent");
+      expect(agent?.provider).toBe("grok");
+      expect(agent?.teamIds?.length).toBe(2);
+    }
+  );
 
-  it("joins every team by default so the agent sees workspace data", async () => {
-    const { organizationId, adminToken } = await seed();
-    const { res, key } = await mintAgent(organizationId, adminToken, {
-      name: "grok-bot",
-      actorType: "agent",
-      permissions: "read,write",
-    });
-    expect(res.status).toBe(201);
-    // Both the default team and the private second team are visible —
-    // before this, agent keys saw zero teams and every list came back empty.
-    expect(await visibleTeamCount(organizationId, key)).toBe(2);
-  });
+  it(
+    "joins every team by default so the agent sees workspace data",
+    { timeout: 30000 },
+    async () => {
+      const { organizationId, adminToken } = await seed();
+      const { res, key } = await mintAgent(organizationId, adminToken, {
+        name: "grok-bot",
+        actorType: "agent",
+        permissions: "read,write",
+      });
+      expect(res.status).toBe(201);
+      // Both the default team and the private second team are visible —
+      // before this, agent keys saw zero teams and every list came back empty.
+      expect(await visibleTeamCount(organizationId, key)).toBe(2);
+    }
+  );
 
-  it("scopes to explicit teamIds when provided", async () => {
-    const { organizationId, adminToken, defaultTeamId } = await seed();
-    const { res, key } = await mintAgent(organizationId, adminToken, {
-      name: "scoped-bot",
-      actorType: "agent",
-      permissions: "read",
-      teamIds: [defaultTeamId],
-    });
-    expect(res.status).toBe(201);
-    expect(await visibleTeamCount(organizationId, key)).toBe(1);
-  });
+  it(
+    "scopes to explicit teamIds when provided",
+    { timeout: 30000 },
+    async () => {
+      const { organizationId, adminToken, defaultTeamId } = await seed();
+      const { res, key } = await mintAgent(organizationId, adminToken, {
+        name: "scoped-bot",
+        actorType: "agent",
+        permissions: "read",
+        teamIds: [defaultTeamId],
+      });
+      expect(res.status).toBe(201);
+      expect(await visibleTeamCount(organizationId, key)).toBe(1);
+    }
+  );
 
-  it("rejects unknown team ids instead of minting a blind key", async () => {
-    const { organizationId, adminToken } = await seed();
-    const res = await fetch(
-      `/workspaces/${organizationId}/tokens`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          name: "bad-teams",
-          actorType: "agent",
-          teamIds: ["not-a-team"],
-        }),
-      },
-      adminToken
-    );
-    expect(res.status).toBe(400);
-  });
+  it(
+    "rejects unknown team ids instead of minting a blind key",
+    { timeout: 30000 },
+    async () => {
+      const { organizationId, adminToken } = await seed();
+      const res = await fetch(
+        `/workspaces/${organizationId}/tokens`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            name: "bad-teams",
+            actorType: "agent",
+            teamIds: ["not-a-team"],
+          }),
+        },
+        adminToken
+      );
+      expect(res.status).toBe(400);
+    }
+  );
+
+  it(
+    "returns the agent userId so admins can target grants at it",
+    { timeout: 30000 },
+    async () => {
+      const { organizationId, adminToken } = await seed();
+      const { res, body } = await mintAgent(organizationId, adminToken, {
+        name: "id-bot",
+        actorType: "agent",
+        permissions: "read",
+      });
+      expect(res.status).toBe(201);
+      const parsed = z
+        .object({ userId: z.string(), actorType: z.string() })
+        .parse(body);
+      expect(parsed.actorType).toBe("agent");
+      expect(parsed.userId.length).toBeGreaterThan(0);
+    }
+  );
+
+  it(
+    "grants restricted-space read via spaceIds at mint time",
+    { timeout: 30000 },
+    async () => {
+      const { organizationId, adminToken } = await seed();
+      const spaceRes = await fetch(
+        `/workspaces/${organizationId}/document-spaces`,
+        {
+          method: "POST",
+          body: JSON.stringify({ name: "Leadership", restricted: true }),
+        },
+        adminToken
+      );
+      expect(spaceRes.status).toBe(201);
+      const space = z.object({ id: z.string() }).parse(await spaceRes.json());
+
+      // A gap doc in the restricted space — no explicit doc ACL.
+      const docRes = await fetch(
+        `/workspaces/${organizationId}/documents`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            title: "CEO Notes",
+            spaceId: space.id,
+          }),
+        },
+        adminToken
+      );
+      expect(docRes.status).toBe(201);
+      const doc = z.object({ id: z.string() }).parse(await docRes.json());
+
+      // Ungranted agent: the restricted space denies by default.
+      const { key: blindKey } = await mintAgent(organizationId, adminToken, {
+        name: "blind-bot",
+        actorType: "agent",
+        permissions: "read",
+      });
+      const denied = await fetch(
+        `/workspaces/${organizationId}/documents/${doc.id}`,
+        {},
+        blindKey
+      );
+      expect(denied.status).toBe(404);
+
+      // Granted agent: the spaceIds install grant opens the gap doc.
+      const { res, key, body } = await mintAgent(organizationId, adminToken, {
+        name: "leadership-bot",
+        actorType: "agent",
+        permissions: "read",
+        spaceIds: [space.id],
+      });
+      expect(res.status).toBe(201);
+      const minted = z
+        .object({ userId: z.string(), spaceIds: z.array(z.string()) })
+        .parse(body);
+      expect(minted.spaceIds).toEqual([space.id]);
+
+      const perms = await fetch(
+        `/workspaces/${organizationId}/document-spaces/${space.id}/permissions`,
+        {},
+        adminToken
+      );
+      const grants = z
+        .object({
+          permissions: z.array(
+            z.object({ actorId: z.string(), level: z.string() })
+          ),
+        })
+        .parse(await perms.json()).permissions;
+      expect(
+        grants.some((g) => g.actorId === minted.userId && g.level === "view")
+      ).toBe(true);
+
+      const allowed = await fetch(
+        `/workspaces/${organizationId}/documents/${doc.id}`,
+        {},
+        key
+      );
+      expect(allowed.status).toBe(200);
+    }
+  );
+
+  it(
+    "rejects unknown space ids instead of minting a blind key",
+    { timeout: 30000 },
+    async () => {
+      const { organizationId, adminToken } = await seed();
+      const res = await fetch(
+        `/workspaces/${organizationId}/tokens`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            name: "bad-spaces",
+            actorType: "agent",
+            spaceIds: ["not-a-space"],
+          }),
+        },
+        adminToken
+      );
+      expect(res.status).toBe(400);
+    }
+  );
+
+  it(
+    "rejects spaceIds unless the token is an agent install",
+    { timeout: 30000 },
+    async () => {
+      const { organizationId, adminToken } = await seed();
+      const res = await fetch(
+        `/workspaces/${organizationId}/tokens`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            name: "self-grant",
+            spaceIds: ["anything"],
+          }),
+        },
+        adminToken
+      );
+      expect(res.status).toBe(400);
+    }
+  );
 });

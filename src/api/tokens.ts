@@ -18,6 +18,7 @@ import type { AppContext } from "../platform/middleware.js";
 import { canAccess, parsePermissionSet } from "../platform/permissions.js";
 import { rls } from "../platform/rls.js";
 import { emitWorkspaceAudit } from "./audit-emit.js";
+import { getWorkspaceStub } from "./stub.js";
 
 const tokenSchema = z.object({
   id: z.string(),
@@ -27,6 +28,9 @@ const tokenSchema = z.object({
   actorType: z.enum(["user", "agent"]).optional(),
   provider: z.string().optional(),
   teamIds: z.array(z.string()).optional(),
+  // The actor this key resolves to — for agent tokens this is the
+  // synthetic agent user id, the actorId space/document grants target.
+  userId: z.string().optional(),
   createdAt: z.string(),
 });
 
@@ -38,6 +42,8 @@ const tokenWithSecretSchema = z.object({
   permissions: z.string(),
   actorType: z.enum(["user", "agent"]).optional(),
   provider: z.string().optional(),
+  userId: z.string().optional(),
+  spaceIds: z.array(z.string()).optional(),
   createdAt: z.string(),
 });
 
@@ -61,6 +67,10 @@ const tokenBodySchema = z.object({
   // teams in the workspace — an agent token with no team access reads
   // nothing because every team is private.
   teamIds: z.array(z.string()).optional(),
+  // Restricted document spaces the agent actor gets a view grant on —
+  // the admin half of "scoped agent token that can read Leadership"
+  // (PILE-447). Agent tokens only.
+  spaceIds: z.array(z.string()).optional(),
 });
 
 const listTokensRoute = createRoute({
@@ -190,6 +200,7 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
         parsed!.actorType === "agent"
           ? (teamsByUser.get(row.referenceId) ?? [])
           : undefined,
+      userId: row.referenceId,
       createdAt:
         row.createdAt instanceof Date
           ? row.createdAt.toISOString()
@@ -215,6 +226,32 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
         status: 403,
         message: "Only admins can create agent tokens",
       });
+    }
+
+    // Space grants write a new actor's space_permissions rows — only the
+    // admin-gated agent path may set them, or a member could self-grant a
+    // restricted space onto their own key.
+    if (input.spaceIds !== undefined && actorType !== "agent") {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: "spaceIds only applies to agent tokens",
+      });
+    }
+    // Validate up front — minting the agent user + key happens below, and
+    // a bad space id failing late would orphan them.
+    if (input.spaceIds && input.spaceIds.length > 0) {
+      const stub = getWorkspaceStub(c.env, organizationId);
+      const spaces = await stub.listDocumentSpaces();
+      const known = new Set(spaces.map((s) => s.id));
+      const unknown = input.spaceIds.filter((id) => !known.has(id));
+      if (unknown.length > 0) {
+        throw new VortexError({
+          code: "BAD_REQUEST",
+          status: 400,
+          message: `Unknown space ids: ${unknown.join(", ")}`,
+        });
+      }
     }
 
     const requested = parsePermissionSet(input.permissions ?? "read");
@@ -323,6 +360,21 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
           )
         )
       );
+
+      if (input.spaceIds && input.spaceIds.length > 0) {
+        const stub = getWorkspaceStub(c.env, organizationId);
+        await Promise.all(
+          input.spaceIds.map((spaceId) =>
+            stub.setSpacePermission(
+              organizationId,
+              spaceId,
+              userId,
+              "user",
+              "view"
+            )
+          )
+        );
+      }
     }
 
     await emitWorkspaceAudit(
@@ -346,6 +398,8 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
         permissions,
         actorType,
         provider: input.provider,
+        userId,
+        spaceIds: actorType === "agent" ? input.spaceIds : undefined,
         createdAt:
           parsed.createdAt instanceof Date
             ? parsed.createdAt.toISOString()

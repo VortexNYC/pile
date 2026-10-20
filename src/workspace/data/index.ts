@@ -4423,9 +4423,22 @@ export interface MemoryInput {
   entityId: string;
   kind: string;
   fact: string;
+  key?: string | null;
   sourceSessionId?: string | null;
   sourceAgentSlug?: string | null;
   validUntil?: string | null;
+}
+
+// The "active" predicate for workspace_memory: a row is stale once a newer
+// row points at it via `supersedes`. (`supersedes` reads "this row replaces
+// row X" — the newest row carries the pointer, so active = nobody replaces
+// me.)
+function memoryActiveCond(organizationId: string) {
+  return sql`${workspaceMemory.id} not in (
+    select ${workspaceMemory.supersedes} from ${workspaceMemory}
+    where ${workspaceMemory.organizationId} = ${organizationId}
+      and ${workspaceMemory.supersedes} is not null
+  )`;
 }
 
 export async function memoryRemember(
@@ -4433,19 +4446,26 @@ export async function memoryRemember(
   organizationId: string,
   input: MemoryInput
 ) {
-  // Supersede: a new fact of the same kind on the same entity marks the
-  // previous row superseded rather than deleting it — contradictions and
-  // temporal updates keep the audit trail.
+  // Supersede: a new fact marks the previous ACTIVE row superseded rather
+  // than deleting it — contradictions and temporal updates keep the audit
+  // trail. A keyed fact supersedes the active row with the same key
+  // (named context rewrites in place, PILE-447); unkeyed facts keep the
+  // same-kind-on-same-entity rule. Matching the active row keeps the
+  // chain linear — A→B→C — instead of forked C also superseding A.
   const prior = await db
     .select({ id: workspaceMemory.id })
     .from(workspaceMemory)
     .where(
       and(
+        input.key
+          ? eq(workspaceMemory.key, input.key)
+          : and(
+              eq(workspaceMemory.entityType, input.entityType),
+              eq(workspaceMemory.entityId, input.entityId),
+              eq(workspaceMemory.kind, input.kind)
+            ),
         eq(workspaceMemory.organizationId, organizationId),
-        eq(workspaceMemory.entityType, input.entityType),
-        eq(workspaceMemory.entityId, input.entityId),
-        eq(workspaceMemory.kind, input.kind),
-        isNull(workspaceMemory.supersedes)
+        memoryActiveCond(organizationId)
       )
     )
     .get();
@@ -4456,6 +4476,7 @@ export async function memoryRemember(
     entityType: input.entityType,
     entityId: input.entityId,
     kind: input.kind,
+    key: input.key ?? null,
     fact: input.fact,
     sourceSessionId: input.sourceSessionId ?? null,
     sourceAgentSlug: input.sourceAgentSlug ?? null,
@@ -4473,18 +4494,22 @@ export async function memoryRecall(
     entityType?: string;
     entityId?: string;
     kind?: string;
+    key?: string;
     search?: string;
     limit?: number;
   }
 ) {
   const conds = [
     eq(workspaceMemory.organizationId, organizationId),
-    isNull(workspaceMemory.supersedes),
+    memoryActiveCond(organizationId),
   ];
   if (query.entityType)
     conds.push(eq(workspaceMemory.entityType, query.entityType));
   if (query.entityId) conds.push(eq(workspaceMemory.entityId, query.entityId));
   if (query.kind) conds.push(eq(workspaceMemory.kind, query.kind));
+  // Exact-match on the caller-chosen key — the "key lookup" a bot uses to
+  // fetch back one named fact.
+  if (query.key) conds.push(eq(workspaceMemory.key, query.key));
   // Fuzzy fact search — LIKE over the fact text so "did we sweep
   // Smith?" finds corridor:smith-st without the exact entity key.
   if (query.search) conds.push(like(workspaceMemory.fact, `%${query.search}%`));
@@ -4495,6 +4520,24 @@ export async function memoryRecall(
     .orderBy(desc(workspaceMemory.createdAt))
     .limit(query.limit ?? 25)
     .all();
+}
+
+// Single-row fetch by memory id — the row id POST /memory returns.
+export async function memoryGet(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return db
+    .select()
+    .from(workspaceMemory)
+    .where(
+      and(
+        eq(workspaceMemory.organizationId, organizationId),
+        eq(workspaceMemory.id, id)
+      )
+    )
+    .get();
 }
 
 export async function upsertAgentProviderConfig(
@@ -4835,7 +4878,10 @@ export function listDocumentsVisibleTo(
   // closed ACL the space grant cannot widen.
   const spaceGranted = new Set<string>();
   for (const row of db
-    .select({ spaceId: workspaceSpacePermissions.spaceId, actorId: workspaceSpacePermissions.actorId })
+    .select({
+      spaceId: workspaceSpacePermissions.spaceId,
+      actorId: workspaceSpacePermissions.actorId,
+    })
     .from(workspaceSpacePermissions)
     .where(eq(workspaceSpacePermissions.organizationId, organizationId))
     .all()) {
@@ -4848,7 +4894,9 @@ export function listDocumentsVisibleTo(
         (d.spaceId && restrictedSpaces.has(d.spaceId))
       ) ||
       granted.has(d.id) ||
-      (!restricted.has(d.id) && d.spaceId != null && spaceGranted.has(d.spaceId))
+      (!restricted.has(d.id) &&
+        d.spaceId != null &&
+        spaceGranted.has(d.spaceId))
   );
 }
 
@@ -4874,12 +4922,13 @@ export function listDocumentsForActor(
     grants.filter((g) => g.actorId === actorId).map((g) => g.documentId)
   );
   // Space grants widen guests the same way — only docs with no doc ACL.
-  const granted = new Set(
-    grants.map((g) => g.documentId)
-  );
+  const granted = new Set(grants.map((g) => g.documentId));
   const spaceGranted = new Set<string>();
   for (const row of db
-    .select({ spaceId: workspaceSpacePermissions.spaceId, actorId: workspaceSpacePermissions.actorId })
+    .select({
+      spaceId: workspaceSpacePermissions.spaceId,
+      actorId: workspaceSpacePermissions.actorId,
+    })
     .from(workspaceSpacePermissions)
     .where(eq(workspaceSpacePermissions.organizationId, organizationId))
     .all()) {
@@ -4889,9 +4938,7 @@ export function listDocumentsForActor(
   return all.filter(
     (d) =>
       visible.has(d.id) ||
-      (!granted.has(d.id) &&
-        d.spaceId != null &&
-        spaceGranted.has(d.spaceId))
+      (!granted.has(d.id) && d.spaceId != null && spaceGranted.has(d.spaceId))
   );
 }
 
@@ -5557,10 +5604,16 @@ export function updateMarketRun(
 export function listMarketRuns(
   db: WorkspaceDb,
   organizationId: string,
-  args: { vertical?: string; geo?: string; issueId?: string; limit?: number } = {}
+  args: {
+    vertical?: string;
+    geo?: string;
+    issueId?: string;
+    limit?: number;
+  } = {}
 ) {
   const conds = [eq(workspaceMarketRuns.organizationId, organizationId)];
-  if (args.vertical) conds.push(eq(workspaceMarketRuns.vertical, args.vertical));
+  if (args.vertical)
+    conds.push(eq(workspaceMarketRuns.vertical, args.vertical));
   if (args.geo) conds.push(eq(workspaceMarketRuns.geo, args.geo));
   if (args.issueId) conds.push(eq(workspaceMarketRuns.issueId, args.issueId));
   return db

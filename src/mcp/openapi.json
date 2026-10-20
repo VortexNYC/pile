@@ -1438,6 +1438,9 @@
                               "type": "string"
                             }
                           },
+                          "userId": {
+                            "type": "string"
+                          },
                           "createdAt": {
                             "type": "string"
                           }
@@ -1514,6 +1517,12 @@
                     "items": {
                       "type": "string"
                     }
+                  },
+                  "spaceIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 },
                 "required": [
@@ -1555,6 +1564,15 @@
                     },
                     "provider": {
                       "type": "string"
+                    },
+                    "userId": {
+                      "type": "string"
+                    },
+                    "spaceIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "createdAt": {
                       "type": "string"
@@ -36375,6 +36393,213 @@
         "summary": "List document history"
       }
     },
+    "/workspaces/{organizationId}/document-spaces/{id}/permissions": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Space permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "permissions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "spaceId": {
+                            "type": "string"
+                          },
+                          "actorId": {
+                            "type": "string"
+                          },
+                          "actorType": {
+                            "type": "string"
+                          },
+                          "level": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "spaceId",
+                          "actorId",
+                          "actorType",
+                          "level",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "permissions"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List document space permissions"
+      },
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "actorId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "actorType": {
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "team"
+                    ]
+                  },
+                  "level": {
+                    "type": "string",
+                    "enum": [
+                      "view",
+                      "edit"
+                    ]
+                  }
+                },
+                "required": [
+                  "actorId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Space permission granted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create document space permission"
+      }
+    },
+    "/workspaces/{organizationId}/document-spaces/{id}/permissions/{actorId}": {
+      "delete": {
+        "tags": [
+          "documents"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "actorId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Space permission revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Delete document space permission"
+      }
+    },
     "/workspaces/{organizationId}/document-spaces": {
       "get": {
         "tags": [
@@ -38348,6 +38573,14 @@
               "type": "string"
             },
             "required": false,
+            "name": "key",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
             "name": "search",
             "in": "query"
           },
@@ -38385,6 +38618,10 @@
                           "kind": {
                             "type": "string"
                           },
+                          "key": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "fact": {
                             "type": "string"
                           },
@@ -38409,6 +38646,7 @@
                           "entityType",
                           "entityId",
                           "kind",
+                          "key",
                           "fact",
                           "sourceSessionId",
                           "sourceAgentSlug",
@@ -38460,6 +38698,10 @@
                     "type": "string",
                     "minLength": 1
                   },
+                  "key": {
+                    "type": "string",
+                    "minLength": 1
+                  },
                   "fact": {
                     "type": "string",
                     "minLength": 1
@@ -38502,6 +38744,103 @@
           }
         },
         "summary": "Create memory"
+      }
+    },
+    "/workspaces/{organizationId}/memory/{id}": {
+      "get": {
+        "tags": [
+          "memory"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A single workspace memory fact by its row id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "memory": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "entityType": {
+                          "type": "string"
+                        },
+                        "entityId": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "key": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "fact": {
+                          "type": "string"
+                        },
+                        "sourceSessionId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "sourceAgentSlug": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "validUntil": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "entityType",
+                        "entityId",
+                        "kind",
+                        "key",
+                        "fact",
+                        "sourceSessionId",
+                        "sourceAgentSlug",
+                        "validUntil",
+                        "createdAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "memory"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Memory not found"
+          }
+        },
+        "summary": "Get memory"
       }
     },
     "/workspaces/{organizationId}/agent/costs": {
@@ -39714,6 +40053,34 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "readiness": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "nextAction": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "fit": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "fitScore": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "fitStatus": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "processor": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "evidenceUri": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "tierId": {
                             "type": "string",
                             "nullable": true
@@ -39775,6 +40142,13 @@
                           "source",
                           "sourceSessionId",
                           "sourceAgentSlug",
+                          "readiness",
+                          "nextAction",
+                          "fit",
+                          "fitScore",
+                          "fitStatus",
+                          "processor",
+                          "evidenceUri",
                           "tierId",
                           "statusId",
                           "ownerId",
@@ -39869,6 +40243,27 @@
                     "type": "string"
                   },
                   "source": {
+                    "type": "string"
+                  },
+                  "readiness": {
+                    "type": "string"
+                  },
+                  "nextAction": {
+                    "type": "string"
+                  },
+                  "fit": {
+                    "type": "string"
+                  },
+                  "fitScore": {
+                    "type": "number"
+                  },
+                  "fitStatus": {
+                    "type": "string"
+                  },
+                  "processor": {
+                    "type": "string"
+                  },
+                  "evidenceUri": {
                     "type": "string"
                   },
                   "tierId": {
@@ -39980,6 +40375,34 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "readiness": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "nextAction": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "fit": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "fitScore": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "fitStatus": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "processor": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "evidenceUri": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "tierId": {
                       "type": "string",
                       "nullable": true
@@ -40041,6 +40464,13 @@
                     "source",
                     "sourceSessionId",
                     "sourceAgentSlug",
+                    "readiness",
+                    "nextAction",
+                    "fit",
+                    "fitScore",
+                    "fitStatus",
+                    "processor",
+                    "evidenceUri",
                     "tierId",
                     "statusId",
                     "ownerId",
@@ -40121,6 +40551,34 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "readiness": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "nextAction": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "fit": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "fitScore": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "fitStatus": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "processor": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "evidenceUri": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "tierId": {
                       "type": "string",
                       "nullable": true
@@ -40182,6 +40640,13 @@
                     "source",
                     "sourceSessionId",
                     "sourceAgentSlug",
+                    "readiness",
+                    "nextAction",
+                    "fit",
+                    "fitScore",
+                    "fitStatus",
+                    "processor",
+                    "evidenceUri",
                     "tierId",
                     "statusId",
                     "ownerId",
@@ -40759,6 +41224,34 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "readiness": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "nextAction": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "fit": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "fitScore": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "fitStatus": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "processor": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "evidenceUri": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "tierId": {
                       "type": "string",
                       "nullable": true
@@ -40820,6 +41313,13 @@
                     "source",
                     "sourceSessionId",
                     "sourceAgentSlug",
+                    "readiness",
+                    "nextAction",
+                    "fit",
+                    "fitScore",
+                    "fitStatus",
+                    "processor",
+                    "evidenceUri",
                     "tierId",
                     "statusId",
                     "ownerId",
@@ -40907,6 +41407,27 @@
                     "type": "string"
                   },
                   "source": {
+                    "type": "string"
+                  },
+                  "readiness": {
+                    "type": "string"
+                  },
+                  "nextAction": {
+                    "type": "string"
+                  },
+                  "fit": {
+                    "type": "string"
+                  },
+                  "fitScore": {
+                    "type": "number"
+                  },
+                  "fitStatus": {
+                    "type": "string"
+                  },
+                  "processor": {
+                    "type": "string"
+                  },
+                  "evidenceUri": {
                     "type": "string"
                   },
                   "tierId": {
@@ -41028,6 +41549,34 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "readiness": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "nextAction": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "fit": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "fitScore": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "fitStatus": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "processor": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "evidenceUri": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "tierId": {
                       "type": "string",
                       "nullable": true
@@ -41089,6 +41638,13 @@
                     "source",
                     "sourceSessionId",
                     "sourceAgentSlug",
+                    "readiness",
+                    "nextAction",
+                    "fit",
+                    "fitScore",
+                    "fitStatus",
+                    "processor",
+                    "evidenceUri",
                     "tierId",
                     "statusId",
                     "ownerId",

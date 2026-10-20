@@ -29,6 +29,10 @@ export const ac = createAccessControl({
   deal: ["view", "create", "edit", "delete"],
   session: ["view", "create", "edit", "delete"],
   comment: ["view", "create", "edit", "delete"],
+  // Agent workspace memory (PILE-447) — resource:action grants let a
+  // scoped agent key carry memory:view or memory:create without the
+  // workspace-wide write verb.
+  memory: ["view", "create"],
   settings: ["view", "edit"],
   // Coarse legacy actions kept so un-migrated routes and old API
   // keys keep working while call sites move to resource:action.
@@ -48,6 +52,7 @@ export const ownerRole = ac.newRole({
   deal: [...CONTENT],
   session: [...CONTENT],
   comment: [...CONTENT],
+  memory: ["view", "create"],
   settings: ["view", "edit"],
   workspace: ["read", "write", "admin"],
 });
@@ -63,6 +68,7 @@ export const adminRole = ac.newRole({
   deal: [...CONTENT],
   session: [...CONTENT],
   comment: [...CONTENT],
+  memory: ["view", "create"],
   settings: ["view", "edit"],
   workspace: ["read", "write", "admin"],
 });
@@ -78,6 +84,7 @@ export const memberRole = ac.newRole({
   deal: ["view", "create", "edit"],
   session: ["view", "create", "edit"],
   comment: ["view", "create", "edit"],
+  memory: ["view", "create"],
   settings: ["view"],
   workspace: ["read", "write"],
 });

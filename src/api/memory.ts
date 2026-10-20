@@ -10,6 +10,9 @@ const memorySchema = z.object({
   entityType: z.string(),
   entityId: z.string(),
   kind: z.string(),
+  // Caller-chosen lookup key — exact-match via ?key= on recall; a new fact
+  // with the same key supersedes the old one.
+  key: z.string().nullable(),
   fact: z.string(),
   sourceSessionId: z.string().nullable(),
   sourceAgentSlug: z.string().nullable(),
@@ -28,6 +31,7 @@ const recallRoute = createRoute({
       entityType: z.string().optional(),
       entityId: z.string().optional(),
       kind: z.string().optional(),
+      key: z.string().optional(),
       search: z.string().optional(),
       limit: z.string().optional(),
     }),
@@ -58,6 +62,7 @@ const rememberRoute = createRoute({
             entityType: z.string().min(1),
             entityId: z.string().min(1),
             kind: z.string().min(1),
+            key: z.string().min(1).optional(),
             fact: z.string().min(1),
             validUntil: z.string().optional(),
             sourceAgentSlug: z.string().optional(),
@@ -75,6 +80,27 @@ const rememberRoute = createRoute({
         },
       },
     },
+  },
+});
+
+const getMemoryRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/memory/{id}",
+  tags: ["memory"],
+  middleware: [rls("memory:view")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "A single workspace memory fact by its row id",
+      content: {
+        "application/json": {
+          schema: z.object({ memory: memorySchema }),
+        },
+      },
+    },
+    404: { description: "Memory not found" },
   },
 });
 
@@ -127,10 +153,21 @@ export function registerMemoryRoutes(app: OpenAPIHono<AppContext>) {
       entityType: q.entityType,
       entityId: q.entityId,
       kind: q.kind,
+      key: q.key,
       search: q.search,
       limit: q.limit ? Number(q.limit) : 25,
     });
     return c.json({ memories }, 200);
+  });
+
+  app.openapi(getMemoryRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const memory = await stub.memoryGet(id);
+    if (!memory) {
+      return c.json({ message: "Memory not found" }, 404);
+    }
+    return c.json({ memory }, 200);
   });
 
   app.openapi(rememberRoute, async (c) => {
@@ -141,6 +178,7 @@ export function registerMemoryRoutes(app: OpenAPIHono<AppContext>) {
       entityType: body.entityType,
       entityId: body.entityId,
       kind: body.kind,
+      key: body.key ?? null,
       fact: body.fact,
       validUntil: body.validUntil ?? null,
       sourceAgentSlug: body.sourceAgentSlug ?? null,

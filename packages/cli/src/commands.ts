@@ -190,6 +190,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "teamIds",
         flag: "team-ids",
       },
+      {
+        name: "spaceIds",
+        flag: "space-ids",
+      },
     ],
   },
   "tokens delete": {
@@ -6879,6 +6883,71 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "document spaces permissions list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/document-spaces/{id}/permissions",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "document spaces permissions create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/document-spaces/{id}/permissions",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "actorId",
+        flag: "actor",
+      },
+      {
+        name: "actorType",
+        flag: "actor-type",
+      },
+      {
+        name: "level",
+        flag: "level",
+      },
+    ],
+  },
+  "document spaces permissions delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/document-spaces/{id}/permissions/{actorId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+      {
+        name: "actorId",
+        flag: "actor",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "document spaces list": {
     method: "GET",
     path: "/workspaces/{organizationId}/document-spaces",
@@ -7312,6 +7381,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "kind",
       },
       {
+        name: "key",
+        flag: "key",
+      },
+      {
         name: "search",
         flag: "search",
       },
@@ -7346,6 +7419,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "kind",
       },
       {
+        name: "key",
+        flag: "key",
+      },
+      {
         name: "fact",
         flag: "fact",
       },
@@ -7358,6 +7435,22 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "source-agent-slug",
       },
     ],
+  },
+  "memory get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/memory/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
   },
   "agent costs list": {
     method: "GET",
@@ -7732,6 +7825,54 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "external-id",
       },
       {
+        name: "phone",
+        flag: "phone",
+      },
+      {
+        name: "address",
+        flag: "address",
+      },
+      {
+        name: "vertical",
+        flag: "vertical",
+      },
+      {
+        name: "neighborhood",
+        flag: "neighborhood",
+      },
+      {
+        name: "source",
+        flag: "source",
+      },
+      {
+        name: "readiness",
+        flag: "readiness",
+      },
+      {
+        name: "nextAction",
+        flag: "next-action",
+      },
+      {
+        name: "fit",
+        flag: "fit",
+      },
+      {
+        name: "fitScore",
+        flag: "fit-score",
+      },
+      {
+        name: "fitStatus",
+        flag: "fit-status",
+      },
+      {
+        name: "processor",
+        flag: "processor",
+      },
+      {
+        name: "evidenceUri",
+        flag: "evidence-uri",
+      },
+      {
         name: "tierId",
         flag: "tier-id",
       },
@@ -7876,6 +8017,54 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "externalId",
         flag: "external-id",
+      },
+      {
+        name: "phone",
+        flag: "phone",
+      },
+      {
+        name: "address",
+        flag: "address",
+      },
+      {
+        name: "vertical",
+        flag: "vertical",
+      },
+      {
+        name: "neighborhood",
+        flag: "neighborhood",
+      },
+      {
+        name: "source",
+        flag: "source",
+      },
+      {
+        name: "readiness",
+        flag: "readiness",
+      },
+      {
+        name: "nextAction",
+        flag: "next-action",
+      },
+      {
+        name: "fit",
+        flag: "fit",
+      },
+      {
+        name: "fitScore",
+        flag: "fit-score",
+      },
+      {
+        name: "fitStatus",
+        flag: "fit-status",
+      },
+      {
+        name: "processor",
+        flag: "processor",
+      },
+      {
+        name: "evidenceUri",
+        flag: "evidence-uri",
       },
       {
         name: "tierId",

@@ -69,8 +69,21 @@ Alias names map 1:1 to generated names. The full list lives in `src/mcp/mcp-alia
 | `create_support_customer` | `postWorkspacesOrganizationIdSupportCustomers`      | `POST /workspaces/{organizationId}/support/customers`         |
 | `create_support_ticket`   | `postWorkspacesOrganizationIdSupportTickets`        | `POST /workspaces/{organizationId}/support/tickets`           |
 | `list_support_tickets`    | `getWorkspacesOrganizationIdSupportTickets`         | `GET /workspaces/{organizationId}/support/tickets`            |
+| `recall_memory`           | `getWorkspacesOrganizationIdMemory`                 | `GET /workspaces/{organizationId}/memory`                     |
+| `remember_memory`         | `postWorkspacesOrganizationIdMemory`                | `POST /workspaces/{organizationId}/memory`                    |
+| `get_memory`              | `getWorkspacesOrganizationIdMemoryId`               | `GET /workspaces/{organizationId}/memory/{id}`                |
 
 The generated tool's description ends with `Alias: <name>.` and the alias's description ends with `Same as <generated name>.`, so either can be found from the other in `tools/list`.
+
+## Workspace memory
+
+`recall_memory`/`remember_memory` share one fact store across every agent surface — dispatch lanes, local Devin sessions, and Grok bots all read the same brain.
+
+- `remember_memory` body: `entityType`, `entityId`, `kind`, `fact` required; optional `key`, `validUntil`, `sourceAgentSlug`. `key` is your stable lookup handle — write the same `key` twice and the old fact supersedes (the audit trail keeps the history).
+- `recall_memory` filters: `entityType`, `entityId`, `kind`, `key` (exact match — the key lookup), `search` (substring over fact text), `limit` (default 25). All filters compose.
+- `get_memory` fetches one row by the `id` `remember_memory` returned.
+
+Permissions: recall needs `memory:view`, remember needs `memory:create`. A `read` key can recall; scoped agent tokens minted via `POST /workspaces/{org}/tokens` (`actorType: "agent"`, e.g. `permissions: "memory:view"`) work — admins can also pass `spaceIds` to open restricted document spaces at mint time.
 
 ## Worked examples
 

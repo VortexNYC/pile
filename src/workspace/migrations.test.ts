@@ -366,3 +366,11 @@ describe("v101 space permissions", () => {
     expect(sql).toContain("space_permissions_space_actor_idx");
   });
 });
+
+describe("v102 memory key (PILE-447)", () => {
+  it("adds the caller-chosen lookup key with an org-scoped index", () => {
+    const sql = workspaceMigrations.migrations.m0101;
+    expect(sql).toContain('ALTER TABLE workspace_memory ADD COLUMN "key" TEXT');
+    expect(sql).toContain("workspace_memory_key_idx");
+  });
+});

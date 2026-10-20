@@ -615,6 +615,31 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdDocumentspacesIdPermissionsActorId",
+    "description": "Delete document space permission (DELETE /workspaces/{organizationId}/document-spaces/{id}/permissions/{actorId}) Path params (top-level, required): organizationId, id, actorId.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/document-spaces/{id}/permissions/{actorId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "actorId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "actorId",
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdEmailinboxesId",
     "description": "Delete email inboxe (DELETE /workspaces/{organizationId}/email-inboxes/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
@@ -3576,6 +3601,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdDocumentspacesIdPermissions",
+    "description": "List document space permissions (GET /workspaces/{organizationId}/document-spaces/{id}/permissions) Path params (top-level, required): organizationId, id.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/document-spaces/{id}/permissions",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdDocumentsSearch",
     "description": "List document search (GET /workspaces/{organizationId}/documents/search) Path params (top-level, required): organizationId. Query params (top-level, optional): q.",
     "method": "GET",
@@ -4969,7 +5015,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdMemory",
-    "description": "List memory (GET /workspaces/{organizationId}/memory) Path params (top-level, required): organizationId. Query params (top-level, optional): entityType, entityId, kind, search, limit.",
+    "description": "List memory (GET /workspaces/{organizationId}/memory) Path params (top-level, required): organizationId. Query params (top-level, optional): entityType, entityId, kind, key, search, limit.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/memory",
     "inputSchema": {
@@ -4987,6 +5033,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         "kind": {
           "type": "string"
         },
+        "key": {
+          "type": "string"
+        },
         "search": {
           "type": "string"
         },
@@ -4995,6 +5044,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdMemoryId",
+    "description": "Get memory (GET /workspaces/{organizationId}/memory/{id}) Path params (top-level, required): organizationId, id.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/memory/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
         "organizationId"
       ]
     }
@@ -7661,7 +7731,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdCustomersId",
-    "description": "Update customer (PATCH /workspaces/{organizationId}/customers/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, url, bookingUrl, notes, logoUrl, externalId, phone, address, vertical, neighborhood, source, tierId, statusId, ownerId, nextStepText, nextStepDueAt, needsHuman, needsHumanReason, priorityScore, customFields, stageGateOverride.",
+    "description": "Update customer (PATCH /workspaces/{organizationId}/customers/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, url, bookingUrl, notes, logoUrl, externalId, phone, address, vertical, neighborhood, source, readiness, nextAction, fit, fitScore, fitStatus, processor, evidenceUri, tierId, statusId, ownerId, nextStepText, nextStepDueAt, needsHuman, needsHumanReason, priorityScore, customFields, stageGateOverride.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/customers/{id}",
     "inputSchema": {
@@ -7713,6 +7783,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "source": {
+              "type": "string"
+            },
+            "readiness": {
+              "type": "string"
+            },
+            "nextAction": {
+              "type": "string"
+            },
+            "fit": {
+              "type": "string"
+            },
+            "fitScore": {
+              "type": "number"
+            },
+            "fitStatus": {
+              "type": "string"
+            },
+            "processor": {
+              "type": "string"
+            },
+            "evidenceUri": {
               "type": "string"
             },
             "tierId": {
@@ -13032,7 +13123,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdCustomers",
-    "description": "Create customer — externalId is a hard dedupe key (same contract as issues' externalRef): when a customer with the same externalId exists the call returns that customer with 200 instead of creating a duplicate. Pass dedupe=block to get 409 with the existing record in details.customer instead — the hard guarantee importers need. (POST /workspaces/{organizationId}/customers) Path params (top-level, required): organizationId. Query params (top-level, optional): dedupe. Request body goes in the \"body\" object; fields: name*, url, bookingUrl, notes, logoUrl, externalId, phone, address, vertical, neighborhood, source, tierId, statusId, ownerId, nextStepText, nextStepDueAt, needsHuman, needsHumanReason, priorityScore, customFields (* = required).",
+    "description": "Create customer — externalId is a hard dedupe key (same contract as issues' externalRef): when a customer with the same externalId exists the call returns that customer with 200 instead of creating a duplicate. Pass dedupe=block to get 409 with the existing record in details.customer instead — the hard guarantee importers need. (POST /workspaces/{organizationId}/customers) Path params (top-level, required): organizationId. Query params (top-level, optional): dedupe. Request body goes in the \"body\" object; fields: name*, url, bookingUrl, notes, logoUrl, externalId, phone, address, vertical, neighborhood, source, readiness, nextAction, fit, fitScore, fitStatus, processor, evidenceUri, tierId, statusId, ownerId, nextStepText, nextStepDueAt, needsHuman, needsHumanReason, priorityScore, customFields (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/customers",
     "inputSchema": {
@@ -13087,6 +13178,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "source": {
+              "type": "string"
+            },
+            "readiness": {
+              "type": "string"
+            },
+            "nextAction": {
+              "type": "string"
+            },
+            "fit": {
+              "type": "string"
+            },
+            "fitScore": {
+              "type": "number"
+            },
+            "fitStatus": {
+              "type": "string"
+            },
+            "processor": {
+              "type": "string"
+            },
+            "evidenceUri": {
               "type": "string"
             },
             "tierId": {
@@ -14032,6 +14144,53 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdDocumentspacesIdPermissions",
+    "description": "Create document space permission (POST /workspaces/{organizationId}/document-spaces/{id}/permissions) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: actorId*, actorType, level (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/document-spaces/{id}/permissions",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "actorId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "actorType": {
+              "type": "string",
+              "enum": [
+                "user",
+                "team"
+              ]
+            },
+            "level": {
+              "type": "string",
+              "enum": [
+                "view",
+                "edit"
+              ]
+            }
+          },
+          "required": [
+            "actorId"
+          ]
+        }
+      },
+      "required": [
+        "id",
         "organizationId"
       ]
     }
@@ -16293,7 +16452,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdMemory",
-    "description": "Create memory (POST /workspaces/{organizationId}/memory) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: entityType*, entityId*, kind*, fact*, validUntil, sourceAgentSlug (* = required).",
+    "description": "Create memory (POST /workspaces/{organizationId}/memory) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: entityType*, entityId*, kind*, key, fact*, validUntil, sourceAgentSlug (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/memory",
     "inputSchema": {
@@ -16314,6 +16473,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "minLength": 1
             },
             "kind": {
+              "type": "string",
+              "minLength": 1
+            },
+            "key": {
               "type": "string",
               "minLength": 1
             },
@@ -19720,7 +19883,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdTokens",
-    "description": "Create token (POST /workspaces/{organizationId}/tokens) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, permissions, actorType, provider, teamIds (* = required).",
+    "description": "Create token (POST /workspaces/{organizationId}/tokens) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, permissions, actorType, provider, teamIds, spaceIds (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/tokens",
     "inputSchema": {
@@ -19760,6 +19923,12 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "teamIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "spaceIds": {
               "type": "array",
               "items": {
                 "type": "string"

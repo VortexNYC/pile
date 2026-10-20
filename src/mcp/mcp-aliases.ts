@@ -81,6 +81,13 @@ export const MCP_TOOL_ALIASES: Readonly<Record<string, string>> = {
   update_state: "patchWorkspacesOrganizationIdStatesId",
   delete_state: "deleteWorkspacesOrganizationIdStatesId",
 
+  // Workspace memory (PILE-447) — same names as the lane tools so bots
+  // share one vocabulary across MCP and dispatch lanes.
+  list_memory: "getWorkspacesOrganizationIdMemory",
+  recall_memory: "getWorkspacesOrganizationIdMemory",
+  get_memory: "getWorkspacesOrganizationIdMemoryId",
+  remember_memory: "postWorkspacesOrganizationIdMemory",
+
   // Documents
   list_documents: "getWorkspacesOrganizationIdDocuments",
   get_document: "getWorkspacesOrganizationIdDocumentsId",

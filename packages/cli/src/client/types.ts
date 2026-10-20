@@ -472,6 +472,7 @@ export interface paths {
                                 actorType?: "user" | "agent";
                                 provider?: string;
                                 teamIds?: string[];
+                                userId?: string;
                                 createdAt: string;
                             }[];
                         };
@@ -499,6 +500,7 @@ export interface paths {
                         actorType?: "user" | "agent";
                         provider?: string;
                         teamIds?: string[];
+                        spaceIds?: string[];
                     };
                 };
             };
@@ -518,6 +520,8 @@ export interface paths {
                             /** @enum {string} */
                             actorType?: "user" | "agent";
                             provider?: string;
+                            userId?: string;
+                            spaceIds?: string[];
                             createdAt: string;
                         };
                     };
@@ -17236,6 +17240,131 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/document-spaces/{id}/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List document space permissions */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Space permissions */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            permissions: {
+                                id: string;
+                                spaceId: string;
+                                actorId: string;
+                                actorType: string;
+                                level: string;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create document space permission */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        actorId: string;
+                        /** @enum {string} */
+                        actorType?: "user" | "team";
+                        /** @enum {string} */
+                        level?: "view" | "edit";
+                    };
+                };
+            };
+            responses: {
+                /** @description Space permission granted */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/document-spaces/{id}/permissions/{actorId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete document space permission */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                    actorId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Space permission revoked */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/document-spaces": {
         parameters: {
             query?: never;
@@ -18348,6 +18477,7 @@ export interface paths {
                     entityType?: string;
                     entityId?: string;
                     kind?: string;
+                    key?: string;
                     search?: string;
                     limit?: string;
                 };
@@ -18371,6 +18501,7 @@ export interface paths {
                                 entityType: string;
                                 entityId: string;
                                 kind: string;
+                                key: string | null;
                                 fact: string;
                                 sourceSessionId: string | null;
                                 sourceAgentSlug: string | null;
@@ -18399,6 +18530,7 @@ export interface paths {
                         entityType: string;
                         entityId: string;
                         kind: string;
+                        key?: string;
                         fact: string;
                         validUntil?: string;
                         sourceAgentSlug?: string;
@@ -18419,6 +18551,65 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/memory/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get memory */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A single workspace memory fact by its row id */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            memory: {
+                                id: string;
+                                entityType: string;
+                                entityId: string;
+                                kind: string;
+                                key: string | null;
+                                fact: string;
+                                sourceSessionId: string | null;
+                                sourceAgentSlug: string | null;
+                                validUntil: string | null;
+                                createdAt: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Memory not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -19143,6 +19334,20 @@ export interface paths {
                                 notes: string | null;
                                 logoUrl: string | null;
                                 externalId: string | null;
+                                phone: string | null;
+                                address: string | null;
+                                vertical: string | null;
+                                neighborhood: string | null;
+                                source: string | null;
+                                sourceSessionId: string | null;
+                                sourceAgentSlug: string | null;
+                                readiness: string | null;
+                                nextAction: string | null;
+                                fit: string | null;
+                                fitScore: number | null;
+                                fitStatus: string | null;
+                                processor: string | null;
+                                evidenceUri: string | null;
                                 tierId: string | null;
                                 statusId: string | null;
                                 ownerId: string | null;
@@ -19187,6 +19392,18 @@ export interface paths {
                         notes?: string | null;
                         logoUrl?: string;
                         externalId?: string;
+                        phone?: string;
+                        address?: string;
+                        vertical?: string;
+                        neighborhood?: string;
+                        source?: string;
+                        readiness?: string;
+                        nextAction?: string;
+                        fit?: string;
+                        fitScore?: number;
+                        fitStatus?: string;
+                        processor?: string;
+                        evidenceUri?: string;
                         tierId?: string;
                         statusId?: string;
                         ownerId?: string;
@@ -19217,6 +19434,20 @@ export interface paths {
                             notes: string | null;
                             logoUrl: string | null;
                             externalId: string | null;
+                            phone: string | null;
+                            address: string | null;
+                            vertical: string | null;
+                            neighborhood: string | null;
+                            source: string | null;
+                            sourceSessionId: string | null;
+                            sourceAgentSlug: string | null;
+                            readiness: string | null;
+                            nextAction: string | null;
+                            fit: string | null;
+                            fitScore: number | null;
+                            fitStatus: string | null;
+                            processor: string | null;
+                            evidenceUri: string | null;
                             tierId: string | null;
                             statusId: string | null;
                             ownerId: string | null;
@@ -19248,6 +19479,20 @@ export interface paths {
                             notes: string | null;
                             logoUrl: string | null;
                             externalId: string | null;
+                            phone: string | null;
+                            address: string | null;
+                            vertical: string | null;
+                            neighborhood: string | null;
+                            source: string | null;
+                            sourceSessionId: string | null;
+                            sourceAgentSlug: string | null;
+                            readiness: string | null;
+                            nextAction: string | null;
+                            fit: string | null;
+                            fitScore: number | null;
+                            fitStatus: string | null;
+                            processor: string | null;
+                            evidenceUri: string | null;
                             tierId: string | null;
                             statusId: string | null;
                             ownerId: string | null;
@@ -19528,6 +19773,20 @@ export interface paths {
                             notes: string | null;
                             logoUrl: string | null;
                             externalId: string | null;
+                            phone: string | null;
+                            address: string | null;
+                            vertical: string | null;
+                            neighborhood: string | null;
+                            source: string | null;
+                            sourceSessionId: string | null;
+                            sourceAgentSlug: string | null;
+                            readiness: string | null;
+                            nextAction: string | null;
+                            fit: string | null;
+                            fitScore: number | null;
+                            fitStatus: string | null;
+                            processor: string | null;
+                            evidenceUri: string | null;
                             tierId: string | null;
                             statusId: string | null;
                             ownerId: string | null;
@@ -19606,6 +19865,18 @@ export interface paths {
                         notes?: string | null;
                         logoUrl?: string;
                         externalId?: string;
+                        phone?: string;
+                        address?: string;
+                        vertical?: string;
+                        neighborhood?: string;
+                        source?: string;
+                        readiness?: string;
+                        nextAction?: string;
+                        fit?: string;
+                        fitScore?: number;
+                        fitStatus?: string;
+                        processor?: string;
+                        evidenceUri?: string;
                         tierId?: string;
                         statusId?: string;
                         ownerId?: string;
@@ -19639,6 +19910,20 @@ export interface paths {
                             notes: string | null;
                             logoUrl: string | null;
                             externalId: string | null;
+                            phone: string | null;
+                            address: string | null;
+                            vertical: string | null;
+                            neighborhood: string | null;
+                            source: string | null;
+                            sourceSessionId: string | null;
+                            sourceAgentSlug: string | null;
+                            readiness: string | null;
+                            nextAction: string | null;
+                            fit: string | null;
+                            fitScore: number | null;
+                            fitStatus: string | null;
+                            processor: string | null;
+                            evidenceUri: string | null;
                             tierId: string | null;
                             statusId: string | null;
                             ownerId: string | null;

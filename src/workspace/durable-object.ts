@@ -5578,10 +5578,15 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     entityType?: string;
     entityId?: string;
     kind?: string;
+    key?: string;
     search?: string;
     limit?: number;
   }) {
     return data.memoryRecall(this.db, this.organizationId, query);
+  }
+
+  memoryGet(id: string) {
+    return data.memoryGet(this.db, this.organizationId, id);
   }
 
   upsertAgentProviderConfig(input: data.AgentProviderConfigInput) {
