@@ -70,6 +70,7 @@ describe("agent environment API", () => {
         userId: "user-env",
         name: "test-admin",
         metadata: { organizationId, permissions: "admin" },
+        permissions: { workspace: ["admin"] },
       },
     });
     token = z.object({ key: z.string() }).parse(result).key;

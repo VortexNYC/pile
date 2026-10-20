@@ -43,6 +43,7 @@ async function seedWorkspace() {
       userId,
       name: "test-admin",
       metadata: { organizationId: workspace.id, permissions: "admin" },
+      permissions: { workspace: ["admin"] },
     },
   });
   const adminParsed = z.object({ key: z.string() }).parse(adminResult);
@@ -52,6 +53,7 @@ async function seedWorkspace() {
       userId,
       name: "test-read",
       metadata: { organizationId: workspace.id, permissions: "read" },
+      permissions: { workspace: ["read"] },
     },
   });
   const readParsed = z.object({ key: z.string() }).parse(readResult);

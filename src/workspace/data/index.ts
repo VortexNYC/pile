@@ -40,6 +40,7 @@ import {
   workspaceDocumentHistory,
   workspaceDocumentLinks,
   workspaceDocumentPermissions,
+  workspaceSpacePermissions,
   workspaceDocuments,
   workspaceDocumentSpaces,
   workspaceEntityAttachments,
@@ -92,6 +93,7 @@ import {
   workspaceWebhookSubscriptions,
   workspaceOutboundWebhookDeliveries,
 } from "../schema.js";
+import { inArrayJson } from "../sql.js";
 
 export type WorkspaceDb = DrizzleSqliteDODatabase<typeof workspaceSchema>;
 
@@ -1213,6 +1215,8 @@ export function getAgentSessionByProviderSessionId(
 
 type ListAgentSessionsOptions = {
   issueId?: string;
+  agentId?: string;
+  agentSlug?: string;
   status?: AgentSessionStatus;
   openPr?: boolean;
   retryOf?: string;
@@ -1231,6 +1235,9 @@ function agentSessionListConditions(
   ];
   if (options.issueId) {
     conditions.push(eq(workspaceAgentSessions.issueId, options.issueId));
+  }
+  if (options.agentId) {
+    conditions.push(eq(workspaceAgentSessions.agentId, options.agentId));
   }
   if (options.excludeIssueCondition) {
     conditions.push(options.excludeIssueCondition);
@@ -1276,10 +1283,27 @@ export function listAgentSessions(
   organizationId: string,
   options: ListAgentSessionsOptions = {}
 ) {
+  // agentSlug isn't a session column — resolve it to the agent type's id.
+  let resolved = options;
+  if (options.agentSlug && !options.agentId) {
+    const type = db
+      .select({ id: workspaceAgentTypes.id })
+      .from(workspaceAgentTypes)
+      .where(
+        and(
+          eq(workspaceAgentTypes.organizationId, organizationId),
+          eq(workspaceAgentTypes.slug, options.agentSlug)
+        )
+      )
+      .get();
+    resolved = { ...options, agentId: type?.id ?? "__none__" };
+  }
   return db
     .select()
     .from(workspaceAgentSessions)
-    .where(and(...agentSessionListConditions(organizationId, options)))
+    .where(
+      and(...agentSessionListConditions(organizationId, resolved))
+    )
     .orderBy(
       desc(workspaceAgentSessions.createdAt),
       desc(workspaceAgentSessions.id)
@@ -3637,7 +3661,7 @@ export function subStepProgressByParent(
     .where(
       and(
         eq(workspaceIssues.organizationId, organizationId),
-        inArray(workspaceIssues.parentId, parentIds),
+        inArrayJson(workspaceIssues.parentId, parentIds),
         eq(workspaceIssues.required, true)
       )
     )
@@ -4881,12 +4905,24 @@ export function listDocumentsVisibleTo(
   const granted = new Set(
     grants.filter((g) => actorSet.has(g.actorId)).map((g) => g.documentId)
   );
+  // Space grants open only docs with NO doc-level ACL — a granted doc is a
+  // closed ACL the space grant cannot widen.
+  const spaceGranted = new Set<string>();
+  for (const row of db
+    .select({ spaceId: workspaceSpacePermissions.spaceId, actorId: workspaceSpacePermissions.actorId })
+    .from(workspaceSpacePermissions)
+    .where(eq(workspaceSpacePermissions.organizationId, organizationId))
+    .all()) {
+    if (actorSet.has(row.actorId)) spaceGranted.add(row.spaceId);
+  }
   return all.filter(
     (d) =>
       !(
         restricted.has(d.id) ||
         (d.spaceId && restrictedSpaces.has(d.spaceId))
-      ) || granted.has(d.id)
+      ) ||
+      granted.has(d.id) ||
+      (!restricted.has(d.id) && d.spaceId != null && spaceGranted.has(d.spaceId))
   );
 }
 
@@ -4911,8 +4947,26 @@ export function listDocumentsForActor(
   const visible = new Set(
     grants.filter((g) => g.actorId === actorId).map((g) => g.documentId)
   );
+  // Space grants widen guests the same way — only docs with no doc ACL.
+  const granted = new Set(
+    grants.map((g) => g.documentId)
+  );
+  const spaceGranted = new Set<string>();
+  for (const row of db
+    .select({ spaceId: workspaceSpacePermissions.spaceId, actorId: workspaceSpacePermissions.actorId })
+    .from(workspaceSpacePermissions)
+    .where(eq(workspaceSpacePermissions.organizationId, organizationId))
+    .all()) {
+    if (row.actorId === actorId) spaceGranted.add(row.spaceId);
+  }
   // Team grants resolve caller-side (the API layer supplies teamIds).
-  return all.filter((d) => visible.has(d.id));
+  return all.filter(
+    (d) =>
+      visible.has(d.id) ||
+      (!granted.has(d.id) &&
+        d.spaceId != null &&
+        spaceGranted.has(d.spaceId))
+  );
 }
 
 export function getDocument(
@@ -5262,6 +5316,7 @@ export interface CustomerInput {
   fit?: string | null;
   fitScore?: number | null;
   fitStatus?: string | null;
+  processor?: string | null;
   evidenceUri?: string | null;
   tierId?: string | null;
   statusId?: string | null;
@@ -5327,6 +5382,7 @@ export function createCustomer(db: WorkspaceDb, input: CustomerInput) {
       fit: input.fit ?? null,
       fitScore: input.fitScore ?? null,
       fitStatus: input.fitStatus ?? null,
+      processor: input.processor ?? null,
       evidenceUri: input.evidenceUri ?? null,
       tierId: input.tierId ?? null,
       statusId: input.statusId ?? null,
@@ -6807,7 +6863,7 @@ export function customFieldMaps(
     .where(
       and(
         eq(workspaceFieldValues.organizationId, organizationId),
-        inArray(workspaceFieldValues.entityId, entityIds)
+        inArrayJson(workspaceFieldValues.entityId, entityIds)
       )
     )
     .all();
@@ -8597,6 +8653,99 @@ export function revokeDocumentPermission(
   );
 }
 
+// ---- space permissions ----
+// A space grant opens every doc in the space that has NO explicit
+// document_permissions rows. A doc with any grant is a closed ACL the
+// space grant cannot widen (Cursor pair design, PILE-447).
+
+export function listSpacePermissions(db: WorkspaceDb, spaceId: string) {
+  return db
+    .select()
+    .from(workspaceSpacePermissions)
+    .where(eq(workspaceSpacePermissions.spaceId, spaceId))
+    .all();
+}
+
+export function setSpacePermission(
+  db: WorkspaceDb,
+  organizationId: string,
+  spaceId: string,
+  actorId: string,
+  actorType: string,
+  level: "view" | "edit"
+) {
+  const existing = db
+    .select()
+    .from(workspaceSpacePermissions)
+    .where(
+      and(
+        eq(workspaceSpacePermissions.spaceId, spaceId),
+        eq(workspaceSpacePermissions.actorId, actorId)
+      )
+    )
+    .get();
+  if (existing) {
+    db.update(workspaceSpacePermissions)
+      .set({ level })
+      .where(eq(workspaceSpacePermissions.id, existing.id))
+      .run();
+    return { ...existing, level };
+  }
+  return db
+    .insert(workspaceSpacePermissions)
+    .values({
+      id: crypto.randomUUID(),
+      organizationId,
+      spaceId,
+      actorId,
+      actorType,
+      level,
+      createdAt: new Date().toISOString(),
+    })
+    .returning()
+    .get();
+}
+
+export function revokeSpacePermission(
+  db: WorkspaceDb,
+  spaceId: string,
+  actorId: string
+) {
+  return (
+    db
+      .delete(workspaceSpacePermissions)
+      .where(
+        and(
+          eq(workspaceSpacePermissions.spaceId, spaceId),
+          eq(workspaceSpacePermissions.actorId, actorId)
+        )
+      )
+      .returning()
+      .all().length > 0
+  );
+}
+
+// Space ids the actor (or their teams) holds any grant on — the list-path
+// helper so listDocumentsVisibleTo pays one query, not one per doc.
+export function grantedSpaceIds(
+  db: WorkspaceDb,
+  organizationId: string,
+  actorIds: string[]
+) {
+  if (actorIds.length === 0) return new Set<string>();
+  // filter by actor — the where above selects org; match actors in JS for
+  // the team-ids expansion (small grant sets, same as documents).
+  const granted = new Set<string>();
+  for (const row of db
+    .select()
+    .from(workspaceSpacePermissions)
+    .where(eq(workspaceSpacePermissions.organizationId, organizationId))
+    .all()) {
+    if (actorIds.includes(row.actorId)) granted.add(row.spaceId);
+  }
+  return granted;
+}
+
 // Returns the effective level for an actor, or null when the doc is
 // restricted and the actor is unlisted. Team grants (Better Auth
 // organization teams) cover every member of the team.
@@ -8629,7 +8778,20 @@ export function documentAccessLevel(
         )
       )
       .get() !== undefined;
-  if (inRestrictedSpace && grants.length === 0) return null;
+  if (inRestrictedSpace && grants.length === 0) {
+    // Gap doc — no doc-level ACL. Fall to the space grant; the doc ACL
+    // would have won had it existed (closed-ACL precedence).
+    let spaceLevel: "view" | "edit" | null = null;
+    for (const grant of listSpacePermissions(db, doc!.spaceId!)) {
+      const covered =
+        grant.actorId === actorId ||
+        (grant.actorType === "team" && teamIds.includes(grant.actorId));
+      if (covered && (spaceLevel === null || grant.level === "edit")) {
+        spaceLevel = grant.level;
+      }
+    }
+    return spaceLevel;
+  }
   if (grants.length === 0) return defaultDenied ? null : "edit";
   let level: "view" | "edit" | null = null;
   for (const grant of grants) {
@@ -8752,7 +8914,7 @@ export function hiddenIssueCondition(
     teamIds.length > 0
       ? and(
           eq(workspaceIssuePermissions.actorType, "team"),
-          inArray(workspaceIssuePermissions.actorId, teamIds)
+          inArrayJson(workspaceIssuePermissions.actorId, teamIds)
         )
       : undefined
   );
@@ -8867,7 +9029,7 @@ export function shiftIssueCycle(
   if (ids.length === 0) return 0;
   db.update(workspaceIssues)
     .set({ cycleId: toCycleId, updatedAt: now })
-    .where(inArray(workspaceIssues.id, ids))
+    .where(inArrayJson(workspaceIssues.id, ids))
     .run();
   return ids.length;
 }

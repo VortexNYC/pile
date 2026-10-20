@@ -336,3 +336,33 @@ describe("v84 draft outputs (PILE-428)", () => {
     );
   });
 });
+
+describe("v98-v99 CRM sales model", () => {
+  it("v98 adds customer phone + contact channels table", () => {
+    const sql = workspaceMigrations.migrations.m0097;
+    expect(sql).toContain("ADD COLUMN phone");
+    expect(sql).toContain("customer_contacts");
+  });
+  it("v99 adds fit/readiness fields + suppression + market_runs", () => {
+    const sql = workspaceMigrations.migrations.m0098;
+    expect(sql).toContain("fit_score");
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS suppression");
+    expect(sql).toContain("market_runs");
+  });
+});
+
+describe("v100 merchant sources", () => {
+  it("creates merchant_sources + customer signal columns", () => {
+    const sql = workspaceMigrations.migrations.m0099;
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS merchant_sources");
+    expect(sql).toContain("signal_date");
+  });
+});
+
+describe("v101 space permissions", () => {
+  it("creates space_permissions for the space-grant model", () => {
+    const sql = workspaceMigrations.migrations.m0100;
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS space_permissions");
+    expect(sql).toContain("space_permissions_space_actor_idx");
+  });
+});

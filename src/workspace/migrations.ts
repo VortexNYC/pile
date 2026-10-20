@@ -1438,12 +1438,26 @@ CREATE INDEX IF NOT EXISTS merchant_sources_enabled_idx ON merchant_sources(orga
 ALTER TABLE customers ADD COLUMN signal TEXT;
 ALTER TABLE customers ADD COLUMN signal_date TEXT`;
 
+const v101 = `CREATE TABLE IF NOT EXISTS space_permissions (
+  id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  space_id TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  actor_type TEXT NOT NULL DEFAULT 'user',
+  level TEXT NOT NULL DEFAULT 'view',
+  created_at TEXT NOT NULL
+)
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS space_permissions_space_actor_idx ON space_permissions (space_id, actor_id)
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS space_permissions_org_idx ON space_permissions (organization_id)`;
+
 // PILE-443 — delivery claiming: drains transition pending → delivering
 // before handling so concurrent drains (post-write waitUntil + sweep)
 // can't double-POST external endpoints. claimed_at carries the lease —
 // a claim older than the lease is treated as a crashed drainer and is
 // reclaimable.
-const v101 = `ALTER TABLE domain_events ADD COLUMN claimed_at TEXT`;
+const v102 = `ALTER TABLE domain_events ADD COLUMN claimed_at TEXT`;
 
 const v97 = `CREATE TABLE IF NOT EXISTS lane_costs (
   session_id TEXT PRIMARY KEY,
@@ -1772,6 +1786,7 @@ export const workspaceMigrations = {
       { idx: 98, when: 98, tag: "v99", breakpoints: true },
       { idx: 99, when: 99, tag: "v100", breakpoints: true },
       { idx: 100, when: 100, tag: "v101", breakpoints: true },
+      { idx: 101, when: 101, tag: "v102", breakpoints: true },
     ],
   },
   migrations: {
@@ -1876,5 +1891,6 @@ export const workspaceMigrations = {
     m0098: v99,
     m0099: v100,
     m0100: v101,
+    m0101: v102,
   },
 } satisfies Parameters<typeof migrate>[1];

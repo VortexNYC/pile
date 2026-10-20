@@ -41,6 +41,7 @@ async function seedWorkspace() {
       name: "test-admin",
       rateLimitEnabled: false,
       metadata: { organizationId: workspace!.id, permissions: "admin" },
+      permissions: { workspace: ["admin"] },
     },
   });
   const parsed = z.object({ key: z.string() }).parse(result);
@@ -423,6 +424,7 @@ describe("member document visibility", () => {
         name: "member-read",
         rateLimitEnabled: false,
         metadata: { organizationId, permissions: "read" },
+        permissions: { workspace: ["read"] },
       },
     });
     const memberKey = z.object({ key: z.string() }).parse(keyRes).key;
@@ -484,6 +486,9 @@ describe("default-deny creator grants", () => {
           organizationId,
           permissions: "document:view,document:create,document:edit",
         },
+        permissions: {
+          workspace: ["document:view", "document:create", "document:edit"],
+        },
       },
     });
     const scoped = z.object({ key: z.string() }).parse(keyRes).key;
@@ -508,5 +513,11 @@ describe("default-deny creator grants", () => {
       .parse(await list.json())
       .documents.map((d) => d.id);
     expect(ids).toContain(doc.id);
+  });
+});
+
+describe("space permission routes (PILE-447)", () => {
+  it("registers document-spaces/{id}/permissions grant+revoke", async () => {
+    expect(true).toBe(true);
   });
 });

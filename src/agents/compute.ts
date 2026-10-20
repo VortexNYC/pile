@@ -8,6 +8,7 @@ import {
   daytonaSandboxListSchema,
   daytonaSandboxSchema,
 } from "./daytona.js";
+import type { LaneSandboxBase } from "./lane-sandbox.js";
 
 const DEFAULT_FALLBACK_TOOLBOX = "https://proxy.app.daytona.io/toolbox";
 const POLL_INTERVAL_MS = 5000;
@@ -16,6 +17,16 @@ const CF_SLEEP_AFTER = "4h"; // leak ceiling, above the runner's 2h timeout
 // Bound every compute I/O call — a wedged sandbox or dead toolbox must fail
 // fast, not hold the request/DO open indefinitely (PILE-217).
 const IO_TIMEOUT_MS = 30_000;
+// A sandbox create can legitimately run past the shared I/O bound while
+// Daytona schedules and boots the VM — aborting at 30s kills healthy
+// creates (PILE-466). The POST gets its own ceiling; every other call
+// stays at 30s.
+const CREATE_TIMEOUT_MS = 120_000;
+// The toolbox can lag the sandbox's "started" state by a few seconds —
+// right after start, the process-session create 400s with
+// SANDBOX_NOT_RUNNING or an unresolvable container IP. Bound the retries
+// so a real failure still fails fast.
+const SESSION_CREATE_MAX_RETRIES = 3;
 
 function ioTimeout<T>(promise: Promise<T>, what: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -63,6 +74,21 @@ export interface ComputeSandbox {
 
 export type RunnerState = "pending" | "running" | { exitCode: number };
 
+export interface SandboxFile {
+  path: string;
+  content: string;
+  /** Octal permission bits applied after the write (e.g. 0o600 for the
+   *  lane env file). */
+  mode?: number;
+}
+
+/** Shell-sourceable env file: one `export K='v'` per entry. */
+export function serializeLaneEnv(env: Record<string, string>): string {
+  return Object.entries(env)
+    .map(([k, v]) => `export ${k}='${v.replaceAll("'", "'\\''")}'`)
+    .join("\n");
+}
+
 export interface ComputeBackend {
   readonly kind: "daytona" | "cloudflare";
   createSandbox(opts: {
@@ -77,6 +103,11 @@ export interface ComputeBackend {
     name: string,
     resultPath?: string
   ): Promise<ComputeSandbox | null>;
+  /** PILE-471 — list sandboxes by label prefix for the orphan sweep:
+   *  sandboxes whose owning session is terminal get reaped. */
+  listSandboxes?(
+    labelPrefix: string
+  ): Promise<Array<ComputeSandbox & { labels?: Record<string, string> }>>;
   /**
    * Block until the lane's runner process is actually alive — the runner
    * binds 127.0.0.1:8787 as its readiness signal (PILE-308). Absent on
@@ -95,12 +126,12 @@ export interface ComputeBackend {
     env?: Record<string, string>
   ): Promise<void>;
   runnerState(sandbox: ComputeSandbox, sessionId: string): Promise<RunnerState>;
-  readFile(sandbox: ComputeSandbox, path: string): Promise<string | null>;
-  writeFile(
-    sandbox: ComputeSandbox,
-    path: string,
-    content: string
-  ): Promise<void>;
+  getFile(sandbox: ComputeSandbox, path: string): Promise<string | null>;
+  /** Write whole files into the sandbox over the backend's file API —
+   *  content never traverses argv or env, so multi-hundred-KB payloads
+   *  (prompts, the runner bundle) don't hit the execve per-string cap
+   *  (PILE-595). */
+  putFiles(sandbox: ComputeSandbox, files: SandboxFile[]): Promise<void>;
   /** Any runner process in flight for this session — used to distinguish a
    *  follow-up run from a dead lane after the primary process exits. */
   runnerBusy?(sandbox: ComputeSandbox, sessionId: string): Promise<boolean>;
@@ -131,25 +162,64 @@ export interface ComputeBackend {
   health(): Promise<{ ok: boolean; message?: string }>;
 }
 
-function computeError(message: string, status = 502): VortexError {
-  return new VortexError({ code: "AGENT_ERROR", status, message });
+// PILE-452 — every failure the compute substrate returns is infra-class:
+// sandbox create/provision/IP-resolution errors mean the provider fleet is
+// saturated, not that the lane's task failed. The flag lets dispatchAgent
+// mark infraFailure (the retry path + fleet breaker) without string
+// matching — Daytona answers 400s to spawn failures, which the old
+// status-only check (503/504) misclassified as task failures.
+export class ComputeError extends VortexError {
+  readonly infra = true;
+}
+
+/** True for compute-substrate failures, including RPC-serialized copies
+ *  that lost the ComputeError prototype but kept its own properties. */
+export function isComputeInfraError(error: unknown): boolean {
+  if (error instanceof ComputeError) return true;
+  return (
+    error instanceof Error &&
+    (error as { infra?: unknown }).infra === true &&
+    (error as { code?: unknown }).code === "AGENT_ERROR"
+  );
+}
+
+/** Coerce any provision-path throw into an infra-class error. Failures that
+ *  never reached the backend — I/O timeouts, DNS ("failed to resolve
+ *  container IP"), provision deadline rejects — arrive as plain Errors and
+ *  would otherwise classify as task failures. */
+export function asComputeInfraError(error: unknown): ComputeError {
+  if (error instanceof ComputeError) return error;
+  const message = error instanceof Error ? error.message : String(error);
+  const status = error instanceof VortexError ? error.status : 502;
+  return new ComputeError({ code: "AGENT_ERROR", status, message });
+}
+
+// Daytona returns 400s for quota and concurrency rejections too — call them
+// out so the session result says what actually blocked the spawn instead of
+// a bare "400 <body>".
+const DAYTONA_QUOTA_RE =
+  /quota|concurr|capacity|rate.?limit|too many|limit exceeded|max.*sandboxes/i;
+
+function daytonaFailure(what: string, status: number, body: string): string {
+  if (status === 429 || DAYTONA_QUOTA_RE.test(body)) {
+    return `${what}: Daytona quota/concurrency limit (status ${status}): ${body}`;
+  }
+  return `${what}: ${status} ${body}`;
+}
+
+function computeError(message: string, status = 502): ComputeError {
+  return new ComputeError({ code: "AGENT_ERROR", status, message });
 }
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function encodeUtf8Base64(input: string): string {
-  const bytes = new TextEncoder().encode(input);
-  const bin = Array.from(bytes, (b) => String.fromCharCode(b)).join("");
-  return btoa(bin);
-}
-
 // ---------------------------------------------------------------------------
 // Daytona
 // ---------------------------------------------------------------------------
 
-class DaytonaBackend implements ComputeBackend {
+export class DaytonaBackend implements ComputeBackend {
   readonly kind = "daytona" as const;
 
   constructor(
@@ -158,14 +228,36 @@ class DaytonaBackend implements ComputeBackend {
   ) {}
 
   private async request(path: string, init?: RequestInit): Promise<Response> {
-    return fetch(`${this.config.apiUrl}${path}`, {
-      signal: AbortSignal.timeout(IO_TIMEOUT_MS),
-      ...init,
-      headers: {
-        Authorization: `Bearer ${this.config.apiKey}`,
-        ...init?.headers,
-      },
-    });
+    // PILE-472 — one automatic retry on recoverable responses: 429 honors
+    // the Retry-After header, 5xx a short backoff. Non-recoverable errors
+    // (4xx) pass straight through to the caller's error handling.
+    const doFetch = () =>
+      fetch(`${this.config.apiUrl}${path}`, {
+        signal: AbortSignal.timeout(IO_TIMEOUT_MS),
+        ...init,
+        headers: {
+          Authorization: `Bearer ${this.config.apiKey}`,
+          ...init?.headers,
+        },
+      });
+    try {
+      let res = await doFetch();
+      const recoverable = res.status === 429 || res.status >= 500;
+      if (recoverable) {
+        const retryAfter = res.headers.get("retry-after");
+        const waitMs = retryAfter
+          ? Math.min(Number(retryAfter) * 1000 || 2000, 15000)
+          : 1500;
+        await delay(waitMs);
+        res = await doFetch();
+      }
+      return res;
+    } catch (err) {
+      throw computeError(
+        `Daytona request failed (${path}): ${err instanceof Error ? err.message : String(err)}`,
+        504
+      );
+    }
   }
 
   async createSandbox(opts: {
@@ -176,6 +268,7 @@ class DaytonaBackend implements ComputeBackend {
     env: Record<string, string>;
   }): Promise<ComputeSandbox> {
     const res = await this.request("/sandbox", {
+      signal: AbortSignal.timeout(CREATE_TIMEOUT_MS),
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -188,7 +281,10 @@ class DaytonaBackend implements ComputeBackend {
           "vortex.agent": opts.agentLabel,
         },
         autoStopInterval: 240, // leak ceiling: 4h, above the runner's 2h timeout
-        autoDeleteInterval: -1,
+        // PILE-471 — a lane's whole lifetime is bounded: 3h wall clock, and
+        // the sandbox deletes itself a day after it stops.
+        ttlMinutes: 180,
+        autoDeleteInterval: 1440,
         ...(this.env.DAYTONA_VOLUME_ID
           ? {
               volumes: [
@@ -203,8 +299,15 @@ class DaytonaBackend implements ComputeBackend {
     });
     if (!res.ok) {
       const text = await res.text();
+      // PILE-472 — a create that failed on a transport timeout may have
+      // actually landed server-side. Before surfacing the failure, adopt
+      // the sandbox by name so a retried dispatch doesn't orphan it.
+      const adopted = await this.findSandbox(opts.sessionId, opts.name).catch(
+        () => null
+      );
+      if (adopted) return adopted;
       throw computeError(
-        `Daytona sandbox create failed: ${res.status} ${text}`
+        daytonaFailure("Daytona sandbox create failed", res.status, text)
       );
     }
     const created = daytonaSandboxSchema.parse(await res.json());
@@ -230,7 +333,9 @@ class DaytonaBackend implements ComputeBackend {
       const res = await this.request(`/sandbox/${sandboxId}`);
       if (!res.ok) {
         const text = await res.text();
-        throw computeError(`Daytona sandbox get failed: ${res.status} ${text}`);
+        throw computeError(
+          daytonaFailure("Daytona sandbox get failed", res.status, text)
+        );
       }
       const sandbox = daytonaSandboxSchema.parse(await res.json());
       if (sandbox.state === "started") return sandbox;
@@ -249,16 +354,29 @@ class DaytonaBackend implements ComputeBackend {
     sessionId: string,
     name: string
   ): Promise<ComputeSandbox | null> {
-    const res = await this.request("/sandbox");
-    if (!res.ok) {
-      const text = await res.text();
-      throw computeError(`Daytona sandbox list failed: ${res.status} ${text}`);
-    }
-    const list = daytonaSandboxListSchema.parse(await res.json());
-    const sandbox =
-      list.items.find(
+    // PILE-472 — the sandbox list paginates; a full fleet can push the
+    // lane's sandbox off page one. Walk pages until it surfaces or runs out.
+    let sandbox: z.infer<typeof daytonaSandboxSchema> | null = null;
+    let page = 1;
+    for (;;) {
+      const res = await this.request(`/sandbox?page=${page}`);
+      if (!res.ok) {
+        const text = await res.text();
+        throw computeError(
+          daytonaFailure("Daytona sandbox list failed", res.status, text)
+        );
+      }
+      const list = daytonaSandboxListSchema.parse(await res.json());
+      const found = list.items.find(
         (s) => s.labels?.["vortex.session"] === sessionId || s.name === name
-      ) ?? null;
+      );
+      if (found) {
+        sandbox = found;
+        break;
+      }
+      if (list.items.length === 0 || page >= 10) break;
+      page += 1;
+    }
     if (!sandbox) return null;
     return {
       id: sandbox.id,
@@ -270,8 +388,61 @@ class DaytonaBackend implements ComputeBackend {
     };
   }
 
+  async listSandboxes(
+    labelPrefix: string
+  ): Promise<Array<ComputeSandbox & { labels?: Record<string, string> }>> {
+    const res = await this.request("/sandbox");
+    if (!res.ok) {
+      const text = await res.text();
+      throw computeError(`Daytona sandbox list failed: ${res.status} ${text}`);
+    }
+    const list = daytonaSandboxListSchema.parse(await res.json());
+    return list.items
+      .filter((s) =>
+        Object.keys(s.labels ?? {}).some((k) => k.startsWith(labelPrefix))
+      )
+      .map((s) => ({
+        id: s.id,
+        name: s.name,
+        state: s.state,
+        organizationId: s.labels?.["vortex.org"],
+        error: s.error ?? null,
+        toolboxProxyUrl: s.toolboxProxyUrl,
+        labels: s.labels ?? {},
+      }));
+  }
+
   private toolbox(sandbox: ComputeSandbox) {
     return `${sandbox.toolboxProxyUrl ?? DEFAULT_FALLBACK_TOOLBOX}/${sandbox.id}`;
+  }
+
+  /** Toolbox calls bypass `request` (different host); the same I/O bound +
+   *  infra classification applies — a dead toolbox or unresolvable sandbox
+   *  IP is a substrate failure, not a task failure. */
+  private async toolboxFetch(
+    url: string,
+    init?: RequestInit
+  ): Promise<Response> {
+    try {
+      return await fetch(url, {
+        signal: AbortSignal.timeout(IO_TIMEOUT_MS),
+        ...init,
+        headers: {
+          // FormData bodies carry their own multipart boundary — forcing a
+          // JSON content type would corrupt the upload.
+          ...(init?.body instanceof FormData
+            ? {}
+            : { "Content-Type": "application/json" }),
+          Authorization: `Bearer ${this.config.apiKey}`,
+          ...init?.headers,
+        },
+      });
+    } catch (err) {
+      throw computeError(
+        `Daytona toolbox request failed: ${err instanceof Error ? err.message : String(err)}`,
+        504
+      );
+    }
   }
 
   async startRunner(
@@ -285,40 +456,44 @@ class DaytonaBackend implements ComputeBackend {
     // prefix the command instead. Values are single-quote escaped.
     if (env && Object.keys(env).length > 0) {
       const envPath = `/tmp/pile-env-${sessionId.replace(/[^a-zA-Z0-9-]/g, "")}.sh`;
-      const body = Object.entries(env)
-        .map(([k, v]) => `export ${k}='${v.replaceAll("'", "'\\''")}'`)
-        .join("\n");
-      await this.writeFile(sandbox, envPath, body);
+      await this.putFiles(sandbox, [
+        { path: envPath, content: serializeLaneEnv(env) },
+      ]);
       command = `set -a && . ${envPath} && set +a && rm -f ${envPath}; ${command}`;
     }
-    const createRes = await fetch(`${base}/process/session`, {
-      signal: AbortSignal.timeout(IO_TIMEOUT_MS),
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.config.apiKey}`,
-      },
-      body: JSON.stringify({ sessionId }),
-    });
-    if (!createRes.ok && createRes.status !== 409) {
+    for (let i = 0; i <= SESSION_CREATE_MAX_RETRIES; i++) {
+      if (i > 0) await delay(2_000 * 2 ** (i - 1)); // 2s, 4s, 8s
+      const createRes = await this.toolboxFetch(`${base}/process/session`, {
+        method: "POST",
+        body: JSON.stringify({ sessionId }),
+      });
+      if (createRes.ok || createRes.status === 409) break;
       const text = await createRes.text();
-      throw computeError(
-        `Daytona process session create failed: ${createRes.status} ${text}`
-      );
+      const retryable =
+        createRes.status === 400 &&
+        (text.includes("SANDBOX_NOT_RUNNING") ||
+          text.includes("failed to resolve container IP"));
+      if (!retryable || i === SESSION_CREATE_MAX_RETRIES) {
+        throw computeError(
+          daytonaFailure(
+            "Daytona process session create failed",
+            createRes.status,
+            text
+          )
+        );
+      }
     }
-    const execRes = await fetch(`${base}/process/session/${sessionId}/exec`, {
-      signal: AbortSignal.timeout(IO_TIMEOUT_MS),
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.config.apiKey}`,
-      },
-      body: JSON.stringify({ command, runAsync: true }),
-    });
+    const execRes = await this.toolboxFetch(
+      `${base}/process/session/${sessionId}/exec`,
+      {
+        method: "POST",
+        body: JSON.stringify({ command, runAsync: true }),
+      }
+    );
     if (!execRes.ok) {
       const text = await execRes.text();
       throw computeError(
-        `Daytona process exec failed: ${execRes.status} ${text}`
+        daytonaFailure("Daytona process exec failed", execRes.status, text)
       );
     }
   }
@@ -328,10 +503,7 @@ class DaytonaBackend implements ComputeBackend {
     sessionId: string
   ): Promise<RunnerState> {
     const base = this.toolbox(sandbox);
-    const res = await fetch(`${base}/process/session/${sessionId}`, {
-      signal: AbortSignal.timeout(IO_TIMEOUT_MS),
-      headers: { Authorization: `Bearer ${this.config.apiKey}` },
-    });
+    const res = await this.toolboxFetch(`${base}/process/session/${sessionId}`);
     if (res.status === 404) return "pending";
     if (!res.ok) {
       const text = await res.text();
@@ -347,18 +519,10 @@ class DaytonaBackend implements ComputeBackend {
     return { exitCode: completed.exitCode };
   }
 
-  async readFile(
-    sandbox: ComputeSandbox,
-    path: string
-  ): Promise<string | null> {
+  async getFile(sandbox: ComputeSandbox, path: string): Promise<string | null> {
     const base = this.toolbox(sandbox);
-    const res = await fetch(`${base}/process/execute`, {
-      signal: AbortSignal.timeout(IO_TIMEOUT_MS),
+    const res = await this.toolboxFetch(`${base}/process/execute`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.config.apiKey}`,
-      },
       body: JSON.stringify({ command: `cat ${path}`, cwd: "/" }),
     });
     if (!res.ok) return null;
@@ -367,33 +531,73 @@ class DaytonaBackend implements ComputeBackend {
     return data.result;
   }
 
-  async writeFile(
+  private async uploadFile(
     sandbox: ComputeSandbox,
-    path: string,
-    content: string
+    file: SandboxFile
   ): Promise<void> {
     const base = this.toolbox(sandbox);
-    const res = await fetch(`${base}/process/execute`, {
-      signal: AbortSignal.timeout(IO_TIMEOUT_MS),
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.config.apiKey}`,
-      },
-      body: JSON.stringify({
-        command: `python3 -c "import base64,sys;open(sys.argv[1],'wb').write(base64.b64decode(sys.argv[2]))" ${path} ${encodeUtf8Base64(content)}`,
-        cwd: "/",
-      }),
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      throw computeError(`Daytona writeFile failed: ${res.status} ${text}`);
-    }
-    const data = daytonaSyncExecSchema.parse(await res.json());
-    if (data.exitCode !== 0) {
-      throw computeError(
-        `Daytona writeFile exited ${data.exitCode}: ${data.result ?? ""}`
+    const res = await this.toolboxFetch(
+      `${base}/files/upload-v2?path=${encodeURIComponent(file.path)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/octet-stream" },
+        body: file.content,
+      }
+    );
+    if (res.ok) return;
+    if (res.status === 404) {
+      // Older toolbox images lack upload-v2 — the legacy endpoint takes a
+      // multipart `file` part instead of a raw body.
+      const form = new FormData();
+      form.set("file", new Blob([file.content]), "file");
+      const legacy = await this.toolboxFetch(
+        `${base}/files/upload?path=${encodeURIComponent(file.path)}`,
+        { method: "POST", body: form }
       );
+      if (legacy.ok) return;
+      const legacyText = await legacy.text();
+      throw computeError(
+        daytonaFailure(
+          `Daytona file upload ${file.path} failed`,
+          legacy.status,
+          legacyText
+        )
+      );
+    }
+    const text = await res.text();
+    throw computeError(
+      daytonaFailure(
+        `Daytona file upload ${file.path} failed`,
+        res.status,
+        text
+      )
+    );
+  }
+
+  async putFiles(sandbox: ComputeSandbox, files: SandboxFile[]): Promise<void> {
+    const base = this.toolbox(sandbox);
+    for (const file of files) {
+      await this.uploadFile(sandbox, file);
+      if (file.mode === undefined) continue;
+      const res = await this.toolboxFetch(`${base}/process/execute`, {
+        method: "POST",
+        body: JSON.stringify({
+          command: `chmod ${file.mode.toString(8)} ${file.path}`,
+          cwd: "/",
+        }),
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw computeError(
+          `Daytona chmod ${file.path} failed: ${res.status} ${text}`
+        );
+      }
+      const data = daytonaSyncExecSchema.parse(await res.json());
+      if (data.exitCode !== 0) {
+        throw computeError(
+          `Daytona chmod ${file.path} exited ${data.exitCode}: ${data.result ?? ""}`
+        );
+      }
     }
   }
 
@@ -429,7 +633,7 @@ class DaytonaBackend implements ComputeBackend {
     if (!res.ok && res.status !== 404) {
       const text = await res.text();
       throw computeError(
-        `Daytona sandbox delete failed: ${res.status} ${text}`
+        daytonaFailure("Daytona sandbox delete failed", res.status, text)
       );
     }
   }
@@ -482,6 +686,55 @@ export function laneCachePrefix(organizationId: string, repo: string): string {
   return `/${cacheSegment(organizationId)}/${segments.join("/")}/`;
 }
 
+async function cfAdmit(env: AppEnv | undefined, name: string): Promise<void> {
+  const url = env?.CF_ADMISSION_URL;
+  const token = env?.CF_ADMISSION_TOKEN;
+  if (!url || !token) return;
+  try {
+    const res = await fetch(`${url}/admin/sandbox/admit`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ name, pool: "EXTERNAL", ttlMs: 2 * 3600_000 }),
+    });
+    if (res.status === 429) {
+      const detail = (await res.json().catch(() => null)) as {
+        reason?: string;
+      } | null;
+      throw new VortexError({
+        code: "RATE_LIMITED",
+        status: 503,
+        message: `sandbox admission denied: ${detail?.reason ?? "account capacity"}`,
+      });
+    }
+    if (!res.ok) {
+      console.warn("sandbox admission endpoint failed-open", res.status);
+    }
+  } catch (err) {
+    if (err instanceof VortexError) throw err;
+    console.warn("sandbox admission unreachable — failing open", err);
+  }
+}
+
+async function cfReleaseAdmission(
+  env: AppEnv | undefined,
+  name: string
+): Promise<void> {
+  const url = env?.CF_ADMISSION_URL;
+  const token = env?.CF_ADMISSION_TOKEN;
+  if (!url || !token) return;
+  await fetch(`${url}/admin/sandbox/release`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ name }),
+  }).catch(() => {});
+}
+
 export class CloudflareBackend implements ComputeBackend {
   readonly kind = "cloudflare" as const;
 
@@ -498,49 +751,11 @@ export class CloudflareBackend implements ComputeBackend {
    * a dead admission service must not take the lane fleet down with it.
    */
   private async admit(name: string): Promise<void> {
-    const url = this.env?.CF_ADMISSION_URL;
-    const token = this.env?.CF_ADMISSION_TOKEN;
-    if (!url || !token) return;
-    try {
-      const res = await fetch(`${url}/admin/sandbox/admit`, {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${token}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({ name, pool: "EXTERNAL", ttlMs: 2 * 3600_000 }),
-      });
-      if (res.status === 429) {
-        const detail = (await res.json().catch(() => null)) as {
-          reason?: string;
-        } | null;
-        throw new VortexError({
-          code: "RATE_LIMITED",
-          status: 503,
-          message: `sandbox admission denied: ${detail?.reason ?? "account capacity"}`,
-        });
-      }
-      if (!res.ok) {
-        console.warn("sandbox admission endpoint failed-open", res.status);
-      }
-    } catch (err) {
-      if (err instanceof VortexError) throw err;
-      console.warn("sandbox admission unreachable — failing open", err);
-    }
+    return cfAdmit(this.env, name);
   }
 
   private async releaseAdmission(name: string): Promise<void> {
-    const url = this.env?.CF_ADMISSION_URL;
-    const token = this.env?.CF_ADMISSION_TOKEN;
-    if (!url || !token) return;
-    await fetch(`${url}/admin/sandbox/release`, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${token}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ name }),
-    }).catch(() => {});
+    return cfReleaseAdmission(this.env, name);
   }
 
   private sandbox(name: string): Promise<SandboxHandle> {
@@ -579,7 +794,7 @@ export class CloudflareBackend implements ComputeBackend {
     // The result file surviving is proof the sandbox (and its disk) is alive.
     if (
       resultPath &&
-      (await this.readFile({ id: name, name, state: "started" }, resultPath))
+      (await this.getFile({ id: name, name, state: "started" }, resultPath))
     ) {
       return { id: name, name, state: "started" };
     }
@@ -648,10 +863,7 @@ export class CloudflareBackend implements ComputeBackend {
     return { exitCode: proc.exitCode ?? (status === "completed" ? 0 : 1) };
   }
 
-  async readFile(
-    sandbox: ComputeSandbox,
-    path: string
-  ): Promise<string | null> {
+  async getFile(sandbox: ComputeSandbox, path: string): Promise<string | null> {
     try {
       const handle = await this.sandbox(sandbox.name);
       const res = await ioTimeout(handle.readFile(path), "sandbox readFile");
@@ -661,20 +873,25 @@ export class CloudflareBackend implements ComputeBackend {
     }
   }
 
-  async writeFile(
-    sandbox: ComputeSandbox,
-    path: string,
-    content: string
-  ): Promise<void> {
-    const res = await ioTimeout(
-      (await ioTimeout(this.sandbox(sandbox.name), "sandbox handle")).writeFile(
-        path,
-        content
-      ),
-      "sandbox writeFile"
+  async putFiles(sandbox: ComputeSandbox, files: SandboxFile[]): Promise<void> {
+    const handle = await ioTimeout(
+      this.sandbox(sandbox.name),
+      "sandbox handle"
     );
-    if (!res.success) {
-      throw computeError(`Cloudflare writeFile failed: ${path}`);
+    for (const file of files) {
+      const res = await ioTimeout(
+        handle.writeFile(file.path, file.content),
+        "sandbox writeFile"
+      );
+      if (!res.success) {
+        throw computeError(`Cloudflare writeFile failed: ${file.path}`);
+      }
+      if (file.mode !== undefined) {
+        await ioTimeout(
+          handle.exec(`chmod ${file.mode.toString(8)} ${file.path}`),
+          "sandbox chmod"
+        );
+      }
     }
   }
 
@@ -855,6 +1072,150 @@ export class CloudflareBackend implements ComputeBackend {
   }
 }
 
+/**
+ * sandbox-sdk 1.0 backend (PILE-473/474): the lane sandbox is a DO with RPC
+ * methods (`LaneSandboxBase`) instead of the 0.12 `getSandbox` handle, so
+ * this backend talks to `SANDBOX_LANE*` bindings directly. Selected per
+ * deployment via `LANE_SDK=v1`; the 0.12 classes and bindings stay live for
+ * rollback. Lane cache mounts and worktree backups aren't wired yet — lanes
+ * on v1 fall back to the HTTP pnpm-store cache and cold continuation.
+ */
+export class LaneSandboxBackend implements ComputeBackend {
+  readonly kind = "cloudflare" as const;
+
+  constructor(
+    private ns: DurableObjectNamespace<LaneSandboxBase>,
+    private env?: AppEnv
+  ) {}
+
+  private stub(name: string): DurableObjectStub<LaneSandboxBase> {
+    return this.ns.getByName(name);
+  }
+
+  async createSandbox(opts: {
+    name: string;
+    sessionId: string;
+    organizationId: string;
+    agentLabel: string;
+    env: Record<string, string>;
+  }): Promise<ComputeSandbox> {
+    await cfAdmit(this.env, opts.name);
+    await ioTimeout(this.stub(opts.name).provision(), "lane provision");
+    return {
+      id: opts.name,
+      name: opts.name,
+      state: "started",
+      organizationId: opts.organizationId,
+      runnerEnv: opts.env,
+    };
+  }
+
+  async findSandbox(
+    sessionId: string,
+    name: string,
+    resultPath?: string
+  ): Promise<ComputeSandbox | null> {
+    const stub = this.stub(name);
+    if (await ioTimeout(stub.hasProcess(sessionId), "sandbox hasProcess")) {
+      return { id: name, name, state: "started" };
+    }
+    if (
+      resultPath &&
+      (await this.getFile({ id: name, name, state: "started" }, resultPath))
+    ) {
+      return { id: name, name, state: "started" };
+    }
+    return null;
+  }
+
+  async startRunner(
+    sandbox: ComputeSandbox,
+    sessionId: string,
+    command: string,
+    env?: Record<string, string>
+  ): Promise<void> {
+    await ioTimeout(
+      this.stub(sandbox.name).spawn({
+        processId: sessionId,
+        command,
+        env: env ?? sandbox.runnerEnv,
+      }),
+      "lane spawn"
+    );
+  }
+
+  async runnerBusy(
+    sandbox: ComputeSandbox,
+    sessionId: string
+  ): Promise<boolean> {
+    return ioTimeout(
+      this.stub(sandbox.name).sessionBusy(sessionId),
+      "lane sessionBusy"
+    ).catch(() => false);
+  }
+
+  async runnerState(
+    sandbox: ComputeSandbox,
+    sessionId: string
+  ): Promise<RunnerState> {
+    const state = await ioTimeout(
+      this.stub(sandbox.name).processState(sessionId),
+      "lane processState"
+    );
+    return state.running ? "running" : { exitCode: state.exitCode ?? 1 };
+  }
+
+  async getFile(sandbox: ComputeSandbox, path: string): Promise<string | null> {
+    return ioTimeout(
+      this.stub(sandbox.name).readFile(path),
+      "lane readFile"
+    ).catch(() => null);
+  }
+
+  async putFiles(sandbox: ComputeSandbox, files: SandboxFile[]): Promise<void> {
+    await ioTimeout(this.stub(sandbox.name).putFiles(files), "lane putFiles");
+  }
+
+  async runnerLogs(
+    sandbox: ComputeSandbox,
+    sessionId: string
+  ): Promise<string | null> {
+    const id = sessionId.replace(/[^A-Za-z0-9._-]/g, "_");
+    return ioTimeout(
+      this.stub(sandbox.name).tail(`/tmp/pile/proc/${id}.log`),
+      "lane runner log tail"
+    ).catch(() => null);
+  }
+
+  async waitForRunner(
+    sandbox: ComputeSandbox,
+    processId: string,
+    timeoutMs: number
+  ): Promise<void> {
+    const stub = this.stub(sandbox.name);
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      if (await ioTimeout(stub.probe(8787), "runner probe")) return;
+      if (Date.now() >= deadline) {
+        throw new Error(`runner process ${processId} never registered`);
+      }
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+  }
+
+  async deleteSandbox(sandbox: ComputeSandbox): Promise<void> {
+    try {
+      await ioTimeout(this.stub(sandbox.name).destroy(), "lane destroy");
+    } finally {
+      await cfReleaseAdmission(this.env, sandbox.name);
+    }
+  }
+
+  async health(): Promise<{ ok: boolean; message?: string }> {
+    return { ok: true, message: "provider=cloudflare sdk=v1" };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Selection
 // ---------------------------------------------------------------------------
@@ -865,9 +1226,41 @@ const SANDBOX_BINDING_BY_AGENT = {
   "codex-cli": "SANDBOX_CODEX",
 } as const;
 
+const LANE_V1_BINDING_BY_AGENT = {
+  "cursor-cli": "SANDBOX_LANE_CURSOR",
+  "devin-cli": "SANDBOX_LANE_DEVIN",
+  "codex-cli": "SANDBOX_LANE_CODEX",
+} as const;
+
 export function computeBackend(env: AppEnv, agentId?: string): ComputeBackend {
   const provider = env.COMPUTE_PROVIDER ?? "daytona";
   if (provider === "cloudflare") {
+    // sandbox-sdk 1.0 lanes (PILE-473/474): LANE_SDK=v1 routes through the
+    // LaneSandbox DOs on SANDBOX_LANE* bindings. Missing binding is a config
+    // error — silently falling back to 0.12 would canary nothing.
+    if (env.LANE_SDK === "v1") {
+      const specific = agentId
+        ? (
+            LANE_V1_BINDING_BY_AGENT as Record<
+              string,
+              | "SANDBOX_LANE_CURSOR"
+              | "SANDBOX_LANE_DEVIN"
+              | "SANDBOX_LANE_CODEX"
+              | undefined
+            >
+          )[agentId]
+        : undefined;
+      const ns = (specific ? env[specific] : undefined) ?? env.SANDBOX_LANE;
+      if (!ns) {
+        throw new VortexError({
+          code: "CONFIG_ERROR",
+          status: 500,
+          message:
+            "LANE_SDK=v1 requires a SANDBOX_LANE binding (or a per-provider SANDBOX_LANE_* binding)",
+        });
+      }
+      return new LaneSandboxBackend(ns, env);
+    }
     // Per-provider image/binding first; fall back to the shared SANDBOX
     // binding so single-image self-host setups keep working.
     const specific = agentId
@@ -906,4 +1299,34 @@ export function computeBackend(env: AppEnv, agentId?: string): ComputeBackend {
     });
   }
   return new DaytonaBackend(env, config);
+}
+
+/** PILE-471 — label-based orphan sweep: any `vortex.*`-labeled sandbox
+ *  whose owning session is terminal (or unknown) gets deleted. The labels
+ *  minted at createSandbox are the source of truth — no session-row
+ *  bookkeeping needed on the Daytona side. */
+export async function sweepOrphanSandboxes(
+  backend: ComputeBackend,
+  stub: {
+    getAgentSession(id: string): Promise<{ status: string } | null | undefined>;
+  },
+  opts: { limit?: number } = {}
+): Promise<{ reaped: number; checked: number }> {
+  if (!backend.listSandboxes) return { reaped: 0, checked: 0 };
+  const sandboxes = await backend.listSandboxes("vortex.");
+  const TERMINAL = new Set(["completed", "failed", "canceled"]);
+  let reaped = 0;
+  let checked = 0;
+  for (const s of sandboxes.slice(0, opts.limit ?? 50)) {
+    const sessionId = s.labels?.["vortex.session"];
+    if (!sessionId) continue;
+    checked += 1;
+    const session = await stub.getAgentSession(sessionId).catch(() => null);
+    const orphaned = !session || TERMINAL.has(session.status);
+    if (orphaned && backend.deleteSandbox) {
+      await backend.deleteSandbox(s).catch(() => {});
+      reaped += 1;
+    }
+  }
+  return { reaped, checked };
 }

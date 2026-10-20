@@ -7,6 +7,7 @@ import {
   type MerchantSourceRow,
 } from "./collectors.js";
 import { sessionPlanSchema, type SessionPlan } from "./session-plan.js";
+import { runUsageSchema, type AgentRunUsage } from "./spend.js";
 
 // PILE-284 — purpose-built lane tool surface. Instead of handing a lane a raw
 // shell + installation token for GitHub ops, Pile exposes named tools that
@@ -198,6 +199,9 @@ export interface LaneToolContext {
     plan?: SessionPlan;
   }): Promise<void>;
   policy: LaneToolPolicy;
+  /** Names of the workspace-domain tools served alongside the repo tools —
+   *  get_lane_context reports the whole callable set. */
+  workspaceToolNames?: readonly string[];
 }
 
 interface LaneToolDef<S extends z.ZodObject> {
@@ -304,9 +308,12 @@ export const LANE_TOOLS: readonly LaneTool[] = [
         branch: ctx.branch,
         tier: ctx.policy.tier,
         permissions: [...ctx.policy.permissions],
-        tools: LANE_TOOLS.filter((t) => laneToolAllowed(ctx.policy, t)).map(
-          (t) => t.name
-        ),
+        tools: [
+          ...LANE_TOOLS.filter((t) => laneToolAllowed(ctx.policy, t)).map(
+            (t) => t.name
+          ),
+          ...(ctx.workspaceToolNames ?? []),
+        ],
       };
     },
   }),
@@ -903,6 +910,18 @@ export interface LaneWorkspace {
   getCustomer(id: string): Promise<unknown>;
   getCustomerByDomain(domain: string): Promise<unknown>;
   getCustomerByExternalId(externalId: string): Promise<unknown>;
+  updateCustomer(
+    id: string,
+    patch: {
+      name?: string;
+      domain?: string | null;
+      url?: string | null;
+      notes?: string | null;
+      priorityScore?: number | null;
+      customFields?: Record<string, string | null>;
+    },
+    actorId?: string
+  ): Promise<unknown>;
   listCustomers(): Promise<unknown[]>;
   getDocument(id: string): Promise<
     | {
@@ -960,6 +979,7 @@ export interface LaneWorkspace {
     search?: string;
     limit?: number;
   }): Promise<unknown[]>;
+  recordSessionUsage(sessionId: string, usage: AgentRunUsage): Promise<unknown>;
 }
 
 export interface WorkspaceLaneToolContext {
@@ -1008,6 +1028,16 @@ function defineWorkspaceTool<S extends z.ZodObject>(
     inputSchema: def.inputSchema,
     run: async (ctx, input) => def.run(ctx, def.inputSchema.parse(input)),
   };
+}
+
+/** "Empty" for fill-only writes — null/undefined or a whitespace-only
+ *  string. 0 and false are real values a lane must not silently replace. */
+function isEmptyValue(value: unknown): boolean {
+  return (
+    value === null ||
+    value === undefined ||
+    (typeof value === "string" && value.trim() === "")
+  );
 }
 
 const BLOCKED_HOSTS =
@@ -1187,7 +1217,7 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
   defineWorkspaceTool({
     name: "customer_upsert",
     description:
-      "Create a merchant record — or return the existing one if a customer with this domain/externalId already exists.",
+      "Create a merchant record — or return the existing one if a customer with this domain/externalId already exists. A matched record is returned unchanged; use customer_update to write fields on it.",
     permission: "ws:write",
     inputSchema: z.object({
       name: z.string().min(1),
@@ -1826,6 +1856,179 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
     },
   }),
   defineWorkspaceTool({
+    name: "deepseek_search",
+    description:
+      "DeepSeek web search — cheap merchant discovery (~$0.75/1k). Returns ranked results with snippets for a query.",
+    permission: "web:fetch",
+    inputSchema: z.object({
+      query: z.string().min(1),
+      limit: z.number().optional(),
+    }),
+    async run(ctx, input) {
+      const key = ctx.env?.DEEPSEEK_API_KEY;
+      if (!key) throw new LaneToolError("DEEPSEEK_API_KEY not configured");
+      const res = await fetch("https://api.deepseek.com/v1/search", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${key}`,
+        },
+        body: JSON.stringify({
+          query: input.query,
+          limit: input.limit ?? 10,
+        }),
+      });
+      if (!res.ok) throw new LaneToolError(`deepseek failed: ${res.status}`);
+      return res.json();
+    },
+  }),
+  defineWorkspaceTool({
+    name: "opencorporates",
+    description:
+      "OpenCorporates business registry — officer names, entity status, filings for a company name + jurisdiction. Free tier.",
+    permission: "web:fetch",
+    inputSchema: z.object({
+      query: z.string().min(1),
+      jurisdiction: z.string().optional(),
+      limit: z.number().optional(),
+    }),
+    async run(ctx, input) {
+      const params = new URLSearchParams({
+        q: input.query,
+        format: "json",
+        per_page: String(input.limit ?? 20),
+        order: "score",
+      });
+      if (input.jurisdiction)
+        params.set("jurisdiction_code", input.jurisdiction);
+      if (ctx.env?.OPENCORPORATES_API_KEY)
+        params.set("api_token", ctx.env.OPENCORPORATES_API_KEY);
+      const res = await fetch(
+        `https://api.opencorporates.com/v0.4/companies/search?${params}`
+      );
+      if (!res.ok)
+        throw new LaneToolError(`opencorporates failed: ${res.status}`);
+      return res.json();
+    },
+  }),
+  defineWorkspaceTool({
+    name: "tech_fingerprint",
+    description:
+      "Technology fingerprint — detect a merchant site's POS/ecommerce/CMS stack (Toast, Square, Shopify, Stripe…) via the self-hosted signature service. The ICP-gate call.",
+    permission: "web:fetch",
+    inputSchema: z.object({
+      url: z.string().url(),
+    }),
+    async run(ctx, input) {
+      const base = ctx.env?.WAPPALYZER_BASE_URL;
+      if (!base) throw new LaneToolError("WAPPALYZER_BASE_URL not configured");
+      const res = await fetch(`${base}/fingerprint`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url: input.url }),
+      });
+      if (!res.ok) throw new LaneToolError(`fingerprint failed: ${res.status}`);
+      return res.json();
+    },
+  }),
+  defineWorkspaceTool({
+    name: "customer_update",
+    description:
+      "Update an existing merchant — look it up by id or externalId (pass exactly one). Only the fields you pass are touched, and by default they fill empty slots only: a field that already has a value is left alone and reported in `skipped` (pass overwrite: true to replace it anyway). Every applied change lands in the record's audit history.",
+    permission: "ws:write",
+    inputSchema: z.object({
+      id: z.string().optional(),
+      externalId: z.string().optional(),
+      name: z.string().min(1).optional(),
+      domain: z.string().optional(),
+      url: z.string().optional(),
+      notes: z.string().optional(),
+      priorityScore: z.number().optional(),
+      // Name-keyed values, same contract as the REST/import surface — a
+      // missing definition is auto-created as a text field, null clears.
+      customFields: z.record(z.string(), z.string().nullable()).optional(),
+      overwrite: z
+        .boolean()
+        .optional()
+        .describe("Replace non-empty values instead of skipping them"),
+    }),
+    async run(ctx, input) {
+      const keys = [input.id, input.externalId].filter(Boolean);
+      if (keys.length !== 1) {
+        throw new LaneToolError("pass exactly one of id / externalId");
+      }
+      const found = input.id
+        ? await ctx.ws.getCustomer(input.id)
+        : await ctx.ws.getCustomerByExternalId(input.externalId!);
+      if (!found || typeof found !== "object") {
+        throw new LaneToolError("customer not found");
+      }
+      const customer = found as {
+        id: string;
+        customFields?: Record<string, string>;
+        [key: string]: unknown;
+      };
+      const overwrite = input.overwrite === true;
+      type CustomerPatch = Parameters<LaneWorkspace["updateCustomer"]>[1];
+      const patch: CustomerPatch = {};
+      const applied: string[] = [];
+      const alreadySet: string[] = [];
+      const skipped: string[] = [];
+      const scalars = [
+        ["name", input.name],
+        ["domain", input.domain],
+        ["url", input.url],
+        ["notes", input.notes],
+      ] as const;
+      for (const [field, value] of scalars) {
+        if (value === undefined) continue;
+        const existing = customer[field];
+        if (existing === value) {
+          alreadySet.push(field);
+        } else if (!overwrite && !isEmptyValue(existing)) {
+          skipped.push(field);
+        } else {
+          patch[field] = value;
+          applied.push(field);
+        }
+      }
+      if (input.priorityScore !== undefined) {
+        if (customer.priorityScore === input.priorityScore) {
+          alreadySet.push("priorityScore");
+        } else if (!overwrite && !isEmptyValue(customer.priorityScore)) {
+          skipped.push("priorityScore");
+        } else {
+          patch.priorityScore = input.priorityScore;
+          applied.push("priorityScore");
+        }
+      }
+      const fieldPatch: Record<string, string | null> = {};
+      const existingFields = customer.customFields ?? {};
+      for (const [key, value] of Object.entries(input.customFields ?? {})) {
+        const existing = existingFields[key];
+        if (existing === value || (value === null && isEmptyValue(existing))) {
+          alreadySet.push(`customFields.${key}`);
+        } else if (!overwrite && !isEmptyValue(existing)) {
+          skipped.push(`customFields.${key}`);
+        } else {
+          fieldPatch[key] = value;
+          applied.push(`customFields.${key}`);
+        }
+      }
+      if (Object.keys(fieldPatch).length > 0) patch.customFields = fieldPatch;
+      if (applied.length === 0) {
+        return { updated: false, customer, applied, alreadySet, skipped };
+      }
+      const updated = await ctx.ws.updateCustomer(
+        customer.id,
+        patch,
+        ctx.agentSlug
+      );
+      if (!updated) throw new LaneToolError("customer not found");
+      return { updated: true, customer: updated, applied, alreadySet, skipped };
+    },
+  }),
+  defineWorkspaceTool({
     name: "web_fetch",
     description:
       "Fetch a public URL (NYC Open Data, a state business registry, a merchant site). GET only, https only, text response capped.",
@@ -1885,6 +2088,17 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
     }),
     async run(ctx, input) {
       return ctx.ws.memoryRecall(input);
+    },
+  }),
+  defineWorkspaceTool({
+    name: "report_usage",
+    description:
+      "Record this run's cumulative token/cost usage on the session's run receipt — call once at run end (values are run totals, not deltas). Fields: model, inputTokens, outputTokens, totalTokens, toolCalls, costMicros (USD micros), externalSpendMicros.",
+    permission: "lane:report",
+    inputSchema: runUsageSchema,
+    async run(ctx, input) {
+      await ctx.ws.recordSessionUsage(ctx.sessionId, input);
+      return { ok: true };
     },
   }),
 ];

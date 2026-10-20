@@ -243,12 +243,20 @@ async function ghFetchFailing(input: RequestInfo | URL) {
   return new Response("not found", { status: 404 });
 }
 
-function ghFetchFailingPr(num: number, sha: string) {
+function ghFetchFailingPr(
+  num: number,
+  sha: string,
+  pr: { state?: string; mergedAt?: string | null } = {}
+) {
   return async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url.endsWith(`/pulls/${num}`)) {
       return new Response(
-        JSON.stringify({ state: "open", merged_at: null, head: { sha } }),
+        JSON.stringify({
+          state: pr.state ?? "open",
+          merged_at: pr.mergedAt ?? null,
+          head: { sha },
+        }),
         { status: 200 }
       );
     }
@@ -319,6 +327,27 @@ async function ghFetchReviewCheck(input: RequestInfo | URL) {
       }),
       { status: 200 }
     );
+  }
+  return new Response("not found", { status: 404 });
+}
+
+// PILE-446 / VOR-738: PR 212 merges while a fix lane is still in flight.
+async function ghFetchMerge(input: RequestInfo | URL) {
+  const url = String(input);
+  if (url.endsWith("/pulls/212")) {
+    return new Response(
+      JSON.stringify({
+        state: "closed",
+        merged_at: "2026-10-19T12:00:00Z",
+        head: { sha: "race123", ref: "merge-race-branch" },
+      }),
+      { status: 200 }
+    );
+  }
+  if (url.includes("/commits/race123/check-runs")) {
+    return new Response(JSON.stringify({ check_runs: [] }), {
+      status: 200,
+    });
   }
   return new Response("not found", { status: 404 });
 }
@@ -427,8 +456,8 @@ function fakeComputeBackend(opts: {
       started.push(`${processId}:${command.slice(0, 40)}`);
     },
     runnerState: async () => opts.state ?? "running",
-    readFile: async () => opts.resultFile ?? null,
-    writeFile: async () => {},
+    getFile: async () => opts.resultFile ?? null,
+    putFiles: async () => {},
     deleteSandbox: async () => {},
     health: async () => ({ ok: true }),
   };
@@ -2087,6 +2116,52 @@ describe("syncOpenPrSessions", () => {
     expect(issueAfter?.status).toBe("done");
   });
 
+  // PILE-446 — the VOR-738 race: a lane fixing review feedback in flight
+  // when its PR merges must be canceled, not left to push a deleted branch.
+  it("cancels in-flight lanes bound to a PR that merged", async () => {
+    const prUrl = "https://github.com/vortexnyc/pile/pull/212";
+    const issue = await stub.createIssue({
+      title: "Merge race",
+      repo: "vortexnyc/pile",
+      branch: "merge-race-branch",
+    });
+    const mk = (
+      over: Omit<
+        Parameters<typeof stub.createAgentSession>[0],
+        "issueId" | "agentId" | "provider" | "actorId" | "actorType"
+      >
+    ) =>
+      stub.createAgentSession({
+        issueId: issue.id,
+        agentId: "mock-mc",
+        provider: "mock-mc",
+        actorId: userId,
+        actorType: "user",
+        ...over,
+      });
+    // Terminal lane that reported the PR (the reconcile candidate).
+    const done = await mk({ status: "completed", prUrl, prState: "open" });
+    // In-flight fix lane bound by prUrl — the VOR-738 case.
+    const fix = await mk({ status: "running", prUrl, prState: "open" });
+    // Just-dispatched lane: nothing reported yet, bound via issue.branch.
+    const fresh = await mk({ status: "created" });
+    // A review side lane is not the PR's worker — it survives.
+    const reviewer = await mk({ status: "running", purpose: "review" });
+
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: ghFetchMerge as typeof fetch,
+    });
+
+    expect((await stub.getAgentSession(fix.id))?.status).toBe("canceled");
+    expect((await stub.getAgentSession(fix.id))?.infraFailure).toBe(0);
+    expect((await stub.getAgentSession(fresh.id))?.status).toBe("canceled");
+    expect((await stub.getAgentSession(reviewer.id))?.status).toBe("running");
+    expect((await stub.getAgentSession(done.id))?.status).toBe("completed");
+    const events = await stub.listAgentSessionEvents(fix.id);
+    expect(events.some((e) => e.type === "pr.merge_cancel")).toBe(true);
+  });
+
   it("does not read a pile-review verdict as CI state (PILE-273)", async () => {
     const issue = await stub.createIssue({ title: "Reviewed PR" });
     const session = await stub.createAgentSession({
@@ -2109,6 +2184,137 @@ describe("syncOpenPrSessions", () => {
     expect(issueAfter?.prCheckState).toBe("passing");
     const events = await stub.listAgentSessionEvents(session.id);
     expect(events.some((e) => e.type === "pr.ci_failed")).toBe(false);
+  });
+
+  // PILE-445 — a pile-review check run left pending by a lane that died on
+  // provisioning is retried by the sweep backstop instead of hanging the PR.
+  it("takes over a stale pending pile-review check run", async () => {
+    const agentId = `mock-review-stale-${crypto.randomUUID().slice(0, 8)}`;
+    const dispatches: string[] = [];
+    registerMock(agentId, {
+      dispatch: (_org, issue) => {
+        dispatches.push(issue.id);
+        return { id: "remote-stale", agentId, status: "running" };
+      },
+    });
+    const issue = await stub.createIssue({ title: "Hung review PR" });
+    await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      prUrl: "https://github.com/vortexnyc/pile/pull/893",
+      prState: "open",
+    });
+
+    const writes: Array<{ url: string; body: Record<string, unknown> }> = [];
+    const ghFetchStale = async (
+      input: RequestInfo | URL,
+      init?: RequestInit
+    ) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      if (method !== "GET" && typeof init?.body === "string") {
+        writes.push({
+          url,
+          body: JSON.parse(init.body) as Record<string, unknown>,
+        });
+      }
+      if (method === "GET" && url.endsWith("/pulls/893")) {
+        return new Response(
+          JSON.stringify({
+            state: "open",
+            merged_at: null,
+            head: { sha: "stale893" },
+            base: { ref: "main" },
+          }),
+          { status: 200 }
+        );
+      }
+      if (
+        url.includes("/commits/stale893/check-runs") &&
+        url.includes("check_name=")
+      ) {
+        return new Response(
+          JSON.stringify({
+            check_runs: [
+              {
+                id: 777,
+                name: "pile-review",
+                status: "in_progress",
+                started_at: "2020-01-01T00:00:00Z",
+              },
+            ],
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.includes("/commits/stale893/check-runs")) {
+        return new Response(
+          JSON.stringify({
+            check_runs: [
+              {
+                id: 777,
+                name: "pile-review",
+                status: "in_progress",
+                started_at: "2020-01-01T00:00:00Z",
+              },
+              { name: "test", status: "completed", conclusion: "success" },
+            ],
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.includes("/contents/.pile/config.json")) {
+        return new Response(
+          JSON.stringify({
+            content: btoa(JSON.stringify({ review: { agent: agentId } })),
+            encoding: "base64",
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.includes("/pulls/893/files")) {
+        return new Response(
+          JSON.stringify([{ filename: "src/a.ts", patch: "@@ -1 +1 @@" }]),
+          { status: 200 }
+        );
+      }
+      if (method === "PATCH" && url.endsWith("/check-runs/777")) {
+        return new Response(JSON.stringify({ id: 777 }), { status: 200 });
+      }
+      if (method === "POST" && url.endsWith("/check-runs")) {
+        return new Response(JSON.stringify({ id: 600 }), { status: 201 });
+      }
+      return new Response("not found", { status: 404 });
+    };
+
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: ghFetchStale as typeof fetch,
+    });
+
+    // The orphaned run resolved neutral and a fresh lane + run took over.
+    const resolved = writes.find((w) => w.url.endsWith("/check-runs/777"));
+    expect(resolved?.body).toMatchObject({
+      status: "completed",
+      conclusion: "neutral",
+    });
+    const created = writes.find((w) => w.url.endsWith("/check-runs"));
+    expect(created?.body).toMatchObject({
+      name: "pile-review",
+      head_sha: "stale893",
+      status: "in_progress",
+    });
+    expect(dispatches).toHaveLength(1);
+    const reviewLane = (
+      await stub.listAgentSessions({ issueId: issue.id })
+    ).find((s) => s.purpose === REVIEW_PURPOSE);
+    expect(reviewLane).toBeDefined();
+    const laneEvents = await stub.listAgentSessionEvents(reviewLane!.id);
+    expect(laneEvents.some((e) => e.type === "review.requested")).toBe(true);
   });
 
   // PILE-315 — the sweep's publish pass hands a terminal review lane's
@@ -3764,5 +3970,148 @@ describe("spend caps (PILE-425)", () => {
     // Escalation comment lands on the issue.
     const comments = await stub.listComments(issue.id);
     expect(comments.some((c) => c.externalSource === "spend-cap")).toBe(true);
+  });
+
+  it("releasePausedSessions staggers the drain — bounded per pass (PILE-476)", async () => {
+    for (let i = 0; i < 5; i++) {
+      await stub.createAgentSession({
+        agentId: `pause-agent-${i}`,
+        issueId: "issue-1",
+        provider: "devin-cli",
+        status: "waiting",
+        paused: 1,
+        actorId: "u1",
+        actorType: "user",
+      });
+    }
+    const released = await releasePausedSessions(
+      env,
+      stub,
+      organizationId,
+      "pause-agent-0",
+      { waitUntil: () => {} }
+    );
+    expect(released.length).toBeLessThanOrEqual(3);
+  });
+});
+
+// PILE-452 — the sweep must not cold-start lanes for terminal work: a
+// merged/closed PR or a done/canceled issue gets state reconciliation only.
+describe("syncOpenPrSessions terminal-work gating (PILE-452)", () => {
+  const userId = "user-p452";
+  let organizationId = "";
+  let stub: ReturnType<typeof env.WORKSPACE_DURABLE_OBJECT.get>;
+
+  beforeAll(async () => {
+    const db = createD1(env.D1);
+    const now = new Date();
+    await db
+      .insert(userTable)
+      .values({
+        id: userId,
+        name: "P452",
+        email: `${userId}@example.com`,
+        emailVerified: false,
+        image: null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({ target: [userTable.email] });
+    const headers = await createAdminHeaders(env, userId);
+    const workspace = await createWorkspace(db, env, headers, {
+      name: "Terminal gating",
+      slug: `p452-${crypto.randomUUID()}`,
+      key: `G4${crypto.randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+      ownerId: userId,
+    });
+    organizationId = workspace!.id;
+    stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+  });
+
+  it("does not redispatch on a merged PR even while CI is red", async () => {
+    const agentId = `mock-merged-${crypto.randomUUID().slice(0, 8)}`;
+    let dispatches = 0;
+    registerMock(agentId, {
+      sendPrompt: () => false,
+      dispatch: (_org, issue) => {
+        dispatches += 1;
+        return {
+          id: `m-${dispatches}`,
+          agentId,
+          issueId: issue.id,
+          status: "created",
+        };
+      },
+    });
+    const issue = await stub.createIssue({ title: "Merged PR lane" });
+    await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "completed",
+      prUrl: "https://github.com/vortexnyc/pile/pull/4521",
+      prState: "open",
+    });
+    const ghFetch = ghFetchFailingPr(4521, "mrg452", {
+      state: "closed",
+      mergedAt: "2026-10-19T12:00:00Z",
+    });
+
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: ghFetch as typeof fetch,
+    });
+
+    expect(dispatches).toBe(0);
+    const sessions = await stub.listAgentSessions({ issueId: issue.id });
+    expect(sessions).toHaveLength(1);
+    const issueAfter = await stub.getIssue(issue.id);
+    expect(issueAfter?.prState).toBe("merged");
+  });
+
+  it("does not nudge or redispatch for a done issue's open PR", async () => {
+    const agentId = `mock-done-${crypto.randomUUID().slice(0, 8)}`;
+    let dispatches = 0;
+    registerMock(agentId, {
+      sendPrompt: () => false,
+      dispatch: (_org, issue) => {
+        dispatches += 1;
+        return {
+          id: `d-${dispatches}`,
+          agentId,
+          issueId: issue.id,
+          status: "created",
+        };
+      },
+    });
+    const issue = await stub.createIssue({
+      title: "Done issue",
+      status: "done",
+    });
+    await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "completed",
+      prUrl: "https://github.com/vortexnyc/pile/pull/4522",
+      prState: "open",
+    });
+    const ghFetch = ghFetchFailingPr(4522, "dn4522");
+
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: ghFetch as typeof fetch,
+    });
+
+    expect(dispatches).toBe(0);
+    const sessions = await stub.listAgentSessions({ issueId: issue.id });
+    expect(sessions).toHaveLength(1);
   });
 });

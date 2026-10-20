@@ -160,13 +160,40 @@ function json(value: unknown, status = 200) {
   return new Response(JSON.stringify(value), { status });
 }
 
+const normalizeCheckRun = (run: object, i: number) => ({
+  id: i + 1,
+  status: null,
+  conclusion: null,
+  started_at: null,
+  ...run,
+});
+
 function fakeGithub(opts: {
   config?: Record<string, unknown> | null;
   files: Array<{ filename: string; patch?: string }>;
-  existingCheck?: boolean;
+  /** pile-review check runs on the head sha — `true` keeps the legacy shape
+   *  (a fresh in_progress run). */
+  existingCheck?:
+    | boolean
+    | {
+        id?: number;
+        status?: string;
+        conclusion?: string | null;
+        started_at?: string;
+      }
+    | Array<{
+        id?: number;
+        status?: string;
+        conclusion?: string | null;
+        started_at?: string;
+      }>;
   /** "reject" 422s the first review POST (own-PR shape), "fail" 422s both,
    *  "flaky" 500s the first — a non-4xx is never retried. */
   reviewPost?: "ok" | "reject" | "fail" | "flaky";
+  /** 500s the check-runs list — a GitHub read failure, not "no runs". */
+  listChecksFail?: boolean;
+  /** GET /pulls/{n} returns this head sha — drives the PILE-470 stale-drop. */
+  prHead?: string;
 }) {
   const calls: GhCall[] = [];
   let nextCheckId = 500;
@@ -187,11 +214,31 @@ function fakeGithub(opts: {
       });
     }
     if (url.includes("/check-runs?check_name=")) {
-      return json({
-        check_runs: opts.existingCheck ? [{ id: 1 }] : [],
-      });
+      if (opts.listChecksFail) {
+        return new Response("Internal Server Error", { status: 500 });
+      }
+      const runs =
+        opts.existingCheck === true
+          ? [
+              normalizeCheckRun(
+                {
+                  status: "in_progress",
+                  started_at: new Date().toISOString(),
+                },
+                0
+              ),
+            ]
+          : Array.isArray(opts.existingCheck)
+            ? opts.existingCheck.map(normalizeCheckRun)
+            : opts.existingCheck
+              ? [normalizeCheckRun(opts.existingCheck, 0)]
+              : [];
+      return json({ check_runs: runs });
     }
     if (url.includes("/files?")) return json(opts.files);
+    if (opts.prHead && method === "GET" && /\/pulls\/\d+$/.test(url)) {
+      return json({ head: { sha: opts.prHead } });
+    }
     if (url.endsWith("/check-runs") && method === "POST") {
       return json({ id: nextCheckId++ }, 201);
     }
@@ -285,6 +332,17 @@ describe("requestPrReview / publishReviewVerdicts", () => {
             if (rejectFollowUps) return false;
             followUpPrompts.push(prompt);
             return true;
+          },
+        })
+    );
+    registerAgentProvider(
+      "review-mock-fail",
+      () =>
+        new MockAgentProvider("review-mock-fail", {
+          dispatch: () => {
+            throw new Error(
+              "Daytona sandbox create failed: sandbox exited with code 1 before becoming ready"
+            );
           },
         })
     );
@@ -762,5 +820,276 @@ describe("requestPrReview / publishReviewVerdicts", () => {
     );
     expect(outcome).toBe("deduped");
     expect(dispatched.length).toBe(before);
+  });
+
+  /** A terminal review session that recorded review.requested for the sha. */
+  async function deadReviewLane(
+    issue: Awaited<ReturnType<typeof laneIssue>>,
+    headSha: string,
+    prUrl: string
+  ) {
+    const lane = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "review-mock",
+      provider: "review-mock",
+      actorId: userId,
+      actorType: "user",
+      status: "failed",
+      purpose: REVIEW_PURPOSE,
+    });
+    await stub.addAgentSessionEvent({
+      sessionId: lane.id,
+      type: "review.requested",
+      message: `Review requested for ${prUrl} @ ${headSha.slice(0, 12)}`,
+      payload: { prUrl, repo: REPO, pullNumber: 1, headSha, checkRunId: 1 },
+    });
+    return lane;
+  }
+
+  // PILE-445 — a lane that dies on sandbox provisioning must never leave the
+  // pile-review check pending forever.
+  it("resolves the check run neutral when the lane fails to provision", async () => {
+    const issue = await laneIssue();
+    const gh = fakeGithub({
+      config: { ...REVIEW_CONFIG, review: { agent: "review-mock-fail" } },
+      files: [{ filename: "src/a.ts", patch: "@@" }],
+    });
+    const outcome = await requestPrReview(
+      workerEnv,
+      stub,
+      organizationId,
+      issue,
+      target("sha-prov-fail"),
+      "tok",
+      { fetch: gh.fetch }
+    );
+    expect(outcome).toBe("failed");
+    const patch = gh.calls.find(
+      (c) => c.method === "PATCH" && c.url.endsWith("/check-runs/500")
+    );
+    expect(patch?.body).toMatchObject({
+      status: "completed",
+      conclusion: "neutral",
+      output: { title: "Review lane could not start" },
+    });
+  });
+
+  // PILE-445 — if the review.requested event can't be written after a
+  // successful dispatch, the lane is failed so it can't keep running
+  // untracked (a later request would otherwise see attempts = 0 and could
+  // double-dispatch), and the check run still resolves.
+  it("fails the dispatched lane when the review.requested event write fails", async () => {
+    const issue = await laneIssue();
+    const gh = fakeGithub({
+      config: REVIEW_CONFIG,
+      files: [{ filename: "src/a.ts", patch: "@@" }],
+    });
+    // dispatchAgent reaches the DO through env — this proxy fails only the
+    // review.ts-side event write. Stub methods are RPC closures, so they're
+    // returned as-is (never rebound — .bind itself is an RPC trap).
+    const failingStub = new Proxy(stub, {
+      get(realStub, prop) {
+        if (prop === "addAgentSessionEvent") {
+          return () => Promise.reject(new Error("do write failed"));
+        }
+        return Reflect.get(realStub, prop);
+      },
+    });
+    const before = dispatched.length;
+    const outcome = await requestPrReview(
+      workerEnv,
+      failingStub,
+      organizationId,
+      issue,
+      target("sha-event-write-fail"),
+      "tok",
+      { fetch: gh.fetch }
+    );
+    expect(outcome).toBe("failed");
+    expect(dispatched.length).toBe(before + 1);
+    const patch = gh.calls.find(
+      (c) => c.method === "PATCH" && c.url.endsWith("/check-runs/500")
+    );
+    expect(patch?.body).toMatchObject({
+      status: "completed",
+      conclusion: "neutral",
+      output: { title: "Review lane could not start" },
+    });
+    const lanes = (await stub.listAgentSessions({ issueId: issue.id })).filter(
+      (s) => s.purpose === REVIEW_PURPOSE
+    );
+    expect(lanes).toHaveLength(1);
+    expect(lanes[0].status).toBe("failed");
+  });
+
+  // PILE-445 review — a failed check-run list is not an empty one: dispatch
+  // can't see a live run, so it must sit out rather than risk a duplicate.
+  it("dedupes when the check-run list can't be read", async () => {
+    const issue = await laneIssue();
+    const gh = fakeGithub({
+      config: REVIEW_CONFIG,
+      files: [{ filename: "src/a.ts", patch: "@@" }],
+      listChecksFail: true,
+    });
+    const before = dispatched.length;
+    const outcome = await requestPrReview(
+      workerEnv,
+      stub,
+      organizationId,
+      issue,
+      target("sha-list-fail"),
+      "tok",
+      { fetch: gh.fetch }
+    );
+    expect(outcome).toBe("deduped");
+    expect(dispatched.length).toBe(before);
+    expect(gh.calls.some((c) => c.method === "POST")).toBe(false);
+  });
+
+  // PILE-445 — a pending run whose lane died gets resolved and replaced by a
+  // bounded retry, not deduped forever.
+  it("resolves a stale pending run and redispatches the review", async () => {
+    const issue = await laneIssue();
+    const t = target("sha-stale-run");
+    await deadReviewLane(issue, t.headSha, t.prUrl);
+    const gh = fakeGithub({
+      config: REVIEW_CONFIG,
+      files: [{ filename: "src/a.ts", patch: "@@" }],
+      existingCheck: {
+        id: 77,
+        status: "in_progress",
+        started_at: "2020-01-01T00:00:00Z",
+      },
+    });
+    const before = dispatched.length;
+    const outcome = await requestPrReview(
+      workerEnv,
+      stub,
+      organizationId,
+      issue,
+      t,
+      "tok",
+      { fetch: gh.fetch }
+    );
+    expect(outcome).toBe("dispatched");
+    expect(dispatched.length).toBe(before + 1);
+    const resolved = gh.calls.find(
+      (c) => c.method === "PATCH" && c.url.endsWith("/check-runs/77")
+    );
+    expect(resolved?.body).toMatchObject({
+      status: "completed",
+      conclusion: "neutral",
+      output: { title: "Review lane lost — retrying" },
+    });
+    const created = gh.calls.filter(
+      (c) => c.method === "POST" && c.url.endsWith("/check-runs")
+    );
+    expect(created).toHaveLength(1);
+    expect(created[0].body).toMatchObject({
+      name: REVIEW_CHECK_NAME,
+      head_sha: "sha-stale-run",
+      status: "in_progress",
+    });
+    // The retry's review.requested records the new run so its verdict PATCHes it.
+    const lanes = (await stub.listAgentSessions({ issueId: issue.id })).filter(
+      (s) => s.purpose === REVIEW_PURPOSE
+    );
+    expect(lanes.length).toBe(2);
+    const retry = lanes.find((s) => s.status !== "failed")!;
+    const events = await stub.listAgentSessionEvents(retry.id);
+    const requested = events.find((e) => e.type === "review.requested");
+    expect(requested?.payload).toContain('"checkRunId":500');
+  });
+
+  it("resolves a stale pending run without retrying past the attempt bound", async () => {
+    const issue = await laneIssue();
+    const t = target("sha-exhausted");
+    await deadReviewLane(issue, t.headSha, t.prUrl);
+    await deadReviewLane(issue, t.headSha, t.prUrl);
+    const gh = fakeGithub({
+      config: REVIEW_CONFIG,
+      files: [{ filename: "src/a.ts", patch: "@@" }],
+      existingCheck: {
+        id: 88,
+        status: "in_progress",
+        started_at: "2020-01-01T00:00:00Z",
+      },
+    });
+    const before = dispatched.length;
+    const outcome = await requestPrReview(
+      workerEnv,
+      stub,
+      organizationId,
+      issue,
+      t,
+      "tok",
+      { fetch: gh.fetch }
+    );
+    expect(outcome).toBe("deduped");
+    expect(dispatched.length).toBe(before);
+    const patch = gh.calls.find(
+      (c) => c.method === "PATCH" && c.url.endsWith("/check-runs/88")
+    );
+    expect(patch?.body).toMatchObject({
+      status: "completed",
+      conclusion: "neutral",
+      output: { title: "Review did not complete" },
+    });
+    expect(
+      gh.calls.some((c) => c.method === "POST" && c.url.endsWith("/check-runs"))
+    ).toBe(false);
+  });
+
+  it("redispatches when a dead attempt's run already resolved neutral", async () => {
+    const issue = await laneIssue();
+    const t = target("sha-neutral-rerun");
+    await deadReviewLane(issue, t.headSha, t.prUrl);
+    const gh = fakeGithub({
+      config: REVIEW_CONFIG,
+      files: [{ filename: "src/a.ts", patch: "@@" }],
+      existingCheck: {
+        id: 90,
+        status: "completed",
+        conclusion: "neutral",
+        started_at: "2020-01-01T00:00:00Z",
+      },
+    });
+    const before = dispatched.length;
+    const outcome = await requestPrReview(
+      workerEnv,
+      stub,
+      organizationId,
+      issue,
+      t,
+      "tok",
+      { fetch: gh.fetch }
+    );
+    expect(outcome).toBe("dispatched");
+    expect(dispatched.length).toBe(before + 1);
+  });
+
+  it("drops a stale verdict when the PR head moved (PILE-470)", async () => {
+    const issue = await laneIssue();
+    await finishReviewLane(
+      issue,
+      "sha-stale",
+      "```json\n" +
+        JSON.stringify({
+          verdict: "request-changes",
+          summary: "Old head.",
+          findings: [{ severity: "must", title: "Fix it" }],
+        }) +
+        "\n```"
+    );
+    const publishGh = fakeGithub({
+      config: REVIEW_CONFIG,
+      files: [],
+      prHead: "sha-moved",
+    });
+    await publishReviewVerdicts(stub, publishDeps(publishGh));
+    const checkPosts = publishGh.calls.filter((c) =>
+      c.url.includes("check-runs")
+    );
+    expect(checkPosts).toHaveLength(0);
   });
 });

@@ -27,12 +27,17 @@ import { CfAgentProvider } from "./cf-agent.js";
 import { ClaudeCliAgentProvider } from "./claude-cli.js";
 import { CodexCliAgentProvider } from "./codex-cli.js";
 import { CodexAgentProvider } from "./codex.js";
-import { computeBackend } from "./compute.js";
+import { computeBackend, isComputeInfraError } from "./compute.js";
 import { loadProviderConfig } from "./credentials.js";
 import { CursorCliAgentProvider } from "./cursor-cli.js";
 import { CursorAgentProvider } from "./cursor.js";
 import { resolveAgentEnv } from "./daytona.js";
-import { checkDispatchDedupe, type DedupeResult } from "./dedupe.js";
+import {
+  checkDispatchDedupe,
+  type DedupeContinuation,
+  type DedupeDeps,
+  type DedupeResult,
+} from "./dedupe.js";
 import { DevinCliAgentProvider } from "./devin-cli.js";
 import { DevinAgentProvider } from "./devin.js";
 import { guidanceRefs, renderGuidancePacks } from "./guidance.js";
@@ -180,6 +185,24 @@ export async function inheritTeamDefaultRepo(
   );
 }
 
+/** PILE-446 — audit marker for a continuation dispatch: the lane resumes an
+ *  open covering PR's head branch because its original session ended. Written
+ *  on whichever session row carries the run (fresh, parked, or promoted). */
+async function noteContinuation(
+  stub: DurableObjectStub<WorkspaceDO>,
+  sessionId: string,
+  continuation: DedupeContinuation
+): Promise<void> {
+  await stub
+    .addAgentSessionEvent({
+      sessionId,
+      type: "lane.continuation",
+      message: `Continuing open PR ${continuation.prUrl} on branch ${continuation.headRef} — covering session ended`,
+      payload: { ...continuation },
+    })
+    .catch(() => {});
+}
+
 export async function dispatchAgent(
   env: WorkerEnv,
   agentId: string,
@@ -243,6 +266,15 @@ export async function dispatchAgent(
      *  passes `{merchantId}-{agentSlug}` so per-merchant context survives
      *  across dispatches. */
     conversationKey?: string;
+    /** Dedupe GitHub/auth overrides — tests inject stubs; production
+     *  callers leave this unset so real installation tokens apply. */
+    dedupeDeps?: DedupeDeps;
+    /** PILE-452 — what a paused agent type does to this dispatch. "hold"
+     *  (default) parks a `waiting` + `paused` row per PILE-420 — right for
+     *  explicit user dispatch. "fail" throws AGENT_PAUSED instead:
+     *  system-initiated dispatches (sweep redispatch, retries, triggers)
+     *  must not leak held rows while the agent type is frozen. */
+    onPaused?: "hold" | "fail";
   }
 ): Promise<AgentSession> {
   const label = sessionLabel(issue, agentId, options?.purpose);
@@ -329,17 +361,28 @@ export async function dispatchAgent(
   // session event so coverage gaps are auditable.
   let dedupeAdvisory: DedupeResult | null = null;
   let dedupeError: string | null = null;
+  let continuation: DedupeContinuation | null = null;
   if (!options?.promoteSessionId) {
-    const dedupe = await checkDispatchDedupe(env, stub, issue).catch((err) => {
+    const dedupe = await checkDispatchDedupe(
+      env,
+      stub,
+      issue,
+      options?.dedupeDeps
+    ).catch((err) => {
       dedupeError = err instanceof Error ? err.message : String(err);
       return null;
     });
-    if (dedupe?.hardBlock) {
-      throw new VortexError({
-        code: "CONFLICT",
-        status: 409,
-        message: dedupe.hardBlock.reason,
-      });
+    continuation = dedupe?.continuation ?? null;
+    if (continuation && issue.branch !== continuation.headRef) {
+      // PILE-446 — an open PR covering this issue with no live session makes
+      // this dispatch a continuation: the lane resumes the PR's head branch
+      // instead of a fresh `issue-<id>` fork. Persisted so queued/paused
+      // promotions and retries see the same target (updateIssue can fail on
+      // a repo+branch collision — the in-memory override still applies).
+      const repointed = await stub
+        .updateIssue(issue.id, { branch: continuation.headRef }, actor.id)
+        .catch(() => undefined);
+      issue = repointed ?? { ...issue, branch: continuation.headRef };
     }
     const queueAfter = options?.queueAfter ?? dedupe?.queueAfter;
     if (queueAfter && !options?.skipQueue) {
@@ -371,6 +414,7 @@ export async function dispatchAgent(
           payload: dedupe ? { coverage: dedupe.coverage } : undefined,
         })
         .catch(() => {});
+      if (continuation) await noteContinuation(stub, queued.id, continuation);
       return queued;
     }
     // PILE-420 — the agent type is paused workspace-wide: the dispatch is
@@ -402,6 +446,13 @@ export async function dispatchAgent(
       }
     }
     if (pause) {
+      if (options?.onPaused === "fail") {
+        throw new VortexError({
+          code: "AGENT_PAUSED",
+          status: 409,
+          message: `Agent type "${agentId}" is paused${pause.reason ? `: ${pause.reason}` : ""}`,
+        });
+      }
       const parked = await stub.createAgentSession({
         issueId: issue.id,
         agentId,
@@ -433,6 +484,7 @@ export async function dispatchAgent(
           },
         })
         .catch(() => {});
+      if (continuation) await noteContinuation(stub, parked.id, continuation);
       return parked;
     }
     // Workspace-wide lane ceiling for container-backed lanes — the CF
@@ -648,6 +700,7 @@ export async function dispatchAgent(
       })
       .catch(() => {});
   }
+  if (continuation) await noteContinuation(stub, session.id, continuation);
 
   await stub.addAgentActivity({
     sessionId: session.id,
@@ -759,6 +812,20 @@ export async function dispatchAgent(
           [
             memoryText,
             guidanceText,
+            // PILE-446 — a continuation lane lands on the covering PR's head
+            // branch; the context tells it the PR exists and what to do
+            // there instead of treating the run as fresh work.
+            continuation
+              ? [
+                  `Continuation dispatch: open PR ${continuation.prUrl} already covers this issue and its agent session ended.`,
+                  `Your working branch is the PR's head branch \`${continuation.headRef}\` — pick up where it left off. Resolve any merge conflicts with the base branch, address outstanding review feedback, and push to the same branch. Do not open a second pull request.`,
+                  continuation.changesRequested
+                    ? "The PR has unresolved requested changes — address them."
+                    : null,
+                ]
+                  .filter((line): line is string => line !== null)
+                  .join("\n")
+              : null,
             options?.instructions ?? null,
             session.resultSchema
               ? buildResultSchemaInstructions(session.resultSchema)
@@ -791,15 +858,19 @@ export async function dispatchAgent(
     return updated ?? session;
   } catch (error) {
     // Dispatch-time substrate failure (container spawn 503, RPC transport
-    // reset, compute I/O timeout) is infra-class — it gets the retry path
-    // and feeds the fleet breaker, not the task-failure trail.
-    let infraFailure = false;
+    // reset, compute I/O timeout, Daytona sandbox-create/provision errors)
+    // is infra-class — it gets the retry path and feeds the fleet breaker,
+    // not the task-failure trail. Compute-layer failures arrive flagged as
+    // ComputeError (PILE-452); everything else falls back to status and the
+    // sandbox SDK's transient classifiers.
+    let infraFailure = isComputeInfraError(error);
     if (
+      !infraFailure &&
       error instanceof VortexError &&
       (error.status === 503 || error.status === 504)
     ) {
       infraFailure = true;
-    } else {
+    } else if (!infraFailure) {
       try {
         const sandboxSdk = (await import("@cloudflare/sandbox")) as {
           isPlatformTransientError?: (e: unknown) => boolean;
@@ -822,8 +893,23 @@ export async function dispatchAgent(
       },
       actor.id
     );
+    // The session row exists and is marked failed — carry its id on the
+    // throw so callers that redispatch can still link retryOf on the
+    // corpse (PILE-452). Without it a failed cold-dispatch left no visible
+    // chain and the sweep retried invisibly every pass.
+    if (error instanceof Error) {
+      (error as { failedSessionId?: string }).failedSessionId = session.id;
+    }
     throw error;
   }
+}
+
+/** The session row a failed dispatchAgent left behind, when it got far
+ *  enough to create one. */
+export function failedDispatchSessionId(error: unknown): string | undefined {
+  if (!(error instanceof Error)) return undefined;
+  const id = (error as { failedSessionId?: unknown }).failedSessionId;
+  return typeof id === "string" ? id : undefined;
 }
 
 /** Provider isolation switch — `config.disabled` on the workspace provider

@@ -49,6 +49,7 @@ async function seedWorkspace() {
       name: "test-admin",
       rateLimitEnabled: false,
       metadata: { organizationId: workspace!.id, permissions: "admin" },
+      permissions: { workspace: ["admin"] },
     },
   });
   const parsed = z.object({ key: z.string() }).parse(result);
@@ -95,6 +96,30 @@ describe("issues API", () => {
       token
     );
     expect(res.status).toBe(200);
+  });
+
+  it("serves a max-size page — the sub-step progress query binds parent ids as one param (PILE-448)", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    // DO SQLite caps bound variables per statement at ~100; a 99+ row page
+    // used to overflow the follow-up query that binds one ? per parent id.
+    await Promise.all(
+      Array.from({ length: 100 }, (_, i) =>
+        stub.createIssue({ title: `Variable cap regression ${i}` })
+      )
+    );
+    const res = await fetch(
+      `/workspaces/${organizationId}/issues?limit=100`,
+      {},
+      token
+    );
+    expect(res.status).toBe(200);
+    const body = z
+      .object({ issues: z.array(z.object({ id: z.string() })) })
+      .parse(await res.json());
+    expect(body.issues).toHaveLength(100);
   });
 
   it("returns an existing issue for an idempotent externalRef create", async () => {
@@ -1504,6 +1529,7 @@ describe("possible duplicates on create (PILE-163)", () => {
           permissions: "admin,agent:write",
           actorType: "agent",
         },
+        permissions: { workspace: ["admin", "agent:write"] },
       },
     });
     const agentToken = z.object({ key: z.string() }).parse(keyResult).key;
@@ -1566,6 +1592,67 @@ describe("possible duplicates on create (PILE-163)", () => {
       .object({ repo: z.string().nullable() })
       .parse(await getRes.json());
     expect(fetched.repo).toBe(teamRepo);
+  });
+
+  it("accepts an `agent:*` wildcard key when assigning to an agent", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const db = createD1(env.D1);
+    const team = await createTeam(db, env, new Headers(), {
+      organizationId,
+      key: `W${crypto.randomUUID().replace(/-/g, "").slice(0, 5).toUpperCase()}`,
+      name: "Wildcard assign",
+      ownerId: "user-issues",
+    });
+    const auth = await createAuth(env);
+    const keyResult = await auth.api.createApiKey({
+      body: {
+        userId: "user-issues",
+        name: "assign-agent-wildcard",
+        metadata: {
+          organizationId,
+          // Lane tokens ship the wildcard form — the assign gate used to
+          // check the literal string "agent:write" and miss `agent:*`.
+          permissions: "admin,agent:*",
+          actorType: "agent",
+        },
+        permissions: {
+          workspace: ["admin", "agent:*"],
+        },
+      },
+    });
+    const agentToken = z.object({ key: z.string() }).parse(keyResult).key;
+
+    const agentId = `mock-wild-${crypto.randomUUID().slice(0, 8)}`;
+    registerAgentProvider(
+      agentId,
+      () =>
+        new MockAgentProvider(agentId, {
+          dispatch: (_org, dispatchedIssue) => ({
+            id: `wild-${crypto.randomUUID()}`,
+            agentId,
+            issueId: dispatchedIssue.id,
+            status: "created" as const,
+          }),
+        })
+    );
+
+    const createRes = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      {
+        method: "POST",
+        body: JSON.stringify({ title: "Wildcard assign", teamId: team.id }),
+      },
+      token
+    );
+    expect(createRes.status).toBe(201);
+    const issue = z.object({ id: z.string() }).parse(await createRes.json());
+
+    const assignRes = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}/assign`,
+      { method: "POST", body: JSON.stringify({ assigneeId: agentId }) },
+      agentToken
+    );
+    expect(assignRes.status).toBe(200);
   });
 
   // PILE-417 — delegate vs assignee: delegateId holds the agent acting on
@@ -1659,6 +1746,7 @@ describe("possible duplicates on create (PILE-163)", () => {
           permissions: "admin,agent:write",
           actorType: "agent",
         },
+        permissions: { workspace: ["admin", "agent:write"] },
       },
     });
     const agentToken = z.object({ key: z.string() }).parse(keyResult).key;
@@ -1888,6 +1976,7 @@ describe("grant-only issue visibility (scoped keys)", () => {
         name: "scoped-view",
         rateLimitEnabled: false,
         metadata: { organizationId, permissions: "issue:view" },
+        permissions: { workspace: ["issue:view"] },
       },
     });
     const scoped = z.object({ key: z.string() }).parse(keyRes).key;

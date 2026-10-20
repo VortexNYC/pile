@@ -1980,6 +1980,77 @@ describe("WorkspaceDO", () => {
     expect(links).toHaveLength(20);
   });
 
+  it("subStepProgressFor answers a 100-parent page — ids ride one JSON param (PILE-448)", async () => {
+    const stub = getStub();
+    const parents = await withWorkspace(stub, (instance) =>
+      Promise.all(
+        Array.from({ length: 100 }, (_, i) =>
+          instance.createIssue({ title: `Chip parent ${i}` })
+        )
+      )
+    );
+    await withWorkspace(stub, (instance) =>
+      instance.createIssue({
+        title: "Required gate",
+        parentId: parents[0].id,
+        stepKey: "gate",
+        required: true,
+      })
+    );
+    // 100 parent ids + org + required used to bind 102 vars and throw.
+    const progress = await withWorkspace(stub, (instance) =>
+      instance.subStepProgressFor(parents.map((parent) => parent.id))
+    );
+    expect(progress[parents[0].id]).toMatchObject({
+      total: 1,
+      done: 0,
+      blocked: 1,
+    });
+    expect(progress[parents[1].id]).toBeUndefined();
+  });
+
+  it("listIssues search survives >95 hit ids — one JSON param, not one ? per id", async () => {
+    const stub = getStub();
+    const needle = `capneedle${crypto.randomUUID().slice(0, 8)}`;
+    await withWorkspace(stub, (instance) =>
+      Promise.all(
+        Array.from({ length: 100 }, (_, i) =>
+          instance.createIssue({ title: `${needle} hit ${i}` })
+        )
+      )
+    );
+    const rows = await withWorkspace(stub, (instance) =>
+      instance.listIssues({ search: needle, limit: 100 })
+    );
+    expect(rows).toHaveLength(100);
+  });
+
+  it("listIssues applies an `in` filter past the ~100 value cap", async () => {
+    const stub = getStub();
+    const issues = await withWorkspace(stub, (instance) =>
+      Promise.all([
+        instance.createIssue({ title: "Filter in probe one" }),
+        instance.createIssue({ title: "Filter in probe two" }),
+        instance.createIssue({ title: "Filter in probe three" }),
+      ])
+    );
+    // Saved-view `in` filters carry caller-sized value lists — a 100-entry
+    // list used to bind one ? per value and throw.
+    const values = [
+      issues[0].identifier!,
+      issues[2].identifier!,
+      ...Array.from({ length: 120 }, (_, i) => `NOPE-${i}`),
+    ];
+    const rows = await withWorkspace(stub, (instance) =>
+      instance.listIssues({
+        filter: { op: "in", field: "identifier", values },
+      })
+    );
+    expect(rows.map((row) => row.id).toSorted()).toEqual(
+      [issues[0].id, issues[2].id].toSorted()
+    );
+  });
+
   it("deduplicates repeated issue references into a single link", async () => {
     const stub = getStub();
     const issue = await withWorkspace(stub, (instance) =>
@@ -2671,6 +2742,73 @@ describe("pipeline hygiene via DO RPC", () => {
       instance.listDeals({ dueBefore: "2026-10-25T00:00:00.000Z" })
     );
     expect(due.map((d) => d.id)).toContain(deal.id);
+  });
+
+  it("updateCustomer lands a customer.updated audit entry with per-field changes", async () => {
+    const stub = getStub();
+    await withWorkspace(stub, async (instance) => {
+      const customer = await instance.createCustomer({
+        name: "Enrich me",
+        externalId: "audit-c-1",
+        notes: "[sourced-by:scout session:s-0]",
+      });
+      await instance.updateCustomer(
+        customer.id,
+        {
+          domain: "joes.example.com",
+          priorityScore: 8,
+          // Same value — no diff should be recorded for it.
+          notes: "[sourced-by:scout session:s-0]",
+          customFields: { industry: "restaurant" },
+        },
+        "profiler"
+      );
+      const entries = await instance.listAuditLog({
+        entityType: "customer",
+        entityId: customer.id,
+      });
+      const entry = entries.find((e) => e.action === "customer.updated");
+      expect(entry?.actorId).toBe("profiler");
+      const changes = JSON.parse(entry?.changes ?? "{}") as Record<
+        string,
+        unknown
+      >;
+      expect(changes).toMatchObject({
+        domain: { from: null, to: "joes.example.com" },
+        priorityScore: { from: null, to: 8 },
+        "customFields.industry": { from: null, to: "restaurant" },
+      });
+      expect(changes).not.toHaveProperty("notes");
+    });
+  });
+
+  it("updateCustomer rejects a bad custom-field value before writing anything", async () => {
+    const stub = getStub();
+    await withWorkspace(stub, async (instance) => {
+      const customer = await instance.createCustomer({
+        name: "Typed fields",
+        externalId: "audit-c-2",
+      });
+      await instance.createFieldDefinition({
+        entityType: "customer",
+        name: "merchant_size",
+        type: "select",
+        options: ["small", "mid", "enterprise"],
+      });
+      await expect(
+        instance.updateCustomer(
+          customer.id,
+          {
+            domain: "nope.example.com",
+            customFields: { merchant_size: "huge" },
+          },
+          "profiler"
+        )
+      ).rejects.toThrow(/merchant_size/);
+      // Nothing landed — the invalid field rejected the whole patch.
+      const after = await instance.getCustomer(customer.id);
+      expect(after?.domain).toBeNull();
+    });
   });
 
   it("manages guidance packs with audit + version history", async () => {
@@ -3635,5 +3773,163 @@ describe("draft outputs (PILE-428)", () => {
       const rows = await instance.listDraftOutputs({ status: "discarded" });
       expect(rows.map((d) => d.id)).toContain(draft.id);
     });
+  });
+});
+
+describe("customer contacts (CRM)", () => {
+  it("upsertContact dedupes on customer+channel+value", async () => {
+    const stub = getStub();
+    const out = await withWorkspace(stub, async (instance) => {
+      const customer = instance.createCustomer({
+        name: "Contact Co",
+      });
+      const a = instance.upsertContact({
+        customerId: customer.id,
+        channel: "email",
+        value: "owner@contactco.example",
+      });
+      const b = instance.upsertContact({
+        customerId: customer.id,
+        channel: "email",
+        value: "owner@contactco.example",
+      });
+      const different = instance.upsertContact({
+        customerId: customer.id,
+        channel: "phone",
+        value: "+15551234567",
+      });
+      return { a, b, different };
+    });
+    expect(out.b.id).toBe(out.a.id);
+    expect(out.different.id).not.toBe(out.a.id);
+  });
+});
+
+describe("merchant sources (feed registry)", () => {
+  it("upserts + cursors a source through the DO", async () => {
+    const stub = getStub();
+    const out = await withWorkspace(stub, async (instance) => {
+      const src = instance.upsertMerchantSource({
+        name: "nys-sla-pending",
+        kind: "socrata",
+        config: { domain: "data.ny.gov", dataset: "f8i8-k2gm" },
+        cursorField: "received_date",
+        signal: "license_pending",
+      });
+      const dupe = instance.upsertMerchantSource({
+        name: "nys-sla-pending",
+        kind: "socrata",
+      });
+      instance.updateMerchantSource(src.id, {
+        cursorValue: "2026-10-19",
+      });
+      const list = instance.listMerchantSources({ enabledOnly: true });
+      return { src, dupe, list };
+    });
+    expect(out.dupe.id).toBe(out.src.id);
+    expect(out.list.find((r) => r.id === out.src.id)?.cursorValue).toBe(
+      "2026-10-19"
+    );
+  });
+});
+
+describe("space permissions via DO (PILE-447)", () => {
+  it("setSpacePermission + revokeSpacePermission round-trip", async () => {
+    const stub = getStub();
+    const out = await withWorkspace(stub, async (instance) => {
+      const space = instance.createDocumentSpace({
+        name: "Leadership",
+        restricted: true,
+        createdById: WORKSPACE_ID,
+      });
+      const perm = instance.setSpacePermission(
+        WORKSPACE_ID,
+        space.id,
+        "member-1",
+        "user",
+        "view"
+      );
+      const list = instance.listSpacePermissions(space.id);
+      const revoked = instance.revokeSpacePermission(space.id, "member-1");
+      return { perm, list, revoked };
+    });
+    expect(out.perm.level).toBe("view");
+    expect(out.list).toHaveLength(1);
+    expect(out.revoked).toBe(true);
+  });
+});
+
+describe("session terminal guard (PILE-467)", () => {
+  it("a canceled session stays canceled when a late poll result lands", async () => {
+    const stub = getStub();
+    const out = await withWorkspace(stub, async (instance) => {
+      const issue = await instance.createIssue({
+        title: "cancel stays",
+        status: "in_progress",
+      });
+      const session = await instance.createAgentSession({
+        agentId: "devin-cli",
+        issueId: issue.id,
+        status: "created",
+        provider: "devin-cli",
+        actorId: "u1",
+        actorType: "user",
+      });
+      // operator cancels mid-provision
+      await instance.applyAgentSessionResult(session.id, {
+        status: "canceled",
+      });
+      // a stale poll lands 'created' — must not resurrect
+      const updated = await instance.applyAgentSessionResult(session.id, {
+        status: "created",
+      });
+      return { session, updated };
+    });
+    expect(out.updated?.status).toBe("canceled");
+  });
+
+  it("a revive flag resumes a completed lane (delivered follow-up)", async () => {
+    const stub = getStub();
+    const out = await withWorkspace(stub, async (instance) => {
+      const issue = await instance.createIssue({
+        title: "revive me",
+        status: "in_progress",
+      });
+      const session = await instance.createAgentSession({
+        agentId: "devin-cli",
+        issueId: issue.id,
+        status: "created",
+        provider: "devin-cli",
+        actorId: "u1",
+        actorType: "user",
+      });
+      await instance.applyAgentSessionResult(session.id, {
+        status: "completed",
+      });
+      // A stale 'running' without revive stays completed…
+      const blocked = await instance.applyAgentSessionResult(session.id, {
+        status: "running",
+      });
+      // …but a delivered follow-up revives the lane deliberately.
+      const revived = await instance.applyAgentSessionResult(session.id, {
+        status: "running",
+        result: null,
+        revive: true,
+      });
+      return { session, blocked, revived };
+    });
+    expect(out.blocked?.status).toBe("completed");
+    expect(out.revived?.status).toBe("running");
+    expect(out.revived?.endedAt).toBeNull();
+  });
+});
+
+describe("session scoping options (PILE-453)", () => {
+  it("listAgentSessions accepts agentSlug through the DO", async () => {
+    const stub = getStub();
+    const rows = await withWorkspace(stub, (instance) =>
+      instance.listAgentSessions({ agentSlug: "scout" })
+    );
+    expect(Array.isArray(rows)).toBe(true);
   });
 });

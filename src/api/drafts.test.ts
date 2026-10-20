@@ -40,6 +40,7 @@ async function seedWorkspace() {
       name: "test-user",
       rateLimitEnabled: false,
       metadata: { organizationId: workspace!.id, permissions: "admin" },
+      permissions: { workspace: ["admin"] },
     },
   });
   const agentKey = await auth.api.createApiKey({
@@ -52,6 +53,7 @@ async function seedWorkspace() {
         permissions: "admin",
         actorType: "agent",
       },
+      permissions: { workspace: ["admin"] },
     },
   });
   return {

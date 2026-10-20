@@ -5,6 +5,7 @@ import { z } from "zod";
 
 env.GITLAB_WEBHOOK_SECRET = "webhook-secret";
 
+import { agentLogToken } from "../agents/credentials.js";
 import { hmacSha256Hex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
 import { createGitlabInstallation } from "../global/gitlab-installations.js";
@@ -67,6 +68,7 @@ async function createAdminTokenRecord(organizationId: string) {
       userId: "user-1",
       name: "test-admin",
       metadata: { organizationId, permissions: "admin" },
+      permissions: { workspace: ["admin"] },
     },
   });
   const parsed = z.object({ id: z.string(), key: z.string() }).parse(result);
@@ -3779,5 +3781,62 @@ describe("draft review routes (PILE-428)", () => {
       .object({ drafts: z.array(z.unknown()) })
       .parse(await res.json());
     expect(body.drafts).toEqual([]);
+  });
+});
+
+describe("lane-token auth bypass (PILE-457)", () => {
+  it("gates lane-token session reads on the session being live", async () => {
+    const organizationId = await seedWorkspace();
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const issue = await stub.createIssue({
+      title: "Lane gate",
+      repo: "VortexNYC/pile",
+    });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "mock",
+      provider: "mock",
+      actorId: "user-1",
+      actorType: "user",
+      status: "running",
+    });
+    const laneToken = await agentLogToken(
+      env as unknown as WorkerEnv,
+      organizationId,
+      session.id
+    );
+    const url = `/workspaces/${organizationId}/agent/sessions/${session.id}`;
+
+    const live = await app.fetch(
+      request(url, { headers: { Authorization: `Bearer ${laneToken}` } }),
+      env
+    );
+    expect(live.status).toBe(200);
+
+    await stub.updateAgentSession(session.id, { status: "completed" });
+    const dead = await app.fetch(
+      request(url, { headers: { Authorization: `Bearer ${laneToken}` } }),
+      env
+    );
+    expect(dead.status).toBe(409);
+
+    // A lane token minted for a session that does not exist verifies
+    // cryptographically but has nothing to authorize.
+    const ghostId = crypto.randomUUID();
+    const ghostToken = await agentLogToken(
+      env as unknown as WorkerEnv,
+      organizationId,
+      ghostId
+    );
+    const ghost = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/sessions/${ghostId}`, {
+        headers: { Authorization: `Bearer ${ghostToken}` },
+      }),
+      env
+    );
+    expect(ghost.status).toBe(404);
   });
 });

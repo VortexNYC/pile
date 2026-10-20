@@ -160,6 +160,51 @@ function buildRoute(endpoint: Endpoint) {
   });
 }
 
+/**
+ * Better Auth synthesizes a session for API-key callers on /get-session,
+ * and that session's `token` field is the raw API key — echoing the
+ * credential back in the response body leaks it to proxies and logs. The
+ * field is stripped for Bearer-authenticated calls; cookie sessions are
+ * untouched.
+ */
+export async function stripApiKeySessionToken(
+  request: Request,
+  response: Response
+): Promise<Response> {
+  const url = new URL(request.url);
+  if (url.pathname !== "/api/auth/get-session") {
+    return response;
+  }
+  const authorization = request.headers.get("Authorization") ?? "";
+  if (!/^Bearer\s+\S/i.test(authorization)) {
+    return response;
+  }
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    return response;
+  }
+  const text = await response.text();
+  try {
+    const body = JSON.parse(text) as {
+      session?: { token?: string } | null;
+    };
+    if (body.session && typeof body.session === "object") {
+      delete body.session.token;
+    }
+    const headers = new Headers(response.headers);
+    headers.delete("content-length");
+    return new Response(JSON.stringify(body), {
+      status: response.status,
+      headers,
+    });
+  } catch {
+    return new Response(text, {
+      status: response.status,
+      headers: response.headers,
+    });
+  }
+}
+
 export function registerAuthRoutes(app: OpenAPIHono<AppContext>) {
   for (const endpoint of endpoints) {
     const route = buildRoute(endpoint);
@@ -174,12 +219,15 @@ export function registerAuthRoutes(app: OpenAPIHono<AppContext>) {
       // Body is re-serialized below, so a stale content-length could truncate it.
       headers.delete("content-length");
       headers.delete("transfer-encoding");
-      const result = await auth.handler(
-        new Request(c.req.url, {
-          method: c.req.method,
-          headers,
-          body: body === undefined ? undefined : JSON.stringify(body),
-        })
+      const result = await stripApiKeySessionToken(
+        c.req.raw,
+        await auth.handler(
+          new Request(c.req.url, {
+            method: c.req.method,
+            headers,
+            body: body === undefined ? undefined : JSON.stringify(body),
+          })
+        )
       );
 
       return new Response(await result.text(), {

@@ -3560,6 +3560,55 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "stage configs get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/stage-configs/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "stage configs update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/stage-configs/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "ownerAgent",
+        flag: "owner-agent",
+      },
+      {
+        name: "instructions",
+        flag: "instructions",
+      },
+      {
+        name: "advancePolicy",
+        flag: "advance-policy",
+      },
+      {
+        name: "enabled",
+        flag: "enabled",
+      },
+    ],
+  },
   "stage configs delete": {
     method: "DELETE",
     path: "/workspaces/{organizationId}/stage-configs/{id}",
@@ -3616,6 +3665,115 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "job-spec",
       },
       {
+        name: "prompt",
+        flag: "prompt",
+      },
+      {
+        name: "model",
+        flag: "model",
+      },
+      {
+        name: "tools",
+        flag: "tools",
+      },
+      {
+        name: "kind",
+        flag: "kind",
+      },
+      {
+        name: "endpointUrl",
+        flag: "endpoint-url",
+      },
+      {
+        name: "endpointSecret",
+        flag: "endpoint-secret",
+      },
+      {
+        name: "toolScope",
+        flag: "tool-scope",
+      },
+      {
+        name: "permissionsTier",
+        flag: "permissions-tier",
+      },
+      {
+        name: "enabled",
+        flag: "enabled",
+      },
+    ],
+  },
+  "agent types get": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/agent-types/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "agent types update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/agent-types/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "slug",
+        flag: "slug",
+      },
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "providerAgentId",
+        flag: "provider-agent-id",
+      },
+      {
+        name: "kind",
+        flag: "kind",
+      },
+      {
+        name: "endpointUrl",
+        flag: "endpoint-url",
+      },
+      {
+        name: "endpointSecret",
+        flag: "endpoint-secret",
+      },
+      {
+        name: "prompt",
+        flag: "prompt",
+      },
+      {
+        name: "model",
+        flag: "model",
+      },
+      {
+        name: "tools",
+        flag: "tools",
+      },
+      {
+        name: "jobSpec",
+        flag: "job-spec",
+      },
+      {
         name: "toolScope",
         flag: "tool-scope",
       },
@@ -3644,6 +3802,50 @@ export const COMMANDS: Record<string, CommandDef> = {
     ],
     query: [],
     body: [],
+  },
+  "pipeline lint list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/pipeline/lint",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "dispatch pile create": {
+    method: "POST",
+    path: "/dispatch/pile",
+    params: [],
+    query: [],
+    body: [
+      {
+        name: "sessionId",
+        flag: "session",
+      },
+      {
+        name: "agent",
+        flag: "agent",
+      },
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "issue",
+        flag: "issue",
+      },
+      {
+        name: "profile",
+        flag: "profile",
+      },
+      {
+        name: "conversationKey",
+        flag: "conversation-key",
+      },
+    ],
   },
   "external events create": {
     method: "POST",
@@ -7087,6 +7289,101 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "memory list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/memory",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "entityType",
+        flag: "entity-type",
+      },
+      {
+        name: "entityId",
+        flag: "entity-id",
+      },
+      {
+        name: "kind",
+        flag: "kind",
+      },
+      {
+        name: "search",
+        flag: "search",
+      },
+      {
+        name: "limit",
+        flag: "limit",
+      },
+    ],
+    body: [],
+  },
+  "memory create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/memory",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "entityType",
+        flag: "entity-type",
+      },
+      {
+        name: "entityId",
+        flag: "entity-id",
+      },
+      {
+        name: "kind",
+        flag: "kind",
+      },
+      {
+        name: "fact",
+        flag: "fact",
+      },
+      {
+        name: "validUntil",
+        flag: "valid-until",
+      },
+      {
+        name: "sourceAgentSlug",
+        flag: "source-agent-slug",
+      },
+    ],
+  },
+  "agent costs list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/agent/costs",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "agentSlug",
+        flag: "agent-slug",
+      },
+      {
+        name: "since",
+        flag: "since",
+      },
+      {
+        name: "limit",
+        flag: "limit",
+      },
+    ],
+    body: [],
+  },
   "emojis list": {
     method: "GET",
     path: "/workspaces/{organizationId}/emojis",
@@ -7638,6 +7935,31 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "customers purge create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/purge",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "sourcedBy",
+        flag: "sourced-by",
+      },
+      {
+        name: "sourceSession",
+        flag: "source-session",
+      },
+      {
+        name: "dryRun",
+        flag: "dry-run",
+      },
+    ],
+  },
   "customers attachments": {
     method: "POST",
     path: "/workspaces/{organizationId}/customers/{id}/attachments",
@@ -7755,6 +8077,14 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "name",
       },
       {
+        name: "key",
+        flag: "key",
+      },
+      {
+        name: "type",
+        flag: "type",
+      },
+      {
         name: "color",
         flag: "color",
       },
@@ -7798,6 +8128,14 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "name",
         flag: "name",
+      },
+      {
+        name: "key",
+        flag: "key",
+      },
+      {
+        name: "type",
+        flag: "type",
       },
       {
         name: "color",
@@ -7853,6 +8191,14 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "name",
       },
       {
+        name: "key",
+        flag: "key",
+      },
+      {
+        name: "type",
+        flag: "type",
+      },
+      {
         name: "color",
         flag: "color",
       },
@@ -7896,6 +8242,14 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "name",
         flag: "name",
+      },
+      {
+        name: "key",
+        flag: "key",
+      },
+      {
+        name: "type",
+        flag: "type",
       },
       {
         name: "color",

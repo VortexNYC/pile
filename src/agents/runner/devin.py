@@ -75,30 +75,45 @@ def write_lane_mcp_config():
     # PILE_LANE_MCP_URL + LANE_TOKEN are injected at provision. Write devin's
     # MCP config so the agent gets the tools natively (issue/customer/memory/
     # document writes, escalate) instead of falling back to the read-only
-    # PILE_API_KEY.
+    # PILE_API_KEY. User scope (~/.config/devin/mcp_config.json) applies to
+    # the project without living in the checkout — a repo-level
+    # .devin/mcp_config.json is committable and would leak the lane bearer
+    # token into the branch (PILE-457).
     url = os.environ.get('PILE_LANE_MCP_URL')
     token = os.environ.get('LANE_TOKEN')
     if not url or not token:
         return
-    cfg_dir = os.path.join(REPO_DIR, '.devin')
+    cfg_dir = os.path.join(HOME, '.config', 'devin')
     os.makedirs(cfg_dir, exist_ok=True)
-    with open(os.path.join(cfg_dir, 'mcp_config.json'), 'w') as f:
-        json.dump({
-            'mcpServers': {
-                'pile-lane': {
-                    'serverUrl': url,
-                    'headers': {'Authorization': f'Bearer {token}'},
-                }
-            }
-        }, f)
+    cfg_path = os.path.join(cfg_dir, 'mcp_config.json')
+    cfg = {}
+    if os.path.exists(cfg_path):
+        try:
+            with open(cfg_path) as f:
+                cfg = json.load(f)
+        except ValueError:
+            cfg = {}
+    if not isinstance(cfg, dict):
+        cfg = {}
+    servers = cfg.get('mcpServers')
+    if not isinstance(servers, dict):
+        servers = {}
+        cfg['mcpServers'] = servers
+    servers['pile-lane'] = {
+        'serverUrl': url,
+        'headers': {'Authorization': f'Bearer {token}'},
+    }
+    with open(cfg_path, 'w') as f:
+        json.dump(cfg, f)
+    os.chmod(cfg_path, 0o600)
 
 
 def run_agent(devin_bin, prompt=None):
     write_lane_mcp_config()
-    prompt = prompt or lane_prompt()
     model = os.environ.get('MODEL', 'swe-2')
+    # Prompt arrives by file, not argv — execve caps a single arg at 128KB.
     proc = subprocess.Popen(
-        [devin_bin, '-p', prompt, '--model', model, '--permission-mode', permission_mode(), '--respect-workspace-trust', 'false'],
+        [devin_bin, '-p', '--prompt-file', prompt_file(prompt if prompt else None), '--model', model, '--permission-mode', permission_mode(), '--respect-workspace-trust', 'false'],
         cwd=REPO_DIR, env=agent_env(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.PIPE, text=True
     )
     threading.Thread(target=inject_followups, args=(proc,), daemon=True).start()
@@ -142,7 +157,7 @@ def drain_followups(devin_bin):
 def run_turn(devin_bin, prompt=None):
     # One agent turn, gated by the repo's stop hook: a failing hook resumes
     # devin with the failure before anything is pushed.
-    task = prompt or base64.b64decode(os.environ['PROMPT_B64']).decode('utf-8')
+    task = prompt or read_lane_prompt()
     output = run_agent(devin_bin, prompt=prompt)
     healed = self_heal(agent_env(), lambda p: run_agent(devin_bin, prompt=p), task)
     return output if healed is None else healed

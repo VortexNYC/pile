@@ -13,7 +13,6 @@ import {
   lt,
   ne,
   not,
-  notInArray,
   or,
   sql,
 } from "drizzle-orm";
@@ -172,6 +171,7 @@ import {
   type CommentForSearch,
   type WorkspaceSearchIndex,
 } from "./search.js";
+import { inArrayJson, notInArrayJson } from "./sql.js";
 import { deliverWebhooks, retryWebhookDeliveries } from "./webhooks.js";
 
 type IssueKey = keyof Issue & keyof IssuePatch;
@@ -1366,7 +1366,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const linearRows = await this.db
       .select({ email: workspaceLinearUsers.email })
       .from(workspaceLinearUsers)
-      .where(inArray(workspaceLinearUsers.linearId, linearIds))
+      .where(inArrayJson(workspaceLinearUsers.linearId, linearIds))
       .all();
     const emails = linearRows
       .map((row) => row.email)
@@ -1378,7 +1378,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     const matchedUsers = await createD1(this.env.D1)
       .select({ id: globalUser.id })
       .from(globalUser)
-      .where(inArray(globalUser.email, emails))
+      .where(inArrayJson(globalUser.email, emails))
       .all();
     return matchedUsers.map((matchedUser) => matchedUser.id);
   }
@@ -2820,6 +2820,28 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         gateOverride = { reason: patch.stageGateOverride.reason, blocked };
       }
     }
+    // Validate custom-field values before any write — a bad value rejects
+    // the whole patch instead of leaving a half-applied record (same
+    // pre-flight contract as the importer's assertFieldValuesValid pass).
+    if (customFields && Object.keys(customFields).length > 0) {
+      try {
+        data.assertFieldValuesValid(
+          this.db,
+          this.organizationId,
+          "customer",
+          customFields
+        );
+      } catch (error) {
+        if (error instanceof data.FieldValueError) {
+          throw new VortexError({
+            code: "BAD_REQUEST",
+            status: 400,
+            message: error.message,
+          });
+        }
+        throw error;
+      }
+    }
     const customer = data.updateCustomer(
       this.db,
       this.organizationId,
@@ -2827,8 +2849,58 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       customerPatch
     );
     if (!customer) return undefined;
-    this.applyCustomFields("customer", id, customFields);
-    this.audit("customer.updated", "customer", id, actorId);
+    // Per-field history: the audit entry carries every changed column plus
+    // each custom-field value diff, so a reviewer can see exactly what an
+    // enrichment write did to the record.
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    for (const key of [
+      "name",
+      "url",
+      "logoUrl",
+      "bookingUrl",
+      "notes",
+      "domain",
+      "externalId",
+      "tierId",
+      "statusId",
+      "ownerId",
+      "nextStepText",
+      "nextStepDueAt",
+      "needsHuman",
+      "needsHumanReason",
+      "priorityScore",
+    ] as const) {
+      if (customerPatch[key] !== undefined && before[key] !== customer[key]) {
+        changes[key] = { from: before[key], to: customer[key] };
+      }
+    }
+    if (customFields && Object.keys(customFields).length > 0) {
+      const beforeFields = data.customFieldMap(
+        this.db,
+        this.organizationId,
+        "customer",
+        id
+      );
+      this.applyCustomFields("customer", id, customFields);
+      const afterFields = data.customFieldMap(
+        this.db,
+        this.organizationId,
+        "customer",
+        id
+      );
+      for (const name of new Set([
+        ...Object.keys(beforeFields),
+        ...Object.keys(afterFields),
+      ])) {
+        if (beforeFields[name] !== afterFields[name]) {
+          changes[`customFields.${name}`] = {
+            from: beforeFields[name] ?? null,
+            to: afterFields[name] ?? null,
+          };
+        }
+      }
+    }
+    this.audit("customer.updated", "customer", id, actorId, changes);
     if (gateOverride) {
       const stageName = (statusId: string | null) =>
         statusId === null
@@ -3260,7 +3332,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
               spaceId: workspaceDocuments.spaceId,
             })
             .from(workspaceDocuments)
-            .where(inArray(workspaceDocuments.id, documentIds))
+            .where(inArrayJson(workspaceDocuments.id, documentIds))
             .all()
         ).map((d) => [d.id, d.spaceId])
       );
@@ -3321,7 +3393,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       const rows = await this.db
         .select()
         .from(workspaceIssues)
-        .where(inArray(workspaceIssues.teamId, teamIds))
+        .where(inArrayJson(workspaceIssues.teamId, teamIds))
         .all();
       return rows
         .flatMap((issue) => {
@@ -3433,6 +3505,29 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   revokeDocumentPermission(documentId: string, actorId: string) {
     return data.revokeDocumentPermission(this.db, documentId, actorId);
+  }
+
+  listSpacePermissions(spaceId: string) {
+    return data.listSpacePermissions(this.db, spaceId);
+  }
+  setSpacePermission(
+    organizationId: string,
+    spaceId: string,
+    actorId: string,
+    actorType: string,
+    level: "view" | "edit"
+  ) {
+    return data.setSpacePermission(
+      this.db,
+      organizationId,
+      spaceId,
+      actorId,
+      actorType,
+      level
+    );
+  }
+  revokeSpacePermission(spaceId: string, actorId: string) {
+    return data.revokeSpacePermission(this.db, spaceId, actorId);
   }
 
   documentAccessLevel(
@@ -3681,6 +3776,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   listAgentSessions(
     options: {
       issueId?: string;
+      agentSlug?: string;
       status?: AgentSessionStatus;
       openPr?: boolean;
       retryOf?: string;
@@ -3701,6 +3797,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   listAgentSessionSummaries(
     options: {
       issueId?: string;
+      agentSlug?: string;
       status?: AgentSessionStatus;
       openPr?: boolean;
       limit?: number;
@@ -4997,7 +5094,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       .from(workspaceAgentSessions)
       .where(
         and(
-          inArray(
+          inArrayJson(
             workspaceAgentSessions.issueId,
             childIssues.map((i) => i.id)
           ),
@@ -5760,11 +5857,24 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         lastProgressAt: new Date().toISOString(),
       };
       if (result.status !== undefined) {
-        set.status = result.status;
-        if (terminal.has(result.status) && !oldSession.endedAt)
-          set.endedAt = set.updatedAt;
-        if (!terminal.has(result.status) && oldSession.endedAt)
-          set.endedAt = null;
+        // PILE-467 — terminal stays terminal. A cancel during provisioning
+        // can still see late poll results arrive as 'created'/'running' —
+        // a non-terminal result must not resurrect a dead lane. Deliberate
+        // resumes (delivered follow-up on a completed lane, queued prompt
+        // on an externally-managed session) carry `revive` to pass.
+        if (
+          !(
+            terminal.has(oldStatus) &&
+            !terminal.has(result.status) &&
+            !result.revive
+          )
+        ) {
+          set.status = result.status;
+          if (terminal.has(result.status) && !oldSession.endedAt)
+            set.endedAt = set.updatedAt;
+          if (!terminal.has(result.status) && oldSession.endedAt)
+            set.endedAt = null;
+        }
         // PILE-419 — leaving `waiting` closes any open elicitation (the
         // lane resumed or died without an answer).
         if (result.status !== "waiting") {
@@ -5813,14 +5923,27 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       lastProgressAt: new Date().toISOString(),
     };
     if (result.status !== undefined) {
-      set.status = result.status;
-      if (terminal.has(result.status) && !oldSession.endedAt)
-        set.endedAt = set.updatedAt;
-      // Resumed lane: clear the anchor so the kept-sandbox window restarts
-      // when it re-ends — otherwise the reaper keys off the ORIGINAL end
-      // and can destroy a sandbox that's actively working a follow-up.
-      if (!terminal.has(result.status) && oldSession.endedAt)
-        set.endedAt = null;
+      // PILE-467 — terminal stays terminal. A cancel during provisioning
+      // can still see late poll results arrive as 'created'/'running' —
+      // a non-terminal result must not resurrect a dead lane. Deliberate
+      // resumes (delivered follow-up on a completed lane, queued prompt
+      // on an externally-managed session) carry `revive` to pass.
+      if (
+        !(
+          terminal.has(oldStatus) &&
+          !terminal.has(result.status) &&
+          !result.revive
+        )
+      ) {
+        set.status = result.status;
+        if (terminal.has(result.status) && !oldSession.endedAt)
+          set.endedAt = set.updatedAt;
+        // Resumed lane: clear the anchor so the kept-sandbox window restarts
+        // when it re-ends — otherwise the reaper keys off the ORIGINAL end
+        // and can destroy a sandbox that's actively working a follow-up.
+        if (!terminal.has(result.status) && oldSession.endedAt)
+          set.endedAt = null;
+      }
       // PILE-419 — leaving `waiting` closes any open elicitation (answered
       // via /respond, provider un-parked on its own, or went terminal).
       if (result.status !== "waiting") {
@@ -6987,7 +7110,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
                 ? isNull(cycles.projectId)
                 : eq(cycles.projectId, cycle.projectId),
               or(isNull(cycles.endDate), gte(cycles.endDate, nowIso)),
-              notInArray(cycles.id, endedIds)
+              notInArrayJson(cycles.id, endedIds)
             )
           )
           .orderBy(asc(cycles.startDate))
@@ -7010,7 +7133,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
               .update(workspaceIssues)
               .set({ cycleId: nextCycle.id, updatedAt: nowIso })
               .where(
-                inArray(
+                inArrayJson(
                   workspaceIssues.id,
                   unfinished.map((row) => row.id)
                 )
@@ -7056,7 +7179,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }
     const conditions = [eq(workspaceIssues.cycleId, cycleId)];
     if (teamIds) {
-      conditions.push(inArray(workspaceIssues.teamId, teamIds));
+      conditions.push(inArrayJson(workspaceIssues.teamId, teamIds));
     }
     const rows = await this.db
       .select({
@@ -7108,7 +7231,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     };
     const column = columns[groupBy];
     const conditions = teamIds
-      ? [inArray(workspaceIssues.teamId, teamIds)]
+      ? [inArrayJson(workspaceIssues.teamId, teamIds)]
       : [];
     const exclude = this.hiddenIssueConditionFor(viewer, workspaceIssues.id);
     if (exclude) conditions.push(exclude);
@@ -7140,7 +7263,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }
     const conditions = [eq(workspaceIssues.cycleId, cycleId)];
     if (teamIds) {
-      conditions.push(inArray(workspaceIssues.teamId, teamIds));
+      conditions.push(inArrayJson(workspaceIssues.teamId, teamIds));
     }
     const exclude = this.hiddenIssueConditionFor(viewer, workspaceIssues.id);
     if (exclude) conditions.push(exclude);
@@ -7166,7 +7289,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         and(
           eq(workspaceIssueHistory.field, "status"),
           inArray(workspaceIssueHistory.toValue, ["done", "canceled"]),
-          inArray(
+          inArrayJson(
             workspaceIssueHistory.issueId,
             rows.map((row) => row.id)
           )
@@ -7187,7 +7310,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           .select({ id: workspaceIssues.id, status: workspaceIssues.status })
           .from(workspaceIssues)
           .where(
-            inArray(
+            inArrayJson(
               workspaceIssues.id,
               rows.map((row) => row.id)
             )
@@ -7314,7 +7437,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       args.teamIds && args.teamIds.length > 0 ? args.teamIds : undefined;
 
     if (visibleTeamIds) {
-      conditions.push(inArray(workspaceIssues.teamId, visibleTeamIds));
+      conditions.push(inArrayJson(workspaceIssues.teamId, visibleTeamIds));
     }
     const exclude = this.hiddenIssueConditionFor(
       args.viewer,
@@ -7404,7 +7527,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       if (issueIds.length === 0) {
         return [];
       }
-      conditions.push(inArray(workspaceIssues.id, issueIds));
+      conditions.push(inArrayJson(workspaceIssues.id, issueIds));
     }
     if (args.cursor) {
       conditions.push(
@@ -8545,7 +8668,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (reactionTargets.length > 0) {
       await this.db
         .delete(workspaceReactions)
-        .where(inArray(workspaceReactions.targetId, reactionTargets));
+        .where(inArrayJson(workspaceReactions.targetId, reactionTargets));
     }
     await this.db
       .delete(workspaceAttachments)
@@ -8563,10 +8686,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (sessionIds.length > 0) {
       await this.db
         .delete(workspaceAgentActivities)
-        .where(inArray(workspaceAgentActivities.sessionId, sessionIds));
+        .where(inArrayJson(workspaceAgentActivities.sessionId, sessionIds));
       await this.db
         .delete(workspaceAgentSessions)
-        .where(inArray(workspaceAgentSessions.id, sessionIds));
+        .where(inArrayJson(workspaceAgentSessions.id, sessionIds));
     }
 
     await this.syncSearchIndex((index) => removeIssueDocuments(index, issueId));

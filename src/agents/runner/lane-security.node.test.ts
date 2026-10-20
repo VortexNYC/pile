@@ -547,4 +547,52 @@ describePy("lane security: runner commit/push (PILE-277)", () => {
       expect(file).not.toContain(secret);
     }
   });
+
+  it("devinConfig: a .devin/ dir dropped in the checkout is never committed or pushed (PILE-457)", () => {
+    const lane = makeLane();
+    // The agent (or a runner writing MCP config into the working tree)
+    // leaves .devin/mcp_config.json holding the lane bearer token.
+    const devinDir = join(lane.repo, ".devin");
+    mkdirSync(devinDir);
+    writeFileSync(
+      join(devinDir, "mcp_config.json"),
+      JSON.stringify({
+        mcpServers: {
+          "pile-lane": {
+            serverUrl: "https://pile.example/mcp",
+            headers: { Authorization: `Bearer ${LANE_TOKEN}` },
+          },
+        },
+      })
+    );
+    writeFileSync(join(lane.repo, "feature.ts"), "export const x = 1;\n");
+    // The agent could have deleted the guard mid-run — commit_local
+    // re-asserts the repo-local exclude before staging anything.
+    rmSync(join(lane.repo, ".git", "info", "exclude"), { force: true });
+
+    const res = runHarness(lane, "push");
+    expect(res.error).toBeUndefined();
+    expect(res.pushed).toBe(true);
+    expectLanePushed(lane, "feature.ts");
+
+    // Nothing under .devin/ reached the lane branch or the local HEAD...
+    const localTree = git(lane.repo, "ls-tree", "-r", "--name-only", "HEAD");
+    const remoteTree = git(
+      lane.remote,
+      "ls-tree",
+      "-r",
+      "--name-only",
+      `refs/heads/${LANE_BRANCH}`
+    );
+    for (const tree of [localTree, remoteTree]) {
+      expect(tree.split("\n").some((p) => p.startsWith(".devin/"))).toBe(false);
+    }
+
+    // ...and it is not stageable afterwards either.
+    git(lane.repo, "add", "-A");
+    expect(git(lane.repo, "status", "--porcelain")).not.toContain(".devin");
+    expect(() =>
+      git(lane.repo, "check-ignore", ".devin/mcp_config.json")
+    ).not.toThrow();
+  });
 });

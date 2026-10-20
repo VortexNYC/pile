@@ -1,5 +1,7 @@
 import type { Sandbox } from "@cloudflare/sandbox";
 
+import type { LaneSandboxBase } from "../agents/lane-sandbox.js";
+
 export interface AppEnv {
   D1: D1Database;
   ATTACHMENTS_BUCKET: R2Bucket;
@@ -36,6 +38,12 @@ export interface AppEnv {
   SANDBOX_CURSOR?: DurableObjectNamespace<Sandbox>;
   SANDBOX_DEVIN?: DurableObjectNamespace<Sandbox>;
   SANDBOX_CODEX?: DurableObjectNamespace<Sandbox>;
+  /** sandbox-sdk 1.0 lane pools — selected per-lane via LANE_SDK=v1. */
+  SANDBOX_LANE?: DurableObjectNamespace<LaneSandboxBase>;
+  SANDBOX_LANE_CURSOR?: DurableObjectNamespace<LaneSandboxBase>;
+  SANDBOX_LANE_DEVIN?: DurableObjectNamespace<LaneSandboxBase>;
+  SANDBOX_LANE_CODEX?: DurableObjectNamespace<LaneSandboxBase>;
+  LANE_SDK?: string;
   /**
    * Shared lane cache (PILE-306): mounted into Cloudflare sandboxes under a
    * per-workspace, per-repo prefix so cold lanes warm their pnpm store from

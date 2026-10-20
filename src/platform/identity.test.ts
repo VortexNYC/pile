@@ -30,15 +30,36 @@ describe("toApiKeyWorkspaceIdentity", () => {
     ).toThrow();
   });
 
-  it("reads permissions and actor type from key metadata", () => {
+  it("ignores metadata permissions and actor type without a server grant", () => {
+    // metadata is client-controlled — without a workspace grant in the
+    // plugin's permissions column the key resolves as a read-only user.
     const identity = toApiKeyWorkspaceIdentity({
       id: "k1",
       referenceId: "u1",
       metadata: JSON.stringify({
         organizationId: "org1",
-        permissions: "read,write",
+        permissions: "read,write,admin",
         actorType: "agent",
       }),
+    });
+    expect(identity).toMatchObject({
+      id: "u1",
+      organizationId: "org1",
+      type: "user",
+      permissions: ["read"],
+    });
+  });
+
+  it("honors the server-set workspace grant and actor type", () => {
+    const identity = toApiKeyWorkspaceIdentity({
+      id: "k1",
+      referenceId: "u1",
+      metadata: JSON.stringify({
+        organizationId: "org1",
+        permissions: "read",
+        actorType: "agent",
+      }),
+      permissions: { workspace: ["read", "write"] },
     });
     expect(identity).toMatchObject({
       id: "u1",

@@ -28,7 +28,7 @@ import { registerAppRoute, registerAppSubdomain, serveConsole } from "./app.js";
 import { registerApprovalRoutes } from "./approvals.js";
 import { registerAttachmentRoutes } from "./attachments.js";
 import { registerAuditRoutes } from "./audit.js";
-import { registerAuthRoutes } from "./auth-routes.js";
+import { registerAuthRoutes, stripApiKeySessionToken } from "./auth-routes.js";
 import { registerBillingWebhookRoutes } from "./billing-webhook.js";
 import { registerBillingRoutes } from "./billing.js";
 import { registerChangelogRoutes } from "./changelog.js";
@@ -97,6 +97,7 @@ import {
 } from "./slack.js";
 import { registerStageTemplateRoutes } from "./stage-templates.js";
 import { registerStateRoutes } from "./states.js";
+import { getWorkspaceStub } from "./stub.js";
 import { registerSupportCaptureRoutes } from "./support-capture.js";
 import { registerSupportChannelRoutes } from "./support-channels.js";
 import { registerSupportContactRoutes } from "./support-contacts.js";
@@ -216,6 +217,18 @@ app.use("/workspaces/:organizationId/*", async (c, next) => {
       laneGet[2]!
     ))
   ) {
+    // Lane tokens die with the session (PILE-457): a terminal session's
+    // bearer can no longer read its record back either.
+    const laneSession = await getWorkspaceStub(
+      c.env,
+      laneGet[1]!
+    ).getAgentSession(laneGet[2]!);
+    if (!laneSession) {
+      return c.json({ message: "Session not found" }, 404);
+    }
+    if (["completed", "failed", "canceled"].includes(laneSession.status)) {
+      return c.json({ message: "Session is terminal" }, 409);
+    }
     // A valid lane token becomes a scoped agent identity — enough for
     // agent:read routes, nothing else.
     c.set("workspaceIdentity", {
@@ -443,7 +456,8 @@ registerIntakeRoutes(app);
 
 app.all("/api/auth/*", async (c) => {
   try {
-    return await (await createAuth(c.env)).handler(c.req.raw);
+    const result = await (await createAuth(c.env)).handler(c.req.raw);
+    return await stripApiKeySessionToken(c.req.raw, result);
   } catch (err) {
     console.error("better-auth handler failed", {
       error: err instanceof Error ? err.message : String(err),
