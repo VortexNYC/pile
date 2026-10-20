@@ -3459,6 +3459,61 @@ describe("agent sessions API", () => {
         body.providers.find((p) => p.agentId === dropId)?.keptSandboxes ?? 0
       ).toBe(0);
     });
+
+    // PILE-452 — the provider goes red on the trailing start-failure rate,
+    // not just a consecutive streak: interleaved kept-alive successes break
+    // the streak even while Daytona keeps rejecting spawns.
+    it("goes red when the 15-minute start-failure rate exceeds 20%", async () => {
+      const agentId = `mock-rate-${crypto.randomUUID().slice(0, 8)}`;
+      registerAgentProvider(agentId, () => new MockAgentProvider(agentId));
+      const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+        env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+      );
+      await stub.setOrganizationId(organizationId);
+      const issue = await stub.createIssue({ title: "rate window" });
+      const seed = async (status: "completed" | "failed", infra: boolean) => {
+        const s = await stub.createAgentSession({
+          issueId: issue.id,
+          agentId,
+          provider: agentId,
+          actorId: "user-1",
+          actorType: "user",
+          status: "created",
+        });
+        await stub.applyAgentSessionResult(s.id, {
+          status,
+          infraFailure: infra,
+        });
+      };
+      // Two infra failures then a success — newest-first streak is 0, but
+      // the window rate is 2/3.
+      await seed("failed", true);
+      await seed("failed", true);
+      await seed("completed", false);
+
+      const res = await app.fetch(
+        request(`/workspaces/${organizationId}/agent/fleet-health`, {
+          token,
+        }),
+        env
+      );
+      expect(res.status).toBe(200);
+      const body = await res.json<{
+        providers: {
+          agentId: string;
+          infraStreak: number;
+          starts: number;
+          startFailures: number;
+          startFailureRate: number | null;
+          unhealthy: boolean;
+        }[];
+      }>();
+      const provider = body.providers.find((p) => p.agentId === agentId);
+      expect(provider?.starts).toBe(3);
+      expect(provider?.startFailures).toBe(2);
+      expect(provider?.startFailureRate).toBeCloseTo(2 / 3);
+      expect(provider?.unhealthy).toBe(true);
+    });
   });
 
   it("queues a follow-up prompt as an event on externally-managed sessions", async () => {

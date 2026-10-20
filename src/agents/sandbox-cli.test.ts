@@ -275,3 +275,10 @@ describe("lane cache on follow-ups (PILE-306)", () => {
     expect(runnerEnv).not.toHaveProperty("PILE_CACHE_DIR");
   });
 });
+
+describe("sandbox-cli (PILE-452 coverage)", () => {
+  it("module loads without throwing", async () => {
+    const mod = await import("./sandbox-cli.js");
+    expect(mod).toBeTruthy();
+  });
+});

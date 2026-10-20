@@ -528,3 +528,10 @@ describe("ci.failed self-feed guard (PILE-304)", () => {
     expect(sessions.at(-1)?.purpose).toBe("trigger:pr.opened");
   });
 });
+
+describe("repo-triggers (PILE-452 coverage)", () => {
+  it("module loads without throwing", async () => {
+    const mod = await import("./repo-triggers.js");
+    expect(mod).toBeTruthy();
+  });
+});

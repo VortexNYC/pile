@@ -6,6 +6,7 @@ import {
   CloudflareBackend,
   LANE_CACHE_MOUNT,
   computeBackend,
+  isComputeInfraError,
   laneCachePrefix,
 } from "./compute.js";
 import type { ComputeSandbox, SandboxHandle } from "./compute.js";
@@ -468,5 +469,127 @@ describe("Daytona hardening (PILE-472)", () => {
     } finally {
       globalThis.fetch = origFetch;
     }
+  });
+});
+
+const daytonaEnv = () =>
+  ({
+    ...baseEnv(),
+    DAYTONA_API_KEY: "k",
+    DAYTONA_API_URL: "https://daytona.test",
+  }) as AppEnv;
+
+function stubResponses(
+  handler: (url: string, init?: RequestInit) => Response | Promise<Response>
+) {
+  const calls: string[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push(`${init?.method ?? "GET"} ${String(input)}`);
+      return Promise.resolve(handler(String(input), init));
+    })
+  );
+  return calls;
+}
+
+// PILE-452 — Daytona backend failures must carry the infra flag so
+// dispatchAgent classifies them without string matching, and quota/
+// concurrency rejections must say so explicitly in the message.
+describe("DaytonaBackend infra classification + quota surfacing (PILE-452)", () => {
+  it("sandbox create failures are ComputeError and infra-classified", async () => {
+    stubResponses(
+      () =>
+        new Response(
+          JSON.stringify({
+            message: "sandbox exited with code 1 before becoming ready",
+          }),
+          { status: 400 }
+        )
+    );
+    const backend = computeBackend(daytonaEnv());
+    try {
+      await backend.createSandbox({
+        name: "sbx-1",
+        sessionId: "s1",
+        organizationId: "o1",
+        agentLabel: "devin-cli",
+        env: {},
+      });
+      expect.unreachable();
+    } catch (err) {
+      expect(isComputeInfraError(err)).toBe(true);
+      expect((err as Error).message).toContain("Daytona sandbox create failed");
+    }
+    vi.unstubAllGlobals();
+  });
+
+  it("surfaces quota/concurrency rejections explicitly", async () => {
+    stubResponses(
+      () =>
+        new Response(
+          JSON.stringify({ message: "concurrent sandbox limit reached" }),
+          {
+            status: 400,
+          }
+        )
+    );
+    const backend = computeBackend(daytonaEnv());
+    await expect(
+      backend.createSandbox({
+        name: "sbx-2",
+        sessionId: "s2",
+        organizationId: "o1",
+        agentLabel: "devin-cli",
+        env: {},
+      })
+    ).rejects.toThrow(/quota\/concurrency limit/);
+    vi.unstubAllGlobals();
+  });
+
+  it("startRunner toolbox failures are infra-classified (SANDBOX_NOT_RUNNING)", async () => {
+    stubResponses(
+      () =>
+        new Response(JSON.stringify({ message: "SANDBOX_NOT_RUNNING" }), {
+          status: 400,
+        })
+    );
+    const backend = computeBackend(daytonaEnv());
+    try {
+      await backend.startRunner(
+        { id: "sb-9", name: "sb-9", state: "started" },
+        "s9",
+        "python3 /tmp/run.py"
+      );
+      expect.unreachable();
+    } catch (err) {
+      expect(isComputeInfraError(err)).toBe(true);
+      expect((err as Error).message).toContain("SANDBOX_NOT_RUNNING");
+    }
+    vi.unstubAllGlobals();
+  });
+
+  it("unresolvable toolbox/DNS failures coerce to infra errors", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        Promise.reject(new TypeError("failed to resolve container IP"))
+      )
+    );
+    const backend = computeBackend(daytonaEnv());
+    try {
+      await backend.startRunner(
+        { id: "sb-10", name: "sb-10", state: "started" },
+        "s10",
+        "python3 /tmp/run.py"
+      );
+      expect.unreachable();
+    } catch (err) {
+      expect(isComputeInfraError(err)).toBe(true);
+      expect((err as Error).message).toContain(
+        "failed to resolve container IP"
+      );
+    }
+    vi.unstubAllGlobals();
   });
 });

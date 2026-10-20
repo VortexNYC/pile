@@ -16,7 +16,12 @@ import { resolveGeneratedConflict } from "./conflict-fix.js";
 import { loadProviderConfig } from "./credentials.js";
 import { resolveAgentEnv } from "./daytona.js";
 import { ingestFailedAgentSession } from "./failure-tickets.js";
-import { FLEET_UNHEALTHY_STREAK, fleetInfraStreak } from "./fleet-health.js";
+import {
+  FLEET_UNHEALTHY_STREAK,
+  fleetInfraStreak,
+  PROVIDER_UNHEALTHY_STREAK,
+  providerInfraStreak,
+} from "./fleet-health.js";
 import {
   buildHangReport,
   formatHangReport,
@@ -573,30 +578,9 @@ const MAX_AUTO_RETRIES = 1;
 // PILE-240 — consecutive infra-class deaths across a provider's lanes mean
 // the provider/substrate is unhealthy (devin's fleet repeatedly wedged with
 // "runner never started"). Past the streak, retries stop churning lanes
-// and the issue gets told plainly instead.
-const PROVIDER_UNHEALTHY_STREAK = 3;
-
-async function providerInfraStreak(
-  stub: DurableObjectStub<WorkspaceDO>,
-  agentId: string
-): Promise<number> {
-  const recent = await stub.listAgentSessions({ limit: 20 });
-  let streak = 0;
-  for (const s of recent) {
-    if (s.agentId !== agentId) continue;
-    // `created`/`waiting` are undetermined — provision hasn't concluded, so
-    // a just-promoted lane proves nothing either way. Without this skip a
-    // rewound promotion lands at the head of the recency order and masks a
-    // live infra streak underneath it (PILE-260).
-    if (s.status === "created" || s.status === "waiting") continue;
-    // Infra-class = provider-reported substrate failure OR a sweep
-    // stall-cancel (both carry infraFailure); task failures and operator
-    // cancels don't count.
-    if (s.infraFailure === 1 && TERMINAL_STATUSES.has(s.status)) streak += 1;
-    else break;
-  }
-  return streak;
-}
+// and the issue gets told plainly instead. providerInfraStreak +
+// PROVIDER_UNHEALTHY_STREAK live in fleet-health.ts so the nudge path's
+// redispatch gate shares them (PILE-452).
 
 // PILE-268 — redispatch once when the lane died underneath the task:
 // sandbox error, runner freeze surfaced as a stall-cancel, provision wedge.
@@ -665,6 +649,18 @@ async function retryDeadLane(
   try {
     const issue = await stub.getIssue(session.issueId);
     if (!issue) return;
+    // PILE-452 — a paused agent type takes no auto-retry: the dispatch
+    // below also runs onPaused:"fail" so nothing can park mid-flight.
+    const pause = await stub.getAgentPause(session.agentId).catch(() => null);
+    if (pause) {
+      await stub.addAgentActivity({
+        sessionId: session.id,
+        actorId: session.actorId,
+        type: "error",
+        message: `auto-retry skipped — agent type "${session.agentId}" is paused${pause.reason ? `: ${pause.reason}` : ""}`,
+      });
+      return;
+    }
     // PILE-321 — same as a manual retry: a lane dispatched before the issue
     // had a repo inherits the team's defaultRepo on redispatch.
     const retriedIssue = await inheritTeamDefaultRepo(
@@ -699,6 +695,7 @@ async function retryDeadLane(
         secondaryRepos: parseStoredSecondaryRepos(session.secondaryRepos),
         effort: session.effort ?? undefined,
         maxDurationMinutes: session.maxDurationMinutes ?? undefined,
+        onPaused: "fail",
       }
     );
     await stub.updateAgentSession(retried.id, {
@@ -782,6 +779,7 @@ async function promoteQueuedSessions(
   // row landed after the dependent parked, or the retry's own re-anchor
   // write was lost mid-flight (PILE-260).
   const retriesCache = new Map<string, AgentSession[]>();
+  const pauseCache = new Map<string, boolean>();
   const retriesFor = async (deadId: string): Promise<AgentSession[]> => {
     const cached = retriesCache.get(deadId);
     if (cached) return cached;
@@ -805,6 +803,16 @@ async function promoteQueuedSessions(
     // orphan-flip and edge promotion must leave them alone. Only the
     // resume drain (releasePausedSessions) releases them.
     if (session.paused === 1) continue;
+    // PILE-452 — promotion is a dispatch: while the agent type is paused a
+    // queued lane stays parked instead of going live. The resume drain
+    // calls promoteQueuedSession directly after deleting the pause row.
+    let paused = pauseCache.get(session.agentId);
+    if (paused === undefined) {
+      paused =
+        (await stub.getAgentPause(session.agentId).catch(() => null)) != null;
+      pauseCache.set(session.agentId, paused);
+    }
+    if (paused) continue;
     if (!session.queuedAfter) {
       // Queue orphan (no edge recorded): rewinding createdAt on the flip
       // keeps its stale queue timestamp from tripping the provision
@@ -2237,6 +2245,16 @@ export async function syncOpenPrSessions(
 
       const issue = await stub.getIssue(session.issueId);
 
+      // PILE-452 — terminal work has no lane to steer: a merged/closed PR or
+      // a done/canceled issue gets state reconciliation only. Nudges and
+      // automation dispatches each can cold-start a lane, which is exactly
+      // the loop that burned the fleet on dead PRs (VOR #954/#955).
+      const laneActionable =
+        state === "open" &&
+        issue !== undefined &&
+        issue.status !== "done" &&
+        issue.status !== "canceled";
+
       // SCM-observer events (PILE-209): orchestrators read PR transitions as
       // session events, not just refreshed fields.
       const priorCheckState = issue?.prCheckState ?? null;
@@ -2296,19 +2314,21 @@ export async function syncOpenPrSessions(
             },
           })
           .catch(() => {});
-        await fireEventAutomations(
-          env,
-          stub,
-          organizationId,
-          "pr.ci_failed",
-          issueEventTarget(stub, session.issueId),
-          ciPrompt
-        );
+        if (laneActionable) {
+          await fireEventAutomations(
+            env,
+            stub,
+            organizationId,
+            "pr.ci_failed",
+            issueEventTarget(stub, session.issueId),
+            ciPrompt
+          );
+        }
       }
       // The nudge retries every sweep while CI is red — delivery dedupe
       // (not detection) decides whether the lane already got this sha's fix
       // prompt, so a busy-sandbox rejection just retries next tick.
-      if (checkState === "failing") {
+      if (checkState === "failing" && laneActionable) {
         await nudgeLane(env, stub, organizationId, session, issue, prUrl, {
           prompt: ciPrompt,
           reason: "CI failure",
@@ -2323,7 +2343,7 @@ export async function syncOpenPrSessions(
       if (state === "open" && pr.mergeable === null) {
         console.log("pr mergeability pending", { session: session.id, prUrl });
       }
-      if (state === "open" && pr.mergeable === false && issue) {
+      if (pr.mergeable === false && laneActionable) {
         const seen = await stub
           .listAgentSessionEvents(session.id, { limit: 100, order: "desc" })
           .catch(() => []);
@@ -2406,7 +2426,7 @@ export async function syncOpenPrSessions(
       // pr.branch_update event — a slow GitHub merge otherwise re-fires on
       // every sweep pass.
       if (
-        issue &&
+        laneActionable &&
         headSha &&
         shouldUpdatePrBranch({
           state,
@@ -2527,7 +2547,7 @@ export async function syncOpenPrSessions(
             }
             const actionable =
               reviewState === "CHANGES_REQUESTED" || body.length > 0;
-            if (!actionable) continue;
+            if (!actionable || !laneActionable) continue;
             let built: Promise<string> | null = null;
             const reviewPrompt = () => {
               built ??= reviewPromptWithContext({
@@ -2594,7 +2614,7 @@ export async function syncOpenPrSessions(
         state === "open" &&
         headSha &&
         (!reviewRun || reviewCheckStale(reviewRun, Date.now())) &&
-        issue &&
+        laneActionable &&
         typeof base?.ref === "string"
       ) {
         await requestPrReview(

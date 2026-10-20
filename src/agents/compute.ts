@@ -131,8 +131,53 @@ export interface ComputeBackend {
   health(): Promise<{ ok: boolean; message?: string }>;
 }
 
-function computeError(message: string, status = 502): VortexError {
-  return new VortexError({ code: "AGENT_ERROR", status, message });
+// PILE-452 — every failure the compute substrate returns is infra-class:
+// sandbox create/provision/IP-resolution errors mean the provider fleet is
+// saturated, not that the lane's task failed. The flag lets dispatchAgent
+// mark infraFailure (the retry path + fleet breaker) without string
+// matching — Daytona answers 400s to spawn failures, which the old
+// status-only check (503/504) misclassified as task failures.
+export class ComputeError extends VortexError {
+  readonly infra = true;
+}
+
+/** True for compute-substrate failures, including RPC-serialized copies
+ *  that lost the ComputeError prototype but kept its own properties. */
+export function isComputeInfraError(error: unknown): boolean {
+  if (error instanceof ComputeError) return true;
+  return (
+    error instanceof Error &&
+    (error as { infra?: unknown }).infra === true &&
+    (error as { code?: unknown }).code === "AGENT_ERROR"
+  );
+}
+
+/** Coerce any provision-path throw into an infra-class error. Failures that
+ *  never reached the backend — I/O timeouts, DNS ("failed to resolve
+ *  container IP"), provision deadline rejects — arrive as plain Errors and
+ *  would otherwise classify as task failures. */
+export function asComputeInfraError(error: unknown): ComputeError {
+  if (error instanceof ComputeError) return error;
+  const message = error instanceof Error ? error.message : String(error);
+  const status = error instanceof VortexError ? error.status : 502;
+  return new ComputeError({ code: "AGENT_ERROR", status, message });
+}
+
+// Daytona returns 400s for quota and concurrency rejections too — call them
+// out so the session result says what actually blocked the spawn instead of
+// a bare "400 <body>".
+const DAYTONA_QUOTA_RE =
+  /quota|concurr|capacity|rate.?limit|too many|limit exceeded|max.*sandboxes/i;
+
+function daytonaFailure(what: string, status: number, body: string): string {
+  if (status === 429 || DAYTONA_QUOTA_RE.test(body)) {
+    return `${what}: Daytona quota/concurrency limit (status ${status}): ${body}`;
+  }
+  return `${what}: ${status} ${body}`;
+}
+
+function computeError(message: string, status = 502): ComputeError {
+  return new ComputeError({ code: "AGENT_ERROR", status, message });
 }
 
 function delay(ms: number): Promise<void> {
@@ -170,17 +215,24 @@ export class DaytonaBackend implements ComputeBackend {
           ...init?.headers,
         },
       });
-    let res = await doFetch();
-    const recoverable = res.status === 429 || res.status >= 500;
-    if (recoverable) {
-      const retryAfter = res.headers.get("retry-after");
-      const waitMs = retryAfter
-        ? Math.min(Number(retryAfter) * 1000 || 2000, 15000)
-        : 1500;
-      await delay(waitMs);
-      res = await doFetch();
+    try {
+      let res = await doFetch();
+      const recoverable = res.status === 429 || res.status >= 500;
+      if (recoverable) {
+        const retryAfter = res.headers.get("retry-after");
+        const waitMs = retryAfter
+          ? Math.min(Number(retryAfter) * 1000 || 2000, 15000)
+          : 1500;
+        await delay(waitMs);
+        res = await doFetch();
+      }
+      return res;
+    } catch (err) {
+      throw computeError(
+        `Daytona request failed (${path}): ${err instanceof Error ? err.message : String(err)}`,
+        504
+      );
     }
-    return res;
   }
 
   async createSandbox(opts: {
@@ -226,7 +278,7 @@ export class DaytonaBackend implements ComputeBackend {
       );
       if (adopted) return adopted;
       throw computeError(
-        `Daytona sandbox create failed: ${res.status} ${text}`
+        daytonaFailure("Daytona sandbox create failed", res.status, text)
       );
     }
     const created = daytonaSandboxSchema.parse(await res.json());
@@ -252,7 +304,9 @@ export class DaytonaBackend implements ComputeBackend {
       const res = await this.request(`/sandbox/${sandboxId}`);
       if (!res.ok) {
         const text = await res.text();
-        throw computeError(`Daytona sandbox get failed: ${res.status} ${text}`);
+        throw computeError(
+          daytonaFailure("Daytona sandbox get failed", res.status, text)
+        );
       }
       const sandbox = daytonaSandboxSchema.parse(await res.json());
       if (sandbox.state === "started") return sandbox;
@@ -280,7 +334,7 @@ export class DaytonaBackend implements ComputeBackend {
       if (!res.ok) {
         const text = await res.text();
         throw computeError(
-          `Daytona sandbox list failed: ${res.status} ${text}`
+          daytonaFailure("Daytona sandbox list failed", res.status, text)
         );
       }
       const list = daytonaSandboxListSchema.parse(await res.json());
@@ -309,6 +363,31 @@ export class DaytonaBackend implements ComputeBackend {
     return `${sandbox.toolboxProxyUrl ?? DEFAULT_FALLBACK_TOOLBOX}/${sandbox.id}`;
   }
 
+  /** Toolbox calls bypass `request` (different host); the same I/O bound +
+   *  infra classification applies — a dead toolbox or unresolvable sandbox
+   *  IP is a substrate failure, not a task failure. */
+  private async toolboxFetch(
+    url: string,
+    init?: RequestInit
+  ): Promise<Response> {
+    try {
+      return await fetch(url, {
+        signal: AbortSignal.timeout(IO_TIMEOUT_MS),
+        ...init,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.config.apiKey}`,
+          ...init?.headers,
+        },
+      });
+    } catch (err) {
+      throw computeError(
+        `Daytona toolbox request failed: ${err instanceof Error ? err.message : String(err)}`,
+        504
+      );
+    }
+  }
+
   async startRunner(
     sandbox: ComputeSandbox,
     sessionId: string,
@@ -326,34 +405,31 @@ export class DaytonaBackend implements ComputeBackend {
       await this.writeFile(sandbox, envPath, body);
       command = `set -a && . ${envPath} && set +a && rm -f ${envPath}; ${command}`;
     }
-    const createRes = await fetch(`${base}/process/session`, {
-      signal: AbortSignal.timeout(IO_TIMEOUT_MS),
+    const createRes = await this.toolboxFetch(`${base}/process/session`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.config.apiKey}`,
-      },
       body: JSON.stringify({ sessionId }),
     });
     if (!createRes.ok && createRes.status !== 409) {
       const text = await createRes.text();
       throw computeError(
-        `Daytona process session create failed: ${createRes.status} ${text}`
+        daytonaFailure(
+          "Daytona process session create failed",
+          createRes.status,
+          text
+        )
       );
     }
-    const execRes = await fetch(`${base}/process/session/${sessionId}/exec`, {
-      signal: AbortSignal.timeout(IO_TIMEOUT_MS),
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.config.apiKey}`,
-      },
-      body: JSON.stringify({ command, runAsync: true }),
-    });
+    const execRes = await this.toolboxFetch(
+      `${base}/process/session/${sessionId}/exec`,
+      {
+        method: "POST",
+        body: JSON.stringify({ command, runAsync: true }),
+      }
+    );
     if (!execRes.ok) {
       const text = await execRes.text();
       throw computeError(
-        `Daytona process exec failed: ${execRes.status} ${text}`
+        daytonaFailure("Daytona process exec failed", execRes.status, text)
       );
     }
   }
@@ -363,10 +439,7 @@ export class DaytonaBackend implements ComputeBackend {
     sessionId: string
   ): Promise<RunnerState> {
     const base = this.toolbox(sandbox);
-    const res = await fetch(`${base}/process/session/${sessionId}`, {
-      signal: AbortSignal.timeout(IO_TIMEOUT_MS),
-      headers: { Authorization: `Bearer ${this.config.apiKey}` },
-    });
+    const res = await this.toolboxFetch(`${base}/process/session/${sessionId}`);
     if (res.status === 404) return "pending";
     if (!res.ok) {
       const text = await res.text();
@@ -387,13 +460,8 @@ export class DaytonaBackend implements ComputeBackend {
     path: string
   ): Promise<string | null> {
     const base = this.toolbox(sandbox);
-    const res = await fetch(`${base}/process/execute`, {
-      signal: AbortSignal.timeout(IO_TIMEOUT_MS),
+    const res = await this.toolboxFetch(`${base}/process/execute`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.config.apiKey}`,
-      },
       body: JSON.stringify({ command: `cat ${path}`, cwd: "/" }),
     });
     if (!res.ok) return null;
@@ -408,13 +476,8 @@ export class DaytonaBackend implements ComputeBackend {
     content: string
   ): Promise<void> {
     const base = this.toolbox(sandbox);
-    const res = await fetch(`${base}/process/execute`, {
-      signal: AbortSignal.timeout(IO_TIMEOUT_MS),
+    const res = await this.toolboxFetch(`${base}/process/execute`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.config.apiKey}`,
-      },
       body: JSON.stringify({
         command: `python3 -c "import base64,sys;open(sys.argv[1],'wb').write(base64.b64decode(sys.argv[2]))" ${path} ${encodeUtf8Base64(content)}`,
         cwd: "/",
@@ -464,7 +527,7 @@ export class DaytonaBackend implements ComputeBackend {
     if (!res.ok && res.status !== 404) {
       const text = await res.text();
       throw computeError(
-        `Daytona sandbox delete failed: ${res.status} ${text}`
+        daytonaFailure("Daytona sandbox delete failed", res.status, text)
       );
     }
   }
