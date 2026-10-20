@@ -3467,7 +3467,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       await recordPromptActivity();
       const queued = await stub.applyAgentSessionResult(
         sessionId,
-        { status: "running", result: null },
+        { status: "running", result: null, revive: true },
         identity.id
       );
       const queuedActivities = await stub.listAgentActivities(sessionId);
@@ -3525,7 +3525,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     await recordPromptActivity();
     const updated = await stub.applyAgentSessionResult(
       sessionId,
-      { status: "running", result: null },
+      { status: "running", result: null, revive: true },
       identity.id
     );
     const activities = await stub.listAgentActivities(sessionId);
