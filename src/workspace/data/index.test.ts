@@ -2014,8 +2014,16 @@ describe("merchant-source registry", () => {
       expect(list.some((r) => r.id === src.id)).toBe(true);
       const updated = updateMerchantSource(db, WORKSPACE_ID, src.id, {
         cursorValue: "2026-10-19",
+        runCount: src.runCount + 1,
       });
       expect(updated.cursorValue).toBe("2026-10-19");
+      // runCount is a persisted column — a fresh list read sees the
+      // increment, not just the UPDATE's returned row.
+      expect(updated.runCount).toBe(1);
+      const reloaded = listMerchantSources(db, WORKSPACE_ID).find(
+        (row) => row.id === src.id
+      );
+      expect(reloaded?.runCount).toBe(1);
     });
   });
 });

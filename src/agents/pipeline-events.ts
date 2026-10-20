@@ -755,25 +755,47 @@ export async function drainDomainEvents(
       }
       delivered += 1;
     } catch (error) {
+      const handlerError =
+        error instanceof Error ? error.message : String(error);
       console.error("domain event delivery failed", {
         eventId: event.id,
         type: event.type,
         organizationId,
-        error: error instanceof Error ? error.message : String(error),
+        error: handlerError,
       });
+      if (pendingTasks.length === 0) {
+        await stub
+          .markDomainEvent(event.id, "failed", handlerError)
+          .catch(() => {});
+        continue;
+      }
       // External POSTs already in flight still need to run — the
       // delivery comments they write (PILE-441) matter most when the
-      // event itself just failed.
-      if (pendingTasks.length > 0) {
-        ctx?.waitUntil(Promise.allSettled(pendingTasks));
-      }
-      await stub
-        .markDomainEvent(
-          event.id,
-          "failed",
-          error instanceof Error ? error.message : String(error)
-        )
-        .catch(() => {});
+      // event itself just failed — and their outcome decides the
+      // event's final state: a POST that already landed must not sit
+      // `failed` (a manual replay would wake the reviewer a second
+      // time), so an all-fulfilled settle marks `delivered` with the
+      // handler error kept for inspection; a rejected POST keeps
+      // `failed` and stays replayable.
+      const settle = Promise.allSettled(pendingTasks).then(async (results) => {
+        const failed = results.find(
+          (r): r is PromiseRejectedResult => r.status === "rejected"
+        );
+        const taskError = failed
+          ? failed.reason instanceof Error
+            ? failed.reason.message
+            : String(failed.reason)
+          : null;
+        await stub
+          .markDomainEvent(
+            event.id,
+            failed ? "failed" : "delivered",
+            [handlerError, taskError].filter(Boolean).join("; ")
+          )
+          .catch(() => {});
+      });
+      if (ctx) ctx.waitUntil(settle);
+      else await settle;
     }
   }
   return delivered;

@@ -215,4 +215,100 @@ describe("pipeline event drain — dead gated lanes (PILE-443)", () => {
     );
     expect(rows).toEqual([expect.objectContaining({ status: "delivered" })]);
   });
+
+  it("POSTs exactly once when two drains race the same pending event", async () => {
+    const { child } = await gatedSubStep("Concurrent drain step");
+    await deadLane(child.id, "failed");
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      // Both drains list the same pending row before either claims —
+      // the atomic pending→delivering transition lets exactly one
+      // through (PILE-443; the post-write waitUntil drain and the
+      // sweep overlap in production).
+      await Promise.all([
+        drainDomainEvents(env, stub(), ORG),
+        drainDomainEvents(env, stub(), ORG),
+      ]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("marks a handler-failed event delivered once its in-flight POST lands", async () => {
+    // A deal stage entry whose owner is external dispatches the POST,
+    // then a downstream handler failure drops the drain into the catch
+    // path while that POST is still in flight. The landed POST must
+    // not sit `failed` — a replay would wake the reviewer twice.
+    await stub().upsertAgentType({
+      slug: "deal_owner",
+      name: "Deal Owner",
+      providerAgentId: "flue",
+      kind: "external",
+      endpointUrl: "https://deal-owner.example.test/hook",
+    });
+    await stub().upsertStageConfig({
+      entityType: "deal",
+      status: "qualified",
+      ownerAgent: "deal_owner",
+    });
+    const customer = await stub().createCustomer({ name: "Catch Co" });
+    const deal = await stub().createDeal({
+      customerId: customer.id,
+      name: "Catch deal",
+      stage: "lead",
+    });
+    await stub().updateDeal(deal.id, { stage: "qualified" }, "test");
+
+    // Sabotage the automation lookup so the second handler of
+    // record.stage_entered throws after the owner POST was queued.
+    const inner = stub();
+    const sabotaged = new Proxy(inner, {
+      get(target, prop, receiver) {
+        if (prop === "listAgentAutomations") {
+          return () => Promise.reject(new Error("automations exploded"));
+        }
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const tasks: Promise<unknown>[] = [];
+    const ctx = {
+      waitUntil: (task: Promise<unknown>) => {
+        tasks.push(task);
+      },
+    };
+    try {
+      await drainDomainEvents(env, sabotaged, ORG, ctx);
+      await Promise.all(tasks);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url] = fetchMock.mock.calls[0] as unknown as [string];
+    expect(url).toBe("https://deal-owner.example.test/hook");
+    const rows = await runInDurableObject(stub(), async (_instance, state) =>
+      state.storage.sql
+        .exec(
+          "SELECT status, error FROM domain_events WHERE type = 'record.stage_entered' AND json_extract(payload, '$.entityId') = ?",
+          deal.id
+        )
+        .toArray()
+    );
+    expect(rows).toEqual([
+      expect.objectContaining({
+        status: "delivered",
+        error: expect.stringContaining("automations exploded"),
+      }),
+    ]);
+  });
 });

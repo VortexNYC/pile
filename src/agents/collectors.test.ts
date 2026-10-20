@@ -107,6 +107,51 @@ describe("assertPublicHost", () => {
     }
   });
 
+  it("rejects non-default ports — a public host can still probe services", () => {
+    for (const host of [
+      "data.ny.gov:22",
+      "https://data.ny.gov:8443/feed",
+      "data.ny.gov@public.example:8080",
+      "[2001:db8::1]:8080",
+    ]) {
+      expect(() => assertPublicHost(host)).toThrow("public hosts");
+    }
+    // The https default is the only port allowed.
+    expect(() => assertPublicHost("data.ny.gov:443")).not.toThrow();
+  });
+
+  it("rejects CGNAT, benchmarking, documentation, and reserved ranges", () => {
+    for (const host of [
+      "100.64.0.1",
+      "100.127.255.254",
+      "198.18.0.1",
+      "198.19.255.1",
+      "192.0.0.8",
+      "192.0.2.1",
+      "192.88.99.1",
+      "198.51.100.1",
+      "203.0.113.1",
+      "224.0.0.1",
+      "240.0.0.1",
+      "255.255.255.255",
+      "[2002:7f00:1::1]",
+      "[2001::]",
+      "[2001:0000:4136:e378:8000:63bf:3fff:fdd2]",
+    ]) {
+      expect(() => assertPublicHost(host)).toThrow("public hosts");
+    }
+    // Carve-outs that stay public — 100.63 is below CGNAT, 192.0.43 is
+    // real unicast, 2001:4860 is global DNS.
+    for (const host of [
+      "100.63.255.1",
+      "100.128.0.1",
+      "192.0.43.10",
+      "[2001:4860:4860::8888]",
+    ]) {
+      expect(() => assertPublicHost(host)).not.toThrow();
+    }
+  });
+
   it("allows public hosts — including f-leading domains and a public IPv6", () => {
     // `[[f]` used to be a character class blocking every f/F-leading
     // hostname; the bracketed-IPv6 alternative must not do that.
@@ -156,6 +201,31 @@ describe("fetchPublic", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
     try {
+      await expect(
+        fetchPublic("https://data.example/feed.json")
+      ).rejects.toThrow("public hosts");
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("refuses a non-default port on the first URL and on redirect hops", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(null, {
+        status: 302,
+        headers: { location: "https://data.example:22/feed.json" },
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      await expect(
+        fetchPublic("https://data.example:22/feed.json")
+      ).rejects.toThrow("public hosts");
+      expect(fetchMock).not.toHaveBeenCalled();
+
+      // Same guard on the redirect hop — the 302 target carries :22,
+      // so hop two must die before its fetch goes out.
       await expect(
         fetchPublic("https://data.example/feed.json")
       ).rejects.toThrow("public hosts");

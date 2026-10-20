@@ -34,29 +34,36 @@ const SIGNAL_WEIGHT: Record<string, number> = {
 };
 
 /** SSRF guard for lane-reachable fetch paths — loopback, unspecified
- *  (0.0.0.0), RFC1918, link-local (cloud metadata), and IPv6
- *  loopback/mapped/local addresses are never valid feed endpoints.
- *  Lane-writable source configs and tool inputs build URLs from
- *  user-controlled hosts, so every such path checks.
+ *  (0.0.0.0), RFC1918, CGNAT (100.64/10), link-local (cloud metadata),
+ *  benchmarking/documentation ranges (198.18/15, TEST-NET-1/2/3,
+ *  192.0.0/24, 6to4 anycast), multicast/reserved (224/4 + 240/4), and
+ *  IPv6 loopback/mapped/local/tunneled (6to4, Teredo) addresses are
+ *  never valid feed endpoints. Lane-writable source configs and tool
+ *  inputs build URLs from user-controlled hosts, so every such path
+ *  checks.
  *  Residual: this vets the hostname, not the DNS answer — a public
  *  name that resolves to a private address (nip.io, split-horizon
  *  DNS) still passes; workerd exposes no resolved-IP hook to close
  *  that gap. Redirect hops are re-vetted in fetchPublic so a public
  *  feed can't 302 a request into a blocked host. */
 export const BLOCKED_HOSTS =
-  /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.\d+\.\d+\.\d+$|\[::|\[64:ff9b:|\[f|[0:]+$)/i;
+  /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|198\.(18|19)\.|192\.0\.(0|2)\.|192\.88\.99\.|198\.51\.100\.|203\.0\.113\.|2(2[4-9]|[3-5]\d)\.|0\.\d+\.\d+\.\d+$|\[::|\[64:ff9b:|\[f|\[2002:|\[2001:0*:|[0:]+$)/i;
 
 export function assertPublicHost(hostname: string): void {
   // Parse before testing — inputs like "legit.com@127.0.0.1" pass a
   // raw-string check while the URL's real host is the blocked one.
-  let host: string;
+  let parsed: URL;
   try {
-    host = new URL(hostname.includes("://") ? hostname : `https://${hostname}`)
-      .hostname;
+    parsed = new URL(
+      hostname.includes("://") ? hostname : `https://${hostname}`
+    );
   } catch {
     throw new Error("https public hosts only");
   }
-  if (BLOCKED_HOSTS.test(host)) {
+  // The port is part of the probe surface — `public.gov:22` reaches
+  // services the host guard never meant to expose. An empty port is
+  // the https default (443), the only one allowed.
+  if (parsed.port !== "" || BLOCKED_HOSTS.test(parsed.hostname)) {
     throw new Error("https public hosts only");
   }
 }
@@ -79,7 +86,9 @@ export async function fetchPublic(
     if (parsed.protocol !== "https:") {
       throw new Error("https public hosts only");
     }
-    assertPublicHost(parsed.hostname);
+    // `host` carries a non-default port, so the port guard vets every
+    // hop too — `public.gov:22` can't slip through on hostname alone.
+    assertPublicHost(parsed.host);
     const res = await fetch(current, {
       ...init,
       redirect: "manual",
