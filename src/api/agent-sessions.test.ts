@@ -4106,4 +4106,15 @@ describe("spend caps + run receipts (PILE-425)", () => {
     expect(receipt?.costMicros).toBe(132_000);
     expect(receipt?.costSource).toBe("reported");
   });
+
+  it("GET /agent/sessions accepts ?agentSlug to scope the list (PILE-453)", async () => {
+    const res = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions?agentSlug=scout`,
+        { token }
+      ),
+      env
+    );
+    expect(res.status).toBe(200);
+  });
 });

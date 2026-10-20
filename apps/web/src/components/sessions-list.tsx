@@ -19,16 +19,26 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const WEEK_MS = 7 * DAY_MS;
 
 /** Agent sessions — Live/Today/Week/Older groups. Reused by the
- * sessions route and the Issues tab. */
-export function SessionsList() {
+ * sessions route and the Issues tab. `issueId`/`agentSlug` scope the list
+ * to a lane of work (PILE-453 — no more flat dumps). */
+export function SessionsList({
+  issueId,
+  agentSlug,
+}: {
+  issueId?: string;
+  agentSlug?: string;
+} = {}) {
   const workspace = useWorkspace();
   const sessions = useQuery({
-    queryKey: wsKey(workspace.id, "sessions"),
+    queryKey: wsKey(workspace.id, "sessions", { issueId, agentSlug }),
     queryFn: async () =>
       (
         await unwrap(
           api.GET("/workspaces/{organizationId}/agent/sessions", {
-            params: { path: { organizationId: workspace.id } },
+            params: {
+              path: { organizationId: workspace.id },
+              query: { issueId, agentSlug },
+            },
           })
         )
       ).sessions,

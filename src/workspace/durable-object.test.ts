@@ -3923,3 +3923,13 @@ describe("session terminal guard (PILE-467)", () => {
     expect(out.revived?.endedAt).toBeNull();
   });
 });
+
+describe("session scoping options (PILE-453)", () => {
+  it("listAgentSessions accepts agentSlug through the DO", async () => {
+    const stub = getStub();
+    const rows = await withWorkspace(stub, (instance) =>
+      instance.listAgentSessions({ agentSlug: "scout" })
+    );
+    expect(Array.isArray(rows)).toBe(true);
+  });
+});

@@ -6,7 +6,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { WorkerEnv } from "../../platform/middleware.js";
 import type { WorkspaceDO } from "../durable-object.js";
 import { workspaceSchema } from "../schema-map.js";
-import { workspaceIssues } from "../schema.js";
+import { workspaceAgentSessions, workspaceAgentTypes, workspaceIssues } from "../schema.js";
 import {
   hiddenIssueCondition,
   type AgentSessionInput,
@@ -2089,6 +2089,72 @@ describe("space permissions — closed-ACL precedence (PILE-447)", () => {
       expect(
         documentAccessLevel(db, gapDoc.id, "member-1", [])
       ).toBeNull();
+    });
+  });
+});
+
+describe("agent session scoping (PILE-453)", () => {
+  it("listAgentSessions filters by agentSlug via agent_types", async () => {
+    await withDb(async (db) => {
+      const { listAgentSessions } = await import("./index.js");
+      db.insert(workspaceAgentTypes)
+        .values([
+          {
+            id: "atype-scout",
+            organizationId: WORKSPACE_ID,
+            slug: "scout",
+            name: "Scout",
+            providerAgentId: "devin-cli",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+          {
+            id: "atype-profiler",
+            organizationId: WORKSPACE_ID,
+            slug: "profiler",
+            name: "Profiler",
+            providerAgentId: "devin-cli",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        ])
+        .run();
+      db.insert(workspaceAgentSessions)
+        .values([
+          {
+            id: "s-scout",
+            organizationId: WORKSPACE_ID,
+            issueId: "issue-scope-1",
+            agentId: "atype-scout",
+            provider: "devin-cli",
+            actorId: "u1",
+            actorType: "user",
+            status: "completed",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+          {
+            id: "s-profiler",
+            organizationId: WORKSPACE_ID,
+            issueId: "issue-scope-1",
+            agentId: "atype-profiler",
+            provider: "devin-cli",
+            actorId: "u1",
+            actorType: "user",
+            status: "completed",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        ])
+        .run();
+      const scoutOnly = listAgentSessions(db, WORKSPACE_ID, {
+        agentSlug: "scout",
+      });
+      expect(scoutOnly.map((r) => r.id)).toEqual(["s-scout"]);
+      const none = listAgentSessions(db, WORKSPACE_ID, {
+        agentSlug: "nope",
+      });
+      expect(none).toHaveLength(0);
     });
   });
 });
