@@ -125,10 +125,14 @@ async function resolveOwner(
 /** waitUntil carrier threaded through drain handlers — domainEventId
  *  lets a fire-and-forget external POST report failure back to the
  *  event that spawned it, so a waitUntil dispatch that dies still
- *  marks the event failed instead of silently landing `delivered`. */
+ *  marks the event failed instead of silently landing `delivered`.
+ *  tasks, when the drain sets it, collects in-flight external POSTs so
+ *  the drain can settle delivered/failed once they resolve — marking
+ *  delivered while a POST is still out races its failure write. */
 type DrainCtx = {
   waitUntil: (promise: Promise<unknown>) => void;
   domainEventId?: string;
+  tasks?: Promise<unknown>[];
 };
 
 /** kind="external" owners (Grokbot as chief_of_staff, a customer's own
@@ -137,8 +141,9 @@ type DrainCtx = {
  *  PILE-441/443 — every attempt lands an internal delivery comment on
  *  the anchor issue (when one is passed) so failures are visible
  *  without worker logs. A failed POST throws so awaited drains mark
- *  the domain event `failed` and it stays replayable; waitUntil-fired
- *  dispatches swallow the throw since the event already delivered. */
+ *  the domain event `failed` and it stays replayable; under a drain
+ *  ctx the task lands on ctx.tasks so the drain settles the event
+ *  from the POST's real outcome once it resolves. */
 async function dispatchExternal(
   env: WorkerEnv,
   stub: Stub,
@@ -201,6 +206,14 @@ async function dispatchExternal(
   })();
   if (!ctx) {
     await task;
+    return;
+  }
+  if (ctx.tasks) {
+    // The drain settles the event once every in-flight task resolves.
+    // The no-op catch keeps a rejection that lands before the drain's
+    // allSettled subscribes from surfacing as an unhandled rejection.
+    task.catch(() => {});
+    ctx.tasks.push(task);
     return;
   }
   const domainEventId = ctx.domainEventId;
@@ -658,17 +671,26 @@ export async function drainDomainEvents(
   const events = await stub.listPendingDomainEvents();
   let delivered = 0;
   for (const event of events) {
+    const pendingTasks: Promise<unknown>[] = [];
     try {
       // Claim before handling — concurrent drains (post-write waitUntil
       // paths + the sweep backstop) would otherwise both see the pending
       // row and double-POST the external reviewer (PILE-443). The loser
       // of the pending→delivering transition skips the event.
       if (!(await stub.claimDomainEvent(event.id))) continue;
-      // Handlers fire external POSTs under waitUntil — carrying the
-      // event id lets a POST that fails after the drain returned flip
-      // the event back to `failed` instead of leaving it `delivered`.
+      // ExecutionContext.waitUntil is a prototype method on workerd —
+      // `{ ...ctx }` drops it and `waitUntil: ctx.waitUntil` detaches
+      // it ("Illegal invocation"), so the external POST would throw
+      // TypeError under a real ctx. Bind through a closure instead.
+      // domainEventId + tasks let a POST that fails after the handler
+      // returned flip the event back to `failed` instead of leaving it
+      // `delivered`.
       const eventCtx: DrainCtx | undefined = ctx
-        ? { ...ctx, domainEventId: event.id }
+        ? {
+            waitUntil: (task) => ctx.waitUntil(task),
+            domainEventId: event.id,
+            tasks: pendingTasks,
+          }
         : undefined;
       const payload = JSON.parse(event.payload) as Record<string, unknown>;
       if (event.type === "record.stage_entered") {
@@ -705,7 +727,32 @@ export async function drainDomainEvents(
           eventCtx
         );
       }
-      await stub.markDomainEvent(event.id, "delivered");
+      if (pendingTasks.length === 0) {
+        await stub.markDomainEvent(event.id, "delivered");
+      } else {
+        // External POSTs are still in flight under waitUntil — settle
+        // the event from their outcome instead of marking delivered
+        // up front: a premature delivered write can land after a fast
+        // endpoint rejection and silently overwrite `failed`.
+        ctx?.waitUntil(
+          Promise.allSettled(pendingTasks).then(async (results) => {
+            const failed = results.find(
+              (r): r is PromiseRejectedResult => r.status === "rejected"
+            );
+            await stub
+              .markDomainEvent(
+                event.id,
+                failed ? "failed" : "delivered",
+                failed
+                  ? failed.reason instanceof Error
+                    ? failed.reason.message
+                    : String(failed.reason)
+                  : undefined
+              )
+              .catch(() => {});
+          })
+        );
+      }
       delivered += 1;
     } catch (error) {
       console.error("domain event delivery failed", {
@@ -714,6 +761,12 @@ export async function drainDomainEvents(
         organizationId,
         error: error instanceof Error ? error.message : String(error),
       });
+      // External POSTs already in flight still need to run — the
+      // delivery comments they write (PILE-441) matter most when the
+      // event itself just failed.
+      if (pendingTasks.length > 0) {
+        ctx?.waitUntil(Promise.allSettled(pendingTasks));
+      }
       await stub
         .markDomainEvent(
           event.id,

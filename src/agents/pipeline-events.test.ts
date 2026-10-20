@@ -174,4 +174,45 @@ describe("pipeline event drain — dead gated lanes (PILE-443)", () => {
       }),
     ]);
   });
+
+  it("wakes the reviewer when ctx.waitUntil is a prototype method", async () => {
+    const { child } = await gatedSubStep("Prototype ctx step");
+    await deadLane(child.id, "failed");
+
+    // workerd's ExecutionContext keeps waitUntil on the prototype — a
+    // `{ ...ctx }` spread drops it and the external dispatch dies with
+    // TypeError (event stuck `failed`, reviewer never POSTed). A
+    // class-backed stub reproduces that shape; plain-object stubs
+    // can't.
+    class FakeExecutionCtx {
+      readonly tasks: Promise<unknown>[] = [];
+      waitUntil(task: Promise<unknown>): void {
+        this.tasks.push(task);
+      }
+    }
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const ctx = new FakeExecutionCtx();
+    try {
+      await drainDomainEvents(env, stub(), ORG, ctx);
+      await Promise.all(ctx.tasks);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url] = fetchMock.mock.calls[0] as unknown as [string];
+    expect(url).toBe(CHIEF_ENDPOINT);
+    const rows = await runInDurableObject(stub(), async (_instance, state) =>
+      state.storage.sql
+        .exec(
+          "SELECT status FROM domain_events WHERE type = 'substep.review' AND json_extract(payload, '$.issueId') = ?",
+          child.id
+        )
+        .toArray()
+    );
+    expect(rows).toEqual([expect.objectContaining({ status: "delivered" })]);
+  });
 });

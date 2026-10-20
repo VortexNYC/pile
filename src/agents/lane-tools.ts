@@ -3,7 +3,7 @@ import { z } from "zod";
 import { GITHUB_USER_AGENT } from "../global/github-auth.js";
 import {
   assertPublicHost,
-  BLOCKED_HOSTS,
+  fetchPublic,
   pullSource,
   scoreCandidate,
   type MerchantSourceRow,
@@ -1611,10 +1611,14 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
       const appToken = ctx.env?.SOCRATA_APP_TOKEN;
       const headers: Record<string, string> = {};
       if (appToken) headers["X-App-Token"] = appToken;
-      const res = await fetch(
+      const res = await fetchPublic(
         `https://${input.domain}/resource/${input.dataset}.json?${params}`,
         { headers }
-      );
+      ).catch((err: unknown) => {
+        throw new LaneToolError(
+          err instanceof Error ? err.message : String(err)
+        );
+      });
       if (!res.ok) throw new LaneToolError(`socrata failed: ${res.status}`);
       return { rows: await res.json() };
     },
@@ -2042,10 +2046,11 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
     }),
     async run(_ctx, input) {
       const url = new URL(input.url);
-      if (url.protocol !== "https:" || BLOCKED_HOSTS.test(url.hostname)) {
-        throw new LaneToolError("https public hosts only");
-      }
-      const res = await fetch(url, { redirect: "follow" });
+      const res = await fetchPublic(input.url).catch((err: unknown) => {
+        throw new LaneToolError(
+          err instanceof Error ? err.message : String(err)
+        );
+      });
       if (!res.ok) {
         throw new LaneToolError(`fetch ${url.hostname}: ${res.status}`);
       }

@@ -33,12 +33,18 @@ const SIGNAL_WEIGHT: Record<string, number> = {
   registration: 0.3,
 };
 
-/** SSRF guard for lane-reachable fetch paths — loopback, RFC1918,
- *  link-local (cloud metadata), and IPv6 local addresses are never
- *  valid feed endpoints. Lane-writable source configs and tool inputs
- *  build URLs from user-controlled hosts, so every such path checks. */
+/** SSRF guard for lane-reachable fetch paths — loopback, unspecified
+ *  (0.0.0.0), RFC1918, link-local (cloud metadata), and IPv6
+ *  loopback/mapped/local addresses are never valid feed endpoints.
+ *  Lane-writable source configs and tool inputs build URLs from
+ *  user-controlled hosts, so every such path checks.
+ *  Residual: this vets the hostname, not the DNS answer — a public
+ *  name that resolves to a private address (nip.io, split-horizon
+ *  DNS) still passes; workerd exposes no resolved-IP hook to close
+ *  that gap. Redirect hops are re-vetted in fetchPublic so a public
+ *  feed can't 302 a request into a blocked host. */
 export const BLOCKED_HOSTS =
-  /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|[[f]|[0:]+$)/i;
+  /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.\d+\.\d+\.\d+$|\[::|\[64:ff9b:|\[f|[0:]+$)/i;
 
 export function assertPublicHost(hostname: string): void {
   // Parse before testing — inputs like "legit.com@127.0.0.1" pass a
@@ -53,6 +59,41 @@ export function assertPublicHost(hostname: string): void {
   if (BLOCKED_HOSTS.test(host)) {
     throw new Error("https public hosts only");
   }
+}
+
+/** Host-checked fetch for lane-controlled URLs — https only, redirects
+ *  followed manually with every hop's host re-vetted through
+ *  assertPublicHost so a public feed domain can't bounce the lane into
+ *  a private endpoint. Request headers forward only while the hop
+ *  stays on the first URL's origin (no credential leak to a redirect
+ *  target). */
+export async function fetchPublic(
+  url: string,
+  init?: RequestInit,
+  maxRedirects = 5
+): Promise<Response> {
+  const firstOrigin = new URL(url).origin;
+  let current = url;
+  for (let hop = 0; hop <= maxRedirects; hop++) {
+    const parsed = new URL(current);
+    if (parsed.protocol !== "https:") {
+      throw new Error("https public hosts only");
+    }
+    assertPublicHost(parsed.hostname);
+    const res = await fetch(current, {
+      ...init,
+      redirect: "manual",
+      headers: parsed.origin === firstOrigin ? init?.headers : undefined,
+    });
+    const location =
+      res.status >= 300 && res.status < 400
+        ? res.headers.get("location")
+        : null;
+    if (!location) return res;
+    if (hop === maxRedirects) throw new Error("too many redirects");
+    current = new URL(location, current).toString();
+  }
+  throw new Error("unreachable");
 }
 
 export function scoreCandidate(c: MerchantCandidate): number {
@@ -100,7 +141,7 @@ async function pullSocrata(
     );
     params.set("$order", `${source.cursorField} DESC`);
   }
-  const res = await fetch(
+  const res = await fetchPublic(
     `https://${domain}/resource/${dataset}.json?${params}`
   );
   if (!res.ok) throw new Error(`socrata ${res.status}`);
