@@ -593,3 +593,50 @@ describe("DaytonaBackend infra classification + quota surfacing (PILE-452)", () 
     vi.unstubAllGlobals();
   });
 });
+
+describe("sweepOrphanSandboxes (PILE-471)", () => {
+  it("reaps label-matched sandboxes whose session is terminal or gone", async () => {
+    const deleted: string[] = [];
+    const backend = {
+      kind: "daytona" as const,
+      listSandboxes: async () => [
+        {
+          id: "s1",
+          name: "a",
+          state: "started",
+          labels: { "vortex.session": "sess-dead" },
+        },
+        {
+          id: "s2",
+          name: "b",
+          state: "started",
+          labels: { "vortex.session": "sess-live" },
+        },
+        {
+          id: "s3",
+          name: "c",
+          state: "started",
+          labels: { "vortex.session": "sess-missing" },
+        },
+      ],
+      deleteSandbox: async (s: { id: string }) => {
+        deleted.push(s.id);
+      },
+    };
+    const stub = {
+      getAgentSession: async (id: string) =>
+        id === "sess-dead"
+          ? { status: "completed" }
+          : id === "sess-missing"
+            ? null
+            : { status: "running" },
+    };
+    const { sweepOrphanSandboxes } = await import("./compute.js");
+    const out = await sweepOrphanSandboxes(
+      backend as never,
+      stub
+    );
+    expect(out.reaped).toBe(2);
+    expect(deleted.sort()).toEqual(["s1", "s3"]);
+  });
+});
