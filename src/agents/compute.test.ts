@@ -5,11 +5,13 @@ import type { AppEnv } from "../types/env.js";
 import {
   CloudflareBackend,
   LANE_CACHE_MOUNT,
+  LaneSandboxBackend,
   computeBackend,
   isComputeInfraError,
   laneCachePrefix,
 } from "./compute.js";
 import type { ComputeSandbox, SandboxHandle } from "./compute.js";
+import type { LaneSandboxBase } from "./lane-sandbox.js";
 
 function baseEnv(): AppEnv {
   return {
@@ -274,6 +276,118 @@ function fakeSandbox(
     getProcess,
   };
 }
+
+describe("LaneSandboxBackend (sandbox-sdk 1.0)", () => {
+  function fakeLaneNs() {
+    const calls: string[] = [];
+    const stub = {
+      provision: vi.fn(async () => {}),
+      spawn: vi.fn(async (o: { processId: string; command: string }) => {
+        calls.push(`spawn:${o.processId}:${o.command}`);
+      }),
+      hasProcess: vi.fn(async () => true),
+      processState: vi.fn(async () => ({ running: true, exitCode: null })),
+      sessionBusy: vi.fn(async () => false),
+      readFile: vi.fn(async () => null),
+      putFiles: vi.fn(async () => {}),
+      tail: vi.fn(async () => "tail-bytes"),
+      probe: vi.fn(async () => true),
+      destroy: vi.fn(async () => {}),
+    };
+    const ns = {
+      getByName: vi.fn(() => stub),
+    };
+    return {
+      ns: ns as unknown as AppEnv["SANDBOX_LANE"],
+      stub,
+      calls,
+    };
+  }
+
+  it("LANE_SDK=v1 selects the lane backend on SANDBOX_LANE*", () => {
+    const { ns } = fakeLaneNs();
+    const env = {
+      ...baseEnv(),
+      COMPUTE_PROVIDER: "cloudflare",
+      LANE_SDK: "v1",
+      SANDBOX_LANE: ns,
+    } as AppEnv;
+    const backend = computeBackend(env, "codex-cli");
+    expect(backend.kind).toBe("cloudflare");
+    expect(backend).toBeInstanceOf(LaneSandboxBackend);
+  });
+
+  it("LANE_SDK=v1 prefers the per-provider binding", async () => {
+    const { ns } = fakeLaneNs();
+    const env = {
+      ...baseEnv(),
+      COMPUTE_PROVIDER: "cloudflare",
+      LANE_SDK: "v1",
+      SANDBOX_LANE: {} as AppEnv["SANDBOX_LANE"],
+      SANDBOX_LANE_CURSOR: ns,
+    } as unknown as AppEnv;
+    const backend = computeBackend(env, "cursor-cli");
+    await backend.createSandbox({
+      name: "n",
+      sessionId: "s",
+      organizationId: "o",
+      agentLabel: "x",
+      env: {},
+    });
+    expect(ns!.getByName).toHaveBeenCalledWith("n");
+  });
+
+  it("LANE_SDK=v1 without a lane binding is a config error", () => {
+    const env = {
+      ...baseEnv(),
+      COMPUTE_PROVIDER: "cloudflare",
+      LANE_SDK: "v1",
+    } as AppEnv;
+    expect(() => computeBackend(env)).toThrow(/SANDBOX_LANE binding/);
+  });
+
+  it("create/start/state/poll/delete flow over the stub RPCs", async () => {
+    const { ns, stub } = fakeLaneNs();
+    const backend = new LaneSandboxBackend(
+      ns as DurableObjectNamespace<LaneSandboxBase>
+    );
+    const sandbox = await backend.createSandbox({
+      name: "sb-v1",
+      sessionId: "s1",
+      organizationId: "o1",
+      agentLabel: "devin-cli",
+      env: {},
+    });
+    expect(stub.provision).toHaveBeenCalled();
+    await backend.startRunner(
+      sandbox,
+      "s1",
+      ". /tmp/pile/lane.env && python3 /tmp/pile/run.py"
+    );
+    expect(stub.spawn).toHaveBeenCalledWith(
+      expect.objectContaining({ processId: "s1" })
+    );
+    expect(await backend.runnerState(sandbox, "s1")).toBe("running");
+    await backend.putFiles(sandbox, [
+      { path: "/tmp/pile/lane.env", content: "export A='1'", mode: 0o600 },
+    ]);
+    expect(stub.putFiles).toHaveBeenCalled();
+    expect(await backend.findSandbox("s1", "sb-v1")).not.toBeNull();
+    await backend.deleteSandbox(sandbox);
+    expect(stub.destroy).toHaveBeenCalled();
+  });
+
+  it("runnerState maps a dead wrapper to an exit code", async () => {
+    const { ns, stub } = fakeLaneNs();
+    stub.processState.mockResolvedValue({ running: false, exitCode: 42 });
+    const backend = new LaneSandboxBackend(
+      ns as DurableObjectNamespace<LaneSandboxBase>
+    );
+    expect(await backend.runnerState(sandboxRecord, "s1")).toEqual({
+      exitCode: 42,
+    });
+  });
+});
 
 const admitEnv = () =>
   ({

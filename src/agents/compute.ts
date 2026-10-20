@@ -8,6 +8,7 @@ import {
   daytonaSandboxListSchema,
   daytonaSandboxSchema,
 } from "./daytona.js";
+import type { LaneSandboxBase } from "./lane-sandbox.js";
 
 const DEFAULT_FALLBACK_TOOLBOX = "https://proxy.app.daytona.io/toolbox";
 const POLL_INTERVAL_MS = 5000;
@@ -685,6 +686,55 @@ export function laneCachePrefix(organizationId: string, repo: string): string {
   return `/${cacheSegment(organizationId)}/${segments.join("/")}/`;
 }
 
+async function cfAdmit(env: AppEnv | undefined, name: string): Promise<void> {
+  const url = env?.CF_ADMISSION_URL;
+  const token = env?.CF_ADMISSION_TOKEN;
+  if (!url || !token) return;
+  try {
+    const res = await fetch(`${url}/admin/sandbox/admit`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ name, pool: "EXTERNAL", ttlMs: 2 * 3600_000 }),
+    });
+    if (res.status === 429) {
+      const detail = (await res.json().catch(() => null)) as {
+        reason?: string;
+      } | null;
+      throw new VortexError({
+        code: "RATE_LIMITED",
+        status: 503,
+        message: `sandbox admission denied: ${detail?.reason ?? "account capacity"}`,
+      });
+    }
+    if (!res.ok) {
+      console.warn("sandbox admission endpoint failed-open", res.status);
+    }
+  } catch (err) {
+    if (err instanceof VortexError) throw err;
+    console.warn("sandbox admission unreachable — failing open", err);
+  }
+}
+
+async function cfReleaseAdmission(
+  env: AppEnv | undefined,
+  name: string
+): Promise<void> {
+  const url = env?.CF_ADMISSION_URL;
+  const token = env?.CF_ADMISSION_TOKEN;
+  if (!url || !token) return;
+  await fetch(`${url}/admin/sandbox/release`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ name }),
+  }).catch(() => {});
+}
+
 export class CloudflareBackend implements ComputeBackend {
   readonly kind = "cloudflare" as const;
 
@@ -701,49 +751,11 @@ export class CloudflareBackend implements ComputeBackend {
    * a dead admission service must not take the lane fleet down with it.
    */
   private async admit(name: string): Promise<void> {
-    const url = this.env?.CF_ADMISSION_URL;
-    const token = this.env?.CF_ADMISSION_TOKEN;
-    if (!url || !token) return;
-    try {
-      const res = await fetch(`${url}/admin/sandbox/admit`, {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${token}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({ name, pool: "EXTERNAL", ttlMs: 2 * 3600_000 }),
-      });
-      if (res.status === 429) {
-        const detail = (await res.json().catch(() => null)) as {
-          reason?: string;
-        } | null;
-        throw new VortexError({
-          code: "RATE_LIMITED",
-          status: 503,
-          message: `sandbox admission denied: ${detail?.reason ?? "account capacity"}`,
-        });
-      }
-      if (!res.ok) {
-        console.warn("sandbox admission endpoint failed-open", res.status);
-      }
-    } catch (err) {
-      if (err instanceof VortexError) throw err;
-      console.warn("sandbox admission unreachable — failing open", err);
-    }
+    return cfAdmit(this.env, name);
   }
 
   private async releaseAdmission(name: string): Promise<void> {
-    const url = this.env?.CF_ADMISSION_URL;
-    const token = this.env?.CF_ADMISSION_TOKEN;
-    if (!url || !token) return;
-    await fetch(`${url}/admin/sandbox/release`, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${token}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ name }),
-    }).catch(() => {});
+    return cfReleaseAdmission(this.env, name);
   }
 
   private sandbox(name: string): Promise<SandboxHandle> {
@@ -1060,6 +1072,150 @@ export class CloudflareBackend implements ComputeBackend {
   }
 }
 
+/**
+ * sandbox-sdk 1.0 backend (PILE-473/474): the lane sandbox is a DO with RPC
+ * methods (`LaneSandboxBase`) instead of the 0.12 `getSandbox` handle, so
+ * this backend talks to `SANDBOX_LANE*` bindings directly. Selected per
+ * deployment via `LANE_SDK=v1`; the 0.12 classes and bindings stay live for
+ * rollback. Lane cache mounts and worktree backups aren't wired yet — lanes
+ * on v1 fall back to the HTTP pnpm-store cache and cold continuation.
+ */
+export class LaneSandboxBackend implements ComputeBackend {
+  readonly kind = "cloudflare" as const;
+
+  constructor(
+    private ns: DurableObjectNamespace<LaneSandboxBase>,
+    private env?: AppEnv
+  ) {}
+
+  private stub(name: string): DurableObjectStub<LaneSandboxBase> {
+    return this.ns.getByName(name);
+  }
+
+  async createSandbox(opts: {
+    name: string;
+    sessionId: string;
+    organizationId: string;
+    agentLabel: string;
+    env: Record<string, string>;
+  }): Promise<ComputeSandbox> {
+    await cfAdmit(this.env, opts.name);
+    await ioTimeout(this.stub(opts.name).provision(), "lane provision");
+    return {
+      id: opts.name,
+      name: opts.name,
+      state: "started",
+      organizationId: opts.organizationId,
+      runnerEnv: opts.env,
+    };
+  }
+
+  async findSandbox(
+    sessionId: string,
+    name: string,
+    resultPath?: string
+  ): Promise<ComputeSandbox | null> {
+    const stub = this.stub(name);
+    if (await ioTimeout(stub.hasProcess(sessionId), "sandbox hasProcess")) {
+      return { id: name, name, state: "started" };
+    }
+    if (
+      resultPath &&
+      (await this.getFile({ id: name, name, state: "started" }, resultPath))
+    ) {
+      return { id: name, name, state: "started" };
+    }
+    return null;
+  }
+
+  async startRunner(
+    sandbox: ComputeSandbox,
+    sessionId: string,
+    command: string,
+    env?: Record<string, string>
+  ): Promise<void> {
+    await ioTimeout(
+      this.stub(sandbox.name).spawn({
+        processId: sessionId,
+        command,
+        env: env ?? sandbox.runnerEnv,
+      }),
+      "lane spawn"
+    );
+  }
+
+  async runnerBusy(
+    sandbox: ComputeSandbox,
+    sessionId: string
+  ): Promise<boolean> {
+    return ioTimeout(
+      this.stub(sandbox.name).sessionBusy(sessionId),
+      "lane sessionBusy"
+    ).catch(() => false);
+  }
+
+  async runnerState(
+    sandbox: ComputeSandbox,
+    sessionId: string
+  ): Promise<RunnerState> {
+    const state = await ioTimeout(
+      this.stub(sandbox.name).processState(sessionId),
+      "lane processState"
+    );
+    return state.running ? "running" : { exitCode: state.exitCode ?? 1 };
+  }
+
+  async getFile(sandbox: ComputeSandbox, path: string): Promise<string | null> {
+    return ioTimeout(
+      this.stub(sandbox.name).readFile(path),
+      "lane readFile"
+    ).catch(() => null);
+  }
+
+  async putFiles(sandbox: ComputeSandbox, files: SandboxFile[]): Promise<void> {
+    await ioTimeout(this.stub(sandbox.name).putFiles(files), "lane putFiles");
+  }
+
+  async runnerLogs(
+    sandbox: ComputeSandbox,
+    sessionId: string
+  ): Promise<string | null> {
+    const id = sessionId.replace(/[^A-Za-z0-9._-]/g, "_");
+    return ioTimeout(
+      this.stub(sandbox.name).tail(`/tmp/pile/proc/${id}.log`),
+      "lane runner log tail"
+    ).catch(() => null);
+  }
+
+  async waitForRunner(
+    sandbox: ComputeSandbox,
+    processId: string,
+    timeoutMs: number
+  ): Promise<void> {
+    const stub = this.stub(sandbox.name);
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      if (await ioTimeout(stub.probe(8787), "runner probe")) return;
+      if (Date.now() >= deadline) {
+        throw new Error(`runner process ${processId} never registered`);
+      }
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+  }
+
+  async deleteSandbox(sandbox: ComputeSandbox): Promise<void> {
+    try {
+      await ioTimeout(this.stub(sandbox.name).destroy(), "lane destroy");
+    } finally {
+      await cfReleaseAdmission(this.env, sandbox.name);
+    }
+  }
+
+  async health(): Promise<{ ok: boolean; message?: string }> {
+    return { ok: true, message: "provider=cloudflare sdk=v1" };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Selection
 // ---------------------------------------------------------------------------
@@ -1070,9 +1226,41 @@ const SANDBOX_BINDING_BY_AGENT = {
   "codex-cli": "SANDBOX_CODEX",
 } as const;
 
+const LANE_V1_BINDING_BY_AGENT = {
+  "cursor-cli": "SANDBOX_LANE_CURSOR",
+  "devin-cli": "SANDBOX_LANE_DEVIN",
+  "codex-cli": "SANDBOX_LANE_CODEX",
+} as const;
+
 export function computeBackend(env: AppEnv, agentId?: string): ComputeBackend {
   const provider = env.COMPUTE_PROVIDER ?? "daytona";
   if (provider === "cloudflare") {
+    // sandbox-sdk 1.0 lanes (PILE-473/474): LANE_SDK=v1 routes through the
+    // LaneSandbox DOs on SANDBOX_LANE* bindings. Missing binding is a config
+    // error — silently falling back to 0.12 would canary nothing.
+    if (env.LANE_SDK === "v1") {
+      const specific = agentId
+        ? (
+            LANE_V1_BINDING_BY_AGENT as Record<
+              string,
+              | "SANDBOX_LANE_CURSOR"
+              | "SANDBOX_LANE_DEVIN"
+              | "SANDBOX_LANE_CODEX"
+              | undefined
+            >
+          )[agentId]
+        : undefined;
+      const ns = (specific ? env[specific] : undefined) ?? env.SANDBOX_LANE;
+      if (!ns) {
+        throw new VortexError({
+          code: "CONFIG_ERROR",
+          status: 500,
+          message:
+            "LANE_SDK=v1 requires a SANDBOX_LANE binding (or a per-provider SANDBOX_LANE_* binding)",
+        });
+      }
+      return new LaneSandboxBackend(ns, env);
+    }
     // Per-provider image/binding first; fall back to the shared SANDBOX
     // binding so single-image self-host setups keep working.
     const specific = agentId
