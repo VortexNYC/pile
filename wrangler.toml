@@ -78,6 +78,24 @@ class_name = "DevinSandbox"
 name = "SANDBOX_CODEX"
 class_name = "CodexSandbox"
 
+# sandbox-sdk 1.0 lanes — new classes + bindings alongside 0.12 (a
+# scheduling_policy move is one-way; the old classes stay for rollback).
+[[durable_objects.bindings]]
+name = "SANDBOX_LANE"
+class_name = "LaneSandbox"
+
+[[durable_objects.bindings]]
+name = "SANDBOX_LANE_CURSOR"
+class_name = "LaneCursorSandbox"
+
+[[durable_objects.bindings]]
+name = "SANDBOX_LANE_DEVIN"
+class_name = "LaneDevinSandbox"
+
+[[durable_objects.bindings]]
+name = "SANDBOX_LANE_CODEX"
+class_name = "LaneCodexSandbox"
+
 [[containers]]
 class_name = "Sandbox"
 image = "./Dockerfile.sandbox"
@@ -101,6 +119,30 @@ class_name = "CodexSandbox"
 image = "./Dockerfile.sandbox-codex"
 max_instances = 20
 instance_type = "standard-1"
+
+[[containers]]
+class_name = "LaneSandbox"
+name = "pile-lane-v1"
+scheduling_policy = "durable_object"
+images = { lane = { dockerfile = "./Dockerfile.sandbox" } }
+
+[[containers]]
+class_name = "LaneCursorSandbox"
+name = "pile-lane-cursor-v1"
+scheduling_policy = "durable_object"
+images = { cursor = { dockerfile = "./Dockerfile.sandbox-cursor" } }
+
+[[containers]]
+class_name = "LaneDevinSandbox"
+name = "pile-lane-devin-v1"
+scheduling_policy = "durable_object"
+images = { devin = { dockerfile = "./Dockerfile.sandbox-devin" } }
+
+[[containers]]
+class_name = "LaneCodexSandbox"
+name = "pile-lane-codex-v1"
+scheduling_policy = "durable_object"
+images = { codex = { dockerfile = "./Dockerfile.sandbox-codex" } }
 
 [[queues.producers]]
 binding = "WEBHOOK_QUEUE"
@@ -126,6 +168,10 @@ new_sqlite_classes = ["Sandbox"]
 [[migrations]]
 tag = "v3"
 new_sqlite_classes = ["CursorSandbox", "DevinSandbox", "CodexSandbox"]
+
+[[migrations]]
+tag = "v4"
+new_sqlite_classes = ["LaneSandbox", "LaneCursorSandbox", "LaneDevinSandbox", "LaneCodexSandbox"]
 
 [env.production]
 name = "pile"
@@ -199,6 +245,22 @@ class_name = "DevinSandbox"
 name = "SANDBOX_CODEX"
 class_name = "CodexSandbox"
 
+[[env.production.durable_objects.bindings]]
+name = "SANDBOX_LANE"
+class_name = "LaneSandbox"
+
+[[env.production.durable_objects.bindings]]
+name = "SANDBOX_LANE_CURSOR"
+class_name = "LaneCursorSandbox"
+
+[[env.production.durable_objects.bindings]]
+name = "SANDBOX_LANE_DEVIN"
+class_name = "LaneDevinSandbox"
+
+[[env.production.durable_objects.bindings]]
+name = "SANDBOX_LANE_CODEX"
+class_name = "LaneCodexSandbox"
+
 # Production pins registry digests so `wrangler deploy` never needs a Docker
 # daemon (cloudflare-ci's sandbox has none). The Dockerfiles remain the source
 # of truth for image contents; releasing a new image is a docker-host step:
@@ -229,6 +291,30 @@ image = "registry.cloudflare.com/953346ce1b4f27fa04a76d83aeccab28/pile-codexsand
 max_instances = 20
 instance_type = "standard-1"
 
+[[env.production.containers]]
+class_name = "LaneSandbox"
+name = "pile-lane-v1"
+scheduling_policy = "durable_object"
+images = { lane = { dockerfile = "./Dockerfile.sandbox" } }
+
+[[env.production.containers]]
+class_name = "LaneCursorSandbox"
+name = "pile-lane-cursor-v1"
+scheduling_policy = "durable_object"
+images = { cursor = { dockerfile = "./Dockerfile.sandbox-cursor" } }
+
+[[env.production.containers]]
+class_name = "LaneDevinSandbox"
+name = "pile-lane-devin-v1"
+scheduling_policy = "durable_object"
+images = { devin = { dockerfile = "./Dockerfile.sandbox-devin" } }
+
+[[env.production.containers]]
+class_name = "LaneCodexSandbox"
+name = "pile-lane-codex-v1"
+scheduling_policy = "durable_object"
+images = { codex = { dockerfile = "./Dockerfile.sandbox-codex" } }
+
 [[env.production.migrations]]
 tag = "v1"
 new_sqlite_classes = ["WorkspaceDO"]
@@ -240,6 +326,10 @@ new_sqlite_classes = ["Sandbox"]
 [[env.production.migrations]]
 tag = "v3"
 new_sqlite_classes = ["CursorSandbox", "DevinSandbox", "CodexSandbox"]
+
+[[env.production.migrations]]
+tag = "v4"
+new_sqlite_classes = ["LaneSandbox", "LaneCursorSandbox", "LaneDevinSandbox", "LaneCodexSandbox"]
 
 [[env.production.queues.producers]]
 binding = "WEBHOOK_QUEUE"

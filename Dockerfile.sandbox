@@ -17,3 +17,8 @@ RUN mkdir -p /root/.local/bin \
        | CODEX_NON_INTERACTIVE=1 CODEX_INSTALL_DIR=/root/.local/bin CODEX_HOME=/root/.codex sh \
     && /root/.local/bin/codex --version
 ENV PATH="/root/.local/bin:${PATH}"
+
+# sandbox-sdk 1.0 lane classes (LaneSandbox*) invoke this shim directly; the
+# 0.12 base image's server entrypoint keeps serving the old classes. The tag
+# must match the installed sandbox-1 package version.
+COPY --from=docker.io/cloudflare/sandbox:1.0.2 /usr/local/bin/sandbox-shim /usr/local/bin/sandbox-shim

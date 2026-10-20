@@ -14,6 +14,16 @@ export class DevinSandbox extends Sandbox {}
 export class CodexSandbox extends Sandbox {}
 export { Sandbox };
 
+// sandbox-sdk 1.0 lane pools — new classes/bindings alongside the 0.12 set
+// (a scheduling_policy move is one-way, so the old classes stay for
+// rollback). Selected per-lane via LANE_SDK=v1.
+export {
+  LaneCodexSandbox,
+  LaneCursorSandbox,
+  LaneDevinSandbox,
+  LaneSandbox,
+} from "./agents/lane-sandbox.js";
+
 // The API graph is ~80 route modules — importing it at module init blows the
 // 400ms startup cap. Defer evaluation to the first request; the promise caches
 // per isolate so steady-state requests pay nothing.

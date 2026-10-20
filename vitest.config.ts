@@ -15,7 +15,10 @@ export default defineConfig({
       {
         plugins: [
           cloudflareTest({
-            wrangler: { configPath: "./wrangler.toml" },
+            // wrangler.test.toml is wrangler.toml minus the sandbox-sdk 1.0
+            // `durable_object` container entries — the pool's bundled
+            // wrangler predates that schema and would reject the parse.
+            wrangler: { configPath: "./wrangler.test.toml" },
             miniflare: {
               bindings: {
                 TEST_MIGRATIONS: migrations,
