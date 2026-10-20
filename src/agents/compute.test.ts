@@ -842,6 +842,6 @@ describe("sweepOrphanSandboxes (PILE-471)", () => {
     const { sweepOrphanSandboxes } = await import("./compute.js");
     const out = await sweepOrphanSandboxes(backend as never, stub);
     expect(out.reaped).toBe(2);
-    expect(deleted.sort()).toEqual(["s1", "s3"]);
+    expect(deleted.toSorted()).toEqual(["s1", "s3"]);
   });
 });
