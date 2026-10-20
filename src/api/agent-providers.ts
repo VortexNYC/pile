@@ -14,6 +14,7 @@ import {
 } from "../agents/credentials.js";
 import { resolveAgentEnv } from "../agents/daytona.js";
 import { getAgentProvider } from "../agents/index.js";
+import { drainDomainEvents } from "../agents/pipeline-events.js";
 import type { AgentProviderSession } from "../agents/provider.js";
 import { redactCredentialPool } from "../agents/subscription-pool.js";
 import { sha256Hex, timingSafeEqualHex } from "../global/crypto.js";
@@ -24,6 +25,7 @@ import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 import type { AgentSessionStatus } from "../types/workspace.js";
 import { captureSessionPrArtifact } from "./agent-artifacts.js";
+import { getExecutionCtx } from "./execution-ctx.js";
 import { getWorkspaceStub } from "./stub.js";
 
 const COMPUTE_PROVIDERS = new Set(["cloudflare", "daytona"]);
@@ -682,6 +684,17 @@ export function registerAgentProviderRoutes(app: OpenAPIHono<AppContext>) {
     if ("notFound" in result) {
       return c.json({ message: "Session not found" }, 404);
     }
+    // PILE-443 — provider webhooks apply terminal results; drain the
+    // domain events they emitted (e.g. substep.review) post-write.
+    const execCtx = getExecutionCtx(c);
+    execCtx?.waitUntil(
+      drainDomainEvents(
+        c.env,
+        getWorkspaceStub(c.env, organizationId),
+        organizationId,
+        execCtx
+      )
+    );
     return c.json(result);
   });
 
@@ -721,6 +734,15 @@ export function registerAgentProviderRoutes(app: OpenAPIHono<AppContext>) {
     if ("notFound" in result) {
       return c.json({ message: "Session not found" }, 404);
     }
+    const execCtx = getExecutionCtx(c);
+    execCtx?.waitUntil(
+      drainDomainEvents(
+        c.env,
+        getWorkspaceStub(c.env, organizationId),
+        organizationId,
+        execCtx
+      )
+    );
     return c.json(result);
   });
 }

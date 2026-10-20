@@ -6012,14 +6012,19 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       }
     }
 
-    // Review-gated chain — a completed non-review lane on a required
+    // Review-gated chain — a terminal non-review lane on a required
     // sub-step emits substep.review; the reviewer's verdict decides
     // whether the chain advances (pass marks it done + promotes the
     // sibling) or the chief gets paged. Review lanes are excluded so
-    // the verdict itself doesn't re-enter review.
+    // the verdict itself doesn't re-enter review. PILE-443 — failures
+    // emit too (the reviewer sees the death, not just the sweep page),
+    // and the session fields ride the payload so an external reviewer
+    // POST can name the lane + conversation it should inspect. The
+    // dedupe key is status-scoped so a failed-then-retried step still
+    // gets its completion reviewed.
     if (
       becameTerminal &&
-      newStatus === "completed" &&
+      (newStatus === "completed" || newStatus === "failed") &&
       oldSession.purpose !== "review" &&
       issue.parentId &&
       issue.required
@@ -6031,8 +6036,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           parentId: issue.parentId,
           stepKey: issue.stepKey,
           ownerAgent: issue.ownerAgent,
+          sessionId: updatedSession.id,
+          sessionStatus: newStatus,
+          conversationKey: updatedSession.conversationKey,
+          agentId: updatedSession.agentId,
         },
-        `review:${issue.id}`
+        `review:${issue.id}:${newStatus}`
       );
     }
 
@@ -7923,7 +7932,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       const openRequired = await this.getBlockingSubSteps(issue.parentId);
       if (openRequired.length > 0) {
         // Review-gated chain — a reviewer lane evaluates the completed
-        // step first; the chain only advances on a pass verdict.
+        // step first; the chain only advances on a pass verdict. The
+        // `:completed` dedupe key matches the lane-completion emit so a
+        // step reviewed once doesn't re-fire when it's marked done.
         await this.emitDomainEvent(
           "substep.review",
           {
@@ -7932,7 +7943,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
             stepKey: issue.stepKey,
             ownerAgent: issue.ownerAgent,
           },
-          `review:${issue.id}`
+          `review:${issue.id}:completed`
         );
       } else {
         await this.emitDomainEvent(

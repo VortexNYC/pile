@@ -34,6 +34,7 @@ import {
   type LaneTodo,
 } from "../agents/lane-progress.js";
 import { resolveResultSchema, sessionLabel } from "../agents/lane-result.js";
+import { drainDomainEvents } from "../agents/pipeline-events.js";
 import {
   parseStoredSecondaryRepos,
   secondaryReposSchema,
@@ -1714,6 +1715,11 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         prUrl: input.prUrl ?? null,
         branch: input.branch ?? null,
       });
+      // PILE-443 — drain the domain events the terminal write emitted.
+      const execCtx = getExecutionCtx(c);
+      execCtx?.waitUntil(
+        drainDomainEvents(c.env, stub, organizationId, execCtx)
+      );
     }
     return c.json(
       { session: toSessionResponse(session), ...(await laneUrls(session.id)) },
@@ -2467,6 +2473,9 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       identity.id
     );
 
+    // PILE-443 — drain pipeline domain events the result write emitted.
+    const execCtx = getExecutionCtx(c);
+    execCtx?.waitUntil(drainDomainEvents(c.env, stub, organizationId, execCtx));
     const activities = await stub.listAgentActivities(sessionId);
     return c.json(toSessionResponse(updated ?? session, activities));
   });
@@ -2666,6 +2675,19 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
               session.issueId,
               sessionId,
               update.result ?? session.result
+            );
+          }
+          // PILE-443 — terminal writes emit pipeline domain events
+          // (substep.review); drain now so external reviewer dispatches
+          // fire instead of waiting for the sweep.
+          if (
+            update.status === "completed" ||
+            update.status === "failed" ||
+            update.status === "canceled"
+          ) {
+            const execCtx = getExecutionCtx(c);
+            execCtx?.waitUntil(
+              drainDomainEvents(c.env, stub, organizationId, execCtx)
             );
           }
           const updated = await stub.getAgentSession(sessionId);
@@ -3276,6 +3298,9 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       identity.id
     );
 
+    // PILE-443 — drain the domain events a terminal result emitted.
+    const execCtx = getExecutionCtx(c);
+    execCtx?.waitUntil(drainDomainEvents(c.env, stub, organizationId, execCtx));
     await captureSessionPrArtifact(stub, sessionId, identity.id, polled.prUrl);
 
     const activities = await stub.listAgentActivities(sessionId);
