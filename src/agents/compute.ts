@@ -1352,7 +1352,7 @@ export class FailoverBackend implements ComputeBackend {
     return this.pick().putFiles(...a);
   }
   runnerLogs(...a: [ComputeSandbox, string]) {
-    return this.pick().runnerLogs(...a);
+    return this.pick().runnerLogs?.(...a) ?? Promise.resolve(null);
   }
   waitForRunner(...a: [ComputeSandbox, string, number]) {
     return this.pick().waitForRunner?.(...a) ?? Promise.resolve();
