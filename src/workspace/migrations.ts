@@ -1436,8 +1436,14 @@ const v100 = `CREATE TABLE IF NOT EXISTS merchant_sources (
 );
 CREATE INDEX IF NOT EXISTS merchant_sources_enabled_idx ON merchant_sources(organization_id, enabled);
 ALTER TABLE customers ADD COLUMN signal TEXT;
-ALTER TABLE customers ADD COLUMN signal_date TEXT;
-ALTER TABLE customers ADD COLUMN priority_score REAL`;
+ALTER TABLE customers ADD COLUMN signal_date TEXT`;
+
+// PILE-443 — delivery claiming: drains transition pending → delivering
+// before handling so concurrent drains (post-write waitUntil + sweep)
+// can't double-POST external endpoints. claimed_at carries the lease —
+// a claim older than the lease is treated as a crashed drainer and is
+// reclaimable.
+const v101 = `ALTER TABLE domain_events ADD COLUMN claimed_at TEXT`;
 
 const v97 = `CREATE TABLE IF NOT EXISTS lane_costs (
   session_id TEXT PRIMARY KEY,
@@ -1754,8 +1760,8 @@ export const workspaceMigrations = {
       { idx: 86, when: 86, tag: "v87", breakpoints: true },
       { idx: 87, when: 87, tag: "v88", breakpoints: true },
       { idx: 88, when: 88, tag: "v89", breakpoints: true },
-      { idx: 89, when: 89, tag: "v91", breakpoints: true },
-      { idx: 90, when: 90, tag: "v90", breakpoints: true },
+      { idx: 89, when: 89, tag: "v90", breakpoints: true },
+      { idx: 90, when: 90, tag: "v91", breakpoints: true },
       { idx: 91, when: 91, tag: "v92", breakpoints: true },
       { idx: 92, when: 92, tag: "v93", breakpoints: true },
       { idx: 93, when: 93, tag: "v94", breakpoints: true },
@@ -1765,6 +1771,7 @@ export const workspaceMigrations = {
       { idx: 97, when: 97, tag: "v98", breakpoints: true },
       { idx: 98, when: 98, tag: "v99", breakpoints: true },
       { idx: 99, when: 99, tag: "v100", breakpoints: true },
+      { idx: 100, when: 100, tag: "v101", breakpoints: true },
     ],
   },
   migrations: {
@@ -1868,5 +1875,6 @@ export const workspaceMigrations = {
     m0097: v98,
     m0098: v99,
     m0099: v100,
+    m0100: v101,
   },
 } satisfies Parameters<typeof migrate>[1];

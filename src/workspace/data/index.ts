@@ -14,6 +14,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  lt,
   lte,
   ne,
   not,
@@ -3741,21 +3742,72 @@ export async function emitDomainEvent(
     .get();
 }
 
+/** How long a `delivering` claim holds before the event is reclaimable —
+ *  a drainer that claims then dies leaves the row leased for this window
+ *  so the sweep's next pass re-enters it instead of dropping it. Sized to
+ *  the sweep cadence; well past the longest handler (a dispatch call). */
+export const DOMAIN_EVENT_CLAIM_LEASE_MS = 5 * 60 * 1000;
+
+function claimStaleBefore(): string {
+  return new Date(Date.now() - DOMAIN_EVENT_CLAIM_LEASE_MS).toISOString();
+}
+
 export function listPendingDomainEvents(
   db: WorkspaceDb,
   organizationId: string
 ) {
+  const staleBefore = claimStaleBefore();
   return db
     .select()
     .from(workspaceDomainEvents)
     .where(
       and(
         eq(workspaceDomainEvents.organizationId, organizationId),
-        eq(workspaceDomainEvents.status, "pending")
+        or(
+          eq(workspaceDomainEvents.status, "pending"),
+          and(
+            eq(workspaceDomainEvents.status, "delivering"),
+            or(
+              isNull(workspaceDomainEvents.claimedAt),
+              lt(workspaceDomainEvents.claimedAt, staleBefore)
+            )
+          )
+        )
       )
     )
     .orderBy(workspaceDomainEvents.createdAt)
     .all();
+}
+
+/** Atomically claim an event for delivery — pending → delivering in a
+ *  single conditional UPDATE, so a second concurrent drainer's UPDATE
+ *  matches no row and the external POST fires exactly once (PILE-443).
+ *  A claim older than the lease is treated as a crashed drainer and is
+ *  reclaimable. Returns true when this caller holds the claim. */
+export function claimDomainEvent(db: WorkspaceDb, id: string): boolean {
+  const nowIso = new Date().toISOString();
+  const staleBefore = claimStaleBefore();
+  const claimed = db
+    .update(workspaceDomainEvents)
+    .set({ status: "delivering", claimedAt: nowIso })
+    .where(
+      and(
+        eq(workspaceDomainEvents.id, id),
+        or(
+          eq(workspaceDomainEvents.status, "pending"),
+          and(
+            eq(workspaceDomainEvents.status, "delivering"),
+            or(
+              isNull(workspaceDomainEvents.claimedAt),
+              lt(workspaceDomainEvents.claimedAt, staleBefore)
+            )
+          )
+        )
+      )
+    )
+    .returning({ id: workspaceDomainEvents.id })
+    .get();
+  return claimed !== undefined;
 }
 
 export async function markDomainEvent(
@@ -3881,7 +3933,8 @@ export async function updateStageConfig(
   };
   if (patch.ownerAgent !== undefined) set.ownerAgent = patch.ownerAgent;
   if (patch.instructions !== undefined) set.instructions = patch.instructions;
-  if (patch.advancePolicy !== undefined) set.advancePolicy = patch.advancePolicy;
+  if (patch.advancePolicy !== undefined)
+    set.advancePolicy = patch.advancePolicy;
   if (patch.enabled !== undefined) set.enabled = patch.enabled ? 1 : 0;
   await db
     .update(workspaceStageConfigs)
@@ -4122,7 +4175,6 @@ export async function updateAgentType(
     .where(eq(workspaceAgentTypes.id, id));
   return getAgentTypeById(db, organizationId, id);
 }
-
 
 export async function deleteAgentType(
   db: WorkspaceDb,
@@ -4404,7 +4456,8 @@ export async function listLaneCosts(
   args: { agentSlug?: string; since?: string; limit?: number } = {}
 ) {
   const conds = [eq(workspaceLaneCosts.organizationId, organizationId)];
-  if (args.agentSlug) conds.push(eq(workspaceLaneCosts.agentSlug, args.agentSlug));
+  if (args.agentSlug)
+    conds.push(eq(workspaceLaneCosts.agentSlug, args.agentSlug));
   if (args.since) conds.push(gte(workspaceLaneCosts.settledAt, args.since));
   return db
     .select()
@@ -4478,13 +4531,13 @@ export async function memoryRecall(
     eq(workspaceMemory.organizationId, organizationId),
     isNull(workspaceMemory.supersedes),
   ];
-  if (query.entityType) conds.push(eq(workspaceMemory.entityType, query.entityType));
+  if (query.entityType)
+    conds.push(eq(workspaceMemory.entityType, query.entityType));
   if (query.entityId) conds.push(eq(workspaceMemory.entityId, query.entityId));
   if (query.kind) conds.push(eq(workspaceMemory.kind, query.kind));
   // Fuzzy fact search — LIKE over the fact text so "did we sweep
   // Smith?" finds corridor:smith-st without the exact entity key.
-  if (query.search)
-    conds.push(like(workspaceMemory.fact, `%${query.search}%`));
+  if (query.search) conds.push(like(workspaceMemory.fact, `%${query.search}%`));
   return db
     .select()
     .from(workspaceMemory)
@@ -5522,10 +5575,16 @@ export function updateMarketRun(
 export function listMarketRuns(
   db: WorkspaceDb,
   organizationId: string,
-  args: { vertical?: string; geo?: string; issueId?: string; limit?: number } = {}
+  args: {
+    vertical?: string;
+    geo?: string;
+    issueId?: string;
+    limit?: number;
+  } = {}
 ) {
   const conds = [eq(workspaceMarketRuns.organizationId, organizationId)];
-  if (args.vertical) conds.push(eq(workspaceMarketRuns.vertical, args.vertical));
+  if (args.vertical)
+    conds.push(eq(workspaceMarketRuns.vertical, args.vertical));
   if (args.geo) conds.push(eq(workspaceMarketRuns.geo, args.geo));
   if (args.issueId) conds.push(eq(workspaceMarketRuns.issueId, args.issueId));
   return db

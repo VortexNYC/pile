@@ -1,10 +1,10 @@
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { Issue } from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
-import { dispatchAgent } from "./index.js";
-import { REVIEW_PURPOSE } from "./review.js";
 import { decryptSecret } from "./credentials.js";
+import { dispatchAgent } from "./index.js";
 import { automationEventTarget } from "./repo-triggers.js";
+import { REVIEW_PURPOSE } from "./review.js";
 import { fireEventAutomations } from "./sweep.js";
 
 /** PILE-401/405/413 — drains the DO's domain-event outbox into agent
@@ -124,9 +124,15 @@ async function resolveOwner(
 
 /** kind="external" owners (Grokbot as chief_of_staff, a customer's own
  *  automation) get the dispatch POSTed to their endpoint instead of a
- *  pile lane — same payload contract a CfAgentProvider would receive. */
+ *  pile lane — same payload contract a CfAgentProvider would receive.
+ *  PILE-441/443 — every attempt lands an internal delivery comment on
+ *  the anchor issue (when one is passed) so failures are visible
+ *  without worker logs. A failed POST throws so awaited drains mark
+ *  the domain event `failed` and it stays replayable; waitUntil-fired
+ *  dispatches swallow the throw since the event already delivered. */
 async function dispatchExternal(
   env: WorkerEnv,
+  stub: Stub,
   owner: {
     endpointUrl: string | null;
     endpointSecret: string | null;
@@ -134,25 +140,57 @@ async function dispatchExternal(
     name: string;
   },
   payload: Record<string, unknown>,
-  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
+  ctx?: { waitUntil: (promise: Promise<unknown>) => void },
+  delivery?: { issueId: string }
 ): Promise<void> {
-  if (!owner.endpointUrl) return;
+  const endpointUrl = owner.endpointUrl;
+  if (!endpointUrl) return;
   const secret = await decryptSecret(env, owner.endpointSecret);
-  const task = fetch(owner.endpointUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(secret ? { Authorization: `Bearer ${secret}` } : {}),
-    },
-    body: JSON.stringify(payload),
-  }).then(async (res) => {
-    if (!res.ok) {
+  const eventType =
+    typeof payload.event === "string" ? payload.event : "dispatch";
+  const task = (async () => {
+    let status: number | null = null;
+    let error: string | null = null;
+    try {
+      const res = await fetch(endpointUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(secret ? { Authorization: `Bearer ${secret}` } : {}),
+        },
+        body: JSON.stringify(payload),
+      });
+      status = res.status;
+    } catch (err) {
+      error = err instanceof Error ? err.message : String(err);
+    }
+    const ok = error === null && status !== null && status < 300;
+    const outcome = ok
+      ? `delivered (HTTP ${status})`
+      : `failed (${error ?? `HTTP ${status}`})`;
+    if (!ok) {
       console.error(
-        `external dispatch to ${owner.slug} (${owner.endpointUrl}) failed: ${res.status}`
+        `external dispatch to ${owner.slug} (${endpointUrl}) ${outcome}`
       );
     }
-  });
-  if (ctx) ctx.waitUntil(task);
+    if (delivery) {
+      await stub
+        .createComment({
+          issueId: delivery.issueId,
+          body: `External dispatch \`${eventType}\` → \`${owner.slug}\`: ${outcome}`,
+          internal: true,
+          externalAuthor: "pipeline",
+          externalSource: "pipeline-runtime",
+        })
+        .catch(() => {});
+    }
+    if (!ok) {
+      throw new Error(
+        `external dispatch to ${owner.slug} (${endpointUrl}) ${outcome}`
+      );
+    }
+  })();
+  if (ctx) ctx.waitUntil(task.catch(() => {}));
   else await task;
 }
 
@@ -181,6 +219,7 @@ export async function pageChiefOfStaff(
   if (!chief || chief.kind !== "external" || !chief.endpointUrl) return;
   await dispatchExternal(
     env,
+    stub,
     chief,
     {
       event: info.event,
@@ -202,7 +241,8 @@ export async function pageChiefOfStaff(
       error: info.error ?? null,
       question: info.question ?? null,
     },
-    ctx
+    ctx,
+    info.issueId ? { issueId: info.issueId } : undefined
   );
 }
 
@@ -230,6 +270,7 @@ async function handleStageEntered(
     if (!owner.endpointUrl) return;
     await dispatchExternal(
       env,
+      stub,
       owner,
       {
         event: "record.stage_entered",
@@ -338,6 +379,7 @@ async function handleSubstepActionable(
     const parentIssue = await stub.getIssue(payload.parentId);
     await dispatchExternal(
       env,
+      stub,
       owner,
       {
         event: "substep.actionable",
@@ -352,7 +394,8 @@ async function handleSubstepActionable(
           ? { id: parentIssue.id, title: parentIssue.title }
           : null,
       },
-      ctx
+      ctx,
+      { issueId: issue.id }
     );
     return;
   }
@@ -373,8 +416,7 @@ async function handleSubstepActionable(
         ctx,
         {
           instructions: [
-            chief.jobSpec ??
-              "Triage an orphaned pipeline sub-step.",
+            chief.jobSpec ?? "Triage an orphaned pipeline sub-step.",
             "",
             `Unassigned sub-step: ${issue.title} (owner_agent "${issue.ownerAgent}" has no registered agent type)`,
             parent
@@ -587,6 +629,11 @@ export async function drainDomainEvents(
   let delivered = 0;
   for (const event of events) {
     try {
+      // Claim before handling — concurrent drains (post-write waitUntil
+      // paths + the sweep backstop) would otherwise both see the pending
+      // row and double-POST the external reviewer (PILE-443). The loser
+      // of the pending→delivering transition skips the event.
+      if (!(await stub.claimDomainEvent(event.id))) continue;
       const payload = JSON.parse(event.payload) as Record<string, unknown>;
       if (event.type === "record.stage_entered") {
         await handleStageEntered(
@@ -618,12 +665,7 @@ export async function drainDomainEvents(
           env,
           stub,
           organizationId,
-          payload as unknown as {
-            issueId: string;
-            parentId: string;
-            stepKey?: string | null;
-            ownerAgent?: string | null;
-          },
+          payload as unknown as SubstepReviewPayload,
           ctx
         );
       }
@@ -648,28 +690,186 @@ export async function drainDomainEvents(
   return delivered;
 }
 
+/** waitUntil-safe drain — the events persist regardless, so a rejected
+ *  drain is only logged, never allowed to become an unhandled rejection
+ *  on the request's execution ctx (the sweep is the backstop). */
+export function drainDomainEventsInBackground(
+  env: WorkerEnv,
+  stub: Stub,
+  organizationId: string,
+  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
+): void {
+  ctx?.waitUntil(
+    drainDomainEvents(env, stub, organizationId, ctx).catch((err: unknown) => {
+      console.error("domain event drain failed", {
+        organizationId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    })
+  );
+}
+
+interface SubstepReviewPayload {
+  issueId: string;
+  parentId: string;
+  stepKey?: string | null;
+  ownerAgent?: string | null;
+  /** The lane whose terminal write raised the event (absent on the
+   *  status-flag emit path — a human marking the step satisfied). */
+  sessionId?: string | null;
+  sessionStatus?: string | null;
+  conversationKey?: string | null;
+}
+
+/** The reviewer for a gated sub-step: a dedicated `reviewer` agent
+ *  type wins when registered; otherwise the stage owner (the stage
+ *  config's owner_agent for the record the parent links to); otherwise
+ *  chief_of_staff. Humans can't be auto-dispatched and external owners
+ *  without an endpointUrl can't be woken — both fall through to the
+ *  next candidate so a misconfigured reviewer can't stall the gate. */
+async function resolveReviewer(
+  stub: Stub,
+  parentId: string
+): Promise<Awaited<ReturnType<typeof resolveOwner>>> {
+  const record = await linkedRecord(stub, parentId);
+  const stageOwner = record
+    ? ((await stub.getStageConfig(record.entityType, record.stageKey))
+        ?.ownerAgent ?? null)
+    : null;
+  const seen = new Set<string>();
+  for (const slug of ["reviewer", stageOwner, "chief_of_staff"]) {
+    if (!slug) continue;
+    // Slug normalization mirrors agent_types lookups — "chief-of-staff"
+    // and "chief_of_staff" resolve to the same row.
+    const key = slug.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const owner = await resolveOwner(stub, slug);
+    if (!owner || owner.kind === "human") continue;
+    if (owner.kind === "external" && !owner.endpointUrl) continue;
+    return owner;
+  }
+  return null;
+}
+
 /** Review-gated chain — a completed required sub-step gets evaluated by
- *  a "reviewer" agent lane before the chain advances. Pass → the next
- *  sibling promotes (its substep.actionable fires on the status move);
- *  fail → page the chief. The gate keeps the belt from moving junk. */
+ *  a reviewer before the chain advances. An external reviewer gets the
+ *  event POSTed to its endpoint (PILE-443); an internal one runs a
+ *  verdict lane. Pass → the next sibling promotes (its
+ *  substep.actionable fires on the status move); fail → page the
+ *  chief. The gate keeps the belt from moving junk. */
 async function handleSubstepReview(
   env: WorkerEnv,
   stub: Stub,
   organizationId: string,
-  payload: {
-    issueId: string;
-    parentId: string;
-    stepKey?: string | null;
-    ownerAgent?: string | null;
-  },
+  payload: SubstepReviewPayload,
   ctx?: { waitUntil: (promise: Promise<unknown>) => void }
 ): Promise<void> {
   const issue = await stub.getIssue(payload.issueId);
   if (!issue) return;
-  const reviewer = await resolveOwner(stub, "reviewer");
-  const target = reviewer && reviewer.kind !== "human" ? reviewer : null;
-  const agentId = target?.agentId ?? "devin-cli";
   const parent = await stub.getIssue(payload.parentId);
+  const target = await resolveReviewer(stub, payload.parentId);
+  const session = payload.sessionId
+    ? {
+        id: payload.sessionId,
+        status: payload.sessionStatus ?? null,
+        agentSlug: issue.ownerAgent ?? null,
+        conversationKey: payload.conversationKey ?? null,
+      }
+    : null;
+
+  // A dead lane isn't a verdict request — the reviewer (or the chief as
+  // escalation owner) gets agent.session_failed. There's nothing to
+  // score, so internal reviewers escalate instead of getting a lane.
+  if (payload.sessionStatus === "failed") {
+    if (target?.kind === "external" && target.endpointUrl) {
+      await dispatchExternal(
+        env,
+        stub,
+        target,
+        {
+          event: "agent.session_failed",
+          organizationId,
+          issueId: issue.id,
+          parentId: payload.parentId,
+          stepKey: issue.stepKey ?? null,
+          issue: {
+            id: issue.id,
+            identifier: issue.identifier,
+            title: issue.title,
+          },
+          parent: parent
+            ? {
+                id: parent.id,
+                identifier: parent.identifier,
+                title: parent.title,
+              }
+            : null,
+          session,
+          agent: target.slug,
+          conversationKey: conversationKey(payload.parentId, target.slug),
+        },
+        ctx,
+        { issueId: issue.id }
+      );
+      return;
+    }
+    await pageChiefOfStaff(
+      env,
+      stub,
+      organizationId,
+      {
+        event: "agent.session_failed",
+        issueId: issue.id,
+        issueTitle: issue.title,
+        issueIdentifier: issue.identifier,
+        sessionId: payload.sessionId ?? undefined,
+        agentSlug: issue.ownerAgent ?? undefined,
+        conversationKey: payload.conversationKey ?? null,
+        error: "sub-step lane failed — awaiting reviewer triage",
+      },
+      ctx
+    );
+    return;
+  }
+
+  if (target?.kind === "external") {
+    // resolveReviewer filtered out endpoint-less externals, so a target
+    // here always has a URL to wake; the internal lane below is the
+    // fallback when every candidate was undispatchable.
+    await dispatchExternal(
+      env,
+      stub,
+      target,
+      {
+        event: "substep.ready_for_review",
+        organizationId,
+        issueId: issue.id,
+        parentId: payload.parentId,
+        stepKey: issue.stepKey ?? null,
+        issue: {
+          id: issue.id,
+          identifier: issue.identifier,
+          title: issue.title,
+        },
+        parent: parent
+          ? {
+              id: parent.id,
+              identifier: parent.identifier,
+              title: parent.title,
+            }
+          : null,
+        session,
+        agent: target.slug,
+        conversationKey: conversationKey(payload.parentId, target.slug),
+      },
+      ctx,
+      { issueId: issue.id }
+    );
+    return;
+  }
+
+  const agentId = target?.agentId ?? "devin-cli";
   const instructions = [
     target?.jobSpec ??
       "You are the reviewer. Evaluate the completed sub-step's output against its task: is it correct, complete, and ready to hand to the next step?",
@@ -679,7 +879,7 @@ async function handleSubstepReview(
       ? `Parent deal issue: ${parent.identifier ?? parent.id} — ${parent.title}`
       : "",
     "",
-    "Return your verdict as JSON: {\"verdict\": \"pass\"|\"fail\", \"reasons\": \"...\"}.",
+    'Return your verdict as JSON: {"verdict": "pass"|"fail", "reasons": "..."}.',
   ]
     .filter((part) => part !== "")
     .join("\n");

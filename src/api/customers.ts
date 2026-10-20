@@ -2,7 +2,7 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 
-import { drainDomainEvents } from "../agents/pipeline-events.js";
+import { drainDomainEventsInBackground } from "../agents/pipeline-events.js";
 import { createD1 } from "../global/db.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
@@ -968,8 +968,11 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     if (!customer) return notFound("Customer not found");
     // PILE-401 — stage transitions emit domain events; drain them into
     // dispatches after the write (sweep is the backstop).
-    getExecutionCtx(c)?.waitUntil(
-      drainDomainEvents(c.env, stub, organizationId, getExecutionCtx(c))
+    drainDomainEventsInBackground(
+      c.env,
+      stub,
+      organizationId,
+      getExecutionCtx(c)
     );
     return c.json(customer);
   });

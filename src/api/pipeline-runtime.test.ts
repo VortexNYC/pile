@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { MockAgentProvider } from "../agents/harness.js";
@@ -72,7 +72,10 @@ describe("pipeline runtime (PILE-401/405/413)", () => {
     admin = seeded.token;
     // PILE-437 — providerAgentId must resolve at write time; register the
     // mock the CRUD test binds.
-    registerAgentProvider("mock-scout", () => new MockAgentProvider("mock-scout"));
+    registerAgentProvider(
+      "mock-scout",
+      () => new MockAgentProvider("mock-scout")
+    );
   });
 
   it("CRUDs agent types and stage configs", async () => {
@@ -339,11 +342,7 @@ describe("pipeline runtime (PILE-401/405/413)", () => {
       admin
     );
     expect(cfg.status).toBe(200);
-    const lint = await fetch(
-      `/workspaces/${org}/pipeline/lint`,
-      {},
-      admin
-    );
+    const lint = await fetch(`/workspaces/${org}/pipeline/lint`, {}, admin);
     const lintBody = (await lint.json()) as {
       findings: Array<{ kind: string; detail: string }>;
     };
@@ -414,5 +413,213 @@ describe("pipeline runtime (PILE-401/405/413)", () => {
       env
     );
     expect(badAuth.status).toBe(401);
+  });
+
+  async function createRequiredSubStep(title: string) {
+    const parentRes = await fetch(
+      `/workspaces/${org}/issues`,
+      { method: "POST", body: JSON.stringify({ title: `${title} parent` }) },
+      admin
+    );
+    const parent = z
+      .object({ id: z.string(), status: z.string() })
+      .parse(await parentRes.json());
+    const childRes = await fetch(
+      `/workspaces/${org}/issues`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          title,
+          parentId: parent.id,
+          stepKey: `step_${crypto.randomUUID().slice(0, 6)}`,
+          required: true,
+          ownerAgent: "scout",
+        }),
+      },
+      admin
+    );
+    const child = z.object({ id: z.string() }).parse(await childRes.json());
+    return { parent, child };
+  }
+
+  async function runTerminalSubStepLane(
+    issueId: string,
+    status: "completed" | "failed",
+    conversationKey: string
+  ) {
+    const stub = getWorkspaceStub(env, org);
+    const session = await stub.createAgentSession({
+      issueId,
+      agentId: "mock-scout",
+      provider: "mock-scout",
+      actorId: "test",
+      actorType: "agent",
+      status: "running",
+      conversationKey,
+    });
+    await stub.applyAgentSessionResult(session.id, {
+      status,
+      result: status === "completed" ? "work output" : "lane exploded",
+    });
+    return session;
+  }
+
+  it("POSTs substep.ready_for_review to the external chief_of_staff once, with a delivery record on the issue (PILE-443)", async () => {
+    const endpoint = "https://chief.example.test/hook";
+    const type = await fetch(
+      `/workspaces/${org}/agent-types`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          slug: "chief_of_staff",
+          name: "Chief of Staff",
+          providerAgentId: "flue",
+          kind: "external",
+          endpointUrl: endpoint,
+          endpointSecret: "test-endpoint-secret",
+        }),
+      },
+      admin
+    );
+    expect(type.status).toBe(200);
+
+    const { parent, child } = await createRequiredSubStep("Chief gated step");
+    const session = await runTerminalSubStepLane(
+      child.id,
+      "completed",
+      `${parent.id}-scout`
+    );
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const stub = getWorkspaceStub(env, org);
+      await drainDomainEvents(env, stub, org);
+      // Exactly-once — a serial re-drain and a concurrent drain race
+      // (post-write waitUntil + sweep overlapping) must not re-fire the
+      // POST: the delivering claim is the arbiter.
+      await drainDomainEvents(env, stub, org);
+      await Promise.all([
+        drainDomainEvents(env, stub, org),
+        drainDomainEvents(env, stub, org),
+      ]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe(endpoint);
+    const headers = init.headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer test-endpoint-secret");
+    const payload = z
+      .object({
+        event: z.literal("substep.ready_for_review"),
+        issueId: z.string(),
+        parentId: z.string(),
+        issue: z.object({ id: z.string() }),
+        session: z.object({
+          id: z.string(),
+          status: z.string(),
+          conversationKey: z.string(),
+        }),
+        conversationKey: z.string(),
+      })
+      .parse(JSON.parse(init.body as string));
+    expect(payload.issueId).toBe(child.id);
+    expect(payload.issue.id).toBe(child.id);
+    expect(payload.parentId).toBe(parent.id);
+    expect(payload.session.id).toBe(session.id);
+    expect(payload.session.status).toBe("completed");
+    expect(payload.session.conversationKey).toBe(`${parent.id}-scout`);
+
+    // PILE-441 — the dispatch attempt lands on the issue as an internal
+    // delivery record.
+    const stub = getWorkspaceStub(env, org);
+    const comments = await stub.listComments(child.id);
+    const delivery = comments.find(
+      (comment) =>
+        comment.externalSource === "pipeline-runtime" &&
+        comment.body.includes("substep.ready_for_review") &&
+        comment.body.includes("delivered")
+    );
+    expect(delivery).toBeDefined();
+    expect(delivery?.internal).toBe(true);
+  });
+
+  it("POSTs agent.session_failed to the stage-owner reviewer when a gated lane dies (PILE-443)", async () => {
+    const reviewerEndpoint = "https://reviewer.example.test/hook";
+    const chiefEndpoint = "https://chief2.example.test/hook";
+    for (const [slug, endpointUrl] of [
+      ["stage_reviewer", reviewerEndpoint],
+      ["chief_of_staff", chiefEndpoint],
+    ] as const) {
+      const type = await fetch(
+        `/workspaces/${org}/agent-types`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            slug,
+            name: slug,
+            providerAgentId: "flue",
+            kind: "external",
+            endpointUrl,
+            endpointSecret: null,
+          }),
+        },
+        admin
+      );
+      expect(type.status).toBe(200);
+    }
+
+    const { parent, child } = await createRequiredSubStep("Failed gated step");
+    // The stage owner reviews first — point the parent's stage at the
+    // external reviewer so the failure POST goes to it, not the chief.
+    const cfg = await fetch(
+      `/workspaces/${org}/stage-configs`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          entityType: "issue",
+          status: parent.status,
+          ownerAgent: "stage_reviewer",
+        }),
+      },
+      admin
+    );
+    expect(cfg.status).toBe(200);
+
+    await runTerminalSubStepLane(child.id, "failed", `${parent.id}-scout`);
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const stub = getWorkspaceStub(env, org);
+      await drainDomainEvents(env, stub, org);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe(reviewerEndpoint);
+    const payload = JSON.parse(init.body as string) as {
+      event: string;
+      issueId: string;
+      session: { status: string } | null;
+    };
+    expect(payload.event).toBe("agent.session_failed");
+    expect(payload.issueId).toBe(child.id);
+    expect(payload.session?.status).toBe("failed");
   });
 });

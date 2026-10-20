@@ -28,10 +28,7 @@ import {
 import { getLaneDbProvider, type LaneDbRef } from "./lane-db.js";
 import { reapLaneGithubTokens } from "./lane-github-token.js";
 import { nudgeLane } from "./nudge.js";
-import {
-  drainDomainEvents,
-  pageChiefOfStaff,
-} from "./pipeline-events.js";
+import { drainDomainEvents, pageChiefOfStaff } from "./pipeline-events.js";
 import type {
   AgentProvider,
   AgentProviderSession,
@@ -1647,20 +1644,15 @@ export async function sweepAgentSessions(
                     null,
                   issueId: session.issueId ?? null,
                   provider:
-                    (session as { provider?: string | null }).provider ??
-                    null,
+                    (session as { provider?: string | null }).provider ?? null,
                   effort:
                     (session as { effort?: string | null }).effort ?? null,
                   status: polled.status,
                   createdAt: session.createdAt ?? settledAt,
                   settledAt,
-                  durationMs: Math.max(
-                    0,
-                    Date.parse(settledAt) - createdMs
-                  ),
+                  durationMs: Math.max(0, Date.parse(settledAt) - createdMs),
                   attempts:
-                    (session as { attempts?: number | null }).attempts ??
-                    1,
+                    (session as { attempts?: number | null }).attempts ?? 1,
                 });
               } catch {
                 // Cost recording is best-effort.
@@ -1679,8 +1671,9 @@ export async function sweepAgentSessions(
                       : polled.result;
                   verdict =
                     typeof parsed === "object" && parsed !== null
-                      ? ((parsed as Record<string, unknown>).verdict as
-                          string | undefined) ?? null
+                      ? (((parsed as Record<string, unknown>).verdict as
+                          | string
+                          | undefined) ?? null)
                       : null;
                 } catch {
                   verdict = null;
@@ -1697,11 +1690,9 @@ export async function sweepAgentSessions(
                   const open = await stub
                     .getIssueChildren(step.parentId)
                     .then((kids) =>
-                      kids.filter(
-                        (k) => k.required && k.status === "backlog"
-                      )
+                      kids.filter((k) => k.required && k.status === "backlog")
                     );
-                  const next = open.sort((a, b) =>
+                  const next = open.toSorted((a, b) =>
                     (a.createdAt ?? "").localeCompare(b.createdAt ?? "")
                   )[0];
                   if (next) {
@@ -1746,23 +1737,37 @@ export async function sweepAgentSessions(
             }
             if (polled.status === "failed") {
               await ingestFailedAgentSession(env, id, session, polled);
-              await pageChiefOfStaff(
-                env,
-                stub,
-                id,
-                {
-                  event: "agent.session_failed",
-                  issueId: session.issueId,
-                  sessionId: session.id,
-                  agentSlug: session.agentId ?? undefined,
-                  conversationKey: session.conversationKey ?? null,
-                  error:
-                    typeof polled.result === "string"
-                      ? polled.result
-                      : undefined,
-                },
-                ctx
+              // PILE-443 — a required sub-step's lane death rides the
+              // substep.review event to the reviewer (stage owner →
+              // chief fallback). Paging the chief here too would
+              // double-POST the endpoint.
+              const failedStep = session.issueId
+                ? await stub.getIssue(session.issueId).catch(() => null)
+                : null;
+              const reviewCovers = Boolean(
+                failedStep?.parentId &&
+                failedStep.required &&
+                session.purpose !== REVIEW_PURPOSE
               );
+              if (!reviewCovers) {
+                await pageChiefOfStaff(
+                  env,
+                  stub,
+                  id,
+                  {
+                    event: "agent.session_failed",
+                    issueId: session.issueId,
+                    sessionId: session.id,
+                    agentSlug: session.agentId ?? undefined,
+                    conversationKey: session.conversationKey ?? null,
+                    error:
+                      typeof polled.result === "string"
+                        ? polled.result
+                        : undefined,
+                  },
+                  ctx
+                );
+              }
               if (polled.infraFailure) {
                 await retryDeadLane(
                   env,
@@ -1911,6 +1916,15 @@ export async function sweepAgentSessions(
           sessions.slice(i, i + SWEEP_FANOUT).map(sweepSession)
         );
       }
+      // PILE-443 — poll writes emit domain events (substep.review on
+      // lane completion/failure). Drain once more so the reviewer's
+      // POST fires this pass instead of waiting a sweep.
+      await drainDomainEvents(env, stub, id, ctx).catch((err: unknown) => {
+        console.error("post-poll domain event drain failed", {
+          organizationId: id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
     } catch (err) {
       console.error("agent session sweep failed", {
         organizationId: id,

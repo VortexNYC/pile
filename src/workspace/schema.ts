@@ -705,7 +705,9 @@ export const workspaceCustomerTiers = sqliteTable(
     // never re-derived on rename. Templates/configs bind to this.
     key: text("key" as string),
     // "active" | "terminal" — Passed/Lost close the pipeline.
-    type: text("type" as string).notNull().default("active"),
+    type: text("type" as string)
+      .notNull()
+      .default("active"),
     color: text("color" as string),
     position: integer("position" as string)
       .notNull()
@@ -751,7 +753,9 @@ export const workspaceMarketRuns = sqliteTable(
     producedCount: integer("produced_count" as string)
       .notNull()
       .default(0),
-    status: text("status" as string).notNull().default("running"),
+    status: text("status" as string)
+      .notNull()
+      .default("running"),
     issueId: text("issue_id" as string),
     createdBySlug: text("created_by_slug" as string),
     sourceSessionId: text("source_session_id" as string),
@@ -777,12 +781,16 @@ export const workspaceCustomerContacts = sqliteTable(
     id: text("id" as string).primaryKey(),
     organizationId: text("organization_id" as string).notNull(),
     customerId: text("customer_id" as string).notNull(),
-    type: text("type" as string).notNull().default("business_channel"),
+    type: text("type" as string)
+      .notNull()
+      .default("business_channel"),
     role: text("role" as string),
     channel: text("channel" as string).notNull(),
     value: text("value" as string).notNull(),
     label: text("label" as string),
-    status: text("status" as string).notNull().default("candidate"),
+    status: text("status" as string)
+      .notNull()
+      .default("candidate"),
     confidence: text("confidence" as string),
     source: text("source" as string),
     evidenceUri: text("evidence_uri" as string),
@@ -810,15 +818,25 @@ export const workspaceMerchantSources = sqliteTable(
     // socrata | usaspending | sam | opencorporates | places | serper
     kind: text("kind" as string).notNull(),
     // JSON — domain/dataset/params/field-map per kind
-    config: text("config" as string).notNull().default("{}"),
+    config: text("config" as string)
+      .notNull()
+      .default("{}"),
     cursorField: text("cursor_field" as string),
     cursorValue: text("cursor_value" as string),
     // license_pending | corp_filing | award | violation | registration
-    signal: text("signal" as string).notNull().default("registration"),
-    cadence: text("cadence" as string).notNull().default("daily"),
-    enabled: integer("enabled" as string).notNull().default(1),
+    signal: text("signal" as string)
+      .notNull()
+      .default("registration"),
+    cadence: text("cadence" as string)
+      .notNull()
+      .default("daily"),
+    enabled: integer("enabled" as string)
+      .notNull()
+      .default(1),
     lastRunAt: text("last_run_at" as string),
-    runCount: integer("run_count" as string).notNull().default(0),
+    runCount: integer("run_count" as string)
+      .notNull()
+      .default(0),
     createdAt: text("created_at" as string).notNull(),
   },
   (table) => [
@@ -839,7 +857,9 @@ export const workspaceCustomerStatuses = sqliteTable(
     // never re-derived on rename. Templates/configs bind to this.
     key: text("key" as string),
     // "active" | "terminal" — Passed/Lost close the pipeline.
-    type: text("type" as string).notNull().default("active"),
+    type: text("type" as string)
+      .notNull()
+      .default("active"),
     color: text("color" as string),
     position: integer("position" as string)
       .notNull()
@@ -1457,7 +1477,7 @@ export const workspaceDomainEvents = sqliteTable(
     payload: text("payload" as string).notNull(),
     dedupeKey: text("dedupe_key" as string),
     status: text("status" as string, {
-      enum: ["pending", "delivered", "failed"],
+      enum: ["pending", "delivering", "delivered", "failed"],
     })
       .notNull()
       .default("pending"),
@@ -1467,6 +1487,7 @@ export const workspaceDomainEvents = sqliteTable(
       .default(0),
     createdAt: text("created_at" as string).notNull(),
     deliveredAt: text("delivered_at" as string),
+    claimedAt: text("claimed_at" as string),
   },
   (table) => [
     index("domain_events_pending_idx" as string).on(
@@ -1574,7 +1595,9 @@ export const workspaceLaneCosts = sqliteTable(
     createdAt: text("created_at" as string).notNull(),
     settledAt: text("settled_at" as string).notNull(),
     durationMs: integer("duration_ms" as string).notNull(),
-    attempts: integer("attempts" as string).notNull().default(1),
+    attempts: integer("attempts" as string)
+      .notNull()
+      .default(1),
   },
   (table) => [
     index("lane_costs_agent_idx" as string).on(
@@ -1598,7 +1621,9 @@ export const workspaceAgentTypes = sqliteTable(
     providerAgentId: text("provider_agent_id" as string).notNull(),
     // "agent" runs a provider lane; "human" is a person-owned step —
     // resolves the owner slug for lint but is never dispatched.
-    kind: text("kind" as string).notNull().default("agent"),
+    kind: text("kind" as string)
+      .notNull()
+      .default("agent"),
     // kind="external" — the webhook pile POSTs dispatches to.
     endpointUrl: text("endpoint_url" as string),
     // Bearer the receiver verifies — encrypted at rest like provider keys.

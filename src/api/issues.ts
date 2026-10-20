@@ -15,7 +15,7 @@ import {
   inheritTeamDefaultRepo,
 } from "../agents/index.js";
 import { resolveResultSchema } from "../agents/lane-result.js";
-import { drainDomainEvents } from "../agents/pipeline-events.js";
+import { drainDomainEventsInBackground } from "../agents/pipeline-events.js";
 import {
   notePlanSource,
   planLaneOptions,
@@ -2175,8 +2175,11 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     );
     // PILE-413 — sub-step lifecycle events (actionable, all-required-done)
     // drain into dispatches + stage policy here; the sweep is the backstop.
-    getExecutionCtx(c)?.waitUntil(
-      drainDomainEvents(c.env, stub, organizationId, getExecutionCtx(c))
+    drainDomainEventsInBackground(
+      c.env,
+      stub,
+      organizationId,
+      getExecutionCtx(c)
     );
     return c.json(issue, 200);
   });
