@@ -1064,9 +1064,7 @@ export function computeBackend(env: AppEnv, agentId?: string): ComputeBackend {
 export async function sweepOrphanSandboxes(
   backend: ComputeBackend,
   stub: {
-    getAgentSession(
-      id: string
-    ): Promise<{ status: string } | null | undefined>;
+    getAgentSession(id: string): Promise<{ status: string } | null | undefined>;
   },
   opts: { limit?: number } = {}
 ): Promise<{ reaped: number; checked: number }> {

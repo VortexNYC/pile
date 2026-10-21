@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { flattenStatements } from "./identity.js";
 import { adminRole, guestRole, memberRole, ownerRole } from "./access.js";
+import { flattenStatements } from "./identity.js";
 
 // The api-key minting clamp (middleware) strips any grant that is not in the
 // member's role statements — `agent` must be a declared resource on the human

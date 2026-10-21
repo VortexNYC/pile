@@ -11,8 +11,8 @@ describe("parseFixResult (PILE-476)", () => {
     expect(parsed.detail).toBe("x-rescue-1");
   });
   it("still maps unknown outcomes to failed", () => {
-    expect(
-      parseFixResult(JSON.stringify({ outcome: "weird" })).outcome
-    ).toBe("failed");
+    expect(parseFixResult(JSON.stringify({ outcome: "weird" })).outcome).toBe(
+      "failed"
+    );
   });
 });
