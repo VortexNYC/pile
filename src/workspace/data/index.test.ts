@@ -62,7 +62,6 @@ import {
   setDocumentPermission,
   setSpacePermission,
   revokeSpacePermission,
-  listSpacePermissions,
   updateDocument,
   updateDocumentSpace,
   createCustomer,
@@ -2090,7 +2089,6 @@ describe("space permissions — closed-ACL precedence (PILE-447)", () => {
 describe("agent session scoping (PILE-453)", () => {
   it("listAgentSessions filters by agentSlug via agent_types", async () => {
     await withDb(async (db) => {
-      const { listAgentSessions } = await import("./index.js");
       db.insert(workspaceAgentTypes)
         .values([
           {
