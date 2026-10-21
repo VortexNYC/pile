@@ -2042,7 +2042,11 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     );
     if (isSummaryQuery(query.summary)) {
       const rows = await stub.listAgentSessionSummaries({
-        issueId: query.issueId,
+        issueId:
+          query.issueId === undefined
+            ? undefined
+            : await resolveIssueRef(stub, query.issueId),
+        agentSlug: query.agentSlug,
         limit: query.limit ? Number(query.limit) : undefined,
         viewer,
       });

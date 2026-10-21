@@ -447,7 +447,17 @@ function IssuesList() {
           <h2 className="text-sm font-medium text-kumo-subtle px-1">
             Sessions
           </h2>
-          <SessionsList />
+          <SessionsList
+            groupBy="issue"
+            groupLabels={Object.fromEntries(
+              allIssues.map((issue) => [
+                issue.id,
+                issue.identifier
+                  ? `${issue.identifier} — ${issue.title}`
+                  : issue.title,
+              ])
+            )}
+          />
         </div>
       ) : null}
     </Page>
