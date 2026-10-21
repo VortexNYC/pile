@@ -5889,15 +5889,32 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       // VTX-621 — a provider capacity death parks the whole agent type
       // until its reset instead of every lane burning retries into the
       // same wall. infraFailure marks it retry-eligible; the sweep lifts
-      // the pause once the reason's timestamp passes.
+      // the pause once the reason's timestamp passes. An existing
+      // operator/spend-cap pause (a reason without the prefix) is left
+      // alone — a rate-limit death must not overwrite or lift it.
       if (result.rateLimited) {
         set.infraFailure = 1;
-        await data
-          .upsertAgentPause(this.db, this.organizationId, oldSession.agentId, {
-            reason: `${RATE_LIMIT_PAUSE_PREFIX}${new Date(Date.now() + RATE_LIMIT_HOLD_MS).toISOString()}`,
-            createdBy: "system",
-          })
-          .catch(() => {});
+        const existingPause = data.getAgentPause(
+          this.db,
+          this.organizationId,
+          oldSession.agentId
+        );
+        if (
+          !existingPause ||
+          existingPause.reason?.startsWith(RATE_LIMIT_PAUSE_PREFIX)
+        ) {
+          await data
+            .upsertAgentPause(
+              this.db,
+              this.organizationId,
+              oldSession.agentId,
+              {
+                reason: `${RATE_LIMIT_PAUSE_PREFIX}${new Date(Date.now() + RATE_LIMIT_HOLD_MS).toISOString()}`,
+                createdBy: "system",
+              }
+            )
+            .catch(() => {});
+        }
       }
       if (result.result !== undefined) set.result = result.result;
       if (result.url !== undefined) set.url = result.url;
@@ -5968,6 +5985,27 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }
     if (result.infraFailure !== undefined)
       set.infraFailure = result.infraFailure ? 1 : 0;
+    // VTX-621 — same rate-limit park as the issue-less path above; lanes
+    // always carry an issue, so this is the branch that actually runs.
+    if (result.rateLimited) {
+      set.infraFailure = 1;
+      const existingPause = data.getAgentPause(
+        this.db,
+        this.organizationId,
+        oldSession.agentId
+      );
+      if (
+        !existingPause ||
+        existingPause.reason?.startsWith(RATE_LIMIT_PAUSE_PREFIX)
+      ) {
+        await data
+          .upsertAgentPause(this.db, this.organizationId, oldSession.agentId, {
+            reason: `${RATE_LIMIT_PAUSE_PREFIX}${new Date(Date.now() + RATE_LIMIT_HOLD_MS).toISOString()}`,
+            createdBy: "system",
+          })
+          .catch(() => {});
+      }
+    }
     if (result.result !== undefined) set.result = result.result;
     if (result.url !== undefined) set.url = result.url;
     if (result.providerSessionId !== undefined)

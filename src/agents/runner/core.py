@@ -1814,7 +1814,12 @@ def fail_result(error):
 # at 6:05 PM", codex/claude 429s) are retryable-after-reset, not task or
 # infra failures — the flag lets the poll/sweep path hold the lane instead
 # of instantly burning the retry budget against a hard provider limit.
-RATE_LIMIT_RE = re.compile(r'rate.?limit|too many requests|429|usage limit|resets? at \d', re.I)
+# Strong phrases only — a bare '429' or 'resets at N' fires on task output
+# about a rate limiter, not on a provider capacity death.
+RATE_LIMIT_RE = re.compile(
+    r'rate.?limits?|too many requests|usage limit|quota exceeded|reached .{0,40}limit',
+    re.I,
+)
 
 
 def is_rate_limited(error):

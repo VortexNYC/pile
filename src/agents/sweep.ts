@@ -594,7 +594,15 @@ async function retryDeadLane(
   cause: string,
   ctx?: { waitUntil: (promise: Promise<unknown>) => void }
 ): Promise<void> {
-  if ((session.retryCount ?? 0) >= MAX_AUTO_RETRIES) return;
+  // VTX-621 — a rate-limit window parks retries instead of consuming the
+  // budget or tripping the breakers: the pause row is the capacity signal,
+  // and a provider capacity death is not a substrate failure.
+  const pause = await stub.getAgentPause(session.agentId).catch(() => null);
+  const rateLimitPaused = Boolean(
+    pause?.reason?.startsWith(RATE_LIMIT_PAUSE_PREFIX)
+  );
+  if ((session.retryCount ?? 0) >= MAX_AUTO_RETRIES && !rateLimitPaused)
+    return;
   // PILE-476 — per-issue breaker: cap failed starts for the same issue per
   // hour so a doomed lane stops burning spawn attempts. Distinct from the
   // fleet/agent breakers — those catch substrate outages, this catches a
@@ -609,7 +617,7 @@ async function retryDeadLane(
       TERMINAL_STATUSES.has(s.status) &&
       new Date(s.createdAt).getTime() > hourAgo
   ).length;
-  if (failedStarts >= 3) {
+  if (failedStarts >= 3 && !rateLimitPaused) {
     await stub
       .addAgentActivity({
         sessionId: session.id,
@@ -624,7 +632,10 @@ async function retryDeadLane(
   // Fleet-wide breaker: during a substrate outage every retry spends a spawn
   // attempt on the thing that's failing. Per-agent streaks miss a partial
   // outage (successes interleave), so this looks across all agents.
-  if ((await fleetInfraStreak(stub)) >= FLEET_UNHEALTHY_STREAK) {
+  if (
+    (await fleetInfraStreak(stub)) >= FLEET_UNHEALTHY_STREAK &&
+    !rateLimitPaused
+  ) {
     await stub.addAgentActivity({
       sessionId: session.id,
       actorId: session.actorId,
@@ -638,7 +649,7 @@ async function retryDeadLane(
   // orphaned is retried/resolved through requestPrReview instead (PILE-445).
   if (session.purpose === REVIEW_PURPOSE) return;
   const streak = await providerInfraStreak(stub, session.agentId);
-  if (streak >= PROVIDER_UNHEALTHY_STREAK) {
+  if (streak >= PROVIDER_UNHEALTHY_STREAK && !rateLimitPaused) {
     await stub.addAgentActivity({
       sessionId: session.id,
       actorId: session.actorId,
@@ -654,7 +665,6 @@ async function retryDeadLane(
     // hold (waiting + paused) instead of skipping outright: a rate-limit
     // or operator pause must not strand the lane permanently — the hold
     // drains on resume through releasePausedSessions.
-    const pause = await stub.getAgentPause(session.agentId).catch(() => null);
     if (pause) {
       await stub.addAgentActivity({
         sessionId: session.id,
@@ -1452,15 +1462,18 @@ export async function sweepAgentSessions(
             ? Date.parse(pause.reason.slice(RATE_LIMIT_PAUSE_PREFIX.length))
             : NaN;
         if (!Number.isFinite(until) || until > now) continue;
-        await stub
+        // Drain only when this pass won the delete — overlapping passes
+        // must not both release the same holds.
+        const resumed = await stub
           .resumeAgentType(pause.agentId, {
             actorId: "pile-sweep",
             actorType: "system",
           })
           .catch(() => false);
-        await releasePausedSessions(env, stub, id, pause.agentId, ctx).catch(
-          () => []
-        );
+        if (resumed)
+          await releasePausedSessions(env, stub, id, pause.agentId, ctx).catch(
+            () => []
+          );
       }
       const sessions = [
         ...(await stub.listAgentSessions({ status: "running" })),
