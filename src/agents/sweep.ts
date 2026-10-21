@@ -780,6 +780,7 @@ async function promoteQueuedSessions(
   // write was lost mid-flight (PILE-260).
   const retriesCache = new Map<string, AgentSession[]>();
   const pauseCache = new Map<string, boolean>();
+  const orphanDrainTried = new Set<string>();
   const retriesFor = async (deadId: string): Promise<AgentSession[]> => {
     const cached = retriesCache.get(deadId);
     if (cached) return cached;
@@ -799,10 +800,6 @@ async function promoteQueuedSessions(
     // human answer, not queued: no promote, no orphan rescue. The respond
     // route resumes it (or keeps it waiting when queuedAfter is also set).
     if (session.awaitingActivityId) continue;
-    // PILE-420 — operator pause holds (`paused`): not queue-parked, so the
-    // orphan-flip and edge promotion must leave them alone. Only the
-    // resume drain (releasePausedSessions) releases them.
-    if (session.paused === 1) continue;
     // PILE-452 — promotion is a dispatch: while the agent type is paused a
     // queued lane stays parked instead of going live. The resume drain
     // calls promoteQueuedSession directly after deleting the pause row.
@@ -811,6 +808,31 @@ async function promoteQueuedSessions(
       paused =
         (await stub.getAgentPause(session.agentId).catch(() => null)) != null;
       pauseCache.set(session.agentId, paused);
+    }
+    // PILE-420 — operator pause holds (`paused`): not queue-parked, so the
+    // orphan-flip and edge promotion must leave them alone while the pause
+    // row lives. A hold whose row is already gone is orphaned — resume's
+    // drain is bounded per call, so a backlog bigger than one call never
+    // finishes without a driver. This pass is the driver: drain a bounded
+    // slice per agentId per pass (VTX-612).
+    if (session.paused === 1) {
+      if (paused) continue;
+      if (!orphanDrainTried.has(session.agentId)) {
+        orphanDrainTried.add(session.agentId);
+        await releasePausedSessions(
+          env,
+          stub,
+          organizationId,
+          session.agentId,
+          ctx
+        ).catch((err: unknown) => {
+          console.error("orphaned pause-hold drain failed", {
+            agentId: session.agentId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+      }
+      continue;
     }
     if (paused) continue;
     if (!session.queuedAfter) {
@@ -958,6 +980,11 @@ async function promoteQueuedSession(
     ctx,
     {
       promoteSessionId: session.id,
+      // Review lanes dispatch concurrent with the issue's work lane
+      // (PILE-273); the parked row keeps `purpose` but the conflict gate is
+      // option-driven, so re-declare it on promote or a live work lane
+      // bounces the release with CONFLICT.
+      concurrent: session.purpose === "review",
       secondaryRepos: parseStoredSecondaryRepos(session.secondaryRepos),
     }
   );
