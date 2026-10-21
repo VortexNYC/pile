@@ -277,33 +277,38 @@ function fakeSandbox(
   };
 }
 
-describe("LaneSandboxBackend (sandbox-sdk 1.0)", () => {
-  function fakeLaneNs() {
-    const calls: string[] = [];
-    const stub = {
-      provision: vi.fn(async () => {}),
-      spawn: vi.fn(async (o: { processId: string; command: string }) => {
-        calls.push(`spawn:${o.processId}:${o.command}`);
-      }),
-      hasProcess: vi.fn(async () => true),
-      processState: vi.fn(async (): Promise<import('./lane-sandbox.js').LaneProcessState> => ({ running: true, exitCode: null })),
-      sessionBusy: vi.fn(async () => false),
-      readFile: vi.fn(async () => null),
-      putFiles: vi.fn(async () => {}),
-      tail: vi.fn(async () => "tail-bytes"),
-      probe: vi.fn(async () => true),
-      destroy: vi.fn(async () => {}),
-    };
-    const ns = {
-      getByName: vi.fn(() => stub),
-    };
-    return {
-      ns: ns as unknown as AppEnv["SANDBOX_LANE"],
-      stub,
-      calls,
-    };
-  }
+function fakeLaneNs() {
+  const calls: string[] = [];
+  const stub = {
+    provision: vi.fn(async () => {}),
+    spawn: vi.fn(async (o: { processId: string; command: string }) => {
+      calls.push(`spawn:${o.processId}:${o.command}`);
+    }),
+    hasProcess: vi.fn(async () => true),
+    processState: vi.fn(
+      async (): Promise<import("./lane-sandbox.js").LaneProcessState> => ({
+        running: true,
+        exitCode: null,
+      })
+    ),
+    sessionBusy: vi.fn(async () => false),
+    readFile: vi.fn(async () => null),
+    putFiles: vi.fn(async () => {}),
+    tail: vi.fn(async () => "tail-bytes"),
+    probe: vi.fn(async () => true),
+    destroy: vi.fn(async () => {}),
+  };
+  const ns = {
+    getByName: vi.fn(() => stub),
+  };
+  return {
+    ns: ns as unknown as AppEnv["SANDBOX_LANE"],
+    stub,
+    calls,
+  };
+}
 
+describe("LaneSandboxBackend (sandbox-sdk 1.0)", () => {
   it("LANE_SDK=v1 selects the lane backend on SANDBOX_LANE*", () => {
     const { ns } = fakeLaneNs();
     const env = {

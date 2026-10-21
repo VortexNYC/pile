@@ -6,7 +6,11 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { WorkerEnv } from "../../platform/middleware.js";
 import type { WorkspaceDO } from "../durable-object.js";
 import { workspaceSchema } from "../schema-map.js";
-import { workspaceAgentSessions, workspaceAgentTypes, workspaceIssues } from "../schema.js";
+import {
+  workspaceAgentSessions,
+  workspaceAgentTypes,
+  workspaceIssues,
+} from "../schema.js";
 import {
   hiddenIssueCondition,
   type AgentSessionInput,
@@ -58,7 +62,6 @@ import {
   setDocumentPermission,
   setSpacePermission,
   revokeSpacePermission,
-  listSpacePermissions,
   updateDocument,
   updateDocumentSpace,
   createCustomer,
@@ -2057,38 +2060,28 @@ describe("space permissions — closed-ACL precedence (PILE-447)", () => {
       setDocumentPermission(db, org, closedDoc.id, "vip-1", "user", "view");
 
       // before any grant: hidden
-      expect(
-        documentAccessLevel(db, gapDoc.id, "member-1", [])
-      ).toBeNull();
+      expect(documentAccessLevel(db, gapDoc.id, "member-1", [])).toBeNull();
       expect(
         listDocumentsVisibleTo(db, org, "member-1", []).map((d) => d.id)
       ).not.toContain(gapDoc.id);
 
       // space grant opens the gap doc…
       setSpacePermission(db, org, space.id, "member-1", "user", "view");
-      expect(documentAccessLevel(db, gapDoc.id, "member-1", [])).toBe(
-        "view"
-      );
+      expect(documentAccessLevel(db, gapDoc.id, "member-1", [])).toBe("view");
       expect(
         listDocumentsVisibleTo(db, org, "member-1", []).map((d) => d.id)
       ).toContain(gapDoc.id);
 
       // …but does NOT widen the closed doc's ACL — closed-ACL precedence
-      expect(
-        documentAccessLevel(db, closedDoc.id, "member-1", [])
-      ).toBeNull();
+      expect(documentAccessLevel(db, closedDoc.id, "member-1", [])).toBeNull();
       expect(
         listDocumentsVisibleTo(db, org, "member-1", []).map((d) => d.id)
       ).not.toContain(closedDoc.id);
-      expect(documentAccessLevel(db, closedDoc.id, "vip-1", [])).toBe(
-        "view"
-      );
+      expect(documentAccessLevel(db, closedDoc.id, "vip-1", [])).toBe("view");
 
       // revoke → gap doc hidden again
       revokeSpacePermission(db, space.id, "member-1");
-      expect(
-        documentAccessLevel(db, gapDoc.id, "member-1", [])
-      ).toBeNull();
+      expect(documentAccessLevel(db, gapDoc.id, "member-1", [])).toBeNull();
     });
   });
 });
@@ -2096,7 +2089,6 @@ describe("space permissions — closed-ACL precedence (PILE-447)", () => {
 describe("agent session scoping (PILE-453)", () => {
   it("listAgentSessions filters by agentSlug via agent_types", async () => {
     await withDb(async (db) => {
-      const { listAgentSessions } = await import("./index.js");
       db.insert(workspaceAgentTypes)
         .values([
           {

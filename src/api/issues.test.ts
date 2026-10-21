@@ -1645,9 +1645,7 @@ describe("possible duplicates on create (PILE-163)", () => {
       token
     );
     expect(createRes.status).toBe(201);
-    const issue = z
-      .object({ id: z.string() })
-      .parse(await createRes.json());
+    const issue = z.object({ id: z.string() }).parse(await createRes.json());
 
     const assignRes = await fetch(
       `/workspaces/${organizationId}/issues/${issue.id}/assign`,

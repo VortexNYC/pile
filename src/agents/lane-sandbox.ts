@@ -7,11 +7,7 @@
 // run finish" already lives in the result file the runner writes — the
 // sentinel only needs to answer "is the wrapper still alive".
 import { DurableObject } from "cloudflare:workers";
-import {
-  DirectoryBackup,
-  Files,
-  type DirectoryBackupRecord,
-} from "sandbox-1";
+import { DirectoryBackup, Files, type DirectoryBackupRecord } from "sandbox-1";
 
 import type { AppEnv } from "../types/env.js";
 import type { SandboxFile } from "./compute.js";
