@@ -5526,10 +5526,16 @@ export function updateMarketRun(
 export function listMarketRuns(
   db: WorkspaceDb,
   organizationId: string,
-  args: { vertical?: string; geo?: string; issueId?: string; limit?: number } = {}
+  args: {
+    vertical?: string;
+    geo?: string;
+    issueId?: string;
+    limit?: number;
+  } = {}
 ) {
   const conds = [eq(workspaceMarketRuns.organizationId, organizationId)];
-  if (args.vertical) conds.push(eq(workspaceMarketRuns.vertical, args.vertical));
+  if (args.vertical)
+    conds.push(eq(workspaceMarketRuns.vertical, args.vertical));
   if (args.geo) conds.push(eq(workspaceMarketRuns.geo, args.geo));
   if (args.issueId) conds.push(eq(workspaceMarketRuns.issueId, args.issueId));
   return db
