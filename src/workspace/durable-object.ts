@@ -2820,6 +2820,28 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         gateOverride = { reason: patch.stageGateOverride.reason, blocked };
       }
     }
+    // Validate custom-field values before any write — a bad value rejects
+    // the whole patch instead of leaving a half-applied record (same
+    // pre-flight contract as the importer's assertFieldValuesValid pass).
+    if (customFields && Object.keys(customFields).length > 0) {
+      try {
+        data.assertFieldValuesValid(
+          this.db,
+          this.organizationId,
+          "customer",
+          customFields
+        );
+      } catch (error) {
+        if (error instanceof data.FieldValueError) {
+          throw new VortexError({
+            code: "BAD_REQUEST",
+            status: 400,
+            message: error.message,
+          });
+        }
+        throw error;
+      }
+    }
     const customer = data.updateCustomer(
       this.db,
       this.organizationId,
@@ -2827,8 +2849,58 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       customerPatch
     );
     if (!customer) return undefined;
-    this.applyCustomFields("customer", id, customFields);
-    this.audit("customer.updated", "customer", id, actorId);
+    // Per-field history: the audit entry carries every changed column plus
+    // each custom-field value diff, so a reviewer can see exactly what an
+    // enrichment write did to the record.
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    for (const key of [
+      "name",
+      "url",
+      "logoUrl",
+      "bookingUrl",
+      "notes",
+      "domain",
+      "externalId",
+      "tierId",
+      "statusId",
+      "ownerId",
+      "nextStepText",
+      "nextStepDueAt",
+      "needsHuman",
+      "needsHumanReason",
+      "priorityScore",
+    ] as const) {
+      if (customerPatch[key] !== undefined && before[key] !== customer[key]) {
+        changes[key] = { from: before[key], to: customer[key] };
+      }
+    }
+    if (customFields && Object.keys(customFields).length > 0) {
+      const beforeFields = data.customFieldMap(
+        this.db,
+        this.organizationId,
+        "customer",
+        id
+      );
+      this.applyCustomFields("customer", id, customFields);
+      const afterFields = data.customFieldMap(
+        this.db,
+        this.organizationId,
+        "customer",
+        id
+      );
+      for (const name of new Set([
+        ...Object.keys(beforeFields),
+        ...Object.keys(afterFields),
+      ])) {
+        if (beforeFields[name] !== afterFields[name]) {
+          changes[`customFields.${name}`] = {
+            from: beforeFields[name] ?? null,
+            to: afterFields[name] ?? null,
+          };
+        }
+      }
+    }
+    this.audit("customer.updated", "customer", id, actorId, changes);
     if (gateOverride) {
       const stageName = (statusId: string | null) =>
         statusId === null
@@ -3435,6 +3507,29 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.revokeDocumentPermission(this.db, documentId, actorId);
   }
 
+  listSpacePermissions(spaceId: string) {
+    return data.listSpacePermissions(this.db, spaceId);
+  }
+  setSpacePermission(
+    organizationId: string,
+    spaceId: string,
+    actorId: string,
+    actorType: string,
+    level: "view" | "edit"
+  ) {
+    return data.setSpacePermission(
+      this.db,
+      organizationId,
+      spaceId,
+      actorId,
+      actorType,
+      level
+    );
+  }
+  revokeSpacePermission(spaceId: string, actorId: string) {
+    return data.revokeSpacePermission(this.db, spaceId, actorId);
+  }
+
   documentAccessLevel(
     documentId: string,
     actorId: string,
@@ -3681,6 +3776,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   listAgentSessions(
     options: {
       issueId?: string;
+      agentSlug?: string;
       status?: AgentSessionStatus;
       openPr?: boolean;
       retryOf?: string;
@@ -3701,6 +3797,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   listAgentSessionSummaries(
     options: {
       issueId?: string;
+      agentSlug?: string;
       status?: AgentSessionStatus;
       openPr?: boolean;
       limit?: number;
@@ -5760,11 +5857,24 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         lastProgressAt: new Date().toISOString(),
       };
       if (result.status !== undefined) {
-        set.status = result.status;
-        if (terminal.has(result.status) && !oldSession.endedAt)
-          set.endedAt = set.updatedAt;
-        if (!terminal.has(result.status) && oldSession.endedAt)
-          set.endedAt = null;
+        // PILE-467 — terminal stays terminal. A cancel during provisioning
+        // can still see late poll results arrive as 'created'/'running' —
+        // a non-terminal result must not resurrect a dead lane. Deliberate
+        // resumes (delivered follow-up on a completed lane, queued prompt
+        // on an externally-managed session) carry `revive` to pass.
+        if (
+          !(
+            terminal.has(oldStatus) &&
+            !terminal.has(result.status) &&
+            !result.revive
+          )
+        ) {
+          set.status = result.status;
+          if (terminal.has(result.status) && !oldSession.endedAt)
+            set.endedAt = set.updatedAt;
+          if (!terminal.has(result.status) && oldSession.endedAt)
+            set.endedAt = null;
+        }
         // PILE-419 — leaving `waiting` closes any open elicitation (the
         // lane resumed or died without an answer).
         if (result.status !== "waiting") {
@@ -5813,14 +5923,27 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       lastProgressAt: new Date().toISOString(),
     };
     if (result.status !== undefined) {
-      set.status = result.status;
-      if (terminal.has(result.status) && !oldSession.endedAt)
-        set.endedAt = set.updatedAt;
-      // Resumed lane: clear the anchor so the kept-sandbox window restarts
-      // when it re-ends — otherwise the reaper keys off the ORIGINAL end
-      // and can destroy a sandbox that's actively working a follow-up.
-      if (!terminal.has(result.status) && oldSession.endedAt)
-        set.endedAt = null;
+      // PILE-467 — terminal stays terminal. A cancel during provisioning
+      // can still see late poll results arrive as 'created'/'running' —
+      // a non-terminal result must not resurrect a dead lane. Deliberate
+      // resumes (delivered follow-up on a completed lane, queued prompt
+      // on an externally-managed session) carry `revive` to pass.
+      if (
+        !(
+          terminal.has(oldStatus) &&
+          !terminal.has(result.status) &&
+          !result.revive
+        )
+      ) {
+        set.status = result.status;
+        if (terminal.has(result.status) && !oldSession.endedAt)
+          set.endedAt = set.updatedAt;
+        // Resumed lane: clear the anchor so the kept-sandbox window restarts
+        // when it re-ends — otherwise the reaper keys off the ORIGINAL end
+        // and can destroy a sandbox that's actively working a follow-up.
+        if (!terminal.has(result.status) && oldSession.endedAt)
+          set.endedAt = null;
+      }
       // PILE-419 — leaving `waiting` closes any open elicitation (answered
       // via /respond, provider un-parked on its own, or went terminal).
       if (result.status !== "waiting") {
@@ -5979,14 +6102,19 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       }
     }
 
-    // Review-gated chain — a completed non-review lane on a required
+    // Review-gated chain — a terminal non-review lane on a required
     // sub-step emits substep.review; the reviewer's verdict decides
     // whether the chain advances (pass marks it done + promotes the
     // sibling) or the chief gets paged. Review lanes are excluded so
-    // the verdict itself doesn't re-enter review.
+    // the verdict itself doesn't re-enter review. PILE-443 — failures
+    // emit too (the reviewer sees the death, not just the sweep page),
+    // and the session fields ride the payload so an external reviewer
+    // POST can name the lane + conversation it should inspect. The
+    // dedupe key is status-scoped so a failed-then-retried step still
+    // gets its completion reviewed.
     if (
       becameTerminal &&
-      newStatus === "completed" &&
+      (newStatus === "completed" || newStatus === "failed") &&
       oldSession.purpose !== "review" &&
       issue.parentId &&
       issue.required
@@ -5998,8 +6126,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           parentId: issue.parentId,
           stepKey: issue.stepKey,
           ownerAgent: issue.ownerAgent,
+          sessionId: updatedSession.id,
+          sessionStatus: newStatus,
+          conversationKey: updatedSession.conversationKey,
+          agentId: updatedSession.agentId,
         },
-        `review:${issue.id}`
+        `review:${issue.id}:${newStatus}`
       );
     }
 
@@ -7890,7 +8022,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       const openRequired = await this.getBlockingSubSteps(issue.parentId);
       if (openRequired.length > 0) {
         // Review-gated chain — a reviewer lane evaluates the completed
-        // step first; the chain only advances on a pass verdict.
+        // step first; the chain only advances on a pass verdict. The
+        // `:completed` dedupe key matches the lane-completion emit so a
+        // step reviewed once doesn't re-fire when it's marked done.
         await this.emitDomainEvent(
           "substep.review",
           {
@@ -7899,7 +8033,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
             stepKey: issue.stepKey,
             ownerAgent: issue.ownerAgent,
           },
-          `review:${issue.id}`
+          `review:${issue.id}:completed`
         );
       } else {
         await this.emitDomainEvent(

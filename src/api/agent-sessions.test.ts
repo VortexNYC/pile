@@ -1539,6 +1539,39 @@ describe("agent sessions API", () => {
     await stub.applyAgentSessionResult(session.id, { status: "canceled" });
   });
 
+  it("a follow-up on a completed externally-managed session revives it (PILE-467)", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const issue = await stub.createIssue({ title: "Externally managed lane" });
+    // providerSessionId stays null — the agent registered itself and polls
+    // /events, so a human prompt is queued, not pushed into a sandbox.
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "mock",
+      provider: "mock",
+      actorId: "user-1",
+      actorType: "user",
+      status: "completed",
+    });
+
+    const promptRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/prompt`,
+        {
+          method: "POST",
+          token,
+          body: JSON.stringify({ prompt: "pick the follow-up up" }),
+        }
+      ),
+      env
+    );
+    expect(promptRes.status).toBe(200);
+    expect((await stub.getAgentSession(session.id))?.status).toBe("running");
+    await stub.applyAgentSessionResult(session.id, { status: "canceled" });
+  });
+
   it("captures a text artifact to the session timeline", async () => {
     const stub = env.WORKSPACE_DURABLE_OBJECT.get(
       env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
@@ -2262,7 +2295,25 @@ describe("agent sessions API", () => {
   });
 
   it("serves the runner pnpm-store cache with per-session token auth", async () => {
-    const sessionId = crypto.randomUUID();
+    // The lane token is verified against a real session now (PILE-457) — a
+    // terminal session's bearer stops working on cache routes too.
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const issue = await stub.createIssue({
+      title: "Cache lane",
+      repo: "VortexNYC/pile",
+    });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "mock",
+      provider: "mock",
+      actorId: "user-1",
+      actorType: "user",
+      status: "running",
+    });
+    const sessionId = session.id;
     const cacheToken = await agentLogToken(
       env as unknown as WorkerEnv,
       organizationId,
@@ -2358,6 +2409,44 @@ describe("agent sessions API", () => {
       env
     );
     expect(miss.status).toBe(404);
+
+    // A token minted for a session that does not exist verifies
+    // cryptographically but has nothing to authorize — 404.
+    const ghostId = crypto.randomUUID();
+    const ghostToken = await agentLogToken(
+      env as unknown as WorkerEnv,
+      organizationId,
+      ghostId
+    );
+    const ghost = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${ghostId}/cache/pnpm-store/${hash}`,
+        {
+          method: "PUT",
+          body: "x",
+          headers: { Authorization: `Bearer ${ghostToken}` },
+        }
+      ),
+      env
+    );
+    expect(ghost.status).toBe(404);
+
+    // Once the session resolves the lane token is dead — reads and writes
+    // alike return 409, matching /logs, /report and /mcp.
+    await stub.updateAgentSession(sessionId, { status: "completed" });
+    for (const attempt of [
+      request(base, {
+        headers: { Authorization: `Bearer ${cacheToken}` },
+      }),
+      request(base, {
+        method: "PUT",
+        body: "x",
+        headers: { Authorization: `Bearer ${cacheToken}` },
+      }),
+    ]) {
+      const res = await app.fetch(attempt, env);
+      expect(res.status).toBe(409);
+    }
   });
 
   it("registers an external agent session and returns lane credentials", async () => {
@@ -2878,6 +2967,24 @@ describe("agent sessions API", () => {
       env
     );
     expect(wsRes.status).toBe(200);
+
+    // PILE-457 — once the session resolves the lane token dies with it;
+    // workspace tokens are unaffected.
+    await stub.updateAgentSession(session.id, { status: "completed" });
+    const dead = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/sessions/${session.id}`, {
+        headers: { Authorization: `Bearer ${laneToken}` },
+      }),
+      env
+    );
+    expect(dead.status).toBe(409);
+    const wsTerminal = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/sessions/${session.id}`, {
+        token,
+      }),
+      env
+    );
+    expect(wsTerminal.status).toBe(200);
   });
 
   describe("dispatch-batch", () => {
@@ -3384,6 +3491,61 @@ describe("agent sessions API", () => {
       expect(
         body.providers.find((p) => p.agentId === dropId)?.keptSandboxes ?? 0
       ).toBe(0);
+    });
+
+    // PILE-452 — the provider goes red on the trailing start-failure rate,
+    // not just a consecutive streak: interleaved kept-alive successes break
+    // the streak even while Daytona keeps rejecting spawns.
+    it("goes red when the 15-minute start-failure rate exceeds 20%", async () => {
+      const agentId = `mock-rate-${crypto.randomUUID().slice(0, 8)}`;
+      registerAgentProvider(agentId, () => new MockAgentProvider(agentId));
+      const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+        env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+      );
+      await stub.setOrganizationId(organizationId);
+      const issue = await stub.createIssue({ title: "rate window" });
+      const seed = async (status: "completed" | "failed", infra: boolean) => {
+        const s = await stub.createAgentSession({
+          issueId: issue.id,
+          agentId,
+          provider: agentId,
+          actorId: "user-1",
+          actorType: "user",
+          status: "created",
+        });
+        await stub.applyAgentSessionResult(s.id, {
+          status,
+          infraFailure: infra,
+        });
+      };
+      // Two infra failures then a success — newest-first streak is 0, but
+      // the window rate is 2/3.
+      await seed("failed", true);
+      await seed("failed", true);
+      await seed("completed", false);
+
+      const res = await app.fetch(
+        request(`/workspaces/${organizationId}/agent/fleet-health`, {
+          token,
+        }),
+        env
+      );
+      expect(res.status).toBe(200);
+      const body = await res.json<{
+        providers: {
+          agentId: string;
+          infraStreak: number;
+          starts: number;
+          startFailures: number;
+          startFailureRate: number | null;
+          unhealthy: boolean;
+        }[];
+      }>();
+      const provider = body.providers.find((p) => p.agentId === agentId);
+      expect(provider?.starts).toBe(3);
+      expect(provider?.startFailures).toBe(2);
+      expect(provider?.startFailureRate).toBeCloseTo(2 / 3);
+      expect(provider?.unhealthy).toBe(true);
     });
   });
 
@@ -3904,5 +4066,54 @@ describe("spend caps + run receipts (PILE-425)", () => {
     const row = rows.find((r) => r.key === "custom-bot");
     expect(row?.runs).toBe(1);
     expect(row?.totalTokens).toBe(110_000);
+  });
+
+  it("records usage supplied on a session PATCH (PILE-450)", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    const issue = await stub.createIssue({ title: "PATCH usage lane" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "patch-bot",
+      provider: "custom-bot",
+      actorId: "test",
+      actorType: "agent",
+      status: "running",
+      conversationKey: `${issue.id}-patch-bot`,
+    });
+    const res = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/sessions/${session.id}`, {
+        method: "PATCH",
+        token,
+        body: JSON.stringify({
+          status: "completed",
+          result: "done",
+          usage: {
+            model: "claude-sonnet-4-5",
+            inputTokens: 40_000,
+            outputTokens: 4_000,
+            costMicros: 132_000,
+          },
+        }),
+      }),
+      env
+    );
+    expect(res.status).toBe(200);
+    const receipt = await stub.getRunReceipt(session.id);
+    expect(receipt?.status).toBe("completed");
+    expect(receipt?.totalTokens).toBe(44_000);
+    expect(receipt?.costMicros).toBe(132_000);
+    expect(receipt?.costSource).toBe("reported");
+  });
+
+  it("GET /agent/sessions accepts ?agentSlug to scope the list (PILE-453)", async () => {
+    const res = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/sessions?agentSlug=scout`, {
+        token,
+      }),
+      env
+    );
+    expect(res.status).toBe(200);
   });
 });

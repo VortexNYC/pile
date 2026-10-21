@@ -42,6 +42,10 @@ export interface AgentSessionResult {
   // PILE-425 — cumulative usage snapshot the lane/provider reports with this
   // result; lands on the session's run receipt (agent_run_receipts).
   usage?: AgentRunUsage | null;
+  // A deliberate resume of a terminal session (delivered follow-up, queued
+  // prompt) — bypasses the terminal-stays-terminal guard that stops stale
+  // poll results resurrecting dead lanes. Never set on poll paths.
+  revive?: boolean;
 }
 
 export type { AgentRunUsage };

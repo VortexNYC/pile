@@ -6,7 +6,11 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { WorkerEnv } from "../../platform/middleware.js";
 import type { WorkspaceDO } from "../durable-object.js";
 import { workspaceSchema } from "../schema-map.js";
-import { workspaceIssues } from "../schema.js";
+import {
+  workspaceAgentSessions,
+  workspaceAgentTypes,
+  workspaceIssues,
+} from "../schema.js";
 import {
   hiddenIssueCondition,
   type AgentSessionInput,
@@ -56,6 +60,8 @@ import {
   listDeals,
   listDocumentsVisibleTo,
   setDocumentPermission,
+  setSpacePermission,
+  revokeSpacePermission,
   updateDocument,
   updateDocumentSpace,
   createCustomer,
@@ -2025,6 +2031,122 @@ describe("subStepProgressByParent (PILE-448)", () => {
         ownerAgent: null,
       });
       expect(progress.has(parentIds[1])).toBe(false);
+    });
+  });
+});
+
+describe("space permissions — closed-ACL precedence (PILE-447)", () => {
+  it("space grant opens gap docs, never widens a closed doc ACL", async () => {
+    await withDb(async (db) => {
+      const org = `sp-${crypto.randomUUID()}`;
+      const space = createDocumentSpace(db, org, {
+        name: "Leadership",
+        restricted: true,
+        createdById: "owner-1",
+      });
+      const gapDoc = createDocument(db, {
+        organizationId: org,
+        title: "gap-doc",
+        createdById: "owner-1",
+        spaceId: space.id,
+      });
+      const closedDoc = createDocument(db, {
+        organizationId: org,
+        title: "closed-doc",
+        createdById: "owner-1",
+        spaceId: space.id,
+      });
+      // closed doc — its own ACL wins over any space grant
+      setDocumentPermission(db, org, closedDoc.id, "vip-1", "user", "view");
+
+      // before any grant: hidden
+      expect(documentAccessLevel(db, gapDoc.id, "member-1", [])).toBeNull();
+      expect(
+        listDocumentsVisibleTo(db, org, "member-1", []).map((d) => d.id)
+      ).not.toContain(gapDoc.id);
+
+      // space grant opens the gap doc…
+      setSpacePermission(db, org, space.id, "member-1", "user", "view");
+      expect(documentAccessLevel(db, gapDoc.id, "member-1", [])).toBe("view");
+      expect(
+        listDocumentsVisibleTo(db, org, "member-1", []).map((d) => d.id)
+      ).toContain(gapDoc.id);
+
+      // …but does NOT widen the closed doc's ACL — closed-ACL precedence
+      expect(documentAccessLevel(db, closedDoc.id, "member-1", [])).toBeNull();
+      expect(
+        listDocumentsVisibleTo(db, org, "member-1", []).map((d) => d.id)
+      ).not.toContain(closedDoc.id);
+      expect(documentAccessLevel(db, closedDoc.id, "vip-1", [])).toBe("view");
+
+      // revoke → gap doc hidden again
+      revokeSpacePermission(db, space.id, "member-1");
+      expect(documentAccessLevel(db, gapDoc.id, "member-1", [])).toBeNull();
+    });
+  });
+});
+
+describe("agent session scoping (PILE-453)", () => {
+  it("listAgentSessions filters by agentSlug via agent_types", async () => {
+    await withDb(async (db) => {
+      db.insert(workspaceAgentTypes)
+        .values([
+          {
+            id: "atype-scout",
+            organizationId: WORKSPACE_ID,
+            slug: "scout",
+            name: "Scout",
+            providerAgentId: "devin-cli",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+          {
+            id: "atype-profiler",
+            organizationId: WORKSPACE_ID,
+            slug: "profiler",
+            name: "Profiler",
+            providerAgentId: "devin-cli",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        ])
+        .run();
+      db.insert(workspaceAgentSessions)
+        .values([
+          {
+            id: "s-scout",
+            organizationId: WORKSPACE_ID,
+            issueId: "issue-scope-1",
+            agentId: "atype-scout",
+            provider: "devin-cli",
+            actorId: "u1",
+            actorType: "user",
+            status: "completed",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+          {
+            id: "s-profiler",
+            organizationId: WORKSPACE_ID,
+            issueId: "issue-scope-1",
+            agentId: "atype-profiler",
+            provider: "devin-cli",
+            actorId: "u1",
+            actorType: "user",
+            status: "completed",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        ])
+        .run();
+      const scoutOnly = listAgentSessions(db, WORKSPACE_ID, {
+        agentSlug: "scout",
+      });
+      expect(scoutOnly.map((r) => r.id)).toEqual(["s-scout"]);
+      const none = listAgentSessions(db, WORKSPACE_ID, {
+        agentSlug: "nope",
+      });
+      expect(none).toHaveLength(0);
     });
   });
 });

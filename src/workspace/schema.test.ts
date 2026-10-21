@@ -15,6 +15,7 @@ import {
   workspaceIssues,
   workspaceSuppression,
   workspaceMerchantSources,
+  workspaceSpacePermissions,
   workspaceNotificationPreferences,
   workspaceStageTemplates,
   workspaceTriageRuleEvaluations,
@@ -512,6 +513,17 @@ describe("workspaceMerchantSources schema", () => {
       (c) => c.name
     );
     for (const col of ["kind", "config", "cursor_field", "signal", "enabled"]) {
+      expect(cols).toContain(col);
+    }
+  });
+});
+
+describe("workspaceSpacePermissions schema", () => {
+  it("carries space/actor/level for the space-grant ACL", () => {
+    const cols = getTableConfig(workspaceSpacePermissions).columns.map(
+      (c) => c.name
+    );
+    for (const col of ["space_id", "actor_id", "actor_type", "level"]) {
       expect(cols).toContain(col);
     }
   });

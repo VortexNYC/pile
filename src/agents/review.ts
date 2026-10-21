@@ -1044,11 +1044,39 @@ export async function publishReviewVerdicts(
       const token = await deps.tokenForRepo(owner, name);
       if (!token) continue;
 
+      // PILE-470 — drop stale results: if the PR's head moved past the sha
+      // this review ran on, the verdict is for a dead head and a fresh
+      // review on the new sha is the one that should land.
+      try {
+        const pr = (await gh(
+          ghFetch,
+          token,
+          "GET",
+          `/repos/${req.repo}/pulls/${req.pullNumber}`
+        )) as { head?: { sha?: string } };
+        if (pr.head?.sha && pr.head.sha !== req.headSha) {
+          await stub
+            .addAgentSessionEvent({
+              sessionId: session.id,
+              type: "review.dropped",
+              message: `Stale verdict dropped — head moved ${req.headSha.slice(0, 8)} → ${pr.head.sha.slice(0, 8)}`,
+              payload: { requestedSha: req.headSha, headSha: pr.head.sha },
+            })
+            .catch(() => {});
+          continue;
+        }
+      } catch {
+        // if the head check fails, publish anyway — a dropped verdict is
+        // worse than a slightly stale one when the check itself is flaky.
+      }
+
       const output = review
         ? { title: reviewCheckTitle(review), summary: body ?? "" }
         : {
+            // PILE-470 — post parsed findings only; an unparseable lane
+            // result stays neutral, not the raw tail.
             title: `Review lane ${session.status}`,
-            summary: (session.result ?? "No report.").slice(0, 2000),
+            summary: "The review lane finished without a parseable verdict.",
           };
       const conclusion = review ? verdictConclusion(review.verdict) : "neutral";
       const checkBody = {
