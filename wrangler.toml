@@ -345,10 +345,10 @@ max_retries = 3
 name = "EMAIL"
 
 # Branch preview target — cloudflare-ci deploys non-main artifact pushes here
-# (`wrangler deploy -e staging`). Shares production data bindings (D1, R2,
-# DOs, containers) so previews see real data, but has no queue consumer and
-# no cron: a preview can never steal prod webhook batches or double-fire
-# scheduled work. EMAIL is also omitted so previews never send real mail.
+# (`wrangler deploy -e staging`). Fully isolated from production (VTX-610):
+# own D1, R2 buckets, DOs, and queue — a bad preview can never write prod
+# data. No queue consumer, no cron, and EMAIL omitted so previews stay
+# inert and never send real mail.
 [env.staging]
 name = "pile-staging"
 
@@ -369,23 +369,21 @@ CF_ADMISSION_URL = "https://cloudflare-ci.vortex-nyc.workers.dev"
 
 [[env.staging.d1_databases]]
 binding = "D1"
-database_name = "pile-global"
-database_id = "222e823e-3594-457d-add1-1827064d4bc8"
+database_name = "pile-global-staging"
+database_id = "b40f2922-2c63-4b3e-9c56-b37512ea1ffe"
 migrations_dir = "migrations"
 
 [[env.staging.r2_buckets]]
 binding = "ATTACHMENTS_BUCKET"
-bucket_name = "pile-attachments"
+bucket_name = "pile-attachments-staging"
 
 [[env.staging.r2_buckets]]
 binding = "LANE_CACHE_BUCKET"
-bucket_name = "pile-lane-cache"
+bucket_name = "pile-lane-cache-staging"
 
 [[env.staging.durable_objects.bindings]]
 name = "WORKSPACE_DURABLE_OBJECT"
 class_name = "WorkspaceDO"
-# External binding -> prod worker's DO namespace, so previews see real data
-script_name = "pile"
 
 [[env.staging.durable_objects.bindings]]
 name = "SANDBOX"
@@ -445,7 +443,7 @@ new_sqlite_classes = ["CursorSandbox", "DevinSandbox", "CodexSandbox"]
 
 [[env.staging.queues.producers]]
 binding = "WEBHOOK_QUEUE"
-queue = "webhook-queue"
+queue = "webhook-queue-staging"
 
 # Top-level [triggers].crons is inherited by named envs — a staging deploy
 # would double-fire the 5-min sweep against shared prod data. Explicit empty
