@@ -58,7 +58,6 @@ import {
   setDocumentPermission,
   setSpacePermission,
   revokeSpacePermission,
-  listSpacePermissions,
   updateDocument,
   updateDocumentSpace,
   createCustomer,

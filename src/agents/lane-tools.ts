@@ -1813,7 +1813,7 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
             runCount: (candidates.length > 0 ? 1 : 0) + produced,
           });
           perSource.push({ name: source.name, candidates: candidates.length });
-        } catch (e) {
+        } catch {
           perSource.push({ name: source.name, candidates: -1 });
         }
       }

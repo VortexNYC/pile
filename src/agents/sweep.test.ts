@@ -3152,10 +3152,7 @@ describe("syncOpenPrSessions", () => {
       prUrl: "https://github.com/vortexnyc/pile/pull/555",
     });
     const updates: string[] = [];
-    const fetchBehind = (async (
-      input: RequestInfo | URL,
-      init?: RequestInit
-    ) => {
+    const fetchBehind = (async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.endsWith("/pulls/555/update-branch")) {
         updates.push(url);
@@ -4059,7 +4056,6 @@ describe("spend caps (PILE-425)", () => {
         actorType: "user",
       });
     }
-    const { releasePausedSessions } = await import("./sweep.js");
     const released = await releasePausedSessions(
       env,
       stub,
