@@ -5888,12 +5888,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         set.infraFailure = result.infraFailure ? 1 : 0;
       // VTX-621 — a provider capacity death parks the whole agent type
       // until its reset instead of every lane burning retries into the
-      // same wall. infraFailure marks it retry-eligible; the sweep lifts
-      // the pause once the reason's timestamp passes. An existing
-      // operator/spend-cap pause (a reason without the prefix) is left
-      // alone — a rate-limit death must not overwrite or lift it.
+      // same wall. The sweep lifts the pause once the reason's timestamp
+      // passes. infraFailure stays unset: a capacity death is not a
+      // substrate failure and must not feed the provider/fleet streaks
+      // (retry eligibility rides polled.rateLimited on the sweep side).
+      // An existing operator/spend-cap pause (a reason without the
+      // prefix) is left alone — never overwritten, never lifted early.
       if (result.rateLimited) {
-        set.infraFailure = 1;
         const existingPause = data.getAgentPause(
           this.db,
           this.organizationId,
@@ -5988,7 +5989,6 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     // VTX-621 — same rate-limit park as the issue-less path above; lanes
     // always carry an issue, so this is the branch that actually runs.
     if (result.rateLimited) {
-      set.infraFailure = 1;
       const existingPause = data.getAgentPause(
         this.db,
         this.organizationId,

@@ -476,7 +476,11 @@ export async function dispatchAgent(
             // would re-trip the cap and re-park it before it runs.
             s.id !== options?.promoteSessionId &&
             !["completed", "failed", "canceled"].includes(s.status) &&
-            s.paused !== 1
+            s.paused !== 1 &&
+            // Provider-less `waiting` rows are queue/park artifacts that
+            // cost no provider capacity — counting them pins the cap shut
+            // (queue rows can't finish, so the pause never lifts).
+            !(s.status === "waiting" && s.providerSessionId == null)
         ).length;
         if (liveForAgent >= cap) {
           pause = await stub.pauseAgentType(agentId, {

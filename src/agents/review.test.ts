@@ -1122,6 +1122,9 @@ describe("requestPrReview / publishReviewVerdicts", () => {
     const gh = fakeGithub({
       config: REVIEW_CONFIG,
       files: [{ filename: "src/a.ts", patch: "@@" }],
+      // GET /pulls/{n} confirms the request targets the current head —
+      // the supersede ordering guard.
+      prHead: "sha-new-head",
     });
     const outcome = await requestPrReview(
       workerEnv,

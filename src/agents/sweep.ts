@@ -579,6 +579,10 @@ async function markStaleAndAlert(
 }
 
 const MAX_AUTO_RETRIES = 1;
+// VTX-621 — cap on rate-limit re-parks: a stuck account parks, drains,
+// dies on the limit again, and re-parks — bound the loop so a lane
+// eventually terminates instead of cycling holds forever.
+const MAX_RATE_LIMIT_PARKS = 6;
 // PILE-240 — consecutive infra-class deaths across a provider's lanes mean
 // the provider/substrate is unhealthy (devin's fleet repeatedly wedged with
 // "runner never started"). Past the streak, retries stop churning lanes
@@ -604,7 +608,12 @@ async function retryDeadLane(
   const rateLimitPaused = Boolean(
     pause?.reason?.startsWith(RATE_LIMIT_PAUSE_PREFIX)
   );
-  if ((session.retryCount ?? 0) >= MAX_AUTO_RETRIES && !rateLimitPaused)
+  // A stuck account must not park-and-redispatch forever: the rate-limit
+  // budget exemption is capped at MAX_RATE_LIMIT_PARKS holds, after which
+  // the lane is terminal for good.
+  const rateLimitRetryable =
+    rateLimitPaused && (session.retryCount ?? 0) < MAX_RATE_LIMIT_PARKS;
+  if ((session.retryCount ?? 0) >= MAX_AUTO_RETRIES && !rateLimitRetryable)
     return;
   // PILE-476 — per-issue breaker: cap failed starts for the same issue per
   // hour so a doomed lane stops burning spawn attempts. Distinct from the
@@ -1480,7 +1489,10 @@ export async function sweepAgentSessions(
               (s) =>
                 s.agentId === pause.agentId &&
                 !TERMINAL_STATUSES.has(s.status) &&
-                s.paused !== 1
+                s.paused !== 1 &&
+                // Same counter as dispatchAgent: provider-less waiting rows
+                // are queue artifacts, not live lanes.
+                !(s.status === "waiting" && s.providerSessionId == null)
             ).length;
             lift = liveForAgent < cap;
           }
@@ -1901,13 +1913,18 @@ export async function sweepAgentSessions(
                   ctx
                 );
               }
-              if (polled.infraFailure) {
+              // VTX-621 — polled.rateLimited drives the retry too: the
+              // runner flags capacity deaths without infraFailure, and the
+              // DO's pause row is what parks the retry as a hold.
+              if (polled.infraFailure || polled.rateLimited) {
                 await retryDeadLane(
                   env,
                   stub,
                   id,
                   session,
-                  "Infrastructure failure",
+                  polled.rateLimited
+                    ? "Provider rate limit"
+                    : "Infrastructure failure",
                   ctx
                 );
               }

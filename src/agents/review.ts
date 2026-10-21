@@ -785,15 +785,28 @@ export async function requestPrReview(
     }
 
     // VTX-621 — we've committed to dispatching for this sha: kill any live
-    // review lane still working an older head of the same PR.
-    await supersedeStaleShaReviews(
-      env,
-      stub,
-      issue.id,
-      target,
+    // review lane still working an older head of the same PR. Ordering
+    // guard first: a delayed/redelivered webhook can carry an older sha —
+    // verify the target is still the PR head, or the supersede would
+    // cancel the NEWER review and dispatch stale work. A failed read
+    // skips the supersede rather than canceling blind.
+    const pull = (await gh(
       ghFetch,
-      token
-    );
+      token,
+      "GET",
+      `/repos/${target.repoFull}/pulls/${target.pullNumber}`
+    ).catch(() => null)) as { head?: { sha?: string } } | null;
+    if (pull?.head?.sha && pull.head.sha !== target.headSha)
+      return "deduped";
+    if (pull?.head?.sha === target.headSha)
+      await supersedeStaleShaReviews(
+        env,
+        stub,
+        issue.id,
+        target,
+        ghFetch,
+        token
+      );
 
     const files = await listPrFiles(ghFetch, token, target);
     const reviewable = reviewableFiles(files, config);
