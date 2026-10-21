@@ -3900,6 +3900,29 @@ describe("PILE-420 stale marking + pause holds", () => {
         await dispatchAgent(env, agentId, organizationId, issue, actor)
       );
     }
+    // A review hold on an issue with a live work lane must still promote —
+    // purpose=review lanes are concurrent by definition (PILE-273).
+    const laneIssue = await stub.createIssue({ title: "Issue with live lane" });
+    await stub.createAgentSession({
+      issueId: laneIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+    });
+    sessions.push(
+      await dispatchAgent(
+        env,
+        agentId,
+        organizationId,
+        laneIssue,
+        actor,
+        undefined,
+        undefined,
+        { purpose: "review", concurrent: true }
+      )
+    );
     expect(sessions.every((s) => s.paused === 1)).toBe(true);
 
     // The pause row goes away without a drain — the state resume leaves
@@ -3923,7 +3946,7 @@ describe("PILE-420 stale marking + pause holds", () => {
       sessions.map((s) => stub.getAgentSession(s.id))
     );
     expect(second.every((s) => s?.paused === 0)).toBe(true);
-    expect(dispatches).toHaveLength(5);
+    expect(dispatches).toHaveLength(6);
   });
 });
 

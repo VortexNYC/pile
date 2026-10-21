@@ -980,6 +980,11 @@ async function promoteQueuedSession(
     ctx,
     {
       promoteSessionId: session.id,
+      // Review lanes dispatch concurrent with the issue's work lane
+      // (PILE-273); the parked row keeps `purpose` but the conflict gate is
+      // option-driven, so re-declare it on promote or a live work lane
+      // bounces the release with CONFLICT.
+      concurrent: session.purpose === "review",
       secondaryRepos: parseStoredSecondaryRepos(session.secondaryRepos),
     }
   );
