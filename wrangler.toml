@@ -124,25 +124,25 @@ instance_type = "standard-1"
 class_name = "LaneSandbox"
 name = "pile-lane-v1"
 scheduling_policy = "durable_object"
-images = { lane = { dockerfile = "./Dockerfile.sandbox" } }
+images = { lane = { image = "registry.cloudflare.com/953346ce1b4f27fa04a76d83aeccab28/pile-lanesandbox-lane@sha256:93b517173fe9d89f5a1150bcb03e06e0b8c5c383908373d2dcc60e961c38ba8a" } }
 
 [[containers]]
 class_name = "LaneCursorSandbox"
 name = "pile-lane-cursor-v1"
 scheduling_policy = "durable_object"
-images = { cursor = { dockerfile = "./Dockerfile.sandbox-cursor" } }
+images = { cursor = { image = "registry.cloudflare.com/953346ce1b4f27fa04a76d83aeccab28/pile-lanecursorsandbox-cursor@sha256:24014f135355295aec79c7fcb973984bb3358bd118382f03703bff9ec10a74b3" } }
 
 [[containers]]
 class_name = "LaneDevinSandbox"
 name = "pile-lane-devin-v1"
 scheduling_policy = "durable_object"
-images = { devin = { dockerfile = "./Dockerfile.sandbox-devin" } }
+images = { devin = { image = "registry.cloudflare.com/953346ce1b4f27fa04a76d83aeccab28/pile-lanedevinsandbox-devin@sha256:2d0146d5f28ae90711a05c886c0aa04832c642eec27d9886a4dc357f2bf756b6" } }
 
 [[containers]]
 class_name = "LaneCodexSandbox"
 name = "pile-lane-codex-v1"
 scheduling_policy = "durable_object"
-images = { codex = { dockerfile = "./Dockerfile.sandbox-codex" } }
+images = { codex = { image = "registry.cloudflare.com/953346ce1b4f27fa04a76d83aeccab28/pile-lanecodexsandbox-codex@sha256:097d47cad761084d2d34410944ddc13a8eeaf303604a8f6bc399b61d4aa72623" } }
 
 [[queues.producers]]
 binding = "WEBHOOK_QUEUE"
@@ -295,25 +295,25 @@ instance_type = "standard-1"
 class_name = "LaneSandbox"
 name = "pile-lane-v1"
 scheduling_policy = "durable_object"
-images = { lane = { dockerfile = "./Dockerfile.sandbox" } }
+images = { lane = { image = "registry.cloudflare.com/953346ce1b4f27fa04a76d83aeccab28/pile-lanesandbox-lane@sha256:93b517173fe9d89f5a1150bcb03e06e0b8c5c383908373d2dcc60e961c38ba8a" } }
 
 [[env.production.containers]]
 class_name = "LaneCursorSandbox"
 name = "pile-lane-cursor-v1"
 scheduling_policy = "durable_object"
-images = { cursor = { dockerfile = "./Dockerfile.sandbox-cursor" } }
+images = { cursor = { image = "registry.cloudflare.com/953346ce1b4f27fa04a76d83aeccab28/pile-lanecursorsandbox-cursor@sha256:24014f135355295aec79c7fcb973984bb3358bd118382f03703bff9ec10a74b3" } }
 
 [[env.production.containers]]
 class_name = "LaneDevinSandbox"
 name = "pile-lane-devin-v1"
 scheduling_policy = "durable_object"
-images = { devin = { dockerfile = "./Dockerfile.sandbox-devin" } }
+images = { devin = { image = "registry.cloudflare.com/953346ce1b4f27fa04a76d83aeccab28/pile-lanedevinsandbox-devin@sha256:2d0146d5f28ae90711a05c886c0aa04832c642eec27d9886a4dc357f2bf756b6" } }
 
 [[env.production.containers]]
 class_name = "LaneCodexSandbox"
 name = "pile-lane-codex-v1"
 scheduling_policy = "durable_object"
-images = { codex = { dockerfile = "./Dockerfile.sandbox-codex" } }
+images = { codex = { image = "registry.cloudflare.com/953346ce1b4f27fa04a76d83aeccab28/pile-lanecodexsandbox-codex@sha256:097d47cad761084d2d34410944ddc13a8eeaf303604a8f6bc399b61d4aa72623" } }
 
 [[env.production.migrations]]
 tag = "v1"
