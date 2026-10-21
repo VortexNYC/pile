@@ -265,3 +265,49 @@ describe("checkDispatchDedupe", () => {
     expect(result.coverage[0]?.overlap).toBe("keywords");
   });
 });
+
+describe("merged-PR stray guard (VTX-621)", () => {
+  const mergedPull = {
+    number: 700,
+    html_url: "https://github.com/acme/widgets/pull/700",
+    title: "ISS-42 invoice.paid emitter",
+    body: "Merged work for ISS-42",
+    head: { ref: "iss-42-invoice-paid" },
+    merged_at: "2026-10-20T12:00:00Z",
+  };
+
+  it("flags a merged identifier-matched PR as merged coverage", async () => {
+    const result = await checkDispatchDedupe(env, noSessions, makeIssue(), {
+      tokenForRepo,
+      fetch: ghStub({ "/pulls?state=closed": [mergedPull] }),
+    });
+    expect(result.merged).toEqual({
+      prUrl: "https://github.com/acme/widgets/pull/700",
+      prNumber: 700,
+    });
+  });
+
+  it("closed-but-unmerged PRs are history, not coverage", async () => {
+    const unmerged = { ...mergedPull, merged_at: null };
+    const result = await checkDispatchDedupe(env, noSessions, makeIssue(), {
+      tokenForRepo,
+      fetch: ghStub({ "/pulls?state=closed": [unmerged] }),
+    });
+    expect(result.merged).toBeNull();
+  });
+
+  it("keyword-only overlap on a merged PR does not flag", async () => {
+    const keywordMerged = {
+      ...mergedPull,
+      number: 701,
+      title: "invoice webhook refactor",
+      body: "touched emitters",
+      head: { ref: "invoice-refactor" },
+    };
+    const result = await checkDispatchDedupe(env, noSessions, makeIssue(), {
+      tokenForRepo,
+      fetch: ghStub({ "/pulls?state=closed": [keywordMerged] }),
+    });
+    expect(result.merged).toBeNull();
+  });
+});

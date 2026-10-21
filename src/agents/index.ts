@@ -373,6 +373,21 @@ export async function dispatchAgent(
       dedupeError = err instanceof Error ? err.message : String(err);
       return null;
     });
+    // VTX-621 — a merged lane PR covering a finished issue makes the
+    // dispatch a stray (stale retry, trigger on a closed ticket). Refuse
+    // outright; CONFLICT reads as redundant, not an error. A reopened
+    // issue (back to an active status) dispatches normally — the merged
+    // PR is history and the lane opens a fresh one (PILE-257).
+    if (
+      dedupe?.merged &&
+      (issue.status === "done" || issue.status === "canceled")
+    ) {
+      throw new VortexError({
+        code: "CONFLICT",
+        status: 409,
+        message: `Issue already covered by merged PR ${dedupe.merged.prUrl} — refusing stale dispatch`,
+      });
+    }
     continuation = dedupe?.continuation ?? null;
     if (continuation && issue.branch !== continuation.headRef) {
       // PILE-446 — an open PR covering this issue with no live session makes
