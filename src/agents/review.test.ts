@@ -1092,4 +1092,58 @@ describe("requestPrReview / publishReviewVerdicts", () => {
     );
     expect(checkPosts).toHaveLength(0);
   });
+
+  it("supersedes a live review lane pinned to an older headSha (VTX-621)", async () => {
+    const issue = await laneIssue();
+    const t = target("sha-new-head");
+    // A review lane still running the previous head — reviews dead code.
+    const stale = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "review-mock",
+      provider: "review-mock",
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      purpose: REVIEW_PURPOSE,
+    });
+    await stub.addAgentSessionEvent({
+      sessionId: stale.id,
+      type: "review.requested",
+      message: "review requested",
+      payload: {
+        prUrl: t.prUrl,
+        repo: REPO,
+        pullNumber: t.pullNumber,
+        headSha: "sha-old-head",
+        checkRunId: 777,
+      },
+    });
+
+    const gh = fakeGithub({
+      config: REVIEW_CONFIG,
+      files: [{ filename: "src/a.ts", patch: "@@" }],
+    });
+    const outcome = await requestPrReview(
+      workerEnv,
+      stub,
+      organizationId,
+      issue,
+      t,
+      "tok",
+      { fetch: gh.fetch }
+    );
+    expect(outcome).toBe("dispatched");
+
+    // The stale lane's check run resolved superseded, and the session went
+    // terminal without an infraFailure mark.
+    const resolve = gh.calls.find(
+      (c) => c.method === "PATCH" && c.url.endsWith("/check-runs/777")
+    );
+    expect(resolve?.body).toMatchObject({ status: "completed" });
+    const staleAfter = await stub.getAgentSession(stale.id);
+    expect(staleAfter?.status).toBe("canceled");
+    expect(staleAfter?.infraFailure).toBe(0);
+    const evts = await stub.listAgentSessionEvents(stale.id);
+    expect(evts.some((e) => e.type === "review.superseded")).toBe(true);
+  });
 });
