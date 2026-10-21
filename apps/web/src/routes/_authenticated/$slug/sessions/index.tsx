@@ -21,6 +21,34 @@ export const Route = createFileRoute("/_authenticated/$slug/sessions/")({
   }),
 });
 
+/** Filter options: every registered agent type plus any agentId that
+ * actually has lanes, deduped and sorted (PILE-453). */
+export function agentFilterOptions(
+  agentTypes: readonly { slug: string }[],
+  agentIds: readonly string[]
+): string[] {
+  return [
+    ...new Set([...agentTypes.map((t) => t.slug), ...agentIds]),
+  ].toSorted();
+}
+
+/** Display name per scope key — both the type slug and the providerAgentId
+ * pipeline lanes record resolve to the type's name. */
+export function agentGroupLabels(
+  agentTypes: readonly {
+    slug: string;
+    name: string;
+    providerAgentId: string;
+  }[]
+): Record<string, string> {
+  const labels: Record<string, string> = {};
+  for (const t of agentTypes) {
+    labels[t.slug] = t.name;
+    labels[t.providerAgentId] ??= t.name;
+  }
+  return labels;
+}
+
 function Sessions() {
   const workspace = useWorkspace();
   const { agent } = Route.useSearch();
@@ -40,15 +68,11 @@ function Sessions() {
   // Shares the unscoped query the list below runs — the picker offers
   // every agent that actually has lanes, plus registered types.
   const sessions = useAgentSessions();
-  const agentIds = (sessions.data ?? []).map((s) => s.agentId);
-  const options = [
-    ...new Set([...(agentTypes.data ?? []).map((t) => t.slug), ...agentIds]),
-  ].toSorted();
-  const groupLabels: Record<string, string> = {};
-  for (const t of agentTypes.data ?? []) {
-    groupLabels[t.slug] = t.name;
-    groupLabels[t.providerAgentId] ??= t.name;
-  }
+  const options = agentFilterOptions(
+    agentTypes.data ?? [],
+    (sessions.data ?? []).map((s) => s.agentId)
+  );
+  const groupLabels = agentGroupLabels(agentTypes.data ?? []);
 
   return (
     <Page

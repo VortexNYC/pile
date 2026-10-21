@@ -106,6 +106,36 @@ function GroupHeader({ title, count }: { title: string; count: number }) {
   );
 }
 
+/** Bucket lanes under their scope key — the agent that ran them or the
+ * issue they belong to — so each surface files sessions under its own
+ * work (PILE-453). Groups sort freshest-lane-first. */
+export function groupSessionsByScope<
+  Row extends { agentId: string; issueId: string; updatedAt: string },
+>(sessions: readonly Row[], groupBy: "agent" | "issue"): [string, Row[]][] {
+  const buckets = new Map<string, Row[]>();
+  for (const session of sessions) {
+    const key = groupBy === "agent" ? session.agentId : session.issueId;
+    const rows = buckets.get(key) ?? [];
+    rows.push(session);
+    buckets.set(key, rows);
+  }
+  return [...buckets.entries()].toSorted(
+    (a, b) =>
+      Date.parse(b[1][0]?.updatedAt ?? "") -
+      Date.parse(a[1][0]?.updatedAt ?? "")
+  );
+}
+
+/** Header text for a scope group: the workspace display name when known,
+ * else the lane label so unloaded scopes read as work, not UUIDs. */
+export function scopeGroupTitle(
+  key: string,
+  rows: readonly { label?: string | null }[],
+  labels?: Readonly<Record<string, string>>
+): string {
+  return labels?.[key] ?? rows[0]?.label ?? key;
+}
+
 /** Agent sessions — Live/Today/Week/Older groups, or `groupBy` scope
  * groups when a surface wants each lane filed under its agent or issue.
  * Reused by the sessions route and the Issues tab. `issueId`/`agentSlug`
@@ -134,7 +164,7 @@ export function SessionsList({
     );
   }
 
-  const ordered = (sessions.data ?? [])
+  const ordered: SessionRow[] = (sessions.data ?? [])
     .toSorted(
       (a, b) =>
         Number(TERMINAL.has(a.status)) - Number(TERMINAL.has(b.status)) ||
@@ -153,26 +183,13 @@ export function SessionsList({
   }
 
   if (groupBy) {
-    const scopeKey = (s: SessionRow) =>
-      groupBy === "agent" ? s.agentId : s.issueId;
-    const buckets = new Map<string, SessionRow[]>();
-    for (const session of ordered) {
-      const key = scopeKey(session);
-      const rows = buckets.get(key) ?? [];
-      rows.push(session);
-      buckets.set(key, rows);
-    }
-    const groups = [...buckets.entries()].toSorted(
-      (a, b) =>
-        Date.parse(b[1][0]?.updatedAt ?? "") -
-        Date.parse(a[1][0]?.updatedAt ?? "")
-    );
+    const groups = groupSessionsByScope(ordered, groupBy);
     return (
       <div className="flex flex-col gap-5">
         {groups.map(([key, rows]) => (
           <div key={key} className="flex flex-col">
             <GroupHeader
-              title={groupLabels?.[key] ?? rows[0]?.label ?? key}
+              title={scopeGroupTitle(key, rows, groupLabels)}
               count={rows.length}
             />
             <LayerCard className="p-0">

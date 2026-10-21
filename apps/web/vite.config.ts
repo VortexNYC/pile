@@ -19,7 +19,11 @@ export default defineConfig({
   base: "/app/",
   plugins: [
     tailwindcss(),
-    tanstackRouter({ autoCodeSplitting: true }),
+    tanstackRouter({
+      autoCodeSplitting: true,
+      // Co-located *.test.ts files are not routes.
+      routeFileIgnorePattern: "\\.test\\.",
+    }),
     react(),
   ],
   resolve: {

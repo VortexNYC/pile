@@ -55,6 +55,23 @@ interface IssuesSearch {
   tab?: "issues" | "projects" | "sessions";
 }
 
+/** Display name per issue id for the Sessions panel — "ISS-1 — Title"
+ * when the issue has an identifier, bare title otherwise (PILE-453). */
+export function sessionGroupLabels(
+  issues: readonly {
+    id: string;
+    title: string;
+    identifier?: string | null;
+  }[]
+): Record<string, string> {
+  return Object.fromEntries(
+    issues.map((issue) => [
+      issue.id,
+      issue.identifier ? `${issue.identifier} — ${issue.title}` : issue.title,
+    ])
+  );
+}
+
 export const Route = createFileRoute("/_authenticated/$slug/issues/")({
   component: IssuesList,
   validateSearch: (search: Record<string, unknown>): IssuesSearch => ({
@@ -449,14 +466,7 @@ function IssuesList() {
           </h2>
           <SessionsList
             groupBy="issue"
-            groupLabels={Object.fromEntries(
-              allIssues.map((issue) => [
-                issue.id,
-                issue.identifier
-                  ? `${issue.identifier} — ${issue.title}`
-                  : issue.title,
-              ])
-            )}
+            groupLabels={sessionGroupLabels(allIssues)}
           />
         </div>
       ) : null}
