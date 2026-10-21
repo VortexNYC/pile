@@ -137,21 +137,21 @@ Risks:
   container applications, orphaning existing instances and doubling quota.
 - **Two container config shapes exist.** `StandardContainerConfig` (has
   `image`, `maxInstances`, `instanceType`, `schedulingPolicy: "default" |
-  "regional"`) vs `DurableObjectContainerConfig` (`schedulingPolicy:
-  "durable-object"`, `images: Record<string, ContainerImage>` — named images
+"regional"`) vs `DurableObjectContainerConfig` (`schedulingPolicy:
+"durable-object"`, `images: Record<string, ContainerImage>` — named images
   the DO can start). Wrangler's `class_name` linkage is implicitly
   DO-managed. Whether to map to the standard shape + `exports.*.container`
   reference, or the durable-object shape, needs verification against
   `cf deploy` behavior — the types alone don't settle it.
 - **Per-mode divergence.** Dev builds from Dockerfiles (`{ dockerfile:
-  "./Dockerfile.sandbox*" }`); production pins digests (`{ reference: … }`)
+"./Dockerfile.sandbox*" }`); production pins digests (`{ reference: … }`)
   precisely because cloudflare-ci has no Docker daemon. Containers must be
   returned inside the `switch (ctx.mode)` branches, not at top level, to
   preserve this.
 - `cf deploy --containers-rollout` exists (`immediate`/`gradual`/`none`) and
   `cf containers applications instances` covers instance inspection for ops.
 - Releasing a new image remains a docker-host step (`wrangler containers build
-  -p -t …`, then update the digest) — the wrangler.toml comment documenting
+-p -t …`, then update the digest) — the wrangler.toml comment documenting
   that workflow should move to the new config.
 
 ## 4. D1 `migrations_dir` → no config equivalent (MEDIUM RISK)
@@ -176,14 +176,14 @@ cf d1 migrations apply <database> --dir ./migrations
 - **Interface change:** cf takes the database (name/ID) directly; there's no
   binding-name resolution or `-e production` coupling. Current call sites:
   - `.github/workflows/migrate.yml`: `wrangler d1 migrations apply
-    issuetracker-global --env production --remote`
+issuetracker-global --env production --remote`
   - `scripts/selfhost.sh`: `wrangler d1 migrations apply D1 --remote`
   - `scripts/backup.sh` / `scripts/dr-restore.sh`: `wrangler d1 export
-    pile-global --remote … -e production`
+pile-global --remote … -e production`
 - **Pre-existing discrepancy flagged:** migrate.yml targets
   `issuetracker-global` while `wrangler.toml` declares `database_name =
-  "pile-global"` (prod binding pins `database_id
-  c4f71628-3f93-4be1-ac11-48b5611f5934`, so the binding itself is unaffected —
+"pile-global"` (prod binding pins `database_id
+c4f71628-3f93-4be1-ac11-48b5611f5934`, so the binding itself is unaffected —
   but the remote name wrangler resolves during `migrations apply` differs from
   the declared one). Worth confirming the real database name before moving the
   step to `cf d1 migrations apply <id>`.
@@ -216,7 +216,7 @@ are **inheritable**; `vars`, bindings, `containers`, `send_email`, `queues` are
 - Production redeclares every non-inheritable binding, so the duplicated maps
   in the generated file are faithful — nothing was silently inherited.
 - `routes = [{ pattern = "pile.nyc", custom_domain = true }]` → `domains:
-  ["pile.nyc"]` on the production branch only. Correct for a custom domain
+["pile.nyc"]` on the production branch only. Correct for a custom domain
   (a non-custom route would instead be `triggers.fetch({ pattern, zone })`).
   Dev keeps `workers.dev` (cf `workersDev` defaults to `true`, matching
   wrangler's default).
@@ -238,7 +238,7 @@ Risks:
 
 - **Secrets:** `.dev.vars.example` was detected but not migrated (only
   `secrets.required` entries move). Secrets stay CLI-managed: `wrangler secret
-  put` → `cf workers secrets update`, bulk → `cf workers secrets bulk`,
+put` → `cf workers secrets update`, bulk → `cf workers secrets bulk`,
   deploy-time file → `cf deploy --secrets-file`. Verify `.dev.vars` is still
   honored by `cf dev` before switching the dev workflow.
 - **Type generation:** the generated `wrangler.config.ts` sets
