@@ -158,6 +158,11 @@ export interface SandboxCliDescriptor {
   };
   /** Require a repo + git identity even for dispatch (codex cloud tasks). */
   requiresRepo?: boolean;
+  /** VTX-621 — cap on concurrent live lanes for this agent type. Past the
+   *  cap, dispatches park as paused holds; the sweep lifts the marker
+   *  pause when a slot frees. Guards one shared provider account against
+   *  bursts that trip its own rate limit. */
+  maxConcurrentLanes?: number;
   /** Keep the sandbox after terminal result so follow-up prompts can resume
    *  it (devin), and check runnerBusy in poll before reading the result. */
   followup?: boolean;
@@ -451,6 +456,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
   readonly id: string;
   readonly keepsTerminalSandbox: boolean;
   readonly supportsSecondaryRepos: boolean;
+  readonly maxConcurrentLanes?: number;
 
   constructor(
     private env: AppEnv,
@@ -460,6 +466,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
     this.keepsTerminalSandbox = d.followup === true;
     // Codex runs on OpenAI's cloud, which never sees the sandbox's ~/xrepo.
     this.supportsSecondaryRepos = d.driver !== "codex";
+    this.maxConcurrentLanes = d.maxConcurrentLanes;
   }
 
   private async note(

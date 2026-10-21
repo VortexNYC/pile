@@ -13,6 +13,7 @@ import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import {
+  CONCURRENT_LANES_PAUSE_PREFIX,
   DEFAULT_GIT_IDENTITY_REPO,
   type AgentSession,
   type Issue,
@@ -443,6 +444,32 @@ export async function dispatchAgent(
           actorId: SPEND_CAP_ACTOR,
           actorType: "agent",
         });
+      }
+    }
+    if (!pause) {
+      // VTX-621 — per-agent concurrency cap: park lanes past the provider's
+      // cap so a burst can't trip its rate limit. Paused holds don't count
+      // as live; the sweep lifts the marker pause once a slot frees.
+      const cap = provider.maxConcurrentLanes;
+      if (cap != null) {
+        const liveForAgent = (
+          await stub.listAgentSessions({ limit: 200 })
+        ).filter(
+          (s) =>
+            s.agentId === agentId &&
+            // A promote is the cap's own drain — counting the promoted row
+            // would re-trip the cap and re-park it before it runs.
+            s.id !== options?.promoteSessionId &&
+            !["completed", "failed", "canceled"].includes(s.status) &&
+            s.paused !== 1
+        ).length;
+        if (liveForAgent >= cap) {
+          pause = await stub.pauseAgentType(agentId, {
+            reason: `${CONCURRENT_LANES_PAUSE_PREFIX}${agentId} at ${cap} live lanes`,
+            actorId: "system",
+            actorType: "system",
+          });
+        }
       }
     }
     if (pause) {

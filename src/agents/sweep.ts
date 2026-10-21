@@ -10,7 +10,10 @@ import type {
   AgentSessionStatus,
   Issue,
 } from "../types/workspace.js";
-import { RATE_LIMIT_PAUSE_PREFIX } from "../types/workspace.js";
+import {
+  CONCURRENT_LANES_PAUSE_PREFIX,
+  RATE_LIMIT_PAUSE_PREFIX,
+} from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
 import type { ComputeBackend } from "./compute.js";
 import { resolveGeneratedConflict } from "./conflict-fix.js";
@@ -1452,16 +1455,37 @@ export async function sweepAgentSessions(
         env.WORKSPACE_DURABLE_OBJECT.idFromName(id)
       );
       await stub.setOrganizationId(id);
-      // VTX-621 — lift expired provider rate-limit pauses: the reason
-      // carries the reset instant; once past, resume the agent type and
-      // drain the parked holds through the normal bounded path.
+      // VTX-621 — lift auto-managed pauses whose condition cleared:
+      // rate-limit holds once the reset instant passes, concurrency-cap
+      // holds once live lanes fall under the cap. Operator/spend-cap
+      // pauses (other reasons) never lift here.
       for (const pause of await stub.listAgentPauses().catch(() => [])) {
-        const until =
-          typeof pause.reason === "string" &&
-          pause.reason.startsWith(RATE_LIMIT_PAUSE_PREFIX)
-            ? Date.parse(pause.reason.slice(RATE_LIMIT_PAUSE_PREFIX.length))
-            : NaN;
-        if (!Number.isFinite(until) || until > now) continue;
+        let lift = false;
+        if (pause.reason?.startsWith(RATE_LIMIT_PAUSE_PREFIX)) {
+          const until = Date.parse(
+            pause.reason.slice(RATE_LIMIT_PAUSE_PREFIX.length)
+          );
+          lift = Number.isFinite(until) && until <= now;
+        } else if (pause.reason?.startsWith(CONCURRENT_LANES_PAUSE_PREFIX)) {
+          let cap: number | undefined;
+          try {
+            cap = getAgentProvider(pause.agentId, env).maxConcurrentLanes;
+          } catch {
+            cap = undefined;
+          }
+          if (cap != null) {
+            const liveForAgent = (
+              await stub.listAgentSessions({ limit: 200 }).catch(() => [])
+            ).filter(
+              (s) =>
+                s.agentId === pause.agentId &&
+                !TERMINAL_STATUSES.has(s.status) &&
+                s.paused !== 1
+            ).length;
+            lift = liveForAgent < cap;
+          }
+        }
+        if (!lift) continue;
         // Drain only when this pass won the delete — overlapping passes
         // must not both release the same holds.
         const resumed = await stub
