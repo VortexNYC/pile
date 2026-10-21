@@ -35,11 +35,17 @@ export const MAX_LANE_REDISPATCHES = 2;
 const REDISPATCH_BACKOFF_BASE_MS = 5 * 60 * 1000;
 
 /** Delay before the next automatic redispatch, given how many already ran:
- *  5m after the first, 10m after the second (though the cap stops there). */
-export function redispatchBackoffMs(priorAttempts: number): number {
-  return priorAttempts <= 0
-    ? 0
-    : REDISPATCH_BACKOFF_BASE_MS * 2 ** (priorAttempts - 1);
+ *  ~5m after the first, ~10m after the second (though the cap stops there).
+ *  ±25% jitter — lanes that failed together must not retry together: a
+ *  synchronized wave into a sick Daytona just re-fails in lockstep.
+ *  `rand` is injectable so tests stay deterministic. */
+export function redispatchBackoffMs(
+  priorAttempts: number,
+  rand: () => number = Math.random
+): number {
+  if (priorAttempts <= 0) return 0;
+  const base = REDISPATCH_BACKOFF_BASE_MS * 2 ** (priorAttempts - 1);
+  return Math.round(base * (0.75 + rand() * 0.5));
 }
 // A lane's budget follows nudge redispatches (prompt.redispatch → retryOf),
 // so a cold-dispatched successor doesn't start from zero. Human retries

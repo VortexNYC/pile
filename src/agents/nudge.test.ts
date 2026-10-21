@@ -485,10 +485,18 @@ describe("nudgeLane redispatch gating (PILE-452)", () => {
     ).toBe(true);
   });
 
-  it("schedules exponential backoff between attempts", () => {
+  it("schedules jittered exponential backoff between attempts", () => {
     expect(redispatchBackoffMs(0)).toBe(0);
-    expect(redispatchBackoffMs(1)).toBe(5 * 60 * 1000);
-    expect(redispatchBackoffMs(2)).toBe(10 * 60 * 1000);
-    expect(redispatchBackoffMs(3)).toBe(20 * 60 * 1000);
+    expect(redispatchBackoffMs(1, () => 0.5)).toBe(5 * 60 * 1000);
+    expect(redispatchBackoffMs(2, () => 0.5)).toBe(10 * 60 * 1000);
+    expect(redispatchBackoffMs(3, () => 0.5)).toBe(20 * 60 * 1000);
+    // ±25% jitter around the base.
+    expect(redispatchBackoffMs(1, () => 0)).toBe(
+      Math.round(5 * 60 * 1000 * 0.75)
+    );
+    expect(redispatchBackoffMs(1, () => 0.999)).toBeLessThanOrEqual(
+      Math.round(5 * 60 * 1000 * 1.25)
+    );
+    expect(redispatchBackoffMs(1, () => 0.999)).toBeGreaterThan(5 * 60 * 1000);
   });
 });

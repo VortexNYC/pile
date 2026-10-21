@@ -39,6 +39,14 @@ const PR_FILES_PAGE_CAP = 10;
 // Verdicts are published by the sweep; past this age a terminal review
 // session is presumed handled (or abandoned) and no longer scanned.
 const PUBLISH_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+// PILE-452 — a single PR wave was starting 7+ review sandboxes inside a
+// minute, flooding Daytona's concurrency quota and starving work lanes.
+// Cap live review lanes; a deferred request records nothing, so the next
+// sweep pass or webhook retries once capacity frees.
+export const MAX_CONCURRENT_REVIEW_LANES = 3;
+// Starts that pass the cap still land within the same second when a wave
+// hits — a short jittered delay decorrelates them before Daytona sees them.
+const REVIEW_START_JITTER_MS = 10_000;
 // PILE-445 — a non-completed pile-review check run older than this with no
 // live lane behind it is orphaned: the lane died before it could publish
 // (provisioning failure, lost session record, a dropped resolve PATCH) and
@@ -85,10 +93,15 @@ export interface ReviewTarget {
 export interface ReviewDeps {
   fetch?: typeof fetch;
   now?: number;
+  /** Test seam — the jittered delay before a review-lane start. */
+  sleep?: (ms: number) => Promise<void>;
+  /** Test seam — jitter source for the start delay. */
+  random?: () => number;
 }
 
 export type ReviewRequestOutcome =
   | "deduped"
+  | "deferred"
   | "disabled"
   | "skipped_generated"
   | "dispatched"
@@ -702,6 +715,23 @@ export async function requestPrReview(
       }
       return "deduped";
     }
+    // PILE-452 — review-lane starts share the provider's concurrency quota:
+    // a PR wave must not fan out unbounded. Deferred requests leave no
+    // dedupe marker, so the next pass retries once lanes drain.
+    const liveReviewLanes = (
+      await stub.listAgentSessions({ limit: 200 })
+    ).filter(
+      (s) =>
+        s.purpose === REVIEW_PURPOSE && !REVIEW_TERMINAL_STATUSES.has(s.status)
+    ).length;
+    if (liveReviewLanes >= MAX_CONCURRENT_REVIEW_LANES) {
+      console.log("pile-review deferred — review lanes at capacity", {
+        prUrl: target.prUrl,
+        headSha: target.headSha,
+        liveReviewLanes,
+      });
+      return "deferred";
+    }
     // Takeover: one lane + one run per attempt — whichever record survives
     // (session event or run count) bounds the retries. Resolve the orphaned
     // run, then fall through to a fresh dispatch for the same sha.
@@ -766,6 +796,15 @@ export async function requestPrReview(
     );
     const providerConfig = await loadProviderConfig(env, stub, agentId);
     try {
+      // PILE-452 — stagger the actual start: a wave of reviews that all
+      // passed the cap together still hits Daytona one jittered slot at a
+      // time instead of in the same second.
+      const jitterMs = Math.floor(
+        (deps.random ?? Math.random)() * REVIEW_START_JITTER_MS
+      );
+      await (
+        deps.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)))
+      )(jitterMs);
       const session = await dispatchAgent(
         resolveAgentEnv(env, providerConfig ?? undefined),
         agentId,

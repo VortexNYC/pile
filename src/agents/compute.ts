@@ -16,6 +16,12 @@ const CF_SLEEP_AFTER = "4h"; // leak ceiling, above the runner's 2h timeout
 // Bound every compute I/O call — a wedged sandbox or dead toolbox must fail
 // fast, not hold the request/DO open indefinitely (PILE-217).
 const IO_TIMEOUT_MS = 30_000;
+// PILE-452 — POST /sandbox blocks server-side until the box is started, and
+// real lanes (full prompt + RUNNER_PY_B64 env) routinely crossed the shared
+// 30s I/O bound: the request aborted while Daytona kept provisioning, so the
+// dispatch died AND the sandbox leaked. Create gets its own ~2min budget;
+// waitForStarted keeps its own poll budget after it.
+const CREATE_TIMEOUT_MS = 120_000;
 
 function ioTimeout<T>(promise: Promise<T>, what: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -202,13 +208,17 @@ export class DaytonaBackend implements ComputeBackend {
     private config: { apiKey: string; apiUrl: string }
   ) {}
 
-  private async request(path: string, init?: RequestInit): Promise<Response> {
+  private async request(
+    path: string,
+    init?: RequestInit,
+    timeoutMs = IO_TIMEOUT_MS
+  ): Promise<Response> {
     // PILE-472 — one automatic retry on recoverable responses: 429 honors
     // the Retry-After header, 5xx a short backoff. Non-recoverable errors
     // (4xx) pass straight through to the caller's error handling.
     const doFetch = () =>
       fetch(`${this.config.apiUrl}${path}`, {
-        signal: AbortSignal.timeout(IO_TIMEOUT_MS),
+        signal: AbortSignal.timeout(timeoutMs),
         ...init,
         headers: {
           Authorization: `Bearer ${this.config.apiKey}`,
@@ -223,7 +233,10 @@ export class DaytonaBackend implements ComputeBackend {
         const waitMs = retryAfter
           ? Math.min(Number(retryAfter) * 1000 || 2000, 15000)
           : 1500;
-        await delay(waitMs);
+        // PILE-452 — jittered wait: a saturated fleet answered by a fleet-
+        // wide retry burst just fails again in lockstep. Never below the
+        // server-supplied Retry-After.
+        await delay(Math.round(waitMs * (1 + Math.random() * 0.5)));
         res = await doFetch();
       }
       return res;
@@ -242,54 +255,68 @@ export class DaytonaBackend implements ComputeBackend {
     agentLabel: string;
     env: Record<string, string>;
   }): Promise<ComputeSandbox> {
-    const res = await this.request("/sandbox", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: opts.name,
-        snapshot: this.env.DAYTONA_SNAPSHOT ?? "daytona-vm-small",
-        env: opts.env,
-        labels: {
-          "vortex.session": opts.sessionId,
-          "vortex.org": opts.organizationId,
-          "vortex.agent": opts.agentLabel,
+    try {
+      const res = await this.request(
+        "/sandbox",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: opts.name,
+            snapshot: this.env.DAYTONA_SNAPSHOT ?? "daytona-vm-small",
+            env: opts.env,
+            labels: {
+              "vortex.session": opts.sessionId,
+              "vortex.org": opts.organizationId,
+              "vortex.agent": opts.agentLabel,
+            },
+            autoStopInterval: 240, // leak ceiling: 4h, above the runner's 2h timeout
+            autoDeleteInterval: -1,
+            ...(this.env.DAYTONA_VOLUME_ID
+              ? {
+                  volumes: [
+                    {
+                      volumeId: this.env.DAYTONA_VOLUME_ID,
+                      mountPath: "/home/daytona/cache",
+                    },
+                  ],
+                }
+              : {}),
+          }),
         },
-        autoStopInterval: 240, // leak ceiling: 4h, above the runner's 2h timeout
-        autoDeleteInterval: -1,
-        ...(this.env.DAYTONA_VOLUME_ID
-          ? {
-              volumes: [
-                {
-                  volumeId: this.env.DAYTONA_VOLUME_ID,
-                  mountPath: "/home/daytona/cache",
-                },
-              ],
-            }
-          : {}),
-      }),
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      // PILE-472 — a create that failed on a transport timeout may have
-      // actually landed server-side. Before surfacing the failure, adopt
-      // the sandbox by name so a retried dispatch doesn't orphan it.
-      const adopted = await this.findSandbox(opts.sessionId, opts.name).catch(
+        CREATE_TIMEOUT_MS
+      );
+      if (!res.ok) {
+        const text = await res.text();
+        throw computeError(
+          daytonaFailure("Daytona sandbox create failed", res.status, text)
+        );
+      }
+      const created = daytonaSandboxSchema.parse(await res.json());
+      const s = await this.waitForStarted(created.id);
+      return {
+        id: s.id,
+        name: s.name,
+        state: s.state,
+        organizationId: s.labels?.["vortex.org"],
+        error: s.error ?? null,
+        toolboxProxyUrl: s.toolboxProxyUrl,
+      };
+    } catch (err) {
+      // PILE-452/PILE-472 — a failed create may still have landed server-side
+      // (the 120s abort fires mid-provision; a 5xx can follow a successful
+      // create). Reconcile by the session label: started → adopt it so the
+      // lane proceeds; anything else → delete so the corpse can't leak
+      // against the account's concurrency quota.
+      const found = await this.findSandbox(opts.sessionId, opts.name).catch(
         () => null
       );
-      if (adopted) return adopted;
-      throw computeError(
-        daytonaFailure("Daytona sandbox create failed", res.status, text)
-      );
+      if (found) {
+        if (found.state === "started") return found;
+        await this.deleteSandbox(found).catch(() => {});
+      }
+      throw err;
     }
-    const created = daytonaSandboxSchema.parse(await res.json());
-    return this.waitForStarted(created.id).then((s) => ({
-      id: s.id,
-      name: s.name,
-      state: s.state,
-      organizationId: s.labels?.["vortex.org"],
-      error: s.error ?? null,
-      toolboxProxyUrl: s.toolboxProxyUrl,
-    }));
   }
 
   private async waitForStarted(

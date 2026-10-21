@@ -446,7 +446,14 @@ describe("Daytona hardening (PILE-472)", () => {
     const calls: string[] = [];
     const pages = [
       [{ id: "other-1", name: "a", state: "started", labels: {} }],
-      [{ id: "mine", name: "x", state: "started", labels: { "vortex.session": "sess-1" } }],
+      [
+        {
+          id: "mine",
+          name: "x",
+          state: "started",
+          labels: { "vortex.session": "sess-1" },
+        },
+      ],
       [],
     ];
     const origFetch = globalThis.fetch;
@@ -459,10 +466,10 @@ describe("Daytona hardening (PILE-472)", () => {
       });
     }) as typeof fetch;
     try {
-      const backend = new DaytonaBackend(
-        {} as never,
-        { apiKey: "k", apiUrl: "https://day" }
-      );
+      const backend = new DaytonaBackend({} as never, {
+        apiKey: "k",
+        apiUrl: "https://day",
+      });
       const found = await backend.findSandbox("sess-1", "x");
       expect(found?.id).toBe("mine");
       expect(calls.length).toBe(2);
@@ -590,6 +597,150 @@ describe("DaytonaBackend infra classification + quota surfacing (PILE-452)", () 
         "failed to resolve container IP"
       );
     }
+    vi.unstubAllGlobals();
+  });
+
+  it("adopts a sandbox that started despite the create call failing", async () => {
+    // The create request dies on the client side (timeout abort, transport)
+    // but Daytona finished the start server-side — the lane takes the box
+    // over by its vortex.session label instead of failing + orphaning it.
+    const calls = stubResponses((url, init) => {
+      if (init?.method === "POST" && url.endsWith("/sandbox")) {
+        return Promise.reject(
+          new Error("The operation was aborted due to timeout")
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          items: [
+            {
+              id: "sb-late",
+              name: "sbx-late",
+              state: "started",
+              labels: { "vortex.session": "s-late" },
+            },
+          ],
+        }),
+        { status: 200 }
+      );
+    });
+    const backend = computeBackend(daytonaEnv());
+    const adopted = await backend.createSandbox({
+      name: "sbx-late",
+      sessionId: "s-late",
+      organizationId: "o1",
+      agentLabel: "devin-cli",
+      env: {},
+    });
+    expect(adopted.id).toBe("sb-late");
+    expect(adopted.state).toBe("started");
+    expect(calls.some((c) => c.startsWith("DELETE"))).toBe(false);
+    vi.unstubAllGlobals();
+  });
+
+  it("deletes a mid-start sandbox when the create call fails", async () => {
+    // Same failure shape, but the box hasn't reached "started" — keeping it
+    // leaks a slot against the concurrency quota while the session is
+    // marked failed and never polls it again.
+    const calls = stubResponses((url, init) => {
+      if (init?.method === "POST" && url.endsWith("/sandbox")) {
+        return Promise.reject(
+          new Error("The operation was aborted due to timeout")
+        );
+      }
+      if (init?.method === "DELETE") {
+        return new Response("{}", { status: 200 });
+      }
+      return new Response(
+        JSON.stringify({
+          items: [
+            {
+              id: "sb-orphan",
+              name: "sbx-orphan",
+              state: "starting",
+              labels: { "vortex.session": "s-orphan" },
+            },
+          ],
+        }),
+        { status: 200 }
+      );
+    });
+    const backend = computeBackend(daytonaEnv());
+    try {
+      await backend.createSandbox({
+        name: "sbx-orphan",
+        sessionId: "s-orphan",
+        organizationId: "o1",
+        agentLabel: "devin-cli",
+        env: {},
+      });
+      expect.unreachable();
+    } catch (err) {
+      expect(isComputeInfraError(err)).toBe(true);
+      expect((err as Error).message).toContain("aborted due to timeout");
+    }
+    expect(
+      calls.some((c) => c.startsWith("DELETE") && c.includes("sb-orphan"))
+    ).toBe(true);
+    vi.unstubAllGlobals();
+  });
+
+  it("cleans up the sandbox when post-create startup fails", async () => {
+    // The create returned a record but the box went to state "error" — the
+    // corpse must be deleted so it doesn't hold a quota slot.
+    const calls = stubResponses((url, init) => {
+      if (init?.method === "DELETE") {
+        return new Response("{}", { status: 200 });
+      }
+      if (init?.method === "POST" && url.endsWith("/sandbox")) {
+        return new Response(
+          JSON.stringify({ id: "sb-err", name: "sbx-err", state: "starting" }),
+          { status: 200 }
+        );
+      }
+      if (url.endsWith("/sandbox/sb-err")) {
+        return new Response(
+          JSON.stringify({
+            id: "sb-err",
+            name: "sbx-err",
+            state: "error",
+            error: "sandbox exited with code 1 before becoming ready",
+          }),
+          { status: 200 }
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          items: [
+            {
+              id: "sb-err",
+              name: "sbx-err",
+              state: "error",
+              error: "sandbox exited with code 1 before becoming ready",
+              labels: { "vortex.session": "s-err" },
+            },
+          ],
+        }),
+        { status: 200 }
+      );
+    });
+    const backend = computeBackend(daytonaEnv());
+    try {
+      await backend.createSandbox({
+        name: "sbx-err",
+        sessionId: "s-err",
+        organizationId: "o1",
+        agentLabel: "devin-cli",
+        env: {},
+      });
+      expect.unreachable();
+    } catch (err) {
+      expect(isComputeInfraError(err)).toBe(true);
+      expect((err as Error).message).toContain("exited with code 1");
+    }
+    expect(
+      calls.some((c) => c.startsWith("DELETE") && c.includes("sb-err"))
+    ).toBe(true);
     vi.unstubAllGlobals();
   });
 });

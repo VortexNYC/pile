@@ -21,6 +21,8 @@ import {
   fleetInfraStreak,
   PROVIDER_UNHEALTHY_STREAK,
   providerInfraStreak,
+  startFailureRateUnhealthy,
+  startFailureStats,
 } from "./fleet-health.js";
 import {
   buildHangReport,
@@ -1122,6 +1124,39 @@ async function reapTerminalArtifacts(
     }
   }
 
+  // PILE-452 — kept-alive sandboxes are real slots on the provider's
+  // concurrency quota (Daytona counts parked boxes). When a provider's
+  // start signal is red — an infra-failure streak or a >20% start-failure
+  // rate over the trailing window — its whole kept fleet is released so
+  // fresh lanes have somewhere to land. A resume that loses its parked box
+  // falls back to cold dispatch through redispatchCompletedLane.
+  const providerStreak = new Map<string, number>();
+  const providerBroken = new Set<string>();
+  const rowsByProvider = new Map<string, AgentSession[]>();
+  for (const s of recent) {
+    const list = rowsByProvider.get(s.agentId) ?? [];
+    list.push(s);
+    rowsByProvider.set(s.agentId, list);
+    if (providerBroken.has(s.agentId)) continue;
+    // `created`/`waiting` rows are undetermined — same skip as
+    // providerInfraStreak.
+    if (s.status === "created" || s.status === "waiting") continue;
+    if (s.infraFailure === 1 && TERMINAL_STATUSES.has(s.status)) {
+      providerStreak.set(s.agentId, (providerStreak.get(s.agentId) ?? 0) + 1);
+    } else {
+      providerBroken.add(s.agentId);
+    }
+  }
+  const providerRed = (agentId: string): boolean =>
+    (providerStreak.get(agentId) ?? 0) >= PROVIDER_UNHEALTHY_STREAK ||
+    startFailureRateUnhealthy(
+      startFailureStats(rowsByProvider.get(agentId) ?? [], now)
+    );
+  for (const [agentId, list] of inWindowByProvider) {
+    if (!providerRed(agentId)) continue;
+    for (const s of list) forceReap.add(s.id);
+  }
+
   for (const session of recent) {
     if (!TERMINAL_STATUSES.has(session.status)) continue;
     // PILE-238 — endedAt is the reaper anchor; a write path that skips it
@@ -2066,6 +2101,8 @@ interface PrSyncDeps {
   /** Compute backend factory for the deterministic conflict fixer
    *  (PILE-251) — injected in tests. */
   compute?: (env: WorkerEnv, agentId: string) => ComputeBackend;
+  /** Test seam — the review-lane start jitter (PILE-452). */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 // PILE-446 — a merged/closed PR retires its branch: lanes still in flight
@@ -2632,7 +2669,7 @@ export async function syncOpenPrSessions(
             body: typeof pr.body === "string" ? pr.body : null,
           },
           token,
-          { fetch: ghFetch }
+          { fetch: ghFetch, sleep: deps.sleep }
         );
       }
 

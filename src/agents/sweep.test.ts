@@ -1757,6 +1757,101 @@ describe("sweepAgentSessions", () => {
     expect(rows.every((r) => r.lastStateHash !== "reaped")).toBe(true);
   });
 
+  // PILE-452 — kept-alive sandboxes hold real slots on the provider's
+  // concurrency quota: while a provider's start signal is red its parked
+  // fleet is released so fresh lanes have somewhere to land.
+  it("releases kept sandboxes while the provider's start signal is red", async () => {
+    const agentId = `mock-red-${crypto.randomUUID().slice(0, 8)}`;
+    const canceled: string[] = [];
+    registerMock(agentId, {
+      keepsTerminalSandbox: true,
+      cancel: (id) => {
+        canceled.push(id);
+      },
+    });
+    const issue = await stub.createIssue({ title: "Red provider kept" });
+    // Two kept sandboxes inside the resume window — under the per-provider
+    // cap, so nothing but the red signal would reap them.
+    const keptIds: string[] = [];
+    for (let i = 0; i < 2; i++) {
+      const kept = await stub.createAgentSession({
+        issueId: issue.id,
+        agentId,
+        provider: agentId,
+        actorId: userId,
+        actorType: "user",
+        status: "completed",
+      });
+      await stub.updateAgentSession(kept.id, {
+        endedAt: new Date(Date.now() - 60_000).toISOString(),
+      });
+      keptIds.push(kept.id);
+    }
+    // PROVIDER_UNHEALTHY_STREAK consecutive infra deaths, newest-first —
+    // a start-failure streak the streak counter and the rate both see.
+    const deadIds: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const dead = await stub.createAgentSession({
+        issueId: issue.id,
+        agentId,
+        provider: agentId,
+        actorId: userId,
+        actorType: "user",
+        status: "created",
+      });
+      await stub.applyAgentSessionResult(dead.id, {
+        status: "failed",
+        result: "Daytona sandbox create failed: 400 exited with code 1",
+        infraFailure: true,
+      });
+      deadIds.push(dead.id);
+    }
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    const rows = await stub.listAgentSessions({ issueId: issue.id });
+    const kept = rows.filter((r) => keptIds.includes(r.id));
+    expect(kept.every((r) => r.lastStateHash === "reaped")).toBe(true);
+    // The dead lanes' parked boxes are released along with the kept ones —
+    // they hold quota slots too.
+    expect(canceled.toSorted()).toEqual([...keptIds, ...deadIds].toSorted());
+  });
+
+  // Same setup with a green provider — the parked boxes survive.
+  it("keeps the parked fleet when the provider's start signal is green", async () => {
+    const agentId = `mock-green-${crypto.randomUUID().slice(0, 8)}`;
+    const canceled: string[] = [];
+    registerMock(agentId, {
+      keepsTerminalSandbox: true,
+      cancel: (id) => {
+        canceled.push(id);
+      },
+    });
+    const issue = await stub.createIssue({ title: "Green provider kept" });
+    const keptIds: string[] = [];
+    for (let i = 0; i < 2; i++) {
+      const kept = await stub.createAgentSession({
+        issueId: issue.id,
+        agentId,
+        provider: agentId,
+        actorId: userId,
+        actorType: "user",
+        status: "completed",
+      });
+      await stub.updateAgentSession(kept.id, {
+        endedAt: new Date(Date.now() - 60_000).toISOString(),
+      });
+      keptIds.push(kept.id);
+    }
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    const rows = await stub.listAgentSessions({ issueId: issue.id });
+    const kept = rows.filter((r) => keptIds.includes(r.id));
+    expect(kept.every((r) => r.lastStateHash !== "reaped")).toBe(true);
+    expect(canceled).toHaveLength(0);
+  });
+
   it("cancels and escalates a lane past its maxDuration without retrying", async () => {
     const agentId = `mock-budget-${crypto.randomUUID().slice(0, 8)}`;
     registerMock(agentId, {
@@ -2294,6 +2389,7 @@ describe("syncOpenPrSessions", () => {
     await syncOpenPrSessions(env, stub, organizationId, {
       tokenForRepo: async () => "gh-test-token",
       fetch: ghFetchStale as typeof fetch,
+      sleep: () => Promise.resolve(),
     });
 
     // The orphaned run resolved neutral and a fresh lane + run took over.
@@ -3984,7 +4080,6 @@ describe("spend caps (PILE-425)", () => {
         actorType: "user",
       });
     }
-    const { releasePausedSessions } = await import("./sweep.js");
     const released = await releasePausedSessions(
       env,
       stub,

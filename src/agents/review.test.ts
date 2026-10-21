@@ -10,6 +10,7 @@ import { MockAgentProvider } from "./harness.js";
 import { registerAgentProvider } from "./index.js";
 import {
   buildReviewDiff,
+  MAX_CONCURRENT_REVIEW_LANES,
   parseReviewVerdict,
   publishReviewVerdicts,
   REVIEW_CHECK_NAME,
@@ -22,6 +23,8 @@ import {
 } from "./review.js";
 
 const workerEnv = env as unknown as WorkerEnv;
+// PILE-452 — dispatch jitter is real (0–10s) but the suite must not pay it.
+const noSleep = () => Promise.resolve();
 const REPO = "vortexnyc/pile";
 const GENERATED = ["src/mcp/openapi.json", "src/mcp/mcp-tools.ts"];
 
@@ -392,7 +395,7 @@ describe("requestPrReview / publishReviewVerdicts", () => {
       issue,
       target("sha-disabled"),
       "tok",
-      { fetch: gh.fetch }
+      { fetch: gh.fetch, sleep: noSleep }
     );
     expect(outcome).toBe("disabled");
     expect(gh.calls.some((c) => c.method === "POST")).toBe(false);
@@ -412,7 +415,7 @@ describe("requestPrReview / publishReviewVerdicts", () => {
       issue,
       target("sha-generated"),
       "tok",
-      { fetch: gh.fetch }
+      { fetch: gh.fetch, sleep: noSleep }
     );
     expect(outcome).toBe("skipped_generated");
     expect(dispatched.length).toBe(before);
@@ -445,7 +448,7 @@ describe("requestPrReview / publishReviewVerdicts", () => {
       issue,
       t,
       "tok",
-      { fetch: gh.fetch }
+      { fetch: gh.fetch, sleep: noSleep }
     );
     expect(outcome).toBe("dispatched");
     expect(dispatched.length).toBe(before + 1);
@@ -472,7 +475,7 @@ describe("requestPrReview / publishReviewVerdicts", () => {
       issue,
       t,
       "tok",
-      { fetch: gh.fetch }
+      { fetch: gh.fetch, sleep: noSleep }
     );
     expect(again).toBe("deduped");
     expect(dispatched.length).toBe(before + 1);
@@ -573,7 +576,7 @@ describe("requestPrReview / publishReviewVerdicts", () => {
       issue,
       t,
       "tok",
-      { fetch: gh.fetch }
+      { fetch: gh.fetch, sleep: noSleep }
     );
     expect(outcome).toBe("dispatched");
     const review = (await stub.listAgentSessions({ issueId: issue.id })).find(
@@ -816,7 +819,7 @@ describe("requestPrReview / publishReviewVerdicts", () => {
       issue,
       target("sha-existing"),
       "tok",
-      { fetch: gh.fetch }
+      { fetch: gh.fetch, sleep: noSleep }
     );
     expect(outcome).toBe("deduped");
     expect(dispatched.length).toBe(before);
@@ -861,7 +864,7 @@ describe("requestPrReview / publishReviewVerdicts", () => {
       issue,
       target("sha-prov-fail"),
       "tok",
-      { fetch: gh.fetch }
+      { fetch: gh.fetch, sleep: noSleep }
     );
     expect(outcome).toBe("failed");
     const patch = gh.calls.find(
@@ -903,7 +906,7 @@ describe("requestPrReview / publishReviewVerdicts", () => {
       issue,
       target("sha-event-write-fail"),
       "tok",
-      { fetch: gh.fetch }
+      { fetch: gh.fetch, sleep: noSleep }
     );
     expect(outcome).toBe("failed");
     expect(dispatched.length).toBe(before + 1);
@@ -939,7 +942,7 @@ describe("requestPrReview / publishReviewVerdicts", () => {
       issue,
       target("sha-list-fail"),
       "tok",
-      { fetch: gh.fetch }
+      { fetch: gh.fetch, sleep: noSleep }
     );
     expect(outcome).toBe("deduped");
     expect(dispatched.length).toBe(before);
@@ -969,7 +972,7 @@ describe("requestPrReview / publishReviewVerdicts", () => {
       issue,
       t,
       "tok",
-      { fetch: gh.fetch }
+      { fetch: gh.fetch, sleep: noSleep }
     );
     expect(outcome).toBe("dispatched");
     expect(dispatched.length).toBe(before + 1);
@@ -1023,7 +1026,7 @@ describe("requestPrReview / publishReviewVerdicts", () => {
       issue,
       t,
       "tok",
-      { fetch: gh.fetch }
+      { fetch: gh.fetch, sleep: noSleep }
     );
     expect(outcome).toBe("deduped");
     expect(dispatched.length).toBe(before);
@@ -1062,10 +1065,59 @@ describe("requestPrReview / publishReviewVerdicts", () => {
       issue,
       t,
       "tok",
-      { fetch: gh.fetch }
+      { fetch: gh.fetch, sleep: noSleep }
     );
     expect(outcome).toBe("dispatched");
     expect(dispatched.length).toBe(before + 1);
+  });
+
+  // PILE-452 — a PR wave must not fan out unbounded: when the live
+  // review-lane count is at the cap the request defers instead of starting
+  // another sandbox. Nothing is recorded, so the next pass retries.
+  it("defers a review start while the live review-lane cap is full", async () => {
+    const issue = await laneIssue();
+    const parked: string[] = [];
+    try {
+      for (let i = 0; i < MAX_CONCURRENT_REVIEW_LANES; i++) {
+        const other = await stub.createIssue({ title: `Busy review ${i}` });
+        const lane = await stub.createAgentSession({
+          issueId: other.id,
+          agentId: "review-mock",
+          provider: "review-mock",
+          actorId: userId,
+          actorType: "user",
+          status: "running",
+          purpose: REVIEW_PURPOSE,
+        });
+        parked.push(lane.id);
+      }
+      const gh = fakeGithub({
+        config: REVIEW_CONFIG,
+        files: [{ filename: "src/a.ts", patch: "@@" }],
+      });
+      const before = dispatched.length;
+      const outcome = await requestPrReview(
+        workerEnv,
+        stub,
+        organizationId,
+        issue,
+        target("sha-capped"),
+        "tok",
+        { fetch: gh.fetch, sleep: noSleep }
+      );
+      expect(outcome).toBe("deferred");
+      expect(dispatched.length).toBe(before);
+      // No check run was opened — the deferral leaves nothing to reconcile.
+      expect(
+        gh.calls.some(
+          (c) => c.method === "POST" && c.url.endsWith("/check-runs")
+        )
+      ).toBe(false);
+    } finally {
+      for (const id of parked) {
+        await stub.applyAgentSessionResult(id, { status: "completed" });
+      }
+    }
   });
 
   it("drops a stale verdict when the PR head moved (PILE-470)", async () => {
