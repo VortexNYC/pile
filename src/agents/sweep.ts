@@ -10,6 +10,7 @@ import type {
   AgentSessionStatus,
   Issue,
 } from "../types/workspace.js";
+import { RATE_LIMIT_PAUSE_PREFIX } from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
 import type { ComputeBackend } from "./compute.js";
 import { resolveGeneratedConflict } from "./conflict-fix.js";
@@ -649,17 +650,18 @@ async function retryDeadLane(
   try {
     const issue = await stub.getIssue(session.issueId);
     if (!issue) return;
-    // PILE-452 — a paused agent type takes no auto-retry: the dispatch
-    // below also runs onPaused:"fail" so nothing can park mid-flight.
+    // PILE-452/VTX-621 — a paused agent type parks its retry as a paused
+    // hold (waiting + paused) instead of skipping outright: a rate-limit
+    // or operator pause must not strand the lane permanently — the hold
+    // drains on resume through releasePausedSessions.
     const pause = await stub.getAgentPause(session.agentId).catch(() => null);
     if (pause) {
       await stub.addAgentActivity({
         sessionId: session.id,
         actorId: session.actorId,
-        type: "error",
-        message: `auto-retry skipped — agent type "${session.agentId}" is paused${pause.reason ? `: ${pause.reason}` : ""}`,
+        type: "thought",
+        message: `auto-retry parked — agent type "${session.agentId}" is paused${pause.reason ? `: ${pause.reason}` : ""}; will resume on lift`,
       });
-      return;
     }
     // PILE-321 — same as a manual retry: a lane dispatched before the issue
     // had a repo inherits the team's defaultRepo on redispatch.
@@ -695,7 +697,7 @@ async function retryDeadLane(
         secondaryRepos: parseStoredSecondaryRepos(session.secondaryRepos),
         effort: session.effort ?? undefined,
         maxDurationMinutes: session.maxDurationMinutes ?? undefined,
-        onPaused: "fail",
+        onPaused: pause ? "hold" : "fail",
       }
     );
     await stub.updateAgentSession(retried.id, {
@@ -1440,6 +1442,26 @@ export async function sweepAgentSessions(
         env.WORKSPACE_DURABLE_OBJECT.idFromName(id)
       );
       await stub.setOrganizationId(id);
+      // VTX-621 — lift expired provider rate-limit pauses: the reason
+      // carries the reset instant; once past, resume the agent type and
+      // drain the parked holds through the normal bounded path.
+      for (const pause of await stub.listAgentPauses().catch(() => [])) {
+        const until =
+          typeof pause.reason === "string" &&
+          pause.reason.startsWith(RATE_LIMIT_PAUSE_PREFIX)
+            ? Date.parse(pause.reason.slice(RATE_LIMIT_PAUSE_PREFIX.length))
+            : NaN;
+        if (!Number.isFinite(until) || until > now) continue;
+        await stub
+          .resumeAgentType(pause.agentId, {
+            actorId: "pile-sweep",
+            actorType: "system",
+          })
+          .catch(() => false);
+        await releasePausedSessions(env, stub, id, pause.agentId, ctx).catch(
+          () => []
+        );
+      }
       const sessions = [
         ...(await stub.listAgentSessions({ status: "running" })),
         ...(await stub.listAgentSessions({ status: "created" })),

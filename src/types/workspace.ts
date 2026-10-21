@@ -82,6 +82,11 @@ export const ISSUE_STATUSES = [
 export type IssueStatus = (typeof ISSUE_STATUSES)[number];
 
 export const ISSUE_PRIORITIES = ["low", "medium", "high", "urgent"] as const;
+
+// VTX-621 — provider rate-limit pause marker: the pause row's reason carries
+// the reset instant as an ISO suffix so the sweep can lift it on expiry.
+export const RATE_LIMIT_PAUSE_PREFIX = "rate-limit until ";
+export const RATE_LIMIT_HOLD_MS = 20 * 60 * 1000;
 export type IssuePriority = (typeof ISSUE_PRIORITIES)[number];
 
 export const ISSUE_RESOLUTIONS = [
