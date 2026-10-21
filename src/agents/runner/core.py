@@ -1,7 +1,10 @@
 # Pile agent runner — shared core.
 #
 # This file is concatenated with a per-agent driver (cursor.py, devin.py,
-# codex.py) and shipped to the sandbox as RUNNER_PY_B64. Everything an agent
+# codex.py) and written to the sandbox as /tmp/pile/run.py (PILE-595 — env
+# values cap at 128KB on execve, so the bundle and the prompt travel as
+# files: lane.env is sourced before this runs, prompt.md is read below).
+# Everything an agent
 # lane needs that is NOT agent-specific lives here: transcript tee, redact,
 # agent env allowlist, GitHub token refresh/revoke,
 # repo ops, GitHub API, PR creation, lane digest, GitHub token refresh, log
@@ -113,6 +116,9 @@ GITHUB_TOKEN_EXPIRES_AT = _parse_expiry(os.environ.get('GITHUB_TOKEN_EXPIRES_AT'
 TOKEN_REFRESH_MARGIN_SEC = 300
 REPO_DIR = os.path.join(HOME, 'repo')
 RESULT_FILE = '/tmp/agent-result.json'
+# The lane prompt lives on disk — agent CLIs get it by path or stdin, never
+# argv, which caps a single string at 128KB (PILE-595).
+PROMPT_PATH = '/tmp/pile/prompt.md'
 AGENT_LABEL = os.environ.get('AGENT_LABEL', 'Agent')
 # 'plan' lanes (PILE-283) read the repo and report a plan — never push.
 LANE_MODE = os.environ.get('PILE_LANE_MODE', '')
@@ -191,8 +197,7 @@ SHELL_POLICY = _tier('PILE_SHELL_POLICY')
 RUNNER_SECRET_ENV = {
     'GITHUB_TOKEN', 'GH_TOKEN', 'LANE_TOKEN', 'PILE_TOKEN_URL',
     'PILE_LOG_TOKEN', 'PILE_LOG_URL', 'PILE_CACHE_URL', 'PILE_API_KEY',
-    'DEVIN_CREDENTIALS_B64', 'CODEX_AUTH_JSON_B64', 'RUNNER_PY_B64',
-    'PROMPT_B64',
+    'DEVIN_CREDENTIALS_B64', 'CODEX_AUTH_JSON_B64',
 }
 # Credentials that can write to or mint for the repo — stripped from the
 # agent whenever push is below 'enabled', whatever the shell tier.
@@ -350,7 +355,7 @@ _AGENT_ENV_ALLOW_PREFIXES = ('LC_', 'XDG_')
 _RUNNER_ONLY_ENV = frozenset((
     'GITHUB_TOKEN', 'GITHUB_TOKEN_EXPIRES_AT', 'GH_TOKEN', 'LANE_TOKEN', 'PILE_TOKEN_URL',
     'PILE_LOG_TOKEN', 'PILE_LOG_URL', 'PILE_CACHE_URL', 'PILE_AGENT_ENV_KEYS', 'SECONDARY_REPOS_JSON',
-    'RUNNER_PY_B64', 'PROMPT_B64', 'DEVIN_CREDENTIALS_B64', 'CODEX_AUTH_JSON_B64', 'FOLLOWUP',
+    'DEVIN_CREDENTIALS_B64', 'CODEX_AUTH_JSON_B64', 'FOLLOWUP',
 ))
 
 
@@ -1517,9 +1522,29 @@ def browser_prompt_note():
     return '\n'.join(lines)
 
 
+def read_lane_prompt():
+    # Written by the provision step's file upload — env/argv would cap the
+    # prompt at 128KB (PILE-595).
+    with open(PROMPT_PATH) as f:
+        return f.read()
+
+
 def lane_prompt():
-    prompt = base64.b64decode(os.environ['PROMPT_B64']).decode('utf-8')
-    return prompt + browser_prompt_note()
+    return read_lane_prompt() + browser_prompt_note()
+
+
+def prompt_file(prompt=None):
+    # Agent CLIs get the prompt by path or stdin — argv caps a single string
+    # at 128KB (PILE-595). None means the lane prompt: the run-time browser
+    # note is folded back into PROMPT_PATH so the CLI reads effective text.
+    if prompt is None:
+        prompt = lane_prompt()
+        path = PROMPT_PATH
+    else:
+        path = '/tmp/pile/prompt-turn.md'
+    with open(path, 'w') as f:
+        f.write(prompt)
+    return path
 
 
 # Push appended transcript lines back to Pile so they land in the session
@@ -1711,17 +1736,60 @@ def read_transcript(fallback=''):
         return fallback
 
 
-def write_result(status, pr_url='', result='', report=None, infra=False):
+def write_result(status, pr_url='', result='', report=None, infra=False, usage=None):
     payload = {'status': status, 'prUrl': pr_url, 'branch': BRANCH, 'result': _redact(result)}
     if report:
         payload['report'] = _redact(report)
     if infra:
         payload['infraFailure'] = True
+    # PILE-450 — cumulative run usage (tokens/cost) extracted by the driver;
+    # lands on the session's run receipt so spend caps have real numbers.
+    if usage:
+        payload['usage'] = usage
     with open(RESULT_FILE, 'w') as f:
         json.dump(payload, f)
 
 
-def finalize(output, pushed, report=None):
+def cli_result_usage(evt):
+    # Normalize a stream-json `result` event's usage into the receipt shape
+    # (AgentRunUsage). Absent fields are omitted — the receipt merge treats
+    # missing as "not reported", never zero. Cache tokens fold into
+    # inputTokens: they are billed input, and the rate map has no cache tier.
+    if not isinstance(evt, dict) or evt.get('type') != 'result':
+        return None
+    u = evt.get('usage')
+    if not isinstance(u, dict):
+        return None
+
+    def num(*keys):
+        for k in keys:
+            v = u.get(k)
+            if isinstance(v, (int, float)) and v >= 0:
+                return int(v)
+        return None
+
+    usage = {}
+    inp = num('input_tokens', 'inputTokens') or 0
+    inp += num('cache_read_input_tokens', 'cacheRead') or 0
+    inp += num('cache_creation_input_tokens', 'cacheCreation', 'cacheWrite') or 0
+    out = num('output_tokens', 'outputTokens')
+    if inp:
+        usage['inputTokens'] = inp
+    if out is not None:
+        usage['outputTokens'] = out
+    total = num('total_tokens', 'totalTokens')
+    if total is not None:
+        usage['totalTokens'] = total
+    cost = evt.get('total_cost_usd', u.get('total_cost_usd', u.get('cost_usd')))
+    if isinstance(cost, (int, float)) and cost >= 0:
+        usage['costMicros'] = round(cost * 1_000_000)
+    model = evt.get('model') or os.environ.get('MODEL')
+    if isinstance(model, str) and model:
+        usage['model'] = model
+    return usage or None
+
+
+def finalize(output, pushed, report=None, usage=None):
     # Terminal bookkeeping shared by every driver: digest → PR → result file.
     digest = collect_digest()
     digest['permissions'] = {'push': PUSH_POLICY, 'shell': SHELL_POLICY}
@@ -1732,7 +1800,7 @@ def finalize(output, pushed, report=None):
     if PUSH_POLICY == 'disabled' and REPO:
         payload['patch'] = local_patch()
     result_text = json.dumps(payload)
-    write_result('completed', pr_url, result_text, report=report)
+    write_result('completed', pr_url, result_text, report=report, usage=usage)
     return 0
 
 

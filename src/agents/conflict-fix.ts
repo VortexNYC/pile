@@ -50,11 +50,12 @@ type FixerOutcome =
   | "resolved"
   | "noop"
   | "source_conflict"
+  | "rescue"
   | "failed";
 
 interface FixerEvent {
   headSha: string | null;
-  state: "started" | "resolved" | "source_conflict" | "failed";
+  state: "started" | "resolved" | "source_conflict" | "rescue" | "failed";
   createdAtMs: number;
 }
 
@@ -273,7 +274,20 @@ elif git diff --cached --quiet; then
 else
   git commit -m "regenerate artifacts" || fail "commit failed"
 fi
-git push origin "HEAD:\${BRANCH}" || fail "push failed"
+# PILE-476 — fetch+merge the (possibly moved) base before pushing; a stale
+# push gets a rescue branch, never an auto-retry.
+git fetch origin "\${BASE_REF}" 2>&1 | tail -3
+if ! git merge --no-edit FETCH_HEAD >/dev/null 2>&1; then
+  git merge --abort >/dev/null 2>&1 || true
+fi
+if ! PUSH_ERR=$(git push origin "HEAD:\${BRANCH}" 2>&1); then
+  RESCUE="\${BRANCH}-rescue-$(date +%s)"
+  if git push origin "HEAD:\${RESCUE}" >/dev/null 2>&1; then
+    write_result rescue "\${RESCUE}"
+  else
+    fail "push failed: \${PUSH_ERR}"
+  fi
+fi
 write_result resolved
 `;
 
@@ -296,7 +310,7 @@ async function backendFor(
     : computeBackend(effectiveEnv, session.agentId);
 }
 
-function parseFixResult(raw: string | null): {
+export function parseFixResult(raw: string | null): {
   outcome: Exclude<FixerOutcome, "running">;
   detail: string;
 } {
@@ -309,7 +323,8 @@ function parseFixResult(raw: string | null): {
       outcome:
         outcome === "resolved" ||
         outcome === "noop" ||
-        outcome === "source_conflict"
+        outcome === "source_conflict" ||
+        outcome === "rescue"
           ? outcome
           : "failed",
       detail: typeof parsed.detail === "string" ? parsed.detail : "",
@@ -369,7 +384,7 @@ async function pollConflictFixer(
     const state = await compute.runnerState(sandbox, id);
     if (state === "pending" || state === "running") return "running";
     const result = parseFixResult(
-      await compute.readFile(sandbox, FIXER_RESULT_PATH)
+      await compute.getFile(sandbox, FIXER_RESULT_PATH)
     );
     await compute.deleteSandbox(sandbox).catch(() => {});
     const terminal = result.outcome === "noop" ? "resolved" : result.outcome;

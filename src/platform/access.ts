@@ -30,6 +30,10 @@ export const ac = createAccessControl({
   session: ["view", "create", "edit", "delete"],
   comment: ["view", "create", "edit", "delete"],
   settings: ["view", "edit"],
+  // Coarse grant for agent-actor API keys — the `agent:read`/`agent:write`
+  // specs on lane routes. Without this resource the membership clamp
+  // strips the grant and scoped agent tokens 403 on every call.
+  agent: ["read", "write"],
   // Coarse legacy actions kept so un-migrated routes and old API
   // keys keep working while call sites move to resource:action.
   workspace: ["read", "write", "admin"],
@@ -49,6 +53,7 @@ export const ownerRole = ac.newRole({
   session: [...CONTENT],
   comment: [...CONTENT],
   settings: ["view", "edit"],
+  agent: ["read", "write"],
   workspace: ["read", "write", "admin"],
 });
 
@@ -64,6 +69,7 @@ export const adminRole = ac.newRole({
   session: [...CONTENT],
   comment: [...CONTENT],
   settings: ["view", "edit"],
+  agent: ["read", "write"],
   workspace: ["read", "write", "admin"],
 });
 
@@ -79,6 +85,7 @@ export const memberRole = ac.newRole({
   session: ["view", "create", "edit"],
   comment: ["view", "create", "edit"],
   settings: ["view"],
+  agent: ["read", "write"],
   workspace: ["read", "write"],
 });
 

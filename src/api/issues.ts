@@ -2563,7 +2563,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         isAgent = false;
       }
     }
-    if (isAgent && !identity.permissions.includes("agent:write")) {
+    if (isAgent && !canAccess(identity.permissions, "write", "agent")) {
       throw new VortexError({
         code: "FORBIDDEN",
         status: 403,

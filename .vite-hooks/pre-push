@@ -1,0 +1,5 @@
+#!/bin/sh
+# The heavy suite gates on push, not per-commit — matches veil/vortex doctrine.
+# vp run test is the full proof wall incl. DO/workerd suites.
+set -e
+pnpm exec vp run test

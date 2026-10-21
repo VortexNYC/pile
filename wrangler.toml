@@ -78,6 +78,24 @@ class_name = "DevinSandbox"
 name = "SANDBOX_CODEX"
 class_name = "CodexSandbox"
 
+# sandbox-sdk 1.0 lanes — new classes + bindings alongside 0.12 (a
+# scheduling_policy move is one-way; the old classes stay for rollback).
+[[durable_objects.bindings]]
+name = "SANDBOX_LANE"
+class_name = "LaneSandbox"
+
+[[durable_objects.bindings]]
+name = "SANDBOX_LANE_CURSOR"
+class_name = "LaneCursorSandbox"
+
+[[durable_objects.bindings]]
+name = "SANDBOX_LANE_DEVIN"
+class_name = "LaneDevinSandbox"
+
+[[durable_objects.bindings]]
+name = "SANDBOX_LANE_CODEX"
+class_name = "LaneCodexSandbox"
+
 [[containers]]
 class_name = "Sandbox"
 image = "./Dockerfile.sandbox"
@@ -101,6 +119,30 @@ class_name = "CodexSandbox"
 image = "./Dockerfile.sandbox-codex"
 max_instances = 20
 instance_type = "standard-1"
+
+[[containers]]
+class_name = "LaneSandbox"
+name = "pile-lane-v1"
+scheduling_policy = "durable_object"
+images = { lane = { image = "registry.cloudflare.com/953346ce1b4f27fa04a76d83aeccab28/pile-lanesandbox-lane@sha256:93b517173fe9d89f5a1150bcb03e06e0b8c5c383908373d2dcc60e961c38ba8a" } }
+
+[[containers]]
+class_name = "LaneCursorSandbox"
+name = "pile-lane-cursor-v1"
+scheduling_policy = "durable_object"
+images = { cursor = { image = "registry.cloudflare.com/953346ce1b4f27fa04a76d83aeccab28/pile-lanecursorsandbox-cursor@sha256:24014f135355295aec79c7fcb973984bb3358bd118382f03703bff9ec10a74b3" } }
+
+[[containers]]
+class_name = "LaneDevinSandbox"
+name = "pile-lane-devin-v1"
+scheduling_policy = "durable_object"
+images = { devin = { image = "registry.cloudflare.com/953346ce1b4f27fa04a76d83aeccab28/pile-lanedevinsandbox-devin@sha256:2d0146d5f28ae90711a05c886c0aa04832c642eec27d9886a4dc357f2bf756b6" } }
+
+[[containers]]
+class_name = "LaneCodexSandbox"
+name = "pile-lane-codex-v1"
+scheduling_policy = "durable_object"
+images = { codex = { image = "registry.cloudflare.com/953346ce1b4f27fa04a76d83aeccab28/pile-lanecodexsandbox-codex@sha256:097d47cad761084d2d34410944ddc13a8eeaf303604a8f6bc399b61d4aa72623" } }
 
 [[queues.producers]]
 binding = "WEBHOOK_QUEUE"
@@ -126,6 +168,15 @@ new_sqlite_classes = ["Sandbox"]
 [[migrations]]
 tag = "v3"
 new_sqlite_classes = ["CursorSandbox", "DevinSandbox", "CodexSandbox"]
+
+[[migrations]]
+tag = "v4"
+new_sqlite_classes = [
+  "LaneSandbox",
+  "LaneCursorSandbox",
+  "LaneDevinSandbox",
+  "LaneCodexSandbox",
+]
 
 [env.production]
 name = "pile"
@@ -199,6 +250,22 @@ class_name = "DevinSandbox"
 name = "SANDBOX_CODEX"
 class_name = "CodexSandbox"
 
+[[env.production.durable_objects.bindings]]
+name = "SANDBOX_LANE"
+class_name = "LaneSandbox"
+
+[[env.production.durable_objects.bindings]]
+name = "SANDBOX_LANE_CURSOR"
+class_name = "LaneCursorSandbox"
+
+[[env.production.durable_objects.bindings]]
+name = "SANDBOX_LANE_DEVIN"
+class_name = "LaneDevinSandbox"
+
+[[env.production.durable_objects.bindings]]
+name = "SANDBOX_LANE_CODEX"
+class_name = "LaneCodexSandbox"
+
 # Production pins registry digests so `wrangler deploy` never needs a Docker
 # daemon (cloudflare-ci's sandbox has none). The Dockerfiles remain the source
 # of truth for image contents; releasing a new image is a docker-host step:
@@ -229,6 +296,30 @@ image = "registry.cloudflare.com/953346ce1b4f27fa04a76d83aeccab28/pile-codexsand
 max_instances = 20
 instance_type = "standard-1"
 
+[[env.production.containers]]
+class_name = "LaneSandbox"
+name = "pile-lane-v1"
+scheduling_policy = "durable_object"
+images = { lane = { image = "registry.cloudflare.com/953346ce1b4f27fa04a76d83aeccab28/pile-lanesandbox-lane@sha256:93b517173fe9d89f5a1150bcb03e06e0b8c5c383908373d2dcc60e961c38ba8a" } }
+
+[[env.production.containers]]
+class_name = "LaneCursorSandbox"
+name = "pile-lane-cursor-v1"
+scheduling_policy = "durable_object"
+images = { cursor = { image = "registry.cloudflare.com/953346ce1b4f27fa04a76d83aeccab28/pile-lanecursorsandbox-cursor@sha256:24014f135355295aec79c7fcb973984bb3358bd118382f03703bff9ec10a74b3" } }
+
+[[env.production.containers]]
+class_name = "LaneDevinSandbox"
+name = "pile-lane-devin-v1"
+scheduling_policy = "durable_object"
+images = { devin = { image = "registry.cloudflare.com/953346ce1b4f27fa04a76d83aeccab28/pile-lanedevinsandbox-devin@sha256:2d0146d5f28ae90711a05c886c0aa04832c642eec27d9886a4dc357f2bf756b6" } }
+
+[[env.production.containers]]
+class_name = "LaneCodexSandbox"
+name = "pile-lane-codex-v1"
+scheduling_policy = "durable_object"
+images = { codex = { image = "registry.cloudflare.com/953346ce1b4f27fa04a76d83aeccab28/pile-lanecodexsandbox-codex@sha256:097d47cad761084d2d34410944ddc13a8eeaf303604a8f6bc399b61d4aa72623" } }
+
 [[env.production.migrations]]
 tag = "v1"
 new_sqlite_classes = ["WorkspaceDO"]
@@ -240,6 +331,15 @@ new_sqlite_classes = ["Sandbox"]
 [[env.production.migrations]]
 tag = "v3"
 new_sqlite_classes = ["CursorSandbox", "DevinSandbox", "CodexSandbox"]
+
+[[env.production.migrations]]
+tag = "v4"
+new_sqlite_classes = [
+  "LaneSandbox",
+  "LaneCursorSandbox",
+  "LaneDevinSandbox",
+  "LaneCodexSandbox",
+]
 
 [[env.production.queues.producers]]
 binding = "WEBHOOK_QUEUE"
@@ -255,10 +355,10 @@ max_retries = 3
 name = "EMAIL"
 
 # Branch preview target — cloudflare-ci deploys non-main artifact pushes here
-# (`wrangler deploy -e staging`). Shares production data bindings (D1, R2,
-# DOs, containers) so previews see real data, but has no queue consumer and
-# no cron: a preview can never steal prod webhook batches or double-fire
-# scheduled work. EMAIL is also omitted so previews never send real mail.
+# (`wrangler deploy -e staging`). Fully isolated from production (VTX-610):
+# own D1, R2 buckets, DOs, and queue — a bad preview can never write prod
+# data. No queue consumer, no cron, and EMAIL omitted so previews stay
+# inert and never send real mail.
 [env.staging]
 name = "pile-staging"
 
@@ -279,23 +379,21 @@ CF_ADMISSION_URL = "https://cloudflare-ci.vortex-nyc.workers.dev"
 
 [[env.staging.d1_databases]]
 binding = "D1"
-database_name = "pile-global"
-database_id = "222e823e-3594-457d-add1-1827064d4bc8"
+database_name = "pile-global-staging"
+database_id = "b40f2922-2c63-4b3e-9c56-b37512ea1ffe"
 migrations_dir = "migrations"
 
 [[env.staging.r2_buckets]]
 binding = "ATTACHMENTS_BUCKET"
-bucket_name = "pile-attachments"
+bucket_name = "pile-attachments-staging"
 
 [[env.staging.r2_buckets]]
 binding = "LANE_CACHE_BUCKET"
-bucket_name = "pile-lane-cache"
+bucket_name = "pile-lane-cache-staging"
 
 [[env.staging.durable_objects.bindings]]
 name = "WORKSPACE_DURABLE_OBJECT"
 class_name = "WorkspaceDO"
-# External binding -> prod worker's DO namespace, so previews see real data
-script_name = "pile"
 
 [[env.staging.durable_objects.bindings]]
 name = "SANDBOX"
@@ -355,7 +453,7 @@ new_sqlite_classes = ["CursorSandbox", "DevinSandbox", "CodexSandbox"]
 
 [[env.staging.queues.producers]]
 binding = "WEBHOOK_QUEUE"
-queue = "webhook-queue"
+queue = "webhook-queue-staging"
 
 # Top-level [triggers].crons is inherited by named envs — a staging deploy
 # would double-fire the 5-min sweep against shared prod data. Explicit empty

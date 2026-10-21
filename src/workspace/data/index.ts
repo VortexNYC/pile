@@ -1214,6 +1214,8 @@ export function getAgentSessionByProviderSessionId(
 
 type ListAgentSessionsOptions = {
   issueId?: string;
+  agentId?: string;
+  agentSlug?: string;
   status?: AgentSessionStatus;
   openPr?: boolean;
   retryOf?: string;
@@ -1232,6 +1234,9 @@ function agentSessionListConditions(
   ];
   if (options.issueId) {
     conditions.push(eq(workspaceAgentSessions.issueId, options.issueId));
+  }
+  if (options.agentId) {
+    conditions.push(eq(workspaceAgentSessions.agentId, options.agentId));
   }
   if (options.excludeIssueCondition) {
     conditions.push(options.excludeIssueCondition);
@@ -1277,10 +1282,25 @@ export function listAgentSessions(
   organizationId: string,
   options: ListAgentSessionsOptions = {}
 ) {
+  // agentSlug isn't a session column — resolve it to the agent type's id.
+  let resolved = options;
+  if (options.agentSlug && !options.agentId) {
+    const type = db
+      .select({ id: workspaceAgentTypes.id })
+      .from(workspaceAgentTypes)
+      .where(
+        and(
+          eq(workspaceAgentTypes.organizationId, organizationId),
+          eq(workspaceAgentTypes.slug, options.agentSlug)
+        )
+      )
+      .get();
+    resolved = { ...options, agentId: type?.id ?? "__none__" };
+  }
   return db
     .select()
     .from(workspaceAgentSessions)
-    .where(and(...agentSessionListConditions(organizationId, options)))
+    .where(and(...agentSessionListConditions(organizationId, resolved)))
     .orderBy(
       desc(workspaceAgentSessions.createdAt),
       desc(workspaceAgentSessions.id)
@@ -4835,7 +4855,10 @@ export function listDocumentsVisibleTo(
   // closed ACL the space grant cannot widen.
   const spaceGranted = new Set<string>();
   for (const row of db
-    .select({ spaceId: workspaceSpacePermissions.spaceId, actorId: workspaceSpacePermissions.actorId })
+    .select({
+      spaceId: workspaceSpacePermissions.spaceId,
+      actorId: workspaceSpacePermissions.actorId,
+    })
     .from(workspaceSpacePermissions)
     .where(eq(workspaceSpacePermissions.organizationId, organizationId))
     .all()) {
@@ -4848,7 +4871,9 @@ export function listDocumentsVisibleTo(
         (d.spaceId && restrictedSpaces.has(d.spaceId))
       ) ||
       granted.has(d.id) ||
-      (!restricted.has(d.id) && d.spaceId != null && spaceGranted.has(d.spaceId))
+      (!restricted.has(d.id) &&
+        d.spaceId != null &&
+        spaceGranted.has(d.spaceId))
   );
 }
 
@@ -4874,12 +4899,13 @@ export function listDocumentsForActor(
     grants.filter((g) => g.actorId === actorId).map((g) => g.documentId)
   );
   // Space grants widen guests the same way — only docs with no doc ACL.
-  const granted = new Set(
-    grants.map((g) => g.documentId)
-  );
+  const granted = new Set(grants.map((g) => g.documentId));
   const spaceGranted = new Set<string>();
   for (const row of db
-    .select({ spaceId: workspaceSpacePermissions.spaceId, actorId: workspaceSpacePermissions.actorId })
+    .select({
+      spaceId: workspaceSpacePermissions.spaceId,
+      actorId: workspaceSpacePermissions.actorId,
+    })
     .from(workspaceSpacePermissions)
     .where(eq(workspaceSpacePermissions.organizationId, organizationId))
     .all()) {
@@ -4889,9 +4915,7 @@ export function listDocumentsForActor(
   return all.filter(
     (d) =>
       visible.has(d.id) ||
-      (!granted.has(d.id) &&
-        d.spaceId != null &&
-        spaceGranted.has(d.spaceId))
+      (!granted.has(d.id) && d.spaceId != null && spaceGranted.has(d.spaceId))
   );
 }
 
@@ -5557,10 +5581,16 @@ export function updateMarketRun(
 export function listMarketRuns(
   db: WorkspaceDb,
   organizationId: string,
-  args: { vertical?: string; geo?: string; issueId?: string; limit?: number } = {}
+  args: {
+    vertical?: string;
+    geo?: string;
+    issueId?: string;
+    limit?: number;
+  } = {}
 ) {
   const conds = [eq(workspaceMarketRuns.organizationId, organizationId)];
-  if (args.vertical) conds.push(eq(workspaceMarketRuns.vertical, args.vertical));
+  if (args.vertical)
+    conds.push(eq(workspaceMarketRuns.vertical, args.vertical));
   if (args.geo) conds.push(eq(workspaceMarketRuns.geo, args.geo));
   if (args.issueId) conds.push(eq(workspaceMarketRuns.issueId, args.issueId));
   return db
@@ -8653,12 +8683,6 @@ export function grantedSpaceIds(
   actorIds: string[]
 ) {
   if (actorIds.length === 0) return new Set<string>();
-  const rows = db
-    .select({ spaceId: workspaceSpacePermissions.spaceId })
-    .from(workspaceSpacePermissions)
-    .where(eq(workspaceSpacePermissions.organizationId, organizationId))
-    .all()
-    .filter((r) => actorIds.includes(r.spaceId) === false);
   // filter by actor — the where above selects org; match actors in JS for
   // the team-ids expansion (small grant sets, same as documents).
   const granted = new Set<string>();

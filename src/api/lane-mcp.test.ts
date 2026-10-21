@@ -202,6 +202,44 @@ describe("lane MCP endpoint", () => {
     );
   });
 
+  it("lists workspace tools on repo-scoped lanes and report_usage lands on the receipt (PILE-450)", async () => {
+    const { session, laneToken, stub } = await registerLane("VortexNYC/pile");
+    const path = `/workspaces/${organizationId}/agent/sessions/${session.id}/mcp`;
+
+    const list = await mcp(path, laneToken, {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/list",
+    });
+    const names = (
+      rpcResponse.parse(await list.json()).result?.tools ?? []
+    ).map((t) => t.name);
+    expect(names).toContain("create_pull_request");
+    expect(names).toContain("memory_remember");
+    expect(names).toContain("memory_recall");
+    expect(names).toContain("report_usage");
+
+    const call = await mcp(path, laneToken, {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: {
+        name: "report_usage",
+        arguments: {
+          model: "claude-sonnet-4-5",
+          inputTokens: 50_000,
+          outputTokens: 5_000,
+          costMicros: 165_000,
+        },
+      },
+    });
+    expect(rpcResponse.parse(await call.json()).result?.isError).toBe(false);
+    const receipt = await stub.getRunReceipt(session.id);
+    expect(receipt?.totalTokens).toBe(55_000);
+    expect(receipt?.costMicros).toBe(165_000);
+    expect(receipt?.costSource).toBe("reported");
+  });
+
   it("reports progress through the session and records a lane.tool event", async () => {
     const { session, laneToken, stub } = await registerLane("VortexNYC/pile");
     const res = await mcp(
@@ -389,5 +427,4 @@ describe("lane MCP endpoint", () => {
     );
     expect(JSON.stringify(parsed)).not.toContain("TypeError");
   });
-
 });

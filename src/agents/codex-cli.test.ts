@@ -119,7 +119,7 @@ describe("CodexCliAgentProvider", () => {
     const toolboxBase = `https://proxy.app.daytona.io/toolbox/${sandboxId}`;
     const fetchSpy = mockFetch([
       {
-        url: "https://app.daytona.io/api/sandbox",
+        url: "https://app.daytona.io/api/sandbox?page=1",
         method: "GET",
         response: () => ({ items: [] }),
       },
@@ -142,6 +142,16 @@ describe("CodexCliAgentProvider", () => {
           state: "started",
           toolboxProxyUrl: "https://proxy.app.daytona.io/toolbox",
         }),
+      },
+      {
+        url: /\/files\/upload-v2\?path=/,
+        method: "POST",
+        response: () => ({}),
+      },
+      {
+        url: `${toolboxBase}/process/execute`,
+        method: "POST",
+        response: () => ({ exitCode: 0, result: "" }),
       },
       {
         url: `${toolboxBase}/process/session`,
@@ -183,7 +193,9 @@ describe("CodexCliAgentProvider", () => {
     expect(result.agentId).toBe("codex-cli");
     await Promise.all(waitUntilCalls);
 
-    expect(fetchSpy).toHaveBeenCalledTimes(5);
+    // findSandbox, create, waitForStarted, 3 file uploads + chmod,
+    // session create, exec.
+    expect(fetchSpy).toHaveBeenCalledTimes(9);
     const createCall = fetchSpy.mock.calls.find(
       ([input, init]) =>
         String(input) === "https://app.daytona.io/api/sandbox" &&
@@ -191,10 +203,26 @@ describe("CodexCliAgentProvider", () => {
     );
     expect(createCall).toBeDefined();
     const body = JSON.parse((createCall![1] as RequestInit).body as string);
-    expect(body.env.MODEL).toBe("gpt-reserve");
-    expect(body.env.REPO).toBe("VortexNYC/pile");
-    expect(body.env.CODEX_CLI_ENV_ID).toBe("env-test-123");
     expect(body.labels["vortex.agent"]).toBe("codex-cli");
+
+    // Lane env ships in the uploaded lane.env file, not the create body.
+    const envUpload = fetchSpy.mock.calls.find(
+      ([input, init]) =>
+        (init as RequestInit | undefined)?.method === "POST" &&
+        String(input).includes("/files/upload-v2") &&
+        new URL(String(input)).searchParams.get("path") === "/tmp/pile/lane.env"
+    );
+    expect(envUpload).toBeDefined();
+    const laneEnv: Record<string, string> = {};
+    for (const line of String((envUpload![1] as RequestInit).body).split(
+      "\n"
+    )) {
+      const match = /^export ([A-Z0-9_]+)='(.*)'$/.exec(line);
+      if (match) laneEnv[match[1]!] = match[2]!.replaceAll("'\\''", "'");
+    }
+    expect(laneEnv.MODEL).toBe("gpt-reserve");
+    expect(laneEnv.REPO).toBe("VortexNYC/pile");
+    expect(laneEnv.CODEX_CLI_ENV_ID).toBe("env-test-123");
   });
 
   it("polls running while command is in progress", async () => {
@@ -202,7 +230,7 @@ describe("CodexCliAgentProvider", () => {
     const toolboxBase = `https://proxy.app.daytona.io/toolbox/${sandboxId}`;
     mockFetch([
       {
-        url: "https://app.daytona.io/api/sandbox",
+        url: "https://app.daytona.io/api/sandbox?page=1",
         response: () => ({
           items: [
             {
@@ -235,7 +263,7 @@ describe("CodexCliAgentProvider", () => {
     const toolboxBase = `https://proxy.app.daytona.io/toolbox/${sandboxId}`;
     mockFetch([
       {
-        url: "https://app.daytona.io/api/sandbox",
+        url: "https://app.daytona.io/api/sandbox?page=1",
         response: () => ({
           items: [
             {
@@ -286,7 +314,7 @@ describe("CodexCliAgentProvider", () => {
     const toolboxBase = `https://proxy.app.daytona.io/toolbox/${sandboxId}`;
     mockFetch([
       {
-        url: "https://app.daytona.io/api/sandbox",
+        url: "https://app.daytona.io/api/sandbox?page=1",
         response: () => ({
           items: [
             {
@@ -334,7 +362,7 @@ describe("CodexCliAgentProvider", () => {
     const sandboxId = "sb-1";
     const fetchSpy = mockFetch([
       {
-        url: "https://app.daytona.io/api/sandbox",
+        url: "https://app.daytona.io/api/sandbox?page=1",
         response: () => ({
           items: [
             {

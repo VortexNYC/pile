@@ -110,10 +110,10 @@ def write_lane_mcp_config():
 
 def run_agent(devin_bin, prompt=None):
     write_lane_mcp_config()
-    prompt = prompt or lane_prompt()
     model = os.environ.get('MODEL', 'swe-2')
+    # Prompt arrives by file, not argv — execve caps a single arg at 128KB.
     proc = subprocess.Popen(
-        [devin_bin, '-p', prompt, '--model', model, '--permission-mode', permission_mode(), '--respect-workspace-trust', 'false'],
+        [devin_bin, '-p', '--prompt-file', prompt_file(prompt if prompt else None), '--model', model, '--permission-mode', permission_mode(), '--respect-workspace-trust', 'false'],
         cwd=REPO_DIR, env=agent_env(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.PIPE, text=True
     )
     threading.Thread(target=inject_followups, args=(proc,), daemon=True).start()
@@ -157,7 +157,7 @@ def drain_followups(devin_bin):
 def run_turn(devin_bin, prompt=None):
     # One agent turn, gated by the repo's stop hook: a failing hook resumes
     # devin with the failure before anything is pushed.
-    task = prompt or base64.b64decode(os.environ['PROMPT_B64']).decode('utf-8')
+    task = prompt or read_lane_prompt()
     output = run_agent(devin_bin, prompt=prompt)
     healed = self_heal(agent_env(), lambda p: run_agent(devin_bin, prompt=p), task)
     return output if healed is None else healed

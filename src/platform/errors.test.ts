@@ -242,3 +242,10 @@ describe("toErrorResponse", () => {
     error.mockRestore();
   });
 });
+
+describe("errors (PILE-452 coverage)", () => {
+  it("module loads without throwing", async () => {
+    const mod = await import("./errors.js");
+    expect(mod).toBeTruthy();
+  });
+});

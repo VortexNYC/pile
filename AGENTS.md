@@ -12,7 +12,7 @@ vp run test
 vp run knip
 ```
 
-`vp run check` is Vite+ (`vp check`: format, lint, types). `contract:check` diffs generated artifacts and needs git — GitHub `ci.yml` owns it; do not put it on the CI path. Tests gate locally via the `vp` pre-push hook; CI is `deps → build (typecheck) → migrate+deploy` on `main`, owned by `cloudflare-ci` (`~/Projects/cloudflare-ci`). If CI behavior is wrong, fix it there — not here.
+`vp run check` is Vite+ (`vp check`: format, lint, types) plus `scan:secrets` (secretlint + the PILE-457 rules in `scripts/scan-secrets.ts`: tracked `.devin/` paths and 64-hex bearers in Authorization headers — the in-repo half of the incident gate; `.gitleaks.toml` is the config external history scanners consume). `contract:check` diffs generated artifacts and needs git — GitHub `ci.yml` owns it; do not put it on the CI path. Tests gate locally via the `vp` pre-push hook; CI is `deps → build (typecheck) → migrate+deploy` on `main`, owned by `cloudflare-ci` (`~/Projects/cloudflare-ci`). If CI behavior is wrong, fix it there — not here.
 
 ## Stack
 

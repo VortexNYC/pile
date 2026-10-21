@@ -254,6 +254,9 @@ export async function fireRepoTriggers(
           instructions: triggerInstructions(trigger, options.context),
           envAllowlist: config.env,
           purpose: `trigger:${event}`,
+          // System-initiated — a trigger fired during an agent-type pause
+          // drops rather than parking a held row (PILE-452).
+          onPaused: "fail",
         }
       );
       fired += 1;

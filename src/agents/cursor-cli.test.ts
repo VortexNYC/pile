@@ -24,7 +24,9 @@ function mockFetch(
     const method = (init?.method ?? "GET").toUpperCase();
     const match = responses.find(
       (r) =>
-        (typeof r.url === "string" ? url === r.url : r.url.test(url)) &&
+        (typeof r.url === "string"
+          ? url === r.url || url.startsWith(`${r.url}?`)
+          : r.url.test(url)) &&
         (r.method === undefined || r.method === method)
     );
     if (match) {
@@ -36,8 +38,34 @@ function mockFetch(
         })
       );
     }
+    // Provision file uploads and the lane.env chmod are routine — tests
+    // that care about them read the calls off the spy directly.
+    if (/\/files\/upload(-v2)?\?/.test(url) && method === "POST") {
+      return Promise.resolve(new Response("{}", { status: 200 }));
+    }
+    if (url.endsWith("/process/execute") && method === "POST") {
+      return Promise.resolve(
+        new Response(JSON.stringify({ exitCode: 0, result: "" }), {
+          status: 200,
+        })
+      );
+    }
     return Promise.resolve(new Response("not found", { status: 404 }));
   });
+}
+
+/** Raw body of the upload-v2 call for one sandbox path (PILE-595). */
+function uploadedBody(
+  fetchSpy: ReturnType<typeof vi.spyOn>,
+  path: string
+): string {
+  const hit = fetchSpy.mock.calls.find(
+    (call: unknown[]) =>
+      String(call[0]).includes(
+        `/files/upload-v2?path=${encodeURIComponent(path)}`
+      ) && (call[1] as RequestInit | undefined)?.method === "POST"
+  );
+  return String((hit?.[1] as RequestInit | undefined)?.body ?? "");
 }
 
 function issueFixture(): Issue {
@@ -154,7 +182,7 @@ describe("CursorCliAgentProvider", () => {
     expect(result.agentId).toBe("cursor-cli");
     await Promise.all(waitUntilCalls);
 
-    expect(fetchSpy).toHaveBeenCalledTimes(5);
+    expect(fetchSpy).toHaveBeenCalledTimes(9);
     const createCall = fetchSpy.mock.calls.find(
       ([input, init]) =>
         String(input) === "https://app.daytona.io/api/sandbox" &&
@@ -162,9 +190,12 @@ describe("CursorCliAgentProvider", () => {
     );
     expect(createCall).toBeDefined();
     const body = JSON.parse((createCall![1] as RequestInit).body as string);
-    expect(body.env.MODEL).toBe("auto");
-    expect(body.env.REPO).toBe("VortexNYC/pile");
-    expect(body.env.CURSOR_API_KEY).toBeDefined();
+    // Env rides /tmp/pile/lane.env, not the create call (PILE-595).
+    expect(body.env ?? {}).toEqual({});
+    const laneEnv = uploadedBody(fetchSpy, "/tmp/pile/lane.env");
+    expect(laneEnv).toContain("export MODEL='auto'");
+    expect(laneEnv).toContain("export REPO='VortexNYC/pile'");
+    expect(laneEnv).toContain("export CURSOR_API_KEY='");
     expect(body.labels["vortex.agent"]).toBe("cursor-cli");
   });
 
@@ -229,15 +260,10 @@ describe("CursorCliAgentProvider", () => {
     });
     await Promise.all(waitUntilCalls);
 
-    const createCall = fetchSpy.mock.calls.find(
-      ([input, init]) =>
-        String(input) === "https://app.daytona.io/api/sandbox" &&
-        (init as RequestInit | undefined)?.method === "POST"
-    );
-    const body = JSON.parse((createCall![1] as RequestInit).body as string);
-    expect(body.env.PILE_API_URL).toBe("https://pile.nyc");
-    expect(body.env.PILE_API_KEY).toBe("pil_readonly");
-    const prompt = atob(body.env.PROMPT_B64);
+    const laneEnv = uploadedBody(fetchSpy, "/tmp/pile/lane.env");
+    expect(laneEnv).toContain("export PILE_API_URL='https://pile.nyc'");
+    expect(laneEnv).toContain("export PILE_API_KEY='pil_readonly'");
+    const prompt = uploadedBody(fetchSpy, "/tmp/pile/prompt.md");
     expect(prompt).toContain("$PILE_API_KEY");
     expect(prompt).toContain("/support/tickets/<ticketId>/artifacts");
   });
@@ -311,21 +337,18 @@ describe("CursorCliAgentProvider", () => {
       { push: "restricted", shell: "disabled" },
       { organizationId: "org-1", sessionId: "sess-3" }
     );
-    const createCall = fetchSpy.mock.calls.find(
-      ([input, init]) =>
-        String(input) === "https://app.daytona.io/api/sandbox" &&
-        (init as RequestInit | undefined)?.method === "POST"
+    const laneEnv = uploadedBody(fetchSpy, "/tmp/pile/lane.env");
+    expect(laneEnv).toContain("export PILE_PUSH_POLICY='restricted'");
+    expect(laneEnv).toContain("export PILE_SHELL_POLICY='disabled'");
+    expect(laneEnv).toContain(
+      "export PILE_AGENT_CREDENTIAL_ENV='CURSOR_API_KEY'"
     );
-    const body = JSON.parse((createCall![1] as RequestInit).body as string);
-    expect(body.env.PILE_PUSH_POLICY).toBe("restricted");
-    expect(body.env.PILE_SHELL_POLICY).toBe("disabled");
-    expect(body.env.PILE_AGENT_CREDENTIAL_ENV).toBe("CURSOR_API_KEY");
-    expect(body.env.PILE_EXTRA_ENV_KEYS).toBe("DATABASE_URL");
+    expect(laneEnv).toContain("export PILE_EXTRA_ENV_KEYS='DATABASE_URL'");
     // Write token comes from the lane mint, never the sandbox env.
-    expect(body.env.GITHUB_TOKEN).toBe("");
-    expect(body.env.LANE_TOKEN).toBeTruthy();
-    expect(body.env.PILE_API_KEY).toBeUndefined();
-    const prompt = atob(body.env.PROMPT_B64);
+    expect(laneEnv).toContain("export GITHUB_TOKEN=''");
+    expect(laneEnv).toContain("export LANE_TOKEN='");
+    expect(laneEnv).not.toContain("export PILE_API_KEY=");
+    const prompt = uploadedBody(fetchSpy, "/tmp/pile/prompt.md");
     expect(prompt).not.toContain("$PILE_API_KEY");
     expect(prompt).toContain("push=restricted, shell=disabled");
   });

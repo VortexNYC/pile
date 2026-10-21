@@ -30,7 +30,7 @@ Run the proof suite from the repo root:
 
 ```bash
 vp install
-vp run check          # format, lint, types (Vite+)
+vp run check          # format, lint, types (Vite+) + scan:secrets
 vp run contract:check # generated artifacts must match the tree
 vp run test
 vp run knip

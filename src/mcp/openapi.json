@@ -7292,6 +7292,16 @@
                           "infraStreak": {
                             "type": "number"
                           },
+                          "starts": {
+                            "type": "number"
+                          },
+                          "startFailures": {
+                            "type": "number"
+                          },
+                          "startFailureRate": {
+                            "type": "number",
+                            "nullable": true
+                          },
                           "unhealthy": {
                             "type": "boolean"
                           }
@@ -7301,6 +7311,9 @@
                           "live",
                           "keptSandboxes",
                           "infraStreak",
+                          "starts",
+                          "startFailures",
+                          "startFailureRate",
                           "unhealthy"
                         ]
                       }
