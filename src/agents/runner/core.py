@@ -1736,12 +1736,14 @@ def read_transcript(fallback=''):
         return fallback
 
 
-def write_result(status, pr_url='', result='', report=None, infra=False, usage=None):
+def write_result(status, pr_url='', result='', report=None, infra=False, usage=None, rate_limited=False):
     payload = {'status': status, 'prUrl': pr_url, 'branch': BRANCH, 'result': _redact(result)}
     if report:
         payload['report'] = _redact(report)
     if infra:
         payload['infraFailure'] = True
+    if rate_limited:
+        payload['rateLimited'] = True
     # PILE-450 — cumulative run usage (tokens/cost) extracted by the driver;
     # lands on the session's run receipt so spend caps have real numbers.
     if usage:
@@ -1805,4 +1807,15 @@ def finalize(output, pushed, report=None, usage=None):
 
 
 def fail_result(error):
-    write_result('failed', '', str(error), infra=isinstance(error, TransportError))
+    write_result('failed', '', str(error), infra=isinstance(error, TransportError), rate_limited=is_rate_limited(error))
+
+
+# Agent-CLI capacity deaths (devin's "Reached free model rate limit … resets
+# at 6:05 PM", codex/claude 429s) are retryable-after-reset, not task or
+# infra failures — the flag lets the poll/sweep path hold the lane instead
+# of instantly burning the retry budget against a hard provider limit.
+RATE_LIMIT_RE = re.compile(r'rate.?limit|too many requests|429|usage limit|resets? at \d', re.I)
+
+
+def is_rate_limited(error):
+    return bool(RATE_LIMIT_RE.search(str(error)))

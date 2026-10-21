@@ -108,6 +108,9 @@ const runnerResultSchema = z.object({
   // The runner sets this when the run died on the substrate (git transport,
   // codeload, token mint) rather than on the task — gates the infra retry.
   infraFailure: z.boolean().optional(),
+  // Provider capacity ceiling (free-model rate limit, account 429) — the
+  // lane is retryable after the provider's reset window, not failed.
+  rateLimited: z.boolean().optional(),
   // PILE-425 — cumulative run usage the driver extracted from the agent
   // CLI's output; lands on the session's run receipt.
   usage: runUsageSchema.optional(),
@@ -1257,6 +1260,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
       prState,
       branch: result.branch ?? null,
       infraFailure: result.infraFailure,
+      rateLimited: result.rateLimited,
       usage: result.usage ?? null,
     };
   }

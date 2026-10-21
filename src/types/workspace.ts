@@ -39,6 +39,10 @@ export interface AgentSessionResult {
   // runner died without a result, or a sweep stall-cancel — rather than the
   // agent reporting a task outcome. Drives auto-retry + the unhealthy streak.
   infraFailure?: boolean;
+  // The lane died on the provider's own capacity ceiling (free-model rate
+  // limit, account 429) — retryable after the provider's reset, not a task
+  // or substrate failure. Sweep-side hold/backoff honors this.
+  rateLimited?: boolean;
   // PILE-425 — cumulative usage snapshot the lane/provider reports with this
   // result; lands on the session's run receipt (agent_run_receipts).
   usage?: AgentRunUsage | null;
