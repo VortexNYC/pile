@@ -1642,8 +1642,7 @@ export async function runCli(
     // canonical form but the auth commands are the ones a human types
     // first; without the alias the CLI reports "Unknown command" and
     // looks like it can't bootstrap itself.
-    const authVerb =
-      scope === "auth" ? positionals[1] : scope;
+    const authVerb = scope === "auth" ? positionals[1] : scope;
 
     if (authVerb === "login") {
       return await authLoginCommand(flags, deps);

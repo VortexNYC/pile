@@ -286,7 +286,12 @@ describe("LaneSandboxBackend (sandbox-sdk 1.0)", () => {
         calls.push(`spawn:${o.processId}:${o.command}`);
       }),
       hasProcess: vi.fn(async () => true),
-      processState: vi.fn(async (): Promise<import('./lane-sandbox.js').LaneProcessState> => ({ running: true, exitCode: null })),
+      processState: vi.fn(
+        async (): Promise<import("./lane-sandbox.js").LaneProcessState> => ({
+          running: true,
+          exitCode: null,
+        })
+      ),
       sessionBusy: vi.fn(async () => false),
       readFile: vi.fn(async () => null),
       putFiles: vi.fn(async () => {}),

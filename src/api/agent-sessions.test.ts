@@ -4109,10 +4109,9 @@ describe("spend caps + run receipts (PILE-425)", () => {
 
   it("GET /agent/sessions accepts ?agentSlug to scope the list (PILE-453)", async () => {
     const res = await app.fetch(
-      request(
-        `/workspaces/${organizationId}/agent/sessions?agentSlug=scout`,
-        { token }
-      ),
+      request(`/workspaces/${organizationId}/agent/sessions?agentSlug=scout`, {
+        token,
+      }),
       env
     );
     expect(res.status).toBe(200);
