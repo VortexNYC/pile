@@ -108,6 +108,9 @@ const runnerResultSchema = z.object({
   // The runner sets this when the run died on the substrate (git transport,
   // codeload, token mint) rather than on the task — gates the infra retry.
   infraFailure: z.boolean().optional(),
+  // Provider capacity ceiling (free-model rate limit, account 429) — the
+  // lane is retryable after the provider's reset window, not failed.
+  rateLimited: z.boolean().optional(),
   // PILE-425 — cumulative run usage the driver extracted from the agent
   // CLI's output; lands on the session's run receipt.
   usage: runUsageSchema.optional(),
@@ -155,6 +158,11 @@ export interface SandboxCliDescriptor {
   };
   /** Require a repo + git identity even for dispatch (codex cloud tasks). */
   requiresRepo?: boolean;
+  /** VTX-621 — cap on concurrent live lanes for this agent type. Past the
+   *  cap, dispatches park as paused holds; the sweep lifts the marker
+   *  pause when a slot frees. Guards one shared provider account against
+   *  bursts that trip its own rate limit. */
+  maxConcurrentLanes?: number;
   /** Keep the sandbox after terminal result so follow-up prompts can resume
    *  it (devin), and check runnerBusy in poll before reading the result. */
   followup?: boolean;
@@ -448,6 +456,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
   readonly id: string;
   readonly keepsTerminalSandbox: boolean;
   readonly supportsSecondaryRepos: boolean;
+  readonly maxConcurrentLanes?: number;
 
   constructor(
     private env: AppEnv,
@@ -457,6 +466,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
     this.keepsTerminalSandbox = d.followup === true;
     // Codex runs on OpenAI's cloud, which never sees the sandbox's ~/xrepo.
     this.supportsSecondaryRepos = d.driver !== "codex";
+    this.maxConcurrentLanes = d.maxConcurrentLanes;
   }
 
   private async note(
@@ -1257,6 +1267,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
       prState,
       branch: result.branch ?? null,
       infraFailure: result.infraFailure,
+      rateLimited: result.rateLimited,
       usage: result.usage ?? null,
     };
   }

@@ -33,6 +33,7 @@ export interface MockAgentProviderOptions {
   ) => string | Promise<string | null> | null;
   cancel?: (sessionId: string) => void | Promise<void>;
   keepsTerminalSandbox?: boolean;
+  maxConcurrentLanes?: number;
   backupTerminalSandbox?: (
     trackerSessionId: string
   ) => string | null | Promise<string | null>;
@@ -41,6 +42,7 @@ export interface MockAgentProviderOptions {
 export class MockAgentProvider implements AgentProvider {
   readonly id: string;
   readonly keepsTerminalSandbox: boolean;
+  readonly maxConcurrentLanes?: number;
   cancel?: (sessionId: string) => Promise<void>;
   backupTerminalSandbox?: (trackerSessionId: string) => Promise<string | null>;
   private options: MockAgentProviderOptions;
@@ -49,6 +51,7 @@ export class MockAgentProvider implements AgentProvider {
     this.id = id;
     this.options = options;
     this.keepsTerminalSandbox = options.keepsTerminalSandbox === true;
+    this.maxConcurrentLanes = options.maxConcurrentLanes;
     const cancel = options.cancel;
     if (cancel) {
       this.cancel = async (sessionId) => cancel(sessionId);
