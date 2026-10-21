@@ -4108,13 +4108,58 @@ describe("spend caps + run receipts (PILE-425)", () => {
   });
 
   it("GET /agent/sessions accepts ?agentSlug to scope the list (PILE-453)", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.upsertAgentType({
+      slug: "scout",
+      name: "Scout",
+      providerAgentId: "devin-cli",
+    });
+    const issue = await stub.createIssue({ title: "Scoped lane" });
+    const scout = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "devin-cli",
+      provider: "devin-cli",
+      actorId: "test",
+      actorType: "agent",
+      status: "completed",
+      conversationKey: `${issue.id}-scout`,
+    });
+    await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "custom-bot",
+      provider: "custom-bot",
+      actorId: "test",
+      actorType: "agent",
+      status: "completed",
+      conversationKey: `${issue.id}-other`,
+    });
+
     const res = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/sessions?agentSlug=scout`, {
+        token,
+      }),
+      env
+    );
+    expect(res.status).toBe(200);
+    const { sessions } = (await res.json()) as {
+      sessions: Array<{ id: string }>;
+    };
+    expect(sessions.map((s) => s.id)).toEqual([scout.id]);
+
+    // The summary projection honors the same scope.
+    const summaryRes = await app.fetch(
       request(
-        `/workspaces/${organizationId}/agent/sessions?agentSlug=scout`,
+        `/workspaces/${organizationId}/agent/sessions?summary=1&agentSlug=scout`,
         { token }
       ),
       env
     );
-    expect(res.status).toBe(200);
+    expect(summaryRes.status).toBe(200);
+    const { sessions: summaries } = (await summaryRes.json()) as {
+      sessions: Array<{ id: string }>;
+    };
+    expect(summaries.map((s) => s.id)).toEqual([scout.id]);
   });
 });

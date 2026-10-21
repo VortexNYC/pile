@@ -2630,6 +2630,7 @@ export interface paths {
             parameters: {
                 query?: {
                     issueId?: string;
+                    agentSlug?: string;
                     limit?: string;
                     summary?: string;
                 };
@@ -3222,6 +3223,15 @@ export interface paths {
                             /** @enum {string} */
                             status: "pending" | "inProgress" | "completed" | "canceled";
                         }[];
+                        usage?: {
+                            model?: string;
+                            inputTokens?: number;
+                            outputTokens?: number;
+                            totalTokens?: number;
+                            toolCalls?: number;
+                            costMicros?: number;
+                            externalSpendMicros?: number;
+                        };
                     };
                 };
             };
@@ -17239,6 +17249,131 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/document-spaces/{id}/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List document space permissions */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Space permissions */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            permissions: {
+                                id: string;
+                                spaceId: string;
+                                actorId: string;
+                                actorType: string;
+                                level: string;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create document space permission */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        actorId: string;
+                        /** @enum {string} */
+                        actorType?: "user" | "team";
+                        /** @enum {string} */
+                        level?: "view" | "edit";
+                    };
+                };
+            };
+            responses: {
+                /** @description Space permission granted */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/document-spaces/{id}/permissions/{actorId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete document space permission */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                    actorId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Space permission revoked */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/document-spaces": {
         parameters: {
             query?: never;
@@ -19146,6 +19281,20 @@ export interface paths {
                                 notes: string | null;
                                 logoUrl: string | null;
                                 externalId: string | null;
+                                phone: string | null;
+                                address: string | null;
+                                vertical: string | null;
+                                neighborhood: string | null;
+                                source: string | null;
+                                sourceSessionId: string | null;
+                                sourceAgentSlug: string | null;
+                                readiness: string | null;
+                                nextAction: string | null;
+                                fit: string | null;
+                                fitScore: number | null;
+                                fitStatus: string | null;
+                                processor: string | null;
+                                evidenceUri: string | null;
                                 tierId: string | null;
                                 statusId: string | null;
                                 ownerId: string | null;
@@ -19190,6 +19339,18 @@ export interface paths {
                         notes?: string | null;
                         logoUrl?: string;
                         externalId?: string;
+                        phone?: string;
+                        address?: string;
+                        vertical?: string;
+                        neighborhood?: string;
+                        source?: string;
+                        readiness?: string;
+                        nextAction?: string;
+                        fit?: string;
+                        fitScore?: number;
+                        fitStatus?: string;
+                        processor?: string;
+                        evidenceUri?: string;
                         tierId?: string;
                         statusId?: string;
                         ownerId?: string;
@@ -19220,6 +19381,20 @@ export interface paths {
                             notes: string | null;
                             logoUrl: string | null;
                             externalId: string | null;
+                            phone: string | null;
+                            address: string | null;
+                            vertical: string | null;
+                            neighborhood: string | null;
+                            source: string | null;
+                            sourceSessionId: string | null;
+                            sourceAgentSlug: string | null;
+                            readiness: string | null;
+                            nextAction: string | null;
+                            fit: string | null;
+                            fitScore: number | null;
+                            fitStatus: string | null;
+                            processor: string | null;
+                            evidenceUri: string | null;
                             tierId: string | null;
                             statusId: string | null;
                             ownerId: string | null;
@@ -19251,6 +19426,20 @@ export interface paths {
                             notes: string | null;
                             logoUrl: string | null;
                             externalId: string | null;
+                            phone: string | null;
+                            address: string | null;
+                            vertical: string | null;
+                            neighborhood: string | null;
+                            source: string | null;
+                            sourceSessionId: string | null;
+                            sourceAgentSlug: string | null;
+                            readiness: string | null;
+                            nextAction: string | null;
+                            fit: string | null;
+                            fitScore: number | null;
+                            fitStatus: string | null;
+                            processor: string | null;
+                            evidenceUri: string | null;
                             tierId: string | null;
                             statusId: string | null;
                             ownerId: string | null;
@@ -19531,6 +19720,20 @@ export interface paths {
                             notes: string | null;
                             logoUrl: string | null;
                             externalId: string | null;
+                            phone: string | null;
+                            address: string | null;
+                            vertical: string | null;
+                            neighborhood: string | null;
+                            source: string | null;
+                            sourceSessionId: string | null;
+                            sourceAgentSlug: string | null;
+                            readiness: string | null;
+                            nextAction: string | null;
+                            fit: string | null;
+                            fitScore: number | null;
+                            fitStatus: string | null;
+                            processor: string | null;
+                            evidenceUri: string | null;
                             tierId: string | null;
                             statusId: string | null;
                             ownerId: string | null;
@@ -19609,6 +19812,18 @@ export interface paths {
                         notes?: string | null;
                         logoUrl?: string;
                         externalId?: string;
+                        phone?: string;
+                        address?: string;
+                        vertical?: string;
+                        neighborhood?: string;
+                        source?: string;
+                        readiness?: string;
+                        nextAction?: string;
+                        fit?: string;
+                        fitScore?: number;
+                        fitStatus?: string;
+                        processor?: string;
+                        evidenceUri?: string;
                         tierId?: string;
                         statusId?: string;
                         ownerId?: string;
@@ -19642,6 +19857,20 @@ export interface paths {
                             notes: string | null;
                             logoUrl: string | null;
                             externalId: string | null;
+                            phone: string | null;
+                            address: string | null;
+                            vertical: string | null;
+                            neighborhood: string | null;
+                            source: string | null;
+                            sourceSessionId: string | null;
+                            sourceAgentSlug: string | null;
+                            readiness: string | null;
+                            nextAction: string | null;
+                            fit: string | null;
+                            fitScore: number | null;
+                            fitStatus: string | null;
+                            processor: string | null;
+                            evidenceUri: string | null;
                             tierId: string | null;
                             statusId: string | null;
                             ownerId: string | null;

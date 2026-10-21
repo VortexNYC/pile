@@ -1215,6 +1215,9 @@ export function getAgentSessionByProviderSessionId(
 type ListAgentSessionsOptions = {
   issueId?: string;
   agentId?: string;
+  /** session.agentId candidates resolved from agentSlug (see
+   *  resolveAgentScope). Internal — callers pass agentSlug. */
+  agentIds?: string[];
   agentSlug?: string;
   status?: AgentSessionStatus;
   openPr?: boolean;
@@ -1237,6 +1240,9 @@ function agentSessionListConditions(
   }
   if (options.agentId) {
     conditions.push(eq(workspaceAgentSessions.agentId, options.agentId));
+  }
+  if (options.agentIds?.length) {
+    conditions.push(inArray(workspaceAgentSessions.agentId, options.agentIds));
   }
   if (options.excludeIssueCondition) {
     conditions.push(options.excludeIssueCondition);
@@ -1277,31 +1283,52 @@ export function getAgentSessionByConversationKey(
     .get();
 }
 
+// agentSlug isn't a session column — lanes record the dispatch agent's id
+// in session.agentId: the type's providerAgentId on registered-type
+// dispatches, the profile slug itself on flue-dispatch lanes. A slug
+// therefore scopes to {slug, providerAgentId}; an explicit agentId still
+// wins when both are passed.
+function resolveAgentScope(
+  db: WorkspaceDb,
+  organizationId: string,
+  options: ListAgentSessionsOptions
+): ListAgentSessionsOptions {
+  if (!options.agentSlug || options.agentId) return options;
+  const type = db
+    .select({ providerAgentId: workspaceAgentTypes.providerAgentId })
+    .from(workspaceAgentTypes)
+    .where(
+      and(
+        eq(workspaceAgentTypes.organizationId, organizationId),
+        eq(workspaceAgentTypes.slug, options.agentSlug)
+      )
+    )
+    .get();
+  const agentIds = [
+    ...new Set(
+      [options.agentSlug, type?.providerAgentId].filter(
+        (value): value is string => typeof value === "string"
+      )
+    ),
+  ];
+  return { ...options, agentIds };
+}
+
 export function listAgentSessions(
   db: WorkspaceDb,
   organizationId: string,
   options: ListAgentSessionsOptions = {}
 ) {
-  // agentSlug isn't a session column — resolve it to the agent type's id.
-  let resolved = options;
-  if (options.agentSlug && !options.agentId) {
-    const type = db
-      .select({ id: workspaceAgentTypes.id })
-      .from(workspaceAgentTypes)
-      .where(
-        and(
-          eq(workspaceAgentTypes.organizationId, organizationId),
-          eq(workspaceAgentTypes.slug, options.agentSlug)
-        )
-      )
-      .get();
-    resolved = { ...options, agentId: type?.id ?? "__none__" };
-  }
   return db
     .select()
     .from(workspaceAgentSessions)
     .where(
-      and(...agentSessionListConditions(organizationId, resolved))
+      and(
+        ...agentSessionListConditions(
+          organizationId,
+          resolveAgentScope(db, organizationId, options)
+        )
+      )
     )
     .orderBy(
       desc(workspaceAgentSessions.createdAt),
@@ -1383,7 +1410,14 @@ export function listAgentSessionSummaries(
   return db
     .select(agentSessionSummaryColumns)
     .from(workspaceAgentSessions)
-    .where(and(...agentSessionListConditions(organizationId, options)))
+    .where(
+      and(
+        ...agentSessionListConditions(
+          organizationId,
+          resolveAgentScope(db, organizationId, options)
+        )
+      )
+    )
     .orderBy(
       desc(workspaceAgentSessions.createdAt),
       desc(workspaceAgentSessions.id)
@@ -4857,7 +4891,10 @@ export function listDocumentsVisibleTo(
   // closed ACL the space grant cannot widen.
   const spaceGranted = new Set<string>();
   for (const row of db
-    .select({ spaceId: workspaceSpacePermissions.spaceId, actorId: workspaceSpacePermissions.actorId })
+    .select({
+      spaceId: workspaceSpacePermissions.spaceId,
+      actorId: workspaceSpacePermissions.actorId,
+    })
     .from(workspaceSpacePermissions)
     .where(eq(workspaceSpacePermissions.organizationId, organizationId))
     .all()) {
@@ -4870,7 +4907,9 @@ export function listDocumentsVisibleTo(
         (d.spaceId && restrictedSpaces.has(d.spaceId))
       ) ||
       granted.has(d.id) ||
-      (!restricted.has(d.id) && d.spaceId != null && spaceGranted.has(d.spaceId))
+      (!restricted.has(d.id) &&
+        d.spaceId != null &&
+        spaceGranted.has(d.spaceId))
   );
 }
 
@@ -4896,12 +4935,13 @@ export function listDocumentsForActor(
     grants.filter((g) => g.actorId === actorId).map((g) => g.documentId)
   );
   // Space grants widen guests the same way — only docs with no doc ACL.
-  const granted = new Set(
-    grants.map((g) => g.documentId)
-  );
+  const granted = new Set(grants.map((g) => g.documentId));
   const spaceGranted = new Set<string>();
   for (const row of db
-    .select({ spaceId: workspaceSpacePermissions.spaceId, actorId: workspaceSpacePermissions.actorId })
+    .select({
+      spaceId: workspaceSpacePermissions.spaceId,
+      actorId: workspaceSpacePermissions.actorId,
+    })
     .from(workspaceSpacePermissions)
     .where(eq(workspaceSpacePermissions.organizationId, organizationId))
     .all()) {
@@ -4911,9 +4951,7 @@ export function listDocumentsForActor(
   return all.filter(
     (d) =>
       visible.has(d.id) ||
-      (!granted.has(d.id) &&
-        d.spaceId != null &&
-        spaceGranted.has(d.spaceId))
+      (!granted.has(d.id) && d.spaceId != null && spaceGranted.has(d.spaceId))
   );
 }
 
@@ -8681,12 +8719,6 @@ export function grantedSpaceIds(
   actorIds: string[]
 ) {
   if (actorIds.length === 0) return new Set<string>();
-  const rows = db
-    .select({ spaceId: workspaceSpacePermissions.spaceId })
-    .from(workspaceSpacePermissions)
-    .where(eq(workspaceSpacePermissions.organizationId, organizationId))
-    .all()
-    .filter((r) => actorIds.includes(r.spaceId) === false);
   // filter by actor — the where above selects org; match actors in JS for
   // the team-ids expansion (small grant sets, same as documents).
   const granted = new Set<string>();
