@@ -627,6 +627,15 @@ class TransportError(RuntimeError):
     pass
 
 
+class PushRejected(RuntimeError):
+    # The lane branch rejected our push — someone moved it under the lane
+    # (sweep update-branch, a teammate push) and the merge+retry path could
+    # not land it. Deliberately NOT a TransportError: a rejection is not a
+    # substrate failure, and an infra auto-retry would just re-enter the same
+    # race (PILE-476 / the VOR-744 lost push).
+    pass
+
+
 _TRANSPORT_NOTES = []
 
 
@@ -1050,13 +1059,91 @@ def assert_push_target():
         raise RuntimeError(f'push restricted by lane policy: refusing to push {BRANCH!r} (default branch {base!r})')
 
 
-def push_command():
+def push_command(refspec=None):
+    refspec = refspec or f'refs/heads/{BRANCH}:refs/heads/{BRANCH}'
     if PUSH_POLICY == 'enabled':
-        return [GIT, '-C', REPO_DIR] + _GIT_SAFE_FLAGS + ['push', 'origin', f'refs/heads/{BRANCH}:refs/heads/{BRANCH}']
+        return [GIT, '-C', REPO_DIR] + _GIT_SAFE_FLAGS + ['push', 'origin', refspec]
     # Explicit URL + fully qualified refspec: no remote config (mirror,
     # push refspecs, rewritten URL) and no followed tags can widen it.
     return [GIT, '-C', REPO_DIR] + _GIT_SAFE_FLAGS + ['push', '--no-follow-tags',
-            f'https://github.com/{REPO}.git', f'HEAD:refs/heads/{BRANCH}']
+            f'https://github.com/{REPO}.git', f'HEAD:{refspec.split(":", 1)[-1]}']
+
+
+# Git's server-side rejection markers — a nonzero push whose stderr carries
+# one of these is a refusal (non-ff, protected ref), not a transport outage.
+_PUSH_REJECTED_RE = re.compile(
+    r'\[rejected\]|non-fast-forward|fetch first|stale info|failed to push some refs', re.I)
+
+
+def _attempt_push(env):
+    # One push attempt with both streams captured: a rejection's stderr must
+    # land in the error and transcript — before, push ran uncaptured so the
+    # recorded error was always empty (the VOR-744 push failure logged nothing).
+    proc = run(push_command(), env=env, capture_output=True, text=True, check=False)
+    if proc.returncode == 0:
+        return None
+    detail = _redact(((proc.stderr or '') + (proc.stdout or '')).strip())[-2000:]
+    return {
+        'detail': detail or f'git push exited {proc.returncode}',
+        'rejected': bool(_PUSH_REJECTED_RE.search(detail)),
+    }
+
+
+def _head_sha(env):
+    proc = run([GIT, '-C', REPO_DIR] + _GIT_SAFE_FLAGS + ['rev-parse', '--verify', '--quiet', 'HEAD'],
+               env=env, capture_output=True, text=True, check=False)
+    return proc.stdout.strip() if proc.returncode == 0 else ''
+
+
+def sync_remote_head(env):
+    """Fetch the lane branch's current remote tip and merge it into HEAD when
+    it moved ahead (sweep update-branch, a teammate push — PILE-476). Returns
+    'absent' | 'unknown' | 'current' | 'merged' | 'conflict'; the caller
+    treats 'conflict' like a rejection bound for the rescue branch."""
+    remote = remote_branch_head(env)
+    if not remote:
+        return 'absent' if remote == '' else 'unknown'
+    git = [GIT, '-C', REPO_DIR] + _GIT_SAFE_FLAGS
+    run_transport(git + ['fetch', 'origin', f'+refs/heads/{BRANCH}:refs/remotes/origin/{BRANCH}'],
+                  env=env, capture_output=True, text=True, timeout=300)
+    ancestor = run(git + ['merge-base', '--is-ancestor', f'origin/{BRANCH}', 'HEAD'], env=git_env(), check=False)
+    if ancestor.returncode == 0:
+        return 'current'
+    merged = run(git + ['merge', '--no-edit', f'origin/{BRANCH}'], env=git_env(),
+                 check=False, capture_output=True, text=True)
+    if merged.returncode == 0:
+        print(f'merged origin/{BRANCH} ({remote[:12]}) into the lane branch')
+        return 'merged'
+    run(git + ['merge', '--abort'], env=git_env(), check=False, capture_output=True)
+    print(f'merge of origin/{BRANCH} conflicts — remote tip stays unmerged')
+    return 'conflict'
+
+
+def rescue_branch_name():
+    # rescue/<session> — the dead-drop for work that can't land on the lane
+    # branch. Sanitized hard: the env value reaches a refspec.
+    session = re.sub(r'[^A-Za-z0-9._-]+', '-', os.environ.get('PILE_SESSION_ID', '')).strip('-.') or 'unknown'
+    return f'rescue/{session[:64]}'
+
+
+def push_rescue_branch(env):
+    """Last-resort deliverable: the lane branch can't take the lane's commits,
+    so push HEAD to rescue/<session> — the work is never lost (PILE-476).
+    Forced: a follow-up run must overwrite its own earlier rescue. Returns the
+    branch name, or '' when the rescue push itself failed."""
+    rescue = rescue_branch_name()
+    refspec = f'+HEAD:refs/heads/{rescue}'
+    if PUSH_POLICY == 'enabled':
+        cmd = [GIT, '-C', REPO_DIR] + _GIT_SAFE_FLAGS + ['push', 'origin', refspec]
+    else:
+        cmd = [GIT, '-C', REPO_DIR] + _GIT_SAFE_FLAGS + ['push', '--no-follow-tags',
+                f'https://github.com/{REPO}.git', refspec]
+    proc = run(cmd, env=env, capture_output=True, text=True, check=False)
+    if proc.returncode != 0:
+        print('rescue push failed:', _redact((proc.stderr or proc.stdout or '').strip()))
+        return ''
+    print(f'lane work preserved on origin branch {rescue}')
+    return rescue
 
 
 def remote_branch_head(env):
@@ -1226,12 +1313,38 @@ def commit_and_push(agent_env=None):
     # Rebuilt with the just-refreshed token (not the dispatch-time one,
     # possibly >1h stale) as what push authenticates with.
     _reset_git_config()
+    auth_env = git_auth_env()
     try:
-        run_transport(push_command(), env=git_auth_env())
+        # PILE-476 — the lane branch can move on origin while the lane works
+        # (the sweep's update-branch merged main into the PR branch under a
+        # live lane, and its next push died non-fast-forward). Fetch+merge the
+        # remote tip before pushing so the push is a fast-forward; on
+        # rejection merge+retry ONCE; still rejected → rescue/<session> so
+        # the work is never lost. A rejection is not an infra failure and
+        # must not auto-retry — the PushRejected error class carries that.
+        if sync_remote_head(auth_env) == 'merged':
+            head = _head_sha(auth_env)
+        pushed = _attempt_push(auth_env)
+        if pushed is not None:
+            if not pushed['rejected']:
+                raise TransportError(f'git push failed: {pushed["detail"]}')
+            print('git push rejected:', pushed['detail'])
+            if sync_remote_head(auth_env) == 'merged':
+                head = _head_sha(auth_env)
+            retry = _attempt_push(auth_env)
+            if retry is not None:
+                print('git push rejected again:', retry['detail'])
+                rescue = push_rescue_branch(auth_env)
+                if rescue:
+                    raise PushRejected(
+                        f'git push rejected — origin {BRANCH} moved under the lane '
+                        f'({retry["detail"]}); the work is preserved on origin branch {rescue}')
+                raise TransportError(
+                    f'git push rejected ({retry["detail"]}) and the rescue push failed too')
         # A lane that ends without its work on origin shipped nothing —
         # verify the push landed instead of trusting the exit code, so a
         # silent no-op classifies as infra and the sweep re-drives it.
-        after = remote_branch_head(git_auth_env())
+        after = remote_branch_head(auth_env)
         if after is None:
             raise TransportError(f'git push succeeded but the re-check of origin {BRANCH} failed — cannot verify it landed')
         if after != head:

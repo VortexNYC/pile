@@ -10,7 +10,13 @@ import type { Issue } from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
 import { loadProviderConfig } from "./credentials.js";
 import { resolveAgentEnv } from "./daytona.js";
-import { FLEET_UNHEALTHY_STREAK, fleetInfraStreak } from "./fleet-health.js";
+import {
+  FLEET_UNHEALTHY_STREAK,
+  fleetInfraStreak,
+  issueBreakerOpen,
+  issueFailedStartCount,
+  noteIssueBreakerOpen,
+} from "./fleet-health.js";
 import { dispatchAgent } from "./index.js";
 import { resolveLaneForIssue } from "./nudge.js";
 import { REVIEW_PURPOSE } from "./review.js";
@@ -219,6 +225,21 @@ export async function fireRepoTriggers(
         return undefined;
       });
     targetIssue = persisted ?? { ...issue, repo };
+  }
+  // PILE-476 — issue breaker: a poison issue whose lanes keep failing at
+  // start gets no more automated dispatches (the PILE-448 redispatch loop).
+  if (await issueBreakerOpen(stub, targetIssue.id)) {
+    console.log("issue breaker open — repo trigger skipped", {
+      event,
+      issueId: targetIssue.id,
+      triggers: triggers.length,
+    });
+    await noteIssueBreakerOpen(
+      stub,
+      targetIssue.id,
+      await issueFailedStartCount(stub, targetIssue.id)
+    );
+    return 0;
   }
   // An event storm during a capacity outage would dispatch lanes onto the
   // substrate that's already failing — fleet breaker closes the loop.

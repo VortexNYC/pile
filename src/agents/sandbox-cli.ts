@@ -525,6 +525,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
     options: {
       comments?: DispatchComment[];
       instructions?: string;
+      sessionId?: string;
       pileApi?: { url: string; key: string } | null;
       lane?: {
         tokenUrl: string | null;
@@ -615,6 +616,9 @@ export class SandboxCliAgentProvider implements AgentProvider {
       ),
       REPO: issue.repo ?? "",
       BRANCH: issue.branch ?? `issue-${issue.id}`,
+      // Names the runner's rescue/<session> fallback branch when a push is
+      // rejected (PILE-476). Runner-only — not on the agent env allowlist.
+      ...(options.sessionId ? { PILE_SESSION_ID: options.sessionId } : {}),
       ISSUE_TITLE: sanitizeEnv(issue.title),
       ISSUE_IDENTIFIER: issue.identifier ?? issue.id,
       AGENT_LABEL: this.d.displayLabel,
@@ -725,6 +729,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
             {
               comments: sessionContext?.comments,
               instructions: sessionContext?.instructions,
+              sessionId,
               pileApi: sessionContext?.pileApi ?? null,
               extra: sessionContext?.extraEnv,
               secondaryRepos,

@@ -16,7 +16,14 @@ import { resolveGeneratedConflict } from "./conflict-fix.js";
 import { loadProviderConfig } from "./credentials.js";
 import { resolveAgentEnv } from "./daytona.js";
 import { ingestFailedAgentSession } from "./failure-tickets.js";
-import { FLEET_UNHEALTHY_STREAK, fleetInfraStreak } from "./fleet-health.js";
+import {
+  FLEET_UNHEALTHY_STREAK,
+  ISSUE_BREAKER_FAILED_STARTS,
+  fleetInfraStreak,
+  issueBreakerOpen,
+  issueFailedStartCount,
+  noteIssueBreakerOpen,
+} from "./fleet-health.js";
 import {
   buildHangReport,
   formatHangReport,
@@ -614,26 +621,18 @@ async function retryDeadLane(
   // hour so a doomed lane stops burning spawn attempts. Distinct from the
   // fleet/agent breakers — those catch substrate outages, this catches a
   // single-issue poison lane.
-  const issueSessions = await stub
-    .listAgentSessions({ issueId: session.issueId, limit: 10 })
-    .catch(() => []);
-  const hourAgo = Date.now() - 60 * 60 * 1000;
-  const failedStarts = issueSessions.filter(
-    (s) =>
-      s.infraFailure === 1 &&
-      TERMINAL_STATUSES.has(s.status) &&
-      new Date(s.createdAt).getTime() > hourAgo
-  ).length;
-  if (failedStarts >= 3) {
+  const issueFailedStarts = await issueFailedStartCount(stub, session.issueId);
+  if (issueFailedStarts >= ISSUE_BREAKER_FAILED_STARTS) {
     await stub
       .addAgentActivity({
         sessionId: session.id,
         actorId: session.actorId,
         type: "error",
-        message: `issue breaker open — ${failedStarts} failed starts on this issue in the last hour; redispatch paused`,
-        payload: { issueId: session.issueId, failedStarts },
+        message: `issue breaker open — ${issueFailedStarts} failed starts on this issue in the last hour; redispatch paused`,
+        payload: { issueId: session.issueId, failedStarts: issueFailedStarts },
       })
       .catch(() => {});
+    await noteIssueBreakerOpen(stub, session.issueId, issueFailedStarts);
     return;
   }
   // Fleet-wide breaker: during a substrate outage every retry spends a spawn
@@ -1310,6 +1309,16 @@ async function fireAutomation(
         )),
       actorId
     );
+    // PILE-476 — issue breaker: an issue whose lanes keep failing at start
+    // must not keep spawning automation dispatches.
+    if (await issueBreakerOpen(stub, targetIssue.id)) {
+      await noteIssueBreakerOpen(
+        stub,
+        targetIssue.id,
+        await issueFailedStartCount(stub, targetIssue.id)
+      );
+      return;
+    }
     const providerConfig = await loadProviderConfig(
       env,
       stub,
@@ -2036,6 +2045,10 @@ export function shouldUpdatePrBranch(input: {
   checkState: string | null;
   headRef: string | null;
   managedRefs: readonly (string | null | undefined)[];
+  /** PILE-476 — a live lane bound to this PR has a checkout of the head
+   *  branch; merging the base under it turns its next push into a
+   *  non-fast-forward rejection (the VOR-744 lost-push race). */
+  liveLaneBound: boolean;
 }): boolean {
   return (
     input.state === "open" &&
@@ -2043,7 +2056,8 @@ export function shouldUpdatePrBranch(input: {
     input.mergeable !== false &&
     input.checkState !== "failing" &&
     input.headRef !== null &&
-    input.managedRefs.includes(input.headRef)
+    input.managedRefs.includes(input.headRef) &&
+    !input.liveLaneBound
   );
 }
 
@@ -2088,6 +2102,28 @@ function laneBoundToPr(
   if (headRef === null) return false;
   const laneBranch = lane.branch ?? issue.branch ?? `issue-${issue.id}`;
   return laneBranch === headRef;
+}
+
+/** PILE-476 — a non-terminal lane bound to this PR (its prUrl, or its
+ *  working branch when it hasn't reported a PR yet) has a checkout of the
+ *  head branch; a sweep update-branch merges under it and its next push
+ *  dies non-fast-forward. Side lanes (review/triage/plan/preflight) never
+ *  push, so they don't hold the branch. */
+async function issueHasLiveLaneBoundToPr(
+  stub: DurableObjectStub<WorkspaceDO>,
+  issue: Issue,
+  prUrl: string,
+  headRef: string | null
+): Promise<boolean> {
+  const lanes = await stub
+    .listAgentSessions({ issueId: issue.id, limit: 50 })
+    .catch(() => [] as AgentSession[]);
+  return lanes.some(
+    (lane) =>
+      !TERMINAL_STATUSES.has(lane.status) &&
+      !(lane.purpose && MERGE_SURVIVOR_PURPOSES.has(lane.purpose)) &&
+      laneBoundToPr(lane, issue, prUrl, headRef)
+  );
 }
 
 async function cancelLanesForTerminalPr(
@@ -2405,6 +2441,7 @@ export async function syncOpenPrSessions(
       // stay on the pr.conflict path above. Deduped per headSha via the
       // pr.branch_update event — a slow GitHub merge otherwise re-fires on
       // every sweep pass.
+      const updateHeadRef = typeof head?.ref === "string" ? head.ref : null;
       if (
         issue &&
         headSha &&
@@ -2413,8 +2450,14 @@ export async function syncOpenPrSessions(
           mergeable: pr.mergeable,
           mergeableState: pr.mergeable_state,
           checkState,
-          headRef: typeof head?.ref === "string" ? head.ref : null,
+          headRef: updateHeadRef,
           managedRefs: [`issue-${issue.id}`, issue.branch],
+          liveLaneBound: await issueHasLiveLaneBoundToPr(
+            stub,
+            issue,
+            prUrl,
+            updateHeadRef
+          ),
         })
       ) {
         const seen = await stub

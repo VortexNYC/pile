@@ -142,6 +142,7 @@ describe("shouldUpdatePrBranch", () => {
     checkState: "passing" as string | null,
     headRef: "issue-abc",
     managedRefs: ["issue-abc", null] as (string | null)[],
+    liveLaneBound: false,
   };
 
   it("updates a managed lane branch that is behind with no conflicts", () => {
@@ -177,6 +178,10 @@ describe("shouldUpdatePrBranch", () => {
     expect(shouldUpdatePrBranch({ ...base, headRef: "fork/feature" })).toBe(
       false
     );
+  });
+
+  it("skips a PR while a live lane is bound to its branch (PILE-476)", () => {
+    expect(shouldUpdatePrBranch({ ...base, liveLaneBound: true })).toBe(false);
   });
 });
 
@@ -3123,6 +3128,70 @@ describe("syncOpenPrSessions", () => {
     expect(updates).toHaveLength(1);
   });
 
+  it("does not update-branch while a live lane is bound to the PR (PILE-476)", async () => {
+    const issue = await stub.createIssue({ title: "Live lane behind" });
+    // The completed lane reported the PR; a second live lane works the same
+    // head branch — the sweep must not merge the base under it.
+    await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "mock-prs",
+      provider: "mock-prs",
+      actorId: userId,
+      actorType: "user",
+      status: "completed",
+      prUrl: "https://github.com/vortexnyc/pile/pull/555",
+      prState: "open",
+    });
+    await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "mock-prs",
+      provider: "mock-prs",
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      prUrl: "https://github.com/vortexnyc/pile/pull/555",
+    });
+    const updates: string[] = [];
+    const fetchBehind = (async (
+      input: RequestInfo | URL,
+      init?: RequestInit
+    ) => {
+      const url = String(input);
+      if (url.endsWith("/pulls/555/update-branch")) {
+        updates.push(url);
+        return new Response("{}", { status: 202 });
+      }
+      if (url.endsWith("/pulls/555")) {
+        return new Response(
+          JSON.stringify({
+            state: "open",
+            merged_at: null,
+            mergeable: true,
+            mergeable_state: "behind",
+            head: { sha: "behind111", ref: `issue-${issue.id}` },
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.includes("/commits/behind111/check-runs")) {
+        return new Response(
+          JSON.stringify({
+            check_runs: [{ status: "completed", conclusion: "success" }],
+          }),
+          { status: 200 }
+        );
+      }
+      return new Response("not found", { status: 404 });
+    }) as typeof fetch;
+
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: fetchBehind,
+    });
+
+    expect(updates).toHaveLength(0);
+  });
+
   it("update-branches a PR on the issue's linked branch", async () => {
     const issue = await stub.createIssue({
       title: "Linked branch lane",
@@ -3840,10 +3909,24 @@ describe("PILE-420 stale marking + pause holds", () => {
     };
     const first = await stub.createIssue({ title: "Held one" });
     const second = await stub.createIssue({ title: "Held two" });
-    const s1 = await dispatchAgent(env, agentId, organizationId, first, actor);
+    const s1 = await dispatchAgent(
+      env,
+      agentId,
+      organizationId,
+      first,
+      actor,
+      undefined,
+      undefined,
+      { instructions: "review prompt + diff the lane was parked with" }
+    );
     const s2 = await dispatchAgent(env, agentId, organizationId, second, actor);
     expect(s1.status).toBe("waiting");
     expect(s1.paused).toBe(1);
+    // PILE-476 — the parked row keeps its dispatch instructions so resume
+    // releases the lane with the prompt it was dispatched with.
+    expect(s1.instructions).toBe(
+      "review prompt + diff the lane was parked with"
+    );
     expect(s2.status).toBe("waiting");
     expect(s2.paused).toBe(1);
     expect(dispatches).toHaveLength(0);

@@ -143,6 +143,7 @@ function failedSession(
     actorId: userId,
     actorType: "user",
     status: "failed",
+    instructions: null,
     result: null,
     url: null,
     providerSessionId: `prov-${id}`,

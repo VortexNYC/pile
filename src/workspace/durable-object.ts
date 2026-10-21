@@ -5662,7 +5662,22 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       "canceled",
     ]);
     const oldStatus = oldSession.status as AgentSessionStatus;
-    const newStatus = result.status;
+    // PILE-467 — terminal lanes are absorbing: a late write racing an
+    // operator cancel or first terminal write (a dispatch resolving after
+    // the cancel, a stale provider poll) must not move the session — the
+    // VOR-732 canceled→failed and 8e1267da canceled→created flips. The one
+    // sanctioned way back out of terminal is the delivered follow-up resume
+    // (→ running) the kept-sandbox providers take; every other transition is
+    // dropped while the result's non-status fields still record.
+    const resumeFromTerminal =
+      result.status === "running" &&
+      (oldStatus === "completed" || oldStatus === "failed");
+    const statusBlocked =
+      result.status !== undefined &&
+      terminal.has(oldStatus) &&
+      result.status !== oldStatus &&
+      !resumeFromTerminal;
+    const newStatus = statusBlocked ? oldStatus : result.status;
     const becameTerminal = !terminal.has(oldStatus) && terminal.has(newStatus);
 
     // PILE-289 — validate the lane's final output against the dispatch-time
@@ -5783,14 +5798,13 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         lastProgressAt: new Date().toISOString(),
       };
       if (result.status !== undefined) {
-        set.status = result.status;
-        if (terminal.has(result.status) && !oldSession.endedAt)
+        set.status = newStatus;
+        if (terminal.has(newStatus) && !oldSession.endedAt)
           set.endedAt = set.updatedAt;
-        if (!terminal.has(result.status) && oldSession.endedAt)
-          set.endedAt = null;
+        if (!terminal.has(newStatus) && oldSession.endedAt) set.endedAt = null;
         // PILE-419 — leaving `waiting` closes any open elicitation (the
         // lane resumed or died without an answer).
-        if (result.status !== "waiting") {
+        if (newStatus !== "waiting") {
           set.awaitingActivityId = null;
           set.awaitingEscalatedAt = null;
         }
@@ -5836,17 +5850,16 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       lastProgressAt: new Date().toISOString(),
     };
     if (result.status !== undefined) {
-      set.status = result.status;
-      if (terminal.has(result.status) && !oldSession.endedAt)
+      set.status = newStatus;
+      if (terminal.has(newStatus) && !oldSession.endedAt)
         set.endedAt = set.updatedAt;
       // Resumed lane: clear the anchor so the kept-sandbox window restarts
       // when it re-ends — otherwise the reaper keys off the ORIGINAL end
       // and can destroy a sandbox that's actively working a follow-up.
-      if (!terminal.has(result.status) && oldSession.endedAt)
-        set.endedAt = null;
+      if (!terminal.has(newStatus) && oldSession.endedAt) set.endedAt = null;
       // PILE-419 — leaving `waiting` closes any open elicitation (answered
       // via /respond, provider un-parked on its own, or went terminal).
-      if (result.status !== "waiting") {
+      if (newStatus !== "waiting") {
         set.awaitingActivityId = null;
         set.awaitingEscalatedAt = null;
       }

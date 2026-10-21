@@ -1675,6 +1675,9 @@ const v56 = `CREATE TABLE IF NOT EXISTS issue_shares (
 );
 CREATE INDEX IF NOT EXISTS issue_shares_issue_idx ON issue_shares (organization_id, issue_id)`;
 
+// PILE-476 — parked sessions keep their dispatch instructions for promotion.
+const v102 = `ALTER TABLE agent_sessions ADD COLUMN instructions TEXT`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -1779,6 +1782,7 @@ export const workspaceMigrations = {
       { idx: 98, when: 98, tag: "v99", breakpoints: true },
       { idx: 99, when: 99, tag: "v100", breakpoints: true },
       { idx: 100, when: 100, tag: "v101", breakpoints: true },
+      { idx: 101, when: 101, tag: "v102", breakpoints: true },
     ],
   },
   migrations: {
@@ -1883,5 +1887,6 @@ export const workspaceMigrations = {
     m0098: v99,
     m0099: v100,
     m0100: v101,
+    m0101: v102,
   },
 } satisfies Parameters<typeof migrate>[1];

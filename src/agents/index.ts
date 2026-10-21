@@ -397,6 +397,9 @@ export async function dispatchAgent(
         label,
         resultSchema,
         stepKey: options?.stepKey ?? null,
+        // PILE-476 — parked lanes keep their dispatch instructions; promote
+        // re-dispatches with them instead of a bare prompt.
+        instructions: options?.instructions ?? null,
       });
       await stub
         .addAgentSessionEvent({
@@ -449,6 +452,7 @@ export async function dispatchAgent(
         status: "waiting",
         queuedAfter: queueAfter ?? null,
         paused: 1,
+        instructions: options?.instructions ?? null,
         parentSessionId: options?.parentSessionId ?? null,
         spawnDepth: options?.spawnDepth ?? 0,
         purpose: options?.purpose ?? null,
@@ -813,7 +817,9 @@ export async function dispatchAgent(
                   .filter((line): line is string => line !== null)
                   .join("\n")
               : null,
-            options?.instructions ?? null,
+            // A promoted lane re-runs the instructions it was parked with
+            // (PILE-476 — released pause holds kept losing their prompt).
+            options?.instructions ?? promoteTarget?.instructions ?? null,
             session.resultSchema
               ? buildResultSchemaInstructions(session.resultSchema)
               : null,

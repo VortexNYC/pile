@@ -1127,6 +1127,9 @@ export interface AgentSessionInput {
   guidance?: string | null;
   /** Flue profile memory — resume key ({merchantId}-{agentSlug}). */
   conversationKey?: string | null;
+  /** PILE-476 — dispatch instructions persisted on parked rows so
+   *  promotion releases the lane with the prompt it was dispatched with. */
+  instructions?: string | null;
 }
 
 export async function createAgentSession(
@@ -1165,6 +1168,7 @@ export async function createAgentSession(
     stepKey: input.stepKey ?? null,
     guidance: input.guidance ?? null,
     conversationKey: input.conversationKey ?? null,
+    instructions: input.instructions ?? null,
     updatedAt: ts,
   });
   const row = await db
@@ -4835,7 +4839,10 @@ export function listDocumentsVisibleTo(
   // closed ACL the space grant cannot widen.
   const spaceGranted = new Set<string>();
   for (const row of db
-    .select({ spaceId: workspaceSpacePermissions.spaceId, actorId: workspaceSpacePermissions.actorId })
+    .select({
+      spaceId: workspaceSpacePermissions.spaceId,
+      actorId: workspaceSpacePermissions.actorId,
+    })
     .from(workspaceSpacePermissions)
     .where(eq(workspaceSpacePermissions.organizationId, organizationId))
     .all()) {
@@ -4848,7 +4855,9 @@ export function listDocumentsVisibleTo(
         (d.spaceId && restrictedSpaces.has(d.spaceId))
       ) ||
       granted.has(d.id) ||
-      (!restricted.has(d.id) && d.spaceId != null && spaceGranted.has(d.spaceId))
+      (!restricted.has(d.id) &&
+        d.spaceId != null &&
+        spaceGranted.has(d.spaceId))
   );
 }
 
@@ -4874,12 +4883,13 @@ export function listDocumentsForActor(
     grants.filter((g) => g.actorId === actorId).map((g) => g.documentId)
   );
   // Space grants widen guests the same way — only docs with no doc ACL.
-  const granted = new Set(
-    grants.map((g) => g.documentId)
-  );
+  const granted = new Set(grants.map((g) => g.documentId));
   const spaceGranted = new Set<string>();
   for (const row of db
-    .select({ spaceId: workspaceSpacePermissions.spaceId, actorId: workspaceSpacePermissions.actorId })
+    .select({
+      spaceId: workspaceSpacePermissions.spaceId,
+      actorId: workspaceSpacePermissions.actorId,
+    })
     .from(workspaceSpacePermissions)
     .where(eq(workspaceSpacePermissions.organizationId, organizationId))
     .all()) {
@@ -4889,9 +4899,7 @@ export function listDocumentsForActor(
   return all.filter(
     (d) =>
       visible.has(d.id) ||
-      (!granted.has(d.id) &&
-        d.spaceId != null &&
-        spaceGranted.has(d.spaceId))
+      (!granted.has(d.id) && d.spaceId != null && spaceGranted.has(d.spaceId))
   );
 }
 
@@ -5557,10 +5565,16 @@ export function updateMarketRun(
 export function listMarketRuns(
   db: WorkspaceDb,
   organizationId: string,
-  args: { vertical?: string; geo?: string; issueId?: string; limit?: number } = {}
+  args: {
+    vertical?: string;
+    geo?: string;
+    issueId?: string;
+    limit?: number;
+  } = {}
 ) {
   const conds = [eq(workspaceMarketRuns.organizationId, organizationId)];
-  if (args.vertical) conds.push(eq(workspaceMarketRuns.vertical, args.vertical));
+  if (args.vertical)
+    conds.push(eq(workspaceMarketRuns.vertical, args.vertical));
   if (args.geo) conds.push(eq(workspaceMarketRuns.geo, args.geo));
   if (args.issueId) conds.push(eq(workspaceMarketRuns.issueId, args.issueId));
   return db

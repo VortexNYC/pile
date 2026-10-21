@@ -775,6 +775,84 @@ describe("WorkspaceDO", () => {
     expect(done?.assigneeId).toBe("user-1");
   });
 
+  it("keeps a canceled session canceled when a late result races in (PILE-467)", async () => {
+    const stub = getStub();
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Cancel race" })
+    );
+    const session = await withWorkspace(stub, (instance) =>
+      instance.createAgentSession({
+        issueId: issue.id,
+        agentId: "mock",
+        provider: "mock",
+        actorId: "user-1",
+        actorType: "user",
+        status: "running",
+      })
+    );
+    await withWorkspace(stub, (instance) =>
+      instance.applyAgentSessionResult(session.id, {
+        status: "canceled",
+        result: "Stopped by user-1",
+      })
+    );
+    // The VOR-732 race: a dispatch that started before the cancel resolves
+    // afterward — its write must not flip the canceled status.
+    await withWorkspace(stub, (instance) =>
+      instance.applyAgentSessionResult(session.id, {
+        status: "failed",
+        result: "spawn failed",
+      })
+    );
+    let after = await withWorkspace(stub, (instance) =>
+      instance.getAgentSession(session.id)
+    );
+    expect(after?.status).toBe("canceled");
+    // 8e1267da — nor may a stale "created"/"running" write resurrect it.
+    await withWorkspace(stub, (instance) =>
+      instance.applyAgentSessionResult(session.id, { status: "created" })
+    );
+    await withWorkspace(stub, (instance) =>
+      instance.applyAgentSessionResult(session.id, { status: "running" })
+    );
+    after = await withWorkspace(stub, (instance) =>
+      instance.getAgentSession(session.id)
+    );
+    expect(after?.status).toBe("canceled");
+  });
+
+  it("lets a completed lane resume to running for a follow-up (PILE-467)", async () => {
+    const stub = getStub();
+    const issue = await withWorkspace(stub, (instance) =>
+      instance.createIssue({ title: "Resume race" })
+    );
+    const session = await withWorkspace(stub, (instance) =>
+      instance.createAgentSession({
+        issueId: issue.id,
+        agentId: "mock",
+        provider: "mock",
+        actorId: "user-1",
+        actorType: "user",
+        status: "running",
+      })
+    );
+    await withWorkspace(stub, (instance) =>
+      instance.applyAgentSessionResult(session.id, { status: "completed" })
+    );
+    // The kept-sandbox follow-up path is the one sanctioned exit from
+    // terminal — completed → running resumes the lane.
+    await withWorkspace(stub, (instance) =>
+      instance.applyAgentSessionResult(session.id, {
+        status: "running",
+        result: null,
+      })
+    );
+    const after = await withWorkspace(stub, (instance) =>
+      instance.getAgentSession(session.id)
+    );
+    expect(after?.status).toBe("running");
+  });
+
   it("claims, renews with an epoch bump, conflicts, and releases (PILE-430)", async () => {
     const stub = getStub();
     const issue = await withWorkspace(stub, (instance) =>
@@ -3760,9 +3838,9 @@ describe("merchant sources (feed registry)", () => {
       return { src, dupe, list };
     });
     expect(out.dupe.id).toBe(out.src.id);
-    expect(
-      out.list.find((r) => r.id === out.src.id)?.cursorValue
-    ).toBe("2026-10-19");
+    expect(out.list.find((r) => r.id === out.src.id)?.cursorValue).toBe(
+      "2026-10-19"
+    );
   });
 });
 

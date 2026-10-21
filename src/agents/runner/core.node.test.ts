@@ -396,10 +396,31 @@ elif mode == "pushstate":
         git("add", "-A")
         git("commit", "-q", "-m", "lane work")
         push_to_bare(git("rev-parse", "HEAD") if state == "head" else base)
+    elif state in ("moved", "conflict"):
+        # PILE-476 — origin's lane branch gained a commit the lane lacks
+        # (sweep update-branch): the runner must fetch+merge then push ff.
+        # "conflict" makes that commit touch changed.txt too, so the merge
+        # aborts and the work lands on rescue/<session> instead.
+        push_to_bare(base)
+        other = os.path.join(home, "other")
+        subprocess.run(["git", "init", "-q", "-b", "main", other], check=True)
+        subprocess.run(["git", "-C", other, "remote", "add", "origin", bare], check=True)
+        subprocess.run(["git", "-C", other, "fetch", "-q", "origin"], check=True)
+        subprocess.run(["git", "-C", other, "checkout", "-q", "-b", branch, "origin/" + branch], check=True)
+        subprocess.run(["git", "-C", other, "config", "user.name", "t"], check=True)
+        subprocess.run(["git", "-C", other, "config", "user.email", "t@example.com"], check=True)
+        bumped = "remote.txt" if state == "moved" else "changed.txt"
+        with open(os.path.join(other, bumped), "w") as f:
+            f.write("remote moved")
+        subprocess.run(["git", "-C", other, "add", "-A"], check=True)
+        subprocess.run(["git", "-C", other, "commit", "-q", "-m", "update-branch merge"], check=True)
+        subprocess.run(["git", "-C", other, "push", "-q", "origin", branch], check=True)
+        git("add", "-A")
+        git("commit", "-q", "-m", "lane work")
     if state == "silent":
-        # The push transport reports success without landing — the
-        # post-push re-check must fail loudly, not end with nothing shipped.
-        ns["run_transport"] = lambda *a, **k: None
+        # The push reports success without landing — the post-push re-check
+        # must fail loudly, not end with nothing shipped.
+        ns["_attempt_push"] = lambda *a, **k: None
     elif state == "flaky":
         # The push lands for real but the verify ls-remote fails —
         # unverified is infra, not success.
@@ -416,6 +437,9 @@ elif mode == "pushstate":
         out["error"] = "%s: %s" % (type(e).__name__, e)
     out["remoteSha"] = subprocess.run(
         ["git", "--git-dir", bare, "rev-parse", "--verify", "--quiet", "refs/heads/" + branch],
+        capture_output=True, text=True).stdout.strip()
+    out["rescueRefs"] = subprocess.run(
+        ["git", "--git-dir", bare, "for-each-ref", "refs/heads/rescue", "--format=%(refname) %(objectname)"],
         capture_output=True, text=True).stdout.strip()
     out["head"] = git("rev-parse", "HEAD")
     out["base"] = base
@@ -610,6 +634,33 @@ describe("runner push state (PILE-322)", () => {
     expect(res.error).toBeUndefined();
     expect(res.pushed).toBe(true);
     expect(res.remoteSha).toBe(res.head);
+  });
+
+  it("fetches and merges a remote tip that moved under the lane, then pushes (PILE-476)", () => {
+    const res = pushState("moved");
+    expect(res.error).toBeUndefined();
+    expect(res.pushed).toBe(true);
+    // The landed head is a merge of lane work + the moved remote tip —
+    // ahead of the clone base and equal to the verified remote ref.
+    expect(res.remoteSha).toBe(res.head);
+    expect(res.remoteSha).not.toBe(res.base);
+  });
+
+  it("pushes to a rescue branch when the remote moved with conflicts (PILE-476)", () => {
+    const res = runHooksHarness({}, "pushstate", {
+      TEST_REMOTE: "conflict",
+      PILE_SESSION_ID: "sess-123",
+    });
+    expect(res.pushed).toBeUndefined();
+    expect(res.error).toContain("PushRejected");
+    // The rejection's stderr is captured now — the error names why.
+    expect(res.error).toContain("rejected");
+    expect(res.error).toContain("rescue/sess-123");
+    const rescueRefs = String(res.rescueRefs ?? "");
+    expect(rescueRefs).toContain("refs/heads/rescue/sess-123");
+    expect(rescueRefs).toContain(String(res.head));
+    // The lane branch itself did NOT take the lane's commits.
+    expect(res.remoteSha).not.toBe(res.head);
   });
 
   it("fails loudly when the push reports success but never lands", () => {

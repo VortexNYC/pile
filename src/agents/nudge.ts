@@ -5,6 +5,11 @@ import type { AgentSession, Issue } from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
 import { loadProviderConfig } from "./credentials.js";
 import { resolveAgentEnv } from "./daytona.js";
+import {
+  ISSUE_BREAKER_FAILED_STARTS,
+  issueFailedStartCount,
+  noteIssueBreakerOpen,
+} from "./fleet-health.js";
 import { followupThrottleWindowMs, laneFollowupThrottled } from "./followup.js";
 import {
   dispatchAgent,
@@ -439,6 +444,23 @@ async function redispatchCompletedLane(
     ...(opts.headSha ? { headSha: opts.headSha } : {}),
     ...(opts.dedupeKey ? { key: opts.dedupeKey } : {}),
   };
+  // PILE-476 — issue breaker: a cold redispatch on an issue whose lanes keep
+  // failing at start is the PILE-448 loop — stop and say so on the issue.
+  const failedStarts = await issueFailedStartCount(stub, issue.id);
+  if (failedStarts >= ISSUE_BREAKER_FAILED_STARTS) {
+    if (!skipNoted) {
+      await stub
+        .addAgentSessionEvent({
+          sessionId: session.id,
+          type: "prompt.followup_skipped",
+          message: `${opts.reason} redispatch skipped: issue breaker open (${failedStarts} failed starts in the last hour)`,
+          payload,
+        })
+        .catch(() => {});
+    }
+    await noteIssueBreakerOpen(stub, issue.id, failedStarts);
+    return;
+  }
   try {
     const providerConfig = await loadProviderConfig(env, stub, session.agentId);
     // PILE-321 — a cold redispatch is a fresh dispatch: a repo-less issue
