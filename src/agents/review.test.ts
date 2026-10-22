@@ -1149,4 +1149,64 @@ describe("requestPrReview / publishReviewVerdicts", () => {
     const evts = await stub.listAgentSessionEvents(stale.id);
     expect(evts.some((e) => e.type === "review.superseded")).toBe(true);
   });
+
+  // VTX-621 ordering guard — a delayed webhook can carry an older sha. When
+  // the PR head has already moved on, dedupe outright: superseding here
+  // would cancel the live lane reviewing the CURRENT head and dispatch
+  // stale work.
+  it("dedupes a stale-sha request without canceling the live head's lane", async () => {
+    const issue = await laneIssue();
+    const t = target("sha-old-head");
+    // The current head already has a live review lane — the stale request
+    // must leave it alone.
+    const live = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "review-mock",
+      provider: "review-mock",
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      purpose: REVIEW_PURPOSE,
+    });
+    await stub.addAgentSessionEvent({
+      sessionId: live.id,
+      type: "review.requested",
+      message: "review requested",
+      payload: {
+        prUrl: t.prUrl,
+        repo: REPO,
+        pullNumber: t.pullNumber,
+        headSha: "sha-new-head",
+        checkRunId: 888,
+      },
+    });
+
+    const gh = fakeGithub({
+      config: REVIEW_CONFIG,
+      files: [{ filename: "src/a.ts", patch: "@@" }],
+      // The PR's real head moved past the requested sha.
+      prHead: "sha-new-head",
+    });
+    const before = dispatched.length;
+    const outcome = await requestPrReview(
+      workerEnv,
+      stub,
+      organizationId,
+      issue,
+      t,
+      "tok",
+      { fetch: gh.fetch }
+    );
+    expect(outcome).toBe("deduped");
+    expect(dispatched.length).toBe(before);
+
+    // The live lane keeps running and its check run is never resolved.
+    const liveAfter = await stub.getAgentSession(live.id);
+    expect(liveAfter?.status).toBe("running");
+    expect(
+      gh.calls.some(
+        (c) => c.method === "PATCH" && c.url.endsWith("/check-runs/888")
+      )
+    ).toBe(false);
+  });
 });
