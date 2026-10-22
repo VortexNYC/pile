@@ -1319,7 +1319,6 @@ describe("infra classification of dispatch failures (PILE-452)", () => {
     });
   });
 
-
   it("refuses a stale dispatch on a finished issue whose lane PR merged (VTX-621)", async () => {
     const s = stub();
     const agentId = `mock-merged-${crypto.randomUUID().slice(0, 8)}`;
@@ -1349,9 +1348,18 @@ describe("infra classification of dispatch failures (PILE-452)", () => {
     };
     const done = await s.getIssue(issue.id);
     await expect(
-      dispatchAgent(env, agentId, actor.organizationId, done!, actor, undefined, undefined, {
-        dedupeDeps,
-      })
+      dispatchAgent(
+        env,
+        agentId,
+        actor.organizationId,
+        done!,
+        actor,
+        undefined,
+        undefined,
+        {
+          dedupeDeps,
+        }
+      )
     ).rejects.toMatchObject({ code: "CONFLICT" });
 
     // A reopened issue with the same merged PR dispatches normally — the
@@ -1371,4 +1379,3 @@ describe("infra classification of dispatch failures (PILE-452)", () => {
     expect(session.status).toBe("created");
   });
 });
-
