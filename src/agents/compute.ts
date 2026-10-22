@@ -400,13 +400,22 @@ export class DaytonaBackend implements ComputeBackend {
   async listSandboxes(
     labelPrefix: string
   ): Promise<Array<ComputeSandbox & { labels?: Record<string, string> }>> {
-    const res = await this.request("/sandbox");
-    if (!res.ok) {
-      const text = await res.text();
-      throw computeError(`Daytona sandbox list failed: ${res.status} ${text}`);
+    // The list paginates (see findSandbox): orphans past page one would
+    // never be swept otherwise. Same 10-page bound as findSandbox.
+    const items: z.infer<typeof daytonaSandboxSchema>[] = [];
+    for (let page = 1; page <= 10; page += 1) {
+      const res = await this.request(`/sandbox?page=${page}`);
+      if (!res.ok) {
+        const text = await res.text();
+        throw computeError(
+          `Daytona sandbox list failed: ${res.status} ${text}`
+        );
+      }
+      const list = daytonaSandboxListSchema.parse(await res.json());
+      items.push(...list.items);
+      if (list.items.length === 0) break;
     }
-    const list = daytonaSandboxListSchema.parse(await res.json());
-    return list.items
+    return items
       .filter((s) =>
         Object.keys(s.labels ?? {}).some((k) => k.startsWith(labelPrefix))
       )
@@ -1485,31 +1494,78 @@ export function computeBackend(env: AppEnv, agentId?: string): ComputeBackend {
   return daytona;
 }
 
-/** PILE-471 — label-based orphan sweep: any `vortex.*`-labeled sandbox
- *  whose owning session is terminal (or unknown) gets deleted. The labels
- *  minted at createSandbox are the source of truth — no session-row
- *  bookkeeping needed on the Daytona side. */
+/** PILE-471 — label-based orphan sweep: `vortex.*`-labeled sandboxes owned
+ *  by `opts.organizationId` whose session row is terminal or missing get
+ *  deleted. The sweep runs per workspace DO while the Daytona account is
+ *  shared, so candidates are scoped by the `vortex.org` label — a foreign
+ *  org's sandbox would read as a missing session here and get deleted
+ *  mid-run otherwise. Sandboxes carrying no org label only reap when the
+ *  session row itself resolves in this DO (UUIDs are unforgeable
+ *  attribution); `ttlMinutes` on create is the backstop for the rest.
+ *
+ *  `opts.keepTerminalMs` mirrors the kept-sandbox resume window: terminal
+ *  sessions younger than it keep their parked sandbox for follow-up
+ *  resumes, so the sweep leaves those to the kept-cap reaper. */
 export async function sweepOrphanSandboxes(
   backend: ComputeBackend,
   stub: {
-    getAgentSession(id: string): Promise<{ status: string } | null | undefined>;
+    getAgentSession(id: string): Promise<
+      | {
+          status: string;
+          endedAt?: string | null;
+          updatedAt?: string | null;
+        }
+      | null
+      | undefined
+    >;
   },
-  opts: { limit?: number } = {}
+  opts: { organizationId: string; limit?: number; keepTerminalMs?: number }
 ): Promise<{ reaped: number; checked: number }> {
   if (!backend.listSandboxes) return { reaped: 0, checked: 0 };
   const sandboxes = await backend.listSandboxes("vortex.");
   const TERMINAL = new Set(["completed", "failed", "canceled"]);
+  // Filter before the limit so unlabeled or foreign-org sandboxes don't
+  // consume the check budget.
+  const candidates = sandboxes.filter(
+    (s) =>
+      s.labels?.["vortex.session"] &&
+      (!s.organizationId || s.organizationId === opts.organizationId)
+  );
   let reaped = 0;
   let checked = 0;
-  for (const s of sandboxes.slice(0, opts.limit ?? 50)) {
+  for (const s of candidates.slice(0, opts.limit ?? 50)) {
     const sessionId = s.labels?.["vortex.session"];
     if (!sessionId) continue;
     checked += 1;
-    const session = await stub.getAgentSession(sessionId).catch(() => null);
-    const orphaned = !session || TERMINAL.has(session.status);
-    if (orphaned && backend.deleteSandbox) {
-      await backend.deleteSandbox(s).catch(() => {});
+    let session:
+      | { status: string; endedAt?: string | null; updatedAt?: string | null }
+      | null
+      | undefined;
+    try {
+      session = await stub.getAgentSession(sessionId);
+    } catch {
+      // Lookup failure ≠ missing session — a transient DO error must not
+      // read as an orphan and delete a live sandbox.
+      continue;
+    }
+    if (session && !TERMINAL.has(session.status)) continue;
+    if (session && opts.keepTerminalMs) {
+      const anchor = Date.parse(session.endedAt ?? session.updatedAt ?? "");
+      if (
+        !Number.isFinite(anchor) ||
+        Date.now() - anchor < opts.keepTerminalMs
+      ) {
+        continue;
+      }
+    }
+    // A missing row is an orphan only when the org label already scoped the
+    // sandbox to this workspace; unlabeled sandboxes could belong anywhere.
+    if (!session && !s.organizationId) continue;
+    try {
+      await backend.deleteSandbox(s);
       reaped += 1;
+    } catch (err) {
+      console.warn("orphan sandbox delete failed", s.id, err);
     }
   }
   return { reaped, checked };

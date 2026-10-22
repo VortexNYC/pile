@@ -355,14 +355,36 @@ function startBackend(outcomes: (Error | ComputeSandbox)[]) {
   };
 }
 
-function providerWith(backend: unknown) {
-  const provider = new DevinCliAgentProvider(env());
+function providerWith(backend: unknown, appEnv: AppEnv = env()) {
+  const provider = new DevinCliAgentProvider(appEnv);
   const seam = provider as unknown as {
     d: { compute: unknown };
     note: (...args: unknown[]) => Promise<void>;
   };
   seam.d.compute = backend;
   return { provider, seam };
+}
+
+// A DO-backed env: sessionIsTerminal re-reads the lane's tracker status
+// through WORKSPACE_DURABLE_OBJECT mid-provision; the note/span helpers
+// write activities through the same stub.
+function sessionEnv(session: { status: string }) {
+  const stub = {
+    setOrganizationId: vi.fn(async () => undefined),
+    getAgentSession: vi.fn(async () => session),
+    addAgentActivity: vi.fn(async () => ({ id: "act-1" })),
+    closeAgentActivity: vi.fn(async () => undefined),
+  };
+  return {
+    stub,
+    env: {
+      ...env(),
+      WORKSPACE_DURABLE_OBJECT: {
+        idFromName: (name: string) => name,
+        get: () => stub,
+      },
+    } as unknown as AppEnv,
+  };
 }
 
 describe("lane payload files (PILE-595)", () => {
@@ -629,5 +651,88 @@ describe("sandbox start retries (PILE-466)", () => {
       vi.useRealTimers();
       vi.restoreAllMocks();
     }
+  });
+});
+
+// PILE-467 — a cancel landing while start() runs inside waitUntil must not
+// be undone by the provision path: each step re-reads the tracker status
+// and tears down whatever was created.
+describe("mid-provision cancel (PILE-467)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("aborts before createSandbox when the session is already canceled", async () => {
+    const backend = startBackend([]);
+    const { env: appEnv } = sessionEnv({ status: "canceled" });
+    const { provider } = providerWith(backend, appEnv);
+
+    await provider.dispatch("org-1", repolessIssue(), "swe-2", {
+      sessionId: "sess-1",
+    });
+
+    expect(backend.createSandbox).not.toHaveBeenCalled();
+    expect(backend.startRunner).not.toHaveBeenCalled();
+    expect(backend.live.size).toBe(0);
+  });
+
+  it("deletes the fresh sandbox when the cancel lands during createSandbox", async () => {
+    const session = { status: "created" };
+    const backend = startBackend([]);
+    backend.createSandbox.mockImplementationOnce(async () => {
+      session.status = "canceled";
+      const sb: ComputeSandbox = {
+        id: "sb-cancel",
+        name: "vortex-devin-sess1",
+        state: "started",
+      };
+      backend.live.set(sb.id, sb);
+      return sb;
+    });
+    const { env: appEnv } = sessionEnv(session);
+    const { provider } = providerWith(backend, appEnv);
+
+    await provider.dispatch("org-1", repolessIssue(), "swe-2", {
+      sessionId: "sess-1",
+    });
+
+    expect(backend.createSandbox).toHaveBeenCalledOnce();
+    expect(backend.startRunner).not.toHaveBeenCalled();
+    expect(backend.live.size).toBe(0);
+  });
+
+  it("tears down the sandbox when the cancel lands after the runner starts", async () => {
+    const session = { status: "created" };
+    const backend = startBackend([]);
+    backend.startRunner.mockImplementationOnce(async () => {
+      session.status = "canceled";
+    });
+    const { env: appEnv } = sessionEnv(session);
+    const { provider } = providerWith(backend, appEnv);
+
+    await provider.dispatch("org-1", repolessIssue(), "swe-2", {
+      sessionId: "sess-1",
+    });
+
+    expect(backend.startRunner).toHaveBeenCalledOnce();
+    expect(backend.live.size).toBe(0);
+  });
+
+  it("provisions normally when the session stays live", async () => {
+    const backend = startBackend([]);
+    const { env: appEnv } = sessionEnv({ status: "created" });
+    const { provider } = providerWith(backend, appEnv);
+
+    const dispatched = await provider.dispatch(
+      "org-1",
+      repolessIssue(),
+      "swe-2",
+      { sessionId: "sess-1" }
+    );
+
+    expect(dispatched.status).toBe("created");
+    expect(backend.createSandbox).toHaveBeenCalledOnce();
+    expect(backend.startRunner).toHaveBeenCalledOnce();
+    expect(backend.live.size).toBe(1);
   });
 });

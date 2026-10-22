@@ -3303,6 +3303,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         prUrl: polled.prUrl,
         prState: polled.prState,
         branch: polled.branch,
+        usage: polled.usage,
       },
       identity.id
     );

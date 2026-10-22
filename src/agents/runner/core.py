@@ -632,6 +632,15 @@ class TransportError(RuntimeError):
     pass
 
 
+class AgentRunError(RuntimeError):
+    # The agent process itself died (nonzero exit, error result, timeout).
+    # Carries whatever usage the driver extracted before the failure so a
+    # crashed lane still lands a real receipt instead of a zero (PILE-450).
+    def __init__(self, message, usage=None):
+        super().__init__(message)
+        self.usage = usage
+
+
 _TRANSPORT_NOTES = []
 
 
@@ -1754,43 +1763,99 @@ def write_result(status, pr_url='', result='', report=None, infra=False, usage=N
         json.dump(payload, f)
 
 
+def _usage_num(u, *keys):
+    for k in keys:
+        v = u.get(k)
+        if isinstance(v, (int, float)) and v >= 0:
+            return int(v)
+    return None
+
+
+def _usage_tokens(u):
+    # Shared token normalization for stream-json usage dicts. Cache tokens
+    # fold into inputTokens: they are billed input, and the rate map has no
+    # cache tier.
+    inp = _usage_num(u, 'input_tokens', 'inputTokens') or 0
+    inp += _usage_num(u, 'cache_read_input_tokens', 'cacheRead') or 0
+    inp += _usage_num(u, 'cache_creation_input_tokens', 'cacheCreation',
+                    'cacheWrite') or 0
+    out = _usage_num(u, 'output_tokens', 'outputTokens')
+    usage = {}
+    if inp:
+        usage['inputTokens'] = inp
+    if out is not None:
+        usage['outputTokens'] = out
+    return usage
+
+
 def cli_result_usage(evt):
     # Normalize a stream-json `result` event's usage into the receipt shape
     # (AgentRunUsage). Absent fields are omitted — the receipt merge treats
-    # missing as "not reported", never zero. Cache tokens fold into
-    # inputTokens: they are billed input, and the rate map has no cache tier.
+    # missing as "not reported", never zero.
     if not isinstance(evt, dict) or evt.get('type') != 'result':
         return None
     u = evt.get('usage')
     if not isinstance(u, dict):
         return None
 
-    def num(*keys):
-        for k in keys:
-            v = u.get(k)
-            if isinstance(v, (int, float)) and v >= 0:
-                return int(v)
-        return None
-
-    usage = {}
-    inp = num('input_tokens', 'inputTokens') or 0
-    inp += num('cache_read_input_tokens', 'cacheRead') or 0
-    inp += num('cache_creation_input_tokens', 'cacheCreation', 'cacheWrite') or 0
-    out = num('output_tokens', 'outputTokens')
-    if inp:
-        usage['inputTokens'] = inp
-    if out is not None:
-        usage['outputTokens'] = out
-    total = num('total_tokens', 'totalTokens')
+    usage = _usage_tokens(u)
+    total = _usage_num(u, 'total_tokens', 'totalTokens')
     if total is not None:
         usage['totalTokens'] = total
-    cost = evt.get('total_cost_usd', u.get('total_cost_usd', u.get('cost_usd')))
+    # Cost walks event → usage dict, treating present-but-null the same as
+    # absent at each level (dict.get's default only fires on a missing key).
+    cost = evt.get('total_cost_usd')
+    if not isinstance(cost, (int, float)):
+        cost = u.get('total_cost_usd')
+    if not isinstance(cost, (int, float)):
+        cost = u.get('cost_usd')
     if isinstance(cost, (int, float)) and cost >= 0:
         usage['costMicros'] = round(cost * 1_000_000)
     model = evt.get('model') or os.environ.get('MODEL')
     if isinstance(model, str) and model:
         usage['model'] = model
     return usage or None
+
+
+def cli_step_usage(evt):
+    # Per-call usage on a mid-run stream-json event (an assistant message's
+    # `message.usage`, or a top-level `usage` on non-result events). The
+    # driver accumulates these so a lane that dies before its result event
+    # still reports what it burned — runaway/erroring lanes are exactly the
+    # runs spend caps exist to catch.
+    if not isinstance(evt, dict) or evt.get('type') == 'result':
+        return None
+    u = evt.get('usage')
+    if not isinstance(u, dict):
+        msg = evt.get('message')
+        u = msg.get('usage') if isinstance(msg, dict) else None
+    if not isinstance(u, dict):
+        return None
+    step = _usage_tokens(u)
+    if not step:
+        return None
+    # Both keys always present — the driver accumulates them sight unseen.
+    return {
+        'inputTokens': step.get('inputTokens', 0),
+        'outputTokens': step.get('outputTokens', 0),
+    }
+
+
+def burned_usage(burned):
+    # Per-event totals for a run that died before its result event — attach
+    # MODEL so the receipt's rate-map fallback can price it.
+    if not burned:
+        return None
+    inp = burned.get('inputTokens') or 0
+    out = burned.get('outputTokens') or 0
+    if not inp and not out:
+        return None
+    usage = dict(burned)
+    usage['totalTokens'] = inp + out
+    model = os.environ.get('MODEL')
+    if model:
+        usage.setdefault('model', model)
+    return usage
 
 
 def finalize(output, pushed, report=None, usage=None):
@@ -1808,10 +1873,13 @@ def finalize(output, pushed, report=None, usage=None):
     return 0
 
 
-def fail_result(error):
+def fail_result(error, usage=None):
+    if usage is None:
+        usage = getattr(error, 'usage', None)
     write_result('failed', '', str(error), infra=isinstance(error, TransportError),
                  rate_limited=is_rate_limited(error),
-                 rate_limit_until=rate_limit_reset_iso(error) if is_rate_limited(error) else None)
+                 rate_limit_until=rate_limit_reset_iso(error) if is_rate_limited(error) else None,
+                 usage=usage)
 
 
 # Agent-CLI capacity deaths (devin's "Reached free model rate limit … resets

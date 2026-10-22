@@ -16958,6 +16958,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/documents/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List document search */
+        get: {
+            parameters: {
+                query: {
+                    q: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Matching documents */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            documents: {
+                                id: string;
+                                organizationId: string;
+                                title: string;
+                                icon: string | null;
+                                content: {
+                                    [key: string]: unknown;
+                                }[] | string;
+                                /** @enum {string} */
+                                contentFormat: "blocks" | "markdown" | "canvas";
+                                slug: string | null;
+                                projectId: string | null;
+                                issueId: string | null;
+                                initiativeId: string | null;
+                                parentDocumentId: string | null;
+                                spaceId: string | null;
+                                isTemplate: boolean;
+                                createdById: string;
+                                updatedById: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                trashedAt: string | null;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/documents/{id}": {
         parameters: {
             query?: never;
@@ -18066,70 +18130,6 @@ export interface paths {
                 };
             };
         };
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/workspaces/{organizationId}/documents/search": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List document search */
-        get: {
-            parameters: {
-                query: {
-                    q: string;
-                };
-                header?: never;
-                path: {
-                    organizationId: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Matching documents */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            documents: {
-                                id: string;
-                                organizationId: string;
-                                title: string;
-                                icon: string | null;
-                                content: {
-                                    [key: string]: unknown;
-                                }[] | string;
-                                /** @enum {string} */
-                                contentFormat: "blocks" | "markdown" | "canvas";
-                                slug: string | null;
-                                projectId: string | null;
-                                issueId: string | null;
-                                initiativeId: string | null;
-                                parentDocumentId: string | null;
-                                spaceId: string | null;
-                                isTemplate: boolean;
-                                createdById: string;
-                                updatedById: string | null;
-                                createdAt: string;
-                                updatedAt: string;
-                                trashedAt: string | null;
-                            }[];
-                        };
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -19256,6 +19256,10 @@ export interface paths {
                     /** @description cold=true → customers with no nextStepText and no nextStepDueAt */
                     cold?: string;
                     needsHuman?: string;
+                    /** @description Exact-match lookup by externalId */
+                    externalId?: string;
+                    /** @description Exact-match lookup by canonical domain (input is normalized first) */
+                    domain?: string;
                 };
                 header?: never;
                 path: {
@@ -19277,6 +19281,7 @@ export interface paths {
                                 organizationId: string;
                                 name: string;
                                 url: string | null;
+                                domain: string | null;
                                 bookingUrl: string | null;
                                 notes: string | null;
                                 logoUrl: string | null;
@@ -19335,6 +19340,7 @@ export interface paths {
                     "application/json": {
                         name: string;
                         url?: string;
+                        domain?: string;
                         bookingUrl?: string | null;
                         notes?: string | null;
                         logoUrl?: string;
@@ -19377,6 +19383,7 @@ export interface paths {
                             organizationId: string;
                             name: string;
                             url: string | null;
+                            domain: string | null;
                             bookingUrl: string | null;
                             notes: string | null;
                             logoUrl: string | null;
@@ -19422,6 +19429,7 @@ export interface paths {
                             organizationId: string;
                             name: string;
                             url: string | null;
+                            domain: string | null;
                             bookingUrl: string | null;
                             notes: string | null;
                             logoUrl: string | null;
@@ -19716,6 +19724,7 @@ export interface paths {
                             organizationId: string;
                             name: string;
                             url: string | null;
+                            domain: string | null;
                             bookingUrl: string | null;
                             notes: string | null;
                             logoUrl: string | null;
@@ -19808,6 +19817,7 @@ export interface paths {
                     "application/json": {
                         name?: string;
                         url?: string | null;
+                        domain?: string | null;
                         bookingUrl?: string | null;
                         notes?: string | null;
                         logoUrl?: string;
@@ -19853,6 +19863,7 @@ export interface paths {
                             organizationId: string;
                             name: string;
                             url: string | null;
+                            domain: string | null;
                             bookingUrl: string | null;
                             notes: string | null;
                             logoUrl: string | null;

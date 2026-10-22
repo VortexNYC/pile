@@ -645,4 +645,25 @@ describe("workspace lane tools", () => {
     expect(customers).toHaveLength(1);
     expect(customers[0].domain).toBeNull();
   });
+
+  it("customer_update compares domain in canonical form and reports alreadySet (PILE-444)", async () => {
+    const existing: FakeCustomer = {
+      id: "cust-dom-1",
+      name: "Joe's Pizza",
+      domain: "joespizza.example.com",
+      externalId: "gplace:dom1",
+      url: null,
+      notes: null,
+      priorityScore: null,
+      customFields: {},
+    };
+    const { ws, calls } = fakeWorkspace([existing]);
+    const out = (await wsTool("customer_update").run(wsCtx(ws), {
+      id: "cust-dom-1",
+      domain: "https://www.JoesPizza.example.com/menu",
+    })) as { alreadySet: string[]; applied: string[] };
+    expect(out.alreadySet).toContain("domain");
+    expect(out.applied).not.toContain("domain");
+    expect(calls.updateCustomer).toHaveLength(0);
+  });
 });

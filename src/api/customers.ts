@@ -21,6 +21,7 @@ const customerSchema = z.object({
   organizationId: z.string(),
   name: z.string(),
   url: z.string().nullable(),
+  domain: z.string().nullable(),
   bookingUrl: z.string().nullable(),
   notes: z.string().nullable(),
   logoUrl: z.string().nullable(),
@@ -57,6 +58,8 @@ const customerSchema = z.object({
 const createCustomerSchema = z.object({
   name: z.string().min(1),
   url: z.string().optional(),
+  // Canonical merchant host — stored normalized (scheme/www./path stripped).
+  domain: z.string().optional(),
   bookingUrl: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
   logoUrl: z.string().optional(),
@@ -88,6 +91,7 @@ const createCustomerSchema = z.object({
 
 const updateCustomerSchema = createCustomerSchema.partial().extend({
   url: z.string().nullable().optional(),
+  domain: z.string().nullable().optional(),
   // PILE-412 — admin-only stage-gate override for the status transition:
   // proceed past open required sub-steps on linked deal issues, recording
   // the reason in audit + issue history. Non-admin callers get 403.
@@ -278,6 +282,13 @@ const listCustomersRoute = createRoute({
           "cold=true → customers with no nextStepText and no nextStepDueAt",
       }),
       needsHuman: z.string().optional(),
+      externalId: z.string().optional().openapi({
+        description: "Exact-match lookup by externalId",
+      }),
+      domain: z.string().optional().openapi({
+        description:
+          "Exact-match lookup by canonical domain (input is normalized first)",
+      }),
     }),
   },
   responses: {
@@ -881,7 +892,8 @@ async function scrubNeedIssueId<T extends { issueId: string | null }>(
 export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listCustomersRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
-    const { cold, dueBefore, needsHuman } = c.req.valid("query");
+    const { cold, dueBefore, needsHuman, externalId, domain } =
+      c.req.valid("query");
     const stub = getWorkspaceStub(c.env, organizationId);
     await stub.setOrganizationId(organizationId);
     return c.json({
@@ -889,6 +901,8 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
         cold: cold === "true",
         dueBefore,
         needsHuman: needsHuman === "true",
+        externalId,
+        domain,
       }),
     });
   });
