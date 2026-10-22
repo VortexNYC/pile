@@ -652,23 +652,25 @@ describe("runner push state (PILE-322)", () => {
   });
 });
 
-describePy("rate-limit reset parsing (VTX-638)", () => {
-  const parse = (text: string, now: string): string => {
-    if (!PYTHON) throw new Error("unreachable: suite skipped without CPython");
-    return execFileSync(
-      PYTHON,
-      [
-        "-c",
-        `import sys, json, datetime; sys.path.insert(0, ${JSON.stringify(join(import.meta.dirname))});
+const parseRateLimitReset = (text: string, now: string): string => {
+  if (!PYTHON) throw new Error("unreachable: suite skipped without CPython");
+  return execFileSync(
+    PYTHON,
+    [
+      "-c",
+      `import sys, json, datetime; sys.path.insert(0, ${JSON.stringify(join(import.meta.dirname))});
 import core;
 now = datetime.datetime.fromisoformat(${JSON.stringify(now)});
 print(json.dumps(core.rate_limit_reset_iso(${JSON.stringify(text)}, now)))`,
-      ],
-      { encoding: "utf8", timeout: 30_000 }
-    )
-      .trim()
-      .replace(/^"|"$/g, "");
-  };
+    ],
+    { encoding: "utf8", timeout: 30_000 }
+  )
+    .trim()
+    .replace(/^"|"$/g, "");
+};
+
+describePy("rate-limit reset parsing (VTX-638)", () => {
+  const parse = parseRateLimitReset;
   const NOW = "2026-10-22T15:33:11+00:00";
 
   it("parses 'reset in N seconds' as a relative offset", () => {

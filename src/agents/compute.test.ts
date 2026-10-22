@@ -141,6 +141,41 @@ describe("DaytonaBackend sandbox create timeout (PILE-466)", () => {
   });
 });
 
+describe("DaytonaBackend lifecycle ceilings (PILE-471)", () => {
+  it("caps every created sandbox: 3h TTL, 24h stopped corpse, 4h idle", async () => {
+    const calls = fetchStub((url, init) => {
+      if (url === "https://daytona.test/sandbox" && init?.method === "POST") {
+        return new Response(JSON.stringify(daytonaRecord), { status: 200 });
+      }
+      return new Response(JSON.stringify(daytonaRecord), { status: 200 });
+    });
+
+    const backend = computeBackend(daytonaTestEnv());
+    await backend.createSandbox({
+      name: "vortex-devin-x",
+      sessionId: "sess-1",
+      organizationId: "org-1",
+      agentLabel: "devin-cli",
+      env: {},
+    });
+
+    const create = calls.find(
+      (c) =>
+        c.url === "https://daytona.test/sandbox" && c.init?.method === "POST"
+    );
+    const body = JSON.parse(String(create?.init?.body)) as Record<
+      string,
+      unknown
+    >;
+    expect(body).toMatchObject({
+      ttlMinutes: 180,
+      autoDeleteInterval: 1440,
+      autoStopInterval: 240,
+    });
+    vi.unstubAllGlobals();
+  });
+});
+
 const sessionCreateUrl = `${daytonaToolbox}/sb-1/process/session`;
 const ipFailure = () =>
   new Response(
