@@ -10,6 +10,7 @@ import type {
   AgentProviderSession,
   AgentProviderState,
 } from "./provider.js";
+import { runUsageSchema } from "./spend.js";
 
 const dispatchResponseSchema = z.object({
   ok: z.boolean(),
@@ -43,6 +44,7 @@ const agentSnapshotSchema = z.object({
       z.object({
         submissionId: z.string(),
         outcome: z.string(),
+        usage: runUsageSchema.optional(),
       })
     )
     .default([]),
@@ -215,6 +217,7 @@ export class CfAgentProvider implements AgentProvider {
       agentId: this.id,
       status,
       ...(lastText ? { result: lastText } : {}),
+      usage: settlement.usage ?? null,
     };
   }
 

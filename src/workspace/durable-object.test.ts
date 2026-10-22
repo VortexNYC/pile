@@ -2744,6 +2744,73 @@ describe("pipeline hygiene via DO RPC", () => {
     expect(due.map((d) => d.id)).toContain(deal.id);
   });
 
+  it("updateCustomer lands a customer.updated audit entry with per-field changes", async () => {
+    const stub = getStub();
+    await withWorkspace(stub, async (instance) => {
+      const customer = await instance.createCustomer({
+        name: "Enrich me",
+        externalId: "audit-c-1",
+        notes: "[sourced-by:scout session:s-0]",
+      });
+      await instance.updateCustomer(
+        customer.id,
+        {
+          domain: "joes.example.com",
+          priorityScore: 8,
+          // Same value — no diff should be recorded for it.
+          notes: "[sourced-by:scout session:s-0]",
+          customFields: { industry: "restaurant" },
+        },
+        "profiler"
+      );
+      const entries = await instance.listAuditLog({
+        entityType: "customer",
+        entityId: customer.id,
+      });
+      const entry = entries.find((e) => e.action === "customer.updated");
+      expect(entry?.actorId).toBe("profiler");
+      const changes = JSON.parse(entry?.changes ?? "{}") as Record<
+        string,
+        unknown
+      >;
+      expect(changes).toMatchObject({
+        domain: { from: null, to: "joes.example.com" },
+        priorityScore: { from: null, to: 8 },
+        "customFields.industry": { from: null, to: "restaurant" },
+      });
+      expect(changes).not.toHaveProperty("notes");
+    });
+  });
+
+  it("updateCustomer rejects a bad custom-field value before writing anything", async () => {
+    const stub = getStub();
+    await withWorkspace(stub, async (instance) => {
+      const customer = await instance.createCustomer({
+        name: "Typed fields",
+        externalId: "audit-c-2",
+      });
+      await instance.createFieldDefinition({
+        entityType: "customer",
+        name: "merchant_size",
+        type: "select",
+        options: ["small", "mid", "enterprise"],
+      });
+      await expect(
+        instance.updateCustomer(
+          customer.id,
+          {
+            domain: "nope.example.com",
+            customFields: { merchant_size: "huge" },
+          },
+          "profiler"
+        )
+      ).rejects.toThrow(/merchant_size/);
+      // Nothing landed — the invalid field rejected the whole patch.
+      const after = await instance.getCustomer(customer.id);
+      expect(after?.domain).toBeNull();
+    });
+  });
+
   it("manages guidance packs with audit + version history", async () => {
     const stub = getStub();
     const pack = await stub.createGuidancePack(
@@ -3423,6 +3490,84 @@ describe("spend caps + run receipts (PILE-425)", () => {
     expect(receipt?.totalTokens).toBeNull();
     expect(receipt?.costMicros).toBeNull();
   });
+  it("escalates the rate-limit park by the dying lane's retryCount (VTX-638)", async () => {
+    const stub = getStub();
+    const mk = async (retryCount: number) => {
+      const issue = await withWorkspace(stub, (i) =>
+        i.createIssue({ title: `rl-${retryCount}` })
+      );
+      const session = await withWorkspace(stub, (i) =>
+        i.createAgentSession({
+          issueId: issue.id,
+          agentId: `rl-agent-${retryCount}`,
+          provider: "mock",
+          actorId: "user-1",
+          actorType: "user",
+          status: "running",
+        })
+      );
+      await withWorkspace(stub, (i) =>
+        i.updateAgentSession(session.id, { retryCount })
+      );
+      const before = Date.now();
+      await withWorkspace(stub, (i) =>
+        i.applyAgentSessionResult(session.id, {
+          status: "failed",
+          rateLimited: true,
+        })
+      );
+      const pause = await withWorkspace(stub, (i) =>
+        i.getAgentPause(`rl-agent-${retryCount}`)
+      );
+      const until = Date.parse(
+        pause!.reason!.slice("rate-limit until ".length)
+      );
+      return until - before;
+    };
+    const first = await mk(0);
+    const second = await mk(1);
+    const third = await mk(4);
+    expect(first).toBeGreaterThan(19 * 60_000);
+    expect(first).toBeLessThanOrEqual(21 * 60_000);
+    expect(second).toBeGreaterThan(39 * 60_000);
+    expect(third).toBeLessThanOrEqual(61 * 60_000);
+  });
+
+  it("never shortens an in-flight rate-limit park (VTX-638)", async () => {
+    const stub = getStub();
+    const die = async (agentId: string, retryCount: number) => {
+      const issue = await withWorkspace(stub, (i) =>
+        i.createIssue({ title: `rl-shorten-${agentId}-${retryCount}` })
+      );
+      const session = await withWorkspace(stub, (i) =>
+        i.createAgentSession({
+          issueId: issue.id,
+          agentId,
+          provider: "mock",
+          actorId: "user-1",
+          actorType: "user",
+          status: "running",
+        })
+      );
+      await withWorkspace(stub, (i) =>
+        i.updateAgentSession(session.id, { retryCount })
+      );
+      await withWorkspace(stub, (i) =>
+        i.applyAgentSessionResult(session.id, {
+          status: "failed",
+          rateLimited: true,
+        })
+      );
+      const pause = await withWorkspace(stub, (i) => i.getAgentPause(agentId));
+      return Date.parse(pause!.reason!.slice("rate-limit until ".length));
+    };
+    const agent = "rl-agent-parked";
+    // A retry-4 death parks ~60m; a fresh lane's retry-0 death must not
+    // pull the park back to ~20m.
+    const parkedUntil = await die(agent, 4);
+    const after = await die(agent, 0);
+    expect(after).toBe(parkedUntil);
+  });
 
   it("carries usage on the result into the finalized receipt", async () => {
     const stub = getStub();
@@ -3819,5 +3964,50 @@ describe("session terminal guard (PILE-467)", () => {
       return { session, updated };
     });
     expect(out.updated?.status).toBe("canceled");
+  });
+
+  it("a revive flag resumes a completed lane (delivered follow-up)", async () => {
+    const stub = getStub();
+    const out = await withWorkspace(stub, async (instance) => {
+      const issue = await instance.createIssue({
+        title: "revive me",
+        status: "in_progress",
+      });
+      const session = await instance.createAgentSession({
+        agentId: "devin-cli",
+        issueId: issue.id,
+        status: "created",
+        provider: "devin-cli",
+        actorId: "u1",
+        actorType: "user",
+      });
+      await instance.applyAgentSessionResult(session.id, {
+        status: "completed",
+      });
+      // A stale 'running' without revive stays completed…
+      const blocked = await instance.applyAgentSessionResult(session.id, {
+        status: "running",
+      });
+      // …but a delivered follow-up revives the lane deliberately.
+      const revived = await instance.applyAgentSessionResult(session.id, {
+        status: "running",
+        result: null,
+        revive: true,
+      });
+      return { session, blocked, revived };
+    });
+    expect(out.blocked?.status).toBe("completed");
+    expect(out.revived?.status).toBe("running");
+    expect(out.revived?.endedAt).toBeNull();
+  });
+});
+
+describe("session scoping options (PILE-453)", () => {
+  it("listAgentSessions accepts agentSlug through the DO", async () => {
+    const stub = getStub();
+    const rows = await withWorkspace(stub, (instance) =>
+      instance.listAgentSessions({ agentSlug: "scout" })
+    );
+    expect(Array.isArray(rows)).toBe(true);
   });
 });

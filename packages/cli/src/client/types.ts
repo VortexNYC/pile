@@ -2866,6 +2866,9 @@ export interface paths {
                                 live: number;
                                 keptSandboxes: number;
                                 infraStreak: number;
+                                starts: number;
+                                startFailures: number;
+                                startFailureRate: number | null;
                                 unhealthy: boolean;
                             }[];
                         };

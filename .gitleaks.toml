@@ -1,0 +1,23 @@
+title = "Pile gitleaks config"
+
+[extend]
+useDefault = true
+
+# Lane session tokens are sha256 hex bearers injected into agent sandboxes —
+# a worker that writes its MCP config into the checkout leaks one per run
+# (PILE-457). These rules deliberately flag on the token *shape* and on
+# .devin/ paths; trufflehog.yml already covers verified upstream secrets.
+
+[[rules]]
+id = "lane-bearer-token"
+description = "64+ hex bearer token (lane/session token shape) in an Authorization header"
+regex = '''(?i)authorization["']?\s*[:=]\s*["']?bearer\s+[a-f0-9]{64,}'''
+
+[[rules]]
+id = "devin-agent-config-dir"
+description = "File under .devin/ — agent config dirs can carry lane bearer tokens and must not be committed"
+path = '''(^|/)\.devin/'''
+
+[[rules.allowlists]]
+description = "Intentionally committed agent skills and rules under .devin/"
+paths = ['''(^|/)\.devin/(skills|rules)/''']

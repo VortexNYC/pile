@@ -3,9 +3,13 @@ node_modules
 dist
 .dev.vars
 .env
-.devin/
+.devin/*
+!.devin/skills/
+!.devin/rules/
 coverage
 *.log
 backups/
 /.vite-hooks/_/
 /.devin/mcp_config.json
+__pycache__/
+*.py[cod]

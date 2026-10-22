@@ -34,6 +34,9 @@ const descriptor: SandboxCliDescriptor = {
   // Kept-sandbox follow-up channel: sendPrompt injects into the running
   // process's stdin via /tmp/followups, or resumes a FOLLOWUP=1 run.
   followup: true,
+  // VTX-621 — one Cognition account behind every lane; a ~30-lane burst
+  // tripped the free-model rate limit. Park beyond the cap as holds.
+  maxConcurrentLanes: 8,
   requireAuth(env) {
     const creds = normalizeCredentialsB64(env.DEVIN_CLI_CREDENTIALS_B64);
     if (!creds) {

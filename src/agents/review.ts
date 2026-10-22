@@ -22,7 +22,7 @@ import type { AgentSession, Issue } from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
 import { loadProviderConfig } from "./credentials.js";
 import { resolveAgentEnv } from "./daytona.js";
-import { dispatchAgent } from "./index.js";
+import { dispatchAgent, getAgentProvider } from "./index.js";
 import { nudgeLane, resolveLaneForIssue } from "./nudge.js";
 
 export const REVIEW_CHECK_NAME = "pile-review";
@@ -629,6 +629,78 @@ async function reviewSessionsFor(
   return { live, attempts };
 }
 
+/** VTX-621 — cancel live review sessions pinned to a different headSha on
+ *  the same PR. Every push mints a new sha, and per-sha dedupe means rapid
+ *  pushes stack parallel review lanes that all burn provider quota on diffs
+ *  already obsolete (the VOR-740 pileup). A review of a superseded head is
+ *  dead code — cancel the lane and resolve its check run so the PR never
+ *  carries two pending pile-review runs at once. */
+async function supersedeStaleShaReviews(
+  env: WorkerEnv,
+  stub: WorkspaceStub,
+  issueId: string,
+  target: Pick<ReviewTarget, "prUrl" | "headSha" | "repoFull">,
+  ghFetch: typeof fetch,
+  token: string
+): Promise<void> {
+  const sessions = await stub
+    .listAgentSessions({ issueId, limit: 50 })
+    .catch(() => [] as AgentSession[]);
+  for (const s of sessions) {
+    if (s.purpose !== REVIEW_PURPOSE) continue;
+    if (REVIEW_TERMINAL_STATUSES.has(s.status)) continue;
+    const events = await stub
+      .listAgentSessionEvents(s.id, { limit: 20, order: "asc" })
+      .catch(() => []);
+    const req = events
+      .map((e) =>
+        e.type === "review.requested"
+          ? requestedPayloadSchema.safeParse(parsePayload(e.payload))
+          : null
+      )
+      .find(
+        (p) =>
+          p?.success &&
+          p.data.prUrl === target.prUrl &&
+          p.data.headSha !== target.headSha
+      );
+    if (!req?.success) continue;
+    if (typeof req.data.checkRunId === "number") {
+      await resolveReviewCheck(ghFetch, token, target.repoFull, req.data.checkRunId, {
+        title: "Superseded by a newer head",
+        summary: `This run covered a superseded head; a fresh pile-review is running for \`${target.headSha.slice(0, 12)}\`.`,
+      });
+    }
+    try {
+      const provider = getAgentProvider(s.agentId, env);
+      await provider.cancel?.(s.providerSessionId ?? s.id);
+    } catch {
+      // Provider cancel is best-effort — the terminal write below is the
+      // authoritative record regardless.
+    }
+    // An intentional supersede, not a failure: no infraFailure, so it does
+    // not feed the provider-unhealthy streak or trip the auto-retry path
+    // (review lanes never retry through retryDeadLane anyway).
+    await stub
+      .applyAgentSessionResult(s.id, {
+        status: "canceled",
+        result: `Superseded — PR head moved to ${target.headSha.slice(0, 12)}`,
+        url: s.url ?? null,
+        prUrl: s.prUrl ?? null,
+        prState: s.prState ?? null,
+      })
+      .catch(() => {});
+    await stub
+      .addAgentSessionEvent({
+        sessionId: s.id,
+        type: "review.superseded",
+        message: `Superseded by head ${target.headSha.slice(0, 12)}`,
+        payload: { supersededSha: req.data.headSha, newSha: target.headSha },
+      })
+      .catch(() => {});
+  }
+}
+
 /** Start the review lane for a PR head, at most once per headSha. Opt-in per
  *  repo via `.pile/config.json` `review` (read from the base ref, so a PR
  *  can't enable or retarget its own review). Never throws. */
@@ -711,6 +783,30 @@ export async function requestPrReview(
         summary: `The pile-review lane for \`${target.headSha.slice(0, 12)}\` never reported; dispatching a new attempt.`,
       });
     }
+
+    // VTX-621 — we've committed to dispatching for this sha: kill any live
+    // review lane still working an older head of the same PR. Ordering
+    // guard first: a delayed/redelivered webhook can carry an older sha —
+    // verify the target is still the PR head, or the supersede would
+    // cancel the NEWER review and dispatch stale work. A failed read
+    // skips the supersede rather than canceling blind.
+    const pull = (await gh(
+      ghFetch,
+      token,
+      "GET",
+      `/repos/${target.repoFull}/pulls/${target.pullNumber}`
+    ).catch(() => null)) as { head?: { sha?: string } } | null;
+    if (pull?.head?.sha && pull.head.sha !== target.headSha)
+      return "deduped";
+    if (pull?.head?.sha === target.headSha)
+      await supersedeStaleShaReviews(
+        env,
+        stub,
+        issue.id,
+        target,
+        ghFetch,
+        token
+      );
 
     const files = await listPrFiles(ghFetch, token, target);
     const reviewable = reviewableFiles(files, config);
@@ -1044,11 +1140,39 @@ export async function publishReviewVerdicts(
       const token = await deps.tokenForRepo(owner, name);
       if (!token) continue;
 
+      // PILE-470 — drop stale results: if the PR's head moved past the sha
+      // this review ran on, the verdict is for a dead head and a fresh
+      // review on the new sha is the one that should land.
+      try {
+        const pr = (await gh(
+          ghFetch,
+          token,
+          "GET",
+          `/repos/${req.repo}/pulls/${req.pullNumber}`
+        )) as { head?: { sha?: string } };
+        if (pr.head?.sha && pr.head.sha !== req.headSha) {
+          await stub
+            .addAgentSessionEvent({
+              sessionId: session.id,
+              type: "review.dropped",
+              message: `Stale verdict dropped — head moved ${req.headSha.slice(0, 8)} → ${pr.head.sha.slice(0, 8)}`,
+              payload: { requestedSha: req.headSha, headSha: pr.head.sha },
+            })
+            .catch(() => {});
+          continue;
+        }
+      } catch {
+        // if the head check fails, publish anyway — a dropped verdict is
+        // worse than a slightly stale one when the check itself is flaky.
+      }
+
       const output = review
         ? { title: reviewCheckTitle(review), summary: body ?? "" }
         : {
+            // PILE-470 — post parsed findings only; an unparseable lane
+            // result stays neutral, not the raw tail.
             title: `Review lane ${session.status}`,
-            summary: (session.result ?? "No report.").slice(0, 2000),
+            summary: "The review lane finished without a parseable verdict.",
           };
       const conclusion = review ? verdictConclusion(review.verdict) : "neutral";
       const checkBody = {

@@ -16,6 +16,10 @@ import {
   verifySessionToken,
 } from "../agents/credentials.js";
 import { resolveAgentEnv } from "../agents/daytona.js";
+import {
+  startFailureRateUnhealthy,
+  startFailureStats,
+} from "../agents/fleet-health.js";
 import type { SessionGuidanceRef } from "../agents/guidance.js";
 import {
   dispatchAgent,
@@ -30,6 +34,7 @@ import {
   type LaneTodo,
 } from "../agents/lane-progress.js";
 import { resolveResultSchema, sessionLabel } from "../agents/lane-result.js";
+import { drainDomainEvents } from "../agents/pipeline-events.js";
 import {
   parseStoredSecondaryRepos,
   secondaryReposSchema,
@@ -493,6 +498,7 @@ const listSessionsRoute = createRoute({
     params: z.object({ organizationId: z.string() }),
     query: z.object({
       issueId: z.string().optional(),
+      agentSlug: z.string().optional(),
       limit: z.string().optional(),
       summary: z.string().optional(),
     }),
@@ -582,6 +588,9 @@ const fleetHealthRoute = createRoute({
                 live: z.number(),
                 keptSandboxes: z.number(),
                 infraStreak: z.number(),
+                starts: z.number(),
+                startFailures: z.number(),
+                startFailureRate: z.number().nullable(),
                 unhealthy: z.boolean(),
               })
             ),
@@ -826,6 +835,8 @@ const patchSessionRoute = createRoute({
             // PILE-426 — publish/replace the plan checklist. Whole-array
             // replace: the agent resends the full ordered list each update.
             plan: sessionPlanSchema.optional(),
+            // PILE-425 — cumulative run usage snapshot → the run receipt.
+            usage: runUsageSchema.optional(),
           }),
         },
       },
@@ -1611,6 +1622,31 @@ const putStoreObject = async (
   return cacheJson({ ok: true });
 };
 
+// Lane-token routes die with the session (PILE-457): once a session resolves
+// to a terminal state the bearer minted for it stops working, matching the
+// /logs, /report, /github-token and /mcp handlers. Returns the error
+// response to send, or null when the session is live.
+const verifyLiveLaneSession = async (
+  env: WorkerEnv,
+  authorization: string | undefined,
+  organizationId: string,
+  sessionId: string
+): Promise<Response | null> => {
+  if (
+    !(await verifySessionToken(env, authorization, organizationId, sessionId))
+  ) {
+    return cacheJson({ message: "Unauthorized" }, 401);
+  }
+  const session = await getWorkspaceStub(env, organizationId).getAgentSession(
+    sessionId
+  );
+  if (!session) return cacheJson({ message: "Session not found" }, 404);
+  if (["completed", "failed", "canceled"].includes(session.status)) {
+    return cacheJson({ message: "Session is terminal" }, 409);
+  }
+  return null;
+};
+
 export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(registerSessionRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
@@ -1682,6 +1718,11 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         prUrl: input.prUrl ?? null,
         branch: input.branch ?? null,
       });
+      // PILE-443 — drain the domain events the terminal write emitted.
+      const execCtx = getExecutionCtx(c);
+      execCtx?.waitUntil(
+        drainDomainEvents(c.env, stub, organizationId, execCtx)
+      );
     }
     return c.json(
       { session: toSessionResponse(session), ...(await laneUrls(session.id)) },
@@ -2012,6 +2053,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         query.issueId === undefined
           ? undefined
           : await resolveIssueRef(stub, query.issueId),
+      agentSlug: query.agentSlug,
       limit: query.limit ? Number(query.limit) : undefined,
       viewer,
     });
@@ -2137,19 +2179,45 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     }
 
     const agentIds = new Set([...kept.keys(), ...streaks.keys()]);
+    // PILE-452 — the streak alone stays green through a partial outage
+    // (kept-alive successes break the run). Providers go red on the
+    // trailing start-failure rate too, so any agentId with starts in the
+    // window must show up — not just ones already counted above.
+    const rateStats = new Map<string, ReturnType<typeof startFailureStats>>();
+    for (const row of rows) {
+      if (rateStats.has(row.agentId)) continue;
+      const stats = startFailureStats(
+        rows.filter((r) => r.agentId === row.agentId),
+        now
+      );
+      rateStats.set(row.agentId, stats);
+      if (stats.starts > 0) agentIds.add(row.agentId);
+    }
     return c.json(
       {
         live,
         missingEndedAt,
-        providers: [...agentIds].map((agentId) => ({
-          agentId,
-          live: rows.filter(
-            (r) => r.agentId === agentId && !TERMINAL.has(r.status)
-          ).length,
-          keptSandboxes: kept.get(agentId) ?? 0,
-          infraStreak: streaks.get(agentId) ?? 0,
-          unhealthy: (streaks.get(agentId) ?? 0) >= UNHEALTHY_STREAK,
-        })),
+        providers: [...agentIds].map((agentId) => {
+          const stats = rateStats.get(agentId) ?? {
+            starts: 0,
+            infraFailures: 0,
+            rate: null,
+          };
+          return {
+            agentId,
+            live: rows.filter(
+              (r) => r.agentId === agentId && !TERMINAL.has(r.status)
+            ).length,
+            keptSandboxes: kept.get(agentId) ?? 0,
+            infraStreak: streaks.get(agentId) ?? 0,
+            starts: stats.starts,
+            startFailures: stats.infraFailures,
+            startFailureRate: stats.rate,
+            unhealthy:
+              (streaks.get(agentId) ?? 0) >= UNHEALTHY_STREAK ||
+              startFailureRateUnhealthy(stats),
+          };
+        }),
       },
       200
     );
@@ -2405,10 +2473,14 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         prUrl: body.prUrl,
         prState: body.prState,
         branch: body.branch,
+        usage: body.usage,
       },
       identity.id
     );
 
+    // PILE-443 — drain pipeline domain events the result write emitted.
+    const execCtx = getExecutionCtx(c);
+    execCtx?.waitUntil(drainDomainEvents(c.env, stub, organizationId, execCtx));
     const activities = await stub.listAgentActivities(sessionId);
     return c.json(toSessionResponse(updated ?? session, activities));
   });
@@ -2610,6 +2682,19 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
               update.result ?? session.result
             );
           }
+          // PILE-443 — terminal writes emit pipeline domain events
+          // (substep.review); drain now so external reviewer dispatches
+          // fire instead of waiting for the sweep.
+          if (
+            update.status === "completed" ||
+            update.status === "failed" ||
+            update.status === "canceled"
+          ) {
+            const execCtx = getExecutionCtx(c);
+            execCtx?.waitUntil(
+              drainDomainEvents(c.env, stub, organizationId, execCtx)
+            );
+          }
           const updated = await stub.getAgentSession(sessionId);
           return c.json({ session: updated });
         }
@@ -2693,16 +2778,13 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       if (!/^[a-f0-9]{64}$/.test(hash)) {
         return c.json({ message: "Invalid hash" }, 400);
       }
-      if (
-        !(await verifySessionToken(
-          c.env,
-          c.req.header("authorization"),
-          organizationId,
-          sessionId
-        ))
-      ) {
-        return c.json({ message: "Unauthorized" }, 401);
-      }
+      const denied = await verifyLiveLaneSession(
+        c.env,
+        c.req.header("authorization"),
+        organizationId,
+        sessionId
+      );
+      if (denied) return denied;
       // Multipart store: manifest lists ordered parts; parts are concatenated
       // on the way out. Falls back to a single-shot object for small stores.
       const bucket = c.env.ATTACHMENTS_BUCKET;
@@ -2744,16 +2826,13 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       if (!/^[a-f0-9]{64}$/.test(hash)) {
         return c.json({ message: "Invalid hash" }, 400);
       }
-      if (
-        !(await verifySessionToken(
-          c.env,
-          c.req.header("authorization"),
-          organizationId,
-          sessionId
-        ))
-      ) {
-        return c.json({ message: "Unauthorized" }, 401);
-      }
+      const denied = await verifyLiveLaneSession(
+        c.env,
+        c.req.header("authorization"),
+        organizationId,
+        sessionId
+      );
+      if (denied) return denied;
       return putStoreObject(
         c.env,
         c.req.raw,
@@ -2769,16 +2848,13 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       if (!/^[a-f0-9]{64}$/.test(hash) || !/^\d{1,3}$/.test(index)) {
         return c.json({ message: "Invalid key" }, 400);
       }
-      if (
-        !(await verifySessionToken(
-          c.env,
-          c.req.header("authorization"),
-          organizationId,
-          sessionId
-        ))
-      ) {
-        return c.json({ message: "Unauthorized" }, 401);
-      }
+      const denied = await verifyLiveLaneSession(
+        c.env,
+        c.req.header("authorization"),
+        organizationId,
+        sessionId
+      );
+      if (denied) return denied;
       return putStoreObject(
         c.env,
         c.req.raw,
@@ -2794,16 +2870,13 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       if (!/^[a-f0-9]{64}$/.test(hash)) {
         return c.json({ message: "Invalid hash" }, 400);
       }
-      if (
-        !(await verifySessionToken(
-          c.env,
-          c.req.header("authorization"),
-          organizationId,
-          sessionId
-        ))
-      ) {
-        return c.json({ message: "Unauthorized" }, 401);
-      }
+      const denied = await verifyLiveLaneSession(
+        c.env,
+        c.req.header("authorization"),
+        organizationId,
+        sessionId
+      );
+      if (denied) return denied;
       const body: unknown = await c.req.json().catch(() => null);
       const parts =
         body !== null &&
@@ -3230,6 +3303,9 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       identity.id
     );
 
+    // PILE-443 — drain the domain events a terminal result emitted.
+    const execCtx = getExecutionCtx(c);
+    execCtx?.waitUntil(drainDomainEvents(c.env, stub, organizationId, execCtx));
     await captureSessionPrArtifact(stub, sessionId, identity.id, polled.prUrl);
 
     const activities = await stub.listAgentActivities(sessionId);
@@ -3454,7 +3530,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       await recordPromptActivity();
       const queued = await stub.applyAgentSessionResult(
         sessionId,
-        { status: "running", result: null },
+        { status: "running", result: null, revive: true },
         identity.id
       );
       const queuedActivities = await stub.listAgentActivities(sessionId);
@@ -3512,7 +3588,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     await recordPromptActivity();
     const updated = await stub.applyAgentSessionResult(
       sessionId,
-      { status: "running", result: null },
+      { status: "running", result: null, revive: true },
       identity.id
     );
     const activities = await stub.listAgentActivities(sessionId);

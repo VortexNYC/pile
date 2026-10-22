@@ -1214,6 +1214,8 @@ export function getAgentSessionByProviderSessionId(
 
 type ListAgentSessionsOptions = {
   issueId?: string;
+  agentId?: string;
+  agentSlug?: string;
   status?: AgentSessionStatus;
   openPr?: boolean;
   retryOf?: string;
@@ -1232,6 +1234,9 @@ function agentSessionListConditions(
   ];
   if (options.issueId) {
     conditions.push(eq(workspaceAgentSessions.issueId, options.issueId));
+  }
+  if (options.agentId) {
+    conditions.push(eq(workspaceAgentSessions.agentId, options.agentId));
   }
   if (options.excludeIssueCondition) {
     conditions.push(options.excludeIssueCondition);
@@ -1277,10 +1282,25 @@ export function listAgentSessions(
   organizationId: string,
   options: ListAgentSessionsOptions = {}
 ) {
+  // agentSlug isn't a session column — resolve it to the agent type's id.
+  let resolved = options;
+  if (options.agentSlug && !options.agentId) {
+    const type = db
+      .select({ id: workspaceAgentTypes.id })
+      .from(workspaceAgentTypes)
+      .where(
+        and(
+          eq(workspaceAgentTypes.organizationId, organizationId),
+          eq(workspaceAgentTypes.slug, options.agentSlug)
+        )
+      )
+      .get();
+    resolved = { ...options, agentId: type?.id ?? "__none__" };
+  }
   return db
     .select()
     .from(workspaceAgentSessions)
-    .where(and(...agentSessionListConditions(organizationId, options)))
+    .where(and(...agentSessionListConditions(organizationId, resolved)))
     .orderBy(
       desc(workspaceAgentSessions.createdAt),
       desc(workspaceAgentSessions.id)
@@ -8663,7 +8683,7 @@ export function grantedSpaceIds(
   actorIds: string[]
 ) {
   if (actorIds.length === 0) return new Set<string>();
-  // filter by actor — the where below selects org; match actors in JS for
+  // filter by actor — the where above selects org; match actors in JS for
   // the team-ids expansion (small grant sets, same as documents).
   const granted = new Set<string>();
   for (const row of db

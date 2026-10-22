@@ -117,6 +117,8 @@ import {
   type IssueViewer,
   type ListIssuesArgs,
   type RealtimeEvent,
+  RATE_LIMIT_HOLD_MS,
+  RATE_LIMIT_PAUSE_PREFIX,
 } from "../types/workspace.js";
 import * as data from "./data/index.js";
 import { filterToSql } from "./filter.js";
@@ -194,6 +196,50 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return Array.from({ length: Math.ceil(arr.length / size) }, (_, i) =>
     arr.slice(i * size, (i + 1) * size)
   );
+}
+
+// VTX-638 — exponential backoff on the park ceiling: a lane that keeps
+// dying on the provider's rate limit doubles its hold per strike (20m →
+// 40m → 60m cap) instead of re-parking into the same window forever.
+const RATE_LIMIT_MAX_HOLD_MS = 60 * 60 * 1000;
+
+/** The instant a rate-limit park ends: the provider's advertised reset
+ *  when it parses, lands in the future, and sits inside the strike-
+ *  escalated ceiling — else the ceiling itself. A past/absent advertised
+ *  instant can't un-park a lane early. */
+function rateLimitHoldUntil(
+  result: { rateLimitUntil?: string | null },
+  retryCount = 0
+): string {
+  const advertised = Date.parse(result.rateLimitUntil ?? "");
+  const ceiling =
+    Date.now() +
+    Math.min(RATE_LIMIT_HOLD_MS * 2 ** retryCount, RATE_LIMIT_MAX_HOLD_MS);
+  return new Date(
+    Number.isFinite(advertised) && advertised > Date.now()
+      ? Math.min(advertised, ceiling)
+      : ceiling
+  ).toISOString();
+}
+
+/** The rate-limit pause reason to persist, or null when the write should
+ *  be skipped: an operator/spend-cap pause (any reason without the
+ *  prefix) is never touched, and a shorter backoff must not shorten a
+ *  longer park still in flight — the escalation is the point. */
+function rateLimitPauseReason(
+  existing: { reason?: string | null } | undefined,
+  result: { rateLimitUntil?: string | null },
+  retryCount: number
+): string | null {
+  if (existing && !existing.reason?.startsWith(RATE_LIMIT_PAUSE_PREFIX))
+    return null;
+  const existingUntil = existing?.reason
+    ? Date.parse(existing.reason.slice(RATE_LIMIT_PAUSE_PREFIX.length))
+    : Number.NaN;
+  const next = rateLimitHoldUntil(result, retryCount);
+  if (Number.isFinite(existingUntil) && Date.parse(next) <= existingUntil)
+    return null;
+  return `${RATE_LIMIT_PAUSE_PREFIX}${next}`;
 }
 
 function isTerminalStatus(status: IssueStatus): boolean {
@@ -2820,6 +2866,28 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         gateOverride = { reason: patch.stageGateOverride.reason, blocked };
       }
     }
+    // Validate custom-field values before any write — a bad value rejects
+    // the whole patch instead of leaving a half-applied record (same
+    // pre-flight contract as the importer's assertFieldValuesValid pass).
+    if (customFields && Object.keys(customFields).length > 0) {
+      try {
+        data.assertFieldValuesValid(
+          this.db,
+          this.organizationId,
+          "customer",
+          customFields
+        );
+      } catch (error) {
+        if (error instanceof data.FieldValueError) {
+          throw new VortexError({
+            code: "BAD_REQUEST",
+            status: 400,
+            message: error.message,
+          });
+        }
+        throw error;
+      }
+    }
     const customer = data.updateCustomer(
       this.db,
       this.organizationId,
@@ -2827,8 +2895,58 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       customerPatch
     );
     if (!customer) return undefined;
-    this.applyCustomFields("customer", id, customFields);
-    this.audit("customer.updated", "customer", id, actorId);
+    // Per-field history: the audit entry carries every changed column plus
+    // each custom-field value diff, so a reviewer can see exactly what an
+    // enrichment write did to the record.
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    for (const key of [
+      "name",
+      "url",
+      "logoUrl",
+      "bookingUrl",
+      "notes",
+      "domain",
+      "externalId",
+      "tierId",
+      "statusId",
+      "ownerId",
+      "nextStepText",
+      "nextStepDueAt",
+      "needsHuman",
+      "needsHumanReason",
+      "priorityScore",
+    ] as const) {
+      if (customerPatch[key] !== undefined && before[key] !== customer[key]) {
+        changes[key] = { from: before[key], to: customer[key] };
+      }
+    }
+    if (customFields && Object.keys(customFields).length > 0) {
+      const beforeFields = data.customFieldMap(
+        this.db,
+        this.organizationId,
+        "customer",
+        id
+      );
+      this.applyCustomFields("customer", id, customFields);
+      const afterFields = data.customFieldMap(
+        this.db,
+        this.organizationId,
+        "customer",
+        id
+      );
+      for (const name of new Set([
+        ...Object.keys(beforeFields),
+        ...Object.keys(afterFields),
+      ])) {
+        if (beforeFields[name] !== afterFields[name]) {
+          changes[`customFields.${name}`] = {
+            from: beforeFields[name] ?? null,
+            to: afterFields[name] ?? null,
+          };
+        }
+      }
+    }
+    this.audit("customer.updated", "customer", id, actorId, changes);
     if (gateOverride) {
       const stageName = (statusId: string | null) =>
         statusId === null
@@ -3664,8 +3782,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   // Encrypted GitHub installation token currently held by each lane, keyed by
-  // session. Swapping returns the previous one so callers can revoke it; the
-  // reaper takes and revokes whatever is left once a session is terminal.
+  // session. Swapping returns the previous ciphertext; callers no longer
+  // revoke it on mint (VTX-634) — displaced tokens self-expire inside the
+  // ~1h TTL while the reaper takes and revokes what a terminal lane holds.
   async swapLaneGithubToken(
     sessionId: string,
     encrypted: string
@@ -3704,6 +3823,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   listAgentSessions(
     options: {
       issueId?: string;
+      agentSlug?: string;
       status?: AgentSessionStatus;
       openPr?: boolean;
       retryOf?: string;
@@ -3724,6 +3844,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   listAgentSessionSummaries(
     options: {
       issueId?: string;
+      agentSlug?: string;
       status?: AgentSessionStatus;
       openPr?: boolean;
       limit?: number;
@@ -5785,8 +5906,16 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       if (result.status !== undefined) {
         // PILE-467 — terminal stays terminal. A cancel during provisioning
         // can still see late poll results arrive as 'created'/'running' —
-        // a non-terminal result must not resurrect a dead lane.
-        if (!(terminal.has(oldStatus) && !terminal.has(result.status))) {
+        // a non-terminal result must not resurrect a dead lane. Deliberate
+        // resumes (delivered follow-up on a completed lane, queued prompt
+        // on an externally-managed session) carry `revive` to pass.
+        if (
+          !(
+            terminal.has(oldStatus) &&
+            !terminal.has(result.status) &&
+            !result.revive
+          )
+        ) {
           set.status = result.status;
           if (terminal.has(result.status) && !oldSession.endedAt)
             set.endedAt = set.updatedAt;
@@ -5802,6 +5931,39 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       }
       if (result.infraFailure !== undefined)
         set.infraFailure = result.infraFailure ? 1 : 0;
+      // VTX-621 — a provider capacity death parks the whole agent type
+      // until its reset instead of every lane burning retries into the
+      // same wall. The sweep lifts the pause once the reason's timestamp
+      // passes. infraFailure stays unset: a capacity death is not a
+      // substrate failure and must not feed the provider/fleet streaks
+      // (retry eligibility rides polled.rateLimited on the sweep side).
+      // An existing operator/spend-cap pause (a reason without the
+      // prefix) is left alone — never overwritten, never lifted early.
+      if (result.rateLimited) {
+        const existingPause = data.getAgentPause(
+          this.db,
+          this.organizationId,
+          oldSession.agentId
+        );
+        const reason = rateLimitPauseReason(
+          existingPause,
+          result,
+          oldSession.retryCount ?? 0
+        );
+        if (reason) {
+          await data
+            .upsertAgentPause(
+              this.db,
+              this.organizationId,
+              oldSession.agentId,
+              {
+                reason,
+                createdBy: "system",
+              }
+            )
+            .catch(() => {});
+        }
+      }
       if (result.result !== undefined) set.result = result.result;
       if (result.url !== undefined) set.url = result.url;
       if (result.providerSessionId !== undefined)
@@ -5843,8 +6005,16 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (result.status !== undefined) {
       // PILE-467 — terminal stays terminal. A cancel during provisioning
       // can still see late poll results arrive as 'created'/'running' —
-      // a non-terminal result must not resurrect a dead lane.
-      if (!(terminal.has(oldStatus) && !terminal.has(result.status))) {
+      // a non-terminal result must not resurrect a dead lane. Deliberate
+      // resumes (delivered follow-up on a completed lane, queued prompt
+      // on an externally-managed session) carry `revive` to pass.
+      if (
+        !(
+          terminal.has(oldStatus) &&
+          !terminal.has(result.status) &&
+          !result.revive
+        )
+      ) {
         set.status = result.status;
         if (terminal.has(result.status) && !oldSession.endedAt)
           set.endedAt = set.updatedAt;
@@ -5863,6 +6033,28 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }
     if (result.infraFailure !== undefined)
       set.infraFailure = result.infraFailure ? 1 : 0;
+    // VTX-621 — same rate-limit park as the issue-less path above; lanes
+    // always carry an issue, so this is the branch that actually runs.
+    if (result.rateLimited) {
+      const existingPause = data.getAgentPause(
+        this.db,
+        this.organizationId,
+        oldSession.agentId
+      );
+      const reason = rateLimitPauseReason(
+        existingPause,
+        result,
+        oldSession.retryCount ?? 0
+      );
+      if (reason) {
+        await data
+          .upsertAgentPause(this.db, this.organizationId, oldSession.agentId, {
+            reason,
+            createdBy: "system",
+          })
+          .catch(() => {});
+      }
+    }
     if (result.result !== undefined) set.result = result.result;
     if (result.url !== undefined) set.url = result.url;
     if (result.providerSessionId !== undefined)
@@ -6012,14 +6204,19 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       }
     }
 
-    // Review-gated chain — a completed non-review lane on a required
+    // Review-gated chain — a terminal non-review lane on a required
     // sub-step emits substep.review; the reviewer's verdict decides
     // whether the chain advances (pass marks it done + promotes the
     // sibling) or the chief gets paged. Review lanes are excluded so
-    // the verdict itself doesn't re-enter review.
+    // the verdict itself doesn't re-enter review. PILE-443 — failures
+    // emit too (the reviewer sees the death, not just the sweep page),
+    // and the session fields ride the payload so an external reviewer
+    // POST can name the lane + conversation it should inspect. The
+    // dedupe key is status-scoped so a failed-then-retried step still
+    // gets its completion reviewed.
     if (
       becameTerminal &&
-      newStatus === "completed" &&
+      (newStatus === "completed" || newStatus === "failed") &&
       oldSession.purpose !== "review" &&
       issue.parentId &&
       issue.required
@@ -6031,8 +6228,12 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           parentId: issue.parentId,
           stepKey: issue.stepKey,
           ownerAgent: issue.ownerAgent,
+          sessionId: updatedSession.id,
+          sessionStatus: newStatus,
+          conversationKey: updatedSession.conversationKey,
+          agentId: updatedSession.agentId,
         },
-        `review:${issue.id}`
+        `review:${issue.id}:${newStatus}`
       );
     }
 
@@ -7923,7 +8124,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       const openRequired = await this.getBlockingSubSteps(issue.parentId);
       if (openRequired.length > 0) {
         // Review-gated chain — a reviewer lane evaluates the completed
-        // step first; the chain only advances on a pass verdict.
+        // step first; the chain only advances on a pass verdict. The
+        // `:completed` dedupe key matches the lane-completion emit so a
+        // step reviewed once doesn't re-fire when it's marked done.
         await this.emitDomainEvent(
           "substep.review",
           {
@@ -7932,7 +8135,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
             stepKey: issue.stepKey,
             ownerAgent: issue.ownerAgent,
           },
-          `review:${issue.id}`
+          `review:${issue.id}:completed`
         );
       } else {
         await this.emitDomainEvent(

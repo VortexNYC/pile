@@ -1,9 +1,10 @@
 // Per-session GitHub credentials for agent lanes. Every lane gets an
 // installation token restricted to its issue's repository, and the token is
-// bound to the session: re-minting revokes the previous one, and once the
-// session is terminal the sweep revokes whatever the lane still holds. A
-// compromised lane therefore holds at most one live, single-repo token that
-// dies with the run instead of living out GitHub's ~1h TTL.
+// bound to the session: re-minting replaces the slot's stored token WITHOUT
+// revoking the displaced one — an in-flight clone/push may still hold it
+// (revoke-on-mint killed live runners during the 2026-10-21 redispatch
+// storm). Displaced tokens self-expire inside GitHub's ~1h TTL; the
+// terminal sweep revokes whatever the slot still holds at teardown.
 //
 // Secondary repos (PILE-294) get their own single-repo token in a separate
 // slot (`<sessionId>|<repo>`), so minting one never revokes the primary's and
@@ -70,7 +71,9 @@ export async function mintLaneGithubToken(
     laneTokenSlot(sessionId, options?.secondary ? repo : undefined),
     await encryptSecret(env, minted.token)
   );
-  if (previous) await revokeEncrypted(env, previous);
+  void previous; // Never revoked on mint — the displaced token may be in an
+  // in-flight clone/push; it self-expires with GitHub's ~1h TTL and the
+  // terminal sweep reaps whatever the slot still holds on teardown.
   return minted;
 }
 

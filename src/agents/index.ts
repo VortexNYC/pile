@@ -13,6 +13,7 @@ import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import {
+  CONCURRENT_LANES_PAUSE_PREFIX,
   DEFAULT_GIT_IDENTITY_REPO,
   type AgentSession,
   type Issue,
@@ -27,7 +28,7 @@ import { CfAgentProvider } from "./cf-agent.js";
 import { ClaudeCliAgentProvider } from "./claude-cli.js";
 import { CodexCliAgentProvider } from "./codex-cli.js";
 import { CodexAgentProvider } from "./codex.js";
-import { computeBackend } from "./compute.js";
+import { computeBackend, isComputeInfraError } from "./compute.js";
 import { loadProviderConfig } from "./credentials.js";
 import { CursorCliAgentProvider } from "./cursor-cli.js";
 import { CursorAgentProvider } from "./cursor.js";
@@ -269,6 +270,12 @@ export async function dispatchAgent(
     /** Dedupe GitHub/auth overrides — tests inject stubs; production
      *  callers leave this unset so real installation tokens apply. */
     dedupeDeps?: DedupeDeps;
+    /** PILE-452 — what a paused agent type does to this dispatch. "hold"
+     *  (default) parks a `waiting` + `paused` row per PILE-420 — right for
+     *  explicit user dispatch. "fail" throws AGENT_PAUSED instead:
+     *  system-initiated dispatches (sweep redispatch, retries, triggers)
+     *  must not leak held rows while the agent type is frozen. */
+    onPaused?: "hold" | "fail";
   }
 ): Promise<AgentSession> {
   const label = sessionLabel(issue, agentId, options?.purpose);
@@ -366,6 +373,21 @@ export async function dispatchAgent(
       dedupeError = err instanceof Error ? err.message : String(err);
       return null;
     });
+    // VTX-621 — a merged lane PR covering a finished issue makes the
+    // dispatch a stray (stale retry, trigger on a closed ticket). Refuse
+    // outright; CONFLICT reads as redundant, not an error. A reopened
+    // issue (back to an active status) dispatches normally — the merged
+    // PR is history and the lane opens a fresh one (PILE-257).
+    if (
+      dedupe?.merged &&
+      (issue.status === "done" || issue.status === "canceled")
+    ) {
+      throw new VortexError({
+        code: "CONFLICT",
+        status: 409,
+        message: `Issue already covered by merged PR ${dedupe.merged.prUrl} — refusing stale dispatch`,
+      });
+    }
     continuation = dedupe?.continuation ?? null;
     if (continuation && issue.branch !== continuation.headRef) {
       // PILE-446 — an open PR covering this issue with no live session makes
@@ -439,7 +461,44 @@ export async function dispatchAgent(
         });
       }
     }
+    if (!pause) {
+      // VTX-621 — per-agent concurrency cap: park lanes past the provider's
+      // cap so a burst can't trip its rate limit. Paused holds don't count
+      // as live; the sweep lifts the marker pause once a slot frees.
+      const cap = provider.maxConcurrentLanes;
+      if (cap != null) {
+        const liveForAgent = (
+          await stub.listAgentSessions({ limit: 200 })
+        ).filter(
+          (s) =>
+            s.agentId === agentId &&
+            // A promote is the cap's own drain — counting the promoted row
+            // would re-trip the cap and re-park it before it runs.
+            s.id !== options?.promoteSessionId &&
+            !["completed", "failed", "canceled"].includes(s.status) &&
+            s.paused !== 1 &&
+            // Provider-less `waiting` rows are queue/park artifacts that
+            // cost no provider capacity — counting them pins the cap shut
+            // (queue rows can't finish, so the pause never lifts).
+            !(s.status === "waiting" && s.providerSessionId == null)
+        ).length;
+        if (liveForAgent >= cap) {
+          pause = await stub.pauseAgentType(agentId, {
+            reason: `${CONCURRENT_LANES_PAUSE_PREFIX}${agentId} at ${cap} live lanes`,
+            actorId: "system",
+            actorType: "system",
+          });
+        }
+      }
+    }
     if (pause) {
+      if (options?.onPaused === "fail") {
+        throw new VortexError({
+          code: "AGENT_PAUSED",
+          status: 409,
+          message: `Agent type "${agentId}" is paused${pause.reason ? `: ${pause.reason}` : ""}`,
+        });
+      }
       const parked = await stub.createAgentSession({
         issueId: issue.id,
         agentId,
@@ -845,15 +904,19 @@ export async function dispatchAgent(
     return updated ?? session;
   } catch (error) {
     // Dispatch-time substrate failure (container spawn 503, RPC transport
-    // reset, compute I/O timeout) is infra-class — it gets the retry path
-    // and feeds the fleet breaker, not the task-failure trail.
-    let infraFailure = false;
+    // reset, compute I/O timeout, Daytona sandbox-create/provision errors)
+    // is infra-class — it gets the retry path and feeds the fleet breaker,
+    // not the task-failure trail. Compute-layer failures arrive flagged as
+    // ComputeError (PILE-452); everything else falls back to status and the
+    // sandbox SDK's transient classifiers.
+    let infraFailure = isComputeInfraError(error);
     if (
+      !infraFailure &&
       error instanceof VortexError &&
       (error.status === 503 || error.status === 504)
     ) {
       infraFailure = true;
-    } else {
+    } else if (!infraFailure) {
       try {
         const sandboxSdk = (await import("@cloudflare/sandbox")) as {
           isPlatformTransientError?: (e: unknown) => boolean;
@@ -876,8 +939,23 @@ export async function dispatchAgent(
       },
       actor.id
     );
+    // The session row exists and is marked failed — carry its id on the
+    // throw so callers that redispatch can still link retryOf on the
+    // corpse (PILE-452). Without it a failed cold-dispatch left no visible
+    // chain and the sweep retried invisibly every pass.
+    if (error instanceof Error) {
+      (error as { failedSessionId?: string }).failedSessionId = session.id;
+    }
     throw error;
   }
+}
+
+/** The session row a failed dispatchAgent left behind, when it got far
+ *  enough to create one. */
+export function failedDispatchSessionId(error: unknown): string | undefined {
+  if (!(error instanceof Error)) return undefined;
+  const id = (error as { failedSessionId?: unknown }).failedSessionId;
+  return typeof id === "string" ? id : undefined;
 }
 
 /** Provider isolation switch — `config.disabled` on the workspace provider

@@ -48,6 +48,8 @@ mod = types.ModuleType("pile_runner_core")
 mod.__dict__["__file__"] = core_path
 with open(core_path) as f:
     exec(compile(f.read(), core_path, "exec"), mod.__dict__)
+if os.environ.get("TEST_PROMPT_PATH"):
+    mod.__dict__["PROMPT_PATH"] = os.environ["TEST_PROMPT_PATH"]
 
 posts = []
 
@@ -203,7 +205,9 @@ describePy("runner PR resolution (PILE-257)", () => {
 
 describePy("runner headless browser (PILE-292)", () => {
   const PROMPT = "# Fix the settings page";
-  const promptB64 = Buffer.from(PROMPT, "utf8").toString("base64");
+  // The lane prompt is a file now (PILE-595), not an env var.
+  const promptPath = join(harnessDir, "prompt.md");
+  writeFileSync(promptPath, PROMPT);
 
   it("wires the baked chromium into the agent env and prompt", () => {
     const binDir = join(harnessDir, "browser-bin");
@@ -213,7 +217,7 @@ describePy("runner headless browser (PILE-292)", () => {
     chmodSync(chromium, 0o755);
     const res = runHarness([], "browser", {
       PATH: binDir,
-      PROMPT_B64: promptB64,
+      TEST_PROMPT_PATH: promptPath,
     });
     expect(res.env).toEqual({
       PILE_BROWSER: chromium,
@@ -238,7 +242,7 @@ describePy("runner headless browser (PILE-292)", () => {
     }
     const res = runHarness([], "browser", {
       PATH: binDir,
-      PROMPT_B64: promptB64,
+      TEST_PROMPT_PATH: promptPath,
     });
     expect(res.prompt).toContain("agent-browser open");
   });
@@ -251,7 +255,7 @@ describePy("runner headless browser (PILE-292)", () => {
     chmodSync(chromium, 0o755);
     const res = runHarness([], "browser", {
       PATH: binDir,
-      PROMPT_B64: promptB64,
+      TEST_PROMPT_PATH: promptPath,
       PILE_SHELL_POLICY: "disabled",
     });
     expect(res.prompt).toBe(PROMPT);
@@ -262,7 +266,7 @@ describePy("runner headless browser (PILE-292)", () => {
     mkdirSync(emptyDir, { recursive: true });
     const res = runHarness([], "browser", {
       PATH: emptyDir,
-      PROMPT_B64: promptB64,
+      TEST_PROMPT_PATH: promptPath,
     });
     expect(res.env).toEqual({});
     expect(res.prompt).toBe(PROMPT);
@@ -292,6 +296,8 @@ mod = types.ModuleType("pile_runner_core")
 mod.__dict__["__file__"] = core_path
 with open(core_path) as f:
     exec(compile(f.read(), core_path, "exec"), mod.__dict__)
+if os.environ.get("TEST_PROMPT_PATH"):
+    mod.__dict__["PROMPT_PATH"] = os.environ["TEST_PROMPT_PATH"]
 ns = mod.__dict__
 repo = ns["REPO_DIR"]
 branch = ns["BRANCH"]
@@ -643,5 +649,59 @@ describe("runner push state (PILE-322)", () => {
     // _reset_git_config refuses a non-plain-directory .git — a loud stop,
     // not a silent re-clone that would rmtree the worktree's working tree.
     expect(res.error).toContain("refusing to push");
+  });
+});
+
+describePy("rate-limit reset parsing (VTX-638)", () => {
+  const parse = (text: string, now: string): string => {
+    if (!PYTHON) throw new Error("unreachable: suite skipped without CPython");
+    return execFileSync(
+      PYTHON,
+      [
+        "-c",
+        `import sys, json, datetime; sys.path.insert(0, ${JSON.stringify(join(import.meta.dirname))});
+import core;
+now = datetime.datetime.fromisoformat(${JSON.stringify(now)});
+print(json.dumps(core.rate_limit_reset_iso(${JSON.stringify(text)}, now)))`,
+      ],
+      { encoding: "utf8", timeout: 30_000 }
+    )
+      .trim()
+      .replace(/^"|"$/g, "");
+  };
+  const NOW = "2026-10-22T15:33:11+00:00";
+
+  it("parses 'reset in N seconds' as a relative offset", () => {
+    expect(
+      parse(
+        "Reached free model rate limit. Your limit will reset in 10 seconds (at 15:44 UTC)",
+        NOW
+      )
+    ).toBe("2026-10-22T15:33:21+00:00");
+  });
+
+  it("parses 'try again in 30s' / '2 minutes' abbreviations", () => {
+    expect(parse("try again in 30s", NOW)).toBe("2026-10-22T15:33:41+00:00");
+    expect(parse("retry in 2 minutes", NOW)).toBe("2026-10-22T15:35:11+00:00");
+  });
+
+  it("accepts 'resets in' phrasing", () => {
+    expect(
+      parse("Rate limit reached. Your limit resets in 30 seconds", NOW)
+    ).toBe("2026-10-22T15:33:41+00:00");
+  });
+
+  it("honors an explicit UTC/GMT clock time", () => {
+    expect(parse("resets at 15:44 UTC", NOW)).toBe("2026-10-22T15:44:00+00:00");
+    // Same-day-past clock rolls to tomorrow.
+    expect(parse("resets at 15:00 UTC", NOW)).toBe("2026-10-23T15:00:00+00:00");
+  });
+
+  it("rejects a bare 'at 6:05 PM' — no timezone marker, cannot guess", () => {
+    expect(parse("resets at 6:05 PM", NOW)).toBe("null");
+  });
+
+  it("ignores unrelated 'at HH:MM' text in a noisy error tail", () => {
+    expect(parse("build failed at 14:02 while cloning", NOW)).toBe("null");
   });
 });

@@ -14,7 +14,9 @@ import {
 } from "../agents/credentials.js";
 import { resolveAgentEnv } from "../agents/daytona.js";
 import { getAgentProvider } from "../agents/index.js";
+import { drainDomainEvents } from "../agents/pipeline-events.js";
 import type { AgentProviderSession } from "../agents/provider.js";
+import { runUsageSchema } from "../agents/spend.js";
 import { redactCredentialPool } from "../agents/subscription-pool.js";
 import { sha256Hex, timingSafeEqualHex } from "../global/crypto.js";
 import { createD1 } from "../global/db.js";
@@ -24,6 +26,7 @@ import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
 import type { AgentSessionStatus } from "../types/workspace.js";
 import { captureSessionPrArtifact } from "./agent-artifacts.js";
+import { getExecutionCtx } from "./execution-ctx.js";
 import { getWorkspaceStub } from "./stub.js";
 
 const COMPUTE_PROVIDERS = new Set(["cloudflare", "daytona"]);
@@ -427,6 +430,7 @@ function parseGenericWebhook(body: unknown): {
       : typeof record.pr_state === "string"
         ? record.pr_state
         : undefined;
+  const usageParsed = runUsageSchema.safeParse(record.usage);
   return {
     sessionId,
     session: status
@@ -437,6 +441,7 @@ function parseGenericWebhook(body: unknown): {
           result,
           prUrl,
           prState,
+          usage: usageParsed.success ? usageParsed.data : undefined,
         }
       : undefined,
   };
@@ -499,6 +504,7 @@ async function applyInboundWebhook(
       prUrl: parsed.session.prUrl,
       prState: parsed.session.prState,
       branch: parsed.session.branch,
+      usage: parsed.session.usage,
     });
     await captureSessionPrArtifact(
       stub,
@@ -682,6 +688,17 @@ export function registerAgentProviderRoutes(app: OpenAPIHono<AppContext>) {
     if ("notFound" in result) {
       return c.json({ message: "Session not found" }, 404);
     }
+    // PILE-443 — provider webhooks apply terminal results; drain the
+    // domain events they emitted (e.g. substep.review) post-write.
+    const execCtx = getExecutionCtx(c);
+    execCtx?.waitUntil(
+      drainDomainEvents(
+        c.env,
+        getWorkspaceStub(c.env, organizationId),
+        organizationId,
+        execCtx
+      )
+    );
     return c.json(result);
   });
 
@@ -721,6 +738,15 @@ export function registerAgentProviderRoutes(app: OpenAPIHono<AppContext>) {
     if ("notFound" in result) {
       return c.json({ message: "Session not found" }, 404);
     }
+    const execCtx = getExecutionCtx(c);
+    execCtx?.waitUntil(
+      drainDomainEvents(
+        c.env,
+        getWorkspaceStub(c.env, organizationId),
+        organizationId,
+        execCtx
+      )
+    );
     return c.json(result);
   });
 }

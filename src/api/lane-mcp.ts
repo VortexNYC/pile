@@ -19,6 +19,7 @@ import {
   type LaneTool,
   type LaneToolContext,
   type LaneToolPermission,
+  type LaneToolPolicy,
   WORKSPACE_LANE_TOOLS,
   type WorkspaceLaneTool,
   type WorkspaceLaneToolContext,
@@ -126,12 +127,20 @@ export function registerLaneMcpRoutes(app: OpenAPIHono<AppContext>) {
 
       const [owner, name] = (issue.repo ?? "").split("/");
       const repoScoped = Boolean(owner && name);
-      const policy = repoScoped
+      const repoPolicy = repoScoped
         ? laneToolPolicyForRepo(
             await orgMetadata(c.env, organizationId),
             `${owner}/${name}`
           )
-        : laneToolPolicy("pipeline", profileDeny);
+        : null;
+      // Workspace-domain tools (issue/document/customer/memory/usage) run
+      // under the pipeline tier on every lane — repo tiers govern the
+      // GitHub surface only, so without this a repo-scoped lane's
+      // tools/list omits them even though the profile permits the calls.
+      const wsPolicy = laneToolPolicy("pipeline", [
+        ...profileDeny,
+        ...(repoPolicy?.deny ?? []),
+      ]);
 
       const branch = session.branch ?? issue.branch ?? `issue-${issue.id}`;
       const report = async (input: {
@@ -188,18 +197,21 @@ export function registerLaneMcpRoutes(app: OpenAPIHono<AppContext>) {
             getExecutionCtx(c) ?? undefined
           );
         },
-        policy,
+        policy: wsPolicy,
       };
-      const repoCtx: LaneToolContext | null = repoScoped
-        ? {
-            gh: lazyGithub(c.env, owner!, name!),
-            owner: owner!,
-            repo: name!,
-            branch,
-            policy,
-            report,
-          }
-        : null;
+      const allowedWsTools = allowedWorkspaceLaneTools(wsPolicy);
+      const repoCtx: LaneToolContext | null =
+        repoScoped && repoPolicy
+          ? {
+              gh: lazyGithub(c.env, owner!, name!),
+              owner: owner!,
+              repo: name!,
+              branch,
+              policy: repoPolicy,
+              report,
+              workspaceToolNames: allowedWsTools.map((t) => t.name),
+            }
+          : null;
 
       const server = new McpServer({ name: "pile-lane", version: "0.1.0" });
       const registerTool = <C>(
@@ -210,7 +222,8 @@ export function registerLaneMcpRoutes(app: OpenAPIHono<AppContext>) {
           inputSchema: z.ZodObject;
           run(ctx: C, input: unknown): Promise<unknown>;
         },
-        ctx: C
+        ctx: C,
+        policy: LaneToolPolicy
       ) => {
         server.registerTool(
           tool.name,
@@ -250,13 +263,13 @@ export function registerLaneMcpRoutes(app: OpenAPIHono<AppContext>) {
           }
         );
       };
-      if (repoCtx) {
-        for (const tool of allowedLaneTools(policy)) {
-          registerTool(tool as LaneTool, repoCtx);
+      if (repoCtx && repoPolicy) {
+        for (const tool of allowedLaneTools(repoPolicy)) {
+          registerTool(tool as LaneTool, repoCtx, repoPolicy);
         }
       }
-      for (const tool of allowedWorkspaceLaneTools(policy)) {
-        registerTool(tool as WorkspaceLaneTool, wsCtx);
+      for (const tool of allowedWsTools) {
+        registerTool(tool as WorkspaceLaneTool, wsCtx, wsPolicy);
       }
 
       const transport = new WebStandardStreamableHTTPServerTransport({

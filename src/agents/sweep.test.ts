@@ -243,12 +243,20 @@ async function ghFetchFailing(input: RequestInfo | URL) {
   return new Response("not found", { status: 404 });
 }
 
-function ghFetchFailingPr(num: number, sha: string) {
+function ghFetchFailingPr(
+  num: number,
+  sha: string,
+  pr: { state?: string; mergedAt?: string | null } = {}
+) {
   return async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url.endsWith(`/pulls/${num}`)) {
       return new Response(
-        JSON.stringify({ state: "open", merged_at: null, head: { sha } }),
+        JSON.stringify({
+          state: pr.state ?? "open",
+          merged_at: pr.mergedAt ?? null,
+          head: { sha },
+        }),
         { status: 200 }
       );
     }
@@ -448,8 +456,8 @@ function fakeComputeBackend(opts: {
       started.push(`${processId}:${command.slice(0, 40)}`);
     },
     runnerState: async () => opts.state ?? "running",
-    readFile: async () => opts.resultFile ?? null,
-    writeFile: async () => {},
+    getFile: async () => opts.resultFile ?? null,
+    putFiles: async () => {},
     deleteSandbox: async () => {},
     health: async () => ({ ok: true }),
   };
@@ -3863,6 +3871,141 @@ describe("PILE-420 stale marking + pause holds", () => {
     expect(dispatches).toEqual([s1.id, s2.id]);
     expect((await stub.getAgentSession(s1.id))?.paused).toBe(0);
   });
+
+  it("drains orphaned pause holds a bounded slice per sweep pass (VTX-612)", async () => {
+    const agentId = `mock-orphan-${crypto.randomUUID().slice(0, 8)}`;
+    const dispatches: string[] = [];
+    registerMock(agentId, {
+      dispatch: (_org, _issue, _model, ctx) => {
+        dispatches.push(ctx?.sessionId ?? "");
+        return { id: `prov-${ctx?.sessionId}`, agentId, status: "running" };
+      },
+      poll: (id) => ({ id, agentId, status: "running" }),
+    });
+    await stub.pauseAgentType(agentId, {
+      reason: "fleet maintenance",
+      actorId: userId,
+      actorType: "user",
+    });
+    const actor = {
+      id: userId,
+      organizationId,
+      type: "user" as const,
+      permissions: [] as string[],
+    };
+    const sessions = [];
+    for (let i = 0; i < 5; i++) {
+      const issue = await stub.createIssue({ title: `Held ${i}` });
+      sessions.push(
+        await dispatchAgent(env, agentId, organizationId, issue, actor)
+      );
+    }
+    // A review hold on an issue with a live work lane must still promote —
+    // purpose=review lanes are concurrent by definition (PILE-273).
+    const laneIssue = await stub.createIssue({ title: "Issue with live lane" });
+    await stub.createAgentSession({
+      issueId: laneIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+    });
+    sessions.push(
+      await dispatchAgent(
+        env,
+        agentId,
+        organizationId,
+        laneIssue,
+        actor,
+        undefined,
+        undefined,
+        { purpose: "review", concurrent: true }
+      )
+    );
+    expect(sessions.every((s) => s.paused === 1)).toBe(true);
+
+    // The pause row goes away without a drain — the state resume leaves
+    // behind when the held backlog outlives one staggered release call.
+    await stub.resumeAgentType(agentId, {
+      actorId: userId,
+      actorType: "user",
+    });
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+    const first = await Promise.all(
+      sessions.map((s) => stub.getAgentSession(s.id))
+    );
+    const releasedFirst = first.filter((s) => s?.paused === 0).length;
+    expect(releasedFirst).toBeGreaterThan(0);
+    expect(releasedFirst).toBeLessThanOrEqual(3);
+    expect(dispatches.length).toBeLessThanOrEqual(3);
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+    const second = await Promise.all(
+      sessions.map((s) => stub.getAgentSession(s.id))
+    );
+    expect(second.every((s) => s?.paused === 0)).toBe(true);
+    expect(dispatches).toHaveLength(6);
+  });
+
+  it("parks dispatches past maxConcurrentLanes and drains when a slot frees (VTX-621)", async () => {
+    const agentId = `mock-cap-${crypto.randomUUID().slice(0, 8)}`;
+    const dispatches: string[] = [];
+    registerMock(agentId, {
+      maxConcurrentLanes: 2,
+      dispatch: (_org, _issue, _model, ctx) => {
+        dispatches.push(ctx?.sessionId ?? "");
+        return { id: `prov-${ctx?.sessionId}`, agentId, status: "running" };
+      },
+      poll: (id) => ({ id, agentId, status: "running" }),
+    });
+    const actor = {
+      id: userId,
+      organizationId,
+      type: "user" as const,
+      permissions: [] as string[],
+    };
+    // Two live lanes fill the cap.
+    const live1 = await stub.createIssue({ title: "Live one" });
+    const live2 = await stub.createIssue({ title: "Live two" });
+    for (const issue of [live1, live2]) {
+      await stub.createAgentSession({
+        issueId: issue.id,
+        agentId,
+        provider: agentId,
+        actorId: userId,
+        actorType: "user",
+        status: "running",
+      });
+    }
+
+    const third = await stub.createIssue({ title: "Overflow" });
+    const held = await dispatchAgent(env, agentId, organizationId, third, actor);
+    expect(held.status).toBe("waiting");
+    expect(held.paused).toBe(1);
+    expect(dispatches).toHaveLength(0);
+    const pause = await stub.getAgentPause(agentId);
+    expect(pause?.reason).toContain("concurrency cap");
+
+    // Still at cap — the sweep must not lift the hold.
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+    expect((await stub.getAgentSession(held.id))?.paused).toBe(1);
+    expect(await stub.getAgentPause(agentId)).not.toBeNull();
+
+    // A lane goes terminal → the cap frees → the sweep lifts and drains.
+    const liveSessions = await stub.listAgentSessions({ limit: 200 });
+    const toEnd = liveSessions.find(
+      (s) => s.agentId === agentId && s.status === "running"
+    );
+    expect(toEnd).toBeDefined();
+    await stub.updateAgentSession(toEnd!.id, { status: "completed" });
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+    expect(await stub.getAgentPause(agentId)).toBeUndefined();
+    const drained = await stub.getAgentSession(held.id);
+    expect(drained?.paused).toBe(0);
+    expect(dispatches).toEqual([held.id]);
+  });
 });
 
 describe("spend caps (PILE-425)", () => {
@@ -3962,5 +4105,148 @@ describe("spend caps (PILE-425)", () => {
     // Escalation comment lands on the issue.
     const comments = await stub.listComments(issue.id);
     expect(comments.some((c) => c.externalSource === "spend-cap")).toBe(true);
+  });
+
+  it("releasePausedSessions staggers the drain — bounded per pass (PILE-476)", async () => {
+    for (let i = 0; i < 5; i++) {
+      await stub.createAgentSession({
+        agentId: `pause-agent-${i}`,
+        issueId: "issue-1",
+        provider: "devin-cli",
+        status: "waiting",
+        paused: 1,
+        actorId: "u1",
+        actorType: "user",
+      });
+    }
+    const released = await releasePausedSessions(
+      env,
+      stub,
+      organizationId,
+      "pause-agent-0",
+      { waitUntil: () => {} }
+    );
+    expect(released.length).toBeLessThanOrEqual(3);
+  });
+});
+
+// PILE-452 — the sweep must not cold-start lanes for terminal work: a
+// merged/closed PR or a done/canceled issue gets state reconciliation only.
+describe("syncOpenPrSessions terminal-work gating (PILE-452)", () => {
+  const userId = "user-p452";
+  let organizationId = "";
+  let stub: ReturnType<typeof env.WORKSPACE_DURABLE_OBJECT.get>;
+
+  beforeAll(async () => {
+    const db = createD1(env.D1);
+    const now = new Date();
+    await db
+      .insert(userTable)
+      .values({
+        id: userId,
+        name: "P452",
+        email: `${userId}@example.com`,
+        emailVerified: false,
+        image: null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({ target: [userTable.email] });
+    const headers = await createAdminHeaders(env, userId);
+    const workspace = await createWorkspace(db, env, headers, {
+      name: "Terminal gating",
+      slug: `p452-${crypto.randomUUID()}`,
+      key: `G4${crypto.randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase()}`,
+      ownerId: userId,
+    });
+    organizationId = workspace!.id;
+    stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+  });
+
+  it("does not redispatch on a merged PR even while CI is red", async () => {
+    const agentId = `mock-merged-${crypto.randomUUID().slice(0, 8)}`;
+    let dispatches = 0;
+    registerMock(agentId, {
+      sendPrompt: () => false,
+      dispatch: (_org, issue) => {
+        dispatches += 1;
+        return {
+          id: `m-${dispatches}`,
+          agentId,
+          issueId: issue.id,
+          status: "created",
+        };
+      },
+    });
+    const issue = await stub.createIssue({ title: "Merged PR lane" });
+    await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "completed",
+      prUrl: "https://github.com/vortexnyc/pile/pull/4521",
+      prState: "open",
+    });
+    const ghFetch = ghFetchFailingPr(4521, "mrg452", {
+      state: "closed",
+      mergedAt: "2026-10-19T12:00:00Z",
+    });
+
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: ghFetch as typeof fetch,
+    });
+
+    expect(dispatches).toBe(0);
+    const sessions = await stub.listAgentSessions({ issueId: issue.id });
+    expect(sessions).toHaveLength(1);
+    const issueAfter = await stub.getIssue(issue.id);
+    expect(issueAfter?.prState).toBe("merged");
+  });
+
+  it("does not nudge or redispatch for a done issue's open PR", async () => {
+    const agentId = `mock-done-${crypto.randomUUID().slice(0, 8)}`;
+    let dispatches = 0;
+    registerMock(agentId, {
+      sendPrompt: () => false,
+      dispatch: (_org, issue) => {
+        dispatches += 1;
+        return {
+          id: `d-${dispatches}`,
+          agentId,
+          issueId: issue.id,
+          status: "created",
+        };
+      },
+    });
+    const issue = await stub.createIssue({
+      title: "Done issue",
+      status: "done",
+    });
+    await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "completed",
+      prUrl: "https://github.com/vortexnyc/pile/pull/4522",
+      prState: "open",
+    });
+    const ghFetch = ghFetchFailingPr(4522, "dn4522");
+
+    await syncOpenPrSessions(env, stub, organizationId, {
+      tokenForRepo: async () => "gh-test-token",
+      fetch: ghFetch as typeof fetch,
+    });
+
+    expect(dispatches).toBe(0);
+    const sessions = await stub.listAgentSessions({ issueId: issue.id });
+    expect(sessions).toHaveLength(1);
   });
 });

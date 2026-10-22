@@ -13,6 +13,7 @@ export const ERROR_CATALOG = {
   UPGRADE_REQUIRED: { status: 426, message: "Upgrade Required" },
   RATE_LIMITED: { status: 429, message: "Rate limit exceeded" },
   AGENT_ERROR: { status: 502, message: "Agent provider error" },
+  AGENT_PAUSED: { status: 409, message: "Agent type is paused" },
   CONFIG_ERROR: { status: 500, message: "Configuration error" },
   INTERNAL_ERROR: { status: 500, message: "Internal error" },
   CAPTURE_CHALLENGE_REQUIRED: {

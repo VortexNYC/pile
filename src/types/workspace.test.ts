@@ -11,6 +11,7 @@ import {
   ISSUE_STATUSES,
 } from "./workspace.js";
 import type {
+  AgentSessionResult,
   DraftCommentPayload,
   DraftFieldChangePayload,
   Issue,
@@ -38,6 +39,7 @@ describe("workspace shared types", () => {
       "not_reproducible",
       "obsolete",
       "resolved",
+      "skipped",
     ]);
     expect(AGENT_SESSION_STATUSES).toEqual([
       "created",
@@ -139,7 +141,12 @@ describe("draft output types (PILE-428)", () => {
   it("keeps the draft kind + status picklists stable", () => {
     // kind drives publish replay (comment → createComment, field_change →
     // updateIssue); status order is the review lifecycle.
-    expect(DRAFT_OUTPUT_KINDS).toEqual(["comment", "field_change", "message"]);
+    expect(DRAFT_OUTPUT_KINDS).toEqual([
+      "comment",
+      "field_change",
+      "message",
+      "artifact",
+    ]);
     expect(DRAFT_OUTPUT_STATUSES).toEqual([
       "pending",
       "published",
@@ -166,5 +173,17 @@ describe("draft output types (PILE-428)", () => {
     expect(flagged.sensitive).toBe(true);
     const input = { sensitive: true } satisfies Partial<IssueInput>;
     expect(input.sensitive).toBe(true);
+  });
+
+  it("AgentSessionResult carries the deliberate-revive flag", () => {
+    // revive bypasses the terminal-stays-terminal guard — the field must
+    // stay on the wire type or delivered follow-ups silently stop resuming
+    // completed lanes.
+    const result = {
+      status: "running",
+      result: null,
+      revive: true,
+    } satisfies AgentSessionResult;
+    expect(result.revive).toBe(true);
   });
 });

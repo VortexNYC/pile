@@ -10,13 +10,22 @@ import type {
   AgentSessionStatus,
   Issue,
 } from "../types/workspace.js";
+import {
+  CONCURRENT_LANES_PAUSE_PREFIX,
+  RATE_LIMIT_PAUSE_PREFIX,
+} from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
 import type { ComputeBackend } from "./compute.js";
 import { resolveGeneratedConflict } from "./conflict-fix.js";
 import { loadProviderConfig } from "./credentials.js";
 import { resolveAgentEnv } from "./daytona.js";
 import { ingestFailedAgentSession } from "./failure-tickets.js";
-import { FLEET_UNHEALTHY_STREAK, fleetInfraStreak } from "./fleet-health.js";
+import {
+  FLEET_UNHEALTHY_STREAK,
+  fleetInfraStreak,
+  PROVIDER_UNHEALTHY_STREAK,
+  providerInfraStreak,
+} from "./fleet-health.js";
 import {
   buildHangReport,
   formatHangReport,
@@ -570,33 +579,16 @@ async function markStaleAndAlert(
 }
 
 const MAX_AUTO_RETRIES = 1;
+// VTX-621 — cap on rate-limit re-parks: a stuck account parks, drains,
+// dies on the limit again, and re-parks — bound the loop so a lane
+// eventually terminates instead of cycling holds forever.
+const MAX_RATE_LIMIT_PARKS = 6;
 // PILE-240 — consecutive infra-class deaths across a provider's lanes mean
 // the provider/substrate is unhealthy (devin's fleet repeatedly wedged with
 // "runner never started"). Past the streak, retries stop churning lanes
-// and the issue gets told plainly instead.
-const PROVIDER_UNHEALTHY_STREAK = 3;
-
-async function providerInfraStreak(
-  stub: DurableObjectStub<WorkspaceDO>,
-  agentId: string
-): Promise<number> {
-  const recent = await stub.listAgentSessions({ limit: 20 });
-  let streak = 0;
-  for (const s of recent) {
-    if (s.agentId !== agentId) continue;
-    // `created`/`waiting` are undetermined — provision hasn't concluded, so
-    // a just-promoted lane proves nothing either way. Without this skip a
-    // rewound promotion lands at the head of the recency order and masks a
-    // live infra streak underneath it (PILE-260).
-    if (s.status === "created" || s.status === "waiting") continue;
-    // Infra-class = provider-reported substrate failure OR a sweep
-    // stall-cancel (both carry infraFailure); task failures and operator
-    // cancels don't count.
-    if (s.infraFailure === 1 && TERMINAL_STATUSES.has(s.status)) streak += 1;
-    else break;
-  }
-  return streak;
-}
+// and the issue gets told plainly instead. providerInfraStreak +
+// PROVIDER_UNHEALTHY_STREAK live in fleet-health.ts so the nudge path's
+// redispatch gate shares them (PILE-452).
 
 // PILE-268 — redispatch once when the lane died underneath the task:
 // sandbox error, runner freeze surfaced as a stall-cancel, provision wedge.
@@ -609,11 +601,53 @@ async function retryDeadLane(
   cause: string,
   ctx?: { waitUntil: (promise: Promise<unknown>) => void }
 ): Promise<void> {
-  if ((session.retryCount ?? 0) >= MAX_AUTO_RETRIES) return;
+  // VTX-621 — a rate-limit window parks retries instead of consuming the
+  // budget or tripping the breakers: the pause row is the capacity signal,
+  // and a provider capacity death is not a substrate failure.
+  const pause = await stub.getAgentPause(session.agentId).catch(() => null);
+  const rateLimitPaused = Boolean(
+    pause?.reason?.startsWith(RATE_LIMIT_PAUSE_PREFIX)
+  );
+  // A stuck account must not park-and-redispatch forever: the rate-limit
+  // budget exemption is capped at MAX_RATE_LIMIT_PARKS holds, after which
+  // the lane is terminal for good.
+  const rateLimitRetryable =
+    rateLimitPaused && (session.retryCount ?? 0) < MAX_RATE_LIMIT_PARKS;
+  if ((session.retryCount ?? 0) >= MAX_AUTO_RETRIES && !rateLimitRetryable)
+    return;
+  // PILE-476 — per-issue breaker: cap failed starts for the same issue per
+  // hour so a doomed lane stops burning spawn attempts. Distinct from the
+  // fleet/agent breakers — those catch substrate outages, this catches a
+  // single-issue poison lane.
+  const issueSessions = await stub
+    .listAgentSessions({ issueId: session.issueId, limit: 10 })
+    .catch(() => []);
+  const hourAgo = Date.now() - 60 * 60 * 1000;
+  const failedStarts = issueSessions.filter(
+    (s) =>
+      s.infraFailure === 1 &&
+      TERMINAL_STATUSES.has(s.status) &&
+      new Date(s.createdAt).getTime() > hourAgo
+  ).length;
+  if (failedStarts >= 3 && !rateLimitPaused) {
+    await stub
+      .addAgentActivity({
+        sessionId: session.id,
+        actorId: session.actorId,
+        type: "error",
+        message: `issue breaker open — ${failedStarts} failed starts on this issue in the last hour; redispatch paused`,
+        payload: { issueId: session.issueId, failedStarts },
+      })
+      .catch(() => {});
+    return;
+  }
   // Fleet-wide breaker: during a substrate outage every retry spends a spawn
   // attempt on the thing that's failing. Per-agent streaks miss a partial
   // outage (successes interleave), so this looks across all agents.
-  if ((await fleetInfraStreak(stub)) >= FLEET_UNHEALTHY_STREAK) {
+  if (
+    (await fleetInfraStreak(stub)) >= FLEET_UNHEALTHY_STREAK &&
+    !rateLimitPaused
+  ) {
     await stub.addAgentActivity({
       sessionId: session.id,
       actorId: session.actorId,
@@ -627,7 +661,7 @@ async function retryDeadLane(
   // orphaned is retried/resolved through requestPrReview instead (PILE-445).
   if (session.purpose === REVIEW_PURPOSE) return;
   const streak = await providerInfraStreak(stub, session.agentId);
-  if (streak >= PROVIDER_UNHEALTHY_STREAK) {
+  if (streak >= PROVIDER_UNHEALTHY_STREAK && !rateLimitPaused) {
     await stub.addAgentActivity({
       sessionId: session.id,
       actorId: session.actorId,
@@ -639,6 +673,18 @@ async function retryDeadLane(
   try {
     const issue = await stub.getIssue(session.issueId);
     if (!issue) return;
+    // PILE-452/VTX-621 — a paused agent type parks its retry as a paused
+    // hold (waiting + paused) instead of skipping outright: a rate-limit
+    // or operator pause must not strand the lane permanently — the hold
+    // drains on resume through releasePausedSessions.
+    if (pause) {
+      await stub.addAgentActivity({
+        sessionId: session.id,
+        actorId: session.actorId,
+        type: "thought",
+        message: `auto-retry parked — agent type "${session.agentId}" is paused${pause.reason ? `: ${pause.reason}` : ""}; will resume on lift`,
+      });
+    }
     // PILE-321 — same as a manual retry: a lane dispatched before the issue
     // had a repo inherits the team's defaultRepo on redispatch.
     const retriedIssue = await inheritTeamDefaultRepo(
@@ -673,6 +719,7 @@ async function retryDeadLane(
         secondaryRepos: parseStoredSecondaryRepos(session.secondaryRepos),
         effort: session.effort ?? undefined,
         maxDurationMinutes: session.maxDurationMinutes ?? undefined,
+        onPaused: pause ? "hold" : "fail",
       }
     );
     await stub.updateAgentSession(retried.id, {
@@ -756,6 +803,8 @@ async function promoteQueuedSessions(
   // row landed after the dependent parked, or the retry's own re-anchor
   // write was lost mid-flight (PILE-260).
   const retriesCache = new Map<string, AgentSession[]>();
+  const pauseCache = new Map<string, boolean>();
+  const orphanDrainTried = new Set<string>();
   const retriesFor = async (deadId: string): Promise<AgentSession[]> => {
     const cached = retriesCache.get(deadId);
     if (cached) return cached;
@@ -775,10 +824,41 @@ async function promoteQueuedSessions(
     // human answer, not queued: no promote, no orphan rescue. The respond
     // route resumes it (or keeps it waiting when queuedAfter is also set).
     if (session.awaitingActivityId) continue;
+    // PILE-452 — promotion is a dispatch: while the agent type is paused a
+    // queued lane stays parked instead of going live. The resume drain
+    // calls promoteQueuedSession directly after deleting the pause row.
+    let paused = pauseCache.get(session.agentId);
+    if (paused === undefined) {
+      paused =
+        (await stub.getAgentPause(session.agentId).catch(() => null)) != null;
+      pauseCache.set(session.agentId, paused);
+    }
     // PILE-420 — operator pause holds (`paused`): not queue-parked, so the
-    // orphan-flip and edge promotion must leave them alone. Only the
-    // resume drain (releasePausedSessions) releases them.
-    if (session.paused === 1) continue;
+    // orphan-flip and edge promotion must leave them alone while the pause
+    // row lives. A hold whose row is already gone is orphaned — resume's
+    // drain is bounded per call, so a backlog bigger than one call never
+    // finishes without a driver. This pass is the driver: drain a bounded
+    // slice per agentId per pass (VTX-612).
+    if (session.paused === 1) {
+      if (paused) continue;
+      if (!orphanDrainTried.has(session.agentId)) {
+        orphanDrainTried.add(session.agentId);
+        await releasePausedSessions(
+          env,
+          stub,
+          organizationId,
+          session.agentId,
+          ctx
+        ).catch((err: unknown) => {
+          console.error("orphaned pause-hold drain failed", {
+            agentId: session.agentId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+      }
+      continue;
+    }
+    if (paused) continue;
     if (!session.queuedAfter) {
       // Queue orphan (no edge recorded): rewinding createdAt on the flip
       // keeps its stale queue timestamp from tripping the provision
@@ -924,6 +1004,11 @@ async function promoteQueuedSession(
     ctx,
     {
       promoteSessionId: session.id,
+      // Review lanes dispatch concurrent with the issue's work lane
+      // (PILE-273); the parked row keeps `purpose` but the conflict gate is
+      // option-driven, so re-declare it on promote or a live work lane
+      // bounces the release with CONFLICT.
+      concurrent: session.purpose === "review",
       secondaryRepos: parseStoredSecondaryRepos(session.secondaryRepos),
     }
   );
@@ -984,7 +1069,12 @@ export async function releasePausedSessions(
 ): Promise<string[]> {
   const held = await stub.listPauseHeldSessions(agentId);
   const released: string[] = [];
-  for (const session of held) {
+  // PILE-476 — stagger post-pause releases: bounded drain per call so a big
+  // held backlog doesn't stampede the provider on resume. Remaining holds
+  // release on subsequent passes; stored instructions ride each session
+  // unchanged (promoteQueuedSession reuses the row).
+  const RELEASE_PER_PASS = 3;
+  for (const session of held.slice(0, RELEASE_PER_PASS)) {
     await stub
       .updateAgentSession(session.id, { paused: 0 })
       .catch((err: unknown) => {
@@ -1374,6 +1464,53 @@ export async function sweepAgentSessions(
         env.WORKSPACE_DURABLE_OBJECT.idFromName(id)
       );
       await stub.setOrganizationId(id);
+      // VTX-621 — lift auto-managed pauses whose condition cleared:
+      // rate-limit holds once the reset instant passes, concurrency-cap
+      // holds once live lanes fall under the cap. Operator/spend-cap
+      // pauses (other reasons) never lift here.
+      for (const pause of await stub.listAgentPauses().catch(() => [])) {
+        let lift = false;
+        if (pause.reason?.startsWith(RATE_LIMIT_PAUSE_PREFIX)) {
+          const until = Date.parse(
+            pause.reason.slice(RATE_LIMIT_PAUSE_PREFIX.length)
+          );
+          lift = Number.isFinite(until) && until <= now;
+        } else if (pause.reason?.startsWith(CONCURRENT_LANES_PAUSE_PREFIX)) {
+          let cap: number | undefined;
+          try {
+            cap = getAgentProvider(pause.agentId, env).maxConcurrentLanes;
+          } catch {
+            cap = undefined;
+          }
+          if (cap != null) {
+            const liveForAgent = (
+              await stub.listAgentSessions({ limit: 200 }).catch(() => [])
+            ).filter(
+              (s) =>
+                s.agentId === pause.agentId &&
+                !TERMINAL_STATUSES.has(s.status) &&
+                s.paused !== 1 &&
+                // Same counter as dispatchAgent: provider-less waiting rows
+                // are queue artifacts, not live lanes.
+                !(s.status === "waiting" && s.providerSessionId == null)
+            ).length;
+            lift = liveForAgent < cap;
+          }
+        }
+        if (!lift) continue;
+        // Drain only when this pass won the delete — overlapping passes
+        // must not both release the same holds.
+        const resumed = await stub
+          .resumeAgentType(pause.agentId, {
+            actorId: "pile-sweep",
+            actorType: "system",
+          })
+          .catch(() => false);
+        if (resumed)
+          await releasePausedSessions(env, stub, id, pause.agentId, ctx).catch(
+            () => []
+          );
+      }
       const sessions = [
         ...(await stub.listAgentSessions({ status: "running" })),
         ...(await stub.listAgentSessions({ status: "created" })),
@@ -1745,30 +1882,49 @@ export async function sweepAgentSessions(
             }
             if (polled.status === "failed") {
               await ingestFailedAgentSession(env, id, session, polled);
-              await pageChiefOfStaff(
-                env,
-                stub,
-                id,
-                {
-                  event: "agent.session_failed",
-                  issueId: session.issueId,
-                  sessionId: session.id,
-                  agentSlug: session.agentId ?? undefined,
-                  conversationKey: session.conversationKey ?? null,
-                  error:
-                    typeof polled.result === "string"
-                      ? polled.result
-                      : undefined,
-                },
-                ctx
+              // PILE-443 — a required sub-step's lane death rides the
+              // substep.review event to the reviewer (stage owner →
+              // chief fallback). Paging the chief here too would
+              // double-POST the endpoint.
+              const failedStep = session.issueId
+                ? await stub.getIssue(session.issueId).catch(() => null)
+                : null;
+              const reviewCovers = Boolean(
+                failedStep?.parentId &&
+                failedStep.required &&
+                session.purpose !== REVIEW_PURPOSE
               );
-              if (polled.infraFailure) {
+              if (!reviewCovers) {
+                await pageChiefOfStaff(
+                  env,
+                  stub,
+                  id,
+                  {
+                    event: "agent.session_failed",
+                    issueId: session.issueId,
+                    sessionId: session.id,
+                    agentSlug: session.agentId ?? undefined,
+                    conversationKey: session.conversationKey ?? null,
+                    error:
+                      typeof polled.result === "string"
+                        ? polled.result
+                        : undefined,
+                  },
+                  ctx
+                );
+              }
+              // VTX-621 — polled.rateLimited drives the retry too: the
+              // runner flags capacity deaths without infraFailure, and the
+              // DO's pause row is what parks the retry as a hold.
+              if (polled.infraFailure || polled.rateLimited) {
                 await retryDeadLane(
                   env,
                   stub,
                   id,
                   session,
-                  "Infrastructure failure",
+                  polled.rateLimited
+                    ? "Provider rate limit"
+                    : "Infrastructure failure",
                   ctx
                 );
               }
@@ -1910,6 +2066,15 @@ export async function sweepAgentSessions(
           sessions.slice(i, i + SWEEP_FANOUT).map(sweepSession)
         );
       }
+      // PILE-443 — poll writes emit domain events (substep.review on
+      // lane completion/failure). Drain once more so the reviewer's
+      // POST fires this pass instead of waiting a sweep.
+      await drainDomainEvents(env, stub, id, ctx).catch((err: unknown) => {
+        console.error("post-poll domain event drain failed", {
+          organizationId: id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
     } catch (err) {
       console.error("agent session sweep failed", {
         organizationId: id,
@@ -2206,6 +2371,16 @@ export async function syncOpenPrSessions(
 
       const issue = await stub.getIssue(session.issueId);
 
+      // PILE-452 — terminal work has no lane to steer: a merged/closed PR or
+      // a done/canceled issue gets state reconciliation only. Nudges and
+      // automation dispatches each can cold-start a lane, which is exactly
+      // the loop that burned the fleet on dead PRs (VOR #954/#955).
+      const laneActionable =
+        state === "open" &&
+        issue !== undefined &&
+        issue.status !== "done" &&
+        issue.status !== "canceled";
+
       // SCM-observer events (PILE-209): orchestrators read PR transitions as
       // session events, not just refreshed fields.
       const priorCheckState = issue?.prCheckState ?? null;
@@ -2265,19 +2440,21 @@ export async function syncOpenPrSessions(
             },
           })
           .catch(() => {});
-        await fireEventAutomations(
-          env,
-          stub,
-          organizationId,
-          "pr.ci_failed",
-          issueEventTarget(stub, session.issueId),
-          ciPrompt
-        );
+        if (laneActionable) {
+          await fireEventAutomations(
+            env,
+            stub,
+            organizationId,
+            "pr.ci_failed",
+            issueEventTarget(stub, session.issueId),
+            ciPrompt
+          );
+        }
       }
       // The nudge retries every sweep while CI is red — delivery dedupe
       // (not detection) decides whether the lane already got this sha's fix
       // prompt, so a busy-sandbox rejection just retries next tick.
-      if (checkState === "failing") {
+      if (checkState === "failing" && laneActionable) {
         await nudgeLane(env, stub, organizationId, session, issue, prUrl, {
           prompt: ciPrompt,
           reason: "CI failure",
@@ -2292,7 +2469,7 @@ export async function syncOpenPrSessions(
       if (state === "open" && pr.mergeable === null) {
         console.log("pr mergeability pending", { session: session.id, prUrl });
       }
-      if (state === "open" && pr.mergeable === false && issue) {
+      if (pr.mergeable === false && laneActionable) {
         const seen = await stub
           .listAgentSessionEvents(session.id, { limit: 100, order: "desc" })
           .catch(() => []);
@@ -2375,7 +2552,7 @@ export async function syncOpenPrSessions(
       // pr.branch_update event — a slow GitHub merge otherwise re-fires on
       // every sweep pass.
       if (
-        issue &&
+        laneActionable &&
         headSha &&
         shouldUpdatePrBranch({
           state,
@@ -2496,7 +2673,7 @@ export async function syncOpenPrSessions(
             }
             const actionable =
               reviewState === "CHANGES_REQUESTED" || body.length > 0;
-            if (!actionable) continue;
+            if (!actionable || !laneActionable) continue;
             let built: Promise<string> | null = null;
             const reviewPrompt = () => {
               built ??= reviewPromptWithContext({
@@ -2563,7 +2740,7 @@ export async function syncOpenPrSessions(
         state === "open" &&
         headSha &&
         (!reviewRun || reviewCheckStale(reviewRun, Date.now())) &&
-        issue &&
+        laneActionable &&
         typeof base?.ref === "string"
       ) {
         await requestPrReview(

@@ -192,6 +192,8 @@ function fakeGithub(opts: {
   reviewPost?: "ok" | "reject" | "fail" | "flaky";
   /** 500s the check-runs list — a GitHub read failure, not "no runs". */
   listChecksFail?: boolean;
+  /** GET /pulls/{n} returns this head sha — drives the PILE-470 stale-drop. */
+  prHead?: string;
 }) {
   const calls: GhCall[] = [];
   let nextCheckId = 500;
@@ -234,6 +236,9 @@ function fakeGithub(opts: {
       return json({ check_runs: runs });
     }
     if (url.includes("/files?")) return json(opts.files);
+    if (opts.prHead && method === "GET" && /\/pulls\/\d+$/.test(url)) {
+      return json({ head: { sha: opts.prHead } });
+    }
     if (url.endsWith("/check-runs") && method === "POST") {
       return json({ id: nextCheckId++ }, 201);
     }
@@ -1061,5 +1066,87 @@ describe("requestPrReview / publishReviewVerdicts", () => {
     );
     expect(outcome).toBe("dispatched");
     expect(dispatched.length).toBe(before + 1);
+  });
+
+  it("drops a stale verdict when the PR head moved (PILE-470)", async () => {
+    const issue = await laneIssue();
+    await finishReviewLane(
+      issue,
+      "sha-stale",
+      "```json\n" +
+        JSON.stringify({
+          verdict: "request-changes",
+          summary: "Old head.",
+          findings: [{ severity: "must", title: "Fix it" }],
+        }) +
+        "\n```"
+    );
+    const publishGh = fakeGithub({
+      config: REVIEW_CONFIG,
+      files: [],
+      prHead: "sha-moved",
+    });
+    await publishReviewVerdicts(stub, publishDeps(publishGh));
+    const checkPosts = publishGh.calls.filter((c) =>
+      c.url.includes("check-runs")
+    );
+    expect(checkPosts).toHaveLength(0);
+  });
+
+  it("supersedes a live review lane pinned to an older headSha (VTX-621)", async () => {
+    const issue = await laneIssue();
+    const t = target("sha-new-head");
+    // A review lane still running the previous head — reviews dead code.
+    const stale = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "review-mock",
+      provider: "review-mock",
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      purpose: REVIEW_PURPOSE,
+    });
+    await stub.addAgentSessionEvent({
+      sessionId: stale.id,
+      type: "review.requested",
+      message: "review requested",
+      payload: {
+        prUrl: t.prUrl,
+        repo: REPO,
+        pullNumber: t.pullNumber,
+        headSha: "sha-old-head",
+        checkRunId: 777,
+      },
+    });
+
+    const gh = fakeGithub({
+      config: REVIEW_CONFIG,
+      files: [{ filename: "src/a.ts", patch: "@@" }],
+      // GET /pulls/{n} confirms the request targets the current head —
+      // the supersede ordering guard.
+      prHead: "sha-new-head",
+    });
+    const outcome = await requestPrReview(
+      workerEnv,
+      stub,
+      organizationId,
+      issue,
+      t,
+      "tok",
+      { fetch: gh.fetch }
+    );
+    expect(outcome).toBe("dispatched");
+
+    // The stale lane's check run resolved superseded, and the session went
+    // terminal without an infraFailure mark.
+    const resolve = gh.calls.find(
+      (c) => c.method === "PATCH" && c.url.endsWith("/check-runs/777")
+    );
+    expect(resolve?.body).toMatchObject({ status: "completed" });
+    const staleAfter = await stub.getAgentSession(stale.id);
+    expect(staleAfter?.status).toBe("canceled");
+    expect(staleAfter?.infraFailure).toBe(0);
+    const evts = await stub.listAgentSessionEvents(stale.id);
+    expect(evts.some((e) => e.type === "review.superseded")).toBe(true);
   });
 });

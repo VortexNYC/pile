@@ -97,6 +97,7 @@ import {
 } from "./slack.js";
 import { registerStageTemplateRoutes } from "./stage-templates.js";
 import { registerStateRoutes } from "./states.js";
+import { getWorkspaceStub } from "./stub.js";
 import { registerSupportCaptureRoutes } from "./support-capture.js";
 import { registerSupportChannelRoutes } from "./support-channels.js";
 import { registerSupportContactRoutes } from "./support-contacts.js";
@@ -216,6 +217,18 @@ app.use("/workspaces/:organizationId/*", async (c, next) => {
       laneGet[2]!
     ))
   ) {
+    // Lane tokens die with the session (PILE-457): a terminal session's
+    // bearer can no longer read its record back either.
+    const laneSession = await getWorkspaceStub(
+      c.env,
+      laneGet[1]!
+    ).getAgentSession(laneGet[2]!);
+    if (!laneSession) {
+      return c.json({ message: "Session not found" }, 404);
+    }
+    if (["completed", "failed", "canceled"].includes(laneSession.status)) {
+      return c.json({ message: "Session is terminal" }, 409);
+    }
     // A valid lane token becomes a scoped agent identity — enough for
     // agent:read routes, nothing else.
     c.set("workspaceIdentity", {
