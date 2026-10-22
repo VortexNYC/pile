@@ -4154,8 +4154,14 @@ describe("PILE-420 stale marking + pause holds", () => {
     expect(released).toEqual([implHeld.id]);
     expect((await stub.getAgentSession(revHeld.id))?.paused).toBe(1);
     expect((await stub.getAgentSession(implHeld.id))?.paused).toBe(0);
-    // Running the sweep with DAYTONA_API_KEY unset skips orphan sandbox reap cleanly (PILE-471).
-    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+    // Running the sweep in test env skips orphan sandbox reap and gates off prod PostHog telemetry (PILE-471 / PILE-597).
+    const tasks: Promise<unknown>[] = [];
+    await sweepAgentSessions(
+      env,
+      { waitUntil: (p) => tasks.push(p) },
+      { probeTimeoutMs: 10 }
+    );
+    expect(tasks).toEqual([]);
   });
 });
 

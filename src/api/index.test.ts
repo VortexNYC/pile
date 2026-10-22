@@ -3839,4 +3839,9 @@ describe("lane-token auth bypass (PILE-457)", () => {
     );
     expect(ghost.status).toBe(404);
   });
+
+  it("returns 200 on /health and keeps 4xx off the 5xx exception reporter (PILE-597)", async () => {
+    const res = await app.fetch(new Request("http://localhost/health"), env);
+    expect(res.status).toBe(200);
+  });
 });

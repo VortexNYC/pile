@@ -5,6 +5,10 @@ import { organization } from "../global/schema.js";
 import { replyLaneResultToTicket } from "../global/support-escalation.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkerEnv } from "../platform/middleware.js";
+import {
+  capturePosthogEvent,
+  reportWorkerException,
+} from "../platform/posthog.js";
 import type {
   AgentSession,
   AgentSessionStatus,
@@ -1873,6 +1877,10 @@ export async function sweepAgentSessions(
                 const createdMs = session.createdAt
                   ? Date.parse(session.createdAt)
                   : Date.parse(settledAt);
+                const durationMs = Math.max(
+                  0,
+                  Date.parse(settledAt) - createdMs
+                );
                 await stub.recordLaneCost({
                   sessionId: session.id,
                   agentSlug:
@@ -1887,10 +1895,26 @@ export async function sweepAgentSessions(
                   status: polled.status,
                   createdAt: session.createdAt ?? settledAt,
                   settledAt,
-                  durationMs: Math.max(0, Date.parse(settledAt) - createdMs),
+                  durationMs,
                   attempts:
                     (session as { attempts?: number | null }).attempts ?? 1,
                 });
+                capturePosthogEvent(
+                  "pile_lane_settled",
+                  {
+                    distinct_id: `org-${id}`,
+                    organizationId: id,
+                    sessionId: session.id,
+                    agentId: session.agentId,
+                    purpose: session.purpose ?? "work",
+                    status: polled.status,
+                    infraFailure: Boolean(polled.infraFailure),
+                    rateLimited: Boolean(polled.rateLimited),
+                    durationMs,
+                  },
+                  ctx,
+                  { env }
+                );
               } catch {
                 // Cost recording is best-effort.
               }
@@ -2172,8 +2196,18 @@ export async function sweepAgentSessions(
         organizationId: id,
         error: err instanceof Error ? err.message : String(err),
       });
+      reportWorkerException("sweep", err, ctx, { organizationId: id }, { env });
     }
   }
+  capturePosthogEvent(
+    "pile_sweep_heartbeat",
+    {
+      distinct_id: "pile-sweep",
+      orgCount: orgs.length,
+    },
+    ctx,
+    { env }
+  );
 }
 
 const GITHUB_PR_URL_RE =
