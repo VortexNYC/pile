@@ -10,6 +10,8 @@ import { MockAgentProvider } from "./harness.js";
 import { registerAgentProvider } from "./index.js";
 import {
   buildReviewDiff,
+  classifyReviewRiskTier,
+  evaluateReviewCase,
   parseReviewVerdict,
   publishReviewVerdicts,
   REVIEW_CHECK_NAME,
@@ -18,6 +20,8 @@ import {
   requestPrReview,
   reviewableFiles,
   reviewCheckTitle,
+  runStaticSecurityPass,
+  SEED_REVIEW_EVAL_CASES,
   verdictConclusion,
 } from "./review.js";
 
@@ -1148,5 +1152,72 @@ describe("requestPrReview / publishReviewVerdicts", () => {
     expect(staleAfter?.infraFailure).toBe(0);
     const evts = await stub.listAgentSessionEvents(stale.id);
     expect(evts.some((e) => e.type === "review.superseded")).toBe(true);
+  });
+
+  it("enforces maxRounds cap, classifies risk tiers, runs static security pass, and evaluates seed cases (PILE-455)", async () => {
+    expect(
+      classifyReviewRiskTier([
+        { filename: "README.md", additions: 10, deletions: 2 },
+      ])
+    ).toBe("low");
+    expect(
+      classifyReviewRiskTier([
+        { filename: "src/platform/auth.ts", additions: 10, deletions: 2 },
+      ])
+    ).toBe("high");
+    const secFindings = runStaticSecurityPass([
+      {
+        filename: "src/config.ts",
+        patch: "+const key = '-----BEGIN RSA PRIVATE KEY-----';",
+      },
+    ]);
+    expect(secFindings).toHaveLength(1);
+    expect(secFindings[0].severity).toBe("breaking");
+
+    const evalRes = evaluateReviewCase(SEED_REVIEW_EVAL_CASES[0], {
+      verdict: "request-changes",
+      summary:
+        "memoryRecall hides updates because supersedes is set on the new row.",
+      findings: [
+        {
+          severity: "breaking",
+          title: "Inverted supersedes returns stale prior row",
+        },
+      ],
+      unstructured: false,
+    });
+    expect(evalRes.passed).toBe(true);
+
+    // Round cap: when maxRounds=1 and 1 round is already published for this PR,
+    // a new headSha completes the check run immediately with round_capped.
+    const issue = await laneIssue();
+    const { t } = await finishReviewLane(
+      issue,
+      "sha-round-1",
+      "```json\n" +
+        JSON.stringify({ verdict: "approve", summary: "Round 1 clean." }) +
+        "\n```"
+    );
+    const publishGh = fakeGithub({ config: REVIEW_CONFIG, files: [] });
+    await publishReviewVerdicts(stub, publishDeps(publishGh));
+
+    const cappedConfig = {
+      ...REVIEW_CONFIG,
+      review: { agent: "review-mock", maxRounds: 1 },
+    };
+    const round2Gh = fakeGithub({
+      config: cappedConfig,
+      files: [{ filename: "src/a.ts", patch: "@@" }],
+    });
+    const outcome = await requestPrReview(
+      workerEnv,
+      stub,
+      organizationId,
+      issue,
+      { ...t, headSha: "sha-round-2" },
+      "tok",
+      { fetch: round2Gh.fetch }
+    );
+    expect(outcome).toBe("round_capped");
   });
 });

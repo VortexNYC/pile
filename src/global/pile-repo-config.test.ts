@@ -94,4 +94,27 @@ describe("repo triggers (PILE-272)", () => {
       "pr.conflict",
     ]);
   });
+
+  it("parses PILE-455 review engine v2 fields (maxRounds, highRiskPaths, tierModels)", () => {
+    const config = parsePileRepoConfig({
+      review: {
+        agent: "devin-cli",
+        maxRounds: 1,
+        highRiskPaths: ["src/platform/auth.ts", "src/payments/"],
+        skipDocsAndLockfiles: true,
+        securityCheck: true,
+        tierModels: {
+          low: "claude-haiku-4-5",
+          medium: "swe-2",
+          high: "swe-2-high",
+        },
+      },
+    });
+    expect(config?.review?.maxRounds).toBe(1);
+    expect(config?.review?.highRiskPaths).toEqual([
+      "src/platform/auth.ts",
+      "src/payments/",
+    ]);
+    expect(config?.review?.tierModels?.high).toBe("swe-2-high");
+  });
 });
