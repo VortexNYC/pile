@@ -261,6 +261,7 @@ export class CfAgentProvider implements AgentProvider {
           ? (rawStatus as AgentSessionStatus)
           : undefined;
 
+    const usage = runUsageSchema.safeParse(record.usage);
     return {
       sessionId,
       session: status
@@ -271,6 +272,7 @@ export class CfAgentProvider implements AgentProvider {
             result:
               typeof record.result === "string" ? record.result : undefined,
             prUrl: typeof record.prUrl === "string" ? record.prUrl : undefined,
+            usage: usage.success ? usage.data : undefined,
           }
         : undefined,
     };

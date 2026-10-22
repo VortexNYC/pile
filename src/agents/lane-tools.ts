@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { GITHUB_USER_AGENT } from "../global/github-auth.js";
+import { normalizeDomain } from "../workspace/data/index.js";
 import {
   pullSource,
   scoreCandidate,
@@ -1940,7 +1941,12 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
       id: z.string().optional(),
       externalId: z.string().optional(),
       name: z.string().min(1).optional(),
-      domain: z.string().optional(),
+      domain: z
+        .string()
+        .optional()
+        .describe(
+          "Merchant host — stored normalized (scheme/www./path stripped)"
+        ),
       url: z.string().optional(),
       notes: z.string().optional(),
       priorityScore: z.number().optional(),
@@ -1974,9 +1980,22 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
       const applied: string[] = [];
       const alreadySet: string[] = [];
       const skipped: string[] = [];
+      // Domain compares in canonical form — the store keeps normalized
+      // hosts, so a differently-spelled input reports alreadySet rather
+      // than recording a no-op write.
+      if (input.domain !== undefined) {
+        const domain = normalizeDomain(input.domain);
+        if (customer.domain === domain) {
+          alreadySet.push("domain");
+        } else if (!overwrite && !isEmptyValue(customer.domain)) {
+          skipped.push("domain");
+        } else {
+          patch.domain = domain;
+          applied.push("domain");
+        }
+      }
       const scalars = [
         ["name", input.name],
-        ["domain", input.domain],
         ["url", input.url],
         ["notes", input.notes],
       ] as const;

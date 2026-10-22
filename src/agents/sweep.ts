@@ -15,6 +15,7 @@ import {
   RATE_LIMIT_PAUSE_PREFIX,
 } from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
+import { computeBackend, sweepOrphanSandboxes } from "./compute.js";
 import type { ComputeBackend } from "./compute.js";
 import { resolveGeneratedConflict } from "./conflict-fix.js";
 import { loadProviderConfig } from "./credentials.js";
@@ -1311,6 +1312,32 @@ async function reapTerminalArtifacts(
     } catch (err) {
       console.error("terminal sandbox reap failed", {
         session: session.id,
+        organizationId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // PILE-471 — Daytona-side orphan sweep: vortex-labeled sandboxes whose
+  // session row is terminal or missing get deleted, scoped to this org by
+  // the vortex.org label. Session teardown above can miss (provider probes
+  // that never land, skipped reap windows); ttlMinutes on create is the
+  // hard backstop when this pass misses too. Terminal sessions inside the
+  // resume window keep their parked sandbox for follow-ups.
+  if (
+    (env.COMPUTE_PROVIDER ?? "daytona") === "daytona" &&
+    env.DAYTONA_API_KEY
+  ) {
+    try {
+      const out = await sweepOrphanSandboxes(computeBackend(env), stub, {
+        organizationId,
+        keepTerminalMs: SANDBOX_RESUME_WINDOW_MS,
+      });
+      if (out.reaped > 0) {
+        console.log("orphan sandboxes reaped", { organizationId, ...out });
+      }
+    } catch (err) {
+      console.error("orphan sandbox sweep failed", {
         organizationId,
         error: err instanceof Error ? err.message : String(err),
       });

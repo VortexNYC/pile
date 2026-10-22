@@ -406,6 +406,67 @@ describe("lane MCP endpoint", () => {
     ).toEqual(plan);
   });
 
+  it("narrows repo tools by the profile allowlist on a repo-scoped lane (PILE-450)", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    const issue = await stub.createIssue({
+      title: "narrow repo lane",
+      repo: "VortexNYC/pile",
+    });
+    await stub.upsertAgentType({
+      slug: "narrow-bot",
+      name: "Narrow",
+      providerAgentId: "flue",
+      kind: "agent",
+      tools: JSON.stringify(["get_pull_request", "memory_recall"]),
+    });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "narrow-bot",
+      provider: "flue",
+      actorId: "test",
+      actorType: "agent",
+      status: "running",
+      conversationKey: `${issue.id}-narrow-bot`,
+    });
+    const laneToken = await agentLogToken(
+      env as unknown as WorkerEnv,
+      organizationId,
+      session.id
+    );
+    const path = `/workspaces/${organizationId}/agent/sessions/${session.id}/mcp`;
+
+    // tools/list — allowlisted tools only, on both the repo and workspace
+    // surfaces.
+    const list = await mcp(path, laneToken, {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/list",
+    });
+    expect(list.status).toBe(200);
+    const names = (
+      rpcResponse.parse(await list.json()).result?.tools ?? []
+    ).map((t) => t.name);
+    expect(names).toContain("get_pull_request");
+    expect(names).toContain("memory_recall");
+    expect(names).not.toContain("create_pull_request");
+    expect(names).not.toContain("report_progress");
+    expect(names).not.toContain("issue_get");
+
+    // tools/call — a repo tool the profile didn't allowlist refuses.
+    const denied = await mcp(path, laneToken, {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: { name: "create_pull_request", arguments: { title: "x" } },
+    });
+    const parsed = rpcResponse.parse(await denied.json());
+    expect(parsed.error !== undefined || parsed.result?.isError === true).toBe(
+      true
+    );
+  });
+
   it("wires env into tool ctx — env-gated tools fail cleanly, not crash", async () => {
     const lane = await registerLane("VortexNYC/pile");
     const res = await mcp(

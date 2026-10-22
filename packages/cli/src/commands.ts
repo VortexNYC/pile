@@ -6762,6 +6762,23 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "documents search list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/documents/search",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "q",
+        flag: "q",
+      },
+    ],
+    body: [],
+  },
   "documents get": {
     method: "GET",
     path: "/workspaces/{organizationId}/documents/{id}",
@@ -7210,23 +7227,6 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
     query: [],
-    body: [],
-  },
-  "documents search list": {
-    method: "GET",
-    path: "/workspaces/{organizationId}/documents/search",
-    params: [
-      {
-        name: "organizationId",
-        flag: "workspace",
-      },
-    ],
-    query: [
-      {
-        name: "q",
-        flag: "q",
-      },
-    ],
     body: [],
   },
   "documents permissions list": {
@@ -7761,6 +7761,14 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "needsHuman",
         flag: "needs-human",
       },
+      {
+        name: "externalId",
+        flag: "external-id",
+      },
+      {
+        name: "domain",
+        flag: "domain",
+      },
     ],
     body: [],
   },
@@ -7787,6 +7795,10 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "url",
         flag: "url",
+      },
+      {
+        name: "domain",
+        flag: "domain",
       },
       {
         name: "bookingUrl",
@@ -7981,6 +7993,10 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "url",
         flag: "url",
+      },
+      {
+        name: "domain",
+        flag: "domain",
       },
       {
         name: "bookingUrl",

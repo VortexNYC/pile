@@ -4106,7 +4106,6 @@ describe("spend caps + run receipts (PILE-425)", () => {
     expect(receipt?.costMicros).toBe(132_000);
     expect(receipt?.costSource).toBe("reported");
   });
-
   it("GET /agent/sessions scopes by ?agentSlug — slug + providerAgentId lanes (PILE-453)", async () => {
     // Sessions record the dispatch agent in agentId: the type's
     // providerAgentId on pipeline lanes, the profile slug on flue lanes.
@@ -4176,5 +4175,53 @@ describe("spend caps + run receipts (PILE-425)", () => {
       sessions: Array<{ id: string }>;
     }>();
     expect(summary.sessions.map((s) => s.id).toSorted()).toEqual(ids);
+  });
+
+  it("lands provider-polled usage on the run receipt (PILE-450)", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    const agentId = `poll-usage-${crypto.randomUUID().slice(0, 8)}`;
+    registerAgentProvider(
+      agentId,
+      () =>
+        new MockAgentProvider(agentId, {
+          poll: (sessionId) => ({
+            id: sessionId,
+            agentId,
+            status: "completed",
+            result: "done",
+            usage: {
+              model: "claude-sonnet-4-5",
+              inputTokens: 12_000,
+              outputTokens: 1_500,
+              costMicros: 45_000,
+            },
+          }),
+        })
+    );
+    const issue = await stub.createIssue({ title: "poll usage lane" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: "custom-bot",
+      actorId: "test",
+      actorType: "agent",
+      status: "running",
+      conversationKey: `${issue.id}-${agentId}`,
+    });
+    const res = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/poll`,
+        { method: "POST", token }
+      ),
+      env
+    );
+    expect(res.status).toBe(200);
+    const receipt = await stub.getRunReceipt(session.id);
+    expect(receipt?.status).toBe("completed");
+    expect(receipt?.totalTokens).toBe(13_500);
+    expect(receipt?.costMicros).toBe(45_000);
+    expect(receipt?.costSource).toBe("reported");
   });
 });

@@ -2798,6 +2798,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     cold?: boolean;
     dueBefore?: string;
     needsHuman?: boolean;
+    externalId?: string;
+    domain?: string;
   }) {
     return this.withEntityFieldsList(
       "customer",

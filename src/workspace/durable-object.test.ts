@@ -2811,6 +2811,38 @@ describe("pipeline hygiene via DO RPC", () => {
     });
   });
 
+  it("stores and finds customers by canonical domain whatever the input form (PILE-444)", async () => {
+    const stub = getStub();
+    await withWorkspace(stub, async (instance) => {
+      const customer = await instance.createCustomer({
+        name: "Canonical",
+        domain: "https://www.JoesPizza.example.com/menu",
+      });
+      expect(customer.domain).toBe("joespizza.example.com");
+      // The domain-dedup lookup path (customer_upsert, customer_lookup)
+      // normalizes its key, so re-running with the domain spelled any other
+      // way still hits the record instead of minting a duplicate.
+      for (const probe of [
+        "joespizza.example.com",
+        "www.joespizza.example.com",
+        "https://joespizza.example.com/",
+        "HTTPS://WWW.JOESPIZZA.EXAMPLE.COM/path",
+      ]) {
+        expect((await instance.getCustomerByDomain(probe))?.id).toBe(
+          customer.id
+        );
+      }
+      // Updates normalize on write the same way creates do.
+      const updated = await instance.updateCustomer(customer.id, {
+        domain: "WWW.NewSite.example.com/",
+      });
+      expect(updated?.domain).toBe("newsite.example.com");
+      expect(
+        (await instance.getCustomerByDomain("newsite.example.com"))?.id
+      ).toBe(customer.id);
+    });
+  });
+
   it("manages guidance packs with audit + version history", async () => {
     const stub = getStub();
     const pack = await stub.createGuidancePack(
@@ -4043,6 +4075,35 @@ describe("session terminal guard (PILE-467)", () => {
     expect(out.blocked?.status).toBe("completed");
     expect(out.revived?.status).toBe("running");
     expect(out.revived?.endedAt).toBeNull();
+  });
+
+  it("updateAgentSession cannot promote a canceled session back to created", async () => {
+    const stub = getStub();
+    const out = await withWorkspace(stub, async (instance) => {
+      const issue = await instance.createIssue({
+        title: "promote race",
+        status: "in_progress",
+      });
+      const session = await instance.createAgentSession({
+        agentId: "devin-cli",
+        issueId: issue.id,
+        status: "waiting",
+        provider: "devin-cli",
+        actorId: "u1",
+        actorType: "user",
+      });
+      // operator cancels the queued lane
+      await instance.applyAgentSessionResult(session.id, {
+        status: "canceled",
+      });
+      // a promote that raced the cancel must not resurrect it
+      const promoted = await instance.updateAgentSession(session.id, {
+        status: "created",
+      });
+      return { session, promoted };
+    });
+    expect(out.promoted?.status).toBe("canceled");
+    expect(out.promoted?.endedAt).not.toBeNull();
   });
 });
 
