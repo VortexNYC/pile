@@ -28,7 +28,10 @@ export const Route = createFileRoute("/_authenticated/$slug/sessions/")({
  * same label. */
 export function agentFilterOptions(
   agentTypes: readonly { slug: string; providerAgentId: string }[],
-  agentIds: readonly string[]
+  agentIds: readonly string[],
+  /** The value in the URL — kept as an option even when no lane or type
+   * covers it, so a stale/bookmarked filter stays visible. */
+  active?: string
 ): string[] {
   const covered = new Set(
     agentTypes.flatMap((t) => [t.slug, t.providerAgentId])
@@ -37,6 +40,7 @@ export function agentFilterOptions(
     ...new Set([
       ...agentTypes.map((t) => t.slug),
       ...agentIds.filter((id) => !covered.has(id)),
+      ...(active ? [active] : []),
     ]),
   ].toSorted();
 }
@@ -79,7 +83,8 @@ function Sessions() {
   const sessions = useAgentSessions();
   const options = agentFilterOptions(
     agentTypes.data ?? [],
-    (sessions.data ?? []).map((s) => s.agentId)
+    (sessions.data ?? []).map((s) => s.agentId),
+    agent
   );
   const groupLabels = agentGroupLabels(agentTypes.data ?? []);
 

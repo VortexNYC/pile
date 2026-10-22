@@ -35,6 +35,28 @@ describe("agentFilterOptions", () => {
     ).toEqual(["scout", "unregistered"]);
   });
 
+  it("keeps the active filter as an option when nothing covers it", () => {
+    // A bookmarked or hand-edited ?agent= URL must not render blank while
+    // the list below is filtered.
+    expect(
+      agentFilterOptions(
+        [{ slug: "scout", providerAgentId: "p-scout" }],
+        ["flue"],
+        "stale-agent"
+      )
+    ).toEqual(["flue", "scout", "stale-agent"]);
+  });
+
+  it("does not duplicate the active filter when an option already covers it", () => {
+    expect(
+      agentFilterOptions(
+        [{ slug: "scout", providerAgentId: "p-scout" }],
+        ["flue"],
+        "scout"
+      )
+    ).toEqual(["flue", "scout"]);
+  });
+
   it("handles empty inputs", () => {
     expect(agentFilterOptions([], [])).toEqual([]);
   });
