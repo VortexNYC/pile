@@ -104,6 +104,131 @@ describe("truncation continuation (VOR-631)", () => {
   });
 });
 
+// A repo-less lane skips the GitHub token mint and cache mount, so the
+// provision path runs fully on the fake compute backend.
+const repoLessIssue = {
+  id: "iss-1",
+  identifier: "PILE-467",
+  title: "cancel mid-provision",
+  repo: null,
+} as unknown as Issue;
+
+function workspaceEnv(session: { status: string }) {
+  const stub = {
+    setOrganizationId: vi.fn(async () => undefined),
+    getAgentSession: vi.fn(async () => session),
+    addAgentActivity: vi.fn(async () => ({ id: "act-1" })),
+    closeAgentActivity: vi.fn(async () => undefined),
+  };
+  return {
+    stub,
+    env: {
+      ...env(),
+      WORKSPACE_DURABLE_OBJECT: {
+        idFromName: (name: string) => name,
+        get: () => stub,
+      },
+    } as unknown as AppEnv,
+  };
+}
+
+function providerWith(
+  appEnv: AppEnv,
+  backend: Record<string, unknown>
+): DevinCliAgentProvider {
+  const provider = new DevinCliAgentProvider(appEnv);
+  (provider as unknown as { d: { compute: unknown } }).d.compute = backend;
+  return provider;
+}
+
+describe("mid-provision cancel (PILE-467)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("aborts before createSandbox when the session is already canceled", async () => {
+    const backend = {
+      ...fakeBackend,
+      findSandbox: vi.fn(async () => null),
+      createSandbox: vi.fn(async () => sandbox),
+    };
+    const { env: appEnv } = workspaceEnv({ status: "canceled" });
+    const provider = providerWith(appEnv, backend);
+
+    await provider.dispatch("org-1", repoLessIssue, undefined, {
+      sessionId: "sess1",
+    });
+
+    expect(backend.createSandbox).not.toHaveBeenCalled();
+    expect(backend.startRunner).not.toHaveBeenCalled();
+  });
+
+  it("deletes the fresh sandbox when the cancel lands during createSandbox", async () => {
+    const session = { status: "created" };
+    const backend = {
+      ...fakeBackend,
+      findSandbox: vi.fn(async () => null),
+      createSandbox: vi.fn(async () => {
+        session.status = "canceled";
+        return sandbox;
+      }),
+    };
+    const { env: appEnv } = workspaceEnv(session);
+    const provider = providerWith(appEnv, backend);
+
+    await provider.dispatch("org-1", repoLessIssue, undefined, {
+      sessionId: "sess1",
+    });
+
+    expect(backend.createSandbox).toHaveBeenCalledOnce();
+    expect(backend.deleteSandbox).toHaveBeenCalledWith(sandbox);
+    expect(backend.startRunner).not.toHaveBeenCalled();
+  });
+
+  it("tears down the sandbox when the cancel lands after the runner starts", async () => {
+    const session = { status: "created" };
+    const backend = {
+      ...fakeBackend,
+      findSandbox: vi.fn(async () => null),
+      createSandbox: vi.fn(async () => sandbox),
+      startRunner: vi.fn(async () => {
+        session.status = "canceled";
+      }),
+    };
+    const { env: appEnv } = workspaceEnv(session);
+    const provider = providerWith(appEnv, backend);
+
+    await provider.dispatch("org-1", repoLessIssue, undefined, {
+      sessionId: "sess1",
+    });
+
+    expect(backend.startRunner).toHaveBeenCalledOnce();
+    expect(backend.deleteSandbox).toHaveBeenCalledWith(sandbox);
+  });
+
+  it("provisions normally when the session stays live", async () => {
+    const backend = {
+      ...fakeBackend,
+      findSandbox: vi.fn(async () => null),
+      createSandbox: vi.fn(async () => sandbox),
+    };
+    const { env: appEnv } = workspaceEnv({ status: "created" });
+    const provider = providerWith(appEnv, backend);
+
+    const dispatched = await provider.dispatch(
+      "org-1",
+      repoLessIssue,
+      undefined,
+      { sessionId: "sess1" }
+    );
+
+    expect(dispatched.status).toBe("created");
+    expect(backend.createSandbox).toHaveBeenCalledOnce();
+    expect(backend.startRunner).toHaveBeenCalledOnce();
+    expect(backend.deleteSandbox).not.toHaveBeenCalled();
+  });
+});
+
 describe("lane cache write policy (PILE-306)", () => {
   it("lets only fully trusted lanes write the shared cache", () => {
     expect(laneCacheReadOnly({ shell: "enabled", push: "enabled" })).toBe(
