@@ -108,6 +108,11 @@ export interface AgentProvider {
   /** True when the provider clones `secondaryRepos` into the lane (PILE-294).
    *  Dispatches carrying secondary repos are rejected for other providers. */
   readonly supportsSecondaryRepos?: boolean;
+  /** VTX-621 — max concurrent live lanes for this provider. Dispatches
+   *  past the cap park as paused holds until a slot frees, so a burst
+   *  can't trip the provider's own rate limit (one Cognition account
+   *  behind devin-cli, one org's worth of lanes). */
+  readonly maxConcurrentLanes?: number;
   dispatch(
     organizationId: string,
     issue: Issue,

@@ -117,6 +117,8 @@ import {
   type IssueViewer,
   type ListIssuesArgs,
   type RealtimeEvent,
+  RATE_LIMIT_HOLD_MS,
+  RATE_LIMIT_PAUSE_PREFIX,
 } from "../types/workspace.js";
 import * as data from "./data/index.js";
 import { filterToSql } from "./filter.js";
@@ -5884,6 +5886,37 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       }
       if (result.infraFailure !== undefined)
         set.infraFailure = result.infraFailure ? 1 : 0;
+      // VTX-621 — a provider capacity death parks the whole agent type
+      // until its reset instead of every lane burning retries into the
+      // same wall. The sweep lifts the pause once the reason's timestamp
+      // passes. infraFailure stays unset: a capacity death is not a
+      // substrate failure and must not feed the provider/fleet streaks
+      // (retry eligibility rides polled.rateLimited on the sweep side).
+      // An existing operator/spend-cap pause (a reason without the
+      // prefix) is left alone — never overwritten, never lifted early.
+      if (result.rateLimited) {
+        const existingPause = data.getAgentPause(
+          this.db,
+          this.organizationId,
+          oldSession.agentId
+        );
+        if (
+          !existingPause ||
+          existingPause.reason?.startsWith(RATE_LIMIT_PAUSE_PREFIX)
+        ) {
+          await data
+            .upsertAgentPause(
+              this.db,
+              this.organizationId,
+              oldSession.agentId,
+              {
+                reason: `${RATE_LIMIT_PAUSE_PREFIX}${new Date(Date.now() + RATE_LIMIT_HOLD_MS).toISOString()}`,
+                createdBy: "system",
+              }
+            )
+            .catch(() => {});
+        }
+      }
       if (result.result !== undefined) set.result = result.result;
       if (result.url !== undefined) set.url = result.url;
       if (result.providerSessionId !== undefined)
@@ -5953,6 +5986,26 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }
     if (result.infraFailure !== undefined)
       set.infraFailure = result.infraFailure ? 1 : 0;
+    // VTX-621 — same rate-limit park as the issue-less path above; lanes
+    // always carry an issue, so this is the branch that actually runs.
+    if (result.rateLimited) {
+      const existingPause = data.getAgentPause(
+        this.db,
+        this.organizationId,
+        oldSession.agentId
+      );
+      if (
+        !existingPause ||
+        existingPause.reason?.startsWith(RATE_LIMIT_PAUSE_PREFIX)
+      ) {
+        await data
+          .upsertAgentPause(this.db, this.organizationId, oldSession.agentId, {
+            reason: `${RATE_LIMIT_PAUSE_PREFIX}${new Date(Date.now() + RATE_LIMIT_HOLD_MS).toISOString()}`,
+            createdBy: "system",
+          })
+          .catch(() => {});
+      }
+    }
     if (result.result !== undefined) set.result = result.result;
     if (result.url !== undefined) set.url = result.url;
     if (result.providerSessionId !== undefined)
