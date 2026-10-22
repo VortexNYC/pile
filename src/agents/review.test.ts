@@ -1149,4 +1149,65 @@ describe("requestPrReview / publishReviewVerdicts", () => {
     const evts = await stub.listAgentSessionEvents(stale.id);
     expect(evts.some((e) => e.type === "review.superseded")).toBe(true);
   });
+
+  it("dedupes a delayed request for a stale head without canceling the live lane", async () => {
+    const issue = await laneIssue();
+    // A redelivered webhook targeting the previous head of the same PR.
+    const t = target("sha-old-head");
+    // The review lane for the current head is live — canceling it on this
+    // request would kill the fresh review (the supersede ordering guard).
+    const live = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "review-mock",
+      provider: "review-mock",
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      purpose: REVIEW_PURPOSE,
+    });
+    await stub.addAgentSessionEvent({
+      sessionId: live.id,
+      type: "review.requested",
+      message: "review requested",
+      payload: {
+        prUrl: t.prUrl,
+        repo: REPO,
+        pullNumber: t.pullNumber,
+        headSha: "sha-new-head",
+        checkRunId: 888,
+      },
+    });
+
+    const gh = fakeGithub({
+      config: REVIEW_CONFIG,
+      files: [{ filename: "src/a.ts", patch: "@@" }],
+      prHead: "sha-new-head",
+    });
+    const before = dispatched.length;
+    const outcome = await requestPrReview(
+      workerEnv,
+      stub,
+      organizationId,
+      issue,
+      t,
+      "tok",
+      { fetch: gh.fetch }
+    );
+    expect(outcome).toBe("deduped");
+    expect(dispatched.length).toBe(before);
+    // No check run opened and none resolved — the request never got far
+    // enough to touch the newer lane's review.
+    expect(
+      gh.calls.some((c) => c.method === "POST" && c.url.endsWith("/check-runs"))
+    ).toBe(false);
+    expect(
+      gh.calls.some(
+        (c) => c.method === "PATCH" && c.url.includes("/check-runs/")
+      )
+    ).toBe(false);
+    const liveAfter = await stub.getAgentSession(live.id);
+    expect(liveAfter?.status).toBe("running");
+    const evts = await stub.listAgentSessionEvents(live.id);
+    expect(evts.some((e) => e.type === "review.superseded")).toBe(false);
+  });
 });
