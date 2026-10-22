@@ -1318,4 +1318,57 @@ describe("infra classification of dispatch failures (PILE-452)", () => {
       actorType: "user",
     });
   });
+
+
+  it("refuses a stale dispatch on a finished issue whose lane PR merged (VTX-621)", async () => {
+    const s = stub();
+    const agentId = `mock-merged-${crypto.randomUUID().slice(0, 8)}`;
+    registerAgentProvider(agentId, () => new MockAgentProvider(agentId));
+    const issue = await s.createIssue({
+      title: "already shipped",
+      repo: "acme/widgets",
+    });
+    await s.updateIssue(issue.id, { status: "done" }, actor.id);
+    const mergedPr = {
+      number: 900,
+      html_url: "https://github.com/acme/widgets/pull/900",
+      title: `${issue.identifier} shipped work`,
+      body: null,
+      head: { ref: "merged-branch" },
+      merged_at: "2026-10-20T12:00:00Z",
+    };
+    const dedupeDeps = {
+      tokenForRepo: async () => "gh-token",
+      fetch: async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/pulls?state=closed")) {
+          return new Response(JSON.stringify([mergedPr]), { status: 200 });
+        }
+        return new Response("[]", { status: 200 });
+      },
+    };
+    const done = await s.getIssue(issue.id);
+    await expect(
+      dispatchAgent(env, agentId, actor.organizationId, done!, actor, undefined, undefined, {
+        dedupeDeps,
+      })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+
+    // A reopened issue with the same merged PR dispatches normally — the
+    // merged PR is history; the lane opens a fresh one (PILE-257).
+    await s.updateIssue(issue.id, { status: "todo" }, actor.id);
+    const reopened = await s.getIssue(issue.id);
+    const session = await dispatchAgent(
+      env,
+      agentId,
+      actor.organizationId,
+      reopened!,
+      actor,
+      undefined,
+      undefined,
+      { dedupeDeps }
+    );
+    expect(session.status).toBe("created");
+  });
 });
+

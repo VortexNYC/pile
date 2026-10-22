@@ -25,7 +25,9 @@ function mockFetch(
     const method = (init?.method ?? "GET").toUpperCase();
     const match = responses.find(
       (r) =>
-        (typeof r.url === "string" ? url === r.url : r.url.test(url)) &&
+        (typeof r.url === "string"
+          ? url === r.url || url.startsWith(`${r.url}?`)
+          : r.url.test(url)) &&
         (r.method === undefined || r.method === method)
     );
     if (match) {
@@ -37,8 +39,34 @@ function mockFetch(
         })
       );
     }
+    // Provision file uploads and the lane.env chmod are routine — tests
+    // that care about them read the calls off the spy directly.
+    if (/\/files\/upload(-v2)?\?/.test(url) && method === "POST") {
+      return Promise.resolve(new Response("{}", { status: 200 }));
+    }
+    if (url.endsWith("/process/execute") && method === "POST") {
+      return Promise.resolve(
+        new Response(JSON.stringify({ exitCode: 0, result: "" }), {
+          status: 200,
+        })
+      );
+    }
     return Promise.resolve(new Response("not found", { status: 404 }));
   });
+}
+
+/** Raw body of the upload-v2 call for one sandbox path (PILE-595). */
+function uploadedBody(
+  fetchSpy: ReturnType<typeof vi.spyOn>,
+  path: string
+): string {
+  const hit = fetchSpy.mock.calls.find(
+    (call: unknown[]) =>
+      String(call[0]).includes(
+        `/files/upload-v2?path=${encodeURIComponent(path)}`
+      ) && (call[1] as RequestInit | undefined)?.method === "POST"
+  );
+  return String((hit?.[1] as RequestInit | undefined)?.body ?? "");
 }
 
 function issueFixture(): Issue {
@@ -155,7 +183,7 @@ describe("DevinCliAgentProvider", () => {
     expect(result.agentId).toBe("devin-cli");
     await Promise.all(waitUntilCalls);
 
-    expect(fetchSpy).toHaveBeenCalledTimes(5);
+    expect(fetchSpy).toHaveBeenCalledTimes(9);
     const createCall = fetchSpy.mock.calls.find(
       ([input, init]) =>
         String(input) === "https://app.daytona.io/api/sandbox" &&
@@ -163,10 +191,13 @@ describe("DevinCliAgentProvider", () => {
     );
     expect(createCall).toBeDefined();
     const body = JSON.parse((createCall![1] as RequestInit).body as string);
-    expect(body.env.MODEL).toBe("swe-2");
-    expect(body.env.REPO).toBe("VortexNYC/pile");
-    expect(body.env.DEVIN_CREDENTIALS_B64).toBeDefined();
-    expect(body.env.PILE_LANE_RESTRICTED).toBeUndefined();
+    // Env rides /tmp/pile/lane.env, not the create call (PILE-595).
+    expect(body.env ?? {}).toEqual({});
+    const laneEnv = uploadedBody(fetchSpy, "/tmp/pile/lane.env");
+    expect(laneEnv).toContain("export MODEL='swe-2'");
+    expect(laneEnv).toContain("export REPO='VortexNYC/pile'");
+    expect(laneEnv).toContain("export DEVIN_CREDENTIALS_B64='");
+    expect(laneEnv).not.toContain("PILE_LANE_RESTRICTED");
     expect(body.labels["vortex.agent"]).toBe("devin-cli");
   });
 
@@ -227,9 +258,9 @@ describe("DevinCliAgentProvider", () => {
         (init as RequestInit | undefined)?.method === "POST"
     );
     expect(createCall).toBeDefined();
-    const body = JSON.parse((createCall![1] as RequestInit).body as string);
-    expect(body.env.PILE_LANE_RESTRICTED).toBe("1");
-    expect(body.env.PILE_NET_ALLOWLIST).toBe("pkg.example.com");
+    const laneEnv = uploadedBody(fetchSpy, "/tmp/pile/lane.env");
+    expect(laneEnv).toContain("export PILE_LANE_RESTRICTED='1'");
+    expect(laneEnv).toContain("export PILE_NET_ALLOWLIST='pkg.example.com'");
   });
 
   it("appends dispatch instructions to the prompt context", async () => {
@@ -297,12 +328,7 @@ describe("DevinCliAgentProvider", () => {
         (init as RequestInit | undefined)?.method === "POST"
     );
     expect(createCall).toBeDefined();
-    const body = JSON.parse((createCall![1] as RequestInit).body as string);
-    const prompt = new TextDecoder().decode(
-      Uint8Array.from(atob(body.env.PROMPT_B64 as string), (c) =>
-        c.charCodeAt(0)
-      )
-    );
+    const prompt = uploadedBody(fetchSpy, "/tmp/pile/prompt.md");
     expect(prompt).toContain("## Dispatch instructions");
     expect(prompt).toContain("Only touch src/api — no deploys");
     expect(prompt).toContain(DOMAIN_REVIEW_PROMPT);

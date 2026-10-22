@@ -91,6 +91,12 @@ export const MCP_TOOL_ALIASES: Readonly<Record<string, string>> = {
   // Notifications
   list_notifications: "getWorkspacesOrganizationIdNotifications",
 
+  // Customers (CRM)
+  list_customers: "getWorkspacesOrganizationIdCustomers",
+  get_customer: "getWorkspacesOrganizationIdCustomersId",
+  create_customer: "postWorkspacesOrganizationIdCustomers",
+  update_customer: "patchWorkspacesOrganizationIdCustomersId",
+
   // Support
   list_support_customers: "getWorkspacesOrganizationIdSupportCustomers",
   get_support_customer: "getWorkspacesOrganizationIdSupportCustomersCustomerId",

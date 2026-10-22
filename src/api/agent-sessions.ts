@@ -498,6 +498,7 @@ const listSessionsRoute = createRoute({
     params: z.object({ organizationId: z.string() }),
     query: z.object({
       issueId: z.string().optional(),
+      agentSlug: z.string().optional(),
       limit: z.string().optional(),
       summary: z.string().optional(),
     }),
@@ -834,6 +835,8 @@ const patchSessionRoute = createRoute({
             // PILE-426 — publish/replace the plan checklist. Whole-array
             // replace: the agent resends the full ordered list each update.
             plan: sessionPlanSchema.optional(),
+            // PILE-425 — cumulative run usage snapshot → the run receipt.
+            usage: runUsageSchema.optional(),
           }),
         },
       },
@@ -2050,6 +2053,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         query.issueId === undefined
           ? undefined
           : await resolveIssueRef(stub, query.issueId),
+      agentSlug: query.agentSlug,
       limit: query.limit ? Number(query.limit) : undefined,
       viewer,
     });
@@ -2469,6 +2473,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         prUrl: body.prUrl,
         prState: body.prState,
         branch: body.branch,
+        usage: body.usage,
       },
       identity.id
     );
@@ -3525,7 +3530,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       await recordPromptActivity();
       const queued = await stub.applyAgentSessionResult(
         sessionId,
-        { status: "running", result: null },
+        { status: "running", result: null, revive: true },
         identity.id
       );
       const queuedActivities = await stub.listAgentActivities(sessionId);
@@ -3583,7 +3588,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     await recordPromptActivity();
     const updated = await stub.applyAgentSessionResult(
       sessionId,
-      { status: "running", result: null },
+      { status: "running", result: null, revive: true },
       identity.id
     );
     const activities = await stub.listAgentActivities(sessionId);

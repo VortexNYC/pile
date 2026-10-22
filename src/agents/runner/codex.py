@@ -42,7 +42,7 @@ def write_codex_home(auth_b64, model):
 
 
 def submit_task(codex_bin):
-    prompt = base64.b64decode(os.environ['PROMPT_B64']).decode('utf-8')
+    prompt = read_lane_prompt()
     result = subprocess.run(
         [codex_bin, 'cloud', 'exec', '--env', ENV_ID, '--branch', BRANCH, '-'],
         input=prompt, text=True, env=agent_env(), capture_output=True

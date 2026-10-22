@@ -1,8 +1,13 @@
 import { z } from "zod";
 
 import { GITHUB_USER_AGENT } from "../global/github-auth.js";
-import { pullSource, scoreCandidate, type MerchantSourceRow } from "./collectors.js";
+import {
+  pullSource,
+  scoreCandidate,
+  type MerchantSourceRow,
+} from "./collectors.js";
 import { sessionPlanSchema, type SessionPlan } from "./session-plan.js";
+import { runUsageSchema, type AgentRunUsage } from "./spend.js";
 
 // PILE-284 — purpose-built lane tool surface. Instead of handing a lane a raw
 // shell + installation token for GitHub ops, Pile exposes named tools that
@@ -194,6 +199,9 @@ export interface LaneToolContext {
     plan?: SessionPlan;
   }): Promise<void>;
   policy: LaneToolPolicy;
+  /** Names of the workspace-domain tools served alongside the repo tools —
+   *  get_lane_context reports the whole callable set. */
+  workspaceToolNames?: readonly string[];
 }
 
 interface LaneToolDef<S extends z.ZodObject> {
@@ -300,9 +308,12 @@ export const LANE_TOOLS: readonly LaneTool[] = [
         branch: ctx.branch,
         tier: ctx.policy.tier,
         permissions: [...ctx.policy.permissions],
-        tools: LANE_TOOLS.filter((t) => laneToolAllowed(ctx.policy, t)).map(
-          (t) => t.name
-        ),
+        tools: [
+          ...LANE_TOOLS.filter((t) => laneToolAllowed(ctx.policy, t)).map(
+            (t) => t.name
+          ),
+          ...(ctx.workspaceToolNames ?? []),
+        ],
       };
     },
   }),
@@ -899,6 +910,18 @@ export interface LaneWorkspace {
   getCustomer(id: string): Promise<unknown>;
   getCustomerByDomain(domain: string): Promise<unknown>;
   getCustomerByExternalId(externalId: string): Promise<unknown>;
+  updateCustomer(
+    id: string,
+    patch: {
+      name?: string;
+      domain?: string | null;
+      url?: string | null;
+      notes?: string | null;
+      priorityScore?: number | null;
+      customFields?: Record<string, string | null>;
+    },
+    actorId?: string
+  ): Promise<unknown>;
   listCustomers(): Promise<unknown[]>;
   getDocument(id: string): Promise<
     | {
@@ -956,6 +979,7 @@ export interface LaneWorkspace {
     search?: string;
     limit?: number;
   }): Promise<unknown[]>;
+  recordSessionUsage(sessionId: string, usage: AgentRunUsage): Promise<unknown>;
 }
 
 export interface WorkspaceLaneToolContext {
@@ -1004,6 +1028,16 @@ function defineWorkspaceTool<S extends z.ZodObject>(
     inputSchema: def.inputSchema,
     run: async (ctx, input) => def.run(ctx, def.inputSchema.parse(input)),
   };
+}
+
+/** "Empty" for fill-only writes — null/undefined or a whitespace-only
+ *  string. 0 and false are real values a lane must not silently replace. */
+function isEmptyValue(value: unknown): boolean {
+  return (
+    value === null ||
+    value === undefined ||
+    (typeof value === "string" && value.trim() === "")
+  );
 }
 
 const BLOCKED_HOSTS =
@@ -1183,7 +1217,7 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
   defineWorkspaceTool({
     name: "customer_upsert",
     description:
-      "Create a merchant record — or return the existing one if a customer with this domain/externalId already exists.",
+      "Create a merchant record — or return the existing one if a customer with this domain/externalId already exists. A matched record is returned unchanged; use customer_update to write fields on it.",
     permission: "ws:write",
     inputSchema: z.object({
       name: z.string().min(1),
@@ -1346,18 +1380,13 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
       query: z.string().optional().describe("for search"),
       url: z.string().url().optional().describe("for scrape"),
       urls: z.array(z.string().url()).optional().describe("for extract"),
-      prompt: z
-        .string()
-        .optional()
-        .describe("what to extract — for extract"),
+      prompt: z.string().optional().describe("what to extract — for extract"),
       limit: z.number().optional(),
     }),
     async run(ctx, input) {
       const key = ctx.env?.FIRECRAWL_API_KEY;
-      if (!key)
-        throw new LaneToolError("FIRECRAWL_API_KEY not configured");
-      const base =
-        ctx.env?.FIRECRAWL_BASE_URL ?? "https://api.firecrawl.dev";
+      if (!key) throw new LaneToolError("FIRECRAWL_API_KEY not configured");
+      const base = ctx.env?.FIRECRAWL_BASE_URL ?? "https://api.firecrawl.dev";
       const res = await fetch(`${base}/v1/${input.action}`, {
         method: "POST",
         headers: {
@@ -1391,8 +1420,7 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
     inputSchema: z.object({ url: z.string().url() }),
     async run(ctx, input) {
       const base = ctx.env?.SCRAPLING_BASE_URL;
-      if (!base)
-        throw new LaneToolError("SCRAPLING_BASE_URL not configured");
+      if (!base) throw new LaneToolError("SCRAPLING_BASE_URL not configured");
       const res = await fetch(`${base}/scrape`, {
         method: "POST",
         headers: {
@@ -1465,15 +1493,13 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
     inputSchema: z.object({ url: z.string().url() }),
     async run(ctx, input) {
       const base = ctx.env?.LIGHTPANDA_BASE_URL;
-      if (!base)
-        throw new LaneToolError("LIGHTPANDA_BASE_URL not configured");
+      if (!base) throw new LaneToolError("LIGHTPANDA_BASE_URL not configured");
       const res = await fetch(`${base}/fetch`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ url: input.url }),
       });
-      if (!res.ok)
-        throw new LaneToolError(`light_fetch failed: ${res.status}`);
+      if (!res.ok) throw new LaneToolError(`light_fetch failed: ${res.status}`);
       return res.json();
     },
   }),
@@ -1485,8 +1511,7 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
     inputSchema: z.object({ url: z.string().url() }),
     async run(ctx, input) {
       const base = ctx.env?.OBSCURA_BASE_URL;
-      if (!base)
-        throw new LaneToolError("OBSCURA_BASE_URL not configured");
+      if (!base) throw new LaneToolError("OBSCURA_BASE_URL not configured");
       const res = await fetch(`${base}/fetch`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -1541,14 +1566,24 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
         return r.json();
       }
       const body: Record<string, unknown> = {};
-      for (const k of ["url","selector","text","key","keyCode","waitMs","ms","expression"] as const)
+      for (const k of [
+        "url",
+        "selector",
+        "text",
+        "key",
+        "keyCode",
+        "waitMs",
+        "ms",
+        "expression",
+      ] as const)
         if (input[k] !== undefined) body[k] = input[k];
       const r = await fetch(`${base}/session/${sid}/${input.op}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (!r.ok) throw new LaneToolError(`browse ${input.op} failed: ${r.status}`);
+      if (!r.ok)
+        throw new LaneToolError(`browse ${input.op} failed: ${r.status}`);
       return r.json();
     },
   }),
@@ -1576,8 +1611,7 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
         `https://${input.domain}/resource/${input.dataset}.json?${params}`,
         { headers }
       );
-      if (!res.ok)
-        throw new LaneToolError(`socrata failed: ${res.status}`);
+      if (!res.ok) throw new LaneToolError(`socrata failed: ${res.status}`);
       return { rows: await res.json() };
     },
   }),
@@ -1588,7 +1622,10 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
     permission: "web:fetch",
     inputSchema: z.object({
       url: z.string().url(),
-      mode: z.enum(["availability", "snapshots"]).optional().default("availability"),
+      mode: z
+        .enum(["availability", "snapshots"])
+        .optional()
+        .default("availability"),
       limit: z.number().optional(),
     }),
     async run(ctx, input) {
@@ -1663,8 +1700,7 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (!res.ok)
-        throw new LaneToolError(`usaspending failed: ${res.status}`);
+      if (!res.ok) throw new LaneToolError(`usaspending failed: ${res.status}`);
       return res.json();
     },
   }),
@@ -1689,9 +1725,13 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
       const params = new URLSearchParams({ api_key: key });
       if (input.keyword) params.set("legalBusinessName", input.keyword);
       if (input.naics) params.set("naicsCode", input.naics);
-      if (input.state) params.set("physicalAddressStateOrProvinceCode", input.state);
+      if (input.state)
+        params.set("physicalAddressStateOrProvinceCode", input.state);
       if (input.purposeOfRegistrationCode)
-        params.set("purposeOfRegistrationCode", input.purposeOfRegistrationCode);
+        params.set(
+          "purposeOfRegistrationCode",
+          input.purposeOfRegistrationCode
+        );
       const res = await fetch(
         `https://api.sam.gov/entity-information/v3/entities?${params}`
       );
@@ -1803,7 +1843,7 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
             runCount: (candidates.length > 0 ? 1 : 0) + produced,
           });
           perSource.push({ name: source.name, candidates: candidates.length });
-        } catch (e) {
+        } catch {
           perSource.push({ name: source.name, candidates: -1 });
         }
       }
@@ -1838,8 +1878,7 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
           limit: input.limit ?? 10,
         }),
       });
-      if (!res.ok)
-        throw new LaneToolError(`deepseek failed: ${res.status}`);
+      if (!res.ok) throw new LaneToolError(`deepseek failed: ${res.status}`);
       return res.json();
     },
   }),
@@ -1888,9 +1927,105 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ url: input.url }),
       });
-      if (!res.ok)
-        throw new LaneToolError(`fingerprint failed: ${res.status}`);
+      if (!res.ok) throw new LaneToolError(`fingerprint failed: ${res.status}`);
       return res.json();
+    },
+  }),
+  defineWorkspaceTool({
+    name: "customer_update",
+    description:
+      "Update an existing merchant — look it up by id or externalId (pass exactly one). Only the fields you pass are touched, and by default they fill empty slots only: a field that already has a value is left alone and reported in `skipped` (pass overwrite: true to replace it anyway). Every applied change lands in the record's audit history.",
+    permission: "ws:write",
+    inputSchema: z.object({
+      id: z.string().optional(),
+      externalId: z.string().optional(),
+      name: z.string().min(1).optional(),
+      domain: z.string().optional(),
+      url: z.string().optional(),
+      notes: z.string().optional(),
+      priorityScore: z.number().optional(),
+      // Name-keyed values, same contract as the REST/import surface — a
+      // missing definition is auto-created as a text field, null clears.
+      customFields: z.record(z.string(), z.string().nullable()).optional(),
+      overwrite: z
+        .boolean()
+        .optional()
+        .describe("Replace non-empty values instead of skipping them"),
+    }),
+    async run(ctx, input) {
+      const keys = [input.id, input.externalId].filter(Boolean);
+      if (keys.length !== 1) {
+        throw new LaneToolError("pass exactly one of id / externalId");
+      }
+      const found = input.id
+        ? await ctx.ws.getCustomer(input.id)
+        : await ctx.ws.getCustomerByExternalId(input.externalId!);
+      if (!found || typeof found !== "object") {
+        throw new LaneToolError("customer not found");
+      }
+      const customer = found as {
+        id: string;
+        customFields?: Record<string, string>;
+        [key: string]: unknown;
+      };
+      const overwrite = input.overwrite === true;
+      type CustomerPatch = Parameters<LaneWorkspace["updateCustomer"]>[1];
+      const patch: CustomerPatch = {};
+      const applied: string[] = [];
+      const alreadySet: string[] = [];
+      const skipped: string[] = [];
+      const scalars = [
+        ["name", input.name],
+        ["domain", input.domain],
+        ["url", input.url],
+        ["notes", input.notes],
+      ] as const;
+      for (const [field, value] of scalars) {
+        if (value === undefined) continue;
+        const existing = customer[field];
+        if (existing === value) {
+          alreadySet.push(field);
+        } else if (!overwrite && !isEmptyValue(existing)) {
+          skipped.push(field);
+        } else {
+          patch[field] = value;
+          applied.push(field);
+        }
+      }
+      if (input.priorityScore !== undefined) {
+        if (customer.priorityScore === input.priorityScore) {
+          alreadySet.push("priorityScore");
+        } else if (!overwrite && !isEmptyValue(customer.priorityScore)) {
+          skipped.push("priorityScore");
+        } else {
+          patch.priorityScore = input.priorityScore;
+          applied.push("priorityScore");
+        }
+      }
+      const fieldPatch: Record<string, string | null> = {};
+      const existingFields = customer.customFields ?? {};
+      for (const [key, value] of Object.entries(input.customFields ?? {})) {
+        const existing = existingFields[key];
+        if (existing === value || (value === null && isEmptyValue(existing))) {
+          alreadySet.push(`customFields.${key}`);
+        } else if (!overwrite && !isEmptyValue(existing)) {
+          skipped.push(`customFields.${key}`);
+        } else {
+          fieldPatch[key] = value;
+          applied.push(`customFields.${key}`);
+        }
+      }
+      if (Object.keys(fieldPatch).length > 0) patch.customFields = fieldPatch;
+      if (applied.length === 0) {
+        return { updated: false, customer, applied, alreadySet, skipped };
+      }
+      const updated = await ctx.ws.updateCustomer(
+        customer.id,
+        patch,
+        ctx.agentSlug
+      );
+      if (!updated) throw new LaneToolError("customer not found");
+      return { updated: true, customer: updated, applied, alreadySet, skipped };
     },
   }),
   defineWorkspaceTool({
@@ -1953,6 +2088,17 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
     }),
     async run(ctx, input) {
       return ctx.ws.memoryRecall(input);
+    },
+  }),
+  defineWorkspaceTool({
+    name: "report_usage",
+    description:
+      "Record this run's cumulative token/cost usage on the session's run receipt — call once at run end (values are run totals, not deltas). Fields: model, inputTokens, outputTokens, totalTokens, toolCalls, costMicros (USD micros), externalSpendMicros.",
+    permission: "lane:report",
+    inputSchema: runUsageSchema,
+    async run(ctx, input) {
+      await ctx.ws.recordSessionUsage(ctx.sessionId, input);
+      return { ok: true };
     },
   }),
 ];

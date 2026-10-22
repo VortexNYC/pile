@@ -68,3 +68,8 @@ RUN mkdir -p /root/.local/bin \
     && (curl -fsSL https://cli.devin.ai/install.sh | bash || true) \
     && test -x /root/.local/bin/devin
 ENV PATH="/root/.local/bin:${PATH}"
+
+# sandbox-sdk 1.0 lane classes (LaneSandbox*) invoke this shim directly; the
+# 0.12 base image's server entrypoint keeps serving the old classes. The tag
+# must match the installed sandbox-1 package version.
+COPY --from=docker.io/cloudflare/sandbox:1.0.2 /usr/local/bin/sandbox-shim /usr/local/bin/sandbox-shim

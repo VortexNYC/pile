@@ -117,6 +117,8 @@ import {
   type IssueViewer,
   type ListIssuesArgs,
   type RealtimeEvent,
+  RATE_LIMIT_HOLD_MS,
+  RATE_LIMIT_PAUSE_PREFIX,
 } from "../types/workspace.js";
 import * as data from "./data/index.js";
 import { filterToSql } from "./filter.js";
@@ -2820,6 +2822,28 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         gateOverride = { reason: patch.stageGateOverride.reason, blocked };
       }
     }
+    // Validate custom-field values before any write — a bad value rejects
+    // the whole patch instead of leaving a half-applied record (same
+    // pre-flight contract as the importer's assertFieldValuesValid pass).
+    if (customFields && Object.keys(customFields).length > 0) {
+      try {
+        data.assertFieldValuesValid(
+          this.db,
+          this.organizationId,
+          "customer",
+          customFields
+        );
+      } catch (error) {
+        if (error instanceof data.FieldValueError) {
+          throw new VortexError({
+            code: "BAD_REQUEST",
+            status: 400,
+            message: error.message,
+          });
+        }
+        throw error;
+      }
+    }
     const customer = data.updateCustomer(
       this.db,
       this.organizationId,
@@ -2827,8 +2851,58 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       customerPatch
     );
     if (!customer) return undefined;
-    this.applyCustomFields("customer", id, customFields);
-    this.audit("customer.updated", "customer", id, actorId);
+    // Per-field history: the audit entry carries every changed column plus
+    // each custom-field value diff, so a reviewer can see exactly what an
+    // enrichment write did to the record.
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    for (const key of [
+      "name",
+      "url",
+      "logoUrl",
+      "bookingUrl",
+      "notes",
+      "domain",
+      "externalId",
+      "tierId",
+      "statusId",
+      "ownerId",
+      "nextStepText",
+      "nextStepDueAt",
+      "needsHuman",
+      "needsHumanReason",
+      "priorityScore",
+    ] as const) {
+      if (customerPatch[key] !== undefined && before[key] !== customer[key]) {
+        changes[key] = { from: before[key], to: customer[key] };
+      }
+    }
+    if (customFields && Object.keys(customFields).length > 0) {
+      const beforeFields = data.customFieldMap(
+        this.db,
+        this.organizationId,
+        "customer",
+        id
+      );
+      this.applyCustomFields("customer", id, customFields);
+      const afterFields = data.customFieldMap(
+        this.db,
+        this.organizationId,
+        "customer",
+        id
+      );
+      for (const name of new Set([
+        ...Object.keys(beforeFields),
+        ...Object.keys(afterFields),
+      ])) {
+        if (beforeFields[name] !== afterFields[name]) {
+          changes[`customFields.${name}`] = {
+            from: beforeFields[name] ?? null,
+            to: afterFields[name] ?? null,
+          };
+        }
+      }
+    }
+    this.audit("customer.updated", "customer", id, actorId, changes);
     if (gateOverride) {
       const stageName = (statusId: string | null) =>
         statusId === null
@@ -3704,6 +3778,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   listAgentSessions(
     options: {
       issueId?: string;
+      agentSlug?: string;
       status?: AgentSessionStatus;
       openPr?: boolean;
       retryOf?: string;
@@ -3724,6 +3799,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   listAgentSessionSummaries(
     options: {
       issueId?: string;
+      agentSlug?: string;
       status?: AgentSessionStatus;
       openPr?: boolean;
       limit?: number;
@@ -5785,8 +5861,16 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       if (result.status !== undefined) {
         // PILE-467 — terminal stays terminal. A cancel during provisioning
         // can still see late poll results arrive as 'created'/'running' —
-        // a non-terminal result must not resurrect a dead lane.
-        if (!(terminal.has(oldStatus) && !terminal.has(result.status))) {
+        // a non-terminal result must not resurrect a dead lane. Deliberate
+        // resumes (delivered follow-up on a completed lane, queued prompt
+        // on an externally-managed session) carry `revive` to pass.
+        if (
+          !(
+            terminal.has(oldStatus) &&
+            !terminal.has(result.status) &&
+            !result.revive
+          )
+        ) {
           set.status = result.status;
           if (terminal.has(result.status) && !oldSession.endedAt)
             set.endedAt = set.updatedAt;
@@ -5802,6 +5886,37 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       }
       if (result.infraFailure !== undefined)
         set.infraFailure = result.infraFailure ? 1 : 0;
+      // VTX-621 — a provider capacity death parks the whole agent type
+      // until its reset instead of every lane burning retries into the
+      // same wall. The sweep lifts the pause once the reason's timestamp
+      // passes. infraFailure stays unset: a capacity death is not a
+      // substrate failure and must not feed the provider/fleet streaks
+      // (retry eligibility rides polled.rateLimited on the sweep side).
+      // An existing operator/spend-cap pause (a reason without the
+      // prefix) is left alone — never overwritten, never lifted early.
+      if (result.rateLimited) {
+        const existingPause = data.getAgentPause(
+          this.db,
+          this.organizationId,
+          oldSession.agentId
+        );
+        if (
+          !existingPause ||
+          existingPause.reason?.startsWith(RATE_LIMIT_PAUSE_PREFIX)
+        ) {
+          await data
+            .upsertAgentPause(
+              this.db,
+              this.organizationId,
+              oldSession.agentId,
+              {
+                reason: `${RATE_LIMIT_PAUSE_PREFIX}${new Date(Date.now() + RATE_LIMIT_HOLD_MS).toISOString()}`,
+                createdBy: "system",
+              }
+            )
+            .catch(() => {});
+        }
+      }
       if (result.result !== undefined) set.result = result.result;
       if (result.url !== undefined) set.url = result.url;
       if (result.providerSessionId !== undefined)
@@ -5843,8 +5958,16 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (result.status !== undefined) {
       // PILE-467 — terminal stays terminal. A cancel during provisioning
       // can still see late poll results arrive as 'created'/'running' —
-      // a non-terminal result must not resurrect a dead lane.
-      if (!(terminal.has(oldStatus) && !terminal.has(result.status))) {
+      // a non-terminal result must not resurrect a dead lane. Deliberate
+      // resumes (delivered follow-up on a completed lane, queued prompt
+      // on an externally-managed session) carry `revive` to pass.
+      if (
+        !(
+          terminal.has(oldStatus) &&
+          !terminal.has(result.status) &&
+          !result.revive
+        )
+      ) {
         set.status = result.status;
         if (terminal.has(result.status) && !oldSession.endedAt)
           set.endedAt = set.updatedAt;
@@ -5863,6 +5986,26 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }
     if (result.infraFailure !== undefined)
       set.infraFailure = result.infraFailure ? 1 : 0;
+    // VTX-621 — same rate-limit park as the issue-less path above; lanes
+    // always carry an issue, so this is the branch that actually runs.
+    if (result.rateLimited) {
+      const existingPause = data.getAgentPause(
+        this.db,
+        this.organizationId,
+        oldSession.agentId
+      );
+      if (
+        !existingPause ||
+        existingPause.reason?.startsWith(RATE_LIMIT_PAUSE_PREFIX)
+      ) {
+        await data
+          .upsertAgentPause(this.db, this.organizationId, oldSession.agentId, {
+            reason: `${RATE_LIMIT_PAUSE_PREFIX}${new Date(Date.now() + RATE_LIMIT_HOLD_MS).toISOString()}`,
+            createdBy: "system",
+          })
+          .catch(() => {});
+      }
+    }
     if (result.result !== undefined) set.result = result.result;
     if (result.url !== undefined) set.url = result.url;
     if (result.providerSessionId !== undefined)

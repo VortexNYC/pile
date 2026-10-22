@@ -447,6 +447,7 @@ export async function nudgeLane(
         .applyAgentSessionResult(session.id, {
           status: "running",
           result: null,
+          revive: true,
         })
         .catch(() => {});
     }

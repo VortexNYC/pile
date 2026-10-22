@@ -2744,6 +2744,73 @@ describe("pipeline hygiene via DO RPC", () => {
     expect(due.map((d) => d.id)).toContain(deal.id);
   });
 
+  it("updateCustomer lands a customer.updated audit entry with per-field changes", async () => {
+    const stub = getStub();
+    await withWorkspace(stub, async (instance) => {
+      const customer = await instance.createCustomer({
+        name: "Enrich me",
+        externalId: "audit-c-1",
+        notes: "[sourced-by:scout session:s-0]",
+      });
+      await instance.updateCustomer(
+        customer.id,
+        {
+          domain: "joes.example.com",
+          priorityScore: 8,
+          // Same value — no diff should be recorded for it.
+          notes: "[sourced-by:scout session:s-0]",
+          customFields: { industry: "restaurant" },
+        },
+        "profiler"
+      );
+      const entries = await instance.listAuditLog({
+        entityType: "customer",
+        entityId: customer.id,
+      });
+      const entry = entries.find((e) => e.action === "customer.updated");
+      expect(entry?.actorId).toBe("profiler");
+      const changes = JSON.parse(entry?.changes ?? "{}") as Record<
+        string,
+        unknown
+      >;
+      expect(changes).toMatchObject({
+        domain: { from: null, to: "joes.example.com" },
+        priorityScore: { from: null, to: 8 },
+        "customFields.industry": { from: null, to: "restaurant" },
+      });
+      expect(changes).not.toHaveProperty("notes");
+    });
+  });
+
+  it("updateCustomer rejects a bad custom-field value before writing anything", async () => {
+    const stub = getStub();
+    await withWorkspace(stub, async (instance) => {
+      const customer = await instance.createCustomer({
+        name: "Typed fields",
+        externalId: "audit-c-2",
+      });
+      await instance.createFieldDefinition({
+        entityType: "customer",
+        name: "merchant_size",
+        type: "select",
+        options: ["small", "mid", "enterprise"],
+      });
+      await expect(
+        instance.updateCustomer(
+          customer.id,
+          {
+            domain: "nope.example.com",
+            customFields: { merchant_size: "huge" },
+          },
+          "profiler"
+        )
+      ).rejects.toThrow(/merchant_size/);
+      // Nothing landed — the invalid field rejected the whole patch.
+      const after = await instance.getCustomer(customer.id);
+      expect(after?.domain).toBeNull();
+    });
+  });
+
   it("manages guidance packs with audit + version history", async () => {
     const stub = getStub();
     const pack = await stub.createGuidancePack(
@@ -3760,9 +3827,9 @@ describe("merchant sources (feed registry)", () => {
       return { src, dupe, list };
     });
     expect(out.dupe.id).toBe(out.src.id);
-    expect(
-      out.list.find((r) => r.id === out.src.id)?.cursorValue
-    ).toBe("2026-10-19");
+    expect(out.list.find((r) => r.id === out.src.id)?.cursorValue).toBe(
+      "2026-10-19"
+    );
   });
 });
 
@@ -3819,5 +3886,50 @@ describe("session terminal guard (PILE-467)", () => {
       return { session, updated };
     });
     expect(out.updated?.status).toBe("canceled");
+  });
+
+  it("a revive flag resumes a completed lane (delivered follow-up)", async () => {
+    const stub = getStub();
+    const out = await withWorkspace(stub, async (instance) => {
+      const issue = await instance.createIssue({
+        title: "revive me",
+        status: "in_progress",
+      });
+      const session = await instance.createAgentSession({
+        agentId: "devin-cli",
+        issueId: issue.id,
+        status: "created",
+        provider: "devin-cli",
+        actorId: "u1",
+        actorType: "user",
+      });
+      await instance.applyAgentSessionResult(session.id, {
+        status: "completed",
+      });
+      // A stale 'running' without revive stays completed…
+      const blocked = await instance.applyAgentSessionResult(session.id, {
+        status: "running",
+      });
+      // …but a delivered follow-up revives the lane deliberately.
+      const revived = await instance.applyAgentSessionResult(session.id, {
+        status: "running",
+        result: null,
+        revive: true,
+      });
+      return { session, blocked, revived };
+    });
+    expect(out.blocked?.status).toBe("completed");
+    expect(out.revived?.status).toBe("running");
+    expect(out.revived?.endedAt).toBeNull();
+  });
+});
+
+describe("session scoping options (PILE-453)", () => {
+  it("listAgentSessions accepts agentSlug through the DO", async () => {
+    const stub = getStub();
+    const rows = await withWorkspace(stub, (instance) =>
+      instance.listAgentSessions({ agentSlug: "scout" })
+    );
+    expect(Array.isArray(rows)).toBe(true);
   });
 });

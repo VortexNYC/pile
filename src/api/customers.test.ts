@@ -901,7 +901,10 @@ describe("customer sales fields (readiness/fit)", () => {
       token
     );
     expect(created.status).toBe(201);
-    const body = (await created.json()) as { id?: string; customer?: { id?: string } };
+    const body = (await created.json()) as {
+      id?: string;
+      customer?: { id?: string };
+    };
     const id = body.customer?.id ?? body.id;
     expect(id).toBeTruthy();
     const got = await fetch(
@@ -917,7 +920,5 @@ describe("customer sales fields (readiness/fit)", () => {
     const customer = record.customer ?? record;
     expect(customer.fitScore).toBe(0.9);
     expect(customer.processor).toBe("toast");
-    expect((await term.json() as { type: string }).type).toBe("terminal");
-    expect(((await term.json()) as { type: string }).type).toBe("terminal");
   });
 });

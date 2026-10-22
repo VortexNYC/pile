@@ -5,11 +5,13 @@ import type { AppEnv } from "../types/env.js";
 import {
   CloudflareBackend,
   LANE_CACHE_MOUNT,
+  LaneSandboxBackend,
   computeBackend,
   isComputeInfraError,
   laneCachePrefix,
 } from "./compute.js";
 import type { ComputeSandbox, SandboxHandle } from "./compute.js";
+import type { LaneSandboxBase } from "./lane-sandbox.js";
 
 function baseEnv(): AppEnv {
   return {
@@ -64,6 +66,170 @@ describe("computeBackend", () => {
   });
 });
 
+const daytonaTestEnv = () =>
+  ({
+    ...baseEnv(),
+    DAYTONA_API_KEY: "k",
+    DAYTONA_API_URL: "https://daytona.test",
+  }) as AppEnv;
+
+const daytonaToolbox = "https://tb.test";
+const daytonaRecord: ComputeSandbox = {
+  id: "sb-1",
+  name: "vortex-devin-x",
+  state: "started",
+  toolboxProxyUrl: daytonaToolbox,
+};
+
+function fetchStub(
+  handler: (url: string, init?: RequestInit) => Response | Promise<Response>
+) {
+  const calls: { url: string; init?: RequestInit }[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(input), init });
+      return Promise.resolve(handler(String(input), init));
+    })
+  );
+  return calls;
+}
+
+describe("DaytonaBackend sandbox create timeout (PILE-466)", () => {
+  it("gives the create POST a 120s signal, not the shared 30s one", async () => {
+    // Map each requested timeout to a distinct signal so the fetch call can
+    // be attributed to its duration.
+    const signals = new Map<number, AbortSignal>();
+    vi.spyOn(AbortSignal, "timeout").mockImplementation((ms) => {
+      let signal = signals.get(ms);
+      if (!signal) {
+        signal = new AbortController().signal;
+        signals.set(ms, signal);
+      }
+      return signal;
+    });
+    const calls = fetchStub((url, init) => {
+      if (url === "https://daytona.test/sandbox" && init?.method === "POST") {
+        return new Response(
+          JSON.stringify({ ...daytonaRecord, state: "creating" }),
+          { status: 200 }
+        );
+      }
+      return new Response(JSON.stringify(daytonaRecord), { status: 200 });
+    });
+
+    const backend = computeBackend(daytonaTestEnv());
+    await backend.createSandbox({
+      name: "vortex-devin-x",
+      sessionId: "sess-1",
+      organizationId: "org-1",
+      agentLabel: "devin-cli",
+      env: {},
+    });
+
+    const create = calls.find(
+      (c) =>
+        c.url === "https://daytona.test/sandbox" && c.init?.method === "POST"
+    );
+    const poll = calls.find(
+      (c) => c.url === "https://daytona.test/sandbox/sb-1" && !c.init?.method
+    );
+    expect(create?.init?.signal).toBe(signals.get(120_000));
+    expect(poll?.init?.signal).toBe(signals.get(30_000));
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+});
+
+const sessionCreateUrl = `${daytonaToolbox}/sb-1/process/session`;
+const ipFailure = () =>
+  new Response(
+    JSON.stringify({
+      message:
+        "failed to resolve container IP after 3 attempts, last error: SANDBOX_NOT_RUNNING",
+    }),
+    { status: 400 }
+  );
+
+describe("DaytonaBackend process-session create retry (PILE-466)", () => {
+  it("retries the container-IP 400 and then starts the runner", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      let sessionCreates = 0;
+      fetchStub((url) => {
+        if (url === sessionCreateUrl) {
+          sessionCreates++;
+          return sessionCreates <= 2
+            ? ipFailure()
+            : new Response(JSON.stringify({ sessionId: "sess-1" }));
+        }
+        return new Response(JSON.stringify({ cmdId: "cmd-1" }));
+      });
+      const backend = computeBackend(daytonaTestEnv());
+      const started = backend.startRunner(
+        daytonaRecord,
+        "sess-1",
+        "python3 /tmp/run.py"
+      );
+      await vi.advanceTimersByTimeAsync(2_000);
+      await vi.advanceTimersByTimeAsync(4_000);
+      await started;
+      expect(sessionCreates).toBe(3);
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("gives up after the third retry", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      let sessionCreates = 0;
+      fetchStub((url) => {
+        if (url === sessionCreateUrl) {
+          sessionCreates++;
+          return ipFailure();
+        }
+        return new Response("{}");
+      });
+      const backend = computeBackend(daytonaTestEnv());
+      const started = backend.startRunner(
+        daytonaRecord,
+        "sess-1",
+        "python3 /tmp/run.py"
+      );
+      const assertion = expect(started).rejects.toThrow(
+        /process session create failed: 400/
+      );
+      await vi.advanceTimersByTimeAsync(15_000); // 2s + 4s + 8s
+      await assertion;
+      expect(sessionCreates).toBe(4);
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("does not retry a session-create 400 that isn't the IP race", async () => {
+    let sessionCreates = 0;
+    fetchStub((url) => {
+      if (url === sessionCreateUrl) {
+        sessionCreates++;
+        return new Response(JSON.stringify({ message: "bad request" }), {
+          status: 400,
+        });
+      }
+      return new Response("{}");
+    });
+    const backend = computeBackend(daytonaTestEnv());
+    await expect(
+      backend.startRunner(daytonaRecord, "sess-1", "python3 /tmp/run.py")
+    ).rejects.toThrow(/process session create failed: 400/);
+    expect(sessionCreates).toBe(1);
+    vi.unstubAllGlobals();
+  });
+});
+
 function fakeProcess(
   status: string,
   exitCode?: number
@@ -86,19 +252,147 @@ function fakeSandbox(
 ) {
   const startProcess = vi.fn();
   const readFile = vi.fn();
+  const writeFile = vi.fn(async () => ({ success: true }));
+  const exec = vi.fn(async () => ({}));
   const destroy = vi.fn();
   const getProcess = vi.fn((id: string) =>
     Promise.resolve(processes[id] ?? null)
   );
-  const handle = { getProcess, startProcess, readFile, destroy };
+  const handle = {
+    getProcess,
+    startProcess,
+    readFile,
+    writeFile,
+    exec,
+    destroy,
+  };
   return {
     handle: handle as unknown as SandboxHandle,
     startProcess,
     readFile,
+    writeFile,
+    exec,
     destroy,
     getProcess,
   };
 }
+
+function fakeLaneNs() {
+  const calls: string[] = [];
+  const stub = {
+    provision: vi.fn(async () => {}),
+    spawn: vi.fn(async (o: { processId: string; command: string }) => {
+      calls.push(`spawn:${o.processId}:${o.command}`);
+    }),
+    hasProcess: vi.fn(async () => true),
+    processState: vi.fn(
+      async (): Promise<import("./lane-sandbox.js").LaneProcessState> => ({
+        running: true,
+        exitCode: null,
+      })
+    ),
+    sessionBusy: vi.fn(async () => false),
+    readFile: vi.fn(async () => null),
+    putFiles: vi.fn(async () => {}),
+    tail: vi.fn(async () => "tail-bytes"),
+    probe: vi.fn(async () => true),
+    destroy: vi.fn(async () => {}),
+  };
+  const ns = {
+    getByName: vi.fn(() => stub),
+  };
+  return {
+    ns: ns as unknown as AppEnv["SANDBOX_LANE"],
+    stub,
+    calls,
+  };
+}
+
+describe("LaneSandboxBackend (sandbox-sdk 1.0)", () => {
+  it("LANE_SDK=v1 selects the lane backend on SANDBOX_LANE*", () => {
+    const { ns } = fakeLaneNs();
+    const env = {
+      ...baseEnv(),
+      COMPUTE_PROVIDER: "cloudflare",
+      LANE_SDK: "v1",
+      SANDBOX_LANE: ns,
+    } as AppEnv;
+    const backend = computeBackend(env, "codex-cli");
+    expect(backend.kind).toBe("cloudflare");
+    expect(backend).toBeInstanceOf(LaneSandboxBackend);
+  });
+
+  it("LANE_SDK=v1 prefers the per-provider binding", async () => {
+    const { ns } = fakeLaneNs();
+    const env = {
+      ...baseEnv(),
+      COMPUTE_PROVIDER: "cloudflare",
+      LANE_SDK: "v1",
+      SANDBOX_LANE: {} as AppEnv["SANDBOX_LANE"],
+      SANDBOX_LANE_CURSOR: ns,
+    } as unknown as AppEnv;
+    const backend = computeBackend(env, "cursor-cli");
+    await backend.createSandbox({
+      name: "n",
+      sessionId: "s",
+      organizationId: "o",
+      agentLabel: "x",
+      env: {},
+    });
+    expect(ns!.getByName).toHaveBeenCalledWith("n");
+  });
+
+  it("LANE_SDK=v1 without a lane binding is a config error", () => {
+    const env = {
+      ...baseEnv(),
+      COMPUTE_PROVIDER: "cloudflare",
+      LANE_SDK: "v1",
+    } as AppEnv;
+    expect(() => computeBackend(env)).toThrow(/SANDBOX_LANE binding/);
+  });
+
+  it("create/start/state/poll/delete flow over the stub RPCs", async () => {
+    const { ns, stub } = fakeLaneNs();
+    const backend = new LaneSandboxBackend(
+      ns as DurableObjectNamespace<LaneSandboxBase>
+    );
+    const sandbox = await backend.createSandbox({
+      name: "sb-v1",
+      sessionId: "s1",
+      organizationId: "o1",
+      agentLabel: "devin-cli",
+      env: {},
+    });
+    expect(stub.provision).toHaveBeenCalled();
+    await backend.startRunner(
+      sandbox,
+      "s1",
+      ". /tmp/pile/lane.env && python3 /tmp/pile/run.py"
+    );
+    expect(stub.spawn).toHaveBeenCalledWith(
+      expect.objectContaining({ processId: "s1" })
+    );
+    expect(await backend.runnerState(sandbox, "s1")).toBe("running");
+    await backend.putFiles(sandbox, [
+      { path: "/tmp/pile/lane.env", content: "export A='1'", mode: 0o600 },
+    ]);
+    expect(stub.putFiles).toHaveBeenCalled();
+    expect(await backend.findSandbox("s1", "sb-v1")).not.toBeNull();
+    await backend.deleteSandbox(sandbox);
+    expect(stub.destroy).toHaveBeenCalled();
+  });
+
+  it("runnerState maps a dead wrapper to an exit code", async () => {
+    const { ns, stub } = fakeLaneNs();
+    stub.processState.mockResolvedValue({ running: false, exitCode: 42 });
+    const backend = new LaneSandboxBackend(
+      ns as DurableObjectNamespace<LaneSandboxBase>
+    );
+    expect(await backend.runnerState(sandboxRecord, "s1")).toEqual({
+      exitCode: 42,
+    });
+  });
+});
 
 const admitEnv = () =>
   ({
@@ -290,7 +584,7 @@ describe("CloudflareBackend", () => {
     });
   });
 
-  it("readFile returns content and null on failure", async () => {
+  it("getFile returns content and null on failure", async () => {
     const { handle, readFile } = fakeSandbox({});
     readFile
       .mockResolvedValueOnce({
@@ -299,10 +593,25 @@ describe("CloudflareBackend", () => {
       })
       .mockRejectedValueOnce(new Error("no such file"));
     const backend = new CloudflareBackend(() => Promise.resolve(handle));
-    expect(await backend.readFile(sandboxRecord, "/tmp/r.json")).toBe(
+    expect(await backend.getFile(sandboxRecord, "/tmp/r.json")).toBe(
       '{"status":"completed"}'
     );
-    expect(await backend.readFile(sandboxRecord, "/tmp/r.json")).toBeNull();
+    expect(await backend.getFile(sandboxRecord, "/tmp/r.json")).toBeNull();
+  });
+
+  it("putFiles writes each file and chmods when a mode is given", async () => {
+    const { handle, writeFile, exec } = fakeSandbox({});
+    const backend = new CloudflareBackend(() => Promise.resolve(handle));
+    await backend.putFiles(sandboxRecord, [
+      { path: "/tmp/pile/prompt.md", content: "do it" },
+      { path: "/tmp/pile/lane.env", content: "export A='1'", mode: 0o600 },
+    ]);
+    expect(writeFile).toHaveBeenCalledWith("/tmp/pile/prompt.md", "do it");
+    expect(writeFile).toHaveBeenCalledWith(
+      "/tmp/pile/lane.env",
+      "export A='1'"
+    );
+    expect(exec).toHaveBeenCalledWith("chmod 600 /tmp/pile/lane.env");
   });
 
   it("deleteSandbox destroys the sandbox", async () => {
@@ -446,7 +755,14 @@ describe("Daytona hardening (PILE-472)", () => {
     const calls: string[] = [];
     const pages = [
       [{ id: "other-1", name: "a", state: "started", labels: {} }],
-      [{ id: "mine", name: "x", state: "started", labels: { "vortex.session": "sess-1" } }],
+      [
+        {
+          id: "mine",
+          name: "x",
+          state: "started",
+          labels: { "vortex.session": "sess-1" },
+        },
+      ],
       [],
     ];
     const origFetch = globalThis.fetch;
@@ -459,10 +775,10 @@ describe("Daytona hardening (PILE-472)", () => {
       });
     }) as typeof fetch;
     try {
-      const backend = new DaytonaBackend(
-        {} as never,
-        { apiKey: "k", apiUrl: "https://day" }
-      );
+      const backend = new DaytonaBackend({} as never, {
+        apiKey: "k",
+        apiUrl: "https://day",
+      });
       const found = await backend.findSandbox("sess-1", "x");
       expect(found?.id).toBe("mine");
       expect(calls.length).toBe(2);
@@ -554,19 +870,30 @@ describe("DaytonaBackend infra classification + quota surfacing (PILE-452)", () 
           status: 400,
         })
     );
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const backend = computeBackend(daytonaEnv());
     try {
-      await backend.startRunner(
-        { id: "sb-9", name: "sb-9", state: "started" },
-        "s9",
-        "python3 /tmp/run.py"
-      );
-      expect.unreachable();
-    } catch (err) {
+      // The not-ready retry loop backs off 2+4+8s — fast-forward through it.
+      const pending = backend
+        .startRunner(
+          { id: "sb-9", name: "sb-9", state: "started" },
+          "s9",
+          "python3 /tmp/run.py"
+        )
+        .then(
+          () => {
+            throw new Error("unreachable");
+          },
+          (err) => err
+        );
+      await vi.advanceTimersByTimeAsync(20_000);
+      const err = await pending;
       expect(isComputeInfraError(err)).toBe(true);
       expect((err as Error).message).toContain("SANDBOX_NOT_RUNNING");
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
     }
-    vi.unstubAllGlobals();
   });
 
   it("unresolvable toolbox/DNS failures coerce to infra errors", async () => {
@@ -632,11 +959,8 @@ describe("sweepOrphanSandboxes (PILE-471)", () => {
             : { status: "running" },
     };
     const { sweepOrphanSandboxes } = await import("./compute.js");
-    const out = await sweepOrphanSandboxes(
-      backend as never,
-      stub
-    );
+    const out = await sweepOrphanSandboxes(backend as never, stub);
     expect(out.reaped).toBe(2);
-    expect(deleted.sort()).toEqual(["s1", "s3"]);
+    expect(deleted.toSorted()).toEqual(["s1", "s3"]);
   });
 });

@@ -1,4 +1,17 @@
+import { flattenStatements, roleMap } from "./identity.js";
+
 const ALL_WORKSPACE_ACTIONS = ["read", "write", "admin"] as const;
+
+// BA role names ("member", "owner", ...) are accepted as grant shorthand —
+// they expand to the role's flattened statements so e.g. a key minted with
+// "member" actually carries the member permissions instead of parsing as
+// an opaque string no check can satisfy (the console's Create key sends it).
+const ROLE_GRANTS = new Map<string, readonly string[]>(
+  Object.entries(roleMap).map(([name, role]) => [
+    name,
+    flattenStatements(role.statements),
+  ])
+);
 
 export function parsePermissionSet(
   permissions: string | string[]
@@ -9,15 +22,19 @@ export function parsePermissionSet(
         .split(",")
         .map((p) => p.trim().toLowerCase())
         .filter(Boolean);
+  const expanded = new Set<string>();
+  for (const p of list) {
+    const grants = ROLE_GRANTS.get(p);
+    if (grants) for (const g of grants) expanded.add(g);
+    else expanded.add(p);
+  }
   // The `*` grant is the admin wildcard — expand at parse so every
   // downstream check (canAccess + permissions.includes) sees it.
-  if (list.includes("*")) {
-    return new Set([
-      ...list.filter((p) => p !== "*"),
-      ...ALL_WORKSPACE_ACTIONS,
-    ]);
+  if (expanded.has("*")) {
+    expanded.delete("*");
+    for (const action of ALL_WORKSPACE_ACTIONS) expanded.add(action);
   }
-  return new Set(list);
+  return expanded;
 }
 
 /** Evaluate a permission grant through Better Auth's access-control

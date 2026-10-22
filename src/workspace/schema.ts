@@ -780,7 +780,9 @@ export const workspaceMarketRuns = sqliteTable(
     producedCount: integer("produced_count" as string)
       .notNull()
       .default(0),
-    status: text("status" as string).notNull().default("running"),
+    status: text("status" as string)
+      .notNull()
+      .default("running"),
     issueId: text("issue_id" as string),
     createdBySlug: text("created_by_slug" as string),
     sourceSessionId: text("source_session_id" as string),
@@ -806,12 +808,16 @@ export const workspaceCustomerContacts = sqliteTable(
     id: text("id" as string).primaryKey(),
     organizationId: text("organization_id" as string).notNull(),
     customerId: text("customer_id" as string).notNull(),
-    type: text("type" as string).notNull().default("business_channel"),
+    type: text("type" as string)
+      .notNull()
+      .default("business_channel"),
     role: text("role" as string),
     channel: text("channel" as string).notNull(),
     value: text("value" as string).notNull(),
     label: text("label" as string),
-    status: text("status" as string).notNull().default("candidate"),
+    status: text("status" as string)
+      .notNull()
+      .default("candidate"),
     confidence: text("confidence" as string),
     source: text("source" as string),
     evidenceUri: text("evidence_uri" as string),
@@ -839,15 +845,25 @@ export const workspaceMerchantSources = sqliteTable(
     // socrata | usaspending | sam | opencorporates | places | serper
     kind: text("kind" as string).notNull(),
     // JSON — domain/dataset/params/field-map per kind
-    config: text("config" as string).notNull().default("{}"),
+    config: text("config" as string)
+      .notNull()
+      .default("{}"),
     cursorField: text("cursor_field" as string),
     cursorValue: text("cursor_value" as string),
     // license_pending | corp_filing | award | violation | registration
-    signal: text("signal" as string).notNull().default("registration"),
-    cadence: text("cadence" as string).notNull().default("daily"),
-    enabled: integer("enabled" as string).notNull().default(1),
+    signal: text("signal" as string)
+      .notNull()
+      .default("registration"),
+    cadence: text("cadence" as string)
+      .notNull()
+      .default("daily"),
+    enabled: integer("enabled" as string)
+      .notNull()
+      .default(1),
     lastRunAt: text("last_run_at" as string),
-    runCount: integer("run_count" as string).notNull().default(0),
+    runCount: integer("run_count" as string)
+      .notNull()
+      .default(0),
     createdAt: text("created_at" as string).notNull(),
   },
   (table) => [

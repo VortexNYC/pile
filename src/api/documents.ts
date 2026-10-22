@@ -445,7 +445,22 @@ const listSpacePermsRoute = createRoute({
   responses: {
     200: {
       description: "Space permissions",
-      content: { "application/json": { schema: z.object({ permissions: z.array(z.object({ id: z.string(), spaceId: z.string(), actorId: z.string(), actorType: z.string(), level: z.string(), createdAt: z.string() })) } ) } },
+      content: {
+        "application/json": {
+          schema: z.object({
+            permissions: z.array(
+              z.object({
+                id: z.string(),
+                spaceId: z.string(),
+                actorId: z.string(),
+                actorType: z.string(),
+                level: z.string(),
+                createdAt: z.string(),
+              })
+            ),
+          }),
+        },
+      },
     },
   },
 });
@@ -470,7 +485,10 @@ const grantSpacePermRoute = createRoute({
     },
   },
   responses: {
-    201: { description: "Space permission granted", content: { "application/json": { schema: z.object({ id: z.string() }) } } },
+    201: {
+      description: "Space permission granted",
+      content: { "application/json": { schema: z.object({ id: z.string() }) } },
+    },
   },
 });
 
@@ -479,12 +497,22 @@ const revokeSpacePermRoute = createRoute({
   path: "/workspaces/{organizationId}/document-spaces/{id}/permissions/{actorId}",
   tags: ["documents"],
   middleware: [rls("document:edit")],
-  request: { params: z.object({ organizationId: z.string(), id: z.string(), actorId: z.string() }) },
+  request: {
+    params: z.object({
+      organizationId: z.string(),
+      id: z.string(),
+      actorId: z.string(),
+    }),
+  },
   responses: {
-    200: { description: "Space permission revoked", content: { "application/json": { schema: z.object({ ok: z.boolean() }) } } },
+    200: {
+      description: "Space permission revoked",
+      content: {
+        "application/json": { schema: z.object({ ok: z.boolean() }) },
+      },
+    },
   },
 });
-
 
 const deleteSpaceRoute = createRoute({
   method: "delete",
