@@ -127,14 +127,21 @@ export function groupSessionsByScope<
   );
 }
 
+// UUID-shaped scope keys (older lanes that recorded a type's id) read as
+// noise — only they fall back to a lane label.
+const OPAQUE_KEY = /^[0-9a-f]{8}-[0-9a-f]{4}-/i;
+
 /** Header text for a scope group: the workspace display name when known,
- * else the lane label so unloaded scopes read as work, not UUIDs. */
+ * the key itself when readable (agent slugs name their group), else the
+ * lane label so UUID-scoped groups still read as work, not ids. */
 export function scopeGroupTitle(
   key: string,
   rows: readonly { label?: string | null }[],
   labels?: Readonly<Record<string, string>>
 ): string {
-  return labels?.[key] ?? rows[0]?.label ?? key;
+  return (
+    labels?.[key] ?? (OPAQUE_KEY.test(key) ? rows[0]?.label : undefined) ?? key
+  );
 }
 
 /** Agent sessions — Live/Today/Week/Older groups, or `groupBy` scope

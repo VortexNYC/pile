@@ -86,10 +86,20 @@ describe("scopeGroupTitle", () => {
     ).toBe("ISS-1 — Fix thing");
   });
 
-  it("falls back to the lane label so unloaded scopes read as work", () => {
+  it("falls back to the lane label for UUID scope keys", () => {
     expect(
-      scopeGroupTitle("agent-uuid", [lane("a", "i", "t", "Refactor runner")])
+      scopeGroupTitle("b4a98d95-c75e-4be9-802a-f2028e64f27d", [
+        lane("a", "i", "t", "Refactor runner"),
+      ])
     ).toBe("Refactor runner");
+  });
+
+  it("shows a readable scope key over the lane label", () => {
+    // "scout" names the agent group; the first lane's label would misname
+    // it after one issue.
+    expect(
+      scopeGroupTitle("scout", [lane("a", "i", "t", "scout/iss-3-fix")])
+    ).toBe("scout");
   });
 
   it("falls back to the raw scope key last", () => {
