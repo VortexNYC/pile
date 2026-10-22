@@ -5605,14 +5605,33 @@ export function listMarketRuns(
 export function listCustomers(
   db: WorkspaceDb,
   organizationId: string,
-  opts: { cold?: boolean; dueBefore?: string; needsHuman?: boolean } = {}
+  opts: {
+    cold?: boolean;
+    dueBefore?: string;
+    needsHuman?: boolean;
+    externalId?: string;
+    domain?: string;
+  } = {}
 ) {
   const rows = db
     .select()
     .from(workspaceCustomers)
     .where(eq(workspaceCustomers.organizationId, organizationId))
     .all();
+  const domainFilter = opts.domain
+    ? (normalizeDomain(opts.domain) ?? opts.domain)
+    : null;
   return rows.filter((c) => {
+    if (opts.externalId !== undefined && c.externalId !== opts.externalId)
+      return false;
+    // Normalized-to-normalized: rows written before updates canonicalized
+    // (verbatim "www.x.com") still match a "x.com" filter.
+    if (
+      domainFilter !== null &&
+      c.domain !== opts.domain &&
+      normalizeDomain(c.domain) !== domainFilter
+    )
+      return false;
     if (opts.cold && (c.nextStepText !== null || c.nextStepDueAt !== null))
       return false;
     if (
@@ -5680,6 +5699,11 @@ export function updateCustomer(
     "priorityScore",
   ] as const) {
     if (patch[key] !== undefined) updates[key] = patch[key];
+  }
+  if (patch.domain !== undefined) {
+    // Domain is a dedup key — writes land in canonical host form, same
+    // normalization createCustomer applies.
+    updates.domain = normalizeDomain(patch.domain);
   }
   return db
     .update(workspaceCustomers)
@@ -8989,16 +9013,17 @@ export function getCustomerByDomain(
   organizationId: string,
   domain: string
 ) {
+  // Compare normalized-to-normalized so "https://www.x.com/" and "x.com"
+  // hit the same record — including rows written before updates stored
+  // canonical domains (verbatim "www.x.com"). The domain column has no
+  // index, so the org scan costs the same as the old eq.
+  const key = normalizeDomain(domain) ?? domain;
   return db
     .select()
     .from(workspaceCustomers)
-    .where(
-      and(
-        eq(workspaceCustomers.organizationId, organizationId),
-        eq(workspaceCustomers.domain, domain)
-      )
-    )
-    .get();
+    .where(eq(workspaceCustomers.organizationId, organizationId))
+    .all()
+    .find((c) => c.domain === domain || normalizeDomain(c.domain) === key);
 }
 
 // ---- triage auto-delegate rules (PILE-427) ----

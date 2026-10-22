@@ -39904,6 +39904,26 @@
             "required": false,
             "name": "needsHuman",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Exact-match lookup by externalId"
+            },
+            "required": false,
+            "description": "Exact-match lookup by externalId",
+            "name": "externalId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Exact-match lookup by canonical domain (input is normalized first)"
+            },
+            "required": false,
+            "description": "Exact-match lookup by canonical domain (input is normalized first)",
+            "name": "domain",
+            "in": "query"
           }
         ],
         "responses": {
@@ -39929,6 +39949,10 @@
                             "type": "string"
                           },
                           "url": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "domain": {
                             "type": "string",
                             "nullable": true
                           },
@@ -40054,6 +40078,7 @@
                           "organizationId",
                           "name",
                           "url",
+                          "domain",
                           "bookingUrl",
                           "notes",
                           "logoUrl",
@@ -40135,6 +40160,9 @@
                     "minLength": 1
                   },
                   "url": {
+                    "type": "string"
+                  },
+                  "domain": {
                     "type": "string"
                   },
                   "bookingUrl": {
@@ -40254,6 +40282,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "domain": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "bookingUrl": {
                       "type": "string",
                       "nullable": true
@@ -40376,6 +40408,7 @@
                     "organizationId",
                     "name",
                     "url",
+                    "domain",
                     "bookingUrl",
                     "notes",
                     "logoUrl",
@@ -40430,6 +40463,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "domain": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "bookingUrl": {
                       "type": "string",
                       "nullable": true
@@ -40552,6 +40589,7 @@
                     "organizationId",
                     "name",
                     "url",
+                    "domain",
                     "bookingUrl",
                     "notes",
                     "logoUrl",
@@ -41103,6 +41141,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "domain": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "bookingUrl": {
                       "type": "string",
                       "nullable": true
@@ -41225,6 +41267,7 @@
                     "organizationId",
                     "name",
                     "url",
+                    "domain",
                     "bookingUrl",
                     "notes",
                     "logoUrl",
@@ -41298,6 +41341,10 @@
                     "minLength": 1
                   },
                   "url": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "domain": {
                     "type": "string",
                     "nullable": true
                   },
@@ -41428,6 +41475,10 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "domain": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "bookingUrl": {
                       "type": "string",
                       "nullable": true
@@ -41550,6 +41601,7 @@
                     "organizationId",
                     "name",
                     "url",
+                    "domain",
                     "bookingUrl",
                     "notes",
                     "logoUrl",

@@ -465,6 +465,61 @@ describe("customer hygiene fields + externalId dedupe", () => {
     expect(human).toContain(flagged.id);
     expect(human).not.toContain(cold.id);
   });
+
+  it("round-trips domain normalized on create and PATCH (PILE-444)", async () => {
+    const create = await postCustomer({
+      name: "Domain merchant",
+      domain: "HTTPS://WWW.JoesPizza.example.com/menu",
+    });
+    expect(create.status).toBe(201);
+    const created = z
+      .object({ id: z.string(), domain: z.string().nullable() })
+      .parse(await create.json());
+    expect(created.domain).toBe("joespizza.example.com");
+
+    const patch = await fetch(
+      `/workspaces/${organizationId}/customers/${created.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ domain: "https://newsite.example.com/" }),
+      },
+      token
+    );
+    expect(patch.status).toBe(200);
+    const patched = z
+      .object({ domain: z.string().nullable() })
+      .parse(await patch.json());
+    expect(patched.domain).toBe("newsite.example.com");
+
+    const cleared = await fetch(
+      `/workspaces/${organizationId}/customers/${created.id}`,
+      { method: "PATCH", body: JSON.stringify({ domain: null }) },
+      token
+    );
+    expect(cleared.status).toBe(200);
+    expect(
+      z.object({ domain: z.string().nullable() }).parse(await cleared.json())
+        .domain
+    ).toBeNull();
+  });
+
+  it("filters lists by externalId and domain — domain input is normalized (PILE-444)", async () => {
+    const target = await mk({
+      name: "Filter target",
+      externalId: "gplace:flt-1",
+      domain: "www.Filtered.example.com",
+    });
+    const other = await mk({ name: "Unfiltered", externalId: "gplace:flt-2" });
+
+    expect(await list("externalId=gplace:flt-1")).toEqual([target.id]);
+    expect(await list("domain=filtered.example.com")).toEqual([target.id]);
+    // Lookup input normalizes too — scheme/www./case all hit the same row.
+    expect(await list("domain=HTTPS://WWW.Filtered.example.com/")).toEqual([
+      target.id,
+    ]);
+    expect(await list("domain=filtered.example.com")).not.toContain(other.id);
+    expect(await list("externalId=gplace:missing")).toEqual([]);
+  });
 });
 
 describe("customer custom fields (PILE-383)", () => {

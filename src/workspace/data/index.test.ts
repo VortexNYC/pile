@@ -9,6 +9,7 @@ import { workspaceSchema } from "../schema-map.js";
 import {
   workspaceAgentSessions,
   workspaceAgentTypes,
+  workspaceCustomers,
   workspaceIssues,
 } from "../schema.js";
 import {
@@ -50,6 +51,7 @@ import {
   createDocumentSpace,
   documentAccessLevel,
   extractEventField,
+  getCustomerByDomain,
   getCustomerByExternalId,
   getDealByExternalId,
   getExternalEventDeliveryByDedupeKey,
@@ -101,6 +103,7 @@ import {
   summarizeRunReceipts,
   sumRunReceipts,
   updateAgentSession,
+  updateCustomer,
   createExternalLink,
   getExternalLink,
   updateExternalLink,
@@ -990,6 +993,59 @@ describe("pipeline record hygiene + externalId dedupe", () => {
         })
       ).map((d) => d.id);
       expect(dueDeals).toEqual([working.id]);
+    });
+  });
+
+  it("domain writes and lookups canonicalize, including legacy verbatim rows (PILE-444)", async () => {
+    await withDb(async (db) => {
+      const org = "domain-org";
+      const customer = await createCustomer(db, {
+        organizationId: org,
+        name: "Canonical",
+        domain: "https://www.JoesPizza.example.com/menu",
+      });
+      expect(customer.domain).toBe("joespizza.example.com");
+
+      // Any spelling of the same host resolves the same record — this is
+      // what keeps customer_upsert's domain dedup from minting duplicates.
+      for (const probe of [
+        "joespizza.example.com",
+        "www.joespizza.example.com",
+        "https://joespizza.example.com/",
+        "HTTPS://WWW.JOESPIZZA.EXAMPLE.COM/path",
+      ]) {
+        expect(getCustomerByDomain(db, org, probe)?.id).toBe(customer.id);
+      }
+
+      // Updates canonicalize on write too.
+      const updated = updateCustomer(db, org, customer.id, {
+        domain: "WWW.NewSite.example.com/",
+      });
+      expect(updated?.domain).toBe("newsite.example.com");
+
+      // A row written before canonicalization (stored verbatim) still
+      // matches a canonical lookup instead of being duplicated past.
+      const legacy = await createCustomer(db, {
+        organizationId: org,
+        name: "Legacy",
+      });
+      db.update(workspaceCustomers)
+        .set({ domain: "WWW.Legacy.example.com" })
+        .where(eq(workspaceCustomers.id, legacy.id))
+        .run();
+      expect(getCustomerByDomain(db, org, "legacy.example.com")?.id).toBe(
+        legacy.id
+      );
+
+      // List filters resolve by externalId and normalized domain.
+      expect(
+        listCustomers(db, org, { externalId: "gplace:none" })
+      ).toHaveLength(0);
+      expect(
+        listCustomers(db, org, { domain: "legacy.example.com" }).map(
+          (c) => c.id
+        )
+      ).toEqual([legacy.id]);
     });
   });
 });

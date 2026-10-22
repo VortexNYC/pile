@@ -19256,6 +19256,10 @@ export interface paths {
                     /** @description cold=true → customers with no nextStepText and no nextStepDueAt */
                     cold?: string;
                     needsHuman?: string;
+                    /** @description Exact-match lookup by externalId */
+                    externalId?: string;
+                    /** @description Exact-match lookup by canonical domain (input is normalized first) */
+                    domain?: string;
                 };
                 header?: never;
                 path: {
@@ -19277,6 +19281,7 @@ export interface paths {
                                 organizationId: string;
                                 name: string;
                                 url: string | null;
+                                domain: string | null;
                                 bookingUrl: string | null;
                                 notes: string | null;
                                 logoUrl: string | null;
@@ -19335,6 +19340,7 @@ export interface paths {
                     "application/json": {
                         name: string;
                         url?: string;
+                        domain?: string;
                         bookingUrl?: string | null;
                         notes?: string | null;
                         logoUrl?: string;
@@ -19377,6 +19383,7 @@ export interface paths {
                             organizationId: string;
                             name: string;
                             url: string | null;
+                            domain: string | null;
                             bookingUrl: string | null;
                             notes: string | null;
                             logoUrl: string | null;
@@ -19422,6 +19429,7 @@ export interface paths {
                             organizationId: string;
                             name: string;
                             url: string | null;
+                            domain: string | null;
                             bookingUrl: string | null;
                             notes: string | null;
                             logoUrl: string | null;
@@ -19716,6 +19724,7 @@ export interface paths {
                             organizationId: string;
                             name: string;
                             url: string | null;
+                            domain: string | null;
                             bookingUrl: string | null;
                             notes: string | null;
                             logoUrl: string | null;
@@ -19808,6 +19817,7 @@ export interface paths {
                     "application/json": {
                         name?: string;
                         url?: string | null;
+                        domain?: string | null;
                         bookingUrl?: string | null;
                         notes?: string | null;
                         logoUrl?: string;
@@ -19853,6 +19863,7 @@ export interface paths {
                             organizationId: string;
                             name: string;
                             url: string | null;
+                            domain: string | null;
                             bookingUrl: string | null;
                             notes: string | null;
                             logoUrl: string | null;

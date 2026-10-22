@@ -7761,6 +7761,14 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "needsHuman",
         flag: "needs-human",
       },
+      {
+        name: "externalId",
+        flag: "external-id",
+      },
+      {
+        name: "domain",
+        flag: "domain",
+      },
     ],
     body: [],
   },
@@ -7787,6 +7795,10 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "url",
         flag: "url",
+      },
+      {
+        name: "domain",
+        flag: "domain",
       },
       {
         name: "bookingUrl",
@@ -7981,6 +7993,10 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "url",
         flag: "url",
+      },
+      {
+        name: "domain",
+        flag: "domain",
       },
       {
         name: "bookingUrl",
