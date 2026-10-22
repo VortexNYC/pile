@@ -1342,12 +1342,30 @@ export class FailoverBackend implements ComputeBackend {
     }
   }
 
-  findSandbox(
+  async findSandbox(
     ...a: Parameters<ComputeBackend["findSandbox"]>[0] extends never
       ? never
       : [string, string, string?]
-  ) {
-    return this.pick().findSandbox(...a);
+  ): Promise<ComputeSandbox | null> {
+    if (this.switched) return this.fallback.findSandbox(...a);
+    let primaryErr: unknown;
+    try {
+      const found = await this.primary.findSandbox(...a);
+      if (found) return found;
+    } catch (err) {
+      primaryErr = err;
+    }
+    try {
+      const fallbackFound = await this.fallback.findSandbox(...a);
+      if (fallbackFound) {
+        this.switched = true;
+        return fallbackFound;
+      }
+      return null;
+    } catch (fallbackErr) {
+      if (primaryErr !== undefined) throw primaryErr;
+      throw fallbackErr;
+    }
   }
   startRunner(...a: [ComputeSandbox, string, string, Record<string, string>?]) {
     return this.pick().startRunner(...a);
@@ -1404,25 +1422,30 @@ export class FailoverBackend implements ComputeBackend {
   }
 }
 
+function resolveLaneV1Binding(env: AppEnv, agentId?: string) {
+  const specific = agentId
+    ? (
+        LANE_V1_BINDING_BY_AGENT as Record<
+          string,
+          | "SANDBOX_LANE_CURSOR"
+          | "SANDBOX_LANE_DEVIN"
+          | "SANDBOX_LANE_CODEX"
+          | undefined
+        >
+      )[agentId]
+    : undefined;
+  return (specific ? env[specific] : undefined) ?? env.SANDBOX_LANE;
+}
+
 export function computeBackend(env: AppEnv, agentId?: string): ComputeBackend {
   const provider = env.COMPUTE_PROVIDER ?? "daytona";
   if (provider === "cloudflare") {
-    // sandbox-sdk 1.0 lanes (PILE-473/474): LANE_SDK=v1 routes through the
-    // LaneSandbox DOs on SANDBOX_LANE* bindings. Missing binding is a config
-    // error — silently falling back to 0.12 would canary nothing.
+    // sandbox-sdk 1.0 lanes (PILE-473/474 / VTX-602): LANE_SDK=v1 routes
+    // through the LaneSandbox DOs on SANDBOX_LANE* bindings, with optional
+    // bidirectional failover to Daytona when LANE_FAILOVER=v1 and
+    // DAYTONA_API_KEY is configured.
     if (env.LANE_SDK === "v1") {
-      const specific = agentId
-        ? (
-            LANE_V1_BINDING_BY_AGENT as Record<
-              string,
-              | "SANDBOX_LANE_CURSOR"
-              | "SANDBOX_LANE_DEVIN"
-              | "SANDBOX_LANE_CODEX"
-              | undefined
-            >
-          )[agentId]
-        : undefined;
-      const ns = (specific ? env[specific] : undefined) ?? env.SANDBOX_LANE;
+      const ns = resolveLaneV1Binding(env, agentId);
       if (!ns) {
         throw new VortexError({
           code: "CONFIG_ERROR",
@@ -1431,7 +1454,14 @@ export function computeBackend(env: AppEnv, agentId?: string): ComputeBackend {
             "LANE_SDK=v1 requires a SANDBOX_LANE binding (or a per-provider SANDBOX_LANE_* binding)",
         });
       }
-      return new LaneSandboxBackend(ns, env);
+      const laneV1 = new LaneSandboxBackend(ns, env);
+      if (env.LANE_FAILOVER === "v1") {
+        const dConfig = daytonaConfig(env);
+        if (dConfig) {
+          return new FailoverBackend(laneV1, new DaytonaBackend(env, dConfig));
+        }
+      }
+      return laneV1;
     }
     // Per-provider image/binding first; fall back to the shared SANDBOX
     // binding so single-image self-host setups keep working.

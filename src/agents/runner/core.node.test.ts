@@ -863,3 +863,37 @@ describePy("rate-limit reset parsing (VTX-638)", () => {
     expect(parse("build failed at 14:02 while cloning", NOW)).toBe("null");
   });
 });
+
+describePy("pgx copy-on-write Postgres warmup (VTX-651)", () => {
+  it("invokes pgx clone <template> <branch> --ttl <ttl> when PILE_PGX_TEMPLATE is set", () => {
+    const out = execFileSync(
+      PYTHON!,
+      [
+        "-c",
+        `import os, json, types;
+os.environ["PILE_PGX_TEMPLATE"] = "vortex_seeded";
+os.environ["PILE_PGX_BRANCH"] = "lane_abc";
+os.environ["PILE_PGX_TTL"] = "4h";
+src = open(${JSON.stringify(CORE_PATH)}).read();
+fn_start = src.index("def ensure_postgres():");
+fn_end = src.index("\\n# Optional headless browser", fn_start);
+calls = [];
+ns = {
+  "os": os,
+  "time": __import__("time"),
+  "shutil": types.SimpleNamespace(which=lambda name: "/usr/local/bin/pgx" if name == "pgx" else None),
+  "run": lambda cmd, **kw: (calls.append(cmd), types.SimpleNamespace(returncode=0, stdout="", stderr=""))[1],
+};
+exec(src[fn_start:fn_end], ns);
+ns["ensure_postgres"]();
+print(json.dumps(calls))`,
+      ],
+      { encoding: "utf8", timeout: 30_000 }
+    ).trim();
+    const lines = out.split("\n");
+    const calls = JSON.parse(lines[lines.length - 1] ?? "[]") as string[][];
+    expect(calls).toEqual([
+      ["pgx", "clone", "vortex_seeded", "lane_abc", "--ttl", "4h"],
+    ]);
+  });
+});

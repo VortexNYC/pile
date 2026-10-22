@@ -1178,7 +1178,7 @@ async function teardownLaneDbForSession(
   if (!session.laneDbRef) return;
   try {
     const ref = JSON.parse(session.laneDbRef) as LaneDbRef;
-    const provider = getLaneDbProvider(env);
+    const provider = getLaneDbProvider(env, undefined, ref.provider);
     if (provider && ref.provider === provider.name) {
       await provider.teardown(ref);
     }
@@ -2307,6 +2307,41 @@ export function shouldUpdatePrBranch(input: {
   );
 }
 
+/** VTX-557 — native queue driver on the 5-minute cron: a completed work lane
+ *  whose open, non-draft PR has mergeable===true, mergeable_state==="clean",
+ *  passing CI checks, and no failing pile-review check is squash-merged by
+ *  the sweep so green lane PRs land and unblock downstream queued issues
+ *  without human intervention. */
+export function shouldAutoMergePr(input: {
+  sessionStatus: string;
+  purpose: string | null | undefined;
+  state: string;
+  draft: boolean;
+  mergeable: unknown;
+  mergeableState: unknown;
+  checkState: string | null;
+  reviewConclusion: string | null | undefined;
+  headRef: string | null;
+  managedRefs: readonly (string | null | undefined)[];
+}): boolean {
+  if (input.sessionStatus !== "completed") return false;
+  if (input.purpose && MERGE_SURVIVOR_PURPOSES.has(input.purpose)) return false;
+  if (input.state !== "open" || input.draft) return false;
+  if (input.mergeable !== true || input.mergeableState !== "clean")
+    return false;
+  if (input.checkState !== "passing") return false;
+  if (
+    input.reviewConclusion !== undefined &&
+    input.reviewConclusion !== null &&
+    input.reviewConclusion !== "success" &&
+    input.reviewConclusion !== "neutral" &&
+    input.reviewConclusion !== "skipped"
+  ) {
+    return false;
+  }
+  return input.headRef !== null && input.managedRefs.includes(input.headRef);
+}
+
 interface PrSyncDeps {
   tokenForRepo?: (
     env: WorkerEnv,
@@ -2720,6 +2755,77 @@ export async function syncOpenPrSessions(
               .catch(() => {});
           } catch (err) {
             console.error("pr update-branch failed", {
+              session: session.id,
+              prUrl,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
+      }
+      // VTX-557 — native queue driver: when a completed work lane's PR is
+      // clean, passing CI, and passing review, squash-merge it automatically
+      // so the issue closes and downstream queued issues promote on the next
+      // sweep pass.
+      if (
+        laneActionable &&
+        headSha &&
+        shouldAutoMergePr({
+          sessionStatus: session.status,
+          purpose: session.purpose,
+          state,
+          draft: pr.draft === true,
+          mergeable: pr.mergeable,
+          mergeableState: pr.mergeable_state,
+          checkState,
+          reviewConclusion: reviewRun
+            ? reviewRun.status === "completed"
+              ? (reviewRun.conclusion ?? "pending")
+              : "pending"
+            : null,
+          headRef: typeof head?.ref === "string" ? head.ref : null,
+          managedRefs: [`issue-${issue.id}`, issue.branch],
+        })
+      ) {
+        const seen = await stub
+          .listAgentSessionEvents(session.id, { limit: 100, order: "desc" })
+          .catch(() => []);
+        const alreadyMerged = seen.some(
+          (e) =>
+            e.type === "pr.auto_merge" &&
+            typeof e.payload === "string" &&
+            e.payload.includes(headSha)
+        );
+        if (!alreadyMerged) {
+          try {
+            await withTimeout(
+              githubApiPut(
+                ghFetch,
+                token,
+                `/repos/${owner}/${repo}/pulls/${num}/merge`,
+                { sha: headSha, merge_method: "squash" }
+              ),
+              probeTimeoutMs,
+              "github-merge-pr"
+            );
+            await stub
+              .addAgentSessionEvent({
+                sessionId: session.id,
+                type: "pr.auto_merge",
+                message: `Auto-merged ${prUrl} — all checks green`,
+                payload: { prUrl, headSha },
+              })
+              .catch(() => {});
+            await stub.updateAgentSession(session.id, { prState: "merged" });
+            await stub.reconcileIssuePr(
+              session.issueId,
+              prUrl,
+              "merged",
+              checkState ?? issue.prCheckState,
+              "agent-sweep"
+            );
+            continue;
+          } catch (err) {
+            console.error("pr auto-merge failed", {
               session: session.id,
               prUrl,
               error: err instanceof Error ? err.message : String(err),

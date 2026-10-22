@@ -799,6 +799,7 @@ export async function dispatchAgent(
           )
         )
       : options?.extraEnv;
+  // PILE-290 — lane-env allowlist includes PILE_PGX_* for pgx lane DBs.
   if (issue.repo && !session.laneDbRef) {
     const laneConfig = await laneDbConfigForOrgRepo(
       env,
@@ -806,7 +807,11 @@ export async function dispatchAgent(
       issue.repo
     );
     if (laneConfig) {
-      const laneProvider = getLaneDbProvider(env);
+      const laneProvider = getLaneDbProvider(
+        env,
+        undefined,
+        laneConfig.provider
+      );
       if (laneProvider) {
         try {
           const provisioned = await laneProvider.provision(

@@ -1453,6 +1453,19 @@ def local_patch():
 
 
 def ensure_postgres():
+    # VTX-651 — when PILE_PGX_TEMPLATE is set and pgx (pgrundev/pgx) is
+    # installed in the image, clone an isolated copy-on-write Postgres branch
+    # in ~6ms instead of booting a full pg_ctlcluster instance.
+    pgx_template = os.environ.get('PILE_PGX_TEMPLATE', '').strip()
+    if pgx_template and shutil.which('pgx'):
+        t0 = time.time()
+        branch = os.environ.get('PILE_PGX_BRANCH', 'vortex_dev').strip() or 'vortex_dev'
+        ttl = os.environ.get('PILE_PGX_TTL', '3h').strip() or '3h'
+        clone = run(['pgx', 'clone', pgx_template, branch, '--ttl', ttl], check=False, capture_output=True, text=True)
+        if clone.returncode == 0:
+            print(f'[timing] pgx clone {pgx_template} -> {branch}: {(time.time() - t0) * 1000:.0f}ms')
+            return
+        print('pgx clone failed, falling back to pg_ctlcluster:', (clone.stdout or '') + (clone.stderr or ''))
     # Images with a baked Postgres get a running cluster + the vortex_dev
     # test database. Best-effort: images without it skip silently and suites
     # that need PG fail with their own error.
@@ -1480,6 +1493,9 @@ def ensure_postgres():
         print('WARNING: postgres not accepting connections:', (ready.stdout or '') + (ready.stderr or ''))
     run(['su', 'postgres', '-c', "psql -c \"ALTER USER postgres PASSWORD 'postgres'\""], check=False)
     run(['su', 'postgres', '-c', 'createdb vortex_dev'], check=False)
+    pgx_branch = re.sub(r'[^a-z0-9_]', '_', os.environ.get('PILE_PGX_BRANCH', '').strip().lower())
+    if pgx_branch and pgx_branch != 'vortex_dev':
+        run(['su', 'postgres', '-c', f'createdb {pgx_branch}'], check=False)
     print(f'[timing] postgres up: {time.time() - t0:.0f}s')
 
 

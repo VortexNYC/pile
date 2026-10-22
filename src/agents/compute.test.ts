@@ -1181,4 +1181,40 @@ describe("DaytonaBackend.listSandboxes (PILE-471)", () => {
     );
     vi.unstubAllGlobals();
   });
+
+  it("FailoverBackend.findSandbox switches to fallback when primary returns null (VTX-602/VTX-596)", async () => {
+    const { ns, stub } = fakeLaneNs();
+    const env = {
+      ...daytonaTestEnv(),
+      COMPUTE_PROVIDER: "cloudflare",
+      LANE_SDK: "v1",
+      LANE_FAILOVER: "v1",
+      SANDBOX_LANE: ns,
+    } as AppEnv;
+    stub.hasProcess.mockResolvedValueOnce(false);
+    fetchStub((url) => {
+      if (url.endsWith("/sandbox?page=1")) {
+        return new Response(
+          JSON.stringify({
+            items: [
+              {
+                id: "daytona-sb-1",
+                name: "vortex-lane-1",
+                state: "started",
+                labels: { "vortex.session": "sess-failover-1" },
+              },
+            ],
+          }),
+          { status: 200 }
+        );
+      }
+      return new Response(JSON.stringify({ items: [] }), { status: 200 });
+    });
+    const backend = computeBackend(env, "devin-cli");
+    expect(backend.kind).toBe("cloudflare");
+    const found = await backend.findSandbox("sess-failover-1", "vortex-lane-1");
+    expect(found?.id).toBe("daytona-sb-1");
+    expect(backend.kind).toBe("daytona");
+    vi.unstubAllGlobals();
+  });
 });

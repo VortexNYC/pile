@@ -1,8 +1,9 @@
 import { env } from "cloudflare:test";
+import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { createD1 } from "../global/db.js";
-import { user as userTable } from "../global/schema.js";
+import { organization, user as userTable } from "../global/schema.js";
 import { createTeam } from "../global/teams.js";
 import { createWorkspace } from "../global/workspaces.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
@@ -1480,5 +1481,52 @@ describe("infra classification of dispatch failures (PILE-452)", () => {
     expect(impl.status).toBe("running");
     expect(impl.paused).toBe(0);
     expect(dispatchedIds).toContain(impl.id);
+  });
+
+  it("provisions PgxLaneDb when org metadata configures provider=pgx for the issue repo (VTX-651)", async () => {
+    const s = stub();
+    let capturedExtraEnv: Record<string, string> | undefined;
+    const agentId = `mock-pgx-${crypto.randomUUID().slice(0, 8)}`;
+    registerAgentProvider(
+      agentId,
+      () =>
+        new MockAgentProvider(agentId, {
+          dispatch: (_org, _issue, _model, ctx) => {
+            capturedExtraEnv = ctx?.extraEnv;
+            return { id: "prov-pgx", agentId, status: "running" };
+          },
+        })
+    );
+    const db = createD1(env.D1);
+    await db
+      .update(organization)
+      .set({
+        metadata: JSON.stringify({
+          key: "IS",
+          laneDb: {
+            "VortexNYC/vortex": {
+              provider: "pgx",
+              template: "vortex_base",
+              ttl: "2h",
+            },
+          },
+        }),
+      })
+      .where(eq(organization.id, actor.organizationId));
+    const issue = await s.createIssue({
+      title: "pgx lane db test",
+      repo: "VortexNYC/vortex",
+    });
+    const session = await dispatchAgent(
+      env,
+      agentId,
+      actor.organizationId,
+      issue,
+      actor
+    );
+    expect(session.laneDbRef).toContain('"provider":"pgx"');
+    expect(capturedExtraEnv?.PILE_PGX_TEMPLATE).toBe("vortex_base");
+    expect(capturedExtraEnv?.PILE_PGX_TTL).toBe("2h");
+    expect(capturedExtraEnv?.DATABASE_URL).toContain("127.0.0.1:5432/lane_");
   });
 });

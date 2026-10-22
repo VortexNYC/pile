@@ -22,6 +22,7 @@ import {
   progressIsStale,
   prStateFromPull,
   releasePausedSessions,
+  shouldAutoMergePr,
   shouldUpdatePrBranch,
   summarizeCheckRuns,
   sweepAgentSessions,
@@ -4162,6 +4163,34 @@ describe("PILE-420 stale marking + pause holds", () => {
       { probeTimeoutMs: 10 }
     );
     expect(tasks).toEqual([]);
+    expect(
+      shouldAutoMergePr({
+        sessionStatus: "completed",
+        purpose: null,
+        state: "open",
+        draft: false,
+        mergeable: true,
+        mergeableState: "clean",
+        checkState: "passing",
+        reviewConclusion: "success",
+        headRef: "issue-123",
+        managedRefs: ["issue-123"],
+      })
+    ).toBe(true);
+    expect(
+      shouldAutoMergePr({
+        sessionStatus: "running",
+        purpose: null,
+        state: "open",
+        draft: false,
+        mergeable: true,
+        mergeableState: "clean",
+        checkState: "passing",
+        reviewConclusion: "success",
+        headRef: "issue-123",
+        managedRefs: ["issue-123"],
+      })
+    ).toBe(false);
   });
 });
 
