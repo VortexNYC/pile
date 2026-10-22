@@ -200,16 +200,18 @@ function chunk<T>(arr: T[], size: number): T[][] {
 
 /** VTX-637 — the instant a rate-limit park ends: the provider's advertised
  *  reset when it parses and lands in the future, else the fixed hold.
+ *  Clamped to the hold ceiling — a misparse upstream degrades to the old
+ *  behavior instead of parking the agent type for an unbounded window.
  *  A past/absent advertised instant can't un-park a lane early. */
 function rateLimitHoldUntil(result: {
   rateLimitUntil?: string | null;
 }): string {
   const advertised = Date.parse(result.rateLimitUntil ?? "");
-  const hold = Date.now() + RATE_LIMIT_HOLD_MS;
+  const ceiling = Date.now() + RATE_LIMIT_HOLD_MS;
   return new Date(
     Number.isFinite(advertised) && advertised > Date.now()
-      ? advertised
-      : hold
+      ? Math.min(advertised, ceiling)
+      : ceiling
   ).toISOString();
 }
 

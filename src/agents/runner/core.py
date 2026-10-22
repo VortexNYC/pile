@@ -1835,8 +1835,10 @@ def is_rate_limited(error):
 # Retry-After-style counts. Prefer the provider's number over the fixed
 # hold so lanes re-enter as soon as capacity frees, not on a guess.
 _RESET_IN_RE = re.compile(r'reset in (\d+)\s*(seconds?|minutes?|s|m)\b', re.I)
-_RESET_AT_UTC_RE = re.compile(
-    r'at (\d{1,2}):(\d{2})\s*(?:(AM|PM)\s*)?(?:UTC|GMT)?', re.I)
+# Only honor a clock instant when it carries an explicit UTC/GMT marker —
+# a bare "at 6:05 PM" gives no timezone and guessing one parks the whole
+# agent type on a confidently wrong instant.
+_RESET_AT_UTC_RE = re.compile(r'at (\d{1,2}):(\d{2})\s*(UTC|GMT)', re.I)
 _RETRY_IN_RE = re.compile(r'(?:try again|retry) in (\d+)\s*(seconds?|minutes?|s|m)\b', re.I)
 
 
@@ -1851,13 +1853,7 @@ def rate_limit_reset_iso(error, now=None):
         return (now + datetime.timedelta(seconds=secs)).isoformat()
     m = _RESET_AT_UTC_RE.search(text)
     if m:
-        hour = int(m.group(1))
-        meridiem = (m.group(3) or '').upper()
-        if meridiem == 'PM' and hour < 12:
-            hour += 12
-        elif meridiem == 'AM' and hour == 12:
-            hour = 0
-        at = now.replace(hour=hour, minute=int(m.group(2)),
+        at = now.replace(hour=int(m.group(1)), minute=int(m.group(2)),
                          second=0, microsecond=0)
         if at <= now:
             at += datetime.timedelta(days=1)
