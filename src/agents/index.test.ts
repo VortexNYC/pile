@@ -1378,4 +1378,39 @@ describe("infra classification of dispatch failures (PILE-452)", () => {
     );
     expect(session.status).toBe("created");
   });
+
+  it("recalls issue.identifier and issue.repo facts into dispatch instructions (VTX-645)", async () => {
+    const s = stub();
+    let capturedInstructions: string | null | undefined;
+    const agentId = `mock-mem-${crypto.randomUUID().slice(0, 8)}`;
+    registerAgentProvider(
+      agentId,
+      () =>
+        new MockAgentProvider(agentId, {
+          dispatch: (_org, _issue, _model, ctx) => {
+            capturedInstructions = ctx?.instructions;
+            return { id: "prov-mem", agentId, status: "running" };
+          },
+        })
+    );
+    const issue = await s.createIssue({
+      title: "memory recall test",
+      repo: "VortexNYC/pile",
+    });
+    await s.memoryRemember({
+      entityType: "issue",
+      entityId: issue.identifier!,
+      kind: "lesson",
+      fact: "identifier-keyed lesson for lane",
+    });
+    await s.memoryRemember({
+      entityType: "repo",
+      entityId: "VortexNYC/pile",
+      kind: "toolchain",
+      fact: "use pnpm only, never npm",
+    });
+    await dispatchAgent(env, agentId, actor.organizationId, issue, actor);
+    expect(capturedInstructions).toContain("identifier-keyed lesson for lane");
+    expect(capturedInstructions).toContain("use pnpm only, never npm");
+  });
 });

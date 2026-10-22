@@ -110,6 +110,8 @@ import {
   upsertAgentSpendCap,
   upsertNotificationPreferences,
   upsertRunReceipt,
+  memoryRemember,
+  memoryRecall,
   type NotificationType,
   type WorkspaceDb,
 } from "./index.js";
@@ -2147,6 +2149,35 @@ describe("agent session scoping (PILE-453)", () => {
         agentSlug: "nope",
       });
       expect(none).toHaveLength(0);
+    });
+  });
+
+  it("memoryRemember supersedes prior facts and memoryRecall filters validUntil (VTX-645)", async () => {
+    await withDb(async (db) => {
+      await memoryRemember(db, WORKSPACE_ID, {
+        entityType: "issue",
+        entityId: "vtx-999",
+        kind: "lesson",
+        fact: "first draft",
+      });
+      await memoryRemember(db, WORKSPACE_ID, {
+        entityType: "issue",
+        entityId: "VTX-999",
+        kind: "lesson",
+        fact: "latest lesson",
+      });
+      await memoryRemember(db, WORKSPACE_ID, {
+        entityType: "issue",
+        entityId: "VTX-999",
+        kind: "ephemeral",
+        fact: "expired note",
+        validUntil: "2020-01-01T00:00:00.000Z",
+      });
+      const rows = await memoryRecall(db, WORKSPACE_ID, {
+        entityType: "issue",
+        entityId: "vtx-999",
+      });
+      expect(rows.map((r) => r.fact)).toEqual(["latest lesson"]);
     });
   });
 });

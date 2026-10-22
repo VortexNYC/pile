@@ -20,4 +20,16 @@ describe("agent resource grants", () => {
     expect(flat).not.toContain("agent:read");
     expect(flat).not.toContain("agent:write");
   });
+
+  it("member/admin/owner roles carry memory grants while guests do not (VTX-636)", () => {
+    for (const role of [memberRole, adminRole, ownerRole]) {
+      const flat = flattenStatements(role.statements);
+      expect(flat).toContain("memory:view");
+      expect(flat).toContain("memory:create");
+      expect(flat).toContain("memory:edit");
+    }
+    const guestFlat = flattenStatements(guestRole.statements);
+    expect(guestFlat).not.toContain("memory:view");
+    expect(guestFlat).not.toContain("memory:create");
+  });
 });
