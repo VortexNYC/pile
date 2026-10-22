@@ -59,6 +59,13 @@ import { describeCapBreach, SPEND_CAP_ACTOR } from "./spend.js";
 // (max_instances) and one lane's provisioning wedge otherwise starves all.
 const MAX_ACTIVE_LANES_PER_WORKSPACE = 25;
 
+/** VTX-648 — review lanes (`purpose === "review"`) get at most half of an
+ *  agent's concurrency ceiling so PR review bursts can never starve
+ *  implementation lanes (`purpose === null`). */
+export function reviewConcurrencyCap(cap: number): number {
+  return Math.max(1, Math.floor(cap / 2));
+}
+
 const providers: Record<string, (env: WorkerEnv) => AgentProvider> = {
   devin: (env) => new DevinAgentProvider(env),
   codex: (env) => new CodexAgentProvider(env),
@@ -371,27 +378,41 @@ export async function dispatchAgent(
         message: "Queued session not found or no longer waiting",
       });
     }
-    // VTX-643 — a queue/pause promotion must still respect the provider's
-    // maxConcurrentLanes cap: if live lanes are already at cap, re-arm the
-    // concurrency-cap pause and hold the promoted row in `waiting` + `paused`.
+    // VTX-643 / VTX-648 — a queue/pause promotion must still respect the
+    // provider's maxConcurrentLanes cap (and the review sub-cap for review
+    // lanes): if at cap, hold the promoted row in `waiting` + `paused`.
     const cap = provider.maxConcurrentLanes;
     if (cap != null) {
-      const liveForAgent = (
-        await stub.listAgentSessions({ limit: 200 })
-      ).filter(
+      const liveRows = (await stub.listAgentSessions({ limit: 200 })).filter(
         (s) =>
           s.agentId === agentId &&
           s.id !== options.promoteSessionId &&
           !["completed", "failed", "canceled"].includes(s.status) &&
           s.paused !== 1 &&
           !(s.status === "waiting" && s.providerSessionId == null)
-      ).length;
-      if (liveForAgent >= cap) {
-        const pause = await stub.pauseAgentType(agentId, {
-          reason: `${CONCURRENT_LANES_PAUSE_PREFIX}${agentId} at ${cap} live lanes`,
-          actorId: "system",
-          actorType: "system",
-        });
+      );
+      const liveForAgent = liveRows.length;
+      const promotedPurpose = options.purpose ?? promoteTarget.purpose;
+      const reviewCap = reviewConcurrencyCap(cap);
+      const liveReviewForAgent =
+        promotedPurpose === "review"
+          ? liveRows.filter((s) => s.purpose === "review").length
+          : 0;
+      if (
+        liveForAgent >= cap ||
+        (promotedPurpose === "review" && liveReviewForAgent >= reviewCap)
+      ) {
+        const reason =
+          liveForAgent >= cap
+            ? `${CONCURRENT_LANES_PAUSE_PREFIX}${agentId} at ${cap} live lanes`
+            : `${CONCURRENT_LANES_PAUSE_PREFIX}${agentId} at ${reviewCap} review lanes`;
+        if (liveForAgent >= cap) {
+          await stub.pauseAgentType(agentId, {
+            reason,
+            actorId: "system",
+            actorType: "system",
+          });
+        }
         const parked = (await stub.updateAgentSession(
           options.promoteSessionId,
           {
@@ -407,11 +428,11 @@ export async function dispatchAgent(
           .addAgentSessionEvent({
             sessionId: parked.id,
             type: "agent.paused",
-            message: `Dispatch held — agent type "${agentId}" is paused${pause.reason ? `: ${pause.reason}` : ""}`,
+            message: `Dispatch held — agent type "${agentId}" is paused: ${reason}`,
             payload: {
               agentId,
-              reason: pause.reason ?? null,
-              pausedBy: pause.createdBy ?? null,
+              reason,
+              pausedBy: "system",
             },
           })
           .catch(() => {});
@@ -492,7 +513,9 @@ export async function dispatchAgent(
     // accepted but held, parked `waiting` + `paused`. Resume drains holds
     // in order; a dedupe edge rides along so a held lane still joins its
     // queue chain after release.
-    let pause = await stub.getAgentPause(agentId);
+    let pause:
+      | { reason?: string | null; createdBy?: string | null }
+      | undefined = await stub.getAgentPause(agentId);
     if (!pause) {
       // PILE-425 — spend/token window caps: a breached cap pauses the agent
       // type (the sweep fires the CoS alert once per breach-day via
@@ -517,27 +540,40 @@ export async function dispatchAgent(
       }
     }
     if (!pause) {
-      // VTX-621 — per-agent concurrency cap: park lanes past the provider's
-      // cap so a burst can't trip its rate limit. Paused holds don't count
-      // as live; the sweep lifts the marker pause once a slot frees.
+      // VTX-621 / VTX-648 — per-agent concurrency cap + review sub-cap:
+      // review lanes (`purpose === "review"`) cap at reviewConcurrencyCap(cap)
+      // and hold locally without writing a workspace-wide agent_pauses row, so
+      // review bursts never block implementation dispatches.
       const cap = provider.maxConcurrentLanes;
       if (cap != null) {
-        const liveForAgent = (
-          await stub.listAgentSessions({ limit: 200 })
-        ).filter(
+        const liveRows = (await stub.listAgentSessions({ limit: 200 })).filter(
           (s) =>
             s.agentId === agentId &&
             s.id !== options?.promoteSessionId &&
             !["completed", "failed", "canceled"].includes(s.status) &&
             s.paused !== 1 &&
             !(s.status === "waiting" && s.providerSessionId == null)
-        ).length;
+        );
+        const liveForAgent = liveRows.length;
+        const reviewCap = reviewConcurrencyCap(cap);
+        const liveReviewForAgent =
+          options?.purpose === "review"
+            ? liveRows.filter((s) => s.purpose === "review").length
+            : 0;
         if (liveForAgent >= cap) {
           pause = await stub.pauseAgentType(agentId, {
             reason: `${CONCURRENT_LANES_PAUSE_PREFIX}${agentId} at ${cap} live lanes`,
             actorId: "system",
             actorType: "system",
           });
+        } else if (
+          options?.purpose === "review" &&
+          liveReviewForAgent >= reviewCap
+        ) {
+          pause = {
+            reason: `${CONCURRENT_LANES_PAUSE_PREFIX}${agentId} at ${reviewCap} review lanes`,
+            createdBy: "system",
+          };
         }
       }
     }

@@ -37,6 +37,7 @@ import {
   getAgentProvider,
   inheritTeamDefaultRepo,
   providerKeepsTerminalSandbox,
+  reviewConcurrencyCap,
 } from "./index.js";
 import { getLaneDbProvider, type LaneDbRef } from "./lane-db.js";
 import { reapLaneGithubTokens } from "./lane-github-token.js";
@@ -1023,7 +1024,7 @@ async function promoteQueuedSession(
  *  as an entity fact; when env.AI is bound, runs an extraction pass
  *  over the result for structured facts the lane forgot to record. */
 async function extractSettledMemory(
-  env: WorkerEnv,
+  _env: WorkerEnv,
   stub: {
     memoryRemember(input: {
       entityType: string;
@@ -1043,10 +1044,15 @@ async function extractSettledMemory(
   result: unknown
 ): Promise<void> {
   try {
-    const tail =
+    const summary =
       typeof result === "string"
-        ? result.slice(-800)
-        : JSON.stringify(result ?? "").slice(-800);
+        ? result
+        : typeof result === "object" &&
+            result !== null &&
+            typeof (result as { result?: unknown }).result === "string"
+          ? (result as { result: string }).result
+          : JSON.stringify(result ?? "");
+    const tail = summary.slice(-800);
     await stub.memoryRemember({
       entityType: "issue",
       entityId: session.issueId ?? session.id,
@@ -1069,9 +1075,10 @@ export async function releasePausedSessions(
 ): Promise<string[]> {
   const held = await stub.listPauseHeldSessions(agentId);
   const released: string[] = [];
-  // PILE-476 / VTX-643 — stagger post-pause releases: bounded drain per call
-  // AND bounded by remaining maxConcurrentLanes headroom so lifting a pause
-  // with 1 free slot cannot promote 3 pure holds past the cap.
+  // PILE-476 / VTX-643 / VTX-648 — stagger post-pause releases: bounded drain
+  // per call, bounded by remaining maxConcurrentLanes headroom, and bounded by
+  // reviewConcurrencyCap(cap) for review holds so held implementation lanes
+  // always promote ahead of cap-saturated review holds.
   const RELEASE_PER_PASS = 3;
   let cap: number | undefined;
   try {
@@ -1080,8 +1087,9 @@ export async function releasePausedSessions(
     cap = undefined;
   }
   let liveForAgent = 0;
+  let liveReviewForAgent = 0;
   if (cap != null) {
-    liveForAgent = (
+    const liveRows = (
       await stub.listAgentSessions({ limit: 200 }).catch(() => [])
     ).filter(
       (s) =>
@@ -1089,16 +1097,26 @@ export async function releasePausedSessions(
         !TERMINAL_STATUSES.has(s.status) &&
         s.paused !== 1 &&
         !(s.status === "waiting" && s.providerSessionId == null)
-    ).length;
+    );
+    liveForAgent = liveRows.length;
+    liveReviewForAgent = liveRows.filter((s) => s.purpose === "review").length;
   }
+  const reviewCap = cap != null ? reviewConcurrencyCap(cap) : undefined;
   for (const session of held) {
     if (released.length >= RELEASE_PER_PASS) break;
-    // A pure hold requires a free live-lane slot; a queue-chained hold
-    // (`session.queuedAfter`) stays `waiting` on its blocker and only drops
-    // `paused`, so `continue` (not `break`) prevents a cap-blocked pure hold
-    // from starving later queue-chained holds.
-    if (!session.queuedAfter && cap != null && liveForAgent >= cap) {
-      continue;
+    // A pure hold requires a free live-lane slot (and for review lanes, a free
+    // review sub-cap slot); a queue-chained hold (`session.queuedAfter`) stays
+    // `waiting` on its blocker and only drops `paused`, so `continue` prevents
+    // a cap-blocked hold from starving later eligible holds.
+    if (!session.queuedAfter && cap != null) {
+      if (liveForAgent >= cap) continue;
+      if (
+        session.purpose === "review" &&
+        reviewCap != null &&
+        liveReviewForAgent >= reviewCap
+      ) {
+        continue;
+      }
     }
     await stub
       .updateAgentSession(session.id, { paused: 0 })
@@ -1118,6 +1136,7 @@ export async function releasePausedSessions(
       if (after?.paused === 1) continue;
       released.push(session.id);
       liveForAgent++;
+      if (session.purpose === "review") liveReviewForAgent++;
     } catch (err) {
       console.error("pause-held session promote failed", {
         session: session.id,
