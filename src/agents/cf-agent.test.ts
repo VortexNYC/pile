@@ -61,3 +61,37 @@ describe("CfAgentProvider dispatch payload (Flue profiles)", () => {
     expect(body.conversationKey).toBe("merchant-42-sales-scout");
   });
 });
+
+describe("CfAgentProvider parseWebhook", () => {
+  const provider = new CfAgentProvider({} as never, "flue");
+
+  it("carries the settlement usage onto the session result (PILE-450)", () => {
+    const parsed = provider.parseWebhook({
+      sessionId: "sess-1",
+      outcome: "completed",
+      usage: {
+        model: "claude-sonnet-4-5",
+        inputTokens: 12_000,
+        outputTokens: 1_500,
+        costMicros: 45_000,
+      },
+    });
+    expect(parsed?.session?.status).toBe("completed");
+    expect(parsed?.session?.usage).toEqual({
+      model: "claude-sonnet-4-5",
+      inputTokens: 12_000,
+      outputTokens: 1_500,
+      costMicros: 45_000,
+    });
+  });
+
+  it("drops a malformed usage payload instead of failing the webhook", () => {
+    const parsed = provider.parseWebhook({
+      sessionId: "sess-1",
+      outcome: "failed",
+      usage: { inputTokens: -1 },
+    });
+    expect(parsed?.session?.status).toBe("failed");
+    expect(parsed?.session?.usage).toBeUndefined();
+  });
+});

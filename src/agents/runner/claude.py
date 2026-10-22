@@ -72,6 +72,7 @@ def run_agent(agent_bin):
     last_text = ''
     result_error = None
     usage = None
+    burned = {'inputTokens': 0, 'outputTokens': 0}
     events = open('/tmp/agent-events.ndjson', 'a', buffering=1)
     try:
         for line in proc.stdout:
@@ -90,21 +91,27 @@ def run_agent(agent_bin):
                 if evt.get('is_error'):
                     result_error = evt.get('result') or evt.get('subtype') or 'error'
                 usage = cli_result_usage(evt) or usage
+            else:
+                step = cli_step_usage(evt)
+                if step:
+                    burned['inputTokens'] += step['inputTokens']
+                    burned['outputTokens'] += step['outputTokens']
             rendered = _render_event(evt)
             if rendered:
                 print(_redact(rendered))
         proc.wait(timeout=7200)
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as e:
         proc.kill()
-        raise
+        raise AgentRunError('claude -p timed out', usage=usage or burned_usage(burned)) from e
     finally:
         events.close()
     output = ''.join(tail)[-4000:]
     print('claude exit:', proc.returncode)
     if proc.returncode != 0 or result_error:
         detail = result_error or output[-500:]
-        raise RuntimeError(f'claude -p failed ({proc.returncode}): {_redact(str(detail))}')
-    return output, last_text, usage
+        raise AgentRunError(f'claude -p failed ({proc.returncode}): {_redact(str(detail))}',
+                            usage=usage or burned_usage(burned))
+    return output, last_text, usage or burned_usage(burned)
 
 
 def main():
