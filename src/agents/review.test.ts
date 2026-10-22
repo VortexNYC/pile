@@ -12,6 +12,7 @@ import {
   buildReviewDiff,
   classifyReviewRiskTier,
   evaluateReviewCase,
+  filterDiffGroundedFindings,
   parseReviewVerdict,
   publishReviewVerdicts,
   REVIEW_CHECK_NAME,
@@ -1219,5 +1220,30 @@ describe("requestPrReview / publishReviewVerdicts", () => {
       { fetch: round2Gh.fetch }
     );
     expect(outcome).toBe("round_capped");
+
+    // Deterministic diff-grounding filter (Michael Thiessen / Pullfrog rule):
+    // drops hallucinated findings on untouched files and recomputes verdict.
+    const grounded = filterDiffGroundedFindings(
+      {
+        verdict: "request-changes",
+        summary: "Found a bug.",
+        findings: [
+          {
+            severity: "breaking",
+            title: "Hallucinated bug in untouched file",
+            file: "src/untouched.ts",
+          },
+          {
+            severity: "minor",
+            title: "Nit in touched file",
+            file: "src/a.ts",
+          },
+        ],
+        unstructured: false,
+      },
+      ["src/a.ts"]
+    );
+    expect(grounded.findings).toHaveLength(1);
+    expect(grounded.verdict).toBe("comment");
   });
 });
