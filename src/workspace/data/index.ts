@@ -1215,6 +1215,9 @@ export function getAgentSessionByProviderSessionId(
 type ListAgentSessionsOptions = {
   issueId?: string;
   agentId?: string;
+  /** session.agentId candidates resolved from agentSlug (see
+   *  resolveAgentScope). Internal — callers pass agentSlug. */
+  agentIds?: string[];
   agentSlug?: string;
   status?: AgentSessionStatus;
   openPr?: boolean;
@@ -1237,6 +1240,9 @@ function agentSessionListConditions(
   }
   if (options.agentId) {
     conditions.push(eq(workspaceAgentSessions.agentId, options.agentId));
+  }
+  if (options.agentIds?.length) {
+    conditions.push(inArray(workspaceAgentSessions.agentId, options.agentIds));
   }
   if (options.excludeIssueCondition) {
     conditions.push(options.excludeIssueCondition);
@@ -1277,30 +1283,55 @@ export function getAgentSessionByConversationKey(
     .get();
 }
 
+// agentSlug isn't a session column — lanes record the dispatch agent in
+// session.agentId: the type's providerAgentId on registered-type
+// dispatches, the profile slug itself on flue-dispatch lanes. A slug
+// therefore scopes to {raw, normalized, providerAgentId}; an explicit
+// agentId still wins when both are passed.
+function resolveAgentScope(
+  db: WorkspaceDb,
+  organizationId: string,
+  options: ListAgentSessionsOptions
+): ListAgentSessionsOptions {
+  if (!options.agentSlug || options.agentId) return options;
+  const normalized = stageKey(options.agentSlug);
+  const type = db
+    .select({ providerAgentId: workspaceAgentTypes.providerAgentId })
+    .from(workspaceAgentTypes)
+    .where(
+      and(
+        eq(workspaceAgentTypes.organizationId, organizationId),
+        eq(workspaceAgentTypes.slug, normalized)
+      )
+    )
+    .get();
+  const agentIds = [
+    ...new Set(
+      [options.agentSlug, normalized, type?.providerAgentId].filter(
+        (value): value is string =>
+          typeof value === "string" && value.length > 0
+      )
+    ),
+  ];
+  return { ...options, agentIds };
+}
+
 export function listAgentSessions(
   db: WorkspaceDb,
   organizationId: string,
   options: ListAgentSessionsOptions = {}
 ) {
-  // agentSlug isn't a session column — resolve it to the agent type's id.
-  let resolved = options;
-  if (options.agentSlug && !options.agentId) {
-    const type = db
-      .select({ id: workspaceAgentTypes.id })
-      .from(workspaceAgentTypes)
-      .where(
-        and(
-          eq(workspaceAgentTypes.organizationId, organizationId),
-          eq(workspaceAgentTypes.slug, options.agentSlug)
-        )
-      )
-      .get();
-    resolved = { ...options, agentId: type?.id ?? "__none__" };
-  }
   return db
     .select()
     .from(workspaceAgentSessions)
-    .where(and(...agentSessionListConditions(organizationId, resolved)))
+    .where(
+      and(
+        ...agentSessionListConditions(
+          organizationId,
+          resolveAgentScope(db, organizationId, options)
+        )
+      )
+    )
     .orderBy(
       desc(workspaceAgentSessions.createdAt),
       desc(workspaceAgentSessions.id)
@@ -1381,7 +1412,14 @@ export function listAgentSessionSummaries(
   return db
     .select(agentSessionSummaryColumns)
     .from(workspaceAgentSessions)
-    .where(and(...agentSessionListConditions(organizationId, options)))
+    .where(
+      and(
+        ...agentSessionListConditions(
+          organizationId,
+          resolveAgentScope(db, organizationId, options)
+        )
+      )
+    )
     .orderBy(
       desc(workspaceAgentSessions.createdAt),
       desc(workspaceAgentSessions.id)

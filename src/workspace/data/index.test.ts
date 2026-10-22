@@ -81,6 +81,7 @@ import {
   setIssuePermission,
   revokeIssuePermission,
   listAgentSessions,
+  listAgentSessionSummaries,
   listDocumentLinks,
   listEntityAttachments,
   listCustomerIntakeItems,
@@ -2088,67 +2089,78 @@ describe("space permissions — closed-ACL precedence (PILE-447)", () => {
   });
 });
 
+// session.agentId stores the dispatch agent — the type's providerAgentId
+// on registered-type dispatches, the profile slug itself on flue lanes.
+// A slug scopes to {slug, providerAgentId}, never the type's row id.
+function seedScopeRows(db: WorkspaceDb) {
+  db.insert(workspaceAgentTypes)
+    .values({
+      id: "atype-scout",
+      organizationId: WORKSPACE_ID,
+      slug: "scout",
+      name: "Scout",
+      providerAgentId: "devin-cli",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    })
+    // The suite shares one DO database — reseeding must be a no-op.
+    .onConflictDoNothing()
+    .run();
+  const session = (id: string, agentId: string, createdAt: string) => ({
+    id,
+    organizationId: WORKSPACE_ID,
+    issueId: "issue-scope-1",
+    agentId,
+    provider: agentId,
+    actorId: "u1",
+    actorType: "user" as const,
+    status: "completed" as const,
+    createdAt,
+    updatedAt: createdAt,
+  });
+  db.insert(workspaceAgentSessions)
+    .values([
+      session("s-pipe", "devin-cli", "2026-01-01T00:00:01.000Z"),
+      session("s-flue", "scout", "2026-01-01T00:00:02.000Z"),
+      session("s-other", "cursor-cli", "2026-01-01T00:00:03.000Z"),
+    ])
+    .onConflictDoNothing()
+    .run();
+}
+
 describe("agent session scoping (PILE-453)", () => {
-  it("listAgentSessions filters by agentSlug via agent_types", async () => {
+  it("listAgentSessions filters by agentSlug via slug + providerAgentId", async () => {
     await withDb(async (db) => {
-      db.insert(workspaceAgentTypes)
-        .values([
-          {
-            id: "atype-scout",
-            organizationId: WORKSPACE_ID,
-            slug: "scout",
-            name: "Scout",
-            providerAgentId: "devin-cli",
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-          {
-            id: "atype-profiler",
-            organizationId: WORKSPACE_ID,
-            slug: "profiler",
-            name: "Profiler",
-            providerAgentId: "devin-cli",
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-        ])
-        .run();
-      db.insert(workspaceAgentSessions)
-        .values([
-          {
-            id: "s-scout",
-            organizationId: WORKSPACE_ID,
-            issueId: "issue-scope-1",
-            agentId: "atype-scout",
-            provider: "devin-cli",
-            actorId: "u1",
-            actorType: "user",
-            status: "completed",
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-          {
-            id: "s-profiler",
-            organizationId: WORKSPACE_ID,
-            issueId: "issue-scope-1",
-            agentId: "atype-profiler",
-            provider: "devin-cli",
-            actorId: "u1",
-            actorType: "user",
-            status: "completed",
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-        ])
-        .run();
+      seedScopeRows(db);
       const scoutOnly = listAgentSessions(db, WORKSPACE_ID, {
         agentSlug: "scout",
       });
-      expect(scoutOnly.map((r) => r.id)).toEqual(["s-scout"]);
+      expect(scoutOnly.map((r) => r.id)).toEqual(["s-flue", "s-pipe"]);
       const none = listAgentSessions(db, WORKSPACE_ID, {
         agentSlug: "nope",
       });
       expect(none).toHaveLength(0);
+      // Slugs normalize like registry writes ("Scope Scout" → scope_scout).
+      const normalized = listAgentSessions(db, WORKSPACE_ID, {
+        agentSlug: "Scout",
+      });
+      expect(normalized.map((r) => r.id)).toEqual(["s-flue", "s-pipe"]);
+      // An explicit agentId wins over the slug candidates.
+      const explicit = listAgentSessions(db, WORKSPACE_ID, {
+        agentSlug: "scout",
+        agentId: "cursor-cli",
+      });
+      expect(explicit.map((r) => r.id)).toEqual(["s-other"]);
+    });
+  });
+
+  it("listAgentSessionSummaries applies the same agentSlug scope", async () => {
+    await withDb(async (db) => {
+      seedScopeRows(db);
+      const scoutOnly = listAgentSessionSummaries(db, WORKSPACE_ID, {
+        agentSlug: "scout",
+      });
+      expect(scoutOnly.map((r) => r.id)).toEqual(["s-flue", "s-pipe"]);
     });
   });
 
