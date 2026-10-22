@@ -408,7 +408,7 @@ export class DaytonaBackend implements ComputeBackend {
       if (!res.ok) {
         const text = await res.text();
         throw computeError(
-          `Daytona sandbox list failed: ${res.status} ${text}`
+          daytonaFailure("Daytona sandbox list failed", res.status, text)
         );
       }
       const list = daytonaSandboxListSchema.parse(await res.json());
