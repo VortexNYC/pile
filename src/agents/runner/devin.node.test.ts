@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -94,9 +94,13 @@ function runDevin(
     timeout: 60_000,
   });
   return JSON.parse(
-    execFileSync(REAL_PYTHON, ["-c", `import json;print(open(${JSON.stringify(out)}).read())`], {
-      encoding: "utf8",
-    }).trim()
+    execFileSync(
+      REAL_PYTHON,
+      ["-c", `import json;print(open(${JSON.stringify(out)}).read())`],
+      {
+        encoding: "utf8",
+      }
+    ).trim()
   );
 }
 
@@ -110,35 +114,41 @@ describe("devin.py driver", () => {
     expect(r.content).toBe('token = "abc123"');
   });
 
-  itPy("write_lane_mcp_config merges pile-lane into existing servers with a bearer header", () => {
-    const r = runDevin("mcp", {
-      PILE_LANE_MCP_URL: "https://pile.test/mcp/lane",
-      LANE_TOKEN: "lane-tok-1",
-    });
-    expect(r.servers).toEqual(["other", "pile-lane"]);
-    expect(r.lane).toEqual({
-      serverUrl: "https://pile.test/mcp/lane",
-      headers: { Authorization: "Bearer lane-tok-1" },
-    });
-    expect(r.mode).toBe("0o600");
-  });
+  itPy(
+    "write_lane_mcp_config merges pile-lane into existing servers with a bearer header",
+    () => {
+      const r = runDevin("mcp", {
+        PILE_LANE_MCP_URL: "https://pile.test/mcp/lane",
+        LANE_TOKEN: "lane-tok-1",
+      });
+      expect(r.servers).toEqual(["other", "pile-lane"]);
+      expect(r.lane).toEqual({
+        serverUrl: "https://pile.test/mcp/lane",
+        headers: { Authorization: "Bearer lane-tok-1" },
+      });
+      expect(r.mode).toBe("0o600");
+    }
+  );
 
   itPy("write_lane_mcp_config is a no-op without the lane MCP env", () => {
     const r = runDevin("mcp_absent", {});
     expect(r.exists).toBe(false);
   });
 
-  itPy("permission_mode is accept-edits only when the lane shell is disabled", () => {
-    expect(runDevin("perm", { PILE_SHELL_POLICY: "disabled" }).mode).toBe(
-      "accept-edits"
-    );
-    expect(runDevin("perm", { PILE_SHELL_POLICY: "enabled" }).mode).toBe(
-      "dangerous"
-    );
-    expect(runDevin("perm", { PILE_SHELL_POLICY: "restricted" }).mode).toBe(
-      "dangerous"
-    );
-  });
+  itPy(
+    "permission_mode is accept-edits only when the lane shell is disabled",
+    () => {
+      expect(runDevin("perm", { PILE_SHELL_POLICY: "disabled" }).mode).toBe(
+        "accept-edits"
+      );
+      expect(runDevin("perm", { PILE_SHELL_POLICY: "enabled" }).mode).toBe(
+        "dangerous"
+      );
+      expect(runDevin("perm", { PILE_SHELL_POLICY: "restricted" }).mode).toBe(
+        "dangerous"
+      );
+    }
+  );
 
   itPy("apply_tool_policy denies exec only under shell=disabled", () => {
     const off = runDevin("policy", { PILE_SHELL_POLICY: "disabled" });
@@ -148,23 +158,26 @@ describe("devin.py driver", () => {
     expect(on.exists).toBe(false);
   });
 
-  itPy("drain_followups on a repo-less lane drains queued prompts without crashing", () => {
-    if (!REAL_PYTHON) return;
-    const home = mkdtempSync(join(tmpdir(), "pile-devin-drain-"));
-    // Stub devin binary: devin's argv is -p --prompt-file PATH ... — echo
-    // the prompt to prove the turn ran, exit clean.
-    const bin = join(home, "devin-stub");
-    writeFileSync(bin, '#!/bin/sh\ncat "$3"\necho stub-done\n');
-    chmodSync(bin, 0o755);
-    const r = runDevin("drain_norepo", {
-      DEVIN_STUB_BIN: bin,
-      DEVIN_CREDENTIALS_B64: Buffer.from('token = "x"').toString("base64"),
-      REPO: "",
-      BRANCH: "",
-      PILE_PUSH_POLICY: "enabled",
-    });
-    expect(r.ok).toBe(true);
-    expect(r.leftover).toEqual([]);
-    expect(r.consumed).toBeGreaterThanOrEqual(2);
-  });
+  itPy(
+    "drain_followups on a repo-less lane drains queued prompts without crashing",
+    () => {
+      if (!REAL_PYTHON) return;
+      const home = mkdtempSync(join(tmpdir(), "pile-devin-drain-"));
+      // Stub devin binary: devin's argv is -p --prompt-file PATH ... — echo
+      // the prompt to prove the turn ran, exit clean.
+      const bin = join(home, "devin-stub");
+      writeFileSync(bin, '#!/bin/sh\ncat "$3"\necho stub-done\n');
+      chmodSync(bin, 0o755);
+      const r = runDevin("drain_norepo", {
+        DEVIN_STUB_BIN: bin,
+        DEVIN_CREDENTIALS_B64: Buffer.from('token = "x"').toString("base64"),
+        REPO: "",
+        BRANCH: "",
+        PILE_PUSH_POLICY: "enabled",
+      });
+      expect(r.ok).toBe(true);
+      expect(r.leftover).toEqual([]);
+      expect(r.consumed).toBeGreaterThanOrEqual(2);
+    }
+  );
 });
