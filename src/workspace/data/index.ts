@@ -4448,14 +4448,40 @@ export interface MemoryInput {
   validUntil?: string | null;
 }
 
+const ISSUE_IDENTIFIER_RE = /^[a-z]+-\d+$/i;
+
+function normalizeMemoryEntityId(entityType: string, entityId: string): string {
+  return entityType === "issue" && ISSUE_IDENTIFIER_RE.test(entityId)
+    ? entityId.toUpperCase()
+    : entityId;
+}
+
+function memoryEntityIdFilter(
+  entityType: string | undefined,
+  entityId: string
+): SQL {
+  if (entityType === "issue" && ISSUE_IDENTIFIER_RE.test(entityId)) {
+    const upper = entityId.toUpperCase();
+    const lower = entityId.toLowerCase();
+    if (upper !== lower) {
+      return or(
+        eq(workspaceMemory.entityId, upper),
+        eq(workspaceMemory.entityId, lower)
+      )!;
+    }
+  }
+  return eq(workspaceMemory.entityId, entityId);
+}
+
 export async function memoryRemember(
   db: WorkspaceDb,
   organizationId: string,
   input: MemoryInput
 ) {
-  // Supersede: a new fact of the same kind on the same entity marks the
-  // previous row superseded rather than deleting it — contradictions and
-  // temporal updates keep the audit trail.
+  const entityId = normalizeMemoryEntityId(input.entityType, input.entityId);
+  // Supersede: a new fact of the same kind on the same entity points `supersedes`
+  // at the latest prior row rather than deleting it — contradictions and
+  // temporal updates keep the audit trail while recall surfaces only the head.
   const prior = await db
     .select({ id: workspaceMemory.id })
     .from(workspaceMemory)
@@ -4463,18 +4489,20 @@ export async function memoryRemember(
       and(
         eq(workspaceMemory.organizationId, organizationId),
         eq(workspaceMemory.entityType, input.entityType),
-        eq(workspaceMemory.entityId, input.entityId),
+        memoryEntityIdFilter(input.entityType, entityId),
         eq(workspaceMemory.kind, input.kind),
-        isNull(workspaceMemory.supersedes)
+        sql`${workspaceMemory.id} NOT IN (SELECT ${workspaceMemory.supersedes} FROM ${workspaceMemory} WHERE ${workspaceMemory.organizationId} = ${organizationId} AND ${workspaceMemory.supersedes} IS NOT NULL)`
       )
     )
+    .orderBy(desc(workspaceMemory.createdAt), desc(workspaceMemory.id))
+    .limit(1)
     .get();
   const id = crypto.randomUUID();
   await db.insert(workspaceMemory).values({
     id,
     organizationId,
     entityType: input.entityType,
-    entityId: input.entityId,
+    entityId,
     kind: input.kind,
     fact: input.fact,
     sourceSessionId: input.sourceSessionId ?? null,
@@ -4497,24 +4525,43 @@ export async function memoryRecall(
     limit?: number;
   }
 ) {
-  const conds = [
+  const now = new Date().toISOString();
+  const conds: SQL[] = [
     eq(workspaceMemory.organizationId, organizationId),
-    isNull(workspaceMemory.supersedes),
+    sql`${workspaceMemory.id} NOT IN (SELECT ${workspaceMemory.supersedes} FROM ${workspaceMemory} WHERE ${workspaceMemory.organizationId} = ${organizationId} AND ${workspaceMemory.supersedes} IS NOT NULL)`,
+    or(
+      isNull(workspaceMemory.validUntil),
+      gt(workspaceMemory.validUntil, now)
+    )!,
   ];
   if (query.entityType)
     conds.push(eq(workspaceMemory.entityType, query.entityType));
-  if (query.entityId) conds.push(eq(workspaceMemory.entityId, query.entityId));
+  if (query.entityId)
+    conds.push(memoryEntityIdFilter(query.entityType, query.entityId));
   if (query.kind) conds.push(eq(workspaceMemory.kind, query.kind));
   // Fuzzy fact search — LIKE over the fact text so "did we sweep
   // Smith?" finds corridor:smith-st without the exact entity key.
   if (query.search) conds.push(like(workspaceMemory.fact, `%${query.search}%`));
-  return db
+  const rows = await db
     .select()
     .from(workspaceMemory)
     .where(and(...conds))
-    .orderBy(desc(workspaceMemory.createdAt))
-    .limit(query.limit ?? 25)
+    .orderBy(desc(workspaceMemory.createdAt), desc(workspaceMemory.id))
+    .limit((query.limit ?? 25) * 2)
     .all();
+  // Deduplicate by (entityType, normalizedEntityId, kind) keeping the newest row
+  // so legacy multi-head chains before VTX-645 collapse to the current fact.
+  const seen = new Set<string>();
+  const deduped: typeof rows = [];
+  const cap = query.limit ?? 25;
+  for (const row of rows) {
+    const key = `${row.entityType}\0${normalizeMemoryEntityId(row.entityType, row.entityId)}\0${row.kind}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(row);
+    if (deduped.length >= cap) break;
+  }
+  return deduped;
 }
 
 export async function upsertAgentProviderConfig(

@@ -129,6 +129,8 @@ describe("MCP integration", () => {
       (tool) => tool.name === "postWorkspacesOrganizationIdIssues"
     );
     expect(generated?.description).toContain("Alias: create_issue");
+    expect(tools.some((tool) => tool.name === "memory_recall")).toBe(true);
+    expect(tools.some((tool) => tool.name === "memory_remember")).toBe(true);
   });
 
   it("creates and manages an issue through MCP", async () => {

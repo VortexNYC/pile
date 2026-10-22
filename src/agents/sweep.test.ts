@@ -3981,7 +3981,13 @@ describe("PILE-420 stale marking + pause holds", () => {
     }
 
     const third = await stub.createIssue({ title: "Overflow" });
-    const held = await dispatchAgent(env, agentId, organizationId, third, actor);
+    const held = await dispatchAgent(
+      env,
+      agentId,
+      organizationId,
+      third,
+      actor
+    );
     expect(held.status).toBe("waiting");
     expect(held.paused).toBe(1);
     expect(dispatches).toHaveLength(0);
@@ -4005,6 +4011,86 @@ describe("PILE-420 stale marking + pause holds", () => {
     const drained = await stub.getAgentSession(held.id);
     expect(drained?.paused).toBe(0);
     expect(dispatches).toEqual([held.id]);
+  });
+
+  it("bounds pause drain by maxConcurrentLanes headroom and re-arms the cap pause (VTX-643)", async () => {
+    const agentId = `mock-cap-drain-${crypto.randomUUID().slice(0, 8)}`;
+    const dispatches: string[] = [];
+    registerMock(agentId, {
+      maxConcurrentLanes: 2,
+      dispatch: (_org, _issue, _model, ctx) => {
+        dispatches.push(ctx?.sessionId ?? "");
+        return { id: `prov-${ctx?.sessionId}`, agentId, status: "running" };
+      },
+      poll: (id) => ({ id, agentId, status: "running" }),
+    });
+    const actor = {
+      id: userId,
+      organizationId,
+      type: "user" as const,
+      permissions: [] as string[],
+    };
+    const live1 = await stub.createIssue({ title: "Cap live 1" });
+    const live2 = await stub.createIssue({ title: "Cap live 2" });
+    for (const issue of [live1, live2]) {
+      await stub.createAgentSession({
+        issueId: issue.id,
+        agentId,
+        provider: agentId,
+        actorId: userId,
+        actorType: "user",
+        status: "running",
+      });
+    }
+    const h1Issue = await stub.createIssue({ title: "Held 1" });
+    const h2Issue = await stub.createIssue({ title: "Held 2" });
+    const h3Issue = await stub.createIssue({ title: "Held 3 (queued)" });
+    const h1 = await dispatchAgent(
+      env,
+      agentId,
+      organizationId,
+      h1Issue,
+      actor
+    );
+    const h2 = await dispatchAgent(
+      env,
+      agentId,
+      organizationId,
+      h2Issue,
+      actor
+    );
+    const h3 = await dispatchAgent(
+      env,
+      agentId,
+      organizationId,
+      h3Issue,
+      actor,
+      undefined,
+      undefined,
+      { queueAfter: h1.id, skipQueue: true }
+    );
+    expect([h1.paused, h2.paused, h3.paused]).toEqual([1, 1, 1]);
+    expect(h3.queuedAfter).toBe(h1.id);
+
+    // One live lane finishes -> 1 slot opens (cap=2, live=1). Drain must promote
+    // only h1, keep pure hold h2 parked (paused=1), still unpause queue-chained
+    // hold h3 (paused=0, waiting on h1), and re-arm the concurrency-cap pause.
+    const liveSessions = await stub.listAgentSessions({ limit: 200 });
+    const toEnd = liveSessions.find(
+      (s) => s.agentId === agentId && s.status === "running"
+    );
+    await stub.updateAgentSession(toEnd!.id, { status: "completed" });
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    expect(dispatches).toEqual([h1.id]);
+    expect((await stub.getAgentSession(h1.id))?.paused).toBe(0);
+    expect((await stub.getAgentSession(h2.id))?.paused).toBe(1);
+    const h3After = await stub.getAgentSession(h3.id);
+    expect(h3After?.paused).toBe(0);
+    expect(h3After?.status).toBe("waiting");
+    expect((await stub.getAgentPause(agentId))?.reason).toContain(
+      "concurrency cap"
+    );
   });
 });
 
