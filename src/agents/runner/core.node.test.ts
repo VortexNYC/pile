@@ -652,6 +652,62 @@ describe("runner push state (PILE-322)", () => {
   });
 });
 
+// VTX-620 — the poll/sweep rate-limit park only works if the runner's
+// result file actually carries the flags. Pin the fail_result payload so a
+// provider-capacity death can't quietly regress to a plain failure.
+describePy("fail_result payload (VTX-620)", () => {
+  const failResult = (pyExpr: string): Record<string, unknown> => {
+    if (!PYTHON) throw new Error("unreachable: suite skipped without CPython");
+    const out = execFileSync(
+      PYTHON,
+      [
+        "-c",
+        `import sys, os, json
+sys.path.insert(0, ${JSON.stringify(join(import.meta.dirname))})
+import core
+try:
+    os.remove(core.RESULT_FILE)
+except OSError:
+    pass
+core.fail_result(${pyExpr})
+print(open(core.RESULT_FILE).read())`,
+      ],
+      { encoding: "utf8", env: runnerEnv(), timeout: 30_000 }
+    );
+    return JSON.parse(out.trim()) as Record<string, unknown>;
+  };
+
+  it("flags a free-model rate-limit death as rateLimited with the advertised reset", () => {
+    const before = Date.now();
+    const result = failResult(
+      `RuntimeError('devin -p failed (1): Reached free model rate limit. Please switch to a different model. Your limit will reset in 1 minute (at 17:21 UTC).')`
+    );
+    expect(result.status).toBe("failed");
+    expect(result.rateLimited).toBe(true);
+    expect(result.infraFailure).toBeUndefined();
+    const until = Date.parse(String(result.rateLimitUntil));
+    expect(until).toBeGreaterThan(before);
+    expect(until).toBeLessThanOrEqual(before + 120_000);
+  });
+
+  it("flags a transport death as infraFailure, not rateLimited", () => {
+    const result = failResult(`core.TransportError('git push died')`);
+    expect(result.status).toBe("failed");
+    expect(result.infraFailure).toBe(true);
+    expect(result.rateLimited).toBeUndefined();
+    expect(result.rateLimitUntil).toBeUndefined();
+  });
+
+  it("leaves a plain task failure unflagged", () => {
+    const result = failResult(
+      `RuntimeError('devin -p failed (1): the implementation broke')`
+    );
+    expect(result.status).toBe("failed");
+    expect(result.infraFailure).toBeUndefined();
+    expect(result.rateLimited).toBeUndefined();
+  });
+});
+
 describePy("rate-limit reset parsing (VTX-638)", () => {
   const parse = (text: string, now: string): string => {
     if (!PYTHON) throw new Error("unreachable: suite skipped without CPython");

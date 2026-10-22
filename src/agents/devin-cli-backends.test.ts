@@ -148,7 +148,7 @@ function laneBackend() {
   const backend = new LaneSandboxBackend(
     ns as unknown as DurableObjectNamespace<LaneSandboxBase>
   );
-  return { backend, stub, files };
+  return { backend, stub, ns, files };
 }
 
 function providerOn(compute: ComputeBackend, env = cliEnv()) {
@@ -279,10 +279,11 @@ describe("devin-cli × CloudflareBackend (sandbox-sdk 0.12)", () => {
 
   it("sendPrompt on an idle sandbox spawns a -fu runner process", async () => {
     const files = new Map([[RESULT_PATH, completedResult]]);
-    const { backend, handle, files: written } = cfBackend(
-      { "sess-1": cfProc("sess-1", "completed", 0) },
-      files
-    );
+    const {
+      backend,
+      handle,
+      files: written,
+    } = cfBackend({ "sess-1": cfProc("sess-1", "completed", 0) }, files);
     const { provider, seam } = providerOn(backend);
     vi.spyOn(seam, "followupPermissions").mockResolvedValue({
       shell: "enabled",
@@ -312,6 +313,75 @@ describe("devin-cli × CloudflareBackend (sandbox-sdk 0.12)", () => {
     const { provider } = providerOn(backend);
     await provider.cancel("sess-1");
     expect(destroy).toHaveBeenCalled();
+  });
+
+  it("poll surfaces rateLimited + rateLimitUntil for the sweep's park (VTX-638)", async () => {
+    // The runner flags provider-capacity deaths in the result file; poll must
+    // carry both fields verbatim — the sweep parks the retry until the
+    // advertised reset instead of burning the lane's retry budget.
+    const until = "2026-10-22T17:22:00+00:00";
+    const files = new Map([
+      [
+        RESULT_PATH,
+        JSON.stringify({
+          status: "failed",
+          result:
+            'devin -p failed (1): Reached free model rate limit. Your limit will reset in 1 minute (at 17:21 UTC). {"cognition.ai/errorKind":"unavailable","cognition.ai/retryable":true}',
+          rateLimited: true,
+          rateLimitUntil: until,
+        }),
+      ],
+    ]);
+    const { backend, destroy } = cfBackend(
+      { "sess-1": cfProc("sess-1", "completed", 1) },
+      files
+    );
+    const { provider } = providerOn(backend);
+    const polled = await provider.poll("sess-1");
+    expect(polled.status).toBe("failed");
+    expect(polled.rateLimited).toBe(true);
+    expect(polled.rateLimitUntil).toBe(until);
+    expect(polled.infraFailure).toBeUndefined();
+    // followup descriptor keeps the sandbox even on a rate-limit death.
+    expect(destroy).not.toHaveBeenCalled();
+  });
+
+  it("poll failed + infraFailure when the runner dies on the substrate", async () => {
+    const files = new Map([
+      [
+        RESULT_PATH,
+        JSON.stringify({
+          status: "failed",
+          result: "TransportError: git push died",
+          infraFailure: true,
+        }),
+      ],
+    ]);
+    const { backend } = cfBackend(
+      { "sess-1": cfProc("sess-1", "completed", 1) },
+      files
+    );
+    const { provider } = providerOn(backend);
+    const polled = await provider.poll("sess-1");
+    expect(polled.status).toBe("failed");
+    expect(polled.infraFailure).toBe(true);
+    expect(polled.rateLimited).toBeUndefined();
+  });
+
+  it("getState reports the runner state and transcript tail", async () => {
+    const files = new Map([["/tmp/agent.log", "runner transcript tail"]]);
+    const { backend } = cfBackend(
+      { "sess-1": cfProc("sess-1", "running") },
+      files
+    );
+    const { provider } = providerOn(backend);
+    const state = await provider.getState("sess-1", "sess-1");
+    expect(state).not.toBeNull();
+    expect(state?.provider).toEqual({
+      state: "running",
+      logs: "runner transcript tail",
+    });
+    expect(state?.compute?.name).toBe("vortex-devin-sess1");
   });
 
   it("backupTerminalSandbox returns the serialized worktree backup", async () => {
@@ -364,6 +434,56 @@ describe("devin-cli × LaneSandboxBackend (sandbox-sdk 1.0)", () => {
     stub.hasProcess.mockResolvedValue(false);
     const { provider } = providerOn(backend);
     expect((await provider.poll("sess-1")).status).toBe("created");
+  });
+
+  it("poll still reads the result when the process record is gone (container slept)", async () => {
+    // The pid wrapper's record can outlive the runner only in /tmp files —
+    // hasProcess goes false on a slept/restarted container, and the result
+    // file is the surviving proof. findSandbox must follow it or a finished
+    // lane would poll 'created' forever.
+    const { backend, stub, files } = laneBackend();
+    stub.hasProcess.mockResolvedValue(false);
+    stub.processState.mockResolvedValue({ running: false, exitCode: 0 });
+    files.set(RESULT_PATH, completedResult);
+    const { provider } = providerOn(backend);
+
+    const polled = await provider.poll("sess-1");
+    expect(polled.status).toBe("completed");
+    expect(polled.prUrl).toBe("https://github.com/VortexNYC/pile/pull/42");
+  });
+
+  it("cancel destroys the lane DO by name even when no process or result exists", async () => {
+    const { backend, stub, ns } = laneBackend();
+    stub.hasProcess.mockResolvedValue(false);
+    const { provider } = providerOn(backend);
+
+    await provider.cancel("sess-1");
+    // findSandbox missed, so cancel falls back to the name-derived target —
+    // the DO is still destroyed instead of leaking a billing container.
+    expect(ns.getByName).toHaveBeenCalledWith("vortex-devin-sess1");
+    expect(stub.destroy).toHaveBeenCalled();
+  });
+
+  it("getState reports process state plus the runner's log tail", async () => {
+    const { backend, stub } = laneBackend();
+    const { provider } = providerOn(backend);
+
+    const state = await provider.getState("sess-1", "sess-1");
+    expect(state).not.toBeNull();
+    expect(state?.provider).toEqual({ state: "running", logs: "tail" });
+    expect(stub.tail).toHaveBeenCalledWith("/tmp/pile/proc/sess-1.log");
+  });
+
+  it("getState falls back to the wrapper log when /tmp/agent.log is absent", async () => {
+    const { backend, stub } = laneBackend();
+    stub.processState.mockResolvedValue({ running: false, exitCode: 7 });
+    const { provider } = providerOn(backend);
+
+    const state = await provider.getState("sess-1", "sess-1");
+    expect(state?.provider).toEqual({
+      state: { exitCode: 7 },
+      logs: "tail",
+    });
   });
 
   it("sendPrompt revives a dead lane from its worktree backup", async () => {

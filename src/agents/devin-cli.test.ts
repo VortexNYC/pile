@@ -467,6 +467,152 @@ describe("DevinCliAgentProvider", () => {
     expect(result.prUrl).toBeNull();
   });
 
+  it("sendPrompt injects into /tmp/followups while the Daytona runner is busy", async () => {
+    const sandboxId = "sb-1";
+    const toolboxBase = `https://proxy.app.daytona.io/toolbox/${sandboxId}`;
+    const fetchSpy = mockFetch([
+      {
+        url: "https://app.daytona.io/api/sandbox",
+        response: () => ({
+          items: [
+            {
+              id: sandboxId,
+              name: "vortex-devin-sess1",
+              state: "started",
+              toolboxProxyUrl: "https://proxy.app.daytona.io/toolbox",
+              labels: { "vortex.session": "sess-1" },
+            },
+          ],
+        }),
+      },
+      {
+        // The primary session still has an in-flight command — sendPrompt
+        // must take the stdin-injection path, not spawn a second runner.
+        url: `${toolboxBase}/process/session/sess-1`,
+        response: () => ({
+          sessionId: "sess-1",
+          commands: [{ id: "cmd-1", command: "python3 /tmp/run.py" }],
+        }),
+      },
+    ]);
+
+    const provider = new DevinCliAgentProvider(cliEnv());
+    const sent = await provider.sendPrompt(
+      "sess-1",
+      "also fix the flaky test",
+      issueFixture(),
+      null,
+      { organizationId: "org-1" }
+    );
+    expect(sent).toBe(true);
+
+    const followupUpload = fetchSpy.mock.calls.find(
+      ([input]) =>
+        /\/files\/upload(-v2)?\?/.test(String(input)) &&
+        String(input).includes(encodeURIComponent("/tmp/followups/"))
+    );
+    expect(followupUpload).toBeDefined();
+    // No new process session was created — the live runner consumed stdin.
+    const sessionCreates = fetchSpy.mock.calls.filter(
+      ([input, init]) =>
+        String(input).endsWith("/process/session") &&
+        (init as RequestInit | undefined)?.method === "POST"
+    );
+    expect(sessionCreates).toHaveLength(0);
+  });
+
+  it("sendPrompt on an idle Daytona sandbox spawns a -fu process session", async () => {
+    const sandboxId = "sb-1";
+    const toolboxBase = `https://proxy.app.daytona.io/toolbox/${sandboxId}`;
+    const fetchSpy = mockFetch([
+      {
+        url: "https://app.daytona.io/api/sandbox",
+        response: () => ({
+          items: [
+            {
+              id: sandboxId,
+              name: "vortex-devin-sess1",
+              state: "started",
+              toolboxProxyUrl: "https://proxy.app.daytona.io/toolbox",
+              labels: { "vortex.session": "sess-1" },
+            },
+          ],
+        }),
+      },
+      {
+        url: `${toolboxBase}/process/session/sess-1`,
+        response: () => ({
+          sessionId: "sess-1",
+          commands: [
+            { id: "cmd-1", command: "python3 /tmp/run.py", exitCode: 0 },
+          ],
+        }),
+      },
+      {
+        url: `${toolboxBase}/process/session/sess-1-fu`,
+        response: () => ({}),
+        method: "GET",
+      },
+      {
+        url: `${toolboxBase}/process/session`,
+        method: "POST",
+        response: () => ({ sessionId: "sess-1-fu-x" }),
+      },
+      {
+        url: /\/process\/session\/sess-1-fu-.+\/exec$/,
+        method: "POST",
+        response: () => ({ cmdId: "cmd-fu" }),
+      },
+    ]);
+
+    const provider = new DevinCliAgentProvider(cliEnv());
+    const seam = provider as unknown as {
+      followupPermissions: () => Promise<unknown>;
+      githubToken: (
+        repo: string
+      ) => Promise<{ token: string; expiresAt: string | null }>;
+    };
+    vi.spyOn(seam, "followupPermissions").mockResolvedValue({
+      shell: "enabled",
+      push: "enabled",
+    });
+    seam.githubToken = vi
+      .fn()
+      .mockResolvedValue({ token: "gh-token", expiresAt: null });
+
+    const sent = await provider.sendPrompt(
+      "sess-1",
+      "keep going",
+      issueFixture(),
+      null,
+      { organizationId: "org-1" }
+    );
+    expect(sent).toBe(true);
+
+    const sessionCreate = fetchSpy.mock.calls.find(
+      ([input, init]) =>
+        String(input).endsWith("/process/session") &&
+        (init as RequestInit | undefined)?.method === "POST"
+    );
+    expect(sessionCreate).toBeDefined();
+    expect(
+      JSON.parse((sessionCreate![1] as RequestInit).body as string).sessionId
+    ).toContain("sess-1-fu-");
+    const execCall = fetchSpy.mock.calls.find(
+      ([input, init]) =>
+        /\/process\/session\/sess-1-fu-.+\/exec$/.test(String(input)) &&
+        (init as RequestInit | undefined)?.method === "POST"
+    );
+    expect(execCall).toBeDefined();
+    expect(
+      (
+        JSON.parse((execCall![1] as RequestInit).body as string) as {
+          command: string;
+        }
+      ).command
+    ).toBe(". /tmp/pile/lane.env && python3 /tmp/pile/run.py");
+  });
+
   it("cancels by deleting the sandbox", async () => {
     const sandboxId = "sb-1";
     const fetchSpy = mockFetch([
@@ -499,6 +645,90 @@ describe("DevinCliAgentProvider", () => {
         (init as RequestInit | undefined)?.method === "DELETE"
     );
     expect(deleteCall).toBeDefined();
+  });
+
+  // DEVIN_CLI_CREDENTIALS_B64 accepts either the base64 blob prod stores or
+  // a raw credentials.toml pasted into a secret — normalizeCredentialsB64
+  // encodes the latter so the runner's write_devin_home always decodes.
+  describe("credential normalization", () => {
+    const dispatchRoutes = (sandboxId: string) => {
+      const toolboxBase = `https://proxy.app.daytona.io/toolbox/${sandboxId}`;
+      return [
+        {
+          url: "https://app.daytona.io/api/sandbox",
+          method: "GET",
+          response: () => ({ items: [] }),
+        },
+        {
+          url: "https://app.daytona.io/api/sandbox",
+          method: "POST",
+          response: () => ({
+            id: sandboxId,
+            name: "vortex-devin-sess1",
+            state: "creating",
+            toolboxProxyUrl: "https://proxy.app.daytona.io/toolbox",
+          }),
+        },
+        {
+          url: `https://app.daytona.io/api/sandbox/${sandboxId}`,
+          method: "GET",
+          response: () => ({
+            id: sandboxId,
+            name: "vortex-devin-sess1",
+            state: "started",
+            toolboxProxyUrl: "https://proxy.app.daytona.io/toolbox",
+          }),
+        },
+        {
+          url: `${toolboxBase}/process/session`,
+          method: "POST",
+          response: () => ({ sessionId: "sess-1" }),
+        },
+        {
+          url: `${toolboxBase}/process/session/sess-1/exec`,
+          method: "POST",
+          response: () => ({ cmdId: "cmd-1" }),
+        },
+      ];
+    };
+
+    async function laneEnvFor(credentials: string): Promise<string> {
+      const fetchSpy = mockFetch(dispatchRoutes("sb-creds"));
+      const provider = new DevinCliAgentProvider(
+        cliEnv({ DEVIN_CLI_CREDENTIALS_B64: credentials })
+      );
+      (
+        provider as unknown as {
+          githubToken: (
+            repo: string
+          ) => Promise<{ token: string; expiresAt: string | null }>;
+        }
+      ).githubToken = vi
+        .fn()
+        .mockResolvedValue({ token: "gh-token", expiresAt: null });
+      const waits: Promise<unknown>[] = [];
+      await provider.dispatch("org-1", issueFixture(), "swe-2", {
+        sessionId: "sess-1",
+        gitIdentity: gitIdentityFixture(),
+        waitUntil: (p) => waits.push(p),
+      });
+      await Promise.all(waits);
+      return uploadedBody(fetchSpy, "/tmp/pile/lane.env");
+    }
+
+    it("base64-encodes a raw credentials.toml", async () => {
+      const raw = 'token = "raw-toml-secret"';
+      const laneEnv = await laneEnvFor(raw);
+      expect(laneEnv).toContain(`export DEVIN_CREDENTIALS_B64='${btoa(raw)}'`);
+    });
+
+    it("passes an already-base64 credential blob through unchanged", async () => {
+      const b64 = btoa('token = "already-encoded"');
+      const laneEnv = await laneEnvFor(b64);
+      expect(laneEnv).toContain(`export DEVIN_CREDENTIALS_B64='${b64}'`);
+      // not double-encoded
+      expect(laneEnv).not.toContain(btoa(b64));
+    });
   });
 
   it("fails provision when sandbox compute hangs instead of stalling forever", async () => {

@@ -255,6 +255,8 @@ function fakeSandbox(
   const writeFile = vi.fn(async () => ({ success: true }));
   const exec = vi.fn(async () => ({}));
   const destroy = vi.fn();
+  const createBackup = vi.fn(async () => ({ backupId: "bk-1" }));
+  const restoreBackup = vi.fn(async () => ({}));
   const getProcess = vi.fn((id: string) =>
     Promise.resolve(processes[id] ?? null)
   );
@@ -265,6 +267,8 @@ function fakeSandbox(
     writeFile,
     exec,
     destroy,
+    createBackup,
+    restoreBackup,
   };
   return {
     handle: handle as unknown as SandboxHandle,
@@ -274,6 +278,8 @@ function fakeSandbox(
     exec,
     destroy,
     getProcess,
+    createBackup,
+    restoreBackup,
   };
 }
 
@@ -620,6 +626,48 @@ describe("CloudflareBackend", () => {
     await backend.deleteSandbox(sandboxRecord);
     expect(destroy).toHaveBeenCalledOnce();
   });
+
+  it("backupWorktree stages /root/repo under /tmp and serializes the record", async () => {
+    const { handle, exec, createBackup } = fakeSandbox({});
+    const backend = new CloudflareBackend(() => Promise.resolve(handle));
+    const ref = await backend.backupWorktree!(sandboxRecord);
+
+    // The worktree lives at $HOME/repo — outside the backup root allowlist —
+    // so it is staged under /tmp first. $HOME (credentials) never enters it.
+    expect(exec).toHaveBeenCalledWith(
+      "rm -rf /tmp/pile-worktree && mkdir -p /tmp/pile-worktree && cp -a /root/repo/. /tmp/pile-worktree/"
+    );
+    expect(createBackup).toHaveBeenCalledWith(
+      expect.objectContaining({ dir: "/tmp/pile-worktree", gitignore: true })
+    );
+    expect(ref).toBe(JSON.stringify({ backupId: "bk-1" }));
+  });
+
+  it("restoreWorktree restores the record and lands it at /root/repo", async () => {
+    const { handle, exec, restoreBackup } = fakeSandbox({});
+    const backend = new CloudflareBackend(() => Promise.resolve(handle));
+    const restored = await backend.restoreWorktree!(
+      "vortex-devin-new",
+      '{"backupId":"bk-1"}'
+    );
+
+    expect(restoreBackup).toHaveBeenCalledWith({ backupId: "bk-1" });
+    expect(exec).toHaveBeenCalledWith(
+      "mkdir -p /root && cp -a /tmp/pile-worktree /root/repo"
+    );
+    expect(restored).toEqual({
+      id: "vortex-devin-new",
+      name: "vortex-devin-new",
+      state: "started",
+    });
+  });
+
+  it("backupWorktree returns null on a wedged sandbox instead of throwing", async () => {
+    const { handle, exec } = fakeSandbox({});
+    exec.mockRejectedValue(new Error("container dead"));
+    const backend = new CloudflareBackend(() => Promise.resolve(handle));
+    await expect(backend.backupWorktree!(sandboxRecord)).resolves.toBeNull();
+  });
 });
 
 const cacheEnv = () =>
@@ -918,6 +966,188 @@ describe("DaytonaBackend infra classification + quota surfacing (PILE-452)", () 
       );
     }
     vi.unstubAllGlobals();
+  });
+});
+
+describe("DaytonaBackend runner lifecycle", () => {
+  const toolbox = "https://tb.test";
+  const record: ComputeSandbox = {
+    id: "sb-1",
+    name: "vortex-devin-x",
+    state: "started",
+    toolboxProxyUrl: toolbox,
+  };
+
+  it("startRunner ships env as a sourced file instead of argv (execve cap)", async () => {
+    const calls = stubResponses((url, init) => {
+      if (url.includes("/process/session") && init?.method === "POST") {
+        return new Response(JSON.stringify({ sessionId: "sess-1" }));
+      }
+      if (url.includes("/files/upload-v2")) {
+        return new Response("{}", { status: 200 });
+      }
+      return new Response(JSON.stringify({ cmdId: "cmd-1" }));
+    });
+    const backend = computeBackend(daytonaEnv());
+    await backend.startRunner(record, "sess-1", "python3 /tmp/run.py", {
+      MODEL: "swe-2",
+      QUOTED: "it's",
+    });
+
+    const upload = calls.find((c) => c.includes("upload-v2"));
+    expect(upload).toContain("path=%2Ftmp%2Fpile-env-sess-1.sh");
+    const exec = calls.find((c) => c.includes("/exec"));
+    expect(exec).toBeDefined();
+    vi.unstubAllGlobals();
+  });
+
+  it("startRunner wraps the command with set -a source and cleans the env file", async () => {
+    let execBody = "";
+    let envContent = "";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes("/files/upload-v2")) {
+          envContent = String(init?.body ?? "");
+          return Promise.resolve(new Response("{}", { status: 200 }));
+        }
+        if (url.endsWith("/exec")) {
+          execBody = String(init?.body ?? "");
+          return Promise.resolve(
+            new Response(JSON.stringify({ cmdId: "cmd-1" }))
+          );
+        }
+        return Promise.resolve(
+          new Response(JSON.stringify({ sessionId: "sess-1" }))
+        );
+      })
+    );
+    const backend = computeBackend(daytonaEnv());
+    await backend.startRunner(record, "sess-1", "python3 /tmp/run.py", {
+      MODEL: "swe-2",
+      QUOTED: "it's",
+    });
+
+    expect(envContent).toBe("export MODEL='swe-2'\nexport QUOTED='it'\\''s'");
+    const command = (JSON.parse(execBody) as { command: string }).command;
+    expect(command).toBe(
+      "set -a && . /tmp/pile-env-sess-1.sh && set +a && rm -f /tmp/pile-env-sess-1.sh; python3 /tmp/run.py"
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it("runnerBusy sees an in-flight follow-up session, not just the primary", async () => {
+    stubResponses((url) => {
+      if (url.endsWith("/process/session/sess-1")) {
+        return new Response(
+          JSON.stringify({
+            sessionId: "sess-1",
+            commands: [{ id: "c1", command: "run", exitCode: 0 }],
+          })
+        );
+      }
+      if (url.endsWith("/process/session/sess-1-fu")) {
+        return new Response(
+          JSON.stringify({
+            sessionId: "sess-1-fu",
+            commands: [{ id: "c2", command: "run" }],
+          })
+        );
+      }
+      return new Response("not found", { status: 404 });
+    });
+    const backend = computeBackend(daytonaEnv());
+    expect(await backend.runnerBusy!(record, "sess-1")).toBe(true);
+    vi.unstubAllGlobals();
+  });
+
+  it("runnerBusy is false when both session records exited or are gone", async () => {
+    stubResponses((url) => {
+      if (url.endsWith("/process/session/sess-1")) {
+        return new Response(
+          JSON.stringify({
+            sessionId: "sess-1",
+            commands: [{ id: "c1", command: "run", exitCode: 1 }],
+          })
+        );
+      }
+      return new Response("not found", { status: 404 });
+    });
+    const backend = computeBackend(daytonaEnv());
+    expect(await backend.runnerBusy!(record, "sess-1")).toBe(false);
+    vi.unstubAllGlobals();
+  });
+
+  it("putFiles falls back to the legacy multipart upload on a 404 toolbox", async () => {
+    const calls = stubResponses((url) => {
+      if (url.includes("upload-v2")) {
+        return new Response("not found", { status: 404 });
+      }
+      if (url.includes("/files/upload?")) {
+        return new Response("{}", { status: 200 });
+      }
+      return new Response("{}", { status: 200 });
+    });
+    const backend = computeBackend(daytonaEnv());
+    await backend.putFiles(record, [
+      { path: "/tmp/pile/run.py", content: "print(1)" },
+    ]);
+    expect(calls.some((c) => c.includes("upload-v2"))).toBe(true);
+    expect(calls.some((c) => c.includes("/files/upload?"))).toBe(true);
+    vi.unstubAllGlobals();
+  });
+
+  it("putFiles raises an infra error when both upload endpoints fail", async () => {
+    stubResponses(() => new Response("gateway exploded", { status: 502 }));
+    const backend = computeBackend(daytonaEnv());
+    try {
+      await backend.putFiles(record, [
+        { path: "/tmp/pile/run.py", content: "print(1)" },
+      ]);
+      expect.unreachable();
+    } catch (err) {
+      expect(isComputeInfraError(err)).toBe(true);
+      expect((err as Error).message).toContain(
+        "Daytona file upload /tmp/pile/run.py failed"
+      );
+    }
+    vi.unstubAllGlobals();
+  });
+
+  it("deleteSandbox tolerates an already-gone sandbox (404)", async () => {
+    stubResponses(() => new Response("gone", { status: 404 }));
+    const backend = computeBackend(daytonaEnv());
+    await expect(backend.deleteSandbox(record)).resolves.toBeUndefined();
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("LaneSandboxBackend findSandbox fallback", () => {
+  it("finds the lane by result file when the pid record is gone", async () => {
+    const { ns, stub } = fakeLaneNs();
+    stub.hasProcess.mockResolvedValue(false);
+    stub.readFile.mockImplementation(async (path: string) =>
+      path === "/tmp/agent-result.json" ? '{"status":"completed"}' : null
+    );
+    const backend = new LaneSandboxBackend(
+      ns as DurableObjectNamespace<LaneSandboxBase>
+    );
+    const found = await backend.findSandbox(
+      "sess-1",
+      "vortex-devin-sess1",
+      "/tmp/agent-result.json"
+    );
+    expect(found?.name).toBe("vortex-devin-sess1");
+
+    stub.readFile.mockResolvedValue(null);
+    expect(
+      await backend.findSandbox(
+        "sess-1",
+        "vortex-devin-sess1",
+        "/tmp/agent-result.json"
+      )
+    ).toBeNull();
   });
 });
 

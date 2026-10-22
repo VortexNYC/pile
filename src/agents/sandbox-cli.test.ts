@@ -97,6 +97,22 @@ describe("truncation continuation (VOR-631)", () => {
     expect(fakeBackend.startRunner).not.toHaveBeenCalled();
   });
 
+  it("recovers lane fields from runnerEnv when the env file is gone (pre-PILE-595 lanes)", async () => {
+    // Lanes provisioned before the env moved to /tmp/pile/lane.env carry
+    // ISSUE_IDENTIFIER/REPO/BRANCH on the sandbox record — the continuation
+    // must still resolve them or the resumed run loses its identity.
+    files.clear();
+    files.set("/tmp/agent-result.json", TRUNCATED_RESULT);
+    fakeBackend.runnerBusy.mockResolvedValue(false);
+    const provider = new DevinCliAgentProvider(env());
+    (provider as unknown as { d: { compute: unknown } }).d.compute =
+      fakeBackend;
+    const polled = await provider.poll("sess1");
+    expect(polled.status).toBe("running");
+    expect(fakeBackend.startRunner).toHaveBeenCalledOnce();
+    expect(files.get("/tmp/pile-continuations")).toBe("1");
+  });
+
   it("stays running without re-dispatching while a continuation is in flight", async () => {
     files.clear();
     files.set("/tmp/agent-result.json", TRUNCATED_RESULT);
