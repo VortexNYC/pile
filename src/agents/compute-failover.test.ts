@@ -52,9 +52,12 @@ function fakeLaneNs() {
 }
 
 /** Minimal ComputeBackend recording which calls it served. */
-function recordingBackend(kind: "daytona" | "cloudflare", opts?: {
-  createError?: unknown;
-}) {
+function recordingBackend(
+  kind: "daytona" | "cloudflare",
+  opts?: {
+    createError?: unknown;
+  }
+) {
   const calls: string[] = [];
   const backend: ComputeBackend = {
     kind,
@@ -243,11 +246,13 @@ describe("FailoverBackend (PILE-473/474)", () => {
     await expect(fb.restoreWorktree("n", "{}")).rejects.toThrow(
       "no restoreWorktree"
     );
-    expect(await fb.mountCache(sb, {
-      organizationId: "o",
-      repo: "a/b",
-      readOnly: false,
-    })).toBeNull();
+    expect(
+      await fb.mountCache(sb, {
+        organizationId: "o",
+        repo: "a/b",
+        readOnly: false,
+      })
+    ).toBeNull();
     await fb.saveCache(sb, { organizationId: "o", repo: "a/b" });
     expect(await fb.previewUrl(sb, 3000)).toBeNull();
     expect(await fb.listSandboxes("vortex.")).toEqual([]);

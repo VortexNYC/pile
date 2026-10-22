@@ -3981,7 +3981,13 @@ describe("PILE-420 stale marking + pause holds", () => {
     }
 
     const third = await stub.createIssue({ title: "Overflow" });
-    const held = await dispatchAgent(env, agentId, organizationId, third, actor);
+    const held = await dispatchAgent(
+      env,
+      agentId,
+      organizationId,
+      third,
+      actor
+    );
     expect(held.status).toBe("waiting");
     expect(held.paused).toBe(1);
     expect(dispatches).toHaveLength(0);
