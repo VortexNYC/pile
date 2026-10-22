@@ -651,3 +651,49 @@ describe("runner push state (PILE-322)", () => {
     expect(res.error).toContain("refusing to push");
   });
 });
+
+describePy("rate-limit reset parsing (VTX-638)", () => {
+  const parse = (text: string, now: string): string => {
+    if (!PYTHON) throw new Error("unreachable: suite skipped without CPython");
+    return execFileSync(
+      PYTHON,
+      [
+        "-c",
+        `import sys, json, datetime; sys.path.insert(0, ${JSON.stringify(join(import.meta.dirname))});
+import core;
+now = datetime.datetime.fromisoformat(${JSON.stringify(now)});
+print(json.dumps(core.rate_limit_reset_iso(${JSON.stringify(text)}, now)))`,
+      ],
+      { encoding: "utf8", timeout: 30_000 }
+    ).trim().replace(/^"|"$/g, "");
+  };
+  const NOW = "2026-10-22T15:33:11+00:00";
+
+  it("parses 'reset in N seconds' as a relative offset", () => {
+    expect(
+      parse(
+        "Reached free model rate limit. Your limit will reset in 10 seconds (at 15:44 UTC)",
+        NOW
+      )
+    ).toBe("2026-10-22T15:33:21+00:00");
+  });
+
+  it("parses 'try again in 30s' / '2 minutes' abbreviations", () => {
+    expect(parse("try again in 30s", NOW)).toBe("2026-10-22T15:33:41+00:00");
+    expect(parse("retry in 2 minutes", NOW)).toBe("2026-10-22T15:35:11+00:00");
+  });
+
+  it("honors an explicit UTC/GMT clock time", () => {
+    expect(parse("resets at 15:44 UTC", NOW)).toBe("2026-10-22T15:44:00+00:00");
+    // Same-day-past clock rolls to tomorrow.
+    expect(parse("resets at 15:00 UTC", NOW)).toBe("2026-10-23T15:00:00+00:00");
+  });
+
+  it("rejects a bare 'at 6:05 PM' — no timezone marker, cannot guess", () => {
+    expect(parse("resets at 6:05 PM", NOW)).toBe("null");
+  });
+
+  it("ignores unrelated 'at HH:MM' text in a noisy error tail", () => {
+    expect(parse("build failed at 14:02 while cloning", NOW)).toBe("null");
+  });
+});

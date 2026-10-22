@@ -198,6 +198,23 @@ function chunk<T>(arr: T[], size: number): T[][] {
   );
 }
 
+/** VTX-637 — the instant a rate-limit park ends: the provider's advertised
+ *  reset when it parses and lands in the future, else the fixed hold.
+ *  Clamped to the hold ceiling — a misparse upstream degrades to the old
+ *  behavior instead of parking the agent type for an unbounded window.
+ *  A past/absent advertised instant can't un-park a lane early. */
+function rateLimitHoldUntil(result: {
+  rateLimitUntil?: string | null;
+}): string {
+  const advertised = Date.parse(result.rateLimitUntil ?? "");
+  const ceiling = Date.now() + RATE_LIMIT_HOLD_MS;
+  return new Date(
+    Number.isFinite(advertised) && advertised > Date.now()
+      ? Math.min(advertised, ceiling)
+      : ceiling
+  ).toISOString();
+}
+
 function isTerminalStatus(status: IssueStatus): boolean {
   return status === "done" || status === "canceled";
 }
@@ -5911,7 +5928,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
               this.organizationId,
               oldSession.agentId,
               {
-                reason: `${RATE_LIMIT_PAUSE_PREFIX}${new Date(Date.now() + RATE_LIMIT_HOLD_MS).toISOString()}`,
+                reason: `${RATE_LIMIT_PAUSE_PREFIX}${rateLimitHoldUntil(result)}`,
                 createdBy: "system",
               }
             )
@@ -6001,7 +6018,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       ) {
         await data
           .upsertAgentPause(this.db, this.organizationId, oldSession.agentId, {
-            reason: `${RATE_LIMIT_PAUSE_PREFIX}${new Date(Date.now() + RATE_LIMIT_HOLD_MS).toISOString()}`,
+            reason: `${RATE_LIMIT_PAUSE_PREFIX}${rateLimitHoldUntil(result)}`,
             createdBy: "system",
           })
           .catch(() => {});

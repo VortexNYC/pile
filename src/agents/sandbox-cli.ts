@@ -111,6 +111,10 @@ const runnerResultSchema = z.object({
   // Provider capacity ceiling (free-model rate limit, account 429) — the
   // lane is retryable after the provider's reset window, not failed.
   rateLimited: z.boolean().optional(),
+  // ISO instant the provider advertised for the reset (devin prints
+  // "reset in 49s (at 15:44 UTC)"; codex/claude "try again in 30s").
+  // When present the park ends at this instant, not a fixed hold.
+  rateLimitUntil: z.string().optional(),
   // PILE-425 — cumulative run usage the driver extracted from the agent
   // CLI's output; lands on the session's run receipt.
   usage: runUsageSchema.optional(),
@@ -1268,6 +1272,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
       branch: result.branch ?? null,
       infraFailure: result.infraFailure,
       rateLimited: result.rateLimited,
+      rateLimitUntil: result.rateLimitUntil,
       usage: result.usage ?? null,
     };
   }
