@@ -1069,12 +1069,37 @@ export async function releasePausedSessions(
 ): Promise<string[]> {
   const held = await stub.listPauseHeldSessions(agentId);
   const released: string[] = [];
-  // PILE-476 — stagger post-pause releases: bounded drain per call so a big
-  // held backlog doesn't stampede the provider on resume. Remaining holds
-  // release on subsequent passes; stored instructions ride each session
-  // unchanged (promoteQueuedSession reuses the row).
+  // PILE-476 / VTX-643 — stagger post-pause releases: bounded drain per call
+  // AND bounded by remaining maxConcurrentLanes headroom so lifting a pause
+  // with 1 free slot cannot promote 3 pure holds past the cap.
   const RELEASE_PER_PASS = 3;
-  for (const session of held.slice(0, RELEASE_PER_PASS)) {
+  let cap: number | undefined;
+  try {
+    cap = getAgentProvider(agentId, env).maxConcurrentLanes;
+  } catch {
+    cap = undefined;
+  }
+  let liveForAgent = 0;
+  if (cap != null) {
+    liveForAgent = (
+      await stub.listAgentSessions({ limit: 200 }).catch(() => [])
+    ).filter(
+      (s) =>
+        s.agentId === agentId &&
+        !TERMINAL_STATUSES.has(s.status) &&
+        s.paused !== 1 &&
+        !(s.status === "waiting" && s.providerSessionId == null)
+    ).length;
+  }
+  for (const session of held) {
+    if (released.length >= RELEASE_PER_PASS) break;
+    // A pure hold requires a free live-lane slot; a queue-chained hold
+    // (`session.queuedAfter`) stays `waiting` on its blocker and only drops
+    // `paused`, so `continue` (not `break`) prevents a cap-blocked pure hold
+    // from starving later queue-chained holds.
+    if (!session.queuedAfter && cap != null && liveForAgent >= cap) {
+      continue;
+    }
     await stub
       .updateAgentSession(session.id, { paused: 0 })
       .catch((err: unknown) => {
@@ -1083,10 +1108,16 @@ export async function releasePausedSessions(
           error: err instanceof Error ? err.message : String(err),
         });
       });
-    released.push(session.id);
-    if (session.queuedAfter) continue;
+    if (session.queuedAfter) {
+      released.push(session.id);
+      continue;
+    }
     try {
       await promoteQueuedSession(env, stub, organizationId, session, ctx);
+      const after = await stub.getAgentSession(session.id).catch(() => null);
+      if (after?.paused === 1) continue;
+      released.push(session.id);
+      liveForAgent++;
     } catch (err) {
       console.error("pause-held session promote failed", {
         session: session.id,
@@ -1094,6 +1125,21 @@ export async function releasePausedSessions(
         error: err instanceof Error ? err.message : String(err),
       });
     }
+  }
+  // If we hit maxConcurrentLanes while pure holds remain parked, re-arm the
+  // concurrency-cap pause so the sweep doesn't treat remaining holds as
+  // orphaned on the very next pass.
+  const remainingPureHolds = held.some(
+    (s) => !released.includes(s.id) && !s.queuedAfter
+  );
+  if (cap != null && liveForAgent >= cap && remainingPureHolds) {
+    await stub
+      .pauseAgentType(agentId, {
+        reason: `${CONCURRENT_LANES_PAUSE_PREFIX}${agentId} at ${cap} live lanes`,
+        actorId: "system",
+        actorType: "system",
+      })
+      .catch(() => {});
   }
   return released;
 }

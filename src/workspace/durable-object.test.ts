@@ -3569,6 +3569,50 @@ describe("spend caps + run receipts (PILE-425)", () => {
     expect(after).toBe(parkedUntil);
   });
 
+  it("supersedes prior workspace_memory facts and filters expired validUntil (VTX-645)", async () => {
+    const stub = getStub();
+    await withWorkspace(stub, (i) =>
+      i.memoryRemember({
+        entityType: "issue",
+        entityId: "vtx-645",
+        kind: "status",
+        fact: "stale v1",
+      })
+    );
+    await withWorkspace(stub, (i) =>
+      i.memoryRemember({
+        entityType: "issue",
+        entityId: "VTX-645",
+        kind: "status",
+        fact: "stale v2",
+      })
+    );
+    await withWorkspace(stub, (i) =>
+      i.memoryRemember({
+        entityType: "issue",
+        entityId: "VTX-645",
+        kind: "status",
+        fact: "current v3",
+      })
+    );
+    await withWorkspace(stub, (i) =>
+      i.memoryRemember({
+        entityType: "issue",
+        entityId: "VTX-645",
+        kind: "ephemeral",
+        fact: "already expired",
+        validUntil: "2020-01-01T00:00:00.000Z",
+      })
+    );
+    const recalled = await withWorkspace(stub, (i) =>
+      i.memoryRecall({
+        entityType: "issue",
+        entityId: "vtx-645",
+      })
+    );
+    expect(recalled.map((m) => m.fact)).toEqual(["current v3"]);
+  });
+
   it("carries usage on the result into the finalized receipt", async () => {
     const stub = getStub();
     const issue = await withWorkspace(stub, (instance) =>

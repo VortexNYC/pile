@@ -363,7 +363,62 @@ export async function dispatchAgent(
   let dedupeAdvisory: DedupeResult | null = null;
   let dedupeError: string | null = null;
   let continuation: DedupeContinuation | null = null;
-  if (!options?.promoteSessionId) {
+  if (options?.promoteSessionId) {
+    if (!promoteTarget || promoteTarget.status !== "waiting") {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Queued session not found or no longer waiting",
+      });
+    }
+    // VTX-643 — a queue/pause promotion must still respect the provider's
+    // maxConcurrentLanes cap: if live lanes are already at cap, re-arm the
+    // concurrency-cap pause and hold the promoted row in `waiting` + `paused`.
+    const cap = provider.maxConcurrentLanes;
+    if (cap != null) {
+      const liveForAgent = (
+        await stub.listAgentSessions({ limit: 200 })
+      ).filter(
+        (s) =>
+          s.agentId === agentId &&
+          s.id !== options.promoteSessionId &&
+          !["completed", "failed", "canceled"].includes(s.status) &&
+          s.paused !== 1 &&
+          !(s.status === "waiting" && s.providerSessionId == null)
+      ).length;
+      if (liveForAgent >= cap) {
+        const pause = await stub.pauseAgentType(agentId, {
+          reason: `${CONCURRENT_LANES_PAUSE_PREFIX}${agentId} at ${cap} live lanes`,
+          actorId: "system",
+          actorType: "system",
+        });
+        const parked = (await stub.updateAgentSession(
+          options.promoteSessionId,
+          {
+            status: "waiting",
+            paused: 1,
+          }
+        )) ?? {
+          ...promoteTarget,
+          status: "waiting" as const,
+          paused: 1,
+        };
+        await stub
+          .addAgentSessionEvent({
+            sessionId: parked.id,
+            type: "agent.paused",
+            message: `Dispatch held — agent type "${agentId}" is paused${pause.reason ? `: ${pause.reason}` : ""}`,
+            payload: {
+              agentId,
+              reason: pause.reason ?? null,
+              pausedBy: pause.createdBy ?? null,
+            },
+          })
+          .catch(() => {});
+        return parked;
+      }
+    }
+  } else {
     const dedupe = await checkDispatchDedupe(
       env,
       stub,
@@ -472,14 +527,9 @@ export async function dispatchAgent(
         ).filter(
           (s) =>
             s.agentId === agentId &&
-            // A promote is the cap's own drain — counting the promoted row
-            // would re-trip the cap and re-park it before it runs.
             s.id !== options?.promoteSessionId &&
             !["completed", "failed", "canceled"].includes(s.status) &&
             s.paused !== 1 &&
-            // Provider-less `waiting` rows are queue/park artifacts that
-            // cost no provider capacity — counting them pins the cap shut
-            // (queue rows can't finish, so the pause never lifts).
             !(s.status === "waiting" && s.providerSessionId == null)
         ).length;
         if (liveForAgent >= cap) {
@@ -619,9 +669,9 @@ export async function dispatchAgent(
     status: issue.status ?? null,
     stepKey,
   });
-  // Workspace memory — recall prior facts for this entity + the agent's
-  // own lessons, injected ahead of the caller's instructions (the
-  // "right context at the right time" layer; facts keyed by entity).
+  // Workspace memory — recall prior facts for this entity (by both UUID and
+  // human identifier), the target repository, the agent's own lessons, and
+  // shared workspace facts, injected ahead of the caller's instructions.
   let memoryText: string | null = null;
   try {
     const entityFacts = await stub.memoryRecall({
@@ -629,6 +679,21 @@ export async function dispatchAgent(
       entityId: issue.id,
       limit: 15,
     });
+    const identifierFacts =
+      issue.identifier && issue.identifier !== issue.id
+        ? await stub.memoryRecall({
+            entityType: "issue",
+            entityId: issue.identifier,
+            limit: 15,
+          })
+        : [];
+    const repoFacts = issue.repo
+      ? await stub.memoryRecall({
+          entityType: "repo",
+          entityId: issue.repo,
+          limit: 10,
+        })
+      : [];
     const agentFacts = await stub.memoryRecall({
       entityType: "agent",
       entityId: options?.agentProfile?.slug ?? agentId,
@@ -639,11 +704,18 @@ export async function dispatchAgent(
       entityId: organizationId,
       limit: 10,
     });
+    const seenFactIds = new Set<string>();
     const facts = [
       ...(entityFacts ?? []),
+      ...(identifierFacts ?? []),
+      ...(repoFacts ?? []),
       ...(agentFacts ?? []),
       ...(sharedFacts ?? []),
-    ];
+    ].filter((f) => {
+      if (seenFactIds.has(f.id)) return false;
+      seenFactIds.add(f.id);
+      return true;
+    });
     if (facts.length > 0) {
       memoryText =
         "Workspace memory (prior facts for this work — treat as given):\n" +

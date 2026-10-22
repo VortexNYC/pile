@@ -29,6 +29,7 @@ export const ac = createAccessControl({
   deal: ["view", "create", "edit", "delete"],
   session: ["view", "create", "edit", "delete"],
   comment: ["view", "create", "edit", "delete"],
+  memory: ["view", "create", "edit", "delete"],
   settings: ["view", "edit"],
   // Coarse grant for agent-actor API keys — the `agent:read`/`agent:write`
   // specs on lane routes. Without this resource the membership clamp
@@ -52,6 +53,7 @@ export const ownerRole = ac.newRole({
   deal: [...CONTENT],
   session: [...CONTENT],
   comment: [...CONTENT],
+  memory: [...CONTENT],
   settings: ["view", "edit"],
   agent: ["read", "write"],
   workspace: ["read", "write", "admin"],
@@ -68,6 +70,7 @@ export const adminRole = ac.newRole({
   deal: [...CONTENT],
   session: [...CONTENT],
   comment: [...CONTENT],
+  memory: [...CONTENT],
   settings: ["view", "edit"],
   agent: ["read", "write"],
   workspace: ["read", "write", "admin"],
@@ -84,6 +87,7 @@ export const memberRole = ac.newRole({
   deal: ["view", "create", "edit"],
   session: ["view", "create", "edit"],
   comment: ["view", "create", "edit"],
+  memory: ["view", "create", "edit"],
   settings: ["view"],
   agent: ["read", "write"],
   workspace: ["read", "write"],

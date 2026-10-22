@@ -88,6 +88,10 @@ export const MCP_TOOL_ALIASES: Readonly<Record<string, string>> = {
   update_document: "patchWorkspacesOrganizationIdDocumentsId",
   delete_document: "deleteWorkspacesOrganizationIdDocumentsId",
 
+  // Memory
+  memory_recall: "getWorkspacesOrganizationIdMemory",
+  memory_remember: "postWorkspacesOrganizationIdMemory",
+
   // Notifications
   list_notifications: "getWorkspacesOrganizationIdNotifications",
 
