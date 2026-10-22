@@ -3533,6 +3533,41 @@ describe("spend caps + run receipts (PILE-425)", () => {
     expect(third).toBeLessThanOrEqual(61 * 60_000);
   });
 
+  it("never shortens an in-flight rate-limit park (VTX-638)", async () => {
+    const stub = getStub();
+    const die = async (agentId: string, retryCount: number) => {
+      const issue = await withWorkspace(stub, (i) =>
+        i.createIssue({ title: `rl-shorten-${agentId}-${retryCount}` })
+      );
+      const session = await withWorkspace(stub, (i) =>
+        i.createAgentSession({
+          issueId: issue.id,
+          agentId,
+          provider: "mock",
+          actorId: "user-1",
+          actorType: "user",
+          status: "running",
+        })
+      );
+      await withWorkspace(stub, (i) =>
+        i.updateAgentSession(session.id, { retryCount })
+      );
+      await withWorkspace(stub, (i) =>
+        i.applyAgentSessionResult(session.id, {
+          status: "failed",
+          rateLimited: true,
+        })
+      );
+      const pause = await withWorkspace(stub, (i) => i.getAgentPause(agentId));
+      return Date.parse(pause!.reason!.slice("rate-limit until ".length));
+    };
+    const agent = "rl-agent-parked";
+    // A retry-4 death parks ~60m; a fresh lane's retry-0 death must not
+    // pull the park back to ~20m.
+    const parkedUntil = await die(agent, 4);
+    const after = await die(agent, 0);
+    expect(after).toBe(parkedUntil);
+  });
 
   it("carries usage on the result into the finalized receipt", async () => {
     const stub = getStub();

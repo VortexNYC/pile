@@ -222,6 +222,26 @@ function rateLimitHoldUntil(
   ).toISOString();
 }
 
+/** The rate-limit pause reason to persist, or null when the write should
+ *  be skipped: an operator/spend-cap pause (any reason without the
+ *  prefix) is never touched, and a shorter backoff must not shorten a
+ *  longer park still in flight — the escalation is the point. */
+function rateLimitPauseReason(
+  existing: { reason?: string | null } | undefined,
+  result: { rateLimitUntil?: string | null },
+  retryCount: number
+): string | null {
+  if (existing && !existing.reason?.startsWith(RATE_LIMIT_PAUSE_PREFIX))
+    return null;
+  const existingUntil = existing?.reason
+    ? Date.parse(existing.reason.slice(RATE_LIMIT_PAUSE_PREFIX.length))
+    : Number.NaN;
+  const next = rateLimitHoldUntil(result, retryCount);
+  if (Number.isFinite(existingUntil) && Date.parse(next) <= existingUntil)
+    return null;
+  return `${RATE_LIMIT_PAUSE_PREFIX}${next}`;
+}
+
 function isTerminalStatus(status: IssueStatus): boolean {
   return status === "done" || status === "canceled";
 }
@@ -5925,17 +5945,19 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           this.organizationId,
           oldSession.agentId
         );
-        if (
-          !existingPause ||
-          existingPause.reason?.startsWith(RATE_LIMIT_PAUSE_PREFIX)
-        ) {
+        const reason = rateLimitPauseReason(
+          existingPause,
+          result,
+          oldSession.retryCount ?? 0
+        );
+        if (reason) {
           await data
             .upsertAgentPause(
               this.db,
               this.organizationId,
               oldSession.agentId,
               {
-                reason: `${RATE_LIMIT_PAUSE_PREFIX}${rateLimitHoldUntil(result, oldSession.retryCount ?? 0)}`,
+                reason,
                 createdBy: "system",
               }
             )
@@ -6019,13 +6041,15 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         this.organizationId,
         oldSession.agentId
       );
-      if (
-        !existingPause ||
-        existingPause.reason?.startsWith(RATE_LIMIT_PAUSE_PREFIX)
-      ) {
+      const reason = rateLimitPauseReason(
+        existingPause,
+        result,
+        oldSession.retryCount ?? 0
+      );
+      if (reason) {
         await data
           .upsertAgentPause(this.db, this.organizationId, oldSession.agentId, {
-            reason: `${RATE_LIMIT_PAUSE_PREFIX}${rateLimitHoldUntil(result, oldSession.retryCount ?? 0)}`,
+            reason,
             createdBy: "system",
           })
           .catch(() => {});
