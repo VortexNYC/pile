@@ -198,21 +198,48 @@ function chunk<T>(arr: T[], size: number): T[][] {
   );
 }
 
-/** VTX-637 — the instant a rate-limit park ends: the provider's advertised
- *  reset when it parses and lands in the future, else the fixed hold.
- *  Clamped to the hold ceiling — a misparse upstream degrades to the old
- *  behavior instead of parking the agent type for an unbounded window.
- *  A past/absent advertised instant can't un-park a lane early. */
-function rateLimitHoldUntil(result: {
-  rateLimitUntil?: string | null;
-}): string {
+// VTX-638 — exponential backoff on the park ceiling: a lane that keeps
+// dying on the provider's rate limit doubles its hold per strike (20m →
+// 40m → 60m cap) instead of re-parking into the same window forever.
+const RATE_LIMIT_MAX_HOLD_MS = 60 * 60 * 1000;
+
+/** The instant a rate-limit park ends: the provider's advertised reset
+ *  when it parses, lands in the future, and sits inside the strike-
+ *  escalated ceiling — else the ceiling itself. A past/absent advertised
+ *  instant can't un-park a lane early. */
+function rateLimitHoldUntil(
+  result: { rateLimitUntil?: string | null },
+  retryCount = 0
+): string {
   const advertised = Date.parse(result.rateLimitUntil ?? "");
-  const ceiling = Date.now() + RATE_LIMIT_HOLD_MS;
+  const ceiling =
+    Date.now() +
+    Math.min(RATE_LIMIT_HOLD_MS * 2 ** retryCount, RATE_LIMIT_MAX_HOLD_MS);
   return new Date(
     Number.isFinite(advertised) && advertised > Date.now()
       ? Math.min(advertised, ceiling)
       : ceiling
   ).toISOString();
+}
+
+/** The rate-limit pause reason to persist, or null when the write should
+ *  be skipped: an operator/spend-cap pause (any reason without the
+ *  prefix) is never touched, and a shorter backoff must not shorten a
+ *  longer park still in flight — the escalation is the point. */
+function rateLimitPauseReason(
+  existing: { reason?: string | null } | undefined,
+  result: { rateLimitUntil?: string | null },
+  retryCount: number
+): string | null {
+  if (existing && !existing.reason?.startsWith(RATE_LIMIT_PAUSE_PREFIX))
+    return null;
+  const existingUntil = existing?.reason
+    ? Date.parse(existing.reason.slice(RATE_LIMIT_PAUSE_PREFIX.length))
+    : Number.NaN;
+  const next = rateLimitHoldUntil(result, retryCount);
+  if (Number.isFinite(existingUntil) && Date.parse(next) <= existingUntil)
+    return null;
+  return `${RATE_LIMIT_PAUSE_PREFIX}${next}`;
 }
 
 function isTerminalStatus(status: IssueStatus): boolean {
@@ -5918,17 +5945,19 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           this.organizationId,
           oldSession.agentId
         );
-        if (
-          !existingPause ||
-          existingPause.reason?.startsWith(RATE_LIMIT_PAUSE_PREFIX)
-        ) {
+        const reason = rateLimitPauseReason(
+          existingPause,
+          result,
+          oldSession.retryCount ?? 0
+        );
+        if (reason) {
           await data
             .upsertAgentPause(
               this.db,
               this.organizationId,
               oldSession.agentId,
               {
-                reason: `${RATE_LIMIT_PAUSE_PREFIX}${rateLimitHoldUntil(result)}`,
+                reason,
                 createdBy: "system",
               }
             )
@@ -6012,13 +6041,15 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         this.organizationId,
         oldSession.agentId
       );
-      if (
-        !existingPause ||
-        existingPause.reason?.startsWith(RATE_LIMIT_PAUSE_PREFIX)
-      ) {
+      const reason = rateLimitPauseReason(
+        existingPause,
+        result,
+        oldSession.retryCount ?? 0
+      );
+      if (reason) {
         await data
           .upsertAgentPause(this.db, this.organizationId, oldSession.agentId, {
-            reason: `${RATE_LIMIT_PAUSE_PREFIX}${rateLimitHoldUntil(result)}`,
+            reason,
             createdBy: "system",
           })
           .catch(() => {});

@@ -1834,7 +1834,7 @@ def is_rate_limited(error):
 # reset in 49 seconds (at 15:44 UTC)", codex/claude "try again in 30s",
 # Retry-After-style counts. Prefer the provider's number over the fixed
 # hold so lanes re-enter as soon as capacity frees, not on a guess.
-_RESET_IN_RE = re.compile(r'reset in (\d+)\s*(seconds?|minutes?|s|m)\b', re.I)
+_RESET_IN_RE = re.compile(r'\bresets? in (\d+)\s*(seconds?|minutes?|s|m)\b', re.I)
 # Only honor a clock instant when it carries an explicit UTC/GMT marker —
 # a bare "at 6:05 PM" gives no timezone and guessing one parks the whole
 # agent type on a confidently wrong instant.

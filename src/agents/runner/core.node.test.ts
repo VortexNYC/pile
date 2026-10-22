@@ -665,7 +665,9 @@ now = datetime.datetime.fromisoformat(${JSON.stringify(now)});
 print(json.dumps(core.rate_limit_reset_iso(${JSON.stringify(text)}, now)))`,
       ],
       { encoding: "utf8", timeout: 30_000 }
-    ).trim().replace(/^"|"$/g, "");
+    )
+      .trim()
+      .replace(/^"|"$/g, "");
   };
   const NOW = "2026-10-22T15:33:11+00:00";
 
@@ -681,6 +683,12 @@ print(json.dumps(core.rate_limit_reset_iso(${JSON.stringify(text)}, now)))`,
   it("parses 'try again in 30s' / '2 minutes' abbreviations", () => {
     expect(parse("try again in 30s", NOW)).toBe("2026-10-22T15:33:41+00:00");
     expect(parse("retry in 2 minutes", NOW)).toBe("2026-10-22T15:35:11+00:00");
+  });
+
+  it("accepts 'resets in' phrasing", () => {
+    expect(
+      parse("Rate limit reached. Your limit resets in 30 seconds", NOW)
+    ).toBe("2026-10-22T15:33:41+00:00");
   });
 
   it("honors an explicit UTC/GMT clock time", () => {

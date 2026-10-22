@@ -3490,6 +3490,84 @@ describe("spend caps + run receipts (PILE-425)", () => {
     expect(receipt?.totalTokens).toBeNull();
     expect(receipt?.costMicros).toBeNull();
   });
+  it("escalates the rate-limit park by the dying lane's retryCount (VTX-638)", async () => {
+    const stub = getStub();
+    const mk = async (retryCount: number) => {
+      const issue = await withWorkspace(stub, (i) =>
+        i.createIssue({ title: `rl-${retryCount}` })
+      );
+      const session = await withWorkspace(stub, (i) =>
+        i.createAgentSession({
+          issueId: issue.id,
+          agentId: `rl-agent-${retryCount}`,
+          provider: "mock",
+          actorId: "user-1",
+          actorType: "user",
+          status: "running",
+        })
+      );
+      await withWorkspace(stub, (i) =>
+        i.updateAgentSession(session.id, { retryCount })
+      );
+      const before = Date.now();
+      await withWorkspace(stub, (i) =>
+        i.applyAgentSessionResult(session.id, {
+          status: "failed",
+          rateLimited: true,
+        })
+      );
+      const pause = await withWorkspace(stub, (i) =>
+        i.getAgentPause(`rl-agent-${retryCount}`)
+      );
+      const until = Date.parse(
+        pause!.reason!.slice("rate-limit until ".length)
+      );
+      return until - before;
+    };
+    const first = await mk(0);
+    const second = await mk(1);
+    const third = await mk(4);
+    expect(first).toBeGreaterThan(19 * 60_000);
+    expect(first).toBeLessThanOrEqual(21 * 60_000);
+    expect(second).toBeGreaterThan(39 * 60_000);
+    expect(third).toBeLessThanOrEqual(61 * 60_000);
+  });
+
+  it("never shortens an in-flight rate-limit park (VTX-638)", async () => {
+    const stub = getStub();
+    const die = async (agentId: string, retryCount: number) => {
+      const issue = await withWorkspace(stub, (i) =>
+        i.createIssue({ title: `rl-shorten-${agentId}-${retryCount}` })
+      );
+      const session = await withWorkspace(stub, (i) =>
+        i.createAgentSession({
+          issueId: issue.id,
+          agentId,
+          provider: "mock",
+          actorId: "user-1",
+          actorType: "user",
+          status: "running",
+        })
+      );
+      await withWorkspace(stub, (i) =>
+        i.updateAgentSession(session.id, { retryCount })
+      );
+      await withWorkspace(stub, (i) =>
+        i.applyAgentSessionResult(session.id, {
+          status: "failed",
+          rateLimited: true,
+        })
+      );
+      const pause = await withWorkspace(stub, (i) => i.getAgentPause(agentId));
+      return Date.parse(pause!.reason!.slice("rate-limit until ".length));
+    };
+    const agent = "rl-agent-parked";
+    // A retry-4 death parks ~60m; a fresh lane's retry-0 death must not
+    // pull the park back to ~20m.
+    const parkedUntil = await die(agent, 4);
+    const after = await die(agent, 0);
+    expect(after).toBe(parkedUntil);
+  });
 
   it("carries usage on the result into the finalized receipt", async () => {
     const stub = getStub();
