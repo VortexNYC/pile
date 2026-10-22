@@ -17,6 +17,7 @@ import {
   workspaceAuthMiddleware,
 } from "../platform/middleware.js";
 import { observabilityMiddleware } from "../platform/observability.js";
+import { reportWorkerException } from "../platform/posthog.js";
 import { securityMiddleware } from "../platform/security.js";
 import { registerActivityRoutes } from "./activities.js";
 import { registerActivityFeedRoutes } from "./activity-feed.js";
@@ -137,7 +138,21 @@ const app = new OpenAPIHono<AppContext>({
 
 app.onError((err, c) => {
   console.error("unhandled route error", c.req.path, err);
-  return toErrorResponse(err);
+  const res = toErrorResponse(err);
+  if (res.status >= 500) {
+    reportWorkerException(
+      "api",
+      err,
+      getExecutionCtx(c),
+      {
+        method: c.req.method,
+        path: c.req.path,
+        status: res.status,
+      },
+      { env: c.env }
+    );
+  }
+  return res;
 });
 
 app.use("*", observabilityMiddleware);
