@@ -107,14 +107,26 @@ export const pileRepoConfigSchema = z.object({
   // PR, open a cloudflared quick tunnel to this port on the kept sandbox and
   // post the *.trycloudflare.com URL as a PR comment.
   preview: z.object({ port: z.number().int().positive() }).optional(),
-  // Automated PR review lane (PILE-273). Present = enabled: every PR
-  // open/synchronize on a Pile-tracked branch gets a repo-less review session
-  // (`agent`, default devin-cli; `model` overrides the provider default) that
-  // publishes a verdict comment and a `pile-review` check run.
+  // Automated PR review lane (PILE-273 / PILE-455). Present = enabled: every
+  // PR open/synchronize on a Pile-tracked branch gets a repo-less review
+  // session (`agent`, default devin-cli; `model` overrides the provider
+  // default; `maxRounds` caps review rounds per PR; `highRiskPaths` classifies
+  // high-risk diffs; `tierModels` scales model by risk tier).
   review: z
     .object({
       agent: z.string().optional(),
       model: z.string().optional(),
+      maxRounds: z.number().int().min(1).max(10).optional(),
+      highRiskPaths: z.array(z.string()).optional(),
+      skipDocsAndLockfiles: z.boolean().optional(),
+      securityCheck: z.boolean().optional(),
+      tierModels: z
+        .object({
+          low: z.string().optional(),
+          medium: z.string().optional(),
+          high: z.string().optional(),
+        })
+        .optional(),
     })
     .optional(),
   // Lane permission policy (PILE-276). Top-level tiers apply to every agent;

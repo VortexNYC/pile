@@ -26,8 +26,12 @@ import { dispatchAgent, getAgentProvider } from "./index.js";
 import { nudgeLane, resolveLaneForIssue } from "./nudge.js";
 
 export const REVIEW_CHECK_NAME = "pile-review";
+export const SECURITY_CHECK_NAME = "pile-security";
 export const REVIEW_PURPOSE = "review";
 export const DEFAULT_REVIEW_AGENT = "devin-cli";
+export const DEFAULT_MAX_REVIEW_ROUNDS = 1;
+
+export type ReviewRiskTier = "low" | "medium" | "high";
 
 // The prompt travels as a base64 env var into the sandbox; a single env
 // string is capped at 128 KiB on Linux, so the inlined diff stays well under.
@@ -91,6 +95,7 @@ export type ReviewRequestOutcome =
   | "deduped"
   | "disabled"
   | "skipped_generated"
+  | "round_capped"
   | "dispatched"
   | "failed";
 
@@ -320,13 +325,139 @@ export interface PrFile {
   previous_filename?: string;
 }
 
-/** Changed files minus the repo's declared generated artifacts. */
+const LOCKFILE_NAMES = new Set([
+  "pnpm-lock.yaml",
+  "package-lock.json",
+  "yarn.lock",
+  "Cargo.lock",
+  "go.sum",
+]);
+
+export function isDocOrLockfile(filename: string): boolean {
+  const lower = filename.toLowerCase();
+  const base = lower.split("/").pop() ?? lower;
+  if (LOCKFILE_NAMES.has(base) || LOCKFILE_NAMES.has(filename)) return true;
+  if (lower.endsWith(".md") || lower.endsWith(".mdx")) return true;
+  if (lower.startsWith("docs/")) return true;
+  return false;
+}
+
+const DEFAULT_HIGH_RISK_PATTERNS = [
+  /(?:^|\/)(?:auth|security|crypto|payment|payments|billing|payout|refund|webhook|secret|secrets|token|tokens|permissions|migrations|schema|access|rls)(?:\/|\.|-|_|$)/i,
+];
+
+const STATIC_SECURITY_RULES: Array<{
+  id: string;
+  title: string;
+  detail: string;
+  re: RegExp;
+}> = [
+  {
+    id: "private-key",
+    title: "Private key material in diff",
+    detail: "Remove private key material from source control immediately.",
+    re: /-----BEGIN (?:RSA |EC |OPENSSH |)PRIVATE KEY-----/,
+  },
+  {
+    id: "live-api-key",
+    title: "Live credential token in diff",
+    detail: "Live provider key detected (`sk_live_`, `rk_live_`, or `AKIA`).",
+    re: /\b(?:sk_live_[0-9a-zA-Z]{16,}|rk_live_[0-9a-zA-Z]{16,}|AKIA[0-9A-Z]{16})\b/,
+  },
+  {
+    id: "javascript-url-sink",
+    title: "Unvalidated javascript: URL scheme sink",
+    detail: "Ensure URLs passed to navigation sinks enforce https: allowlists.",
+    re: /location\.(?:href|replace|assign)\s*\([^)]*javascript:/i,
+  },
+];
+
+/** PILE-455 Layer 3 — deterministic static security scan over added diff lines. */
+export function runStaticSecurityPass(files: PrFile[]): ReviewFinding[] {
+  const findings: ReviewFinding[] = [];
+  for (const file of files) {
+    if (!file.patch || file.filename.includes(".test.")) continue;
+    const lines = file.patch.split("\n");
+    for (let idx = 0; idx < lines.length; idx++) {
+      const line = lines[idx] ?? "";
+      if (!line.startsWith("+") || line.startsWith("+++")) continue;
+      for (const rule of STATIC_SECURITY_RULES) {
+        if (rule.re.test(line)) {
+          findings.push({
+            severity: "breaking",
+            title: rule.title,
+            file: file.filename,
+            line: idx + 1,
+            detail: rule.detail,
+          });
+        }
+      }
+    }
+  }
+  return findings;
+}
+
+/** PILE-455 Layer 6 — classify PR risk tier (`low` | `medium` | `high`). */
+export function classifyReviewRiskTier(
+  files: PrFile[],
+  config?: PileRepoConfig | null
+): ReviewRiskTier {
+  if (files.length === 0) return "low";
+  if (runStaticSecurityPass(files).length > 0) return "high";
+  const customHigh = config?.review?.highRiskPaths ?? [];
+  for (const f of files) {
+    if (
+      customHigh.some(
+        (pattern) =>
+          f.filename === pattern ||
+          f.filename.startsWith(pattern.endsWith("/") ? pattern : `${pattern}/`)
+      )
+    ) {
+      return "high";
+    }
+    if (DEFAULT_HIGH_RISK_PATTERNS.some((re) => re.test(f.filename))) {
+      return "high";
+    }
+  }
+  const allLowFiles = files.every(
+    (f) =>
+      isDocOrLockfile(f.filename) ||
+      f.filename.endsWith(".test.ts") ||
+      f.filename.endsWith(".spec.ts")
+  );
+  if (allLowFiles) return "low";
+  const totalLines = files.reduce(
+    (sum, f) => sum + (f.additions ?? 0) + (f.deletions ?? 0),
+    0
+  );
+  if (files.length <= 3 && totalLines > 0 && totalLines <= 60) return "low";
+  return "medium";
+}
+
+/** PILE-455 Layer 10 — cost-aware model selection by risk tier. */
+export function resolveReviewModel(
+  config: PileRepoConfig | null | undefined,
+  tier: ReviewRiskTier
+): string | undefined {
+  return config?.review?.tierModels?.[tier] ?? config?.review?.model;
+}
+
+/** Changed files minus the repo's declared generated artifacts (and docs/lockfiles
+ *  when `skipDocsAndLockfiles` is enabled). */
 export function reviewableFiles(
   files: PrFile[],
   config: PileRepoConfig | null
 ): PrFile[] {
   const generated = new Set(config?.conflict?.generated ?? []);
-  return files.filter((f) => !generated.has(f.filename));
+  const nonGenerated = files.filter((f) => !generated.has(f.filename));
+  if (
+    config?.review?.skipDocsAndLockfiles &&
+    nonGenerated.length > 0 &&
+    nonGenerated.every((f) => isDocOrLockfile(f.filename))
+  ) {
+    return [];
+  }
+  return nonGenerated;
 }
 
 /** Inline unified diff for the prompt, bounded by DIFF_CHAR_BUDGET. Files
@@ -595,38 +726,48 @@ function parsePayload(payload: string | null): unknown {
 
 const REVIEW_TERMINAL_STATUSES = new Set(["completed", "failed", "canceled"]);
 
-/** Review sessions Pile already started for this headSha. `live` = one is
- *  still non-terminal (it owns the sha's check run — dedupe outright);
- *  `attempts` counts every lane that recorded `review.requested`, so the
- *  stale-run takeover stays bounded. */
+/** Review sessions Pile already started for this headSha, plus completed
+ *  published rounds across the whole PR (`prUrl`) for PILE-455's round cap. */
 async function reviewSessionsFor(
   stub: WorkspaceStub,
   issueId: string,
   target: Pick<ReviewTarget, "prUrl" | "headSha">
-): Promise<{ live: boolean; attempts: number }> {
+): Promise<{ live: boolean; attempts: number; completedRoundsForPr: number }> {
   const sessions = await stub.listAgentSessions({ issueId, limit: 50 });
   let live = false;
   let attempts = 0;
+  let completedRoundsForPr = 0;
   for (const s of sessions) {
     if (s.purpose !== REVIEW_PURPOSE) continue;
     const events = await stub.listAgentSessionEvents(s.id, {
       limit: 20,
       order: "asc",
     });
+    let matchesPr = false;
     const hit = events.some((e) => {
       if (e.type !== "review.requested") return false;
       const p = requestedPayloadSchema.safeParse(parsePayload(e.payload));
+      if (p.success && p.data.prUrl === target.prUrl) {
+        matchesPr = true;
+      }
       return (
         p.success &&
         p.data.headSha === target.headSha &&
         p.data.prUrl === target.prUrl
       );
     });
+    if (
+      matchesPr &&
+      s.status === "completed" &&
+      events.some((e) => e.type === "review.published")
+    ) {
+      completedRoundsForPr += 1;
+    }
     if (!hit) continue;
     attempts += 1;
     if (!REVIEW_TERMINAL_STATUSES.has(s.status)) live = true;
   }
-  return { live, attempts };
+  return { live, attempts, completedRoundsForPr };
 }
 
 /** VTX-621 — cancel live review sessions pinned to a different headSha on
@@ -666,10 +807,16 @@ async function supersedeStaleShaReviews(
       );
     if (!req?.success) continue;
     if (typeof req.data.checkRunId === "number") {
-      await resolveReviewCheck(ghFetch, token, target.repoFull, req.data.checkRunId, {
-        title: "Superseded by a newer head",
-        summary: `This run covered a superseded head; a fresh pile-review is running for \`${target.headSha.slice(0, 12)}\`.`,
-      });
+      await resolveReviewCheck(
+        ghFetch,
+        token,
+        target.repoFull,
+        req.data.checkRunId,
+        {
+          title: "Superseded by a newer head",
+          summary: `This run covered a superseded head; a fresh pile-review is running for \`${target.headSha.slice(0, 12)}\`.`,
+        }
+      );
     }
     try {
       const provider = getAgentProvider(s.agentId, env);
@@ -732,6 +879,28 @@ export async function requestPrReview(
     if (!config?.review) return "disabled";
     const agentId = config.review.agent ?? DEFAULT_REVIEW_AGENT;
     if (config.agents && !config.agents.includes(agentId)) return "disabled";
+
+    // PILE-455 Layer 8 — review round cap: when `config.review.maxRounds` is
+    // configured and the PR has already completed `maxRounds` published review
+    // rounds on earlier heads, complete the new head's check run without
+    // spawning another review lane so PRs never ping-pong in a review loop.
+    if (
+      config.review.maxRounds != null &&
+      prior.completedRoundsForPr >= config.review.maxRounds
+    ) {
+      await gh(ghFetch, token, "POST", `/repos/${target.repoFull}/check-runs`, {
+        name: REVIEW_CHECK_NAME,
+        head_sha: target.headSha,
+        status: "completed",
+        conclusion: "success",
+        completed_at: new Date(now).toISOString(),
+        output: {
+          title: `Review round cap reached (${prior.completedRoundsForPr}/${config.review.maxRounds})`,
+          summary: `This PR already completed ${prior.completedRoundsForPr} review round(s); skipping re-review per \`.pile/config.json\` \`review.maxRounds\`.`,
+        },
+      }).catch(() => null);
+      return "round_capped";
+    }
 
     // The check run is the cross-path marker: it exists before the session
     // event does, and survives a lost Pile record. A fresh pending run
@@ -796,8 +965,7 @@ export async function requestPrReview(
       "GET",
       `/repos/${target.repoFull}/pulls/${target.pullNumber}`
     ).catch(() => null)) as { head?: { sha?: string } } | null;
-    if (pull?.head?.sha && pull.head.sha !== target.headSha)
-      return "deduped";
+    if (pull?.head?.sha && pull.head.sha !== target.headSha) return "deduped";
     if (pull?.head?.sha === target.headSha)
       await supersedeStaleShaReviews(
         env,
@@ -855,6 +1023,8 @@ export async function requestPrReview(
     const skipped = files
       .filter((f) => !reviewable.includes(f))
       .map((f) => f.filename);
+    const riskTier = classifyReviewRiskTier(reviewable, config);
+    const selectedModel = resolveReviewModel(config, riskTier);
     const instructions = buildReviewInstructions(
       target,
       buildReviewDiff(reviewable),
@@ -874,7 +1044,7 @@ export async function requestPrReview(
           type: "agent",
           permissions: [],
         },
-        config.review.model,
+        selectedModel,
         undefined,
         {
           instructions,
@@ -1264,4 +1434,83 @@ export async function publishReviewVerdicts(
     }
   }
   return published;
+}
+
+// ---- PILE-455 Layer 9: Reviewer Eval Harness & Metrics ----
+
+export interface ReviewEvalCase {
+  id: string;
+  description: string;
+  files: PrFile[];
+  expectedMinVerdict: ReviewVerdict;
+  expectedFindingKeywords: string[];
+  expectedRiskTier: ReviewRiskTier;
+}
+
+export const SEED_REVIEW_EVAL_CASES: ReviewEvalCase[] = [
+  {
+    id: "vtx-645-inverted-supersedes",
+    description:
+      "memoryRecall filters WHERE supersedes IS NULL while memoryRemember sets supersedes=prior.id on the NEW row, hiding updates",
+    files: [
+      {
+        filename: "src/workspace/data/index.ts",
+        additions: 80,
+        deletions: 4,
+        patch:
+          "@@ -4450,6 +4450,8 @@\n+  const prior = db.select().where(isNull(workspaceMemory.supersedes)).get();\n+  db.insert(workspaceMemory).values({ supersedes: prior?.id ?? null });\n+  return db.select().where(isNull(workspaceMemory.supersedes)).all();",
+      },
+    ],
+    expectedMinVerdict: "request-changes",
+    expectedFindingKeywords: ["supersedes", "stale", "prior"],
+    expectedRiskTier: "medium",
+  },
+  {
+    id: "vtx-522-javascript-url-sink",
+    description: "Unvalidated javascript: URL passed to location.replace",
+    files: [
+      {
+        filename: "src/auth/redirect.ts",
+        additions: 5,
+        deletions: 1,
+        patch:
+          "@@ -10,2 +10,3 @@\n+  window.location.replace('javascript:alert(1)');",
+      },
+    ],
+    expectedMinVerdict: "request-changes",
+    expectedFindingKeywords: ["javascript:", "url", "scheme"],
+    expectedRiskTier: "high",
+  },
+];
+
+export function evaluateReviewCase(
+  evalCase: ReviewEvalCase,
+  review: ParsedReview,
+  config?: PileRepoConfig | null
+): {
+  passed: boolean;
+  tierMatched: boolean;
+  verdictMatched: boolean;
+  keywordMatched: boolean;
+} {
+  const tierMatched =
+    classifyReviewRiskTier(evalCase.files, config) ===
+    evalCase.expectedRiskTier;
+  const verdictMatched =
+    VERDICT_RANK[review.verdict] >= VERDICT_RANK[evalCase.expectedMinVerdict];
+  const combinedText = [
+    review.summary,
+    ...review.findings.map((f) => `${f.title} ${f.detail ?? ""}`),
+  ]
+    .join(" ")
+    .toLowerCase();
+  const keywordMatched = evalCase.expectedFindingKeywords.some((kw) =>
+    combinedText.includes(kw.toLowerCase())
+  );
+  return {
+    passed: tierMatched && verdictMatched && keywordMatched,
+    tierMatched,
+    verdictMatched,
+    keywordMatched,
+  };
 }
