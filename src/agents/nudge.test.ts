@@ -232,6 +232,46 @@ describe("nudgeLane redispatch (PILE-321)", () => {
     const redispatch = sessions.find((s) => s.id !== session.id);
     expect(redispatch?.stepKey).toBe("contacted");
   });
+
+  it("a delivered follow-up revives a completed lane to running", async () => {
+    const stub = getStub();
+    await stub.setOrganizationId(actor.organizationId);
+    const agentId = `mock-live-${crypto.randomUUID().slice(0, 8)}`;
+    registerAgentProvider(
+      agentId,
+      () => new MockAgentProvider(agentId, { sendPrompt: () => true })
+    );
+
+    const issue = await stub.createIssue({
+      title: "Completed lane follow-up",
+      teamId: defaultedTeamId,
+    });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId,
+      provider: agentId,
+      actorId: actor.id,
+      actorType: "user",
+      status: "completed",
+    });
+
+    await nudgeLane(
+      env,
+      stub,
+      actor.organizationId,
+      session,
+      issue,
+      "https://github.com/VortexNYC/nudge-default/pull/4",
+      { prompt: "CI is red", reason: "CI failed" }
+    );
+
+    expect((await stub.getAgentSession(session.id))?.status).toBe("running");
+    const events = await stub.listAgentSessionEvents(session.id, {
+      limit: 50,
+      order: "desc",
+    });
+    expect(events.some((e) => e.type === "prompt.followup")).toBe(true);
+  });
 });
 
 // PILE-452 — the redispatch loop that burned the fleet: Daytona start

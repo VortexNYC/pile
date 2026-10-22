@@ -13,6 +13,7 @@ import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import {
+  CONCURRENT_LANES_PAUSE_PREFIX,
   DEFAULT_GIT_IDENTITY_REPO,
   type AgentSession,
   type Issue,
@@ -372,6 +373,21 @@ export async function dispatchAgent(
       dedupeError = err instanceof Error ? err.message : String(err);
       return null;
     });
+    // VTX-621 — a merged lane PR covering a finished issue makes the
+    // dispatch a stray (stale retry, trigger on a closed ticket). Refuse
+    // outright; CONFLICT reads as redundant, not an error. A reopened
+    // issue (back to an active status) dispatches normally — the merged
+    // PR is history and the lane opens a fresh one (PILE-257).
+    if (
+      dedupe?.merged &&
+      (issue.status === "done" || issue.status === "canceled")
+    ) {
+      throw new VortexError({
+        code: "CONFLICT",
+        status: 409,
+        message: `Issue already covered by merged PR ${dedupe.merged.prUrl} — refusing stale dispatch`,
+      });
+    }
     continuation = dedupe?.continuation ?? null;
     if (continuation && issue.branch !== continuation.headRef) {
       // PILE-446 — an open PR covering this issue with no live session makes
@@ -443,6 +459,36 @@ export async function dispatchAgent(
           actorId: SPEND_CAP_ACTOR,
           actorType: "agent",
         });
+      }
+    }
+    if (!pause) {
+      // VTX-621 — per-agent concurrency cap: park lanes past the provider's
+      // cap so a burst can't trip its rate limit. Paused holds don't count
+      // as live; the sweep lifts the marker pause once a slot frees.
+      const cap = provider.maxConcurrentLanes;
+      if (cap != null) {
+        const liveForAgent = (
+          await stub.listAgentSessions({ limit: 200 })
+        ).filter(
+          (s) =>
+            s.agentId === agentId &&
+            // A promote is the cap's own drain — counting the promoted row
+            // would re-trip the cap and re-park it before it runs.
+            s.id !== options?.promoteSessionId &&
+            !["completed", "failed", "canceled"].includes(s.status) &&
+            s.paused !== 1 &&
+            // Provider-less `waiting` rows are queue/park artifacts that
+            // cost no provider capacity — counting them pins the cap shut
+            // (queue rows can't finish, so the pause never lifts).
+            !(s.status === "waiting" && s.providerSessionId == null)
+        ).length;
+        if (liveForAgent >= cap) {
+          pause = await stub.pauseAgentType(agentId, {
+            reason: `${CONCURRENT_LANES_PAUSE_PREFIX}${agentId} at ${cap} live lanes`,
+            actorId: "system",
+            actorType: "system",
+          });
+        }
       }
     }
     if (pause) {

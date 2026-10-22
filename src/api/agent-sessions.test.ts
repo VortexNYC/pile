@@ -1539,6 +1539,39 @@ describe("agent sessions API", () => {
     await stub.applyAgentSessionResult(session.id, { status: "canceled" });
   });
 
+  it("a follow-up on a completed externally-managed session revives it (PILE-467)", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const issue = await stub.createIssue({ title: "Externally managed lane" });
+    // providerSessionId stays null — the agent registered itself and polls
+    // /events, so a human prompt is queued, not pushed into a sandbox.
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "mock",
+      provider: "mock",
+      actorId: "user-1",
+      actorType: "user",
+      status: "completed",
+    });
+
+    const promptRes = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/prompt`,
+        {
+          method: "POST",
+          token,
+          body: JSON.stringify({ prompt: "pick the follow-up up" }),
+        }
+      ),
+      env
+    );
+    expect(promptRes.status).toBe(200);
+    expect((await stub.getAgentSession(session.id))?.status).toBe("running");
+    await stub.applyAgentSessionResult(session.id, { status: "canceled" });
+  });
+
   it("captures a text artifact to the session timeline", async () => {
     const stub = env.WORKSPACE_DURABLE_OBJECT.get(
       env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
@@ -4033,5 +4066,54 @@ describe("spend caps + run receipts (PILE-425)", () => {
     const row = rows.find((r) => r.key === "custom-bot");
     expect(row?.runs).toBe(1);
     expect(row?.totalTokens).toBe(110_000);
+  });
+
+  it("records usage supplied on a session PATCH (PILE-450)", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    const issue = await stub.createIssue({ title: "PATCH usage lane" });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "patch-bot",
+      provider: "custom-bot",
+      actorId: "test",
+      actorType: "agent",
+      status: "running",
+      conversationKey: `${issue.id}-patch-bot`,
+    });
+    const res = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/sessions/${session.id}`, {
+        method: "PATCH",
+        token,
+        body: JSON.stringify({
+          status: "completed",
+          result: "done",
+          usage: {
+            model: "claude-sonnet-4-5",
+            inputTokens: 40_000,
+            outputTokens: 4_000,
+            costMicros: 132_000,
+          },
+        }),
+      }),
+      env
+    );
+    expect(res.status).toBe(200);
+    const receipt = await stub.getRunReceipt(session.id);
+    expect(receipt?.status).toBe("completed");
+    expect(receipt?.totalTokens).toBe(44_000);
+    expect(receipt?.costMicros).toBe(132_000);
+    expect(receipt?.costSource).toBe("reported");
+  });
+
+  it("GET /agent/sessions accepts ?agentSlug to scope the list (PILE-453)", async () => {
+    const res = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/sessions?agentSlug=scout`, {
+        token,
+      }),
+      env
+    );
+    expect(res.status).toBe(200);
   });
 });

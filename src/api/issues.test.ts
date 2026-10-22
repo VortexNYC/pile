@@ -1594,6 +1594,67 @@ describe("possible duplicates on create (PILE-163)", () => {
     expect(fetched.repo).toBe(teamRepo);
   });
 
+  it("accepts an `agent:*` wildcard key when assigning to an agent", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const db = createD1(env.D1);
+    const team = await createTeam(db, env, new Headers(), {
+      organizationId,
+      key: `W${crypto.randomUUID().replace(/-/g, "").slice(0, 5).toUpperCase()}`,
+      name: "Wildcard assign",
+      ownerId: "user-issues",
+    });
+    const auth = await createAuth(env);
+    const keyResult = await auth.api.createApiKey({
+      body: {
+        userId: "user-issues",
+        name: "assign-agent-wildcard",
+        metadata: {
+          organizationId,
+          // Lane tokens ship the wildcard form — the assign gate used to
+          // check the literal string "agent:write" and miss `agent:*`.
+          permissions: "admin,agent:*",
+          actorType: "agent",
+        },
+        permissions: {
+          workspace: ["admin", "agent:*"],
+        },
+      },
+    });
+    const agentToken = z.object({ key: z.string() }).parse(keyResult).key;
+
+    const agentId = `mock-wild-${crypto.randomUUID().slice(0, 8)}`;
+    registerAgentProvider(
+      agentId,
+      () =>
+        new MockAgentProvider(agentId, {
+          dispatch: (_org, dispatchedIssue) => ({
+            id: `wild-${crypto.randomUUID()}`,
+            agentId,
+            issueId: dispatchedIssue.id,
+            status: "created" as const,
+          }),
+        })
+    );
+
+    const createRes = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      {
+        method: "POST",
+        body: JSON.stringify({ title: "Wildcard assign", teamId: team.id }),
+      },
+      token
+    );
+    expect(createRes.status).toBe(201);
+    const issue = z.object({ id: z.string() }).parse(await createRes.json());
+
+    const assignRes = await fetch(
+      `/workspaces/${organizationId}/issues/${issue.id}/assign`,
+      { method: "POST", body: JSON.stringify({ assigneeId: agentId }) },
+      agentToken
+    );
+    expect(assignRes.status).toBe(200);
+  });
+
   // PILE-417 — delegate vs assignee: delegateId holds the agent acting on
   // the assignee's behalf; both can be set independently, the field is
   // filterable, and non-agent delegates are rejected.

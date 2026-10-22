@@ -25,6 +25,7 @@ interface GhPull {
   title: string;
   body: string | null;
   head: { ref: string };
+  merged_at?: string | null;
 }
 
 interface GhPullFile {
@@ -68,6 +69,10 @@ export interface DedupeResult {
   collisions: DedupeCollision[];
   continuation: DedupeContinuation | null;
   queueAfter: string | null;
+  /** VTX-621 — a closed+merged PR already covers this issue's identifier:
+   *  the work shipped, so the dispatch is a stray (stale retry, trigger
+   *  on a finished ticket) and must be refused, not run. */
+  merged?: { prUrl: string; prNumber: number } | null;
 }
 
 export interface DedupeDeps {
@@ -158,6 +163,7 @@ export async function checkDispatchDedupe(
     collisions: [],
     continuation: null,
     queueAfter: null,
+    merged: null,
   };
   if (!issue.repo) return result;
   const repoMatch = GITHUB_PULLS_RE.exec(issue.repo);
@@ -244,6 +250,25 @@ export async function checkDispatchDedupe(
       headRef: pull.head.ref,
       changesRequested: entry.changesRequested === true,
     };
+  }
+
+  // VTX-621 — closed-side check: an identifier-matched PR that already
+  // merged means the issue's work shipped; the dispatch is a stray.
+  // Closed-unmerged PRs are history, not coverage (PILE-257).
+  if (identifier) {
+    const closedPulls = (await ghGet(
+      ghFetch,
+      token,
+      `/repos/${owner}/${name}/pulls?state=closed&per_page=100`
+    ).catch(() => null)) as GhPull[] | null;
+    if (Array.isArray(closedPulls)) {
+      for (const pull of closedPulls) {
+        if (!pull.merged_at) continue;
+        if (pullMatches(pull, identifier, tokens) !== "identifier") continue;
+        result.merged = { prUrl: pull.html_url, prNumber: pull.number };
+        break;
+      }
+    }
   }
 
   // Collision check — only against live lanes on the same repo whose PR file

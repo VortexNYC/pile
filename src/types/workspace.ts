@@ -39,9 +39,17 @@ export interface AgentSessionResult {
   // runner died without a result, or a sweep stall-cancel — rather than the
   // agent reporting a task outcome. Drives auto-retry + the unhealthy streak.
   infraFailure?: boolean;
+  // The lane died on the provider's own capacity ceiling (free-model rate
+  // limit, account 429) — retryable after the provider's reset, not a task
+  // or substrate failure. Sweep-side hold/backoff honors this.
+  rateLimited?: boolean;
   // PILE-425 — cumulative usage snapshot the lane/provider reports with this
   // result; lands on the session's run receipt (agent_run_receipts).
   usage?: AgentRunUsage | null;
+  // A deliberate resume of a terminal session (delivered follow-up, queued
+  // prompt) — bypasses the terminal-stays-terminal guard that stops stale
+  // poll results resurrecting dead lanes. Never set on poll paths.
+  revive?: boolean;
 }
 
 export type { AgentRunUsage };
@@ -74,6 +82,15 @@ export const ISSUE_STATUSES = [
 export type IssueStatus = (typeof ISSUE_STATUSES)[number];
 
 export const ISSUE_PRIORITIES = ["low", "medium", "high", "urgent"] as const;
+
+// VTX-621 — provider rate-limit pause marker: the pause row's reason carries
+// the reset instant as an ISO suffix so the sweep can lift it on expiry.
+export const RATE_LIMIT_PAUSE_PREFIX = "rate-limit until ";
+export const RATE_LIMIT_HOLD_MS = 20 * 60 * 1000;
+// A concurrency-cap pause (VTX-621): written when live lanes for an agent
+// type reach its cap; the sweep lifts it once a slot frees. The reason
+// suffix carries the cap so it can't be mistaken for an operator freeze.
+export const CONCURRENT_LANES_PAUSE_PREFIX = "concurrency cap — ";
 export type IssuePriority = (typeof ISSUE_PRIORITIES)[number];
 
 export const ISSUE_RESOLUTIONS = [

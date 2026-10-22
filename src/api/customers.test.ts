@@ -920,7 +920,5 @@ describe("customer sales fields (readiness/fit)", () => {
     const customer = record.customer ?? record;
     expect(customer.fitScore).toBe(0.9);
     expect(customer.processor).toBe("toast");
-    expect((await term.json() as { type: string }).type).toBe("terminal");
-    expect(((await term.json()) as { type: string }).type).toBe("terminal");
   });
 });

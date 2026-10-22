@@ -2,13 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import {
   allowedLaneTools,
+  allowedWorkspaceLaneTools,
   createLaneGithub,
   DEFAULT_LANE_TOOL_TIER,
   LANE_TOOLS,
+  type LaneWorkspace,
   laneToolPolicy,
   laneToolPolicyForRepo,
   WORKSPACE_LANE_TOOLS,
   type LaneToolContext,
+  type WorkspaceLaneToolContext,
 } from "./lane-tools.js";
 
 interface Call {
@@ -317,5 +320,329 @@ describe("workspace lane tools — merchant sources + fetch shelf", () => {
     ]) {
       expect(names).toContain(n);
     }
+  });
+});
+
+// ---- workspace-domain tools (pipeline lanes) ----
+
+interface FakeCustomer {
+  id: string;
+  name: string;
+  domain: string | null;
+  externalId: string | null;
+  url: string | null;
+  notes: string | null;
+  priorityScore: number | null;
+  customFields: Record<string, string>;
+}
+
+function fakeWorkspace(customers: FakeCustomer[] = []) {
+  const calls = {
+    createCustomer: [] as Record<string, unknown>[],
+    updateCustomer: [] as {
+      id: string;
+      patch: Record<string, unknown>;
+      actorId?: string;
+    }[],
+  };
+  const ws: LaneWorkspace = {
+    async getIssue() {
+      return undefined;
+    },
+    async createComment() {
+      return {};
+    },
+    async updateIssue() {
+      return {};
+    },
+    async createCustomer(input) {
+      calls.createCustomer.push(input);
+      const record: FakeCustomer = {
+        id: `cust-${customers.length + 1}`,
+        name: input.name,
+        domain: input.domain ?? null,
+        externalId: input.externalId ?? null,
+        url: null,
+        notes: typeof input.notes === "string" ? input.notes : null,
+        priorityScore: null,
+        customFields: {},
+      };
+      customers.push(record);
+      return record;
+    },
+    async getCustomer(id) {
+      return customers.find((c) => c.id === id);
+    },
+    async getCustomerByDomain(domain) {
+      return customers.find((c) => c.domain === domain);
+    },
+    async getCustomerByExternalId(externalId) {
+      return customers.find((c) => c.externalId === externalId);
+    },
+    async updateCustomer(id, patch, actorId) {
+      calls.updateCustomer.push({ id, patch, actorId });
+      const customer = customers.find((c) => c.id === id);
+      if (!customer) return undefined;
+      const { customFields, ...scalars } = patch;
+      Object.assign(customer, scalars);
+      for (const [key, value] of Object.entries(customFields ?? {})) {
+        if (value === null) {
+          delete customer.customFields[key];
+        } else {
+          customer.customFields[key] = value;
+        }
+      }
+      return customer;
+    },
+    async listCustomers() {
+      return customers;
+    },
+    async getDocument() {
+      return undefined;
+    },
+    async listDocuments() {
+      return [];
+    },
+    async createDocument() {
+      return { id: "doc-1" };
+    },
+    async updateDocument() {
+      return {};
+    },
+    async memoryRemember() {
+      return {};
+    },
+    async memoryRecall() {
+      return [];
+    },
+    async upsertSuppression() {
+      return {};
+    },
+    async isSuppressed() {
+      return null;
+    },
+    async createMarketRun() {
+      return {};
+    },
+    async updateMarketRun() {
+      return {};
+    },
+    async listMarketRuns() {
+      return [];
+    },
+    async upsertContact() {
+      return {};
+    },
+    async listContacts() {
+      return [];
+    },
+    async upsertMerchantSource() {
+      return {};
+    },
+    async listMerchantSources() {
+      return [];
+    },
+    async updateMerchantSource() {
+      return {};
+    },
+    async recordSessionUsage() {
+      return {};
+    },
+  };
+  return { ws, calls, customers };
+}
+
+function wsCtx(ws: LaneWorkspace): WorkspaceLaneToolContext {
+  return {
+    ws,
+    organizationId: "org_vortex_main",
+    sessionId: "sess-1",
+    issueId: "issue-1",
+    agentSlug: "profiler",
+    async report() {},
+    policy: laneToolPolicy("pipeline"),
+  };
+}
+
+function wsTool(name: string) {
+  const found = WORKSPACE_LANE_TOOLS.find((t) => t.name === name);
+  if (!found) throw new Error(`no tool ${name}`);
+  return found;
+}
+
+describe("workspace lane tools", () => {
+  it("customer_update is granted to the pipeline tier", () => {
+    const names = allowedWorkspaceLaneTools(laneToolPolicy("pipeline")).map(
+      (t) => t.name
+    );
+    expect(names).toContain("customer_update");
+    expect(names).toContain("customer_upsert");
+  });
+
+  it("fills empty fields on a customer found by externalId", async () => {
+    const { ws, calls, customers } = fakeWorkspace([
+      {
+        id: "cust-1",
+        name: "Joe's Pizza",
+        domain: null,
+        externalId: "gplace:abc",
+        url: null,
+        notes: "[sourced-by:scout session:s-0]",
+        priorityScore: null,
+        customFields: {},
+      },
+    ]);
+    const out = (await wsTool("customer_update").run(wsCtx(ws), {
+      externalId: "gplace:abc",
+      domain: "joespizza.example.com",
+      url: "https://joespizza.example.com",
+      priorityScore: 8,
+      customFields: { industry: "restaurant", pos: "square" },
+    })) as {
+      updated: boolean;
+      applied: string[];
+      skipped: string[];
+      customer: FakeCustomer;
+    };
+    expect(out.updated).toBe(true);
+    expect(out.applied).toEqual([
+      "domain",
+      "url",
+      "priorityScore",
+      "customFields.industry",
+      "customFields.pos",
+    ]);
+    expect(out.skipped).toEqual([]);
+    expect(calls.updateCustomer).toEqual([
+      {
+        id: "cust-1",
+        actorId: "profiler",
+        patch: {
+          domain: "joespizza.example.com",
+          url: "https://joespizza.example.com",
+          priorityScore: 8,
+          customFields: { industry: "restaurant", pos: "square" },
+        },
+      },
+    ]);
+    expect(customers[0].domain).toBe("joespizza.example.com");
+    expect(customers[0].customFields.pos).toBe("square");
+  });
+
+  it("never clobbers a non-empty value unless overwrite is passed", async () => {
+    const { ws, calls, customers } = fakeWorkspace([
+      {
+        id: "cust-1",
+        name: "Joe's Pizza",
+        domain: "joespizza.example.com",
+        externalId: "gplace:abc",
+        url: null,
+        notes: "human note",
+        priorityScore: null,
+        customFields: { pos: "square" },
+      },
+    ]);
+    const out = (await wsTool("customer_update").run(wsCtx(ws), {
+      id: "cust-1",
+      domain: "different.example.com",
+      notes: "profiler notes",
+      customFields: { pos: "toast", size: "1-10" },
+    })) as { updated: boolean; applied: string[]; skipped: string[] };
+    expect(out.updated).toBe(true);
+    expect(out.applied).toEqual(["customFields.size"]);
+    expect(out.skipped).toEqual(["domain", "notes", "customFields.pos"]);
+    expect(calls.updateCustomer[0].patch).toEqual({
+      customFields: { size: "1-10" },
+    });
+    expect(customers[0].domain).toBe("joespizza.example.com");
+    expect(customers[0].customFields.pos).toBe("square");
+
+    const forced = (await wsTool("customer_update").run(wsCtx(ws), {
+      id: "cust-1",
+      domain: "different.example.com",
+      overwrite: true,
+    })) as { updated: boolean; applied: string[] };
+    expect(forced.applied).toEqual(["domain"]);
+    expect(customers[0].domain).toBe("different.example.com");
+  });
+
+  it("reports same-value fields as alreadySet and writes nothing", async () => {
+    const { ws, calls } = fakeWorkspace([
+      {
+        id: "cust-1",
+        name: "Joe's Pizza",
+        domain: "joespizza.example.com",
+        externalId: "gplace:abc",
+        url: null,
+        notes: null,
+        priorityScore: null,
+        customFields: { industry: "restaurant" },
+      },
+    ]);
+    const out = (await wsTool("customer_update").run(wsCtx(ws), {
+      externalId: "gplace:abc",
+      domain: "joespizza.example.com",
+      customFields: { industry: "restaurant" },
+    })) as { updated: boolean; applied: string[]; alreadySet: string[] };
+    expect(out.updated).toBe(false);
+    expect(out.applied).toEqual([]);
+    expect(out.alreadySet).toEqual(["domain", "customFields.industry"]);
+    expect(calls.updateCustomer).toHaveLength(0);
+  });
+
+  it("requires exactly one lookup key and a real customer", async () => {
+    const { ws } = fakeWorkspace([
+      {
+        id: "cust-1",
+        name: "Joe's Pizza",
+        domain: null,
+        externalId: "gplace:abc",
+        url: null,
+        notes: null,
+        priorityScore: null,
+        customFields: {},
+      },
+    ]);
+    await expect(
+      wsTool("customer_update").run(wsCtx(ws), { domain: "x.example.com" })
+    ).rejects.toThrow(/exactly one of id \/ externalId/);
+    await expect(
+      wsTool("customer_update").run(wsCtx(ws), {
+        id: "cust-1",
+        externalId: "gplace:abc",
+        domain: "x.example.com",
+      })
+    ).rejects.toThrow(/exactly one of id \/ externalId/);
+    await expect(
+      wsTool("customer_update").run(wsCtx(ws), {
+        externalId: "gplace:missing",
+        domain: "x.example.com",
+      })
+    ).rejects.toThrow(/customer not found/);
+  });
+
+  it("customer_upsert still dedupes on match without writing (PILE-402)", async () => {
+    const existing: FakeCustomer = {
+      id: "cust-1",
+      name: "Joe's Pizza",
+      domain: null,
+      externalId: "gplace:abc",
+      url: null,
+      notes: null,
+      priorityScore: null,
+      customFields: {},
+    };
+    const { ws, calls, customers } = fakeWorkspace([existing]);
+    const out = (await wsTool("customer_upsert").run(wsCtx(ws), {
+      name: "Joe's Pizza",
+      externalId: "gplace:abc",
+      notes: "enrichment ignored by upsert",
+    })) as { created: boolean; customer: FakeCustomer };
+    expect(out.created).toBe(false);
+    expect(out.customer.id).toBe("cust-1");
+    expect(calls.createCustomer).toHaveLength(0);
+    expect(calls.updateCustomer).toHaveLength(0);
+    expect(customers).toHaveLength(1);
+    expect(customers[0].domain).toBeNull();
   });
 });

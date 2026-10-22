@@ -60,17 +60,21 @@ def _render_event(evt):
 
 
 def run_agent(agent_bin):
-    prompt = base64.b64decode(os.environ['PROMPT_B64']).decode('utf-8')
     model = os.environ.get('MODEL', '')
-    cmd = [agent_bin, '-p', prompt, '--output-format', 'stream-json', '--verbose', '--dangerously-skip-permissions']
+    # claude -p reads the prompt from stdin when no positional arg is given —
+    # keeps it off argv, which caps a single string at 128KB.
+    cmd = [agent_bin, '-p', '--output-format', 'stream-json', '--verbose', '--dangerously-skip-permissions']
     if model:
         cmd += ['--model', model]
+    prompt_in = open(PROMPT_PATH)
     proc = subprocess.Popen(
-        cmd, cwd=REPO_DIR if REPO else HOME, env=agent_env(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+        cmd, cwd=REPO_DIR if REPO else HOME, env=agent_env(), stdin=prompt_in, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
     )
+    prompt_in.close()
     tail = []
     last_text = ''
     result_error = None
+    usage = None
     events = open('/tmp/agent-events.ndjson', 'a', buffering=1)
     try:
         for line in proc.stdout:
@@ -88,6 +92,7 @@ def run_agent(agent_bin):
                     last_text = evt['result']
                 if evt.get('is_error'):
                     result_error = evt.get('result') or evt.get('subtype') or 'error'
+                usage = cli_result_usage(evt) or usage
             rendered = _render_event(evt)
             if rendered:
                 print(_redact(rendered))
@@ -102,7 +107,7 @@ def run_agent(agent_bin):
     if proc.returncode != 0 or result_error:
         detail = result_error or output[-500:]
         raise RuntimeError(f'claude -p failed ({proc.returncode}): {_redact(str(detail))}')
-    return output, last_text
+    return output, last_text, usage
 
 
 def main():
@@ -112,9 +117,9 @@ def main():
         create_branch()
         clone_repo()
         warm_pnpm_store()
-    output, report = run_agent(agent_bin)
+    output, report, usage = run_agent(agent_bin)
     pushed = commit_and_push(agent_env()) if REPO else False
-    rc = finalize(output, pushed, report=report)
+    rc = finalize(output, pushed, report=report, usage=usage)
     save_pnpm_store()
     stop_log_ship()
     return rc

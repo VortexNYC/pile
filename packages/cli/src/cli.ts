@@ -730,7 +730,10 @@ async function authLoginCommand(
 
   const signInRes = await doFetch(`${baseUrl}/api/auth/sign-in/email`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Origin: new URL(baseUrl).origin,
+    },
     body: JSON.stringify({ email, password, rememberMe: true }),
   });
   const signInText = await signInRes.text();
@@ -1635,15 +1638,21 @@ export async function runCli(
       return await feedbackCommand(flags, deps);
     }
 
-    if (scope === "auth" && positionals[1] === "login") {
+    // Bare `pile login|logout|status` aliases — `auth <verb>` is the
+    // canonical form but the auth commands are the ones a human types
+    // first; without the alias the CLI reports "Unknown command" and
+    // looks like it can't bootstrap itself.
+    const authVerb = scope === "auth" ? positionals[1] : scope;
+
+    if (authVerb === "login") {
       return await authLoginCommand(flags, deps);
     }
 
-    if (scope === "auth" && positionals[1] === "status") {
+    if (authVerb === "status") {
       return await authStatusCommand(flags, deps);
     }
 
-    if (scope === "auth" && positionals[1] === "logout") {
+    if (authVerb === "logout") {
       return await authLogoutCommand(flags, deps);
     }
 
