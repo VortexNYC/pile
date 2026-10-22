@@ -6,14 +6,33 @@ describe("agentFilterOptions", () => {
   it("lists registered types plus agentIds that actually have lanes", () => {
     expect(
       agentFilterOptions(
-        [{ slug: "scout" }, { slug: "swe" }],
+        [
+          { slug: "scout", providerAgentId: "p-scout" },
+          { slug: "swe", providerAgentId: "p-swe" },
+        ],
         ["mock-scout", "flue"]
       )
     ).toEqual(["flue", "mock-scout", "scout", "swe"]);
   });
 
   it("dedupes when a lane's agentId is also a type slug", () => {
-    expect(agentFilterOptions([{ slug: "flue" }], ["flue"])).toEqual(["flue"]);
+    expect(
+      agentFilterOptions(
+        [{ slug: "flue", providerAgentId: "p-flue" }],
+        ["flue"]
+      )
+    ).toEqual(["flue"]);
+  });
+
+  it("drops lane agentIds a type already covers via providerAgentId", () => {
+    // Both values would render the type's name — one option suffices
+    // since the slug scope already resolves providerAgentId lanes.
+    expect(
+      agentFilterOptions(
+        [{ slug: "scout", providerAgentId: "devin-cli" }],
+        ["devin-cli", "unregistered"]
+      )
+    ).toEqual(["scout", "unregistered"]);
   });
 
   it("handles empty inputs", () => {

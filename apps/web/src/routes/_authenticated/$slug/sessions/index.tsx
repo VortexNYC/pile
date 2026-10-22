@@ -22,13 +22,22 @@ export const Route = createFileRoute("/_authenticated/$slug/sessions/")({
 });
 
 /** Filter options: every registered agent type plus any agentId that
- * actually has lanes, deduped and sorted (PILE-453). */
+ * actually has lanes, deduped and sorted (PILE-453). An agentId a type
+ * already covers (its slug or providerAgentId) is dropped — picking the
+ * type resolves to the same lanes, and a second option would render the
+ * same label. */
 export function agentFilterOptions(
-  agentTypes: readonly { slug: string }[],
+  agentTypes: readonly { slug: string; providerAgentId: string }[],
   agentIds: readonly string[]
 ): string[] {
+  const covered = new Set(
+    agentTypes.flatMap((t) => [t.slug, t.providerAgentId])
+  );
   return [
-    ...new Set([...agentTypes.map((t) => t.slug), ...agentIds]),
+    ...new Set([
+      ...agentTypes.map((t) => t.slug),
+      ...agentIds.filter((id) => !covered.has(id)),
+    ]),
   ].toSorted();
 }
 
