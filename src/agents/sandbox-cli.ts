@@ -615,6 +615,33 @@ export class SandboxCliAgentProvider implements AgentProvider {
     return `${this.d.namePrefix}-${sessionId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 12)}`;
   }
 
+  /**
+   * PILE-467 — re-read the lane's tracker status mid-provision. A cancel
+   * lands while start() is still inside waitUntil; without a fresh read the
+   * provision path keeps going and creates a sandbox *after* cancel deleted
+   * the old one — a leaked container nobody will ever poll.
+   */
+  private async sessionIsTerminal(
+    organizationId: string,
+    sessionId: string
+  ): Promise<boolean> {
+    if (!("WORKSPACE_DURABLE_OBJECT" in this.env)) return false;
+    try {
+      const env = this.env as WorkerEnv;
+      const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+        env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+      );
+      await stub.setOrganizationId(organizationId);
+      const status = (await stub.getAgentSession(sessionId))?.status;
+      return (
+        status === "canceled" || status === "failed" || status === "completed"
+      );
+    } catch {
+      // A failed status read must not kill a healthy provision.
+      return false;
+    }
+  }
+
   private resolveCredential(purpose?: string | null): {
     env: Record<string, string>;
     selection: PoolSelection | null;
@@ -892,6 +919,30 @@ export class SandboxCliAgentProvider implements AgentProvider {
       }
       await withTimeout(
         (async () => {
+          // PILE-467 — a cancel can land while this provision is still in
+          // waitUntil: re-check the tracker status at each step and tear
+          // down whatever was created instead of resurrecting a dead lane.
+          const abortIfTerminal = async (
+            created?: ComputeSandbox
+          ): Promise<boolean> => {
+            if (!(await this.sessionIsTerminal(organizationId, sessionId)))
+              return false;
+            if (created) {
+              await compute.deleteSandbox(created).catch(() => {});
+            }
+            await this.note(
+              organizationId,
+              sessionId,
+              "status",
+              created
+                ? `${this.id} sandbox deleted — session went terminal mid-provision`
+                : `${this.id} provision aborted — session is already terminal`,
+              created ? { sandbox: created.id } : {},
+              { parentId: spanId }
+            );
+            return true;
+          };
+
           const provisionDeadline = Date.now() + PROVISION_TIMEOUT_MS;
           const existing = await compute.findSandbox(sessionId, name);
           if (existing) {
@@ -908,6 +959,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
 
           for (let attempt = 1; attempt <= START_MAX_ATTEMPTS; attempt++) {
             try {
+              if (await abortIfTerminal()) return;
               const sandbox = await compute.createSandbox({
                 name,
                 sessionId,
@@ -927,6 +979,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
                 },
                 { parentId: spanId }
               );
+              if (await abortIfTerminal(sandbox)) return;
               const cacheEnv = await this.mountLaneCache(
                 compute,
                 sandbox,
@@ -948,6 +1001,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
               if (compute.waitForRunner) {
                 await compute.waitForRunner(sandbox, sessionId, 60_000);
               }
+              if (await abortIfTerminal(sandbox)) return;
               await this.note(
                 organizationId,
                 sessionId,

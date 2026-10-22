@@ -1447,14 +1447,22 @@ export async function updateAgentSession(
     updatedAt: new Date().toISOString(),
   };
   if (input.status !== undefined) {
-    set.status = input.status;
-    // Anchor the first terminal transition — the kept-sandbox reaper keys
-    // its resume window off endedAt, which later writes can't push.
+    // PILE-467 — terminal stays terminal: queue promotion can race a
+    // cancel and flip a dead session back to `created`, resurrecting a
+    // lane that still holds the issue's active-session slot.
+    const terminalStatuses = new Set(["completed", "failed", "canceled"]);
     if (
-      ["completed", "failed", "canceled"].includes(input.status) &&
-      !existing.endedAt
+      !(
+        terminalStatuses.has(existing.status) &&
+        !terminalStatuses.has(input.status)
+      )
     ) {
-      set.endedAt = set.updatedAt;
+      set.status = input.status;
+      // Anchor the first terminal transition — the kept-sandbox reaper keys
+      // its resume window off endedAt, which later writes can't push.
+      if (terminalStatuses.has(input.status) && !existing.endedAt) {
+        set.endedAt = set.updatedAt;
+      }
     }
     // PILE-419 — an open elicitation only exists while the session is
     // parked in `waiting`; any other status (resumed, terminal, re-queued

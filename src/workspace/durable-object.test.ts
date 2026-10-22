@@ -4000,6 +4000,35 @@ describe("session terminal guard (PILE-467)", () => {
     expect(out.revived?.status).toBe("running");
     expect(out.revived?.endedAt).toBeNull();
   });
+
+  it("updateAgentSession cannot promote a canceled session back to created", async () => {
+    const stub = getStub();
+    const out = await withWorkspace(stub, async (instance) => {
+      const issue = await instance.createIssue({
+        title: "promote race",
+        status: "in_progress",
+      });
+      const session = await instance.createAgentSession({
+        agentId: "devin-cli",
+        issueId: issue.id,
+        status: "waiting",
+        provider: "devin-cli",
+        actorId: "u1",
+        actorType: "user",
+      });
+      // operator cancels the queued lane
+      await instance.applyAgentSessionResult(session.id, {
+        status: "canceled",
+      });
+      // a promote that raced the cancel must not resurrect it
+      const promoted = await instance.updateAgentSession(session.id, {
+        status: "created",
+      });
+      return { session, promoted };
+    });
+    expect(out.promoted?.status).toBe("canceled");
+    expect(out.promoted?.endedAt).not.toBeNull();
+  });
 });
 
 describe("session scoping options (PILE-453)", () => {
