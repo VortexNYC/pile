@@ -174,5 +174,29 @@ describe("Outbound Send Gate & Permission Foundation (PILE-478..482)", () => {
       "MERCHANT_CONTACT_CAP_REACHED",
       "RETOUCH_COOLDOWN_ACTIVE",
     ]);
+
+    const capAndHours = evaluateSendGate({
+      touchId: "t-visit",
+      channel: "visit",
+      now: "2026-10-24T16:00:00.000Z", // Saturday 12:00 EDT
+      merchant: { id: "m-1" },
+      contact: { id: "c-1" },
+      schedule: {
+        timeZone: "America/New_York",
+        businessHours: { startHour: 9, endHour: 18 },
+        quietWindows: [
+          {
+            dayOfWeek: 6,
+            startHour: 10,
+            endHour: 15,
+            reason: "Saturday salon rush",
+          },
+        ],
+        minTouchGapHours: 24,
+        lastTouchAt: "2026-10-24T10:00:00.000Z",
+      },
+    });
+    expect(capAndHours.result).toBe("block");
+    expect(capAndHours.reasons).toEqual(["RECENT_TOUCH", "OUTSIDE_HOURS"]);
   });
 });

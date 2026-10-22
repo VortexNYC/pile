@@ -38,7 +38,33 @@ export type GateReasonCode =
   | "EXCLUSION_WARNING"
   | "ACTIVE_CADENCE_EXISTS"
   | "RETOUCH_COOLDOWN_ACTIVE"
-  | "MERCHANT_CONTACT_CAP_REACHED";
+  | "MERCHANT_CONTACT_CAP_REACHED"
+  | "MAILBOX_UNAVAILABLE"
+  | "MAILBOX_CAP"
+  | "DOMAIN_UNHEALTHY"
+  | "OUTSIDE_HOURS"
+  | "RECENT_TOUCH";
+
+export interface MailboxGateState {
+  state: "connected" | "unauthorized" | "paused";
+  dailyCap: number;
+  rampStartedAt: string;
+  sentToday: number;
+  domainHealthy?: boolean;
+}
+
+export interface MerchantScheduleGuard {
+  timeZone?: string | null;
+  businessHours?: { startHour: number; endHour: number };
+  quietWindows?: Array<{
+    dayOfWeek: number;
+    startHour: number;
+    endHour: number;
+    reason?: string;
+  }>;
+  minTouchGapHours?: number;
+  lastTouchAt?: string | null;
+}
 
 export interface MerchantPermissionFlags {
   doNotContact?: boolean;
@@ -110,6 +136,22 @@ export interface SendGateInput {
   cadence?: CadenceSendPolicy;
   exclusions?: ExclusionRule[];
   enrollments?: EnrollmentSnapshot[];
+  mailbox?: MailboxGateState;
+  schedule?: MerchantScheduleGuard;
+}
+
+/** U-007 (PILE-484): per-mailbox current daily cap with +5/day ramp. */
+export function computeMailboxCurrentCap(
+  mailbox: Pick<MailboxGateState, "dailyCap" | "rampStartedAt">,
+  nowIso = new Date().toISOString()
+): number {
+  const nowMs = Date.parse(nowIso);
+  const startMs = Date.parse(mailbox.rampStartedAt);
+  const days =
+    Number.isFinite(nowMs) && Number.isFinite(startMs) && nowMs >= startMs
+      ? Math.floor((nowMs - startMs) / 86_400_000) + 1
+      : 1;
+  return Math.max(0, Math.min(mailbox.dailyCap, 5 * days));
 }
 
 export interface GateDecision {
@@ -313,6 +355,81 @@ export function evaluateSendGate(input: SendGateInput): GateDecision {
     if (inCooldown) {
       reasons.push("RETOUCH_COOLDOWN_ACTIVE");
       result = "block";
+    }
+  }
+
+  // 5. U-006 / U-007 / U-008: Mailbox & domain health checks for email touches
+  if (input.channel === "email" && input.mailbox) {
+    if (input.mailbox.domainHealthy === false) {
+      reasons.push("DOMAIN_UNHEALTHY");
+      result = "block";
+    }
+    if (input.mailbox.state !== "connected") {
+      reasons.push("MAILBOX_UNAVAILABLE");
+      result = "block";
+    } else {
+      const currentCap = computeMailboxCurrentCap(input.mailbox, nowIso);
+      if (input.mailbox.sentToday >= currentCap) {
+        reasons.push("MAILBOX_CAP");
+        result = "block";
+      }
+    }
+  }
+
+  // 6. U-009: Calling-hours, quiet-windows, and recent-touch guard
+  if (input.schedule) {
+    const sched = input.schedule;
+    if (
+      sched.minTouchGapHours != null &&
+      sched.minTouchGapHours > 0 &&
+      sched.lastTouchAt
+    ) {
+      const lastMs = Date.parse(sched.lastTouchAt);
+      if (
+        Number.isFinite(lastMs) &&
+        nowMs - lastMs < sched.minTouchGapHours * 3_600_000
+      ) {
+        reasons.push("RECENT_TOUCH");
+        result = "block";
+      }
+    }
+    if (input.channel === "call" || input.channel === "visit") {
+      const tz = sched.timeZone || "America/New_York";
+      const d = new Date(nowMs);
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone: tz,
+        hour: "numeric",
+        hour12: false,
+        weekday: "short",
+      }).formatToParts(d);
+      const hourPart = Number(
+        parts.find((p) => p.type === "hour")?.value ?? "12"
+      );
+      const localHour = hourPart === 24 ? 0 : hourPart;
+      const wkMap: Record<string, number> = {
+        Sun: 0,
+        Mon: 1,
+        Tue: 2,
+        Wed: 3,
+        Thu: 4,
+        Fri: 5,
+        Sat: 6,
+      };
+      const wk =
+        wkMap[parts.find((p) => p.type === "weekday")?.value ?? "Mon"] ?? 1;
+      const bh = sched.businessHours ?? { startHour: 9, endHour: 18 };
+      const outsideBusiness =
+        localHour < bh.startHour || localHour >= bh.endHour;
+      const inQuietWindow = (sched.quietWindows ?? []).some(
+        (q) =>
+          q.dayOfWeek === wk &&
+          localHour >= q.startHour &&
+          localHour < q.endHour
+      );
+      if (outsideBusiness || inQuietWindow) {
+        reasons.push("OUTSIDE_HOURS");
+        result = "block";
+      }
     }
   }
 
