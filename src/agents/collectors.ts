@@ -91,7 +91,8 @@ async function pullSocrata(
         str(r[str(c.address_field) ?? "address"]) ??
         ([str(r.actual_address_of_premises), str(r.city), str(r.state_name)]
           .filter(Boolean)
-          .join(", ") || null),
+          .join(", ") ||
+          null),
       vertical: str(r[str(c.vertical_field) ?? "description"]),
       signal: source.signal,
       signalDate: date,
@@ -111,14 +112,11 @@ async function pullUsaspending(
   if (str(c.state))
     filters.recipient_locations = [{ state: c.state, country: "USA" }];
   if (str(c.keyword)) filters.recipient_search_text = [c.keyword];
-  const res = await fetch(
-    "https://api.usaspending.gov/api/v2/recipient/",
-    {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ filters, limit: 500 }),
-    }
-  );
+  const res = await fetch("https://api.usaspending.gov/api/v2/recipient/", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ filters, limit: 500 }),
+  });
   if (!res.ok) throw new Error(`usaspending ${res.status}`);
   const data = (await res.json()) as {
     results?: { name?: string; uei?: string; duns?: string; amount?: number }[];
@@ -143,7 +141,8 @@ async function pullOpencorporates(
     per_page: "50",
     order: "score",
   });
-  if (str(c.jurisdiction)) params.set("jurisdiction_code", str(c.jurisdiction)!);
+  if (str(c.jurisdiction))
+    params.set("jurisdiction_code", str(c.jurisdiction)!);
   const res = await fetch(
     `https://api.opencorporates.com/v0.4/companies/search?${params}`
   );
@@ -161,10 +160,9 @@ async function pullOpencorporates(
       externalId: `opencorporates:${str(co.company_number) ?? str(co.name)}`,
       domain: null,
       address:
-        [
-          str(co.current_address),
-          str(co.registered_address_in_full),
-        ].find(Boolean) ?? null,
+        [str(co.current_address), str(co.registered_address_in_full)].find(
+          Boolean
+        ) ?? null,
       vertical: str(co.company_type),
       signal: source.signal,
       signalDate: str(co.incorporation_date),
@@ -198,7 +196,11 @@ async function pullSam(
         cageCode?: string;
       };
       coreData?: {
-        physicalAddress?: { addressLine1?: string; city?: string; stateOrProvinceCode?: string };
+        physicalAddress?: {
+          addressLine1?: string;
+          city?: string;
+          stateOrProvinceCode?: string;
+        };
       };
     }[];
   };

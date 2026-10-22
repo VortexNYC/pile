@@ -23,14 +23,9 @@ describe("stripApiKeySessionToken (PILE-456)", () => {
   });
   it("passes through non-get-session and cookie calls untouched", async () => {
     const orig = res({ session: { token: "k" } });
+    expect(await stripApiKeySessionToken(req("/api/auth/ok"), orig)).toBe(orig);
     expect(
-      await stripApiKeySessionToken(req("/api/auth/ok"), orig)
-    ).toBe(orig);
-    expect(
-      await stripApiKeySessionToken(
-        req("/api/auth/get-session", false),
-        orig
-      )
+      await stripApiKeySessionToken(req("/api/auth/get-session", false), orig)
     ).toBe(orig);
   });
 });

@@ -1,7 +1,11 @@
 import { z } from "zod";
 
 import { GITHUB_USER_AGENT } from "../global/github-auth.js";
-import { pullSource, scoreCandidate, type MerchantSourceRow } from "./collectors.js";
+import {
+  pullSource,
+  scoreCandidate,
+  type MerchantSourceRow,
+} from "./collectors.js";
 import { sessionPlanSchema, type SessionPlan } from "./session-plan.js";
 import { runUsageSchema, type AgentRunUsage } from "./spend.js";
 
@@ -1354,18 +1358,13 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
       query: z.string().optional().describe("for search"),
       url: z.string().url().optional().describe("for scrape"),
       urls: z.array(z.string().url()).optional().describe("for extract"),
-      prompt: z
-        .string()
-        .optional()
-        .describe("what to extract — for extract"),
+      prompt: z.string().optional().describe("what to extract — for extract"),
       limit: z.number().optional(),
     }),
     async run(ctx, input) {
       const key = ctx.env?.FIRECRAWL_API_KEY;
-      if (!key)
-        throw new LaneToolError("FIRECRAWL_API_KEY not configured");
-      const base =
-        ctx.env?.FIRECRAWL_BASE_URL ?? "https://api.firecrawl.dev";
+      if (!key) throw new LaneToolError("FIRECRAWL_API_KEY not configured");
+      const base = ctx.env?.FIRECRAWL_BASE_URL ?? "https://api.firecrawl.dev";
       const res = await fetch(`${base}/v1/${input.action}`, {
         method: "POST",
         headers: {
@@ -1399,8 +1398,7 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
     inputSchema: z.object({ url: z.string().url() }),
     async run(ctx, input) {
       const base = ctx.env?.SCRAPLING_BASE_URL;
-      if (!base)
-        throw new LaneToolError("SCRAPLING_BASE_URL not configured");
+      if (!base) throw new LaneToolError("SCRAPLING_BASE_URL not configured");
       const res = await fetch(`${base}/scrape`, {
         method: "POST",
         headers: {
@@ -1473,15 +1471,13 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
     inputSchema: z.object({ url: z.string().url() }),
     async run(ctx, input) {
       const base = ctx.env?.LIGHTPANDA_BASE_URL;
-      if (!base)
-        throw new LaneToolError("LIGHTPANDA_BASE_URL not configured");
+      if (!base) throw new LaneToolError("LIGHTPANDA_BASE_URL not configured");
       const res = await fetch(`${base}/fetch`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ url: input.url }),
       });
-      if (!res.ok)
-        throw new LaneToolError(`light_fetch failed: ${res.status}`);
+      if (!res.ok) throw new LaneToolError(`light_fetch failed: ${res.status}`);
       return res.json();
     },
   }),
@@ -1493,8 +1489,7 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
     inputSchema: z.object({ url: z.string().url() }),
     async run(ctx, input) {
       const base = ctx.env?.OBSCURA_BASE_URL;
-      if (!base)
-        throw new LaneToolError("OBSCURA_BASE_URL not configured");
+      if (!base) throw new LaneToolError("OBSCURA_BASE_URL not configured");
       const res = await fetch(`${base}/fetch`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -1549,14 +1544,24 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
         return r.json();
       }
       const body: Record<string, unknown> = {};
-      for (const k of ["url","selector","text","key","keyCode","waitMs","ms","expression"] as const)
+      for (const k of [
+        "url",
+        "selector",
+        "text",
+        "key",
+        "keyCode",
+        "waitMs",
+        "ms",
+        "expression",
+      ] as const)
         if (input[k] !== undefined) body[k] = input[k];
       const r = await fetch(`${base}/session/${sid}/${input.op}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (!r.ok) throw new LaneToolError(`browse ${input.op} failed: ${r.status}`);
+      if (!r.ok)
+        throw new LaneToolError(`browse ${input.op} failed: ${r.status}`);
       return r.json();
     },
   }),
@@ -1584,8 +1589,7 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
         `https://${input.domain}/resource/${input.dataset}.json?${params}`,
         { headers }
       );
-      if (!res.ok)
-        throw new LaneToolError(`socrata failed: ${res.status}`);
+      if (!res.ok) throw new LaneToolError(`socrata failed: ${res.status}`);
       return { rows: await res.json() };
     },
   }),
@@ -1596,7 +1600,10 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
     permission: "web:fetch",
     inputSchema: z.object({
       url: z.string().url(),
-      mode: z.enum(["availability", "snapshots"]).optional().default("availability"),
+      mode: z
+        .enum(["availability", "snapshots"])
+        .optional()
+        .default("availability"),
       limit: z.number().optional(),
     }),
     async run(ctx, input) {
@@ -1671,8 +1678,7 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (!res.ok)
-        throw new LaneToolError(`usaspending failed: ${res.status}`);
+      if (!res.ok) throw new LaneToolError(`usaspending failed: ${res.status}`);
       return res.json();
     },
   }),
@@ -1697,9 +1703,13 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
       const params = new URLSearchParams({ api_key: key });
       if (input.keyword) params.set("legalBusinessName", input.keyword);
       if (input.naics) params.set("naicsCode", input.naics);
-      if (input.state) params.set("physicalAddressStateOrProvinceCode", input.state);
+      if (input.state)
+        params.set("physicalAddressStateOrProvinceCode", input.state);
       if (input.purposeOfRegistrationCode)
-        params.set("purposeOfRegistrationCode", input.purposeOfRegistrationCode);
+        params.set(
+          "purposeOfRegistrationCode",
+          input.purposeOfRegistrationCode
+        );
       const res = await fetch(
         `https://api.sam.gov/entity-information/v3/entities?${params}`
       );
@@ -1811,7 +1821,7 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
             runCount: (candidates.length > 0 ? 1 : 0) + produced,
           });
           perSource.push({ name: source.name, candidates: candidates.length });
-        } catch (e) {
+        } catch {
           perSource.push({ name: source.name, candidates: -1 });
         }
       }
@@ -1846,8 +1856,7 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
           limit: input.limit ?? 10,
         }),
       });
-      if (!res.ok)
-        throw new LaneToolError(`deepseek failed: ${res.status}`);
+      if (!res.ok) throw new LaneToolError(`deepseek failed: ${res.status}`);
       return res.json();
     },
   }),
@@ -1896,8 +1905,7 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ url: input.url }),
       });
-      if (!res.ok)
-        throw new LaneToolError(`fingerprint failed: ${res.status}`);
+      if (!res.ok) throw new LaneToolError(`fingerprint failed: ${res.status}`);
       return res.json();
     },
   }),
