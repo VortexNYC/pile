@@ -18,6 +18,7 @@ import {
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
+import { VortexError } from "../platform/errors.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
 
@@ -3840,8 +3841,75 @@ describe("lane-token auth bypass (PILE-457)", () => {
     expect(ghost.status).toBe(404);
   });
 
-  it("returns 200 on /health and keeps 4xx off the 5xx exception reporter (PILE-597)", async () => {
-    const res = await app.fetch(new Request("http://localhost/health"), env);
-    expect(res.status).toBe(200);
+  it("reports 5xx route faults to PostHog via waitUntil and skips 4xx (PILE-597)", async () => {
+    const { reportUnhandledRouteError } = await import("./index.js");
+    const captured: Array<{
+      url: string;
+      event: unknown;
+      props: Record<string, unknown>;
+    }> = [];
+    const tasks: Promise<unknown>[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (
+      input: RequestInfo | URL,
+      init?: RequestInit
+    ) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        event?: unknown;
+        properties?: Record<string, unknown>;
+      };
+      captured.push({
+        url: String(input),
+        event: body.event,
+        props: body.properties ?? {},
+      });
+      return new Response("ok", { status: 200 });
+    }) as typeof fetch;
+    const telemetryEnv = { ...env, POSTHOG_PROJECT_KEY: "phc_test_pile597" };
+    const fakeCtx = (method: string, path: string) => ({
+      req: { method, path },
+      env: telemetryEnv,
+      executionCtx: {
+        waitUntil: (p: Promise<unknown>) => {
+          tasks.push(p);
+        },
+      },
+    });
+    try {
+      const res = reportUnhandledRouteError(
+        new RangeError("boom-pile597"),
+        fakeCtx("GET", "/__pile597_boom")
+      );
+      expect(res.status).toBe(500);
+      // The capture POST rides on waitUntil, not the response path.
+      expect(tasks).toHaveLength(1);
+      await Promise.all(tasks);
+      const posthogCalls = captured.filter((call) =>
+        call.url.startsWith("https://us.i.posthog.com/")
+      );
+      expect(posthogCalls).toHaveLength(1);
+      expect(posthogCalls[0].event).toBe("$exception");
+      expect(posthogCalls[0].props.$exception_type).toBe("RangeError");
+      expect(posthogCalls[0].props.$exception_message).toBe("boom-pile597");
+      expect(posthogCalls[0].props.path).toBe("/__pile597_boom");
+      expect(posthogCalls[0].props.status).toBe(500);
+
+      // 4xx faults never reach the exception reporter.
+      captured.length = 0;
+      tasks.length = 0;
+      const res4xx = reportUnhandledRouteError(
+        new VortexError({ code: "BAD_REQUEST", status: 400, message: "nope" }),
+        fakeCtx("GET", "/__pile597_4xx")
+      );
+      expect(res4xx.status).toBe(400);
+      expect(tasks).toEqual([]);
+      expect(
+        captured.filter((call) =>
+          call.url.startsWith("https://us.i.posthog.com/")
+        )
+      ).toEqual([]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

@@ -3,6 +3,7 @@ import { ne } from "drizzle-orm";
 import { createD1 } from "./global/db.js";
 import { cycles } from "./global/schema.js";
 import type { WorkerEnv } from "./platform/middleware.js";
+import { reportWorkerException } from "./platform/posthog.js";
 
 export { WorkspaceDO } from "./workspace/durable-object.js";
 import { Sandbox } from "@cloudflare/sandbox";
@@ -46,9 +47,10 @@ async function scheduled(
 ) {
   ctx.waitUntil(
     import("./agents/sweep.js").then(({ sweepAgentSessions }) =>
-      sweepAgentSessions(env, ctx).catch((err) =>
-        console.error("agent session sweep failed", err)
-      )
+      sweepAgentSessions(env, ctx).catch((err) => {
+        reportWorkerException("sweep", err, ctx, undefined, { env });
+        console.error("agent session sweep failed", err);
+      })
     )
   );
   ctx.waitUntil(

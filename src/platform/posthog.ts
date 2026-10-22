@@ -26,10 +26,9 @@ export function isProductionTelemetryEnabled(env?: PosthogEnvLike): boolean {
 }
 
 export function scrubRoutePath(path: string): string {
-  return path.replace(
-    /(\/shared-documents\/[^/]+\/)[^/]+/g,
-    "$1[redacted-token]"
-  );
+  return path
+    .replace(/(\/shared-documents\/[^/]+\/)[^/]+/g, "$1[redacted-token]")
+    .replace(/\/cap\/[^/]+/g, "/cap/[redacted-token]");
 }
 
 export function capturePosthogEvent(

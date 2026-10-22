@@ -62,6 +62,9 @@ describe("PostHog worker telemetry (PILE-597)", () => {
     expect(props.path).toBe(
       "/shared-documents/org_vortex_main/[redacted-token]"
     );
+    expect(scrubRoutePath("/cap/capl_support_token_456")).toBe(
+      "/cap/[redacted-token]"
+    );
     expect(scrubRoutePath("/workspaces/org_vortex_main/issues")).toBe(
       "/workspaces/org_vortex_main/issues"
     );

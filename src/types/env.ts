@@ -57,6 +57,9 @@ export interface AppEnv {
   AGENT_SETTINGS_KEK?: string;
   /** Public API origin agents call back to (log ingest). Defaults to BETTER_AUTH_URL. */
   PUBLIC_API_URL?: string;
+  /** PostHog capture key override. Production uses the baked-in pile project
+   *  key; setting this also enables worker telemetry outside production. */
+  POSTHOG_PROJECT_KEY?: string;
   FEEDBACK_CHANNEL_ID?: string;
   /** Days before capture artifacts (R2 objects + attachment rows) are swept by the cron. Defaults to 30. */
   CAPTURE_ARTIFACT_RETENTION_DAYS?: string;

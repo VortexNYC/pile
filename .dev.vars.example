@@ -21,3 +21,8 @@ VORTEX_BILLING_ENV=
 VORTEX_BILLING_METER_ID=
 BILLING_WEBHOOK_SECRET=
 BILLING_UPGRADE_URL=
+
+# Worker PostHog telemetry ($exception, sweep heartbeat, lane settled).
+# Unset keeps local dev/preview silent; production uses the baked-in pile
+# project key. Set any project token to opt in from a non-prod env.
+# POSTHOG_PROJECT_KEY=

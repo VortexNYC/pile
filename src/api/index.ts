@@ -17,7 +17,10 @@ import {
   workspaceAuthMiddleware,
 } from "../platform/middleware.js";
 import { observabilityMiddleware } from "../platform/observability.js";
-import { reportWorkerException } from "../platform/posthog.js";
+import {
+  type PosthogEnvLike,
+  reportWorkerException,
+} from "../platform/posthog.js";
 import { securityMiddleware } from "../platform/security.js";
 import { registerActivityRoutes } from "./activities.js";
 import { registerActivityFeedRoutes } from "./activity-feed.js";
@@ -136,8 +139,16 @@ const app = new OpenAPIHono<AppContext>({
   },
 });
 
-app.onError((err, c) => {
-  console.error("unhandled route error", c.req.path, err);
+// Structured so the 5xx → $exception reporting is unit-testable without a
+// running matcher (Hono freezes route registration once the app serves).
+export function reportUnhandledRouteError(
+  err: unknown,
+  c: {
+    req: { method: string; path: string };
+    env: PosthogEnvLike;
+    executionCtx?: { waitUntil: (promise: Promise<unknown>) => void };
+  }
+): Response {
   const res = toErrorResponse(err);
   if (res.status >= 500) {
     reportWorkerException(
@@ -153,6 +164,11 @@ app.onError((err, c) => {
     );
   }
   return res;
+}
+
+app.onError((err, c) => {
+  console.error("unhandled route error", c.req.path, err);
+  return reportUnhandledRouteError(err, c);
 });
 
 app.use("*", observabilityMiddleware);

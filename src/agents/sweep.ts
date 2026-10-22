@@ -1870,17 +1870,14 @@ export async function sweepAgentSessions(
                 : polled
             );
             {
+              const settledAt = new Date().toISOString();
+              const createdMs = session.createdAt
+                ? Date.parse(session.createdAt)
+                : Date.parse(settledAt);
+              const durationMs = Math.max(0, Date.parse(settledAt) - createdMs);
               // Lane-cost ledger — duration + effort + status on every
               // terminal settle, regardless of outcome.
               try {
-                const settledAt = new Date().toISOString();
-                const createdMs = session.createdAt
-                  ? Date.parse(session.createdAt)
-                  : Date.parse(settledAt);
-                const durationMs = Math.max(
-                  0,
-                  Date.parse(settledAt) - createdMs
-                );
                 await stub.recordLaneCost({
                   sessionId: session.id,
                   agentSlug:
@@ -1899,25 +1896,25 @@ export async function sweepAgentSessions(
                   attempts:
                     (session as { attempts?: number | null }).attempts ?? 1,
                 });
-                capturePosthogEvent(
-                  "pile_lane_settled",
-                  {
-                    distinct_id: `org-${id}`,
-                    organizationId: id,
-                    sessionId: session.id,
-                    agentId: session.agentId,
-                    purpose: session.purpose ?? "work",
-                    status: polled.status,
-                    infraFailure: Boolean(polled.infraFailure),
-                    rateLimited: Boolean(polled.rateLimited),
-                    durationMs,
-                  },
-                  ctx,
-                  { env }
-                );
               } catch {
                 // Cost recording is best-effort.
               }
+              capturePosthogEvent(
+                "pile_lane_settled",
+                {
+                  distinct_id: `org-${id}`,
+                  organizationId: id,
+                  sessionId: session.id,
+                  agentId: session.agentId,
+                  purpose: session.purpose ?? "work",
+                  status: polled.status,
+                  infraFailure: Boolean(polled.infraFailure),
+                  rateLimited: Boolean(polled.rateLimited),
+                  durationMs,
+                },
+                ctx,
+                { env }
+              );
             }
             if (polled.status === "completed") {
               await extractSettledMemory(env, stub, session, polled.result);
