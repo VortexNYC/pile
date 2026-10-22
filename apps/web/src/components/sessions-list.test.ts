@@ -58,6 +58,20 @@ describe("groupSessionsByScope", () => {
     ]);
   });
 
+  it("ranks a group by its freshest lane, not its first row", () => {
+    // `ordered` puts non-terminal lanes first — a stale live lane must not
+    // pin its group above fresher work.
+    const groups = groupSessionsByScope(
+      [
+        lane("live", "iss-1", "2026-10-10T00:00:00Z"),
+        lane("done", "iss-2", "2026-10-20T00:00:00Z"),
+        lane("live", "iss-3", "2026-10-21T00:00:00Z"),
+      ],
+      "agent"
+    );
+    expect(groups.map(([key]) => key)).toEqual(["live", "done"]);
+  });
+
   it("returns no groups for an empty list", () => {
     expect(groupSessionsByScope([], "agent")).toEqual([]);
   });

@@ -108,7 +108,8 @@ function GroupHeader({ title, count }: { title: string; count: number }) {
 
 /** Bucket lanes under their scope key — the agent that ran them or the
  * issue they belong to — so each surface files sessions under its own
- * work (PILE-453). Groups sort freshest-lane-first. */
+ * work (PILE-453). Groups sort by their freshest lane: a stale first row
+ * (a live lane idles atop `ordered`) can't pin its group on top. */
 export function groupSessionsByScope<
   Row extends { agentId: string; issueId: string; updatedAt: string },
 >(sessions: readonly Row[], groupBy: "agent" | "issue"): [string, Row[]][] {
@@ -119,10 +120,10 @@ export function groupSessionsByScope<
     rows.push(session);
     buckets.set(key, rows);
   }
+  const freshest = (rows: readonly Row[]) =>
+    rows.reduce((max, row) => Math.max(max, Date.parse(row.updatedAt) || 0), 0);
   return [...buckets.entries()].toSorted(
-    (a, b) =>
-      Date.parse(b[1][0]?.updatedAt ?? "") -
-      Date.parse(a[1][0]?.updatedAt ?? "")
+    (a, b) => freshest(b[1]) - freshest(a[1])
   );
 }
 
