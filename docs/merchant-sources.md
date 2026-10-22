@@ -24,20 +24,20 @@ a filing this week outranks last quarter's.
 
 ## Tools
 
-| Tool | What it does |
-|---|---|
-| `source_add` | Register a feed: name, kind, config (field map), cursor field, signal, cadence |
-| `source_list` | List registered sources |
+| Tool             | What it does                                                                             |
+| ---------------- | ---------------------------------------------------------------------------------------- |
+| `source_add`     | Register a feed: name, kind, config (field map), cursor field, signal, cadence           |
+| `source_list`    | List registered sources                                                                  |
 | `source_collect` | Pull one source (or all enabled) → candidates → scored customers; records a `market_run` |
 
 ## Kinds + configs
 
-| kind | config |
-|---|---|
-| `socrata` | `{domain, dataset, name_field, id_field, domain_field?, address_field?, vertical_field?}` — works on any Socrata domain (`data.ny.gov`, `data.cityofnewyork.us`, state portals) |
-| `usaspending` | `{naics?: string[], state?, keyword?}` — federal award recipients |
-| `opencorporates` | `{query, jurisdiction?}` — business registry search |
-| `sam` | `{keyword?, naics?, state?}` — SAM.gov vendors (needs `SAM_API_KEY`) |
+| kind             | config                                                                                                                                                                          |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `socrata`        | `{domain, dataset, name_field, id_field, domain_field?, address_field?, vertical_field?}` — works on any Socrata domain (`data.ny.gov`, `data.cityofnewyork.us`, state portals) |
+| `usaspending`    | `{naics?: string[], state?, keyword?}` — federal award recipients                                                                                                               |
+| `opencorporates` | `{query, jurisdiction?}` — business registry search                                                                                                                             |
+| `sam`            | `{keyword?, naics?, state?}` — SAM.gov vendors (needs `SAM_API_KEY`)                                                                                                            |
 
 ## Source descriptors (example feeds)
 
@@ -45,22 +45,30 @@ a filing this week outranks last quarter's.
 source_add({
   name: "nys-sla-pending",
   kind: "socrata",
-  config: { domain: "data.ny.gov", dataset: "f8i8-k2gm",
-            name_field: "legalname", id_field: "application_id",
-            vertical_field: "description" },
+  config: {
+    domain: "data.ny.gov",
+    dataset: "f8i8-k2gm",
+    name_field: "legalname",
+    id_field: "application_id",
+    vertical_field: "description",
+  },
   cursorField: "received_date",
   signal: "license_pending",
   cadence: "daily",
-})
+});
 
 source_add({
   name: "nys-corp-filings",
   kind: "socrata",
-  config: { domain: "data.ny.gov", dataset: "63wc-4exh",
-            name_field: "entity_name", id_field: "dos_id" },
+  config: {
+    domain: "data.ny.gov",
+    dataset: "63wc-4exh",
+    name_field: "entity_name",
+    id_field: "dos_id",
+  },
   cursorField: "filing_date",
   signal: "corp_filing",
-})
+});
 ```
 
 ## Doctrine

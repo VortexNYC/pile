@@ -7,15 +7,18 @@ import { user as userTable } from "../global/schema.js";
 beforeAll(async () => {
   const db = createD1(env.D1);
   const now = new Date();
-  await db.insert(userTable).values({
-    id: "user-session-test",
-    name: "T",
-    email: "s@test.x",
-    emailVerified: false,
-    image: null,
-    createdAt: now,
-    updatedAt: now,
-  }).onConflictDoNothing({ target: [userTable.id] });
+  await db
+    .insert(userTable)
+    .values({
+      id: "user-session-test",
+      name: "T",
+      email: "s@test.x",
+      emailVerified: false,
+      image: null,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoNothing({ target: [userTable.id] });
 });
 
 import { sessionHeadersForUser } from "./session.js";

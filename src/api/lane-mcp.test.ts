@@ -389,5 +389,4 @@ describe("lane MCP endpoint", () => {
     );
     expect(JSON.stringify(parsed)).not.toContain("TypeError");
   });
-
 });
