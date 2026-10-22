@@ -3933,3 +3933,40 @@ describe("session scoping options (PILE-453)", () => {
     expect(Array.isArray(rows)).toBe(true);
   });
 });
+
+describe("lane token seed RPC (PILE-457)", () => {
+  it("reads, mints, and rotates the per-session seed through the DO", async () => {
+    const stub = getStub();
+    const session = await withWorkspace(stub, (instance) =>
+      instance.createAgentSession({
+        issueId: crypto.randomUUID(),
+        agentId: "mock",
+        provider: "mock",
+        actorId: "user-1",
+        actorType: "user",
+        status: "running",
+      })
+    );
+    await withWorkspace(stub, async (instance) => {
+      expect(await instance.laneTokenSeed(session.id)).toBeNull();
+      const seed = await instance.ensureLaneTokenSeed(session.id);
+      expect(seed).toBeTruthy();
+      expect(await instance.laneTokenSeed(session.id)).toBe(seed);
+      const rotated = await instance.rotateLaneTokenSeed(session.id);
+      expect(rotated).toBeTruthy();
+      expect(rotated).not.toBe(seed);
+      expect(await instance.laneTokenSeed(session.id)).toBe(rotated);
+      // A terminal session can't mint — the DO enforces the same gate the
+      // data layer does.
+      const dead = await instance.createAgentSession({
+        issueId: crypto.randomUUID(),
+        agentId: "mock",
+        provider: "mock",
+        actorId: "user-1",
+        actorType: "user",
+        status: "failed",
+      });
+      expect(await instance.ensureLaneTokenSeed(dead.id)).toBeNull();
+    });
+  });
+});

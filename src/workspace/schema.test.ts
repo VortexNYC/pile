@@ -13,6 +13,7 @@ import {
   workspaceEntityAttachments,
   workspaceGuidancePacks,
   workspaceIssues,
+  laneTokens,
   workspaceSuppression,
   workspaceMerchantSources,
   workspaceSpacePermissions,
@@ -526,5 +527,22 @@ describe("workspaceSpacePermissions schema", () => {
     for (const col of ["space_id", "actor_id", "actor_type", "level"]) {
       expect(cols).toContain(col);
     }
+  });
+});
+
+describe("laneTokens schema (PILE-457)", () => {
+  it("keys the revocation seed by session id, off the session row", () => {
+    const config = getTableConfig(laneTokens);
+    expect(config.name).toBe("lane_tokens");
+    const names = config.columns.map((c) => c.name);
+    for (const col of ["session_id", "organization_id", "seed", "created_at"]) {
+      expect(names).toContain(col);
+    }
+    // The seed is the bearer derivation input — it must not be a column on
+    // agent_sessions, whose rows spread into API responses.
+    const sessionCols = getTableConfig(workspaceAgentSessions).columns.map(
+      (c) => c.name
+    );
+    expect(sessionCols).not.toContain("seed");
   });
 });

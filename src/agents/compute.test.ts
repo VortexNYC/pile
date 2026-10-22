@@ -620,6 +620,32 @@ describe("CloudflareBackend", () => {
     await backend.deleteSandbox(sandboxRecord);
     expect(destroy).toHaveBeenCalledOnce();
   });
+
+  it("restoreWorktree replaces /root/repo instead of merging into it (PILE-457)", async () => {
+    const { handle, exec } = fakeSandbox({});
+    const restoreBackup = vi.fn(async () => ({
+      success: true,
+      dir: "/tmp/pile-worktree",
+      id: "backup-1",
+    }));
+    const backend = new CloudflareBackend(() =>
+      Promise.resolve({ ...handle, restoreBackup } as SandboxHandle)
+    );
+    const restored = await backend.restoreWorktree(
+      "vortex-codex-abc123",
+      '{"v":1}'
+    );
+    expect(restoreBackup).toHaveBeenCalledOnce();
+    // cp -a src dst nests to dst/pile-worktree when dst exists — the exec
+    // must remove the stale tree first, and must not merge it.
+    expect(exec).toHaveBeenCalledWith(
+      "mkdir -p /root && rm -rf /root/repo && cp -a /tmp/pile-worktree /root/repo"
+    );
+    expect(restored).toMatchObject({
+      name: "vortex-codex-abc123",
+      state: "started",
+    });
+  });
 });
 
 const cacheEnv = () =>

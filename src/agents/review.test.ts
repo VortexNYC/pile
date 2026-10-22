@@ -1068,6 +1068,47 @@ describe("requestPrReview / publishReviewVerdicts", () => {
     expect(dispatched.length).toBe(before + 1);
   });
 
+  it("dedupes a stale retry when the PR head moved past the target sha", async () => {
+    // Ordering guard: a delayed webhook carrying an old head must not
+    // supersede or redispatch against it — the stale run still resolves,
+    // but nothing new dispatches.
+    const issue = await laneIssue();
+    const t = target("sha-superseded-target");
+    await deadReviewLane(issue, t.headSha, t.prUrl);
+    const gh = fakeGithub({
+      config: REVIEW_CONFIG,
+      files: [{ filename: "src/a.ts", patch: "@@" }],
+      existingCheck: {
+        id: 99,
+        status: "in_progress",
+        started_at: "2020-01-01T00:00:00Z",
+      },
+      prHead: "sha-newer-head",
+    });
+    const before = dispatched.length;
+    const outcome = await requestPrReview(
+      workerEnv,
+      stub,
+      organizationId,
+      issue,
+      t,
+      "tok",
+      { fetch: gh.fetch }
+    );
+    expect(outcome).toBe("deduped");
+    expect(dispatched.length).toBe(before);
+    // The orphaned run still resolves so the PR isn't left waiting on it —
+    // but no fresh check run or lane is created for the stale sha.
+    expect(
+      gh.calls.find(
+        (c) => c.method === "PATCH" && c.url.endsWith("/check-runs/99")
+      )?.body
+    ).toMatchObject({ status: "completed", conclusion: "neutral" });
+    expect(
+      gh.calls.some((c) => c.method === "POST" && c.url.endsWith("/check-runs"))
+    ).toBe(false);
+  });
+
   it("drops a stale verdict when the PR head moved (PILE-470)", async () => {
     const issue = await laneIssue();
     await finishReviewLane(

@@ -15,6 +15,9 @@ import {
   hiddenIssueCondition,
   type AgentSessionInput,
   createAgentSession,
+  ensureLaneTokenSeed,
+  laneTokenSeed,
+  rotateLaneTokenSeed,
   createGuidancePack,
   buildStepContext,
   createDeal,
@@ -2147,6 +2150,71 @@ describe("agent session scoping (PILE-453)", () => {
         agentSlug: "nope",
       });
       expect(none).toHaveLength(0);
+    });
+  });
+});
+
+describe("lane token seeds (PILE-457)", () => {
+  it("mints a stable seed for a live session and keeps it off the session row", async () => {
+    await withDb(async (db) => {
+      const session = await createAgentSession(
+        db,
+        sessionInput({ status: "running" })
+      );
+      expect(await laneTokenSeed(db, WORKSPACE_ID, session.id)).toBeNull();
+      const seed = await ensureLaneTokenSeed(db, WORKSPACE_ID, session.id);
+      expect(seed).toBeTruthy();
+      // Idempotent: a second mint returns the same row, and the verify path
+      // reads it back.
+      expect(await ensureLaneTokenSeed(db, WORKSPACE_ID, session.id)).toBe(
+        seed
+      );
+      expect(await laneTokenSeed(db, WORKSPACE_ID, session.id)).toBe(seed);
+      // The seed is the derivation input — it must never ride the session
+      // row that API responses spread.
+      const row = await getAgentSession(db, WORKSPACE_ID, session.id);
+      expect(row).not.toHaveProperty("seed");
+    });
+  });
+
+  it("refuses to mint for terminal or unknown sessions", async () => {
+    await withDb(async (db) => {
+      for (const status of ["completed", "failed", "canceled"] as const) {
+        const dead = await createAgentSession(db, sessionInput({ status }));
+        expect(await ensureLaneTokenSeed(db, WORKSPACE_ID, dead.id)).toBeNull();
+        expect(await laneTokenSeed(db, WORKSPACE_ID, dead.id)).toBeNull();
+      }
+      expect(
+        await ensureLaneTokenSeed(db, WORKSPACE_ID, crypto.randomUUID())
+      ).toBeNull();
+    });
+  });
+
+  it("rotates the seed — the revocation knob — scoped to the org", async () => {
+    await withDb(async (db) => {
+      const session = await createAgentSession(
+        db,
+        sessionInput({ status: "running" })
+      );
+      const seed = await ensureLaneTokenSeed(db, WORKSPACE_ID, session.id);
+      const rotated = await rotateLaneTokenSeed(db, WORKSPACE_ID, session.id);
+      expect(rotated).toBeTruthy();
+      expect(rotated).not.toBe(seed);
+      expect(await laneTokenSeed(db, WORKSPACE_ID, session.id)).toBe(rotated);
+      // Rotation mints a seed even for a pre-table legacy session.
+      const legacy = await createAgentSession(
+        db,
+        sessionInput({ status: "running" })
+      );
+      const legacySeed = await rotateLaneTokenSeed(db, WORKSPACE_ID, legacy.id);
+      expect(legacySeed).toBeTruthy();
+      expect(await laneTokenSeed(db, WORKSPACE_ID, legacy.id)).toBe(legacySeed);
+      // Seeds are org-scoped and can't be rotated into existence for an
+      // unknown session.
+      expect(await laneTokenSeed(db, "org_other", session.id)).toBeNull();
+      expect(
+        await rotateLaneTokenSeed(db, WORKSPACE_ID, crypto.randomUUID())
+      ).toBeNull();
     });
   });
 });

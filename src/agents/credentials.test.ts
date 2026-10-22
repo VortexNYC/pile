@@ -9,11 +9,14 @@ import type { WorkerEnv } from "../platform/middleware.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
 import { WorkspaceDO } from "../workspace/durable-object.js";
 import {
+  agentLogToken,
   decryptProviderConfigRow,
   decryptSecret,
   encryptProviderConfigInput,
   encryptSecret,
+  expectedSessionToken,
   isEncrypted,
+  verifySessionToken,
 } from "./credentials.js";
 import { MockAgentProvider } from "./harness.js";
 import { dispatchAgent, registerAgentProvider } from "./index.js";
@@ -147,5 +150,81 @@ describe("BYOK dispatch wiring", () => {
     expect(capturedEnv?.AGENT_PROVIDER_TOKEN).toBe("workspace-owned-token");
     expect(capturedEnv?.CURSOR_API_KEY).toBe("workspace-owned-token");
     expect(capturedEnv?.CURSOR_CLI_MODEL).toBe("cursor-grok-4.6-medium");
+  });
+});
+
+describe("lane session tokens (PILE-457)", () => {
+  const laneOrg = "org_lane_token_test";
+
+  async function laneSession(status: "running" | "failed" = "running") {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(laneOrg)
+    ) as DurableObjectStub<WorkspaceDO>;
+    await stub.setOrganizationId(laneOrg);
+    return stub.createAgentSession({
+      issueId: crypto.randomUUID(),
+      agentId: "mock",
+      provider: "mock",
+      actorId: "user-1",
+      actorType: "user",
+      status,
+    });
+  }
+
+  it("mints a verifiable bearer for a live session only", async () => {
+    const live = await laneSession("running");
+    const token = await agentLogToken(wenv, laneOrg, live.id);
+    expect(token).toMatch(/^[a-f0-9]{64}$/);
+    expect(
+      await verifySessionToken(wenv, `Bearer ${token}`, laneOrg, live.id)
+    ).toBe(true);
+    expect(
+      await verifySessionToken(
+        wenv,
+        `Bearer ${token}`,
+        laneOrg,
+        crypto.randomUUID()
+      )
+    ).toBe(false);
+
+    // Terminal and unknown sessions get no usable token.
+    const dead = await laneSession("failed");
+    expect(await agentLogToken(wenv, laneOrg, dead.id)).toBeNull();
+    expect(await agentLogToken(wenv, laneOrg, crypto.randomUUID())).toBeNull();
+  });
+
+  it("rejects non-hex bearers without minting or verifying", async () => {
+    const live = await laneSession("running");
+    for (const header of [
+      "Bearer not-a-token",
+      "Bearer " + "0".repeat(63),
+      "Bearer " + "0".repeat(65),
+      "Basic " + "0".repeat(64),
+    ]) {
+      expect(await verifySessionToken(wenv, header, laneOrg, live.id)).toBe(
+        false
+      );
+    }
+  });
+
+  it("first mint rotates a seedless legacy session onto the seeded derivation", async () => {
+    const session = await laneSession("running");
+    // No seed row yet: the verify path derives the legacy seedless bearer.
+    const legacy = await expectedSessionToken(wenv, laneOrg, session.id);
+    expect(legacy).toMatch(/^[a-f0-9]{64}$/);
+    expect(
+      await verifySessionToken(wenv, `Bearer ${legacy}`, laneOrg, session.id)
+    ).toBe(true);
+
+    // Minting creates the seed — the legacy bearer dies with it.
+    const seeded = await agentLogToken(wenv, laneOrg, session.id);
+    expect(seeded).toMatch(/^[a-f0-9]{64}$/);
+    expect(seeded).not.toBe(legacy);
+    expect(
+      await verifySessionToken(wenv, `Bearer ${legacy}`, laneOrg, session.id)
+    ).toBe(false);
+    expect(
+      await verifySessionToken(wenv, `Bearer ${seeded}`, laneOrg, session.id)
+    ).toBe(true);
   });
 });

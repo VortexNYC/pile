@@ -41,6 +41,17 @@ describe("workspaceMigrations", () => {
       "CREATE INDEX IF NOT EXISTS entity_attachments_entity_idx ON entity_attachments (organization_id, entity_type, entity_id)"
     );
   });
+
+  it("v102 creates lane_tokens holding the per-session revocation seed (PILE-457)", () => {
+    expect(
+      workspaceMigrations.journal.entries.some((e) => e.tag === "v102")
+    ).toBe(true);
+    const sql = workspaceMigrations.migrations.m0101;
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS lane_tokens");
+    for (const col of ["session_id", "organization_id", "seed", "created_at"]) {
+      expect(sql).toContain(col);
+    }
+  });
 });
 
 describe("v71 pipeline hygiene", () => {
