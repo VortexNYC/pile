@@ -3738,8 +3738,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   // Encrypted GitHub installation token currently held by each lane, keyed by
-  // session. Swapping returns the previous one so callers can revoke it; the
-  // reaper takes and revokes whatever is left once a session is terminal.
+  // session. Swapping returns the previous ciphertext; callers no longer
+  // revoke it on mint (VTX-634) — displaced tokens self-expire inside the
+  // ~1h TTL while the reaper takes and revokes what a terminal lane holds.
   async swapLaneGithubToken(
     sessionId: string,
     encrypted: string
