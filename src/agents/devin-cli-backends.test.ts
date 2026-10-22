@@ -8,11 +8,7 @@ import {
   FailoverBackend,
   LaneSandboxBackend,
 } from "./compute.js";
-import type {
-  ComputeBackend,
-  ComputeSandbox,
-  SandboxHandle,
-} from "./compute.js";
+import type { ComputeBackend, SandboxHandle } from "./compute.js";
 import { DevinCliAgentProvider } from "./devin-cli.js";
 import type { LaneSandboxBase } from "./lane-sandbox.js";
 
@@ -255,7 +251,7 @@ describe("devin-cli × CloudflareBackend (sandbox-sdk 0.12)", () => {
 
   it("sendPrompt injects into /tmp/followups while the runner is busy — no new process", async () => {
     const files = new Map([[RESULT_PATH, completedResult]]);
-    const { backend, handle, startProcess } = cfBackend(
+    const { backend, startProcess } = cfBackend(
       { "sess-1": cfProc("sess-1", "running") },
       files
     );
@@ -279,10 +275,11 @@ describe("devin-cli × CloudflareBackend (sandbox-sdk 0.12)", () => {
 
   it("sendPrompt on an idle sandbox spawns a -fu runner process", async () => {
     const files = new Map([[RESULT_PATH, completedResult]]);
-    const { backend, handle, files: written } = cfBackend(
-      { "sess-1": cfProc("sess-1", "completed", 0) },
-      files
-    );
+    const {
+      backend,
+      handle,
+      files: written,
+    } = cfBackend({ "sess-1": cfProc("sess-1", "completed", 0) }, files);
     const { provider, seam } = providerOn(backend);
     vi.spyOn(seam, "followupPermissions").mockResolvedValue({
       shell: "enabled",

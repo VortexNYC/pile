@@ -9,6 +9,7 @@ import {
 } from "../agents/budget.js";
 import {
   agentLogToken,
+  expectedSessionToken,
   agentLogUrl,
   agentMcpUrl,
   agentReportUrl,
@@ -866,6 +867,31 @@ const cancelSessionRoute = createRoute({
       description: "Session canceled",
       content: {
         "application/json": { schema: agentSessionSchema },
+      },
+    },
+    404: { description: "Session not found" },
+  },
+});
+
+// PILE-457 — lane-token revocation: rotate the session's token seed so
+// every bearer minted under it dies immediately, without canceling the
+// lane. The incident lever for a leaked token on a still-live session; the
+// lane itself can't recover its callback access (its env holds the dead
+// token), which is the point.
+const rotateLaneTokenRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/agent/sessions/{sessionId}/lane-token/rotate",
+  tags: ["agent-sessions"],
+  middleware: [rls("session:create", "agent:write")],
+  request: {
+    params: z.object({ organizationId: z.string(), sessionId: z.string() }),
+  },
+  responses: {
+    200: {
+      description:
+        "Lane token rotated — every bearer previously minted for the session is revoked",
+      content: {
+        "application/json": { schema: z.object({ ok: z.literal(true) }) },
       },
     },
     404: { description: "Session not found" },
@@ -2492,7 +2518,11 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     "/workspaces/:organizationId/agent/sessions/:sessionId/logs",
     async (c) => {
       const { organizationId, sessionId } = c.req.param();
-      const expected = await agentLogToken(c.env, organizationId, sessionId);
+      const expected = await expectedSessionToken(
+        c.env,
+        organizationId,
+        sessionId
+      );
       const provided = (c.req.header("authorization") ?? "").replace(
         /^Bearer\s+/i,
         ""
@@ -3069,6 +3099,30 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     );
     const activities = await stub.listAgentActivities(sessionId);
     return c.json(toSessionResponse(updated ?? session, activities));
+  });
+
+  // PILE-457 — rotate the lane-token seed: every bearer minted for the
+  // session is revoked at once. The lane keeps running but loses its
+  // callback access — the intended blast radius for a leaked token.
+  app.openapi(rotateLaneTokenRoute, async (c) => {
+    const { organizationId, sessionId } = c.req.valid("param");
+    const identity = c.var.workspaceIdentity;
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const session = await stub.getAgentSession(sessionId);
+    if (!session) {
+      return c.json({ message: "Session not found" }, 404);
+    }
+    await assertSessionIssueAccess(createD1(c.env.D1), stub, session, identity);
+    await stub.rotateLaneTokenSeed(sessionId);
+    await stub
+      .addAgentSessionEvent({
+        sessionId,
+        type: "status",
+        message: "Lane token rotated — prior bearers revoked",
+        payload: { actorId: identity.id, actorType: identity.type },
+      })
+      .catch(() => {});
+    return c.json({ ok: true as const }, 200);
   });
 
   // PILE-420 — the human Stop action: `session.stopped` on the event stream

@@ -3729,6 +3729,20 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.getAgentSession(this.db, this.organizationId, id);
   }
 
+  // PILE-457 — lane-token seed access for token mint/verify/rotate. Kept off
+  // the session row so API spreads can't leak the derivation input.
+  laneTokenSeed(sessionId: string) {
+    return data.laneTokenSeed(this.db, this.organizationId, sessionId);
+  }
+
+  ensureLaneTokenSeed(sessionId: string) {
+    return data.ensureLaneTokenSeed(this.db, this.organizationId, sessionId);
+  }
+
+  rotateLaneTokenSeed(sessionId: string) {
+    return data.rotateLaneTokenSeed(this.db, this.organizationId, sessionId);
+  }
+
   getAgentSessionByConversationKey(conversationKey: string) {
     return data.getAgentSessionByConversationKey(
       this.db,

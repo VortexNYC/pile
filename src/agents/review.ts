@@ -666,10 +666,16 @@ async function supersedeStaleShaReviews(
       );
     if (!req?.success) continue;
     if (typeof req.data.checkRunId === "number") {
-      await resolveReviewCheck(ghFetch, token, target.repoFull, req.data.checkRunId, {
-        title: "Superseded by a newer head",
-        summary: `This run covered a superseded head; a fresh pile-review is running for \`${target.headSha.slice(0, 12)}\`.`,
-      });
+      await resolveReviewCheck(
+        ghFetch,
+        token,
+        target.repoFull,
+        req.data.checkRunId,
+        {
+          title: "Superseded by a newer head",
+          summary: `This run covered a superseded head; a fresh pile-review is running for \`${target.headSha.slice(0, 12)}\`.`,
+        }
+      );
     }
     try {
       const provider = getAgentProvider(s.agentId, env);
@@ -796,8 +802,7 @@ export async function requestPrReview(
       "GET",
       `/repos/${target.repoFull}/pulls/${target.pullNumber}`
     ).catch(() => null)) as { head?: { sha?: string } } | null;
-    if (pull?.head?.sha && pull.head.sha !== target.headSha)
-      return "deduped";
+    if (pull?.head?.sha && pull.head.sha !== target.headSha) return "deduped";
     if (pull?.head?.sha === target.headSha)
       await supersedeStaleShaReviews(
         env,

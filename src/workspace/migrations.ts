@@ -1452,6 +1452,18 @@ CREATE UNIQUE INDEX IF NOT EXISTS space_permissions_space_actor_idx ON space_per
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS space_permissions_org_idx ON space_permissions (organization_id)`;
 
+// PILE-457 — per-session lane-token seed. The lane bearer is
+// sha256(org:session:seed:DISPATCH_SECRET), so the row is the revocation
+// knob: rotating the seed kills every token minted for the session without
+// touching DISPATCH_SECRET or any other lane. Sessions pre-dating the table
+// have no row and verify against the legacy seedless derivation.
+const v102 = `CREATE TABLE IF NOT EXISTS lane_tokens (
+  session_id TEXT PRIMARY KEY,
+  organization_id TEXT NOT NULL,
+  seed TEXT NOT NULL,
+  created_at TEXT NOT NULL
+)`;
+
 const v97 = `CREATE TABLE IF NOT EXISTS lane_costs (
   session_id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -1779,6 +1791,7 @@ export const workspaceMigrations = {
       { idx: 98, when: 98, tag: "v99", breakpoints: true },
       { idx: 99, when: 99, tag: "v100", breakpoints: true },
       { idx: 100, when: 100, tag: "v101", breakpoints: true },
+      { idx: 101, when: 101, tag: "v102", breakpoints: true },
     ],
   },
   migrations: {
@@ -1883,5 +1896,6 @@ export const workspaceMigrations = {
     m0098: v99,
     m0099: v100,
     m0100: v101,
+    m0101: v102,
   },
 } satisfies Parameters<typeof migrate>[1];

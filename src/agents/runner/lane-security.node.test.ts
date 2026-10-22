@@ -595,4 +595,52 @@ describePy("lane security: runner commit/push (PILE-277)", () => {
       git(lane.repo, "check-ignore", ".devin/mcp_config.json")
     ).not.toThrow();
   });
+
+  it("devinConfig: a tracked .devin/ leak is unstaged while skills/rules stay committable (PILE-457)", () => {
+    const lane = makeLane();
+    const devinDir = join(lane.repo, ".devin");
+    mkdirSync(devinDir);
+    // The incident shape: mcp_config.json was committed before the
+    // exclusion existed, so it is *tracked* — ignore rules don't apply.
+    const cfgPath = join(devinDir, "mcp_config.json");
+    writeFileSync(cfgPath, '{"mcpServers":{}}\n');
+    git(lane.repo, "add", "-A");
+    git(lane.repo, "commit", "-q", "-m", "preexisting tracked config");
+
+    // The agent drops a fresh token into the tracked file, plants a brand
+    // new config dir entry, and authors a legit skill.
+    writeFileSync(
+      cfgPath,
+      JSON.stringify({
+        mcpServers: {
+          "pile-lane": {
+            serverUrl: "https://pile.example/mcp",
+            headers: { Authorization: `Bearer ${LANE_TOKEN}` },
+          },
+        },
+      })
+    );
+    mkdirSync(join(devinDir, "skills", "demo"), { recursive: true });
+    writeFileSync(join(devinDir, "skills", "demo", "SKILL.md"), "# demo\n");
+    writeFileSync(join(lane.repo, "feature.ts"), "export const x = 1;\n");
+
+    const res = runHarness(lane, "push");
+    expect(res.error).toBeUndefined();
+    expect(res.pushed).toBe(true);
+    expectLanePushed(lane, "feature.ts");
+    // The skills/ carve-out is committable — repo-sanctioned content.
+    expectLanePushed(lane, ".devin/skills/demo/SKILL.md");
+
+    // The tracked config's lane-side edit never landed: the branch keeps
+    // the pre-lane content, and no commit on the lane carries the token.
+    const remoteCfg = git(
+      lane.remote,
+      "show",
+      `refs/heads/${LANE_BRANCH}:.devin/mcp_config.json`
+    );
+    expect(remoteCfg).toBe('{"mcpServers":{}}');
+    expect(remoteCfg).not.toContain(LANE_TOKEN);
+    const laneTree = git(lane.repo, "show", "HEAD:.devin/mcp_config.json");
+    expect(laneTree).not.toContain(LANE_TOKEN);
+  });
 });

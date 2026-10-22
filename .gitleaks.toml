@@ -18,6 +18,11 @@ id = "devin-agent-config-dir"
 description = "File under .devin/ — agent config dirs can carry lane bearer tokens and must not be committed"
 path = '''(^|/)\.devin/'''
 
+# TOML binds this table to the rule directly above (devin-agent-config-dir)
+# — that is deliberate: the skills/rules carve-out only softens the .devin/
+# *path* rule; a 64-hex bearer under .devin/skills/ still trips
+# lane-bearer-token. Requires a gitleaks new enough for per-rule
+# `allowlists` (>= 8.21; the singular `allowlist` key is deprecated).
 [[rules.allowlists]]
 description = "Intentionally committed agent skills and rules under .devin/"
 paths = ['''(^|/)\.devin/(skills|rules)/''']

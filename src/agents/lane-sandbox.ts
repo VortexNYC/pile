@@ -99,6 +99,9 @@ export class LaneSandboxBase extends DurableObject<AppEnv> {
       `echo $? > ${PROC_DIR}/${id}.exit`,
       "",
     ].join("\n");
+    // PROC_DIR must exist before writeFile — the Files API doesn't create
+    // parents, so the first spawn on a fresh container fails otherwise.
+    await this.container.exec(["mkdir", "-p", PROC_DIR], { env: BASE_ENV });
     await this.files.writeFile(`${PROC_DIR}/${id}.sh`, script);
     const res = await this.container.exec(
       [
@@ -285,8 +288,15 @@ export class LaneSandboxBase extends DurableObject<AppEnv> {
     const record = JSON.parse(backupJson) as DirectoryBackupRecord;
     await this.backups.intercept();
     await this.backups.restore(record, { dir: "/tmp/pile-worktree" });
+    // Replace, don't merge: `cp -a src dst` with an existing dst nests to
+    // /root/repo/pile-worktree, and a plain merge-copy would keep files the
+    // crashed run left behind — the follow-up must see the tree as it was.
     await this.container.exec(
-      ["sh", "-c", "mkdir -p /root && cp -a /tmp/pile-worktree /root/repo"],
+      [
+        "sh",
+        "-c",
+        "mkdir -p /root && rm -rf /root/repo && cp -a /tmp/pile-worktree /root/repo",
+      ],
       { env: BASE_ENV }
     );
   }

@@ -1033,10 +1033,29 @@ def refresh_github_token():
         print('github token refresh failed:', e)
 
 
+# Agent config dirs that must never enter a lane's commits: .devin/ can carry
+# an mcp_config.json holding the lane bearer token (PILE-457). The patterns
+# mirror the .gitignore carve-out repos adopt — .devin/skills/ and
+# .devin/rules/ are legitimately committable content (Pile's own repo tracks
+# them), so the exclusion covers everything else under .devin/, not the whole
+# directory. Tracked paths inside those prefixes are unaffected: ignore rules
+# never apply to tracked files.
+_AGENT_DIR_EXCLUDE = ('.devin/*', '!.devin/skills/', '!.devin/rules/')
+
+
+def _agent_dir_path(path):
+    # A tracked path that falls under the agent-config exclusion: inside
+    # .devin/ but outside the skills/rules carve-outs.
+    return path.startswith('.devin/') and not path.startswith(
+        ('.devin/skills/', '.devin/rules/')
+    )
+
+
+_BLANKET_DEVIN_EXCLUDE = ('.devin', '.devin/', '/.devin', '/.devin/')
+
+
 def exclude_agent_dirs(repo_dir=REPO_DIR):
-    # Agent CLIs drop config dirs in the checkout (devin's .devin/ can carry
-    # an mcp_config.json holding the lane bearer token — PILE-457). A
-    # repo-local exclude keeps .devin/ unstageable without committing a
+    # A repo-local exclude keeps .devin/ unstageable without committing a
     # .gitignore line to every repo. Re-asserted before every stage: .git is
     # agent-writable, so the agent could have deleted it mid-run.
     git_dir = os.path.join(repo_dir, '.git')
@@ -1045,17 +1064,38 @@ def exclude_agent_dirs(repo_dir=REPO_DIR):
     try:
         info = os.path.join(git_dir, 'info')
         path = os.path.join(info, 'exclude')
-        existing = ''
+        lines = []
         if os.path.exists(path):
             with open(path) as f:
-                existing = f.read()
-        if any(l.strip() in ('.devin', '.devin/', '/.devin', '/.devin/') for l in existing.splitlines()):
+                lines = f.read().splitlines()
+        stripped = {l.strip() for l in lines}
+        has_carve = '.devin/*' in stripped or '/.devin/*' in stripped
+        has_blanket = any(l.strip() in _BLANKET_DEVIN_EXCLUDE for l in lines)
+        if has_carve and not has_blanket:
             return
+        # Drop any blanket `.devin/` exclusion (older runner versions or
+        # hand-written) — it blocks the skills/rules carve-outs too — and
+        # append the carve-out form when it's missing entirely.
+        kept = [l for l in lines if l.strip() not in _BLANKET_DEVIN_EXCLUDE]
+        if not has_carve:
+            kept += _AGENT_DIR_EXCLUDE
         os.makedirs(info, exist_ok=True)
-        with open(path, 'a') as f:
-            f.write('.devin/\n')
+        with open(path, 'w') as f:
+            f.write('\n'.join(kept) + '\n')
     except OSError:
         pass
+
+
+def _unstage_agent_dirs(git, env):
+    # Tracked .devin/ files predate the exclusion (the PILE-457 incident PRs
+    # committed mcp_config.json outright) — ignore rules don't touch tracked
+    # files, so `add -A` would happily stage a fresh token leak. Unstage every
+    # tracked path under .devin/ that isn't skills/rules content.
+    tracked = run(git + ['ls-files', '-z', '--', '.devin'], env=env,
+                  capture_output=True, text=True, check=False)
+    drop = [p for p in tracked.stdout.split('\0') if _agent_dir_path(p)]
+    if drop:
+        run(git + ['reset', '-q', 'HEAD', '--'] + drop, env=env, check=False)
 
 
 def commit_local(agent_env):
@@ -1067,6 +1107,12 @@ def commit_local(agent_env):
     if not status.stdout.strip():
         return False
     run(git + ['add', '-A'], env=env, check=True)
+    _unstage_agent_dirs(git, env)
+    # Unstaging can leave nothing to commit (e.g. the only change was a
+    # tracked agent-config file) — an empty `git commit` would fail the lane.
+    staged = run(git + ['diff', '--cached', '--quiet'], env=env, check=False)
+    if staged.returncode == 0:
+        return False
     run(git + ['commit', '-m', f'{AGENT_LABEL} changes for {BRANCH}'], env=env, check=True)
     return True
 

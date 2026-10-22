@@ -133,27 +133,27 @@ describe("lane MCP endpoint", () => {
 
     expect([401, 403]).toContain((await mcp(path, null, list)).status);
     expect((await mcp(path, "wrong", list)).status).toBe(401);
-    const otherSession = await agentLogToken(
-      env as unknown as WorkerEnv,
-      organizationId,
-      crypto.randomUUID()
-    );
-    expect((await mcp(path, otherSession, list)).status).toBe(401);
+    // A real bearer minted for a different live session is still rejected.
+    const other = await registerLane("VortexNYC/pile");
+    expect((await mcp(path, other.laneToken, list)).status).toBe(401);
   });
 
-  it("returns 404 for an unknown session", async () => {
+  it("returns 401 for an unknown session — no token can be minted for it", async () => {
     const sessionId = crypto.randomUUID();
+    // PILE-457 — minting requires a live session row, so an unknown session
+    // id yields no token at all (previously any id derived a valid bearer).
     const laneToken = await agentLogToken(
       env as unknown as WorkerEnv,
       organizationId,
       sessionId
     );
+    expect(laneToken).toBeNull();
     const res = await mcp(
       `/workspaces/${organizationId}/agent/sessions/${sessionId}/mcp`,
-      laneToken,
+      "0".repeat(64),
       { jsonrpc: "2.0", id: 1, method: "tools/list" }
     );
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(401);
   });
 
   it("lists only the tools the repo's tier permits", async () => {

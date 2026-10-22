@@ -164,7 +164,10 @@ describe("lane security: Pile endpoints reachable with a lane token", () => {
 
     it("refuses to mint once the session is terminal", async () => {
       for (const status of ["completed", "failed", "canceled"] as const) {
-        const { session, laneToken } = await laneSession(status);
+        // Mint while live, then drive the session terminal — the bearer
+        // dies with it (PILE-457).
+        const { stub, session, laneToken } = await laneSession("running");
+        await stub.updateAgentSession(session.id, { status });
         const res = await app.fetch(
           request(tokenPath(organizationId, session.id), {
             method: "POST",

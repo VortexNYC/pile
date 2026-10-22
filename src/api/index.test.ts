@@ -3823,20 +3823,22 @@ describe("lane-token auth bypass (PILE-457)", () => {
     );
     expect(dead.status).toBe(409);
 
-    // A lane token minted for a session that does not exist verifies
-    // cryptographically but has nothing to authorize.
+    // A session that does not exist can't mint a lane token at all
+    // (PILE-457) — there is no bearer to authorize with, so the read falls
+    // through to workspace auth.
     const ghostId = crypto.randomUUID();
     const ghostToken = await agentLogToken(
       env as unknown as WorkerEnv,
       organizationId,
       ghostId
     );
+    expect(ghostToken).toBeNull();
     const ghost = await app.fetch(
       request(`/workspaces/${organizationId}/agent/sessions/${ghostId}`, {
-        headers: { Authorization: `Bearer ${ghostToken}` },
+        headers: { Authorization: `Bearer ${"0".repeat(64)}` },
       }),
       env
     );
-    expect(ghost.status).toBe(404);
+    expect(ghost.status).toBe(401);
   });
 });

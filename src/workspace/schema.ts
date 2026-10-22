@@ -1200,6 +1200,18 @@ export const workspaceAgentSessions = sqliteTable(
   ]
 );
 
+// PILE-457 — per-session lane-token seed kept off the session row so the
+// `...row` spreads in session responses can never leak it. The lane bearer
+// is sha256(org:session:seed:DISPATCH_SECRET); rotating the seed revokes
+// every token minted for the session. Sessions older than the table have no
+// row and fall back to the legacy seedless derivation until terminal.
+export const laneTokens = sqliteTable("lane_tokens" as string, {
+  sessionId: text("session_id" as string).primaryKey(),
+  organizationId: text("organization_id" as string).notNull(),
+  seed: text("seed" as string).notNull(),
+  createdAt: text("created_at" as string).notNull(),
+});
+
 export const workspaceAgentActivities = sqliteTable(
   "agent_activities" as string,
   {

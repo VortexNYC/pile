@@ -47,6 +47,7 @@ import {
   workspaceAgentProviderConfigs,
   workspaceMemory,
   workspaceLaneCosts,
+  laneTokens,
   workspaceAgentSessions,
   workspaceAgentEnvironmentFiles,
   workspaceAttachments,
@@ -1176,6 +1177,83 @@ export async function createAgentSession(
     throw new Error("Failed to create agent session");
   }
   return row;
+}
+
+// ---- lane_tokens (PILE-457) ----
+// The lane bearer is derived, not stored: sha256(org:session:seed:secret).
+// The per-session seed lives in this table — never on the session row, so
+// response spreads can't leak it — which makes rotation a real revocation:
+// a new seed invalidates every token minted under the old one. Sessions
+// created before the table existed have no row and verify against the
+// legacy seedless derivation until they go terminal.
+
+const TERMINAL_SESSION_STATUSES = new Set(["completed", "failed", "canceled"]);
+
+export async function laneTokenSeed(
+  db: WorkspaceDb,
+  organizationId: string,
+  sessionId: string
+): Promise<string | null> {
+  const row = await db
+    .select({ seed: laneTokens.seed })
+    .from(laneTokens)
+    .where(
+      and(
+        eq(laneTokens.organizationId, organizationId),
+        eq(laneTokens.sessionId, sessionId)
+      )
+    )
+    .get();
+  return row?.seed ?? null;
+}
+
+/** Seed for token minting: existing row wins, else mint for a live session. */
+export async function ensureLaneTokenSeed(
+  db: WorkspaceDb,
+  organizationId: string,
+  sessionId: string
+): Promise<string | null> {
+  const session = await getAgentSession(db, organizationId, sessionId);
+  if (!session || TERMINAL_SESSION_STATUSES.has(session.status)) {
+    return null;
+  }
+  const existing = await laneTokenSeed(db, organizationId, sessionId);
+  if (existing) return existing;
+  const seed = crypto.randomUUID().replaceAll("-", "");
+  await db
+    .insert(laneTokens)
+    .values({
+      sessionId,
+      organizationId,
+      seed,
+      createdAt: new Date().toISOString(),
+    })
+    .onConflictDoNothing({ target: laneTokens.sessionId });
+  return (await laneTokenSeed(db, organizationId, sessionId)) ?? seed;
+}
+
+/** Rotate the seed — every bearer minted for the session dies at once. */
+export async function rotateLaneTokenSeed(
+  db: WorkspaceDb,
+  organizationId: string,
+  sessionId: string
+): Promise<string | null> {
+  const session = await getAgentSession(db, organizationId, sessionId);
+  if (!session) return null;
+  const seed = crypto.randomUUID().replaceAll("-", "");
+  await db
+    .insert(laneTokens)
+    .values({
+      sessionId,
+      organizationId,
+      seed,
+      createdAt: new Date().toISOString(),
+    })
+    .onConflictDoUpdate({
+      target: laneTokens.sessionId,
+      set: { seed, createdAt: new Date().toISOString() },
+    });
+  return seed;
 }
 
 export function getAgentSession(

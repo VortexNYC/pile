@@ -994,8 +994,12 @@ export class CloudflareBackend implements ComputeBackend {
     );
     // The backup restores into its staged /tmp path — land it at the lane's
     // real worktree so the follow-up runner sees the branch as it left it.
+    // rm first: `cp -a src dst` nests to /root/repo/pile-worktree when dst
+    // exists, and a merge-copy would keep files the dead lane left behind.
     await ioTimeout(
-      handle.exec("mkdir -p /root && cp -a /tmp/pile-worktree /root/repo"),
+      handle.exec(
+        "mkdir -p /root && rm -rf /root/repo && cp -a /tmp/pile-worktree /root/repo"
+      ),
       "sandbox restore copy"
     );
     return { id: name, name, state: "started" };

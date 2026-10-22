@@ -239,20 +239,72 @@ export async function decryptProviderConfigRow<
   }
   return out;
 }
+function laneTokenSecret(env: WorkerEnv): string | null {
+  return env.DISPATCH_SECRET ?? env.BETTER_AUTH_SECRET ?? null;
+}
+
+function laneWorkspaceStub(env: WorkerEnv, organizationId: string) {
+  return env.WORKSPACE_DURABLE_OBJECT.get(
+    env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+  );
+}
+
+// PILE-457 — the bearer is sha256 of a per-session seed kept in the DO's
+// lane_tokens table, not of the deployment secret alone. That makes the
+// token revocable: rotating the seed kills every bearer minted under it
+// without touching DISPATCH_SECRET or any other lane. Sessions that
+// predate the table have no seed row and keep the legacy seedless
+// derivation until they go terminal (and the terminal checks bind every
+// route either way).
+function deriveLaneToken(
+  secret: string,
+  organizationId: string,
+  sessionId: string,
+  seed: string | null
+): Promise<string> {
+  return sha256Hex(
+    seed === null
+      ? `agent-logs:${organizationId}:${sessionId}:${secret}`
+      : `agent-logs:${organizationId}:${sessionId}:${seed}:${secret}`
+  );
+}
+
 /**
  * Per-session bearer token the runner uses to push log lines back to Pile.
- * Derived from the deployment dispatch secret — not stored anywhere, so it
- * can't leak via the sessions API, and it only authorizes appending logs to
- * the one session it was minted for.
+ * Mint path: ensures the session's lane-token seed exists (legacy rows get
+ * one on first mint, which rotates them onto the seeded derivation) and
+ * derives the bearer from it. Returns null when the session is missing or
+ * terminal — a dead lane gets no usable token.
  */
 export async function agentLogToken(
   env: WorkerEnv,
   organizationId: string,
   sessionId: string
 ): Promise<string | null> {
-  const secret = env.DISPATCH_SECRET ?? env.BETTER_AUTH_SECRET;
+  const secret = laneTokenSecret(env);
   if (!secret) return null;
-  return sha256Hex(`agent-logs:${organizationId}:${sessionId}:${secret}`);
+  const seed = await laneWorkspaceStub(env, organizationId).ensureLaneTokenSeed(
+    sessionId
+  );
+  if (!seed) return null;
+  return deriveLaneToken(secret, organizationId, sessionId, seed);
+}
+
+/**
+ * The bearer a request is expected to carry — the non-mutating read path,
+ * so verification never mints a seed as a side effect.
+ */
+export async function expectedSessionToken(
+  env: WorkerEnv,
+  organizationId: string,
+  sessionId: string
+): Promise<string | null> {
+  const secret = laneTokenSecret(env);
+  if (!secret) return null;
+  const seed = await laneWorkspaceStub(env, organizationId).laneTokenSeed(
+    sessionId
+  );
+  return deriveLaneToken(secret, organizationId, sessionId, seed);
 }
 
 /**
@@ -266,9 +318,12 @@ export async function verifySessionToken(
   organizationId: string,
   sessionId: string
 ): Promise<boolean> {
-  const expected = await agentLogToken(env, organizationId, sessionId);
   const provided = (authorization ?? "").replace(/^Bearer\s+/i, "");
-  return !!expected && !!provided && timingSafeEqualHex(provided, expected);
+  // Lane tokens are sha256 hex — anything else short-circuits before the
+  // seed read so workspace-authed session polls don't pay a DO round-trip.
+  if (!/^[a-f0-9]{64}$/i.test(provided)) return false;
+  const expected = await expectedSessionToken(env, organizationId, sessionId);
+  return !!expected && timingSafeEqualHex(provided, expected);
 }
 
 /**

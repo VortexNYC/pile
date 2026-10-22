@@ -2282,16 +2282,18 @@ describe("agent sessions API", () => {
     );
     expect(badToken.status).toBe(401);
 
-    // Valid lane token, unknown session → 404 (token can't mint for another
-    // session id, and a real session is required to resolve the repo).
+    // Unknown session → no seed can be minted, so there is no valid lane
+    // token for it at all (PILE-457) — the mint returns null and the bare
+    // request is unauthorized rather than reaching the 404.
+    expect(laneToken).toBeNull();
     const unknown = await app.fetch(
       request(base, {
         method: "POST",
-        headers: { Authorization: `Bearer ${laneToken}` },
+        headers: { Authorization: `Bearer ${"0".repeat(64)}` },
       }),
       env
     );
-    expect(unknown.status).toBe(404);
+    expect(unknown.status).toBe(401);
   });
 
   it("serves the runner pnpm-store cache with per-session token auth", async () => {
@@ -2410,26 +2412,27 @@ describe("agent sessions API", () => {
     );
     expect(miss.status).toBe(404);
 
-    // A token minted for a session that does not exist verifies
-    // cryptographically but has nothing to authorize — 404.
+    // A session that does not exist can't mint a lane token (PILE-457) —
+    // the request is unauthorized before any session lookup.
     const ghostId = crypto.randomUUID();
     const ghostToken = await agentLogToken(
       env as unknown as WorkerEnv,
       organizationId,
       ghostId
     );
+    expect(ghostToken).toBeNull();
     const ghost = await app.fetch(
       request(
         `/workspaces/${organizationId}/agent/sessions/${ghostId}/cache/pnpm-store/${hash}`,
         {
           method: "PUT",
           body: "x",
-          headers: { Authorization: `Bearer ${ghostToken}` },
+          headers: { Authorization: `Bearer ${"0".repeat(64)}` },
         }
       ),
       env
     );
-    expect(ghost.status).toBe(404);
+    expect(ghost.status).toBe(401);
 
     // Once the session resolves the lane token is dead — reads and writes
     // alike return 409, matching /logs, /report and /mcp.
@@ -2447,6 +2450,87 @@ describe("agent sessions API", () => {
       const res = await app.fetch(attempt, env);
       expect(res.status).toBe(409);
     }
+  });
+
+  it("rotating the lane-token seed revokes the live lane's bearer (PILE-457)", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const issue = await stub.createIssue({
+      title: "Rotate lane token",
+      repo: "VortexNYC/pile",
+    });
+    const session = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "mock",
+      provider: "mock",
+      actorId: "user-1",
+      actorType: "user",
+      status: "running",
+    });
+    const laneToken = await agentLogToken(
+      env as unknown as WorkerEnv,
+      organizationId,
+      session.id
+    );
+    expect(laneToken).toBeTruthy();
+    const reportBase = `/workspaces/${organizationId}/agent/sessions/${session.id}/report`;
+
+    // The minted bearer works while the lane is live.
+    const live = await app.fetch(
+      request(reportBase, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${laneToken}` },
+        body: JSON.stringify({ result: "still running" }),
+      }),
+      env
+    );
+    expect(live.status).toBe(200);
+
+    // Ops rotation: the old bearer dies while the session stays live.
+    const rotate = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/agent/sessions/${session.id}/lane-token/rotate`,
+        { method: "POST", token }
+      ),
+      env
+    );
+    expect(rotate.status).toBe(200);
+
+    for (const dead of [
+      request(reportBase, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${laneToken}` },
+        body: JSON.stringify({ result: "x" }),
+      }),
+      // The lane-token read path dies with it.
+      request(`/workspaces/${organizationId}/agent/sessions/${session.id}`, {
+        headers: { Authorization: `Bearer ${laneToken}` },
+      }),
+    ]) {
+      const res = await app.fetch(dead, env);
+      expect(res.status).toBe(401);
+    }
+
+    // A fresh mint under the rotated seed works — rotation doesn't brick
+    // the session's future lanes.
+    const newToken = await agentLogToken(
+      env as unknown as WorkerEnv,
+      organizationId,
+      session.id
+    );
+    expect(newToken).toBeTruthy();
+    expect(newToken).not.toBe(laneToken);
+    const relive = await app.fetch(
+      request(reportBase, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${newToken}` },
+        body: JSON.stringify({ result: "x" }),
+      }),
+      env
+    );
+    expect(relive.status).toBe(200);
   });
 
   it("registers an external agent session and returns lane credentials", async () => {
@@ -2564,10 +2648,18 @@ describe("agent sessions API", () => {
     expect(badToken.status).toBe(401);
 
     // A lane token minted for a *different* session must not work here.
+    const other = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "mock",
+      provider: "mock",
+      actorId: "user-1",
+      actorType: "user",
+      status: "running",
+    });
     const otherToken = await agentLogToken(
       env as unknown as WorkerEnv,
       organizationId,
-      crypto.randomUUID()
+      other.id
     );
     const cross = await app.fetch(
       request(reportBase, {
@@ -2939,10 +3031,18 @@ describe("agent sessions API", () => {
     expect(checks.checks).toEqual([]);
 
     // A token minted for a different session cannot read this one.
+    const otherSession = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "mock",
+      provider: "mock",
+      actorId: "user-1",
+      actorType: "user",
+      status: "running",
+    });
     const foreign = await agentLogToken(
       env as unknown as WorkerEnv,
       organizationId,
-      crypto.randomUUID()
+      otherSession.id
     );
     const cross = await app.fetch(
       request(`/workspaces/${organizationId}/agent/sessions/${session.id}`, {
