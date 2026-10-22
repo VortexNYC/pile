@@ -43,6 +43,9 @@ export interface AgentSessionResult {
   // limit, account 429) — retryable after the provider's reset, not a task
   // or substrate failure. Sweep-side hold/backoff honors this.
   rateLimited?: boolean;
+  // Provider-advertised reset instant (ISO) — when present the rate-limit
+  // park ends here instead of the fixed RATE_LIMIT_HOLD_MS window.
+  rateLimitUntil?: string | null;
   // PILE-425 — cumulative usage snapshot the lane/provider reports with this
   // result; lands on the session's run receipt (agent_run_receipts).
   usage?: AgentRunUsage | null;
