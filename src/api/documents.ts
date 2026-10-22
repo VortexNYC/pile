@@ -966,6 +966,17 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
     return c.json(toResponse(doc), 201);
   });
 
+  app.openapi(searchRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const { q } = c.req.valid("query");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const ids = await stub.searchDocuments(q);
+    const docs = (
+      await Promise.all(ids.map((id) => stub.getDocument(id)))
+    ).filter((d) => d !== undefined);
+    return c.json({ documents: docs.map(toResponse) });
+  });
+
   app.openapi(getRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
@@ -1231,17 +1242,6 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
     const stub = getWorkspaceStub(c.env, organizationId);
     await stub.unwatchDocument(id, identity.id);
     return c.body(null, 204);
-  });
-
-  app.openapi(searchRoute, async (c) => {
-    const { organizationId } = c.req.valid("param");
-    const { q } = c.req.valid("query");
-    const stub = getWorkspaceStub(c.env, organizationId);
-    const ids = await stub.searchDocuments(q);
-    const docs = (
-      await Promise.all(ids.map((id) => stub.getDocument(id)))
-    ).filter((d) => d !== undefined);
-    return c.json({ documents: docs.map(toResponse) });
   });
 
   app.openapi(listPermissionsRoute, async (c) => {

@@ -1413,4 +1413,72 @@ describe("infra classification of dispatch failures (PILE-452)", () => {
     expect(capturedInstructions).toContain("identifier-keyed lesson for lane");
     expect(capturedInstructions).toContain("use pnpm only, never npm");
   });
+
+  it("caps review lanes at reviewConcurrencyCap without pausing implementation dispatches (VTX-648)", async () => {
+    const s = stub();
+    const agentId = `mock-revcap-${crypto.randomUUID().slice(0, 8)}`;
+    const dispatchedIds: string[] = [];
+    registerAgentProvider(
+      agentId,
+      () =>
+        new MockAgentProvider(agentId, {
+          maxConcurrentLanes: 4,
+          dispatch: (_org, _issue, _model, ctx) => {
+            dispatchedIds.push(ctx?.sessionId ?? "");
+            return { id: `prov-${ctx?.sessionId}`, agentId, status: "running" };
+          },
+        })
+    );
+    // maxConcurrentLanes=4 -> reviewCap=2. First 2 review lanes run; 3rd holds locally.
+    const r1Issue = await s.createIssue({ title: "rev 1" });
+    const r2Issue = await s.createIssue({ title: "rev 2" });
+    const r3Issue = await s.createIssue({ title: "rev 3" });
+    const r1 = await dispatchAgent(
+      env,
+      agentId,
+      actor.organizationId,
+      r1Issue,
+      actor,
+      undefined,
+      undefined,
+      { purpose: "review" }
+    );
+    const r2 = await dispatchAgent(
+      env,
+      agentId,
+      actor.organizationId,
+      r2Issue,
+      actor,
+      undefined,
+      undefined,
+      { purpose: "review" }
+    );
+    const r3 = await dispatchAgent(
+      env,
+      agentId,
+      actor.organizationId,
+      r3Issue,
+      actor,
+      undefined,
+      undefined,
+      { purpose: "review" }
+    );
+    expect(r1.status).toBe("running");
+    expect(r2.status).toBe("running");
+    expect(r3.status).toBe("waiting");
+    expect(r3.paused).toBe(1);
+    // Agent type is NOT paused workspace-wide — an implementation lane still dispatches!
+    expect(await s.getAgentPause(agentId)).toBeUndefined();
+    const implIssue = await s.createIssue({ title: "impl work" });
+    const impl = await dispatchAgent(
+      env,
+      agentId,
+      actor.organizationId,
+      implIssue,
+      actor
+    );
+    expect(impl.status).toBe("running");
+    expect(impl.paused).toBe(0);
+    expect(dispatchedIds).toContain(impl.id);
+  });
 });

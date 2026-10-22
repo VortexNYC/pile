@@ -4092,6 +4092,69 @@ describe("PILE-420 stale marking + pause holds", () => {
       "concurrency cap"
     );
   });
+
+  it("promotes held implementation lanes ahead of review-cap-saturated review holds (VTX-648)", async () => {
+    const agentId = `mock-rev-drain-${crypto.randomUUID().slice(0, 8)}`;
+    const dispatches: string[] = [];
+    registerMock(agentId, {
+      maxConcurrentLanes: 2,
+      dispatch: (_org, _issue, _model, ctx) => {
+        dispatches.push(ctx?.sessionId ?? "");
+        return { id: `prov-${ctx?.sessionId}`, agentId, status: "running" };
+      },
+      poll: (id) => ({ id, agentId, status: "running" }),
+    });
+    const actor = {
+      id: userId,
+      organizationId,
+      type: "user" as const,
+      permissions: [] as string[],
+    };
+    // 1 running review lane fills reviewCap=1 (for cap=2).
+    const revLiveIssue = await stub.createIssue({ title: "Rev live" });
+    await stub.createAgentSession({
+      issueId: revLiveIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      purpose: "review",
+    });
+    // 2nd review lane hits reviewCap=1 and holds locally.
+    const revHeldIssue = await stub.createIssue({ title: "Rev held" });
+    const revHeld = await dispatchAgent(
+      env,
+      agentId,
+      organizationId,
+      revHeldIssue,
+      actor,
+      undefined,
+      undefined,
+      { purpose: "review" }
+    );
+    expect(revHeld.paused).toBe(1);
+    // An implementation hold parked behind revHeld must still promote into the 2nd slot!
+    const implIssue = await stub.createIssue({ title: "Impl held" });
+    const implHeld = await stub.createAgentSession({
+      issueId: implIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "waiting",
+      paused: 1,
+    });
+    const released = await releasePausedSessions(
+      env,
+      stub,
+      organizationId,
+      agentId
+    );
+    expect(released).toEqual([implHeld.id]);
+    expect((await stub.getAgentSession(revHeld.id))?.paused).toBe(1);
+    expect((await stub.getAgentSession(implHeld.id))?.paused).toBe(0);
+  });
 });
 
 describe("spend caps (PILE-425)", () => {

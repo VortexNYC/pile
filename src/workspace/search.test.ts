@@ -4,8 +4,10 @@ import { describe, expect, it } from "vitest";
 import type { Issue } from "../types/workspace.js";
 import {
   createWorkspaceSearchIndex,
+  documentToSearchDocument,
   findDuplicateCandidates,
   issueToSearchDocument,
+  searchDocuments,
   titleOverlapScore,
 } from "./search.js";
 
@@ -99,5 +101,29 @@ describe("findDuplicateCandidates", () => {
     );
     expect(hits.map((hit) => hit.issueId)).toEqual(["exact", "close"]);
     expect(hits[0].score).toBe(1);
+  });
+
+  it("indexes markdown documents and survives 200KB single-token payloads without stack overflow (VTX-649)", async () => {
+    const index = createWorkspaceSearchIndex();
+    await insert(
+      index,
+      issueToSearchDocument(
+        issue("huge-token", "Canary 200KB", {
+          description: `prefix ${"A".repeat(200_000)} suffix`,
+        })
+      )
+    );
+    await insert(
+      index,
+      documentToSearchDocument({
+        id: "doc-md-1",
+        title: "Handoff Note",
+        content:
+          "# Handoff\n\nExponential backoff landed on rateLimitHoldUntil.",
+        createdAt: "2026-10-22T00:00:00.000Z",
+      })
+    );
+    const docIds = await searchDocuments(index, "rateLimitHoldUntil");
+    expect(docIds).toEqual(["doc-md-1"]);
   });
 });

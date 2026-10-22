@@ -442,6 +442,7 @@ export async function canAccessTeam(
   const record = await getTeamById(db, teamId);
   if (!record) return false;
   if (record.isPublic) return true;
+  if (record.ownerId === identity.id) return true;
   if (isAdminIdentity(identity)) return true;
   return isTeamMember(db, record.id, identity.id);
 }
@@ -471,7 +472,12 @@ export async function getVisibleTeamIds(
   const visible: string[] = [];
   for (const row of teamRows) {
     const metadata = parseTeamMetadata(row.metadata);
-    if (isAdmin || metadata?.isPublic || memberTeamIds.has(row.id)) {
+    if (
+      isAdmin ||
+      metadata?.isPublic ||
+      metadata?.ownerId === identity.id ||
+      memberTeamIds.has(row.id)
+    ) {
       visible.push(row.id);
     }
   }

@@ -239,7 +239,7 @@ describe("documents API", () => {
       {},
       token
     );
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(400);
   });
 });
 
@@ -519,5 +519,34 @@ describe("default-deny creator grants", () => {
 describe("space permission routes (PILE-447)", () => {
   it("registers document-spaces/{id}/permissions grant+revoke", async () => {
     expect(true).toBe(true);
+  });
+
+  it("routes GET /documents/search before /documents/{id} and matches markdown content (VTX-649)", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const created = await fetch(
+      `/workspaces/${organizationId}/documents`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          title: "VTX-649 — markdown search proof",
+          contentFormat: "markdown",
+          content: "UniqueTokenVtx649SearchProof in markdown body",
+        }),
+      },
+      token
+    );
+    expect(created.status).toBe(201);
+    const doc = z.object({ id: z.string() }).parse(await created.json());
+
+    const res = await fetch(
+      `/workspaces/${organizationId}/documents/search?q=UniqueTokenVtx649SearchProof`,
+      {},
+      token
+    );
+    expect(res.status).toBe(200);
+    const body = z
+      .object({ documents: z.array(z.object({ id: z.string() })) })
+      .parse(await res.json());
+    expect(body.documents.map((d) => d.id)).toContain(doc.id);
   });
 });
