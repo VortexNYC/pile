@@ -90,6 +90,71 @@ function gitIdentityFixture(): GitIdentity {
   } as unknown as GitIdentity;
 }
 
+const dispatchRoutes = (sandboxId: string) => {
+  const toolboxBase = `https://proxy.app.daytona.io/toolbox/${sandboxId}`;
+  return [
+    {
+      url: "https://app.daytona.io/api/sandbox",
+      method: "GET",
+      response: () => ({ items: [] }),
+    },
+    {
+      url: "https://app.daytona.io/api/sandbox",
+      method: "POST",
+      response: () => ({
+        id: sandboxId,
+        name: "vortex-devin-sess1",
+        state: "creating",
+        toolboxProxyUrl: "https://proxy.app.daytona.io/toolbox",
+      }),
+    },
+    {
+      url: `https://app.daytona.io/api/sandbox/${sandboxId}`,
+      method: "GET",
+      response: () => ({
+        id: sandboxId,
+        name: "vortex-devin-sess1",
+        state: "started",
+        toolboxProxyUrl: "https://proxy.app.daytona.io/toolbox",
+      }),
+    },
+    {
+      url: `${toolboxBase}/process/session`,
+      method: "POST",
+      response: () => ({ sessionId: "sess-1" }),
+    },
+    {
+      url: `${toolboxBase}/process/session/sess-1/exec`,
+      method: "POST",
+      response: () => ({ cmdId: "cmd-1" }),
+    },
+  ];
+};
+
+async function laneEnvFor(credentials: string): Promise<string> {
+  const fetchSpy = mockFetch(dispatchRoutes("sb-creds"));
+  const provider = new DevinCliAgentProvider(
+    cliEnv({ DEVIN_CLI_CREDENTIALS_B64: credentials })
+  );
+  (
+    provider as unknown as {
+      githubToken: (
+        repo: string
+      ) => Promise<{ token: string; expiresAt: string | null }>;
+    }
+  ).githubToken = vi
+    .fn()
+    .mockResolvedValue({ token: "gh-token", expiresAt: null });
+  const waits: Promise<unknown>[] = [];
+  await provider.dispatch("org-1", issueFixture(), "swe-2", {
+    sessionId: "sess-1",
+    gitIdentity: gitIdentityFixture(),
+    waitUntil: (p) => waits.push(p),
+  });
+  await Promise.all(waits);
+  return uploadedBody(fetchSpy, "/tmp/pile/lane.env");
+}
+
 describe("DevinCliAgentProvider", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -651,71 +716,6 @@ describe("DevinCliAgentProvider", () => {
   // a raw credentials.toml pasted into a secret — normalizeCredentialsB64
   // encodes the latter so the runner's write_devin_home always decodes.
   describe("credential normalization", () => {
-    const dispatchRoutes = (sandboxId: string) => {
-      const toolboxBase = `https://proxy.app.daytona.io/toolbox/${sandboxId}`;
-      return [
-        {
-          url: "https://app.daytona.io/api/sandbox",
-          method: "GET",
-          response: () => ({ items: [] }),
-        },
-        {
-          url: "https://app.daytona.io/api/sandbox",
-          method: "POST",
-          response: () => ({
-            id: sandboxId,
-            name: "vortex-devin-sess1",
-            state: "creating",
-            toolboxProxyUrl: "https://proxy.app.daytona.io/toolbox",
-          }),
-        },
-        {
-          url: `https://app.daytona.io/api/sandbox/${sandboxId}`,
-          method: "GET",
-          response: () => ({
-            id: sandboxId,
-            name: "vortex-devin-sess1",
-            state: "started",
-            toolboxProxyUrl: "https://proxy.app.daytona.io/toolbox",
-          }),
-        },
-        {
-          url: `${toolboxBase}/process/session`,
-          method: "POST",
-          response: () => ({ sessionId: "sess-1" }),
-        },
-        {
-          url: `${toolboxBase}/process/session/sess-1/exec`,
-          method: "POST",
-          response: () => ({ cmdId: "cmd-1" }),
-        },
-      ];
-    };
-
-    async function laneEnvFor(credentials: string): Promise<string> {
-      const fetchSpy = mockFetch(dispatchRoutes("sb-creds"));
-      const provider = new DevinCliAgentProvider(
-        cliEnv({ DEVIN_CLI_CREDENTIALS_B64: credentials })
-      );
-      (
-        provider as unknown as {
-          githubToken: (
-            repo: string
-          ) => Promise<{ token: string; expiresAt: string | null }>;
-        }
-      ).githubToken = vi
-        .fn()
-        .mockResolvedValue({ token: "gh-token", expiresAt: null });
-      const waits: Promise<unknown>[] = [];
-      await provider.dispatch("org-1", issueFixture(), "swe-2", {
-        sessionId: "sess-1",
-        gitIdentity: gitIdentityFixture(),
-        waitUntil: (p) => waits.push(p),
-      });
-      await Promise.all(waits);
-      return uploadedBody(fetchSpy, "/tmp/pile/lane.env");
-    }
-
     it("base64-encodes a raw credentials.toml", async () => {
       const raw = 'token = "raw-toml-secret"';
       const laneEnv = await laneEnvFor(raw);

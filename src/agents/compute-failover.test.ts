@@ -2,15 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import { VortexError } from "../platform/errors.js";
 import type { AppEnv } from "../types/env.js";
-import {
-  CloudflareBackend,
-  ComputeError,
-  FailoverBackend,
-  LaneSandboxBackend,
-  computeBackend,
-} from "./compute.js";
+import { ComputeError, FailoverBackend, computeBackend } from "./compute.js";
 import type { ComputeBackend, ComputeSandbox } from "./compute.js";
-import type { LaneSandboxBase } from "./lane-sandbox.js";
 
 function baseEnv(): AppEnv {
   return {

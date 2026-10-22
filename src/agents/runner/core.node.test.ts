@@ -652,17 +652,13 @@ describe("runner push state (PILE-322)", () => {
   });
 });
 
-// VTX-620 — the poll/sweep rate-limit park only works if the runner's
-// result file actually carries the flags. Pin the fail_result payload so a
-// provider-capacity death can't quietly regress to a plain failure.
-describePy("fail_result payload (VTX-620)", () => {
-  const failResult = (pyExpr: string): Record<string, unknown> => {
-    if (!PYTHON) throw new Error("unreachable: suite skipped without CPython");
-    const out = execFileSync(
-      PYTHON,
-      [
-        "-c",
-        `import sys, os, json
+const failResult = (pyExpr: string): Record<string, unknown> => {
+  if (!PYTHON) throw new Error("unreachable: suite skipped without CPython");
+  const out = execFileSync(
+    PYTHON,
+    [
+      "-c",
+      `import sys, os, json
 sys.path.insert(0, ${JSON.stringify(join(import.meta.dirname))})
 import core
 try:
@@ -671,12 +667,16 @@ except OSError:
     pass
 core.fail_result(${pyExpr})
 print(open(core.RESULT_FILE).read())`,
-      ],
-      { encoding: "utf8", env: runnerEnv(), timeout: 30_000 }
-    );
-    return JSON.parse(out.trim()) as Record<string, unknown>;
-  };
+    ],
+    { encoding: "utf8", env: runnerEnv(), timeout: 30_000 }
+  );
+  return JSON.parse(out.trim()) as Record<string, unknown>;
+};
 
+// VTX-620 — the poll/sweep rate-limit park only works if the runner's
+// result file actually carries the flags. Pin the fail_result payload so a
+// provider-capacity death can't quietly regress to a plain failure.
+describePy("fail_result payload (VTX-620)", () => {
   it("flags a free-model rate-limit death as rateLimited with the advertised reset", () => {
     const before = Date.now();
     const result = failResult(
@@ -708,23 +708,24 @@ print(open(core.RESULT_FILE).read())`,
   });
 });
 
-describePy("rate-limit reset parsing (VTX-638)", () => {
-  const parse = (text: string, now: string): string => {
-    if (!PYTHON) throw new Error("unreachable: suite skipped without CPython");
-    return execFileSync(
-      PYTHON,
-      [
-        "-c",
-        `import sys, json, datetime; sys.path.insert(0, ${JSON.stringify(join(import.meta.dirname))});
+const parse = (text: string, now: string): string => {
+  if (!PYTHON) throw new Error("unreachable: suite skipped without CPython");
+  return execFileSync(
+    PYTHON,
+    [
+      "-c",
+      `import sys, json, datetime; sys.path.insert(0, ${JSON.stringify(join(import.meta.dirname))});
 import core;
 now = datetime.datetime.fromisoformat(${JSON.stringify(now)});
 print(json.dumps(core.rate_limit_reset_iso(${JSON.stringify(text)}, now)))`,
-      ],
-      { encoding: "utf8", timeout: 30_000 }
-    )
-      .trim()
-      .replace(/^"|"$/g, "");
-  };
+    ],
+    { encoding: "utf8", timeout: 30_000 }
+  )
+    .trim()
+    .replace(/^"|"$/g, "");
+};
+
+describePy("rate-limit reset parsing (VTX-638)", () => {
   const NOW = "2026-10-22T15:33:11+00:00";
 
   it("parses 'reset in N seconds' as a relative offset", () => {
