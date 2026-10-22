@@ -1736,7 +1736,7 @@ def read_transcript(fallback=''):
         return fallback
 
 
-def write_result(status, pr_url='', result='', report=None, infra=False, usage=None, rate_limited=False):
+def write_result(status, pr_url='', result='', report=None, infra=False, usage=None, rate_limited=False, rate_limit_until=None):
     payload = {'status': status, 'prUrl': pr_url, 'branch': BRANCH, 'result': _redact(result)}
     if report:
         payload['report'] = _redact(report)
@@ -1744,6 +1744,8 @@ def write_result(status, pr_url='', result='', report=None, infra=False, usage=N
         payload['infraFailure'] = True
     if rate_limited:
         payload['rateLimited'] = True
+        if rate_limit_until:
+            payload['rateLimitUntil'] = rate_limit_until
     # PILE-450 — cumulative run usage (tokens/cost) extracted by the driver;
     # lands on the session's run receipt so spend caps have real numbers.
     if usage:
@@ -1807,7 +1809,9 @@ def finalize(output, pushed, report=None, usage=None):
 
 
 def fail_result(error):
-    write_result('failed', '', str(error), infra=isinstance(error, TransportError), rate_limited=is_rate_limited(error))
+    write_result('failed', '', str(error), infra=isinstance(error, TransportError),
+                 rate_limited=is_rate_limited(error),
+                 rate_limit_until=rate_limit_reset_iso(error) if is_rate_limited(error) else None)
 
 
 # Agent-CLI capacity deaths (devin's "Reached free model rate limit … resets
@@ -1824,3 +1828,34 @@ RATE_LIMIT_RE = re.compile(
 
 def is_rate_limited(error):
     return bool(RATE_LIMIT_RE.search(str(error)))
+
+
+# VTX-637 — providers tell us the reset instant: devin's "Your limit will
+# reset in 49 seconds (at 15:44 UTC)", codex/claude "try again in 30s",
+# Retry-After-style counts. Prefer the provider's number over the fixed
+# hold so lanes re-enter as soon as capacity frees, not on a guess.
+_RESET_IN_RE = re.compile(r'\bresets? in (\d+)\s*(seconds?|minutes?|s|m)\b', re.I)
+# Only honor a clock instant when it carries an explicit UTC/GMT marker —
+# a bare "at 6:05 PM" gives no timezone and guessing one parks the whole
+# agent type on a confidently wrong instant.
+_RESET_AT_UTC_RE = re.compile(r'at (\d{1,2}):(\d{2})\s*(UTC|GMT)', re.I)
+_RETRY_IN_RE = re.compile(r'(?:try again|retry) in (\d+)\s*(seconds?|minutes?|s|m)\b', re.I)
+
+
+def rate_limit_reset_iso(error, now=None):
+    """ISO instant the provider gave for capacity reset, or None."""
+    import datetime
+    text = str(error)
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    m = _RESET_IN_RE.search(text) or _RETRY_IN_RE.search(text)
+    if m:
+        secs = int(m.group(1)) * (60 if m.group(2).lower().startswith('m') else 1)
+        return (now + datetime.timedelta(seconds=secs)).isoformat()
+    m = _RESET_AT_UTC_RE.search(text)
+    if m:
+        at = now.replace(hour=int(m.group(1)), minute=int(m.group(2)),
+                         second=0, microsecond=0)
+        if at <= now:
+            at += datetime.timedelta(days=1)
+        return at.isoformat()
+    return None
