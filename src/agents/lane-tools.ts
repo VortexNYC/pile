@@ -1080,7 +1080,7 @@ function isEmptyValue(value: unknown): boolean {
 }
 
 const BLOCKED_HOSTS =
-  /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|[[f]|[0:]+$)/i;
+  /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|\[f|\[[0:]+\]?$)/i;
 
 export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
   defineWorkspaceTool({
