@@ -21,6 +21,7 @@ import { migrate } from "drizzle-orm/durable-sqlite/migrator";
 import { alias } from "drizzle-orm/sqlite-core";
 import { z } from "zod";
 
+import { classifyMerchantLead } from "../agents/collectors.js";
 import { encryptSecret } from "../agents/credentials.js";
 import {
   LANE_PROGRESS_HEARTBEAT_MS,
@@ -2880,12 +2881,19 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         byExternalId.get(cand.externalId) ??
         (mk.matchKey ? byMatchKey.get(mk.matchKey) : undefined);
 
+      const classified = classifyMerchantLead({
+        name: cand.name,
+        vertical: cand.vertical,
+        source: input.sourceName,
+      });
+      const normalizedVertical = classified.categoryLabel;
+
       const customer = matched
         ? (data.updateCustomer(this.db, this.organizationId, matched.id, {
             domain: cand.domain ?? matched.domain,
             address: cand.address ?? matched.address,
             phone: mk.phoneE164 ?? cand.phone ?? matched.phone,
-            vertical: cand.vertical ?? matched.vertical,
+            vertical: normalizedVertical,
             neighborhood: cand.neighborhood ?? matched.neighborhood,
             processor: cand.posGuess ?? matched.processor,
             evidenceUri: cand.evidenceUri ?? matched.evidenceUri,
@@ -2898,7 +2906,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
             domain: cand.domain ?? null,
             address: cand.address ?? null,
             phone: mk.phoneE164 ?? cand.phone ?? null,
-            vertical: cand.vertical ?? null,
+            vertical: normalizedVertical,
             neighborhood: cand.neighborhood ?? null,
             processor: cand.posGuess ?? null,
             evidenceUri: cand.evidenceUri ?? null,

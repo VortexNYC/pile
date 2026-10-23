@@ -84,7 +84,182 @@ export type NonPosSmbPresetId =
   | "nyc_dob_permit_issuances"
   | "nyc_home_improvement_contractors"
   | "nyc_auto_and_garages"
-  | "nyc_b2b_and_specialty_dealers";
+  | "nyc_b2b_and_specialty_dealers"
+  | "nyc_bookkeepers_and_cpas"
+  | "nyc_vc_and_accelerators"
+  | "nyc_tech_and_software_startups";
+
+export type LeadSheetKey =
+  | "trades"
+  | "tech"
+  | "partners_accounting"
+  | "partners_vc"
+  | "exploration"
+  | "excluded_pos";
+
+export interface MerchantLeadClassification {
+  sheetKey: LeadSheetKey;
+  categoryLabel: string;
+  vortexWedge: string;
+}
+
+export function classifyMerchantLead(input: {
+  name?: string | null;
+  vertical?: string | null;
+  source?: string | null;
+}): MerchantLeadClassification {
+  const v = (input.vertical ?? "").toLowerCase();
+  const n = (input.name ?? "").toLowerCase();
+  const s = (input.source ?? "").toLowerCase();
+
+  if (
+    v.includes("bookkeep") ||
+    v.includes("cpa") ||
+    v.includes("account") ||
+    v.includes("tax") ||
+    s.includes("bookkeep") ||
+    s.includes("cpa") ||
+    /\b(cpa|bookkeeping|accounting|tax service)\b/.test(n)
+  ) {
+    return {
+      sheetKey: "partners_accounting",
+      categoryLabel: "Bookkeeper / CPA Partner",
+      vortexWedge: "Partner Residual Rev-Share (20-100+ SMB Client Book)",
+    };
+  }
+
+  if (
+    v.includes("venture") ||
+    v.includes("capital partner") ||
+    v.includes("accelerator") ||
+    s.includes("venture") ||
+    /\b(ventures|capital partners|venture partners|seed fund)\b/.test(n)
+  ) {
+    return {
+      sheetKey: "partners_vc",
+      categoryLabel: "VC / Fund Partner",
+      vortexWedge: "Portfolio Startup Perks + Partner Rev-Share",
+    };
+  }
+
+  if (
+    v.includes("tech") ||
+    v.includes("software") ||
+    v.includes("saas") ||
+    s.includes("startup") ||
+    /\b(technologies|software|ai labs)\b/.test(n)
+  ) {
+    return {
+      sheetKey: "tech",
+      categoryLabel: "Tech / AI / SaaS Startup",
+      vortexWedge: "Polar/Stripe Parity: SDKs + Subscriptions + $10 ACH",
+    };
+  }
+
+  if (
+    v.includes("restaurant") ||
+    v.includes("bar") ||
+    v.includes("cafe") ||
+    v.includes("bakery") ||
+    v.includes("pizzeria") ||
+    v.includes("deli") ||
+    v.includes("nightclub") ||
+    v.includes("excluded") ||
+    /\b(pizzeria|osteria|bistro|taqueria|bakery|bagel|cafe|beer hall|delicatessen|grill)\b/.test(
+      n
+    )
+  ) {
+    return {
+      sheetKey: "excluded_pos",
+      categoryLabel: "Restaurant / POS (Excluded)",
+      vortexWedge: "Excluded — Requires Restaurant POS",
+    };
+  }
+
+  if (v.includes("electrical")) {
+    return {
+      sheetKey: "trades",
+      categoryLabel: "Electrical Contractor",
+      vortexWedge: "Hosted Invoice + $10-Capped ACH + Surcharging",
+    };
+  }
+  if (
+    v.includes("plumber") ||
+    v.includes("plumbing") ||
+    v.includes("oil burner") ||
+    v.includes("fire suppression") ||
+    v === "mp"
+  ) {
+    return {
+      sheetKey: "trades",
+      categoryLabel: "Plumbing, Heating & Fire",
+      vortexWedge: "Hosted Invoice + $10-Capped ACH + Surcharging",
+    };
+  }
+  if (
+    v.includes("filing representative") ||
+    v.includes("special inspection") ||
+    v.includes("engineering") ||
+    v.includes("architect")
+  ) {
+    return {
+      sheetKey: "trades",
+      categoryLabel: "Architecture, Engineering & Expediting",
+      vortexWedge: "Retainers + Milestone Invoices + $10 ACH",
+    };
+  }
+  if (v.includes("license") || s.includes("trade waste") || s.includes("bic")) {
+    return {
+      sheetKey: "trades",
+      categoryLabel: "Commercial Hauling & Demolition",
+      vortexWedge: "Recurring B2B Invoices + Card-on-File + ACH",
+    };
+  }
+  if (
+    v.includes("general contractor") ||
+    v.includes("home improvement") ||
+    v.includes("contractor") ||
+    v.includes("rigger") ||
+    v === "gc"
+  ) {
+    return {
+      sheetKey: "trades",
+      categoryLabel: "General & Home Improvement Contractor",
+      vortexWedge: "Hosted Invoice + $10-Capped ACH + Deposit Links",
+    };
+  }
+
+  if (
+    v.includes("garage") ||
+    v.includes("auto") ||
+    v.includes("tow") ||
+    v.includes("car wash")
+  ) {
+    return {
+      sheetKey: "exploration",
+      categoryLabel: "Auto, Garage & Towing (20% Explore)",
+      vortexWedge: "Countertop Terminal + Surcharging + Text-to-Pay",
+    };
+  }
+  if (
+    v.includes("disabled") ||
+    v.includes("medical") ||
+    v.includes("dental") ||
+    v.includes("pharmacy")
+  ) {
+    return {
+      sheetKey: "exploration",
+      categoryLabel: "Medical, Dental & DME (20% Explore)",
+      vortexWedge: "Hosted Payment Links + Card-on-File + Terminal",
+    };
+  }
+
+  return {
+    sheetKey: "exploration",
+    categoryLabel: input.vertical || "B2B & Specialty SMB (20% Explore)",
+    vortexWedge: "Invoicing + Payment Links + ACH",
+  };
+}
 
 export const PRESET_NON_POS_SMB_SOURCES: Record<
   NonPosSmbPresetId,
@@ -206,6 +381,60 @@ export const PRESET_NON_POS_SMB_SOURCES: Record<
     cursorValue: null,
     signal: "new_license",
   },
+  nyc_bookkeepers_and_cpas: {
+    id: "preset_nyc_cpas",
+    name: "NY DOS Active CPA, Bookkeeping, Accounting & Tax Service Partners",
+    kind: "socrata",
+    config: JSON.stringify({
+      domain: "data.ny.gov",
+      dataset: "n9v6-gdp6",
+      name_field: "current_entity_name",
+      id_field: "dos_id",
+      vertical_field: "entity_type",
+      borough_field: "county",
+      where:
+        "(upper(current_entity_name) like '%BOOKKEEPING%' OR upper(current_entity_name) like '%ACCOUNTING%' OR upper(current_entity_name) like '% CPA %' OR upper(current_entity_name) like '%CPA P%' OR upper(current_entity_name) like '%TAX SERVICE%') AND county IN ('New York','Kings','Queens','Bronx','Nassau','Westchester','Suffolk')",
+    }),
+    cursorField: "initial_dos_filing_date",
+    cursorValue: null,
+    signal: "corp_filing",
+  },
+  nyc_vc_and_accelerators: {
+    id: "preset_nyc_vcs",
+    name: "NY DOS Active Venture Capital, Seed Funds & Investment Partners",
+    kind: "socrata",
+    config: JSON.stringify({
+      domain: "data.ny.gov",
+      dataset: "n9v6-gdp6",
+      name_field: "current_entity_name",
+      id_field: "dos_id",
+      vertical_field: "entity_type",
+      borough_field: "county",
+      where:
+        "(upper(current_entity_name) like '%VENTURES%' OR upper(current_entity_name) like '%CAPITAL PARTNERS%' OR upper(current_entity_name) like '%VENTURE PARTNERS%' OR upper(current_entity_name) like '%SEED FUND%') AND county IN ('New York','Kings')",
+    }),
+    cursorField: "initial_dos_filing_date",
+    cursorValue: null,
+    signal: "corp_filing",
+  },
+  nyc_tech_and_software_startups: {
+    id: "preset_nyc_tech_startups",
+    name: "NY DOS Newly Formed Tech, Software & AI Startups",
+    kind: "socrata",
+    config: JSON.stringify({
+      domain: "data.ny.gov",
+      dataset: "n9v6-gdp6",
+      name_field: "current_entity_name",
+      id_field: "dos_id",
+      vertical_field: "entity_type",
+      borough_field: "county",
+      where:
+        "(upper(current_entity_name) like '%TECHNOLOGIES%' OR upper(current_entity_name) like '%SOFTWARE%' OR upper(current_entity_name) like '%AI LABS%' OR upper(current_entity_name) like '%SYSTEMS%') AND county IN ('New York','Kings','Queens')",
+    }),
+    cursorField: "initial_dos_filing_date",
+    cursorValue: null,
+    signal: "corp_filing",
+  },
 };
 
 const SIGNAL_WEIGHT: Record<string, number> = {
@@ -290,23 +519,30 @@ async function pullSocrata(
       str(r.address_building) ??
         str(r.business_house_number) ??
         str(r.house__) ??
-        str(r.building_number),
+        str(r.building_number) ??
+        str(r.dos_process_address_1),
       str(r.address_street_name) ??
         str(r.business_street_name) ??
         str(r.street_name) ??
-        str(r.street),
+        str(r.street) ??
+        str(r.dos_process_address_2),
     ]
       .filter(Boolean)
       .join(" ");
     const composedAddress = [
       streetLine || str(r.actual_address_of_premises) || str(r.address),
-      str(r.address_city) ?? str(r.license_business_city) ?? str(r.city),
+      str(r.address_city) ??
+        str(r.license_business_city) ??
+        str(r.dos_process_city) ??
+        str(r.city),
       str(r.address_state) ??
         str(r.business_state) ??
+        str(r.dos_process_state) ??
         str(r.state) ??
         str(r.state_name),
       str(r.address_zip) ??
         str(r.business_zip_code) ??
+        str(r.dos_process_zip) ??
         str(r.zip_code) ??
         str(r.postcode),
     ]
@@ -319,7 +555,21 @@ async function pullSocrata(
     )?.toLowerCase();
     const ownerFirst = str(r.first_name) ?? str(r.permittee_s_first_name);
     const ownerLast = str(r.last_name) ?? str(r.permittee_s_last_name);
-    const ownerName = [ownerFirst, ownerLast].filter(Boolean).join(" ") || null;
+    const processPerson =
+      str(r.dos_process_name) ?? str(r.registered_agent_name);
+    const validProcessPerson =
+      processPerson &&
+      name &&
+      processPerson.toUpperCase() !== name.toUpperCase() &&
+      !/\b(LLC|INC|CORP|PLLC|PC|C\/O|REGISTERED AGENT|CORPORATION SERVICE)\b/i.test(
+        processPerson
+      )
+        ? processPerson
+        : null;
+    const ownerName =
+      [ownerFirst, ownerLast].filter(Boolean).join(" ") ||
+      validProcessPerson ||
+      null;
     return {
       name: name ?? "unknown",
       externalId: `socrata:${dataset}:${id}`,
@@ -338,7 +588,9 @@ async function pullSocrata(
       neighborhood:
         str(r[boroughField]) ??
         str(r.borough) ??
+        str(r.county) ??
         str(r.license_business_city) ??
+        str(r.dos_process_city) ??
         str(r.city),
       vertical: str(r[str(c.vertical_field) ?? "description"]),
       signal: source.signal,

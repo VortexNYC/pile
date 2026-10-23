@@ -16,6 +16,7 @@ import {
   withPaidVendorBudgetEffect,
 } from "./collectors-effect.js";
 import {
+  classifyMerchantLead,
   deriveDomainFromEmail,
   PRESET_NON_POS_SMB_SOURCES,
   pullSource,
@@ -378,5 +379,24 @@ describe("scoreCandidate", () => {
     expect(batchGate.approved[0]?.customerId).toBe("c-pass");
     expect(batchGate.blocked).toHaveLength(1);
     expect(batchGate.blocked[0]?.customerId).toBe("c-block");
+
+    expect(
+      classifyMerchantLead({
+        name: "JAEHWAN LEE CPA P.C.",
+        vertical: "DOMESTIC PROFESSIONAL SERVICE CORPORATION",
+      })
+    ).toMatchObject({
+      sheetKey: "partners_accounting",
+      categoryLabel: "Bookkeeper / CPA Partner",
+    });
+    expect(
+      classifyMerchantLead({
+        name: "MARINO VENTURES LLC",
+        vertical: "DOMESTIC LIMITED LIABILITY COMPANY",
+      })
+    ).toMatchObject({
+      sheetKey: "partners_vc",
+      categoryLabel: "VC / Fund Partner",
+    });
   });
 });
