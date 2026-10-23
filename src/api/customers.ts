@@ -2206,7 +2206,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
               borough: z.string().optional(),
               limit: z.number().int().min(1).max(100).default(15),
               offset: z.number().int().min(0).optional(),
-              enrichWebsites: z.boolean().default(false),
+              enrichWebsites: z.boolean().default(true),
               dispatchDetectiveBatch: z.boolean().default(false),
             }),
           },
@@ -2269,10 +2269,19 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
           const { Effect } = await import("effect");
           const { enrichCandidatesWithEffect } =
             await import("../agents/collectors-effect.js");
+          const envVars = c.env as unknown as Record<
+            string,
+            string | undefined
+          >;
           return Effect.runPromise(
             enrichCandidatesWithEffect(pulled.candidates, {
               concurrency: 6,
               timeoutMs: 2500,
+              scraplingBaseUrl:
+                envVars.SCRAPLING_BASE_URL ?? "https://scrapling.pile.nyc",
+              firecrawlBaseUrl:
+                envVars.FIRECRAWL_BASE_URL ?? "https://firecrawl.pile.nyc",
+              lookupDos: true,
             })
           );
         })()

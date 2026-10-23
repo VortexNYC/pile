@@ -53,12 +53,28 @@ const FREEMAIL_DOMAINS = new Set([
   "mail.com",
 ]);
 
+const FREEMAIL_PREFIXES = [
+  "gmail.",
+  "googlemail.",
+  "yahoo.",
+  "ymail.",
+  "aol.",
+  "hotmail.",
+  "outlook.",
+  "live.",
+  "msn.",
+  "icloud.",
+  "protonmail.",
+  "proton.",
+];
+
 export function deriveDomainFromEmail(
   email: string | null | undefined
 ): string | null {
   if (!email || !email.includes("@")) return null;
   const host = email.split("@")[1]?.trim().toLowerCase();
   if (!host || !host.includes(".") || FREEMAIL_DOMAINS.has(host)) return null;
+  if (FREEMAIL_PREFIXES.some((p) => host.startsWith(p))) return null;
   return host;
 }
 

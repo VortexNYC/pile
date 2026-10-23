@@ -4,10 +4,14 @@ import { describe, expect, it, vi } from "vitest";
 import {
   CollectorSourceError,
   enrichCandidatesWithEffect,
+  fetchHtmlWaterfallEffect,
   isSafePublicDomain,
   pullSourceEffect,
+  VendorBudgetExceededError,
+  withPaidVendorBudgetEffect,
 } from "./collectors-effect.js";
 import {
+  deriveDomainFromEmail,
   PRESET_NON_POS_SMB_SOURCES,
   pullSource,
   scoreCandidate,
@@ -194,6 +198,108 @@ describe("scoreCandidate", () => {
       posEvidenceUrl: "https://acmeplumbing.nyc",
     });
     expect(enriched[1]?.posGuess).toBeNull();
+    vi.unstubAllGlobals();
+  });
+
+  it("promotes VTX-692 Detective rules into Tier 1: paired DOB Master Electrician (license_sl_no+1), NY DOS n9v6-gdp6 lookup, Mac mini Scrapling/Firecrawl waterfall, international freemail guard, and VendorBudgetExceededError", async () => {
+    expect(deriveDomainFromEmail("marcolamberti@yahoo.it")).toBeNull();
+    expect(deriveDomainFromEmail("user@hotmail.co.uk")).toBeNull();
+    expect(deriveDomainFromEmail("info@precisionprecastconcrete.com")).toBe(
+      "precisionprecastconcrete.com"
+    );
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("t8hj-ruu2.json")) {
+          return new Response(
+            JSON.stringify([
+              {
+                license_sl_no: "102953",
+                first_name: "MARCO",
+                last_name: "LAMBERTI",
+              },
+            ]),
+            { status: 200 }
+          );
+        }
+        if (url.includes("n9v6-gdp6.json")) {
+          return new Response(
+            JSON.stringify([
+              {
+                dos_id: "7574460",
+                initial_dos_filing_date: "2025-02-05T00:00:00.000",
+                dos_process_name: "LAMBERTI ELECTRIC INC.",
+              },
+            ]),
+            { status: 200 }
+          );
+        }
+        if (url === "https://blocked-contractor.nyc") {
+          return new Response("Just a moment... cf-browser-verification", {
+            status: 200,
+          });
+        }
+        if (url === "https://scrapling.pile.nyc/fetch") {
+          return new Response(
+            JSON.stringify({
+              html: '<html><script src="https://getjobber.com/widget.js"></script></html>',
+            }),
+            { status: 200 }
+          );
+        }
+        return new Response("", { status: 404 });
+      })
+    );
+
+    const wf = await Effect.runPromise(
+      fetchHtmlWaterfallEffect("https://blocked-contractor.nyc", {
+        scraplingBaseUrl: "https://scrapling.pile.nyc",
+        firecrawlBaseUrl: "https://firecrawl.pile.nyc",
+      })
+    );
+    expect(wf.tier).toBe("scrapling");
+
+    const enriched = await Effect.runPromise(
+      enrichCandidatesWithEffect(
+        [
+          {
+            name: "LAMBERTI ELECTRIC INC",
+            externalId: "socrata:t8hj-ruu2:102952",
+            domain: "blocked-contractor.nyc",
+            ownerName: null,
+            signal: "new_license",
+          },
+        ],
+        {
+          scraplingBaseUrl: "https://scrapling.pile.nyc",
+          lookupDos: true,
+        }
+      )
+    );
+    expect(enriched[0]).toMatchObject({
+      ownerName: "MARCO LAMBERTI",
+      dosId: "7574460",
+      posGuess: "jobber",
+      scrapeTier: "scrapling",
+    });
+
+    const budgetErr = await Effect.runPromise(
+      Effect.flip(
+        withPaidVendorBudgetEffect(
+          {
+            vendor: "apollo",
+            monthlyCapCents: 10_000,
+            spentThisMonthCents: 9_980,
+            requestedCents: 50,
+          },
+          Effect.succeed("ok")
+        )
+      )
+    );
+    expect(budgetErr).toBeInstanceOf(VendorBudgetExceededError);
+    expect(budgetErr._tag).toBe("VendorBudgetExceededError");
     vi.unstubAllGlobals();
   });
 });
