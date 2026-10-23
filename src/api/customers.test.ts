@@ -976,4 +976,99 @@ describe("customer sales fields (readiness/fit)", () => {
     expect(customer.fitScore).toBe(0.9);
     expect(customer.processor).toBe("toast");
   });
+
+  it("records customer signals, computes Ranker v2 breakdown + Why Now, evaluates send-gate, and resolves SMB dedup keys (PILE-478..533)", async () => {
+    const created = await fetch(
+      `/workspaces/${organizationId}/customers`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "The Bleecker Street Bistro LLC",
+          address: "123 Bleecker Street, New York, NY",
+          phone: "(212) 555-0144",
+          vertical: "restaurant",
+        }),
+      },
+      token
+    );
+    expect(created.status).toBe(201);
+    const createdBody = (await created.json()) as {
+      id?: string;
+      customer?: { id?: string };
+    };
+    const cust = { id: (createdBody.customer?.id ?? createdBody.id)! };
+
+    // 1. Record a signal with HTML technographics -> detects Toast POS + updates priorityScore
+    const sigRes = await fetch(
+      `/workspaces/${organizationId}/customers/${cust.id}/signals`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          source: "website_technographics",
+          evidenceUrl: "https://bleeckerbistro.example.com",
+          html: '<script src="https://order.toasttab.com/widget.js"></script>',
+        }),
+      },
+      token
+    );
+    expect(sigRes.status).toBe(201);
+    const sigBody = (await sigRes.json()) as {
+      signal: { type: string };
+      breakdown: { priorityScore: number; whyNow: string };
+    };
+    expect(sigBody.signal.type).toBe("pos_detected");
+    expect(sigBody.breakdown.priorityScore).toBeGreaterThan(0);
+    expect(sigBody.breakdown.whyNow).toContain("TOAST");
+
+    // 2. GET /customers/:id/signals returns the persisted signal + breakdown
+    const listSig = await fetch(
+      `/workspaces/${organizationId}/customers/${cust.id}/signals`,
+      {},
+      token
+    );
+    expect(listSig.status).toBe(200);
+    const listBody = (await listSig.json()) as {
+      signals: Array<{ type: string }>;
+    };
+    expect(listBody.signals).toHaveLength(1);
+
+    // 3. POST /customers/:id/send-gate blocks invalid email and passes valid email
+    const gateBlock = await fetch(
+      `/workspaces/${organizationId}/customers/${cust.id}/send-gate`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          channel: "email",
+          contactEmail: "bad@example.com",
+          emailStatus: "invalid",
+        }),
+      },
+      token
+    );
+    expect(gateBlock.status).toBe(200);
+    const gateBlockBody = (await gateBlock.json()) as {
+      result: string;
+      reasons: string[];
+    };
+    expect(gateBlockBody.result).toBe("block");
+    expect(gateBlockBody.reasons).toContain("EMAIL_INVALID");
+
+    // 4. POST /customers/dedup-key matches the existing SMB by normalized name + address
+    const dedupRes = await fetch(
+      `/workspaces/${organizationId}/customers/dedup-key`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "Bleecker St Bistro",
+          address: "123 Bleecker St, New York, NY",
+        }),
+      },
+      token
+    );
+    expect(dedupRes.status).toBe(200);
+    const dedupBody = (await dedupRes.json()) as {
+      matchedCustomerId: string | null;
+    };
+    expect(dedupBody.matchedCustomerId).toBe(cust.id);
+  });
 });

@@ -20963,6 +20963,250 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/customers/{id}/signals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List customer signals */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Customer signals, rank breakdown, and detective waterfall */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            customerId: string;
+                            signals: {
+                                [key: string]: unknown;
+                            }[];
+                            breakdown: {
+                                [key: string]: unknown;
+                            };
+                            waterfall: string[];
+                        };
+                    };
+                };
+                /** @description Customer not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        /** Create customer signal */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        type?: string;
+                        /** @default agent */
+                        source?: string;
+                        /** Format: uri */
+                        evidenceUrl: string;
+                        /** @default 80 */
+                        strength?: number;
+                        summary?: string;
+                        observedAt?: string;
+                        html?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Recorded signal and recomputed merchant rank */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            signal: {
+                                [key: string]: unknown;
+                            };
+                            breakdown: {
+                                [key: string]: unknown;
+                            };
+                            waterfall: string[];
+                        };
+                    };
+                };
+                /** @description Customer not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/customers/{id}/send-gate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create customer send gate */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @default touch-preview */
+                        touchId?: string;
+                        /** @enum {string} */
+                        channel: "email" | "call" | "visit" | "linkedin";
+                        /**
+                         * @default engage
+                         * @enum {string}
+                         */
+                        action?: "engage" | "claim";
+                        /** @default default-contact */
+                        contactId?: string;
+                        contactEmail?: string;
+                        /** @enum {string} */
+                        emailStatus?: "valid" | "invalid" | "catch_all" | "role" | "unknown";
+                        emailVerifiedAt?: string;
+                        doNotContact?: boolean;
+                        doNotEmail?: boolean;
+                        doNotCall?: boolean;
+                        euResident?: boolean;
+                        hasExplicitConsent?: boolean;
+                        allowCatchAll?: boolean;
+                        allowRole?: boolean;
+                        allowUnverified?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Deterministic send/claim GateDecision */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            touchId: string;
+                            channel: string;
+                            /** @enum {string} */
+                            result: "pass" | "warn" | "block";
+                            reasons: string[];
+                            matchedExclusions: string[];
+                            evaluatedAt: string;
+                        };
+                    };
+                };
+                /** @description Customer not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/customers/dedup-key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create customer dedup key */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        name: string;
+                        address?: string | null;
+                        phone?: string | null;
+                        domain?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Normalized SMB match key and any matching existing customer */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            matchKey: string;
+                            normalizedName: string;
+                            normalizedAddress: string;
+                            phoneE164: string;
+                            normalizedDomain: string;
+                            matchedCustomerId: string | null;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/deals": {
         parameters: {
             query?: never;

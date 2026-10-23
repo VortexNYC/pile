@@ -16,5 +16,11 @@ describe("MCP tool aliases", () => {
     expect(aliasesFor("postWorkspacesOrganizationIdMemory")).toContain(
       "memory_remember"
     );
+    expect(MCP_TOOL_ALIASES.customer_signal_record).toBe(
+      "postWorkspacesOrganizationIdCustomersIdSignals"
+    );
+    expect(MCP_TOOL_ALIASES.customer_send_gate).toBe(
+      "postWorkspacesOrganizationIdCustomersIdSendgate"
+    );
   });
 });

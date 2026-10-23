@@ -43530,6 +43530,433 @@
         "summary": "List customer intake"
       }
     },
+    "/workspaces/{organizationId}/customers/{id}/signals": {
+      "post": {
+        "tags": [
+          "customers"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "source": {
+                    "type": "string",
+                    "minLength": 1,
+                    "default": "agent"
+                  },
+                  "evidenceUrl": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "strength": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100,
+                    "default": 80
+                  },
+                  "summary": {
+                    "type": "string"
+                  },
+                  "observedAt": {
+                    "type": "string"
+                  },
+                  "html": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "evidenceUrl"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Recorded signal and recomputed merchant rank",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "signal": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "breakdown": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "waterfall": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "signal",
+                    "breakdown",
+                    "waterfall"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Customer not found"
+          }
+        },
+        "summary": "Create customer signal"
+      },
+      "get": {
+        "tags": [
+          "customers"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Customer signals, rank breakdown, and detective waterfall",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "customerId": {
+                      "type": "string"
+                    },
+                    "signals": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "nullable": true
+                        }
+                      }
+                    },
+                    "breakdown": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "waterfall": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "customerId",
+                    "signals",
+                    "breakdown",
+                    "waterfall"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Customer not found"
+          }
+        },
+        "summary": "List customer signals"
+      }
+    },
+    "/workspaces/{organizationId}/customers/{id}/send-gate": {
+      "post": {
+        "tags": [
+          "customers"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "touchId": {
+                    "type": "string",
+                    "default": "touch-preview"
+                  },
+                  "channel": {
+                    "type": "string",
+                    "enum": [
+                      "email",
+                      "call",
+                      "visit",
+                      "linkedin"
+                    ]
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "engage",
+                      "claim"
+                    ],
+                    "default": "engage"
+                  },
+                  "contactId": {
+                    "type": "string",
+                    "default": "default-contact"
+                  },
+                  "contactEmail": {
+                    "type": "string"
+                  },
+                  "emailStatus": {
+                    "type": "string",
+                    "enum": [
+                      "valid",
+                      "invalid",
+                      "catch_all",
+                      "role",
+                      "unknown"
+                    ]
+                  },
+                  "emailVerifiedAt": {
+                    "type": "string"
+                  },
+                  "doNotContact": {
+                    "type": "boolean"
+                  },
+                  "doNotEmail": {
+                    "type": "boolean"
+                  },
+                  "doNotCall": {
+                    "type": "boolean"
+                  },
+                  "euResident": {
+                    "type": "boolean"
+                  },
+                  "hasExplicitConsent": {
+                    "type": "boolean"
+                  },
+                  "allowCatchAll": {
+                    "type": "boolean"
+                  },
+                  "allowRole": {
+                    "type": "boolean"
+                  },
+                  "allowUnverified": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "channel"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Deterministic send/claim GateDecision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "touchId": {
+                      "type": "string"
+                    },
+                    "channel": {
+                      "type": "string"
+                    },
+                    "result": {
+                      "type": "string",
+                      "enum": [
+                        "pass",
+                        "warn",
+                        "block"
+                      ]
+                    },
+                    "reasons": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "matchedExclusions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "evaluatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "touchId",
+                    "channel",
+                    "result",
+                    "reasons",
+                    "matchedExclusions",
+                    "evaluatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Customer not found"
+          }
+        },
+        "summary": "Create customer send gate"
+      }
+    },
+    "/workspaces/{organizationId}/customers/dedup-key": {
+      "post": {
+        "tags": [
+          "customers"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "address": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "phone": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "domain": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "name"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Normalized SMB match key and any matching existing customer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "matchKey": {
+                      "type": "string"
+                    },
+                    "normalizedName": {
+                      "type": "string"
+                    },
+                    "normalizedAddress": {
+                      "type": "string"
+                    },
+                    "phoneE164": {
+                      "type": "string"
+                    },
+                    "normalizedDomain": {
+                      "type": "string"
+                    },
+                    "matchedCustomerId": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "matchKey",
+                    "normalizedName",
+                    "normalizedAddress",
+                    "phoneE164",
+                    "normalizedDomain",
+                    "matchedCustomerId"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create customer dedup key"
+      }
+    },
     "/workspaces/{organizationId}/deals": {
       "get": {
         "tags": [

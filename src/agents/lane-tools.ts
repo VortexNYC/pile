@@ -3,6 +3,18 @@ import { z } from "zod";
 import { GITHUB_USER_AGENT } from "../global/github-auth.js";
 import { normalizeDomain } from "../workspace/data/index.js";
 import {
+  evaluateSendGate,
+  type EmailVerificationStatus,
+  type TouchChannel,
+} from "../workspace/send-gate.js";
+import {
+  computeSmbMatchKey,
+  detectPosTechnographics,
+  type MerchantSignal,
+  planDetectiveWaterfall,
+  rankMerchantSignals,
+} from "../workspace/signals-engine.js";
+import {
   pullSource,
   scoreCandidate,
   type MerchantSourceRow,
@@ -2118,6 +2130,185 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
     async run(ctx, input) {
       await ctx.ws.recordSessionUsage(ctx.sessionId, input);
       return { ok: true };
+    },
+  }),
+  defineWorkspaceTool({
+    name: "customer_signal_record",
+    description:
+      "Record a cited merchant signal (new_license, ownership_change, new_location, pos_detected, pricing_view, etc. — or pass html to fingerprint Toast/Square/Clover/SpotOn/Stripe technographics) and recompute the merchant's Ranker v2 priorityScore, fitScore, Why Now, and Detective waterfall.",
+    permission: "ws:write",
+    inputSchema: z.object({
+      customerId: z.string().min(1),
+      type: z.string().min(1).optional(),
+      source: z.string().min(1).default("agent"),
+      evidenceUrl: z.string().url(),
+      strength: z.number().min(0).max(100).default(80),
+      summary: z.string().optional(),
+      html: z.string().optional(),
+    }),
+    async run(ctx, input) {
+      const customer = (await ctx.ws.getCustomer(input.customerId)) as
+        | {
+            id: string;
+            domain?: string | null;
+            vertical?: string | null;
+            address?: string | null;
+            phone?: string | null;
+          }
+        | null
+        | undefined;
+      if (!customer) throw new LaneToolError("customer not found");
+      const nowIso = new Date().toISOString();
+      let signal: MerchantSignal;
+      if (input.html) {
+        const det = detectPosTechnographics({
+          merchantId: customer.id,
+          pageUrl: input.evidenceUrl,
+          html: input.html,
+          observedAt: nowIso,
+        });
+        signal = det.signal ?? {
+          id: `sig_${crypto.randomUUID().slice(0, 12)}`,
+          merchantId: customer.id,
+          type: input.type ?? "pos_detected",
+          observedAt: nowIso,
+          source: input.source,
+          evidenceUrl: input.evidenceUrl,
+          strength: input.strength,
+          summary: input.summary ?? null,
+        };
+      } else {
+        signal = {
+          id: `sig_${crypto.randomUUID().slice(0, 12)}`,
+          merchantId: customer.id,
+          type: input.type ?? "new_license",
+          observedAt: nowIso,
+          source: input.source,
+          evidenceUrl: input.evidenceUrl,
+          strength: input.strength,
+          summary: input.summary ?? null,
+        };
+      }
+      await ctx.ws.memoryRemember({
+        entityType: "customer",
+        entityId: customer.id,
+        kind: `signal:${signal.type}:${signal.id}`,
+        fact: JSON.stringify(signal),
+        sourceSessionId: ctx.sessionId,
+        sourceAgentSlug: ctx.agentSlug,
+      });
+      const breakdown = rankMerchantSignals({
+        merchantId: customer.id,
+        merchantAttrs: {
+          vertical: (customer.vertical ?? "").toLowerCase(),
+          hasAddress: Boolean(customer.address),
+          hasPhone: Boolean(customer.phone),
+        },
+        signals: [signal],
+        config: {
+          motion: "smb_default",
+          icpRules: [
+            {
+              id: "icp-vert",
+              motion: "smb_default",
+              field: "vertical",
+              op: "in",
+              value: ["restaurant", "bar", "cafe", "hospitality", "retail"],
+              weight: 20,
+            },
+          ],
+          signalRules: [
+            {
+              type: signal.type,
+              polarity: "positive",
+              weight: 40,
+              activeForDays: 90,
+            },
+          ],
+        },
+        nowIso,
+      });
+      await ctx.ws.updateCustomer(customer.id, {
+        priorityScore: breakdown.priorityScore,
+      });
+      return {
+        signal,
+        breakdown,
+        waterfall: planDetectiveWaterfall({
+          rankScore: breakdown.priorityScore,
+          paidRankThreshold: 75,
+          monthlyBudgetRemainingCents: 10_000,
+          estimatedPaidLookupCents: 50,
+        }),
+      };
+    },
+  }),
+  defineWorkspaceTool({
+    name: "customer_send_gate",
+    description:
+      "Run the deterministic Unify-parity Send Gate (U-001..U-009) before drafting, claiming, or contacting a merchant — checks DNC/suppression, Reacher email status, exclusions, and returns a GateDecision (pass/warn/block + typed reasons).",
+    permission: "ws:read",
+    inputSchema: z.object({
+      customerId: z.string().min(1),
+      channel: z.enum(["email", "call", "visit", "linkedin"]),
+      contactEmail: z.string().optional(),
+      emailStatus: z
+        .enum(["valid", "invalid", "catch_all", "role", "unknown"])
+        .optional(),
+      doNotContact: z.boolean().optional(),
+    }),
+    async run(ctx, input) {
+      const customer = (await ctx.ws.getCustomer(input.customerId)) as
+        | {
+            id: string;
+            domain?: string | null;
+            vertical?: string | null;
+            address?: string | null;
+            phone?: string | null;
+          }
+        | null
+        | undefined;
+      if (!customer) throw new LaneToolError("customer not found");
+      const suppCust = await ctx.ws.isSuppressed("customerId", customer.id);
+      const suppEmail = input.contactEmail
+        ? await ctx.ws.isSuppressed("email", input.contactEmail)
+        : null;
+      return evaluateSendGate({
+        touchId: `lane_${ctx.sessionId}`,
+        channel: input.channel as TouchChannel,
+        merchant: {
+          id: customer.id,
+          domain: customer.domain,
+          permissions: {
+            doNotContact: Boolean(input.doNotContact) || Boolean(suppCust),
+          },
+        },
+        contact: {
+          id: input.contactEmail ?? "default-contact",
+          email: input.contactEmail ?? null,
+          permissions: {
+            doNotEmail: Boolean(suppEmail),
+            emailStatus: (input.emailStatus ??
+              "valid") as EmailVerificationStatus,
+          },
+        },
+        cadence: { allowUnverified: true },
+      });
+    },
+  }),
+  defineWorkspaceTool({
+    name: "customer_dedup_key",
+    description:
+      "Compute the normalized SMB match key (DBA name + street address + E.164 phone + optional domain) for deduplicating merchants without websites.",
+    permission: "ws:read",
+    inputSchema: z.object({
+      name: z.string().min(1),
+      address: z.string().optional(),
+      phone: z.string().optional(),
+      domain: z.string().optional(),
+    }),
+    async run(_ctx, input) {
+      return computeSmbMatchKey(input);
     },
   }),
 ];
