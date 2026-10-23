@@ -208,17 +208,41 @@ export function classifyInboundReply(
     category = "ooo";
     confidence = 0.96;
   } else if (
+    /thank you for contacting|received your message|ticket has been created|do not reply to this email|noreply/i.test(
+      combined
+    )
+  ) {
+    category = "automated";
+    confidence = 0.93;
+  } else if (
     /unsubscribe|remove me|stop emailing|take me off|do not contact|opt out/i.test(
       combined
     )
   ) {
     category = "opt_out";
     confidence = 0.97;
+  } else if (/\b(?:fuck off|go to hell|spammer scum)\b/i.test(combined)) {
+    category = "nsfw";
+    confidence = 0.95;
+  } else if (
+    /not interested|no thanks|pass for now|don't reach out|never interested/i.test(
+      combined
+    )
+  ) {
+    category = "negative";
+    confidence = 0.91;
   } else if (
     /no longer with|left the company|no longer works here/i.test(combined)
   ) {
     category = "left_job";
     confidence = 0.92;
+  } else if (
+    /new email is|my new number|updated my email|reach me at my new/i.test(
+      combined
+    )
+  ) {
+    category = "updated_contact_info";
+    confidence = 0.89;
   } else if (
     /reach out to|talk to my partner|better person to contact|contact .* instead/i.test(
       combined
@@ -233,11 +257,6 @@ export function classifyInboundReply(
   ) {
     category = "willing_to_meet";
     confidence = 0.91;
-  } else if (
-    /interested|sounds good|send over|love to chat|yes please/i.test(combined)
-  ) {
-    category = "positive";
-    confidence = 0.87;
   } else if (
     /what are your rates|how much|send pricing|more info|how does it work/i.test(
       combined
@@ -259,9 +278,13 @@ export function classifyInboundReply(
   ) {
     category = "bad_timing";
     confidence = 0.85;
-  } else if (/not interested|no thanks|pass for now/i.test(combined)) {
-    category = "negative";
-    confidence = 0.89;
+  } else if (
+    /\b(?:interested|sounds good|send over|love to chat|yes please)\b/i.test(
+      combined
+    )
+  ) {
+    category = "positive";
+    confidence = 0.87;
   }
 
   return {
@@ -392,6 +415,14 @@ export function applyInboundReplyOutcome(input: {
         emailStatus: "invalid",
         emailVerifiedAt: nowIso,
       },
+      tasks: input.existingTasks,
+    };
+  }
+
+  if (cat === "soft_bounce" || cat === "automated") {
+    return {
+      enrollment: input.enrollment,
+      contactPermissions: input.contactPermissions,
       tasks: input.existingTasks,
     };
   }

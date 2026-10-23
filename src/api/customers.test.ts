@@ -1114,5 +1114,6 @@ describe("customer sales fields (readiness/fit)", () => {
     };
     expect(gateAfterBody.result).toBe("block");
     expect(gateAfterBody.reasons).toContain("MERCHANT_DO_NOT_CONTACT");
+    expect(gateAfterBody.reasons).toContain("CONTACT_DO_NOT_EMAIL");
   });
 });
