@@ -149,6 +149,20 @@ describe("Unify-parity Reply Classifier, OOO/Bounce Kill-Switch, Statement Check
     });
     expect(meetOutcome.tasks).toHaveLength(1);
     expect(meetOutcome.tasks[0]?.priority).toBe("high");
+
+    // 4. "not interested" is classified as negative (not positive), and automated/updated_contact_info/nsfw are reachable
+    expect(
+      classifyInboundReply("Re: Hello", "Thanks but not interested").category
+    ).toBe("negative");
+    expect(
+      classifyInboundReply(
+        "Support",
+        "Thank you for contacting us, a ticket has been created."
+      ).category
+    ).toBe("automated");
+    expect(
+      classifyInboundReply("Update", "My new email is chef@bistro.com").category
+    ).toBe("updated_contact_info");
   });
 
   it("creates statement-received checklist and computes weekly sales funnel excluding automated OOO/bounces (PILE-505 / PILE-506)", () => {

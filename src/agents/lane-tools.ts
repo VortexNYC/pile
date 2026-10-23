@@ -3,6 +3,7 @@ import { z } from "zod";
 import { GITHUB_USER_AGENT } from "../global/github-auth.js";
 import { normalizeDomain } from "../workspace/data/index.js";
 import {
+  applyInboundReplyOutcome,
   classifyInboundReply,
   createStatementReceivedChecklist,
 } from "../workspace/reply-funnel-engine.js";
@@ -2457,16 +2458,13 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
       if (!customer) throw new LaneToolError("customer not found");
       const classified = classifyInboundReply(input.subject, input.body);
       let suppressed = false;
-      if (
-        classified.category === "opt_out" ||
-        classified.category === "hard_bounce"
-      ) {
+      if (classified.category === "opt_out") {
         suppressed = true;
         await ctx.ws.upsertSuppression({
           kind: "customerId",
           value: customer.id,
           customerId: customer.id,
-          reason: `reply:${classified.category}`,
+          reason: "reply:opt_out",
           source: `agent:${ctx.agentSlug}`,
         });
         if (input.fromEmail) {
@@ -2474,11 +2472,36 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
             kind: "email",
             value: input.fromEmail,
             customerId: customer.id,
-            reason: `reply:${classified.category}`,
+            reason: "reply:opt_out",
             source: `agent:${ctx.agentSlug}`,
           });
         }
+      } else if (classified.category === "hard_bounce" && input.fromEmail) {
+        suppressed = true;
+        await ctx.ws.upsertSuppression({
+          kind: "email",
+          value: input.fromEmail,
+          customerId: customer.id,
+          reason: "reply:hard_bounce",
+          source: `agent:${ctx.agentSlug}`,
+        });
       }
+      const outcome = applyInboundReplyOutcome({
+        enrollment: {
+          id: `enr_${customer.id}`,
+          merchantId: customer.id,
+          contactId: input.fromEmail ?? "default-contact",
+          cadenceId: "default",
+          cadenceVersion: 1,
+          mailboxId: "default",
+          status: "active",
+          enrolledBy: ctx.agentSlug,
+          touches: [],
+        },
+        contactPermissions: { emailStatus: "valid" },
+        classified,
+        existingTasks: [],
+      });
       const statementChecklist = input.statementFileId
         ? createStatementReceivedChecklist({
             merchantId: customer.id,
@@ -2493,12 +2516,21 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
           classified,
           fromEmail: input.fromEmail ?? null,
           suppressed,
+          enrollmentStatus: outcome.enrollment.status,
+          pausedUntil: outcome.enrollment.pausedUntil ?? null,
+          tasks: outcome.tasks,
           statementChecklist,
         }),
         sourceSessionId: ctx.sessionId,
         sourceAgentSlug: ctx.agentSlug,
       });
-      return { classified, suppressed, statementChecklist };
+      return {
+        classified,
+        suppressed,
+        enrollment: outcome.enrollment,
+        tasks: outcome.tasks,
+        statementChecklist,
+      };
     },
   }),
 ];

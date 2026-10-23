@@ -9,6 +9,7 @@ import type { AppContext } from "../platform/middleware.js";
 import { isAdminIdentity } from "../platform/permissions.js";
 import { rls } from "../platform/rls.js";
 import {
+  applyInboundReplyOutcome,
   classifyInboundReply,
   createStatementReceivedChecklist,
 } from "../workspace/reply-funnel-engine.js";
@@ -1771,16 +1772,13 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
 
     const classified = classifyInboundReply(input.subject, input.body);
     let suppressed = false;
-    if (
-      classified.category === "opt_out" ||
-      classified.category === "hard_bounce"
-    ) {
+    if (classified.category === "opt_out") {
       suppressed = true;
       await stub.upsertSuppression({
         kind: "customerId",
         value: customer.id,
         customerId: customer.id,
-        reason: `reply:${classified.category}`,
+        reason: "reply:opt_out",
         source: "reply_ingest",
       });
       if (input.fromEmail) {
@@ -1788,11 +1786,37 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
           kind: "email",
           value: input.fromEmail,
           customerId: customer.id,
-          reason: `reply:${classified.category}`,
+          reason: "reply:opt_out",
           source: "reply_ingest",
         });
       }
+    } else if (classified.category === "hard_bounce" && input.fromEmail) {
+      suppressed = true;
+      await stub.upsertSuppression({
+        kind: "email",
+        value: input.fromEmail,
+        customerId: customer.id,
+        reason: "reply:hard_bounce",
+        source: "reply_ingest",
+      });
     }
+
+    const outcome = applyInboundReplyOutcome({
+      enrollment: {
+        id: `enr_${customer.id}`,
+        merchantId: customer.id,
+        contactId: input.fromEmail ?? "default-contact",
+        cadenceId: "default",
+        cadenceVersion: 1,
+        mailboxId: "default",
+        status: "active",
+        enrolledBy: "system",
+        touches: [],
+      },
+      contactPermissions: { emailStatus: "valid" },
+      classified,
+      existingTasks: [],
+    });
 
     const statementChecklist = input.statementFileId
       ? createStatementReceivedChecklist({
@@ -1809,6 +1833,9 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
         classified,
         fromEmail: input.fromEmail ?? null,
         suppressed,
+        enrollmentStatus: outcome.enrollment.status,
+        pausedUntil: outcome.enrollment.pausedUntil ?? null,
+        tasks: outcome.tasks,
         statementChecklist,
       }),
     });
