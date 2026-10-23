@@ -148,6 +148,22 @@ export interface ClassifiedReply {
   needsHumanReview: boolean;
   returnDateIso?: string | null;
   alternateContactEmail?: string | null;
+  referralRole?: "bookkeeper_cpa" | "decision_maker" | null;
+  recontactWindowMonths?: 3 | 6 | 12 | null;
+  recontactAtIso?: string | null;
+}
+
+export function addMonthsUtc(baseIso: string, months: number): string {
+  const base = new Date(Date.parse(baseIso));
+  const originalDay = base.getUTCDate();
+  const result = new Date(base);
+  result.setUTCDate(1);
+  result.setUTCMonth(result.getUTCMonth() + months);
+  const lastDayOfTargetMonth = new Date(
+    Date.UTC(result.getUTCFullYear(), result.getUTCMonth() + 1, 0)
+  ).getUTCDate();
+  result.setUTCDate(Math.min(originalDay, lastDayOfTargetMonth));
+  return result.toISOString();
 }
 
 export function categoryToReplyGroup(cat: UnifyReplyCategory): UnifyReplyGroup {
@@ -177,7 +193,8 @@ export function categoryToReplyGroup(cat: UnifyReplyCategory): UnifyReplyGroup {
  *  categories with confidence and OOO return-date / alternate-contact extraction. */
 export function classifyInboundReply(
   subject: string,
-  body: string
+  body: string,
+  nowIso = new Date().toISOString()
 ): ClassifiedReply {
   const combined = `${subject}\n${body}`.toLowerCase();
   const emailMatch = body.match(
@@ -187,6 +204,9 @@ export function classifyInboundReply(
 
   let category: UnifyReplyCategory = "neutral";
   let confidence = 0.65;
+  let referralRole: "bookkeeper_cpa" | "decision_maker" | null = null;
+  let recontactWindowMonths: 3 | 6 | 12 | null = null;
+  let recontactAtIso: string | null = null;
 
   if (
     /550\s+5\.1\.1|user unknown|address not found|does not exist|hard bounce/i.test(
@@ -244,12 +264,17 @@ export function classifyInboundReply(
     category = "updated_contact_info";
     confidence = 0.89;
   } else if (
-    /reach out to|talk to my partner|better person to contact|contact .* instead/i.test(
+    /reach out to|talk to my partner|talk to my bookkeeper|talk to our bookkeeper|talk to my accountant|talk to our accountant|talk to my cpa|talk to our cpa|my bookkeeper|my accountant|our controller|better person to contact|contact .* instead/i.test(
       combined
     )
   ) {
     category = "referral";
     confidence = 0.88;
+    referralRole = /\b(bookkeeper|accountant|cpa|controller|tax)\b/i.test(
+      combined
+    )
+      ? "bookkeeper_cpa"
+      : "decision_maker";
   } else if (
     /let's meet|book a time|free tomorrow|stop by|come by|tuesday at|thursday at|schedule a call/i.test(
       combined
@@ -272,12 +297,22 @@ export function classifyInboundReply(
     category = "has_solution";
     confidence = 0.85;
   } else if (
-    /next quarter|check back in|busy right now|after the holidays/i.test(
+    /next quarter|check back in|busy right now|after the holidays|next year|not this year|tight on budget|no budget right now|in 6 months|in 3 months/i.test(
       combined
     )
   ) {
     category = "bad_timing";
     confidence = 0.85;
+    if (/not this year|next year|12 months|in a year/i.test(combined)) {
+      recontactWindowMonths = 12;
+    } else if (
+      /after the holidays|budget|6 months|half a year/i.test(combined)
+    ) {
+      recontactWindowMonths = 6;
+    } else {
+      recontactWindowMonths = 3;
+    }
+    recontactAtIso = addMonthsUtc(nowIso, recontactWindowMonths);
   } else if (
     /\b(?:interested|sounds good|send over|love to chat|yes please)\b/i.test(
       combined
@@ -294,6 +329,9 @@ export function classifyInboundReply(
     needsHumanReview: confidence < 0.75,
     returnDateIso: isoDateMatch ? `${isoDateMatch[1]}T09:00:00.000Z` : null,
     alternateContactEmail: emailMatch ? emailMatch[0].toLowerCase() : null,
+    referralRole,
+    recontactWindowMonths,
+    recontactAtIso,
   };
 }
 
@@ -474,6 +512,8 @@ export function applyInboundReplyOutcome(input: {
     },
     contactPermissions: input.contactPermissions,
     tasks,
+    flaggedAlternateContactEmail:
+      input.classified.alternateContactEmail ?? null,
   };
 }
 

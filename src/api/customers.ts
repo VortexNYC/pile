@@ -1905,6 +1905,75 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
       existingTasks: [],
     });
 
+    // PILE-603: Wire referral / updated_contact_info -> DecisionMakerPointer contact + Bookkeeper/CPA Partner auto-link
+    let referredPartnerCustomerId: string | null = null;
+    if (
+      classified.alternateContactEmail &&
+      (classified.category === "referral" ||
+        classified.category === "updated_contact_info")
+    ) {
+      await stub.upsertContact({
+        customerId: customer.id,
+        type: "named_person",
+        role: classified.referralRole ?? "decision_maker",
+        channel: "email",
+        value: classified.alternateContactEmail,
+        label:
+          classified.referralRole === "bookkeeper_cpa"
+            ? `${customer.name} Bookkeeper / CPA`
+            : `${customer.name} Referral Contact`,
+        status: "verified",
+        confidence: "high",
+        source: "reply_referral",
+      });
+
+      if (classified.referralRole === "bookkeeper_cpa") {
+        const { deriveDomainFromEmail } =
+          await import("../agents/collectors.js");
+        const partnerDomain = deriveDomainFromEmail(
+          classified.alternateContactEmail
+        );
+        const existingPartners = partnerDomain
+          ? await stub.listCustomers({ domain: partnerDomain })
+          : [];
+        const partnerCustomer =
+          existingPartners[0] ??
+          (await stub.createCustomer({
+            name: partnerDomain
+              ? `${partnerDomain.split(".")[0]!.toUpperCase()} CPA & BOOKKEEPING`
+              : `${customer.name} Bookkeeper Partner`,
+            domain: partnerDomain ?? null,
+            vertical: "Bookkeeper / CPA Partner",
+            ownerId:
+              organizationId === "org_vortex_main"
+                ? "0r5mlhiV0owDDL59vzGnfTTqwNBuGHgE"
+                : null,
+            signal: `Referred by ${customer.name} (${classified.alternateContactEmail})`,
+            source: "reply_referral",
+          }));
+        referredPartnerCustomerId = partnerCustomer.id;
+        await stub.upsertContact({
+          customerId: partnerCustomer.id,
+          type: "named_person",
+          role: "owner",
+          channel: "email",
+          value: classified.alternateContactEmail,
+          label: partnerCustomer.name,
+          status: "verified",
+          confidence: "high",
+          source: "reply_referral",
+        });
+      }
+    }
+
+    // PILE-604: Deferred recontactAt window (3/6/12 months) on bad_timing / budget replies
+    if (classified.category === "bad_timing" && classified.recontactAtIso) {
+      await stub.updateCustomer(customer.id, {
+        nextStepDueAt: classified.recontactAtIso,
+        nextStepText: `recontact: bad_timing (${classified.recontactWindowMonths ?? 3}mo)`,
+      });
+    }
+
     const statementChecklist = input.statementFileId
       ? createStatementReceivedChecklist({
           merchantId: customer.id,
@@ -1920,6 +1989,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
         classified,
         fromEmail: input.fromEmail ?? null,
         suppressed,
+        referredPartnerCustomerId,
         enrollmentStatus: outcome.enrollment.status,
         pausedUntil: outcome.enrollment.pausedUntil ?? null,
         tasks: outcome.tasks,
@@ -1928,7 +1998,10 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     });
 
     return c.json({
-      classified: classified as unknown as Record<string, unknown>,
+      classified: {
+        ...(classified as unknown as Record<string, unknown>),
+        referredPartnerCustomerId,
+      },
       suppressed,
       enrollment: outcome.enrollment as unknown as Record<string, unknown>,
       tasks: outcome.tasks as unknown as Array<Record<string, unknown>>,
@@ -2203,7 +2276,14 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId } = c.req.valid("param");
     const query = c.req.valid("json");
     const stub = getWorkspaceStub(c.env, organizationId);
-    const all = await stub.listCustomers();
+    const allRaw = await stub.listCustomers();
+    const nowMs = Date.now();
+    // PILE-604: Exclude deferred bad_timing customers until nextStepDueAt <= now
+    const all = allRaw.filter((cust) => {
+      if (!cust.nextStepDueAt) return true;
+      const dueMs = Date.parse(cust.nextStepDueAt);
+      return !Number.isFinite(dueMs) || dueMs <= nowMs;
+    });
     const candidates: AudienceCandidateMerchant[] = await Promise.all(
       all.map(async (cust) => {
         const suppCust = await stub.isSuppressed("customerId", cust.id);
@@ -2464,16 +2544,26 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
       .sort((a, b) => (b.priorityScore ?? 0) - (a.priorityScore ?? 0))
       .slice(0, input.limit);
 
+    const todayYmd = new Date().toISOString().slice(0, 10);
+    const preSendKind = `pre_send:${input.channel}:${todayYmd}`;
+
     const candidates = await Promise.all(
       selected.map(async (cust) => {
         const contacts = await stub.listContacts(cust.id);
         const emailContact = contacts.find((ct) => ct.channel === "email");
-        const [suppCust, suppEmail] = await Promise.all([
+        const [suppCust, suppEmail, existingReservation] = await Promise.all([
           stub.isSuppressed("customerId", cust.id),
           emailContact?.value
             ? stub.isSuppressed("email", emailContact.value)
             : Promise.resolve(null),
+          stub.memoryRecall({
+            entityType: "customer",
+            entityId: cust.id,
+            kind: preSendKind,
+            limit: 1,
+          }),
         ]);
+        const alreadyReservedToday = existingReservation.length > 0;
         return {
           customerId: cust.id,
           name: cust.name,
@@ -2481,7 +2571,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
           contactEmail: emailContact?.value ?? null,
           phone: cust.phone,
           address: cust.address,
-          suppressedCustomer: Boolean(suppCust),
+          suppressedCustomer: Boolean(suppCust) || alreadyReservedToday,
           suppressedEmail: Boolean(suppEmail),
         };
       })
@@ -2492,6 +2582,26 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
       await import("../agents/collectors-effect.js");
     const partitioned = await Effect.runPromise(
       evaluateApprovedBatchWithEffect(candidates, { concurrency: 5 })
+    );
+
+    // PILE-608: Commit pre_send idempotency reservation for every approved touch
+    const nowIso = new Date().toISOString();
+    await Promise.all(
+      partitioned.approved.map((item) =>
+        stub.memoryRemember({
+          entityType: "customer",
+          entityId: item.customerId,
+          kind: preSendKind,
+          fact: JSON.stringify({
+            customerId: item.customerId,
+            name: item.name,
+            channel: item.channel,
+            recipient: item.recipient,
+            reservedAt: nowIso,
+            status: "reserved",
+          }),
+        })
+      )
     );
 
     return c.json({

@@ -393,7 +393,11 @@ export function evaluateSendGate(input: SendGateInput): GateDecision {
         result = "block";
       }
     }
-    if (input.channel === "call" || input.channel === "visit") {
+    if (
+      input.channel === "call" ||
+      input.channel === "visit" ||
+      input.channel === "email"
+    ) {
       const tz = sched.timeZone || "America/New_York";
       const d = new Date(nowMs);
       const parts = new Intl.DateTimeFormat("en-US", {

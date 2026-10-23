@@ -2816,6 +2816,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       evidenceUri?: string | null;
       posGuess?: string | null;
       posEvidenceUrl?: string | null;
+      contactFormUrl?: string | null;
       dosId?: string | null;
       dosFilingDate?: string | null;
     }>;
@@ -2950,6 +2951,20 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           confidence: "high",
           source: input.sourceName,
           evidenceUri: cand.evidenceUri ?? null,
+        });
+      }
+      if (cand.contactFormUrl) {
+        data.upsertCustomerContact(this.db, this.organizationId, {
+          customerId: customer.id,
+          type: "business_channel",
+          role: "owner",
+          channel: "form",
+          value: cand.contactFormUrl,
+          label: `${customer.name} Contact Form`,
+          status: "verified",
+          confidence: "medium",
+          source: input.sourceName,
+          evidenceUri: cand.contactFormUrl,
         });
       }
 
