@@ -66,7 +66,7 @@ export interface EnrichedMerchantCandidate extends MerchantCandidate {
   posEvidenceUrl?: string | null;
   dosId?: string | null;
   dosFilingDate?: string | null;
-  scrapeTier?: "direct" | "scrapling" | "firecrawl" | null;
+  scrapeTier?: "direct" | "scrapling" | "obscura" | "firecrawl" | null;
 }
 
 const SAFE_PUBLIC_DOMAIN_RE =
@@ -156,10 +156,11 @@ export const fetchHtmlWaterfallEffect = Effect.fnUntraced(function* (
   options?: {
     timeoutMs?: number;
     scraplingBaseUrl?: string;
+    obscuraBaseUrl?: string;
     firecrawlBaseUrl?: string;
   }
 ): Effect.fn.Return<
-  { html: string; tier: "direct" | "scrapling" | "firecrawl" },
+  { html: string; tier: "direct" | "scrapling" | "obscura" | "firecrawl" },
   HtmlFetchError
 > {
   const timeoutMs = options?.timeoutMs ?? 2500;
@@ -194,7 +195,7 @@ export const fetchHtmlWaterfallEffect = Effect.fnUntraced(function* (
 
   const steps: Array<
     Effect.Effect<
-      { html: string; tier: "direct" | "scrapling" | "firecrawl" },
+      { html: string; tier: "direct" | "scrapling" | "obscura" | "firecrawl" },
       HtmlFetchError
     >
   > = [directStep];
@@ -222,6 +223,40 @@ export const fetchHtmlWaterfallEffect = Effect.fnUntraced(function* (
         catch: (err) =>
           new HtmlFetchError({
             tier: "scrapling",
+            url: pageUrl,
+            message: err instanceof Error ? err.message : String(err),
+          }),
+      })
+    );
+  }
+
+  if (options?.obscuraBaseUrl) {
+    const base = options.obscuraBaseUrl.replace(/\/$/, "");
+    steps.push(
+      Effect.tryPromise({
+        try: async () => {
+          const res = await fetch(`${base}/fetch`, {
+            method: "POST",
+            signal: AbortSignal.timeout(Math.max(timeoutMs, 4500)),
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: pageUrl }),
+          });
+          if (!res.ok) throw new Error(`obscura ${res.status}`);
+          const body = (await res.json()) as {
+            html?: string;
+            content?: string;
+            text?: string;
+          };
+          const text = (body.html ?? body.content ?? body.text ?? "").slice(
+            0,
+            65_536
+          );
+          if (!text.trim()) throw new Error("obscura empty body");
+          return { html: text, tier: "obscura" as const };
+        },
+        catch: (err) =>
+          new HtmlFetchError({
+            tier: "obscura",
             url: pageUrl,
             message: err instanceof Error ? err.message : String(err),
           }),
@@ -388,6 +423,7 @@ export const probeCandidateWebsiteEffect = Effect.fnUntraced(function* (
   options?: {
     timeoutMs?: number;
     scraplingBaseUrl?: string;
+    obscuraBaseUrl?: string;
     firecrawlBaseUrl?: string;
     lookupDos?: boolean;
   }
@@ -451,6 +487,7 @@ export const enrichCandidatesWithEffect = Effect.fn(
     concurrency?: number;
     timeoutMs?: number;
     scraplingBaseUrl?: string;
+    obscuraBaseUrl?: string;
     firecrawlBaseUrl?: string;
     lookupDos?: boolean;
   }
