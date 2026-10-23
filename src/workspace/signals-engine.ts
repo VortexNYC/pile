@@ -628,3 +628,94 @@ export function planDetectiveWaterfall(input: {
   }
   return steps;
 }
+
+export const DEFAULT_SIGNAL_RULES: SignalRuleConfig[] = [
+  { type: "new_license", polarity: "positive", weight: 40, activeForDays: 90 },
+  {
+    type: "license_pending",
+    polarity: "positive",
+    weight: 35,
+    activeForDays: 90,
+  },
+  {
+    type: "ownership_change",
+    polarity: "positive",
+    weight: 35,
+    activeForDays: 90,
+  },
+  { type: "new_location", polarity: "positive", weight: 30, activeForDays: 90 },
+  {
+    type: "pos_detected",
+    polarity: "positive",
+    weight: 25,
+    activeForDays: 120,
+  },
+  {
+    type: "product_signup",
+    polarity: "positive",
+    weight: 45,
+    activeForDays: 60,
+  },
+  { type: "pricing_view", polarity: "positive", weight: 25, activeForDays: 30 },
+  {
+    type: "stalled_onboarding",
+    polarity: "positive",
+    weight: 35,
+    activeForDays: 45,
+  },
+  {
+    type: "negative_closure",
+    polarity: "negative",
+    weight: 80,
+    activeForDays: 365,
+  },
+];
+
+export const DEFAULT_ICP_RULES: IcpRule[] = [
+  {
+    id: "icp-vertical-hospitality",
+    motion: "smb_default",
+    field: "vertical",
+    op: "in",
+    value: ["restaurant", "bar", "cafe", "bakery", "hospitality", "retail"],
+    weight: 20,
+  },
+  {
+    id: "icp-has-address",
+    motion: "smb_default",
+    field: "hasAddress",
+    op: "eq",
+    value: true,
+    weight: 10,
+  },
+  {
+    id: "icp-has-phone",
+    motion: "smb_default",
+    field: "hasPhone",
+    op: "eq",
+    value: true,
+    weight: 10,
+  },
+];
+
+export function parseCustomerSignalFacts(
+  facts: ReadonlyArray<{ kind: string; fact: string }>
+): MerchantSignal[] {
+  const out: MerchantSignal[] = [];
+  for (const row of facts) {
+    if (!row.kind.startsWith("signal:")) continue;
+    try {
+      const parsed = JSON.parse(row.fact) as MerchantSignal;
+      if (
+        parsed &&
+        typeof parsed.id === "string" &&
+        typeof parsed.type === "string"
+      ) {
+        out.push(parsed);
+      }
+    } catch {
+      // Ignore non-JSON signal facts
+    }
+  }
+  return out;
+}
