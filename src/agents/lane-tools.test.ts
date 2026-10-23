@@ -667,14 +667,30 @@ describe("workspace lane tools", () => {
     expect(calls.updateCustomer).toHaveLength(0);
   });
 
-  it("exposes customer_dedup_key lane tool for SMB match keys (PILE-518)", async () => {
-    const { ws } = fakeWorkspace([]);
+  it("exposes customer_dedup_key lane tool for SMB match keys and matches existing customers (PILE-518)", async () => {
+    const existing: FakeCustomer = {
+      id: "cust-bleecker",
+      name: "Bleecker St Cafe",
+      domain: "bleecker.example.com",
+      externalId: null,
+      url: null,
+      notes: null,
+      priorityScore: null,
+      customFields: {},
+    };
+    const { ws } = fakeWorkspace([existing]);
     const out = (await wsTool("customer_dedup_key").run(wsCtx(ws), {
       name: "The Bleecker Street Cafe LLC",
       address: "123 Bleecker Street",
       phone: "(212) 555-0199",
-    })) as { matchKey: string; phoneE164: string };
+      domain: "https://www.bleecker.example.com",
+    })) as {
+      matchKey: string;
+      phoneE164: string;
+      matchedCustomerId: string | null;
+    };
     expect(out.matchKey).toBe("bleecker|123 bleecker");
     expect(out.phoneE164).toBe("+12125550199");
+    expect(out.matchedCustomerId).toBe("cust-bleecker");
   });
 });

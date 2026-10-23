@@ -9,8 +9,11 @@ import {
 } from "../workspace/send-gate.js";
 import {
   computeSmbMatchKey,
+  DEFAULT_ICP_RULES,
+  DEFAULT_SIGNAL_RULES,
   detectPosTechnographics,
   type MerchantSignal,
+  parseCustomerSignalFacts,
   planDetectiveWaterfall,
   rankMerchantSignals,
 } from "../workspace/signals-engine.js";
@@ -931,6 +934,10 @@ export interface LaneWorkspace {
       url?: string | null;
       notes?: string | null;
       priorityScore?: number | null;
+      fitScore?: number | null;
+      fitStatus?: string | null;
+      processor?: string | null;
+      evidenceUri?: string | null;
       customFields?: Record<string, string | null>;
     },
     actorId?: string
@@ -2135,7 +2142,7 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
   defineWorkspaceTool({
     name: "customer_signal_record",
     description:
-      "Record a cited merchant signal (new_license, ownership_change, new_location, pos_detected, pricing_view, etc. — or pass html to fingerprint Toast/Square/Clover/SpotOn/Stripe technographics) and recompute the merchant's Ranker v2 priorityScore, fitScore, Why Now, and Detective waterfall.",
+      "Record a cited merchant signal (new_license, ownership_change, new_location, pos_detected, pricing_view, negative_closure, etc. — or pass html to fingerprint Toast/Square/Clover/SpotOn/Stripe technographics) and recompute the merchant's Ranker v2 priorityScore, fitScore, Why Now, and Detective waterfall.",
     permission: "ws:write",
     inputSchema: z.object({
       customerId: z.string().min(1),
@@ -2144,6 +2151,7 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
       evidenceUrl: z.string().url(),
       strength: z.number().min(0).max(100).default(80),
       summary: z.string().optional(),
+      observedAt: z.string().optional(),
       html: z.string().optional(),
     }),
     async run(ctx, input) {
@@ -2154,24 +2162,28 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
             vertical?: string | null;
             address?: string | null;
             phone?: string | null;
+            customFields?: Record<string, string | null> | string | null;
           }
         | null
         | undefined;
       if (!customer) throw new LaneToolError("customer not found");
-      const nowIso = new Date().toISOString();
+      const evaluationNowIso = new Date().toISOString();
+      const observedAt = input.observedAt ?? evaluationNowIso;
       let signal: MerchantSignal;
+      let posGuess: string | null = null;
       if (input.html) {
         const det = detectPosTechnographics({
           merchantId: customer.id,
           pageUrl: input.evidenceUrl,
           html: input.html,
-          observedAt: nowIso,
+          observedAt,
         });
+        posGuess = det.posGuess;
         signal = det.signal ?? {
           id: `sig_${crypto.randomUUID().slice(0, 12)}`,
           merchantId: customer.id,
           type: input.type ?? "pos_detected",
-          observedAt: nowIso,
+          observedAt,
           source: input.source,
           evidenceUrl: input.evidenceUrl,
           strength: input.strength,
@@ -2182,7 +2194,7 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
           id: `sig_${crypto.randomUUID().slice(0, 12)}`,
           merchantId: customer.id,
           type: input.type ?? "new_license",
-          observedAt: nowIso,
+          observedAt,
           source: input.source,
           evidenceUrl: input.evidenceUrl,
           strength: input.strength,
@@ -2197,6 +2209,13 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
         sourceSessionId: ctx.sessionId,
         sourceAgentSlug: ctx.agentSlug,
       });
+      const recalled = (await ctx.ws.memoryRecall({
+        entityType: "customer",
+        entityId: customer.id,
+        limit: 100,
+      })) as Array<{ kind: string; fact: string }>;
+      const allSignals = parseCustomerSignalFacts(recalled);
+      const signalsForRank = allSignals.length > 0 ? allSignals : [signal];
       const breakdown = rankMerchantSignals({
         merchantId: customer.id,
         merchantAttrs: {
@@ -2204,32 +2223,27 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
           hasAddress: Boolean(customer.address),
           hasPhone: Boolean(customer.phone),
         },
-        signals: [signal],
+        signals: signalsForRank,
         config: {
           motion: "smb_default",
-          icpRules: [
-            {
-              id: "icp-vert",
-              motion: "smb_default",
-              field: "vertical",
-              op: "in",
-              value: ["restaurant", "bar", "cafe", "hospitality", "retail"],
-              weight: 20,
-            },
-          ],
-          signalRules: [
-            {
-              type: signal.type,
-              polarity: "positive",
-              weight: 40,
-              activeForDays: 90,
-            },
-          ],
+          icpRules: DEFAULT_ICP_RULES,
+          signalRules: DEFAULT_SIGNAL_RULES,
         },
-        nowIso,
+        nowIso: evaluationNowIso,
       });
+      const customFields: Record<string, string | null> =
+        typeof customer.customFields === "string"
+          ? (JSON.parse(customer.customFields) as Record<string, string | null>)
+          : { ...(customer.customFields ?? {}) };
+      customFields.whyNow = breakdown.whyNow;
+      customFields.whyNowSignalIds = breakdown.whyNowSignalIds.join(",");
       await ctx.ws.updateCustomer(customer.id, {
         priorityScore: breakdown.priorityScore,
+        fitScore: breakdown.fitScore,
+        fitStatus: breakdown.fitRating,
+        ...(posGuess ? { processor: posGuess } : {}),
+        evidenceUri: signal.evidenceUrl,
+        customFields,
       });
       return {
         signal,
@@ -2244,24 +2258,17 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
     },
   }),
   defineWorkspaceTool({
-    name: "customer_send_gate",
+    name: "customer_signals_list",
     description:
-      "Run the deterministic Unify-parity Send Gate (U-001..U-009) before drafting, claiming, or contacting a merchant — checks DNC/suppression, Reacher email status, exclusions, and returns a GateDecision (pass/warn/block + typed reasons).",
+      "List all persisted signals on a merchant along with its Ranker v2 breakdown (priorityScore, fitScore, timingScore, Why Now) and Detective waterfall.",
     permission: "ws:read",
     inputSchema: z.object({
       customerId: z.string().min(1),
-      channel: z.enum(["email", "call", "visit", "linkedin"]),
-      contactEmail: z.string().optional(),
-      emailStatus: z
-        .enum(["valid", "invalid", "catch_all", "role", "unknown"])
-        .optional(),
-      doNotContact: z.boolean().optional(),
     }),
     async run(ctx, input) {
       const customer = (await ctx.ws.getCustomer(input.customerId)) as
         | {
             id: string;
-            domain?: string | null;
             vertical?: string | null;
             address?: string | null;
             phone?: string | null;
@@ -2269,37 +2276,128 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
         | null
         | undefined;
       if (!customer) throw new LaneToolError("customer not found");
+      const recalled = (await ctx.ws.memoryRecall({
+        entityType: "customer",
+        entityId: customer.id,
+        limit: 100,
+      })) as Array<{ kind: string; fact: string }>;
+      const signals = parseCustomerSignalFacts(recalled);
+      const breakdown = rankMerchantSignals({
+        merchantId: customer.id,
+        merchantAttrs: {
+          vertical: (customer.vertical ?? "").toLowerCase(),
+          hasAddress: Boolean(customer.address),
+          hasPhone: Boolean(customer.phone),
+        },
+        signals,
+        config: {
+          motion: "smb_default",
+          icpRules: DEFAULT_ICP_RULES,
+          signalRules: DEFAULT_SIGNAL_RULES,
+        },
+      });
+      return {
+        customerId: customer.id,
+        signals,
+        breakdown,
+        waterfall: planDetectiveWaterfall({
+          rankScore: breakdown.priorityScore,
+          paidRankThreshold: 75,
+          monthlyBudgetRemainingCents: 10_000,
+          estimatedPaidLookupCents: 50,
+        }),
+      };
+    },
+  }),
+  defineWorkspaceTool({
+    name: "customer_send_gate",
+    description:
+      "Run the deterministic Unify-parity Send Gate (U-001..U-009) before drafting, claiming, or contacting a merchant — checks DNC/suppression, Reacher email status, EU consent, and records a GateDecision (pass/warn/block + typed reasons).",
+    permission: "ws:read",
+    inputSchema: z.object({
+      customerId: z.string().min(1),
+      touchId: z.string().default("touch-preview"),
+      channel: z.enum(["email", "call", "visit", "linkedin"]),
+      action: z.enum(["engage", "claim"]).default("engage"),
+      contactId: z.string().default("default-contact"),
+      contactEmail: z.string().optional(),
+      emailStatus: z
+        .enum(["valid", "invalid", "catch_all", "role", "unknown"])
+        .optional(),
+      emailVerifiedAt: z.string().optional(),
+      doNotContact: z.boolean().optional(),
+      doNotEmail: z.boolean().optional(),
+      doNotCall: z.boolean().optional(),
+      euResident: z.boolean().optional(),
+      hasExplicitConsent: z.boolean().optional(),
+      allowCatchAll: z.boolean().optional(),
+      allowRole: z.boolean().optional(),
+      allowUnverified: z.boolean().optional(),
+    }),
+    async run(ctx, input) {
+      const customer = (await ctx.ws.getCustomer(input.customerId)) as
+        | {
+            id: string;
+            domain?: string | null;
+          }
+        | null
+        | undefined;
+      if (!customer) throw new LaneToolError("customer not found");
       const suppCust = await ctx.ws.isSuppressed("customerId", customer.id);
+      const suppDomain = customer.domain
+        ? await ctx.ws.isSuppressed("domain", customer.domain)
+        : null;
       const suppEmail = input.contactEmail
         ? await ctx.ws.isSuppressed("email", input.contactEmail)
         : null;
-      return evaluateSendGate({
-        touchId: `lane_${ctx.sessionId}`,
+      const decision = evaluateSendGate({
+        touchId: input.touchId || `lane_${ctx.sessionId}`,
         channel: input.channel as TouchChannel,
+        action: input.action,
         merchant: {
           id: customer.id,
           domain: customer.domain,
           permissions: {
-            doNotContact: Boolean(input.doNotContact) || Boolean(suppCust),
+            doNotContact:
+              Boolean(input.doNotContact) ||
+              Boolean(suppCust) ||
+              Boolean(suppDomain),
           },
         },
         contact: {
-          id: input.contactEmail ?? "default-contact",
+          id: input.contactId,
           email: input.contactEmail ?? null,
           permissions: {
-            doNotEmail: Boolean(suppEmail),
+            doNotEmail: Boolean(input.doNotEmail) || Boolean(suppEmail),
+            doNotCall: Boolean(input.doNotCall),
+            euResident: Boolean(input.euResident),
+            hasExplicitConsent: Boolean(input.hasExplicitConsent),
             emailStatus: (input.emailStatus ??
               "valid") as EmailVerificationStatus,
+            emailVerifiedAt: input.emailVerifiedAt ?? null,
           },
         },
-        cadence: { allowUnverified: true },
+        cadence: {
+          allowCatchAll: input.allowCatchAll,
+          allowRole: input.allowRole,
+          allowUnverified: input.allowUnverified ?? true,
+        },
       });
+      await ctx.ws.memoryRemember({
+        entityType: "customer",
+        entityId: customer.id,
+        kind: `gate_decision:${decision.touchId}`,
+        fact: JSON.stringify(decision),
+        sourceSessionId: ctx.sessionId,
+        sourceAgentSlug: ctx.agentSlug,
+      });
+      return decision;
     },
   }),
   defineWorkspaceTool({
     name: "customer_dedup_key",
     description:
-      "Compute the normalized SMB match key (DBA name + street address + E.164 phone + optional domain) for deduplicating merchants without websites.",
+      "Compute the normalized SMB match key (DBA name + street address + E.164 phone + optional domain) and resolve any matching existing customer in the workspace.",
     permission: "ws:read",
     inputSchema: z.object({
       name: z.string().min(1),
@@ -2307,8 +2405,32 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
       phone: z.string().optional(),
       domain: z.string().optional(),
     }),
-    async run(_ctx, input) {
-      return computeSmbMatchKey(input);
+    async run(ctx, input) {
+      const key = computeSmbMatchKey(input);
+      const allCustomers = ((await ctx.ws.listCustomers?.()) ?? []) as Array<{
+        id: string;
+        name: string;
+        address?: string | null;
+        phone?: string | null;
+        domain?: string | null;
+      }>;
+      const matched = allCustomers.find((row) => {
+        const rowKey = computeSmbMatchKey({
+          name: row.name,
+          address: row.address,
+          phone: row.phone,
+          domain: row.domain,
+        });
+        return (
+          rowKey.matchKey === key.matchKey ||
+          (Boolean(key.normalizedDomain) &&
+            rowKey.normalizedDomain === key.normalizedDomain)
+        );
+      });
+      return {
+        ...key,
+        matchedCustomerId: matched?.id ?? null,
+      };
     },
   }),
 ];

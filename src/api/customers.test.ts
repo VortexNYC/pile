@@ -1029,8 +1029,12 @@ describe("customer sales fields (readiness/fit)", () => {
     expect(listSig.status).toBe(200);
     const listBody = (await listSig.json()) as {
       signals: Array<{ type: string }>;
+      breakdown: { priorityScore: number };
     };
     expect(listBody.signals).toHaveLength(1);
+    expect(listBody.breakdown.priorityScore).toBe(
+      sigBody.breakdown.priorityScore
+    );
 
     // 3. POST /customers/:id/send-gate blocks invalid email and passes valid email
     const gateBlock = await fetch(

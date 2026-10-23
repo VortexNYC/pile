@@ -4,9 +4,11 @@ import {
   applyFieldWriteWithProvenance,
   backfillSignalsFromSourceItems,
   computeSmbMatchKey,
+  DEFAULT_SIGNAL_RULES,
   detectPosTechnographics,
   identifyContactWithConsent,
   mapPostHogEventToSignal,
+  parseCustomerSignalFacts,
   planDetectiveWaterfall,
   rankMerchantSignals,
   validateResearchAnswer,
@@ -246,5 +248,24 @@ describe("Unify-parity Signals, Ranker v2, Provenance & Technographics (PILE-507
       "website_crawl",
       "paid_vendor",
     ]);
+    expect(
+      DEFAULT_SIGNAL_RULES.find((r) => r.type === "negative_closure")?.polarity
+    ).toBe("negative");
+    expect(
+      parseCustomerSignalFacts([
+        {
+          kind: "signal:new_license:sig_1",
+          fact: JSON.stringify({
+            id: "sig_1",
+            merchantId: "m-1",
+            type: "new_license",
+            observedAt: NOW,
+            source: "sla",
+            evidenceUrl: "https://data.ny.gov",
+            strength: 90,
+          }),
+        },
+      ])
+    ).toHaveLength(1);
   });
 });

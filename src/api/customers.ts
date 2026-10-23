@@ -16,12 +16,13 @@ import {
 } from "../workspace/send-gate.js";
 import {
   computeSmbMatchKey,
+  DEFAULT_ICP_RULES,
+  DEFAULT_SIGNAL_RULES,
   detectPosTechnographics,
-  type IcpRule,
   type MerchantSignal,
+  parseCustomerSignalFacts,
   planDetectiveWaterfall,
   rankMerchantSignals,
-  type SignalRuleConfig,
 } from "../workspace/signals-engine.js";
 import { getExecutionCtx } from "./execution-ctx.js";
 import {
@@ -1322,90 +1323,6 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
 
   // ---- PILE-478..533: Signals, Ranker v2, SMB Dedup & Send Gate API ----
 
-  const DEFAULT_SIGNAL_RULES: SignalRuleConfig[] = [
-    {
-      type: "new_license",
-      polarity: "positive",
-      weight: 40,
-      activeForDays: 90,
-    },
-    {
-      type: "license_pending",
-      polarity: "positive",
-      weight: 35,
-      activeForDays: 90,
-    },
-    {
-      type: "ownership_change",
-      polarity: "positive",
-      weight: 35,
-      activeForDays: 90,
-    },
-    {
-      type: "new_location",
-      polarity: "positive",
-      weight: 30,
-      activeForDays: 90,
-    },
-    {
-      type: "pos_detected",
-      polarity: "positive",
-      weight: 25,
-      activeForDays: 120,
-    },
-    {
-      type: "product_signup",
-      polarity: "positive",
-      weight: 45,
-      activeForDays: 60,
-    },
-    {
-      type: "pricing_view",
-      polarity: "positive",
-      weight: 25,
-      activeForDays: 30,
-    },
-    {
-      type: "stalled_onboarding",
-      polarity: "positive",
-      weight: 35,
-      activeForDays: 45,
-    },
-    {
-      type: "negative_closure",
-      polarity: "negative",
-      weight: 80,
-      activeForDays: 365,
-    },
-  ];
-
-  const DEFAULT_ICP_RULES: IcpRule[] = [
-    {
-      id: "icp-vertical-hospitality",
-      motion: "smb_default",
-      field: "vertical",
-      op: "in",
-      value: ["restaurant", "bar", "cafe", "bakery", "hospitality", "retail"],
-      weight: 20,
-    },
-    {
-      id: "icp-has-address",
-      motion: "smb_default",
-      field: "hasAddress",
-      op: "eq",
-      value: true,
-      weight: 10,
-    },
-    {
-      id: "icp-has-phone",
-      motion: "smb_default",
-      field: "hasPhone",
-      op: "eq",
-      value: true,
-      weight: 10,
-    },
-  ];
-
   async function loadCustomerSignals(
     stub: ReturnType<typeof getWorkspaceStub>,
     customerId: string
@@ -1415,23 +1332,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
       entityId: customerId,
       limit: 100,
     });
-    const out: MerchantSignal[] = [];
-    for (const row of facts) {
-      if (!row.kind.startsWith("signal:")) continue;
-      try {
-        const parsed = JSON.parse(row.fact) as MerchantSignal;
-        if (
-          parsed &&
-          typeof parsed.id === "string" &&
-          typeof parsed.type === "string"
-        ) {
-          out.push(parsed);
-        }
-      } catch {
-        // Ignore non-JSON signal facts
-      }
-    }
-    return out;
+    return parseCustomerSignalFacts(facts);
   }
 
   const recordSignalRoute = createRoute({
@@ -1598,7 +1499,8 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     const stub = getWorkspaceStub(c.env, organizationId);
     const customer = await stub.getCustomer(id);
     if (!customer) return notFound("Customer not found");
-    const nowIso = input.observedAt ?? new Date().toISOString();
+    const evaluationNowIso = new Date().toISOString();
+    const observedAt = input.observedAt ?? evaluationNowIso;
 
     let signal: MerchantSignal;
     let posGuess: string | null = null;
@@ -1607,7 +1509,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
         merchantId: customer.id,
         pageUrl: input.evidenceUrl,
         html: input.html,
-        observedAt: nowIso,
+        observedAt,
       });
       posGuess = detected.posGuess;
       if (detected.signal) {
@@ -1617,7 +1519,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
           id: `sig_${crypto.randomUUID().slice(0, 12)}`,
           merchantId: customer.id,
           type: input.type ?? "pos_detected",
-          observedAt: nowIso,
+          observedAt,
           source: input.source,
           evidenceUrl: input.evidenceUrl,
           strength: input.strength,
@@ -1630,7 +1532,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
         id: `sig_${crypto.randomUUID().slice(0, 12)}`,
         merchantId: customer.id,
         type: sigType,
-        observedAt: nowIso,
+        observedAt,
         source: input.source,
         evidenceUrl: input.evidenceUrl,
         strength: input.strength,
@@ -1659,7 +1561,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
         icpRules: DEFAULT_ICP_RULES,
         signalRules: DEFAULT_SIGNAL_RULES,
       },
-      nowIso,
+      nowIso: evaluationNowIso,
     });
     const customFields: Record<string, string | null> =
       typeof customer.customFields === "string"
