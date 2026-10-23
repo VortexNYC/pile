@@ -141,6 +141,7 @@ const requestedPayloadSchema = z.object({
   pullNumber: z.number(),
   headSha: z.string(),
   checkRunId: z.number().nullable().optional(),
+  files: z.array(z.string()).optional(),
 });
 
 const publishedPayloadSchema = z.object({
@@ -148,6 +149,33 @@ const publishedPayloadSchema = z.object({
 });
 
 type RequestedPayload = z.infer<typeof requestedPayloadSchema>;
+
+/** Deterministically filter out hallucinated findings whose `file` is not in
+ *  the PR's reviewable changed files (Michael Thiessen / Pullfrog rule), and
+ *  recompute `verdict` from the surviving grounded findings. */
+export function filterDiffGroundedFindings(
+  review: ParsedReview,
+  changedFiles?: Iterable<string> | null
+): ParsedReview {
+  if (!changedFiles) return review;
+  const allowed = new Set(
+    [...changedFiles].map((f) => f.trim().replace(/^\.\//, ""))
+  );
+  if (allowed.size === 0) return review;
+  const grounded = review.findings.filter((f) => {
+    if (!f.file) return true;
+    const clean = f.file.trim().replace(/^\.\//, "");
+    return allowed.has(clean);
+  });
+  if (grounded.length === review.findings.length) return review;
+  return {
+    ...review,
+    findings: grounded,
+    verdict: review.unstructured
+      ? review.verdict
+      : verdictFromFindings(grounded),
+  };
+}
 
 function normalizeVerdict(raw: string): ReviewVerdict | null {
   const v = raw
@@ -1049,6 +1077,7 @@ export async function requestPrReview(
         {
           instructions,
           purpose: REVIEW_PURPOSE,
+          effort: riskTier,
           skipQueue: true,
           concurrent: true,
         }
@@ -1064,6 +1093,9 @@ export async function requestPrReview(
         pullNumber: target.pullNumber,
         headSha: target.headSha,
         checkRunId: openedCheckRunId,
+        files: reviewable.flatMap((f) =>
+          f.previous_filename ? [f.filename, f.previous_filename] : [f.filename]
+        ),
       };
       try {
         await stub.addAgentSessionEvent({
@@ -1276,7 +1308,10 @@ export async function publishReviewVerdicts(
       const req = requested.data;
       const review =
         session.status === "completed"
-          ? parseReviewVerdict(session.result)
+          ? filterDiffGroundedFindings(
+              parseReviewVerdict(session.result),
+              req.files
+            )
           : null;
       const body = review ? renderReviewBody(review, req.headSha) : null;
 
