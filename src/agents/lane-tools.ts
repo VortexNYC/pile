@@ -1505,33 +1505,42 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
       const token = ctx.env?.BROWSERLESS_TOKEN;
       if (!base || !token)
         throw new LaneToolError("BROWSERLESS_* not configured");
+      const { Effect } = await import("effect");
+      const { runMacMiniFetchWithRetryEffect } =
+        await import("./collectors-effect.js");
       if (input.script) {
         const endpoint = new URL(`${base}/function`);
         endpoint.searchParams.set("token", token);
-        const res = await fetch(endpoint.href, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            code: `module.exports = async ({ page, context }) => { ${input.script} }`,
-            context: { url: input.url },
-          }),
-        });
-        if (!res.ok)
-          throw new LaneToolError(
-            `browser_fetch /function failed: ${res.status}`
-          );
+        const res = await Effect.runPromise(
+          runMacMiniFetchWithRetryEffect({
+            tier: "browser_fetch /function",
+            url: endpoint.href,
+            init: {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                code: `module.exports = async ({ page, context }) => { ${input.script} }`,
+                context: { url: input.url },
+              }),
+            },
+          }).pipe(Effect.mapError((err) => new LaneToolError(err.message)))
+        );
         const data: unknown = await res.json().catch(() => null);
         return { data };
       }
       const endpoint = new URL(`${base}/content`);
       endpoint.searchParams.set("token", token);
-      const res = await fetch(endpoint.href, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ url: input.url }),
-      });
-      if (!res.ok)
-        throw new LaneToolError(`browser_fetch failed: ${res.status}`);
+      const res = await Effect.runPromise(
+        runMacMiniFetchWithRetryEffect({
+          tier: "browser_fetch",
+          url: endpoint.href,
+          init: {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: input.url }),
+          },
+        }).pipe(Effect.mapError((err) => new LaneToolError(err.message)))
+      );
       const text = await res.text();
       return { text: text.slice(0, 20000) };
     },
@@ -1545,12 +1554,20 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
     async run(ctx, input) {
       const base = ctx.env?.LIGHTPANDA_BASE_URL;
       if (!base) throw new LaneToolError("LIGHTPANDA_BASE_URL not configured");
-      const res = await fetch(`${base}/fetch`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ url: input.url }),
-      });
-      if (!res.ok) throw new LaneToolError(`light_fetch failed: ${res.status}`);
+      const { Effect } = await import("effect");
+      const { runMacMiniFetchWithRetryEffect } =
+        await import("./collectors-effect.js");
+      const res = await Effect.runPromise(
+        runMacMiniFetchWithRetryEffect({
+          tier: "light_fetch",
+          url: `${base}/fetch`,
+          init: {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: input.url }),
+          },
+        }).pipe(Effect.mapError((err) => new LaneToolError(err.message)))
+      );
       return res.json();
     },
   }),
@@ -1563,13 +1580,20 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
     async run(ctx, input) {
       const base = ctx.env?.OBSCURA_BASE_URL;
       if (!base) throw new LaneToolError("OBSCURA_BASE_URL not configured");
-      const res = await fetch(`${base}/fetch`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ url: input.url }),
-      });
-      if (!res.ok)
-        throw new LaneToolError(`obscura_fetch failed: ${res.status}`);
+      const { Effect } = await import("effect");
+      const { runMacMiniFetchWithRetryEffect } =
+        await import("./collectors-effect.js");
+      const res = await Effect.runPromise(
+        runMacMiniFetchWithRetryEffect({
+          tier: "obscura_fetch",
+          url: `${base}/fetch`,
+          init: {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: input.url }),
+          },
+        }).pipe(Effect.mapError((err) => new LaneToolError(err.message)))
+      );
       return res.json();
     },
   }),

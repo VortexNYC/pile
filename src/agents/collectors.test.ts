@@ -529,6 +529,38 @@ describe("scoreCandidate", () => {
       pullDaily8020BatchesWithEffect(plan)
     );
     expect(batches).toHaveLength(4);
+
+    // 4-Tier Waterfall: direct (403) -> scrapling (500) -> obscura (200)
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "https://protected-contractor.nyc") {
+          return new Response("Just a moment...", { status: 403 });
+        }
+        if (url.startsWith("https://scrapling.pile.nyc/fetch")) {
+          return new Response("scrapling down", { status: 500 });
+        }
+        if (url.startsWith("https://obscura.pile.nyc/fetch")) {
+          return new Response(
+            JSON.stringify({
+              html: "<html><body><h1>Protected Contractor NYC</h1><a href='mailto:owner@protected-contractor.nyc'>Email</a></body></html>",
+            }),
+            { status: 200 }
+          );
+        }
+        return new Response("not found", { status: 404 });
+      })
+    );
+    const obscuraWaterfall = await Effect.runPromise(
+      fetchHtmlWaterfallEffect("https://protected-contractor.nyc", {
+        scraplingBaseUrl: "https://scrapling.pile.nyc",
+        obscuraBaseUrl: "https://obscura.pile.nyc",
+        firecrawlBaseUrl: "https://firecrawl.pile.nyc",
+      })
+    );
+    expect(obscuraWaterfall.tier).toBe("obscura");
+    expect(obscuraWaterfall.html).toContain("owner@protected-contractor.nyc");
     vi.unstubAllGlobals();
   });
 });

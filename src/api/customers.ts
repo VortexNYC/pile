@@ -2358,6 +2358,8 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
               timeoutMs: 2500,
               scraplingBaseUrl:
                 envVars.SCRAPLING_BASE_URL ?? "https://scrapling.pile.nyc",
+              obscuraBaseUrl:
+                envVars.OBSCURA_BASE_URL ?? "https://obscura.pile.nyc",
               firecrawlBaseUrl:
                 envVars.FIRECRAWL_BASE_URL ?? "https://firecrawl.pile.nyc",
               lookupDos: true,
