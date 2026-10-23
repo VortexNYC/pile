@@ -370,8 +370,16 @@ async function handleSubstepActionable(
 ): Promise<void> {
   const issue = await stub.getIssue(payload.issueId);
   if (!issue || !issue.ownerAgent) return;
-  // Only dispatch work that's still open.
+  // Only dispatch work that's still open and doesn't already have a live lane.
   if (issue.status !== "todo" && issue.status !== "in_progress") return;
+  const existingSessions = await stub.listAgentSessions({ issueId: issue.id });
+  if (
+    existingSessions.some(
+      (s) => !["completed", "failed", "canceled"].includes(s.status)
+    )
+  ) {
+    return;
+  }
   const owner = await resolveOwner(stub, issue.ownerAgent);
   if (owner?.kind === "human") return;
   if (owner?.kind === "external") {
