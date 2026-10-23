@@ -4,11 +4,14 @@ import { describe, expect, it, vi } from "vitest";
 import {
   CollectorSourceError,
   ComputeBackendError,
+  computePartnerResidualsWithEffect,
   enrichCandidatesWithEffect,
   evaluateApprovedBatchWithEffect,
   fetchHtmlWaterfallEffect,
   isSafePublicDomain,
   partitionTasksWithEffect,
+  planDaily8020Replenish,
+  pullDaily8020BatchesWithEffect,
   pullSourceEffect,
   runMacMiniFetchWithRetryEffect,
   VendorBudgetExceededError,
@@ -398,5 +401,134 @@ describe("scoreCandidate", () => {
       sheetKey: "partners_vc",
       categoryLabel: "VC / Fund Partner",
     });
+
+    // Option A: NPPES & SEC Form D collectors via pullSourceEffect
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("npiregistry.cms.hhs.gov")) {
+          return new Response(
+            JSON.stringify({
+              results: [
+                {
+                  number: "1013309533",
+                  basic: {
+                    organization_name: "PARK SLOPE DENTAL ARTS PLLC",
+                    authorized_official_first_name: "SARAH",
+                    authorized_official_last_name: "COHEN",
+                    authorized_official_telephone_number: "7185550192",
+                    enumeration_date: "2026-02-10",
+                  },
+                  addresses: [
+                    {
+                      address_purpose: "LOCATION",
+                      address_1: "320 7TH AVE",
+                      city: "BROOKLYN",
+                      state: "NY",
+                      postal_code: "11215",
+                    },
+                  ],
+                  taxonomies: [{ desc: "Dentist", primary: true }],
+                },
+              ],
+            }),
+            { status: 200 }
+          );
+        }
+        if (url.includes("efts.sec.gov")) {
+          return new Response(
+            JSON.stringify({
+              hits: {
+                hits: [
+                  {
+                    _id: "0002161835-26-000001:primary_doc.xml",
+                    _source: {
+                      ciks: ["0002161835"],
+                      adsh: "0002161835-26-000001",
+                      display_names: ["Vortex AI Labs Inc. (CIK 0002161835)"],
+                      biz_locations: ["New York, NY"],
+                      file_date: "2026-10-23",
+                    },
+                  },
+                ],
+              },
+            }),
+            { status: 200 }
+          );
+        }
+        if (url.includes("primary_doc.xml")) {
+          return new Response(
+            "<edgarSubmission><primaryIssuer><entityName>Vortex AI Labs Inc.</entityName><issuerAddress><street1>244 5TH AVE</street1><city>NEW YORK</city><stateOrCountry>NY</stateOrCountry><zipCode>10003</zipCode></issuerAddress><issuerPhoneNumber>2125550188</issuerPhoneNumber></primaryIssuer><relatedPersonsList><relatedPersonInfo><relatedPersonName><firstName>Alex</firstName><lastName>Rivera</lastName></relatedPersonName></relatedPersonInfo></relatedPersonsList><offeringData><industryGroup><industryGroupType>Computers</industryGroupType></industryGroup></offeringData></edgarSubmission>",
+            { status: 200 }
+          );
+        }
+        return new Response("[]", { status: 200 });
+      })
+    );
+
+    const nppesPulled = await Effect.runPromise(
+      pullSourceEffect(
+        PRESET_NON_POS_SMB_SOURCES.us_nppes_medical_and_dental,
+        undefined,
+        { limit: 1 }
+      )
+    );
+    expect(nppesPulled.candidates[0]).toMatchObject({
+      name: "PARK SLOPE DENTAL ARTS PLLC",
+      ownerName: "SARAH COHEN",
+      phone: "7185550192",
+      vertical: "Dentist",
+    });
+
+    const secPulled = await Effect.runPromise(
+      pullSourceEffect(
+        PRESET_NON_POS_SMB_SOURCES.us_sec_form_d_tech_startups,
+        undefined,
+        { limit: 1 }
+      )
+    );
+    expect(secPulled.candidates[0]).toMatchObject({
+      name: "Vortex AI Labs Inc.",
+      ownerName: "Alex Rivera",
+      phone: "2125550188",
+      vertical: "Tech / AI / SaaS Startup",
+    });
+
+    // Option B: Partner Residual Calculator
+    const residuals = await Effect.runPromise(
+      computePartnerResidualsWithEffect([
+        {
+          customerId: "cust-1",
+          merchantName: "Deco Construction Inc",
+          partnerId: "part-cpa-1",
+          partnerName: "Jaehwan Lee CPA P.C.",
+          monthlyCardVolumeCents: 5_000_000, // $50,000 card volume
+          monthlyAchCount: 10, // 10 ACH invoices
+          netCardMarginBps: 65,
+          netAchMarginCentsPerTx: 800,
+          partnerRevSharePct: 20,
+        },
+      ])
+    );
+    expect(residuals.totalVortexNetProfitCents).toBe(40_500); // $325 card + $80 ACH = $405.00
+    expect(residuals.totalPartnerResidualPayoutCents).toBe(8_100); // 20% = $81.00
+
+    // Option C: 80/20 Daily Auto-Replenish Planner & Puller
+    const plan = planDaily8020Replenish({ totalLeads: 20 });
+    const coreSum = plan
+      .filter((p) => p.bucket === "core_80")
+      .reduce((acc, p) => acc + p.limit, 0);
+    const exploreSum = plan
+      .filter((p) => p.bucket === "explore_20")
+      .reduce((acc, p) => acc + p.limit, 0);
+    expect(coreSum).toBe(16);
+    expect(exploreSum).toBe(4);
+
+    const batches = await Effect.runPromise(
+      pullDaily8020BatchesWithEffect(plan)
+    );
+    expect(batches).toHaveLength(4);
+    vi.unstubAllGlobals();
   });
 });

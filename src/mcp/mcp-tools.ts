@@ -13454,6 +13454,34 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdCustomersAutoreplenish",
+    "description": "Create customer auto replenish (POST /workspaces/{organizationId}/customers/auto-replenish) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: totalLeads.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers/auto-replenish",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "totalLeads": {
+              "type": "integer",
+              "minimum": 5,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdCustomersDedupkey",
     "description": "Create customer dedup key (POST /workspaces/{organizationId}/customers/dedup-key) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, address, phone, domain (* = required).",
     "method": "POST",
@@ -13984,6 +14012,78 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdCustomersPartnerresiduals",
+    "description": "Create customer partner residual (POST /workspaces/{organizationId}/customers/partner-residuals) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: merchants* (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers/partner-residuals",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "merchants": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "customerId": {
+                    "type": "string"
+                  },
+                  "merchantName": {
+                    "type": "string"
+                  },
+                  "partnerId": {
+                    "type": "string"
+                  },
+                  "partnerName": {
+                    "type": "string"
+                  },
+                  "monthlyCardVolumeCents": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "monthlyAchCount": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "netCardMarginBps": {
+                    "type": "number"
+                  },
+                  "netAchMarginCentsPerTx": {
+                    "type": "number"
+                  },
+                  "partnerRevSharePct": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 80
+                  }
+                },
+                "required": [
+                  "customerId",
+                  "merchantName",
+                  "partnerId",
+                  "partnerName",
+                  "monthlyCardVolumeCents",
+                  "monthlyAchCount"
+                ]
+              }
+            }
+          },
+          "required": [
+            "merchants"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdCustomersPullleads",
     "description": "Create customer pull lead (POST /workspaces/{organizationId}/customers/pull-leads) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: preset, borough, limit, offset, ownerId, enrichWebsites, dispatchDetectiveBatch.",
     "method": "POST",
@@ -14008,7 +14108,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "nyc_b2b_and_specialty_dealers",
                 "nyc_bookkeepers_and_cpas",
                 "nyc_vc_and_accelerators",
-                "nyc_tech_and_software_startups"
+                "nyc_tech_and_software_startups",
+                "us_nppes_medical_and_dental",
+                "us_sec_form_d_tech_startups"
               ],
               "default": "nyc_dob_contractors_and_trades"
             },

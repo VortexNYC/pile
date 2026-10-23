@@ -9,6 +9,8 @@ import { detectPosTechnographics } from "../workspace/signals-engine.js";
 import {
   type MerchantCandidate,
   type MerchantSourceRow,
+  type NonPosSmbPresetId,
+  PRESET_NON_POS_SMB_SOURCES,
   pullSource,
 } from "./collectors.js";
 
@@ -690,4 +692,178 @@ export const evaluateApprovedBatchWithEffect = Effect.fn(
       reasons: b.reasons,
     })),
   };
+});
+
+/**
+ * Option B: Effect-powered Partner Referral & Monthly Residual Rev-Share Calculator.
+ * Given a partner's referred merchant book (`monthlyCardVolumeCents`, `monthlyAchCount`,
+ * `netMarginBps`, `partnerRevSharePct`), computes deterministic integer-cent residual payouts
+ * per merchant and aggregates the partner's monthly residual check.
+ */
+export const PartnerReferredMerchantSchema = Schema.Struct({
+  customerId: Schema.String,
+  merchantName: Schema.String,
+  partnerId: Schema.String,
+  partnerName: Schema.String,
+  monthlyCardVolumeCents: Schema.Number,
+  monthlyAchCount: Schema.Number,
+  netCardMarginBps: Schema.optional(Schema.Number),
+  netAchMarginCentsPerTx: Schema.optional(Schema.Number),
+  partnerRevSharePct: Schema.optional(Schema.Number),
+});
+
+export type PartnerReferredMerchantInput =
+  typeof PartnerReferredMerchantSchema.Type;
+
+export interface PartnerMerchantResidualRow {
+  customerId: string;
+  merchantName: string;
+  partnerId: string;
+  partnerName: string;
+  monthlyCardVolumeCents: number;
+  monthlyAchCount: number;
+  vortexNetProfitCents: number;
+  partnerResidualPayoutCents: number;
+  partnerRevSharePct: number;
+}
+
+export const computePartnerResidualsWithEffect = Effect.fn(
+  "computePartnerResidualsWithEffect"
+)(function* (
+  merchants: ReadonlyArray<PartnerReferredMerchantInput>
+): Effect.fn.Return<{
+  totalMerchants: number;
+  totalVortexNetProfitCents: number;
+  totalPartnerResidualPayoutCents: number;
+  rows: PartnerMerchantResidualRow[];
+}> {
+  const rows = yield* Effect.forEach(merchants, (m) =>
+    Effect.sync(() => {
+      const cardBps = m.netCardMarginBps ?? 65; // ~65 bps net margin on 2.9% card
+      const achMarginCents = m.netAchMarginCentsPerTx ?? 800; // ~$8 net on $10 ACH cap
+      const revSharePct = Math.max(0, Math.min(80, m.partnerRevSharePct ?? 20));
+      const cardProfitCents = Math.round(
+        (Math.max(0, m.monthlyCardVolumeCents) * cardBps) / 10_000
+      );
+      const achProfitCents = Math.max(0, m.monthlyAchCount) * achMarginCents;
+      const vortexNetProfitCents = cardProfitCents + achProfitCents;
+      const partnerResidualPayoutCents = Math.round(
+        (vortexNetProfitCents * revSharePct) / 100
+      );
+      return {
+        customerId: m.customerId,
+        merchantName: m.merchantName,
+        partnerId: m.partnerId,
+        partnerName: m.partnerName,
+        monthlyCardVolumeCents: m.monthlyCardVolumeCents,
+        monthlyAchCount: m.monthlyAchCount,
+        vortexNetProfitCents,
+        partnerResidualPayoutCents,
+        partnerRevSharePct: revSharePct,
+      };
+    })
+  );
+
+  let totalVortexNetProfitCents = 0;
+  let totalPartnerResidualPayoutCents = 0;
+  for (const r of rows) {
+    totalVortexNetProfitCents += r.vortexNetProfitCents;
+    totalPartnerResidualPayoutCents += r.partnerResidualPayoutCents;
+  }
+
+  return {
+    totalMerchants: rows.length,
+    totalVortexNetProfitCents,
+    totalPartnerResidualPayoutCents,
+    rows,
+  };
+});
+
+/**
+ * Option C: Effect-powered 80/20 Daily Auto-Replenish Planner & Puller.
+ * Splits a target daily lead count (e.g. 25 or 100) into:
+ * - 80% Core Wedges (`nyc_dob_contractors_and_trades`, `nyc_tech_and_software_startups`, `nyc_bookkeepers_and_cpas`, `us_sec_form_d_tech_startups`)
+ * - 20% Exploration Slice (`us_nppes_medical_and_dental`, `nyc_auto_and_garages`, `nyc_b2b_and_specialty_dealers`)
+ */
+export interface Daily8020AllocationItem {
+  preset: NonPosSmbPresetId;
+  bucket: "core_80" | "explore_20";
+  limit: number;
+  ownerId: string;
+}
+
+export function planDaily8020Replenish(input?: {
+  totalLeads?: number;
+  shlomoOwnerId?: string;
+  ronnyOwnerId?: string;
+}): Daily8020AllocationItem[] {
+  const total = Math.max(5, Math.min(200, input?.totalLeads ?? 25));
+  const shlomo = input?.shlomoOwnerId ?? "0r5mlhiV0owDDL59vzGnfTTqwNBuGHgE";
+  const ronny = input?.ronnyOwnerId ?? "ecH8c2QyUL9IldR7F59YLtvG58s76UIh";
+  const coreTotal = Math.round(total * 0.8);
+  const exploreTotal = Math.max(1, total - coreTotal);
+  const tradesCount = Math.max(1, Math.round(coreTotal * 0.6));
+  const techAndPartnerCount = Math.max(1, coreTotal - tradesCount);
+
+  return [
+    {
+      preset: "nyc_dob_contractors_and_trades",
+      bucket: "core_80",
+      limit: tradesCount,
+      ownerId: ronny,
+    },
+    {
+      preset: "nyc_bookkeepers_and_cpas",
+      bucket: "core_80",
+      limit: Math.max(1, Math.ceil(techAndPartnerCount / 2)),
+      ownerId: shlomo,
+    },
+    {
+      preset: "us_sec_form_d_tech_startups",
+      bucket: "core_80",
+      limit: Math.max(1, Math.floor(techAndPartnerCount / 2)),
+      ownerId: shlomo,
+    },
+    {
+      preset: "us_nppes_medical_and_dental",
+      bucket: "explore_20",
+      limit: exploreTotal,
+      ownerId: ronny,
+    },
+  ];
+}
+
+export const pullDaily8020BatchesWithEffect = Effect.fn(
+  "pullDaily8020BatchesWithEffect"
+)(function* (
+  plan: ReadonlyArray<Daily8020AllocationItem>,
+  offsetsByPreset?: Record<string, number>
+): Effect.fn.Return<
+  Array<{
+    item: Daily8020AllocationItem;
+    sourceName: string;
+    candidates: MerchantCandidate[];
+    nextOffset: number;
+  }>,
+  CollectorSourceError
+> {
+  return yield* Effect.forEach(
+    plan,
+    (item) =>
+      Effect.gen(function* () {
+        const source = PRESET_NON_POS_SMB_SOURCES[item.preset];
+        const offset = offsetsByPreset?.[item.preset] ?? 0;
+        const pulled = yield* pullSourceEffect(source, undefined, {
+          limit: item.limit,
+          offset,
+        });
+        return {
+          item,
+          sourceName: source.name,
+          candidates: pulled.candidates,
+          nextOffset: offset + pulled.candidates.length,
+        };
+      }),
+    { concurrency: 2 }
+  );
 });
