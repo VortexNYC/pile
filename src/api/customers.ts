@@ -8,6 +8,10 @@ import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { isAdminIdentity } from "../platform/permissions.js";
 import { rls } from "../platform/rls.js";
+import {
+  classifyInboundReply,
+  createStatementReceivedChecklist,
+} from "../workspace/reply-funnel-engine.js";
 import type { workspaceEntityAttachments } from "../workspace/schema.js";
 import {
   evaluateSendGate,
@@ -1717,6 +1721,105 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     return c.json({
       ...key,
       matchedCustomerId: matched?.id ?? null,
+    });
+  });
+
+  const replyIngestRoute = createRoute({
+    method: "post",
+    path: "/workspaces/{organizationId}/customers/{id}/reply-ingest",
+    tags: ["customers"],
+    middleware: [rls("customer:edit")],
+    request: {
+      params: orgIdParam,
+      body: {
+        content: {
+          "application/json": {
+            schema: z.object({
+              subject: z.string().default(""),
+              body: z.string().min(1),
+              fromEmail: z.string().optional(),
+              statementFileId: z.string().optional(),
+            }),
+          },
+        },
+      },
+    },
+    responses: {
+      200: {
+        description:
+          "Classified 16-category Unify reply, applied opt-out/bounce suppression, and created statement checklist if applicable",
+        content: {
+          "application/json": {
+            schema: z.object({
+              classified: z.record(z.string(), z.unknown()),
+              suppressed: z.boolean(),
+              statementChecklist: z.record(z.string(), z.unknown()).nullable(),
+            }),
+          },
+        },
+      },
+      404: { description: "Customer not found" },
+    },
+  });
+
+  app.openapi(replyIngestRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const customer = await stub.getCustomer(id);
+    if (!customer) return notFound("Customer not found");
+
+    const classified = classifyInboundReply(input.subject, input.body);
+    let suppressed = false;
+    if (
+      classified.category === "opt_out" ||
+      classified.category === "hard_bounce"
+    ) {
+      suppressed = true;
+      await stub.upsertSuppression({
+        kind: "customerId",
+        value: customer.id,
+        customerId: customer.id,
+        reason: `reply:${classified.category}`,
+        source: "reply_ingest",
+      });
+      if (input.fromEmail) {
+        await stub.upsertSuppression({
+          kind: "email",
+          value: input.fromEmail,
+          customerId: customer.id,
+          reason: `reply:${classified.category}`,
+          source: "reply_ingest",
+        });
+      }
+    }
+
+    const statementChecklist = input.statementFileId
+      ? createStatementReceivedChecklist({
+          merchantId: customer.id,
+          statementFileId: input.statementFileId,
+        })
+      : null;
+
+    await stub.memoryRemember({
+      entityType: "customer",
+      entityId: customer.id,
+      kind: `reply:${Date.now()}`,
+      fact: JSON.stringify({
+        classified,
+        fromEmail: input.fromEmail ?? null,
+        suppressed,
+        statementChecklist,
+      }),
+    });
+
+    return c.json({
+      classified: classified as unknown as Record<string, unknown>,
+      suppressed,
+      statementChecklist: statementChecklist as unknown as Record<
+        string,
+        unknown
+      > | null,
     });
   });
 }

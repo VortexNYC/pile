@@ -692,5 +692,6 @@ describe("workspace lane tools", () => {
     expect(out.matchKey).toBe("bleecker|123 bleecker");
     expect(out.phoneE164).toBe("+12125550199");
     expect(out.matchedCustomerId).toBe("cust-bleecker");
+    expect(wsTool("customer_reply_ingest").name).toBe("customer_reply_ingest");
   });
 });

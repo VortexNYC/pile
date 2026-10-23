@@ -13413,6 +13413,49 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdCustomersIdReplyingest",
+    "description": "Create customer reply ingest (POST /workspaces/{organizationId}/customers/{id}/reply-ingest) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: subject, body*, fromEmail, statementFileId (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers/{id}/reply-ingest",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "subject": {
+              "type": "string",
+              "default": ""
+            },
+            "body": {
+              "type": "string",
+              "minLength": 1
+            },
+            "fromEmail": {
+              "type": "string"
+            },
+            "statementFileId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "body"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdCustomersIdSendgate",
     "description": "Create customer send gate (POST /workspaces/{organizationId}/customers/{id}/send-gate) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: touchId, channel*, action, contactId, contactEmail, emailStatus, emailVerifiedAt, doNotContact, doNotEmail, doNotCall, euResident, hasExplicitConsent, allowCatchAll, allowRole, allowUnverified (* = required).",
     "method": "POST",

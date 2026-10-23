@@ -3,6 +3,10 @@ import { z } from "zod";
 import { GITHUB_USER_AGENT } from "../global/github-auth.js";
 import { normalizeDomain } from "../workspace/data/index.js";
 import {
+  classifyInboundReply,
+  createStatementReceivedChecklist,
+} from "../workspace/reply-funnel-engine.js";
+import {
   evaluateSendGate,
   type EmailVerificationStatus,
   type TouchChannel,
@@ -2431,6 +2435,70 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
         ...key,
         matchedCustomerId: matched?.id ?? null,
       };
+    },
+  }),
+  defineWorkspaceTool({
+    name: "customer_reply_ingest",
+    description:
+      "Classify an inbound merchant reply into the 16 Unify categories (U-022..U-028), auto-suppress opt-outs and hard bounces, and optionally create a Statement-Received Checklist.",
+    permission: "ws:write",
+    inputSchema: z.object({
+      customerId: z.string().min(1),
+      subject: z.string().default(""),
+      body: z.string().min(1),
+      fromEmail: z.string().optional(),
+      statementFileId: z.string().optional(),
+    }),
+    async run(ctx, input) {
+      const customer = (await ctx.ws.getCustomer(input.customerId)) as
+        | { id: string }
+        | null
+        | undefined;
+      if (!customer) throw new LaneToolError("customer not found");
+      const classified = classifyInboundReply(input.subject, input.body);
+      let suppressed = false;
+      if (
+        classified.category === "opt_out" ||
+        classified.category === "hard_bounce"
+      ) {
+        suppressed = true;
+        await ctx.ws.upsertSuppression({
+          kind: "customerId",
+          value: customer.id,
+          customerId: customer.id,
+          reason: `reply:${classified.category}`,
+          source: `agent:${ctx.agentSlug}`,
+        });
+        if (input.fromEmail) {
+          await ctx.ws.upsertSuppression({
+            kind: "email",
+            value: input.fromEmail,
+            customerId: customer.id,
+            reason: `reply:${classified.category}`,
+            source: `agent:${ctx.agentSlug}`,
+          });
+        }
+      }
+      const statementChecklist = input.statementFileId
+        ? createStatementReceivedChecklist({
+            merchantId: customer.id,
+            statementFileId: input.statementFileId,
+          })
+        : null;
+      await ctx.ws.memoryRemember({
+        entityType: "customer",
+        entityId: customer.id,
+        kind: `reply:${Date.now()}`,
+        fact: JSON.stringify({
+          classified,
+          fromEmail: input.fromEmail ?? null,
+          suppressed,
+          statementChecklist,
+        }),
+        sourceSessionId: ctx.sessionId,
+        sourceAgentSlug: ctx.agentSlug,
+      });
+      return { classified, suppressed, statementChecklist };
     },
   }),
 ];
