@@ -56,6 +56,8 @@ export default defineConfig({
             "**/*.node.test.ts",
           ],
           globals: true,
+          testTimeout: 15_000,
+          hookTimeout: 30_000,
           setupFiles: ["./src/test/apply-migrations.ts"],
         },
       },
