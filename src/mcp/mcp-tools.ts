@@ -13298,6 +13298,50 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdCustomersApprovebatch",
+    "description": "Create customer approve batch (POST /workspaces/{organizationId}/customers/approve-batch) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: customerIds, channel, limit.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers/approve-batch",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "customerIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "channel": {
+              "type": "string",
+              "enum": [
+                "email",
+                "call",
+                "visit",
+                "sms"
+              ],
+              "default": "call"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25
+            }
+          }
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdCustomersAudiencequery",
     "description": "Create customer audience query (POST /workspaces/{organizationId}/customers/audience-query) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: logic, predicates, limit.",
     "method": "POST",

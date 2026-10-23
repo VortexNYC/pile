@@ -2304,4 +2304,112 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
 
     return c.json(batchResult);
   });
+
+  // Effect.partition Batch Approval & Send-Gate Runner
+  const approveBatchRoute = createRoute({
+    method: "post",
+    path: "/workspaces/{organizationId}/customers/approve-batch",
+    tags: ["customers"],
+    middleware: [rls("customer:edit", "workspace:write")],
+    request: {
+      params: z.object({ organizationId: z.string() }),
+      body: {
+        content: {
+          "application/json": {
+            schema: z.object({
+              customerIds: z.array(z.string()).optional(),
+              channel: z
+                .enum(["email", "call", "visit", "sms"])
+                .default("call"),
+              limit: z.number().int().min(1).max(100).default(25),
+            }),
+          },
+        },
+      },
+    },
+    responses: {
+      200: {
+        description:
+          "Evaluated Send Gate across the batch using Effect.partition and separated approved vs blocked leads",
+        content: {
+          "application/json": {
+            schema: z.object({
+              approvedCount: z.number(),
+              blockedCount: z.number(),
+              approved: z.array(
+                z.object({
+                  customerId: z.string(),
+                  name: z.string(),
+                  channel: z.string(),
+                  recipient: z.string().nullable(),
+                })
+              ),
+              blocked: z.array(
+                z.object({
+                  customerId: z.string(),
+                  name: z.string(),
+                  reasons: z.array(z.string()),
+                })
+              ),
+            }),
+          },
+        },
+      },
+    },
+  });
+
+  app.openapi(approveBatchRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const allCustomers = await stub.listCustomers();
+    const idSet = input.customerIds ? new Set(input.customerIds) : null;
+    const selected = allCustomers
+      .filter((row) =>
+        idSet ? idSet.has(row.id) : (row.priorityScore ?? 0) > 0
+      )
+      .sort((a, b) => (b.priorityScore ?? 0) - (a.priorityScore ?? 0))
+      .slice(0, input.limit);
+
+    const candidates = await Promise.all(
+      selected.map(async (cust) => {
+        const contacts = await stub.listContacts(cust.id);
+        const emailContact = contacts.find((ct) => ct.channel === "email");
+        const [suppCust, suppEmail] = await Promise.all([
+          stub.isSuppressed("customerId", cust.id),
+          emailContact?.value
+            ? stub.isSuppressed("email", emailContact.value)
+            : Promise.resolve(null),
+        ]);
+        return {
+          customerId: cust.id,
+          name: cust.name,
+          channel: input.channel as TouchChannel,
+          contactEmail: emailContact?.value ?? null,
+          phone: cust.phone,
+          address: cust.address,
+          suppressedCustomer: Boolean(suppCust),
+          suppressedEmail: Boolean(suppEmail),
+        };
+      })
+    );
+
+    const { Effect } = await import("effect");
+    const { evaluateApprovedBatchWithEffect } =
+      await import("../agents/collectors-effect.js");
+    const partitioned = await Effect.runPromise(
+      evaluateApprovedBatchWithEffect(candidates, { concurrency: 5 })
+    );
+
+    return c.json({
+      approvedCount: partitioned.approved.length,
+      blockedCount: partitioned.blocked.length,
+      approved: partitioned.approved,
+      blocked: partitioned.blocked.map((b) => ({
+        customerId: b.customerId,
+        name: b.name,
+        reasons: [...b.reasons],
+      })),
+    });
+  });
 }

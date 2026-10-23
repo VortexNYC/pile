@@ -109,6 +109,7 @@ export const MCP_TOOL_ALIASES: Readonly<Record<string, string>> = {
   customer_run_play: "postWorkspacesOrganizationIdCustomersIdRunplay",
   customer_morning_brief: "postWorkspacesOrganizationIdCustomersMorningbrief",
   customer_pull_leads: "postWorkspacesOrganizationIdCustomersPullleads",
+  customer_approve_batch: "postWorkspacesOrganizationIdCustomersApprovebatch",
 
   // Support
   list_support_customers: "getWorkspacesOrganizationIdSupportCustomers",

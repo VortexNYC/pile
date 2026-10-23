@@ -21514,6 +21514,71 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/customers/approve-batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create customer approve batch */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        customerIds?: string[];
+                        /**
+                         * @default call
+                         * @enum {string}
+                         */
+                        channel?: "email" | "call" | "visit" | "sms";
+                        /** @default 25 */
+                        limit?: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Evaluated Send Gate across the batch using Effect.partition and separated approved vs blocked leads */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            approvedCount: number;
+                            blockedCount: number;
+                            approved: {
+                                customerId: string;
+                                name: string;
+                                channel: string;
+                                recipient: string | null;
+                            }[];
+                            blocked: {
+                                customerId: string;
+                                name: string;
+                                reasons: string[];
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/deals": {
         parameters: {
             query?: never;

@@ -1426,28 +1426,33 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
       const key = ctx.env?.FIRECRAWL_API_KEY;
       if (!key) throw new LaneToolError("FIRECRAWL_API_KEY not configured");
       const base = ctx.env?.FIRECRAWL_BASE_URL ?? "https://api.firecrawl.dev";
-      const res = await fetch(`${base}/v1/${input.action}`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${key}`,
-        },
-        body: JSON.stringify(
-          input.action === "search"
-            ? { query: input.query, limit: input.limit ?? 5 }
-            : input.action === "scrape"
-              ? { url: input.url, formats: ["markdown"] }
-              : {
-                  urls: input.urls,
-                  prompt: input.prompt,
-                  enableWebSearch: false,
-                }
-        ),
-      });
-      if (!res.ok)
-        throw new LaneToolError(
-          `firecrawl ${input.action} failed: ${res.status}`
-        );
+      const { Effect } = await import("effect");
+      const { runMacMiniFetchWithRetryEffect } =
+        await import("./collectors-effect.js");
+      const res = await Effect.runPromise(
+        runMacMiniFetchWithRetryEffect({
+          tier: `firecrawl ${input.action}`,
+          url: `${base}/v1/${input.action}`,
+          init: {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              authorization: `Bearer ${key}`,
+            },
+            body: JSON.stringify(
+              input.action === "search"
+                ? { query: input.query, limit: input.limit ?? 5 }
+                : input.action === "scrape"
+                  ? { url: input.url, formats: ["markdown"] }
+                  : {
+                      urls: input.urls,
+                      prompt: input.prompt,
+                      enableWebSearch: false,
+                    }
+            ),
+          },
+        }).pipe(Effect.mapError((err) => new LaneToolError(err.message)))
+      );
       return res.json();
     },
   }),
@@ -1460,16 +1465,23 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
     async run(ctx, input) {
       const base = ctx.env?.SCRAPLING_BASE_URL;
       if (!base) throw new LaneToolError("SCRAPLING_BASE_URL not configured");
-      const res = await fetch(`${base}/scrape`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-api-key": ctx.env?.SCRAPLING_API_KEY ?? "",
-        },
-        body: JSON.stringify({ url: input.url, mode: "stealth" }),
-      });
-      if (!res.ok)
-        throw new LaneToolError(`stealth_fetch failed: ${res.status}`);
+      const { Effect } = await import("effect");
+      const { runMacMiniFetchWithRetryEffect } =
+        await import("./collectors-effect.js");
+      const res = await Effect.runPromise(
+        runMacMiniFetchWithRetryEffect({
+          tier: "stealth_fetch",
+          url: `${base}/scrape`,
+          init: {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-api-key": ctx.env?.SCRAPLING_API_KEY ?? "",
+            },
+            body: JSON.stringify({ url: input.url, mode: "stealth" }),
+          },
+        }).pipe(Effect.mapError((err) => new LaneToolError(err.message)))
+      );
       const text = await res.text();
       return { text: text.slice(0, 20000) };
     },

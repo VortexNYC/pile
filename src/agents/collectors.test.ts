@@ -3,11 +3,16 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   CollectorSourceError,
+  ComputeBackendError,
   enrichCandidatesWithEffect,
+  evaluateApprovedBatchWithEffect,
   fetchHtmlWaterfallEffect,
   isSafePublicDomain,
+  partitionTasksWithEffect,
   pullSourceEffect,
+  runMacMiniFetchWithRetryEffect,
   VendorBudgetExceededError,
+  withFailoverEffect,
   withPaidVendorBudgetEffect,
 } from "./collectors-effect.js";
 import {
@@ -301,5 +306,77 @@ describe("scoreCandidate", () => {
     expect(budgetErr).toBeInstanceOf(VendorBudgetExceededError);
     expect(budgetErr._tag).toBe("VendorBudgetExceededError");
     vi.unstubAllGlobals();
+  });
+
+  it("runs all 4 Effect orchestrator primitives: runMacMiniFetchWithRetryEffect (502 tunnel retry), withFailoverEffect (primary -> fallback), partitionTasksWithEffect, and evaluateApprovedBatchWithEffect", async () => {
+    let tunnelCalls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        tunnelCalls += 1;
+        if (tunnelCalls === 1) {
+          return new Response("bad gateway", { status: 502 });
+        }
+        return new Response(JSON.stringify({ ok: true }), { status: 200 });
+      })
+    );
+    const macRes = await Effect.runPromise(
+      runMacMiniFetchWithRetryEffect({
+        tier: "firecrawl scrape",
+        url: "https://firecrawl.pile.nyc/v1/scrape",
+        init: { method: "POST" },
+      })
+    );
+    expect(tunnelCalls).toBe(2);
+    expect(macRes.status).toBe(200);
+    vi.unstubAllGlobals();
+
+    const switched: ComputeBackendError[] = [];
+    const failoverResult = await Effect.runPromise(
+      withFailoverEffect({
+        operation: "createSandbox",
+        primaryName: "daytona",
+        fallbackName: "cloudflare",
+        primary: async () => {
+          throw new Error("daytona quota reached");
+        },
+        fallback: async () => "cf-sandbox-1",
+        onSwitch: (err) => switched.push(err),
+      })
+    );
+    expect(failoverResult).toBe("cf-sandbox-1");
+    expect(switched[0]?.backend).toBe("daytona");
+
+    const part = await Effect.runPromise(
+      partitionTasksWithEffect([1, 2, 3], async (n) => {
+        if (n === 2) throw new Error("item 2 failed");
+        return n * 10;
+      })
+    );
+    expect(part.successes).toEqual([10, 30]);
+    expect(part.failures).toEqual([{ message: "item 2 failed" }]);
+
+    const batchGate = await Effect.runPromise(
+      evaluateApprovedBatchWithEffect([
+        {
+          customerId: "c-pass",
+          name: "Metro Electric",
+          channel: "email",
+          contactEmail: "owner@metroelectric.nyc",
+          emailStatus: "valid",
+        },
+        {
+          customerId: "c-block",
+          name: "Opted Out Corp",
+          channel: "email",
+          contactEmail: "owner@optedout.nyc",
+          suppressedCustomer: true,
+        },
+      ])
+    );
+    expect(batchGate.approved).toHaveLength(1);
+    expect(batchGate.approved[0]?.customerId).toBe("c-pass");
+    expect(batchGate.blocked).toHaveLength(1);
+    expect(batchGate.blocked[0]?.customerId).toBe("c-block");
   });
 });
