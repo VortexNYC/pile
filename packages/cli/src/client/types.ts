@@ -21250,6 +21250,12 @@ export interface paths {
                                 [key: string]: unknown;
                             };
                             suppressed: boolean;
+                            enrollment: {
+                                [key: string]: unknown;
+                            };
+                            tasks: {
+                                [key: string]: unknown;
+                            }[];
                             statementChecklist: {
                                 [key: string]: unknown;
                             } | null;

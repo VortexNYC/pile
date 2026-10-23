@@ -1754,6 +1754,8 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
             schema: z.object({
               classified: z.record(z.string(), z.unknown()),
               suppressed: z.boolean(),
+              enrollment: z.record(z.string(), z.unknown()),
+              tasks: z.array(z.record(z.string(), z.unknown())),
               statementChecklist: z.record(z.string(), z.unknown()).nullable(),
             }),
           },
@@ -1843,6 +1845,8 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     return c.json({
       classified: classified as unknown as Record<string, unknown>,
       suppressed,
+      enrollment: outcome.enrollment as unknown as Record<string, unknown>,
+      tasks: outcome.tasks as unknown as Array<Record<string, unknown>>,
       statementChecklist: statementChecklist as unknown as Record<
         string,
         unknown

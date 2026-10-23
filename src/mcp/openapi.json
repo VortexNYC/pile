@@ -44025,6 +44025,21 @@
                     "suppressed": {
                       "type": "boolean"
                     },
+                    "enrollment": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "tasks": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "nullable": true
+                        }
+                      }
+                    },
                     "statementChecklist": {
                       "type": "object",
                       "nullable": true,
@@ -44036,6 +44051,8 @@
                   "required": [
                     "classified",
                     "suppressed",
+                    "enrollment",
+                    "tasks",
                     "statementChecklist"
                   ]
                 }
