@@ -2798,6 +2798,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     cursorKind?: string | null;
     nextOffset?: number | null;
     actorUserId?: string | null;
+    defaultOwnerId?: string | null;
     dispatchDetectiveBatch?: boolean;
     teamId?: string | null;
     candidates: ReadonlyArray<{
@@ -2896,6 +2897,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
             vertical: normalizedVertical,
             neighborhood: cand.neighborhood ?? matched.neighborhood,
             processor: cand.posGuess ?? matched.processor,
+            ownerId: matched.ownerId ?? input.defaultOwnerId ?? null,
             evidenceUri: cand.evidenceUri ?? matched.evidenceUri,
             source: input.sourceName,
           }) ?? matched)
@@ -2909,6 +2911,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
             vertical: normalizedVertical,
             neighborhood: cand.neighborhood ?? null,
             processor: cand.posGuess ?? null,
+            ownerId: input.defaultOwnerId ?? null,
             evidenceUri: cand.evidenceUri ?? null,
             source: input.sourceName,
           });

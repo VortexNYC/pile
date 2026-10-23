@@ -1,8 +1,6 @@
 import { Badge } from "@cloudflare/kumo/components/badge";
 import { Button } from "@cloudflare/kumo/components/button";
 import { Input } from "@cloudflare/kumo/components/input";
-import { LayerCard } from "@cloudflare/kumo/components/layer-card";
-import { Table } from "@cloudflare/kumo/components/table";
 import { Tabs } from "@cloudflare/kumo/components/tabs";
 import { Buildings, Plus } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
@@ -29,6 +27,16 @@ interface LeadClass {
   sheetKey: Exclude<SheetKey, "all_active">;
   categoryLabel: string;
   vortexWedge: string;
+}
+
+const KNOWN_OWNERS: Record<string, string> = {
+  "0r5mlhiV0owDDL59vzGnfTTqwNBuGHgE": "Shlomo",
+  ecH8c2QyUL9IldR7F59YLtvG58s76UIh: "Ronny",
+};
+
+function ownerDisplayName(ownerId: string | null | undefined): string {
+  if (!ownerId) return "Unassigned";
+  return KNOWN_OWNERS[ownerId] ?? ownerId.slice(0, 8);
 }
 
 function classifyCustomerRow(row: {
@@ -190,22 +198,22 @@ function classifyCustomerRow(row: {
 }
 
 const SHEET_DEFS: ReadonlyArray<{ key: SheetKey; label: string }> = [
-  { key: "all_active", label: "All Active Leads" },
-  { key: "trades", label: "Trades & Contractors (80%)" },
-  { key: "tech", label: "Tech & Startups (80%)" },
+  { key: "all_active", label: "All Active" },
+  { key: "trades", label: "Trades & Contractors" },
+  { key: "tech", label: "Tech & Startups" },
   { key: "partners_accounting", label: "Partners: Bookkeepers & CPAs" },
   { key: "partners_vc", label: "Partners: VCs & Funds" },
   { key: "exploration", label: "Exploration SMBs (20%)" },
-  { key: "excluded_pos", label: "Excluded (POS Restaurants)" },
+  { key: "excluded_pos", label: "Excluded (POS)" },
 ];
 
-/** Multi-sheet Notion/Google-Sheets style company table with category tabs,
- * sub-category filters, owner/Why-Now provenance, phone, and address columns. */
+/** Notion Database / Google Sheets / Linear style dense tabular view. */
 export function CustomersList() {
   const workspace = useWorkspace();
   const key = wsKey(workspace.id, "customers");
   const [activeSheet, setActiveSheet] = useState<SheetKey>("all_active");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [selectedOwner, setSelectedOwner] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
 
   const customers = useQuery({
@@ -229,8 +237,11 @@ export function CustomersList() {
         vertical: typeof extra.vertical === "string" ? extra.vertical : null,
         source: typeof extra.source === "string" ? extra.source : null,
       });
+      const ownerId = typeof extra.ownerId === "string" ? extra.ownerId : null;
       return {
         raw: c,
+        ownerId,
+        ownerName: ownerDisplayName(ownerId),
         phone: typeof extra.phone === "string" ? extra.phone : null,
         address: typeof extra.address === "string" ? extra.address : null,
         neighborhood:
@@ -245,6 +256,20 @@ export function CustomersList() {
     });
   }, [customers.data]);
 
+  const ownerOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of enrichedRows) {
+      if (r.classified.sheetKey === "excluded_pos") continue;
+      counts.set(r.ownerName, (counts.get(r.ownerName) ?? 0) + 1);
+    }
+    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+  }, [enrichedRows]);
+
+  const ownerFilteredRows = useMemo(() => {
+    if (selectedOwner === "all") return enrichedRows;
+    return enrichedRows.filter((r) => r.ownerName === selectedOwner);
+  }, [enrichedRows, selectedOwner]);
+
   const sheetCounts = useMemo(() => {
     const counts: Record<SheetKey, number> = {
       all_active: 0,
@@ -255,23 +280,29 @@ export function CustomersList() {
       exploration: 0,
       excluded_pos: 0,
     };
-    for (const r of enrichedRows) {
+    for (const r of ownerFilteredRows) {
       counts[r.classified.sheetKey] += 1;
       if (r.classified.sheetKey !== "excluded_pos") {
         counts.all_active += 1;
       }
     }
     return counts;
-  }, [enrichedRows]);
+  }, [ownerFilteredRows]);
+
+  const visibleSheets = useMemo(() => {
+    return SHEET_DEFS.filter(
+      (s) => s.key === "all_active" || sheetCounts[s.key] > 0
+    );
+  }, [sheetCounts]);
 
   const sheetFiltered = useMemo(() => {
-    return enrichedRows.filter((r) => {
+    return ownerFilteredRows.filter((r) => {
       if (activeSheet === "all_active") {
         return r.classified.sheetKey !== "excluded_pos";
       }
       return r.classified.sheetKey === activeSheet;
     });
-  }, [enrichedRows, activeSheet]);
+  }, [ownerFilteredRows, activeSheet]);
 
   const categoryOptions = useMemo(() => {
     const counts = new Map<string, number>();
@@ -298,6 +329,7 @@ export function CustomersList() {
         return (
           r.raw.name.toLowerCase().includes(q) ||
           r.classified.categoryLabel.toLowerCase().includes(q) ||
+          r.ownerName.toLowerCase().includes(q) ||
           (r.phone ?? "").toLowerCase().includes(q) ||
           (r.address ?? "").toLowerCase().includes(q) ||
           (r.neighborhood ?? "").toLowerCase().includes(q) ||
@@ -308,12 +340,13 @@ export function CustomersList() {
   }, [sheetFiltered, selectedCategory, searchQuery]);
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="flex flex-col gap-2">
+      {/* Top Notion/Sheets View Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-kumo-line pb-2">
         <Tabs
-          tabs={SHEET_DEFS.map((s) => ({
+          tabs={visibleSheets.map((s) => ({
             value: s.key,
-            label: `${s.label} (${sheetCounts[s.key]})`,
+            label: `${s.label} · ${sheetCounts[s.key]}`,
           }))}
           value={activeSheet}
           onValueChange={(v) => {
@@ -322,8 +355,37 @@ export function CustomersList() {
           }}
         />
         <div className="flex items-center gap-2">
+          {ownerOptions.length > 1 && (
+            <div className="flex items-center gap-1 rounded border border-kumo-line px-1 py-0.5 text-xs">
+              <button
+                type="button"
+                onClick={() => setSelectedOwner("all")}
+                className={`rounded px-2 py-0.5 ${
+                  selectedOwner === "all"
+                    ? "bg-kumo-tint font-medium text-kumo-default"
+                    : "text-kumo-subtle hover:text-kumo-default"
+                }`}
+              >
+                All Owners
+              </button>
+              {ownerOptions.map(([owner, cnt]) => (
+                <button
+                  key={owner}
+                  type="button"
+                  onClick={() => setSelectedOwner(owner)}
+                  className={`rounded px-2 py-0.5 ${
+                    selectedOwner === owner
+                      ? "bg-kumo-tint font-medium text-kumo-default"
+                      : "text-kumo-subtle hover:text-kumo-default"
+                  }`}
+                >
+                  {owner} ({cnt})
+                </button>
+              ))}
+            </div>
+          )}
           <Input
-            placeholder="Filter by name, category, owner, phone, borough…"
+            placeholder="Filter rows…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -335,35 +397,46 @@ export function CustomersList() {
               window.dispatchEvent(new CustomEvent("pile:create-customer"))
             }
           >
-            Add company
+            New row
           </Button>
         </div>
       </div>
 
+      {/* Sub-Category Filter Strip (Notion/Linear filter bar) */}
       {categoryOptions.length > 1 && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Button
-            variant={selectedCategory === "all" ? "primary" : "ghost"}
-            size="sm"
+        <div className="flex flex-wrap items-center gap-1 text-xs">
+          <span className="text-kumo-subtle mr-1">Category:</span>
+          <button
+            type="button"
             onClick={() => setSelectedCategory("all")}
+            className={`rounded border px-2 py-0.5 transition-colors ${
+              selectedCategory === "all"
+                ? "border-kumo-default bg-kumo-tint font-medium text-kumo-default"
+                : "border-kumo-line text-kumo-subtle hover:text-kumo-default"
+            }`}
           >
-            All Categories ({sheetFiltered.length})
-          </Button>
+            All ({sheetFiltered.length})
+          </button>
           {categoryOptions.map(([cat, cnt]) => (
-            <Button
+            <button
               key={cat}
-              variant={selectedCategory === cat ? "primary" : "ghost"}
-              size="sm"
+              type="button"
               onClick={() => setSelectedCategory(cat)}
+              className={`rounded border px-2 py-0.5 transition-colors ${
+                selectedCategory === cat
+                  ? "border-kumo-default bg-kumo-tint font-medium text-kumo-default"
+                  : "border-kumo-line text-kumo-subtle hover:text-kumo-default"
+              }`}
             >
-              {cat} ({cnt})
-            </Button>
+              {cat} · {cnt}
+            </button>
           ))}
         </div>
       )}
 
+      {/* Dense Spreadsheet / Notion Database Grid */}
       {customers.isPending ? (
-        <LoadingState label="Loading companies" />
+        <LoadingState label="Loading sheet" />
       ) : customers.isError ? (
         <ErrorState
           error={customers.error}
@@ -372,29 +445,56 @@ export function CustomersList() {
       ) : visibleRows.length === 0 ? (
         <EmptyState
           icon={<Buildings size={40} />}
-          title="No leads in this sheet yet"
-          description="Switch sheet tabs or pull a fresh batch of leads."
+          title="No rows match this view"
+          description="Switch sheet tabs or clear active filters."
         />
       ) : (
-        <LayerCard className="p-0">
-          <Table aria-label="Companies">
-            <Table.Header>
-              <Table.Row>
-                <Table.Head>Company</Table.Head>
-                <Table.Head>Category & Wedge</Table.Head>
-                <Table.Head>Phone</Table.Head>
-                <Table.Head>Location</Table.Head>
-                <Table.Head>Principal & Why Now</Table.Head>
-                <Table.Head>Fit & Score</Table.Head>
-                <Table.Head>Added</Table.Head>
-              </Table.Row>
-            </Table.Header>
-            <Table.Body>
-              {visibleRows.map((row) => {
+        <div className="overflow-x-auto rounded border border-kumo-line bg-kumo-base">
+          <table
+            aria-label="Companies"
+            className="w-full border-collapse text-left text-xs"
+          >
+            <thead>
+              <tr className="border-b border-kumo-line bg-kumo-tint/30 text-[11px] font-medium uppercase tracking-wider text-kumo-subtle">
+                <th className="w-10 border-r border-kumo-line px-2 py-1.5 text-right font-mono">
+                  #
+                </th>
+                <th className="min-w-[220px] border-r border-kumo-line px-2.5 py-1.5">
+                  Company
+                </th>
+                <th className="min-w-[180px] border-r border-kumo-line px-2.5 py-1.5">
+                  Category
+                </th>
+                <th className="min-w-[90px] border-r border-kumo-line px-2.5 py-1.5">
+                  Owner
+                </th>
+                <th className="min-w-[125px] border-r border-kumo-line px-2.5 py-1.5">
+                  Phone
+                </th>
+                <th className="min-w-[220px] border-r border-kumo-line px-2.5 py-1.5">
+                  Location
+                </th>
+                <th className="min-w-[260px] border-r border-kumo-line px-2.5 py-1.5">
+                  Principal & Signal
+                </th>
+                <th className="min-w-[90px] border-r border-kumo-line px-2.5 py-1.5">
+                  Score
+                </th>
+                <th className="w-24 px-2.5 py-1.5">Added</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleRows.map((row, idx) => {
                 const customer = row.raw;
                 return (
-                  <Table.Row key={customer.id}>
-                    <Table.Cell>
+                  <tr
+                    key={customer.id}
+                    className="border-b border-kumo-line hover:bg-kumo-tint/20 transition-colors"
+                  >
+                    <td className="border-r border-kumo-line px-2 py-1.5 text-right font-mono text-[11px] text-kumo-subtle">
+                      {idx + 1}
+                    </td>
+                    <td className="border-r border-kumo-line px-2.5 py-1.5 whitespace-nowrap">
                       <EntityHover
                         title={customer.name}
                         description={customer.url}
@@ -405,98 +505,79 @@ export function CustomersList() {
                             slug: workspace.slug,
                             customerId: customer.id,
                           }}
-                          className="text-kumo-link hover:underline font-medium"
+                          className="text-kumo-link hover:underline font-medium inline-flex items-center gap-1.5"
                         >
-                          <span className="flex items-center gap-2">
-                            <CompanyLogo
-                              name={customer.name}
-                              logoUrl={customer.logoUrl}
-                              url={customer.url}
-                            />
-                            <span className="flex flex-col">
-                              <span>{customer.name}</span>
-                              {customer.domain && (
-                                <span className="text-xs text-kumo-subtle">
-                                  {customer.domain}
-                                </span>
-                              )}
-                            </span>
+                          <CompanyLogo
+                            name={customer.name}
+                            logoUrl={customer.logoUrl}
+                            url={customer.url}
+                          />
+                          <span className="truncate max-w-[210px]">
+                            {customer.name}
                           </span>
+                          {customer.domain && (
+                            <span className="text-[11px] text-kumo-subtle font-normal">
+                              · {customer.domain}
+                            </span>
+                          )}
                         </Link>
                       </EntityHover>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <div className="flex flex-col gap-0.5">
-                        <div>
-                          <Badge variant="secondary">
-                            {row.classified.categoryLabel}
-                          </Badge>
-                        </div>
-                        <span className="text-xs text-kumo-subtle">
-                          {row.classified.vortexWedge}
-                        </span>
-                      </div>
-                    </Table.Cell>
-                    <Table.Cell>
+                    </td>
+                    <td className="border-r border-kumo-line px-2.5 py-1.5 whitespace-nowrap">
+                      <Badge variant="secondary">
+                        {row.classified.categoryLabel}
+                      </Badge>
+                    </td>
+                    <td className="border-r border-kumo-line px-2.5 py-1.5 whitespace-nowrap">
+                      <Badge
+                        variant={
+                          row.ownerName === "Shlomo" ? "primary" : "secondary"
+                        }
+                      >
+                        {row.ownerName}
+                      </Badge>
+                    </td>
+                    <td className="border-r border-kumo-line px-2.5 py-1.5 whitespace-nowrap font-mono">
                       {row.phone ? (
                         <a
                           href={`tel:${row.phone}`}
-                          className="text-kumo-link hover:underline font-mono text-xs"
+                          className="text-kumo-link hover:underline"
                         >
                           {row.phone}
                         </a>
                       ) : (
-                        "—"
+                        <span className="text-kumo-subtle">—</span>
                       )}
-                    </Table.Cell>
-                    <Table.Cell>
-                      <div className="flex flex-col text-xs">
-                        {row.neighborhood && (
-                          <span className="font-medium">
-                            {row.neighborhood}
-                          </span>
-                        )}
-                        <span className="text-kumo-subtle truncate max-w-[220px]">
-                          {row.address ?? "—"}
-                        </span>
-                      </div>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <span className="text-xs text-kumo-subtle line-clamp-2 max-w-[280px]">
-                        {row.signal ?? "—"}
+                    </td>
+                    <td className="border-r border-kumo-line px-2.5 py-1.5 whitespace-nowrap">
+                      <span className="truncate block max-w-[230px] text-kumo-subtle">
+                        {row.neighborhood ? `${row.neighborhood} · ` : ""}
+                        {row.address ?? "—"}
                       </span>
-                    </Table.Cell>
-                    <Table.Cell>
+                    </td>
+                    <td className="border-r border-kumo-line px-2.5 py-1.5">
+                      <span className="truncate block max-w-[290px] text-kumo-subtle">
+                        {row.signal ?? row.classified.vortexWedge}
+                      </span>
+                    </td>
+                    <td className="border-r border-kumo-line px-2.5 py-1.5 whitespace-nowrap font-mono">
                       {row.fitScore != null || row.priorityScore != null ? (
-                        <div className="flex items-center gap-1.5 text-xs">
-                          <Badge
-                            variant={
-                              row.fitStatus === "great"
-                                ? "primary"
-                                : "secondary"
-                            }
-                          >
-                            Fit {row.fitScore ?? "—"}
-                          </Badge>
-                          {row.priorityScore != null && (
-                            <span className="text-kumo-subtle font-mono">
-                              P{row.priorityScore}
-                            </span>
-                          )}
-                        </div>
+                        <span>
+                          F{row.fitScore ?? "—"} · P{row.priorityScore ?? "—"}
+                        </span>
                       ) : (
-                        "—"
+                        <span className="text-kumo-subtle">—</span>
                       )}
-                    </Table.Cell>
-                    <Table.Cell>
+                    </td>
+                    <td className="px-2.5 py-1.5 whitespace-nowrap text-kumo-subtle">
                       {formatRelative(customer.createdAt)}
-                    </Table.Cell>
-                  </Table.Row>
+                    </td>
+                  </tr>
                 );
               })}
-            </Table.Body>
-          </Table>
-        </LayerCard>
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

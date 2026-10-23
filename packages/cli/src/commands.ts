@@ -8920,6 +8920,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "offset",
       },
       {
+        name: "ownerId",
+        flag: "owner-id",
+      },
+      {
         name: "enrichWebsites",
         flag: "enrich-websites",
       },

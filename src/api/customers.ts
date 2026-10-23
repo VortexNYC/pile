@@ -928,14 +928,22 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
       c.req.valid("query");
     const stub = getWorkspaceStub(c.env, organizationId);
     await stub.setOrganizationId(organizationId);
+    const allCustomers = await stub.listCustomers({
+      cold: cold === "true",
+      dueBefore,
+      needsHuman: needsHuman === "true",
+      externalId,
+      domain,
+    });
+    const identity = c.var.workspaceIdentity;
+    const isAdmin = isAdminIdentity(identity);
+    const hasAssignedOwners = allCustomers.some((row) => row.ownerId !== null);
+    const visibleCustomers =
+      !isAdmin && identity.type === "user" && hasAssignedOwners
+        ? allCustomers.filter((row) => row.ownerId === identity.id)
+        : allCustomers;
     return c.json({
-      customers: await stub.listCustomers({
-        cold: cold === "true",
-        dueBefore,
-        needsHuman: needsHuman === "true",
-        externalId,
-        domain,
-      }),
+      customers: visibleCustomers,
     });
   });
 
@@ -996,6 +1004,15 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     await stub.setOrganizationId(organizationId);
     const customer = await stub.getCustomer(id);
     if (!customer) return notFound("Customer not found");
+    const identity = c.var.workspaceIdentity;
+    if (
+      customer.ownerId &&
+      !isAdminIdentity(identity) &&
+      identity.type === "user" &&
+      customer.ownerId !== identity.id
+    ) {
+      return notFound("Customer not found");
+    }
     return c.json(customer);
   });
 
@@ -2209,6 +2226,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
               borough: z.string().optional(),
               limit: z.number().int().min(1).max(100).default(15),
               offset: z.number().int().min(0).optional(),
+              ownerId: z.string().optional(),
               enrichWebsites: z.boolean().default(true),
               dispatchDetectiveBatch: z.boolean().default(false),
             }),
@@ -2290,11 +2308,22 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
         })()
       : pulled.candidates;
 
+    const defaultOwnerId =
+      input.ownerId ??
+      (organizationId === "org_vortex_main"
+        ? input.preset === "nyc_tech_and_software_startups" ||
+          input.preset === "nyc_vc_and_accelerators" ||
+          input.preset === "nyc_bookkeepers_and_cpas"
+          ? "0r5mlhiV0owDDL59vzGnfTTqwNBuGHgE"
+          : "ecH8c2QyUL9IldR7F59YLtvG58s76UIh"
+        : null);
+
     const batchResult = await stub.ingestPulledLeadsBatch({
       sourceName: source.name,
       cursorKind,
       nextOffset,
       actorUserId: c.var.workspaceIdentity.id,
+      defaultOwnerId,
       dispatchDetectiveBatch: input.dispatchDetectiveBatch,
       candidates,
     });

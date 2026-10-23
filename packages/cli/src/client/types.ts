@@ -21479,6 +21479,7 @@ export interface paths {
                         /** @default 15 */
                         limit?: number;
                         offset?: number;
+                        ownerId?: string;
                         /** @default true */
                         enrichWebsites?: boolean;
                         /** @default false */
