@@ -2819,6 +2819,9 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
           "nyc_home_improvement_contractors",
           "nyc_auto_and_garages",
           "nyc_b2b_and_specialty_dealers",
+          "nyc_bookkeepers_and_cpas",
+          "nyc_vc_and_accelerators",
+          "nyc_tech_and_software_startups",
         ])
         .default("nyc_dob_contractors_and_trades"),
       borough: z.string().optional(),
