@@ -41675,6 +41675,108 @@
         "summary": "Delete customer"
       }
     },
+    "/workspaces/{organizationId}/customers/{id}/contacts": {
+      "get": {
+        "tags": [
+          "customers"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Verified customer contacts (owners, emails, phones)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "contacts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "customerId": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "role": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "channel": {
+                            "type": "string"
+                          },
+                          "value": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "confidence": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "source": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "evidenceUri": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "customerId",
+                          "type",
+                          "role",
+                          "channel",
+                          "value",
+                          "label",
+                          "status",
+                          "confidence",
+                          "source",
+                          "evidenceUri"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "contacts"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List customer contacts"
+      }
+    },
     "/workspaces/{organizationId}/customers/purge": {
       "post": {
         "tags": [

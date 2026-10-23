@@ -19909,6 +19909,59 @@ export interface paths {
         };
         trace?: never;
     };
+    "/workspaces/{organizationId}/customers/{id}/contacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List customer contacts */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Verified customer contacts (owners, emails, phones) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            contacts: {
+                                id: string;
+                                customerId: string;
+                                type: string;
+                                role: string | null;
+                                channel: string;
+                                value: string;
+                                label: string | null;
+                                status: string;
+                                confidence: string | null;
+                                source: string | null;
+                                evidenceUri: string | null;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/customers/purge": {
         parameters: {
             query?: never;
