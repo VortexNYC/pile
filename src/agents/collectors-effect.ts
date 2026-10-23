@@ -64,6 +64,7 @@ export class SendGateBlockedError extends Schema.TaggedError<SendGateBlockedErro
 export interface EnrichedMerchantCandidate extends MerchantCandidate {
   posGuess?: string | null;
   posEvidenceUrl?: string | null;
+  contactFormUrl?: string | null;
   dosId?: string | null;
   dosFilingDate?: string | null;
   scrapeTier?: "direct" | "scrapling" | "obscura" | "firecrawl" | null;
@@ -90,8 +91,27 @@ export function isSafePublicDomain(
 }
 
 const MAILTO_RE = /mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,24})/i;
+const CONTACT_LINK_RE =
+  /href=["']([^"']*\/(?:contact|contact-us|get-a-quote|request-quote|estimate)[^"']*)["']/i;
+const FORM_ACTION_RE = /<form[^>]+action=["']([^"'#]+)["']/i;
 const CF_CHALLENGE_RE =
   /Just a moment\.\.\.|cf-browser-verification|Attention Required! \| Cloudflare/i;
+
+function resolveContactFormUrl(pageUrl: string, html: string): string | null {
+  const linkMatch = CONTACT_LINK_RE.exec(html);
+  const formMatch = FORM_ACTION_RE.exec(html);
+  const raw = linkMatch?.[1] ?? formMatch?.[1] ?? null;
+  if (!raw) return null;
+  try {
+    const resolved = new URL(raw, pageUrl);
+    if (resolved.protocol !== "https:" && resolved.protocol !== "http:") {
+      return null;
+    }
+    return resolved.href;
+  } catch {
+    return null;
+  }
+}
 
 export const withPaidVendorBudgetEffect = Effect.fn(
   "withPaidVendorBudgetEffect"
@@ -454,6 +474,7 @@ export const probeCandidateWebsiteEffect = Effect.fnUntraced(function* (
       ...cand,
       posGuess: null,
       posEvidenceUrl: null,
+      contactFormUrl: null,
       dosId: dos.dosId,
       dosFilingDate: dos.dosFilingDate,
       scrapeTier: null,
@@ -468,11 +489,13 @@ export const probeCandidateWebsiteEffect = Effect.fnUntraced(function* (
   });
   const mailtoMatch = !cand.email ? MAILTO_RE.exec(fetched.html) : null;
   const discoveredEmail = mailtoMatch?.[1]?.toLowerCase() ?? null;
+  const contactFormUrl = resolveContactFormUrl(pageUrl, fetched.html);
   return {
     ...cand,
     email: cand.email ?? discoveredEmail,
     posGuess: tech.posGuess,
     posEvidenceUrl: tech.posGuess ? pageUrl : null,
+    contactFormUrl,
     dosId: dos.dosId,
     dosFilingDate: dos.dosFilingDate,
     scrapeTier: fetched.tier,

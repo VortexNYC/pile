@@ -2,6 +2,11 @@ import { Effect } from "effect";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  applyInboundReplyOutcome,
+  classifyInboundReply,
+} from "../workspace/reply-funnel-engine.js";
+import { evaluateSendGate } from "../workspace/send-gate.js";
+import {
   CollectorSourceError,
   ComputeBackendError,
   computePartnerResidualsWithEffect,
@@ -561,6 +566,62 @@ describe("scoreCandidate", () => {
     );
     expect(obscuraWaterfall.tier).toBe("obscura");
     expect(obscuraWaterfall.html).toContain("owner@protected-contractor.nyc");
+
+    // PILE-603: referral reply extracts DecisionMakerPointer bookkeeper_cpa role + alternateContactEmail
+    const refReply = classifyInboundReply(
+      "Re: Vortex for Deco Construction",
+      "I don't handle the invoicing, talk to my bookkeeper Sarah at sarah@leecpa.nyc instead.",
+      "2026-10-23T14:00:00.000Z"
+    );
+    expect(refReply.category).toBe("referral");
+    expect(refReply.referralRole).toBe("bookkeeper_cpa");
+    expect(refReply.alternateContactEmail).toBe("sarah@leecpa.nyc");
+    const refOutcome = applyInboundReplyOutcome({
+      enrollment: {
+        id: "enr_1",
+        merchantId: "m_1",
+        contactId: "c_1",
+        cadenceId: "cad_1",
+        cadenceVersion: 1,
+        mailboxId: "mb_1",
+        status: "active",
+        enrolledBy: "system",
+        touches: [],
+      },
+      contactPermissions: { emailStatus: "valid" },
+      classified: refReply,
+      existingTasks: [],
+    });
+    expect(refOutcome.flaggedAlternateContactEmail).toBe("sarah@leecpa.nyc");
+
+    // PILE-604: bad_timing / budget reply computes 3/6/12 month recontactAtIso
+    const timingReply = classifyInboundReply(
+      "Re: Vortex",
+      "We are tight on budget right now, check back after the holidays.",
+      "2026-10-23T14:00:00.000Z"
+    );
+    expect(timingReply.category).toBe("bad_timing");
+    expect(timingReply.recontactWindowMonths).toBe(6);
+    expect(timingReply.recontactAtIso).toBe("2027-04-23T14:00:00.000Z");
+
+    // PILE-607: OUTSIDE_HOURS blocks email channel when outside 9am-6pm businessHours
+    const nightGate = evaluateSendGate({
+      touchId: "t_night",
+      channel: "email",
+      now: "2026-10-23T06:00:00.000Z", // 02:00 AM America/New_York
+      merchant: { id: "m_1" },
+      contact: {
+        id: "c_1",
+        email: "owner@contractor.nyc",
+        permissions: { emailStatus: "valid" },
+      },
+      schedule: {
+        timeZone: "America/New_York",
+        businessHours: { startHour: 9, endHour: 18 },
+      },
+    });
+    expect(nightGate.result).toBe("block");
+    expect(nightGate.reasons).toContain("OUTSIDE_HOURS");
     vi.unstubAllGlobals();
   });
 });
