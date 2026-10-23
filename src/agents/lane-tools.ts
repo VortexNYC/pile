@@ -2801,13 +2801,17 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
     inputSchema: z.object({
       preset: z
         .enum([
+          "nyc_dob_contractors_and_trades",
+          "nyc_bic_commercial_haulers",
+          "nyc_dob_permit_issuances",
           "nyc_home_improvement_contractors",
           "nyc_auto_and_garages",
           "nyc_b2b_and_specialty_dealers",
         ])
-        .default("nyc_home_improvement_contractors"),
+        .default("nyc_dob_contractors_and_trades"),
       borough: z.string().optional(),
       limit: z.number().int().min(1).max(100).default(15),
+      offset: z.number().int().min(0).optional(),
     }),
     async run(ctx, input) {
       const source =
@@ -2817,6 +2821,7 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
         : undefined;
       const pulled = await pullSource(source, undefined, {
         limit: input.limit,
+        offset: input.offset ?? 0,
         extraWhere,
       });
       const existing = (await ctx.ws.listCustomers()) as Array<{

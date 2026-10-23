@@ -2195,13 +2195,17 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
             schema: z.object({
               preset: z
                 .enum([
+                  "nyc_dob_contractors_and_trades",
+                  "nyc_bic_commercial_haulers",
+                  "nyc_dob_permit_issuances",
                   "nyc_home_improvement_contractors",
                   "nyc_auto_and_garages",
                   "nyc_b2b_and_specialty_dealers",
                 ])
-                .default("nyc_home_improvement_contractors"),
+                .default("nyc_dob_contractors_and_trades"),
               borough: z.string().optional(),
               limit: z.number().int().min(1).max(100).default(15),
+              offset: z.number().int().min(0).optional(),
             }),
           },
         },
@@ -2210,7 +2214,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     responses: {
       200: {
         description:
-          "Pulled non-POS SMB leads from public registries, deduplicated via SMB match key, recorded signals, and executed lead play",
+          "Pulled non-POS SMB leads from public registries, deduplicated via SMB match key, created owner contacts, recorded signals, and executed lead play",
         content: {
           "application/json": {
             schema: z.object({
@@ -2218,6 +2222,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
               pulledCount: z.number(),
               createdCount: z.number(),
               updatedCount: z.number(),
+              nextOffset: z.number(),
               leads: z.array(z.record(z.string(), z.unknown())),
             }),
           },
@@ -2232,12 +2237,33 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     const stub = getWorkspaceStub(c.env, organizationId);
     const source =
       PRESET_NON_POS_SMB_SOURCES[input.preset as NonPosSmbPresetId];
+    const cursorKind = `lead_cursor:${input.preset}`;
+    let offset = input.offset;
+    if (offset === undefined) {
+      const cursorRows = await stub.memoryRecall({
+        entityType: "workspace",
+        entityId: organizationId,
+        kind: cursorKind,
+        limit: 1,
+      });
+      const stored = Number(cursorRows[0]?.fact ?? 0);
+      offset = Number.isFinite(stored) && stored >= 0 ? stored : 0;
+    }
+
     const extraWhere = input.borough
       ? `upper(address_borough)=upper('${input.borough.replace(/'/g, "")}')`
       : undefined;
     const pulled = await pullSource(source, undefined, {
       limit: input.limit,
+      offset,
       extraWhere,
+    });
+    const nextOffset = offset + pulled.candidates.length;
+    await stub.memoryRemember({
+      entityType: "workspace",
+      entityId: organizationId,
+      kind: cursorKind,
+      fact: String(nextOffset),
     });
 
     const existing = await stub.listCustomers();
@@ -2271,6 +2297,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
 
       const customer = matched
         ? ((await stub.updateCustomer(matched.id, {
+            domain: cand.domain ?? matched.domain,
             address: cand.address ?? matched.address,
             phone: mk.phoneE164 ?? cand.phone ?? matched.phone,
             vertical: cand.vertical ?? matched.vertical,
@@ -2298,19 +2325,48 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
         if (mk.matchKey) byMatchKey.set(mk.matchKey, customer);
       }
 
+      if (cand.email) {
+        await stub.upsertContact({
+          customerId: customer.id,
+          type: cand.ownerName ? "named_person" : "business_channel",
+          role: cand.ownerName ? "owner" : null,
+          channel: "email",
+          value: cand.email,
+          label: cand.ownerName ?? customer.name,
+          status: "verified",
+          confidence: "high",
+          source: source.name,
+          evidenceUri: cand.evidenceUri ?? null,
+        });
+      }
+      if (mk.phoneE164 ?? cand.phone) {
+        await stub.upsertContact({
+          customerId: customer.id,
+          type: cand.ownerName ? "named_person" : "business_channel",
+          role: cand.ownerName ? "owner" : null,
+          channel: "phone",
+          value: (mk.phoneE164 ?? cand.phone)!,
+          label: cand.ownerName ?? customer.name,
+          status: "verified",
+          confidence: "high",
+          source: source.name,
+          evidenceUri: cand.evidenceUri ?? null,
+        });
+      }
+
       const signalObj: MerchantSignal = {
         id: `sig_${cand.externalId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 48)}`,
         merchantId: customer.id,
-        type: "new_license",
+        type: cand.signal || source.signal || "new_license",
         observedAt: cand.signalDate
           ? new Date(cand.signalDate).toISOString()
           : new Date().toISOString(),
         source: source.name,
         evidenceUrl:
           cand.evidenceUri ??
-          "https://data.cityofnewyork.us/resource/w7w3-xahh",
+          "https://data.cityofnewyork.us/resource/t8hj-ruu2",
         strength: 85,
-        summary: `Active NYC ${cand.vertical ?? "SMB"} license (${cand.externalId})`,
+        summary: `Active NYC ${cand.vertical ?? "SMB"} license${cand.ownerName ? ` (Principal: ${cand.ownerName})` : ""} (${cand.externalId})`,
       };
       await stub.memoryRemember({
         entityType: "customer",
@@ -2332,6 +2388,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
           ownerId: customer.ownerId,
         },
         signals: [signalObj],
+        contactEmail: cand.email ?? null,
         actorUserId: c.var.workspaceIdentity.id,
       });
 
@@ -2345,6 +2402,9 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
       leads.push({
         customerId: customer.id,
         name: customer.name,
+        ownerName: cand.ownerName ?? null,
+        email: cand.email ?? null,
+        domain: customer.domain ?? null,
         vertical: customer.vertical,
         neighborhood: customer.neighborhood,
         address: customer.address,
@@ -2361,6 +2421,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
       pulledCount: pulled.candidates.length,
       createdCount,
       updatedCount,
+      nextOffset,
       leads,
     });
   });
