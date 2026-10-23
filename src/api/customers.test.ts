@@ -1115,5 +1115,53 @@ describe("customer sales fields (readiness/fit)", () => {
     expect(gateAfterBody.result).toBe("block");
     expect(gateAfterBody.reasons).toContain("MERCHANT_DO_NOT_CONTACT");
     expect(gateAfterBody.reasons).toContain("CONTACT_DO_NOT_EMAIL");
+
+    // 6. hard_bounce suppresses only the bounced email, leaving phone/visit channels open on a fresh customer
+    const bounceCustRes = await fetch(
+      `/workspaces/${organizationId}/customers`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "MacDougal Espresso LLC",
+          vertical: "cafe",
+        }),
+      },
+      token
+    );
+    const bounceCustBody = (await bounceCustRes.json()) as {
+      id?: string;
+      customer?: { id?: string };
+    };
+    const bounceCustId = (bounceCustBody.customer?.id ?? bounceCustBody.id)!;
+    const bounceReply = await fetch(
+      `/workspaces/${organizationId}/customers/${bounceCustId}/reply-ingest`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          subject: "Undeliverable",
+          body: "550 5.1.1 User unknown",
+          fromEmail: "dead@macdougal.example.com",
+        }),
+      },
+      token
+    );
+    expect(bounceReply.status).toBe(200);
+    const bounceReplyJson = (await bounceReply.json()) as {
+      enrollment: { status: string; endReason: string };
+    };
+    expect(bounceReplyJson.enrollment.status).toBe("ended");
+    expect(bounceReplyJson.enrollment.endReason).toBe("bounced");
+
+    const callGate = await fetch(
+      `/workspaces/${organizationId}/customers/${bounceCustId}/send-gate`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          channel: "call",
+        }),
+      },
+      token
+    );
+    expect(((await callGate.json()) as { result: string }).result).toBe("pass");
   });
 });

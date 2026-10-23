@@ -163,6 +163,21 @@ describe("Unify-parity Reply Classifier, OOO/Bounce Kill-Switch, Statement Check
     expect(
       classifyInboundReply("Update", "My new email is chef@bistro.com").category
     ).toBe("updated_contact_info");
+    expect(classifyInboundReply("Spam", "Fuck off").category).toBe("nsfw");
+
+    // 5. soft_bounce and automated keep the enrollment active without opening a reply task
+    const autoOutcome = applyInboundReplyOutcome({
+      enrollment: baseEnrollment,
+      contactPermissions: { emailStatus: "valid" },
+      classified: classifyInboundReply(
+        "Support",
+        "Thank you for contacting us, a ticket has been created."
+      ),
+      existingTasks: [],
+      nowIso: NOW,
+    });
+    expect(autoOutcome.enrollment.status).toBe("active");
+    expect(autoOutcome.tasks).toEqual([]);
   });
 
   it("creates statement-received checklist and computes weekly sales funnel excluding automated OOO/bounces (PILE-505 / PILE-506)", () => {
