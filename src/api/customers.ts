@@ -2,6 +2,11 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 
+import {
+  type NonPosSmbPresetId,
+  PRESET_NON_POS_SMB_SOURCES,
+  pullSource,
+} from "../agents/collectors.js";
 import { drainDomainEvents } from "../agents/pipeline-events.js";
 import { createD1 } from "../global/db.js";
 import { VortexError } from "../platform/errors.js";
@@ -2173,6 +2178,190 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
       generatedAt: brief.generatedAt,
       totalCandidates: brief.totalCandidates,
       items: brief.items as unknown as Array<Record<string, unknown>>,
+    });
+  });
+
+  // Autonomous Non-POS SMB Lead Pull, Dedup, Signal Record & Play Runner
+  const pullLeadsRoute = createRoute({
+    method: "post",
+    path: "/workspaces/{organizationId}/customers/pull-leads",
+    tags: ["customers"],
+    middleware: [rls("customer:edit", "workspace:write")],
+    request: {
+      params: z.object({ organizationId: z.string() }),
+      body: {
+        content: {
+          "application/json": {
+            schema: z.object({
+              preset: z
+                .enum([
+                  "nyc_home_improvement_contractors",
+                  "nyc_auto_and_garages",
+                  "nyc_b2b_and_specialty_dealers",
+                ])
+                .default("nyc_home_improvement_contractors"),
+              borough: z.string().optional(),
+              limit: z.number().int().min(1).max(100).default(15),
+            }),
+          },
+        },
+      },
+    },
+    responses: {
+      200: {
+        description:
+          "Pulled non-POS SMB leads from public registries, deduplicated via SMB match key, recorded signals, and executed lead play",
+        content: {
+          "application/json": {
+            schema: z.object({
+              sourceName: z.string(),
+              pulledCount: z.number(),
+              createdCount: z.number(),
+              updatedCount: z.number(),
+              leads: z.array(z.record(z.string(), z.unknown())),
+            }),
+          },
+        },
+      },
+    },
+  });
+
+  app.openapi(pullLeadsRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const source =
+      PRESET_NON_POS_SMB_SOURCES[input.preset as NonPosSmbPresetId];
+    const extraWhere = input.borough
+      ? `upper(address_borough)=upper('${input.borough.replace(/'/g, "")}')`
+      : undefined;
+    const pulled = await pullSource(source, undefined, {
+      limit: input.limit,
+      extraWhere,
+    });
+
+    const existing = await stub.listCustomers();
+    const byMatchKey = new Map<string, (typeof existing)[number]>();
+    const byExternalId = new Map<string, (typeof existing)[number]>();
+    for (const row of existing) {
+      if (row.externalId) byExternalId.set(row.externalId, row);
+      const mk = computeSmbMatchKey({
+        name: row.name,
+        address: row.address,
+        phone: row.phone,
+        domain: row.domain,
+      });
+      if (mk.matchKey) byMatchKey.set(mk.matchKey, row);
+    }
+
+    let createdCount = 0;
+    let updatedCount = 0;
+    const leads: Array<Record<string, unknown>> = [];
+
+    for (const cand of pulled.candidates) {
+      const mk = computeSmbMatchKey({
+        name: cand.name,
+        address: cand.address,
+        phone: cand.phone,
+        domain: cand.domain,
+      });
+      const matched =
+        byExternalId.get(cand.externalId) ??
+        (mk.matchKey ? byMatchKey.get(mk.matchKey) : undefined);
+
+      const customer = matched
+        ? ((await stub.updateCustomer(matched.id, {
+            address: cand.address ?? matched.address,
+            phone: mk.phoneE164 ?? cand.phone ?? matched.phone,
+            vertical: cand.vertical ?? matched.vertical,
+            neighborhood: cand.neighborhood ?? matched.neighborhood,
+            evidenceUri: cand.evidenceUri ?? matched.evidenceUri,
+            source: source.name,
+          })) ?? matched)
+        : await stub.createCustomer({
+            name: cand.name,
+            externalId: cand.externalId,
+            domain: cand.domain ?? null,
+            address: cand.address ?? null,
+            phone: mk.phoneE164 ?? cand.phone ?? null,
+            vertical: cand.vertical ?? null,
+            neighborhood: cand.neighborhood ?? null,
+            evidenceUri: cand.evidenceUri ?? null,
+            source: source.name,
+          });
+
+      if (matched) {
+        updatedCount += 1;
+      } else {
+        createdCount += 1;
+        byExternalId.set(cand.externalId, customer);
+        if (mk.matchKey) byMatchKey.set(mk.matchKey, customer);
+      }
+
+      const signalObj: MerchantSignal = {
+        id: `sig_${cand.externalId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 48)}`,
+        merchantId: customer.id,
+        type: "new_license",
+        observedAt: cand.signalDate
+          ? new Date(cand.signalDate).toISOString()
+          : new Date().toISOString(),
+        source: source.name,
+        evidenceUrl:
+          cand.evidenceUri ??
+          "https://data.cityofnewyork.us/resource/w7w3-xahh",
+        strength: 85,
+        summary: `Active NYC ${cand.vertical ?? "SMB"} license (${cand.externalId})`,
+      };
+      await stub.memoryRemember({
+        entityType: "customer",
+        entityId: customer.id,
+        kind: `signal:${signalObj.type}:${signalObj.id}`,
+        fact: JSON.stringify(signalObj),
+      });
+
+      const receipt = runMerchantLeadPlay({
+        merchant: {
+          id: customer.id,
+          name: customer.name,
+          domain: customer.domain,
+          vertical: customer.vertical,
+          neighborhood: customer.neighborhood,
+          address: customer.address,
+          phone: customer.phone,
+          processor: customer.processor,
+          ownerId: customer.ownerId,
+        },
+        signals: [signalObj],
+        actorUserId: c.var.workspaceIdentity.id,
+      });
+
+      await stub.updateCustomer(customer.id, {
+        priorityScore: receipt.breakdown.priorityScore,
+        fitScore: receipt.breakdown.fitScore,
+        fitStatus: receipt.breakdown.fitRating,
+        signal: receipt.breakdown.whyNow,
+      });
+
+      leads.push({
+        customerId: customer.id,
+        name: customer.name,
+        vertical: customer.vertical,
+        neighborhood: customer.neighborhood,
+        address: customer.address,
+        phone: customer.phone,
+        priorityScore: receipt.breakdown.priorityScore,
+        fitScore: receipt.breakdown.fitScore,
+        whyNow: receipt.breakdown.whyNow,
+        playStatus: receipt.status,
+      });
+    }
+
+    return c.json({
+      sourceName: source.name,
+      pulledCount: pulled.candidates.length,
+      createdCount,
+      updatedCount,
+      leads,
     });
   });
 }

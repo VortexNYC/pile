@@ -569,10 +569,23 @@ export function applyFieldWriteWithProvenance(
 
 const POS_FINGERPRINTS: Array<{ pos: string; re: RegExp }> = [
   { pos: "toast", re: /toasttab\.com|toast-pos/i },
-  { pos: "square", re: /squareup\.com|square\.site|sq-payment/i },
   { pos: "clover", re: /clover\.com\/online-ordering|clover-pos/i },
   { pos: "spoton", re: /spoton\.com|order\.spoton/i },
-  { pos: "stripe", re: /js\.stripe\.com|checkout\.stripe\.com/i },
+  { pos: "quickbooks", re: /intuit\.com|quickbooks/i },
+  { pos: "jobber", re: /getjobber\.com|clienthub\.getjobber/i },
+  { pos: "housecall_pro", re: /housecallpro\.com/i },
+  { pos: "servicetitan", re: /servicetitan\.com/i },
+  { pos: "lawpay", re: /lawpay\.com|affinipay\.com/i },
+  { pos: "freshbooks", re: /freshbooks\.com/i },
+  { pos: "bill_com", re: /(?:^|\/\/|\.)bill\.com\b/i },
+  { pos: "authorize_net", re: /authorize\.net/i },
+  { pos: "mindbody", re: /mindbodyonline\.com/i },
+  { pos: "janeapp", re: /(?:^|\/\/|\.)jane\.app\b/i },
+  { pos: "square", re: /squareup\.com|square\.site|sq-payment/i },
+  {
+    pos: "stripe",
+    re: /js\.stripe\.com|checkout\.stripe\.com|invoice\.stripe\.com/i,
+  },
 ];
 
 /** U-057 (PILE-532): fingerprint POS / payment stack from merchant HTML. */
@@ -595,7 +608,7 @@ export function detectPosTechnographics(input: {
           source: "website_technographics",
           evidenceUrl: input.pageUrl,
           strength: 85,
-          summary: `Detected ${fp.pos.toUpperCase()} ordering/payment widget on website`,
+          summary: `Detected ${fp.pos.toUpperCase()} payment/billing stack on website`,
         },
       };
     }
@@ -673,12 +686,49 @@ export const DEFAULT_SIGNAL_RULES: SignalRuleConfig[] = [
 
 export const DEFAULT_ICP_RULES: IcpRule[] = [
   {
-    id: "icp-vertical-hospitality",
+    id: "icp-vertical-non-pos-smb",
     motion: "smb_default",
     field: "vertical",
     op: "in",
-    value: ["restaurant", "bar", "cafe", "bakery", "hospitality", "retail"],
-    weight: 20,
+    value: [
+      "home improvement contractor",
+      "contractor",
+      "hvac",
+      "plumbing",
+      "electrical",
+      "auto_repair",
+      "garage & parking lot",
+      "secondhand dealer - auto",
+      "tow truck company",
+      "car wash",
+      "electronic & home appliance service dealer",
+      "dealer in products for the disabled",
+      "employment agency",
+      "self-storage facility",
+      "secondhand dealer - general",
+      "wholesale",
+      "printing",
+      "professional_services",
+      "legal",
+      "accounting",
+      "medical",
+      "dental",
+      "veterinary",
+      "med_spa",
+      "moving",
+      "cleaning",
+      "b2b_services",
+      "retail",
+    ],
+    weight: 25,
+  },
+  {
+    id: "icp-vertical-pos-bound-restaurant-penalty",
+    motion: "smb_default",
+    field: "vertical",
+    op: "in",
+    value: ["restaurant", "bar", "cafe", "nightclub"],
+    weight: -40,
   },
   {
     id: "icp-has-address",
