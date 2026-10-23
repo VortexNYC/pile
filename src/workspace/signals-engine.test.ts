@@ -252,6 +252,14 @@ describe("Unify-parity Signals, Ranker v2, Provenance & Technographics (PILE-507
       DEFAULT_SIGNAL_RULES.find((r) => r.type === "negative_closure")?.polarity
     ).toBe("negative");
     expect(
+      detectPosTechnographics({
+        merchantId: "m-qb",
+        pageUrl: "https://contractor.example.com",
+        html: '<a href="https://connect.intuit.com/pay/inv123">Pay via QuickBooks</a>',
+        observedAt: NOW,
+      }).posGuess
+    ).toBe("quickbooks");
+    expect(
       parseCustomerSignalFacts([
         {
           kind: "signal:new_license:sig_1",

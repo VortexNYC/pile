@@ -21448,6 +21448,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/customers/pull-leads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create customer pull lead */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /**
+                         * @default nyc_home_improvement_contractors
+                         * @enum {string}
+                         */
+                        preset?: "nyc_home_improvement_contractors" | "nyc_auto_and_garages" | "nyc_b2b_and_specialty_dealers";
+                        borough?: string;
+                        /** @default 15 */
+                        limit?: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Pulled non-POS SMB leads from public registries, deduplicated via SMB match key, recorded signals, and executed lead play */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            sourceName: string;
+                            pulledCount: number;
+                            createdCount: number;
+                            updatedCount: number;
+                            leads: {
+                                [key: string]: unknown;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/deals": {
         parameters: {
             query?: never;

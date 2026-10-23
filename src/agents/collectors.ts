@@ -17,11 +17,81 @@ export interface MerchantCandidate {
   externalId: string;
   domain?: string | null;
   address?: string | null;
+  phone?: string | null;
+  neighborhood?: string | null;
   vertical?: string | null;
   signal: string;
   signalDate?: string | null;
   evidenceUri?: string | null;
 }
+
+export type NonPosSmbPresetId =
+  | "nyc_home_improvement_contractors"
+  | "nyc_auto_and_garages"
+  | "nyc_b2b_and_specialty_dealers";
+
+export const PRESET_NON_POS_SMB_SOURCES: Record<
+  NonPosSmbPresetId,
+  MerchantSourceRow
+> = {
+  nyc_home_improvement_contractors: {
+    id: "preset_nyc_hic",
+    name: "NYC DCWP Active Home Improvement Contractors",
+    kind: "socrata",
+    config: JSON.stringify({
+      domain: "data.cityofnewyork.us",
+      dataset: "w7w3-xahh",
+      name_field: "business_name",
+      id_field: "license_nbr",
+      vertical_field: "business_category",
+      phone_field: "contact_phone",
+      borough_field: "address_borough",
+      where:
+        "license_status='Active' AND contact_phone IS NOT NULL AND address_street_name IS NOT NULL AND business_category='Home Improvement Contractor'",
+    }),
+    cursorField: "license_creation_date",
+    cursorValue: null,
+    signal: "new_license",
+  },
+  nyc_auto_and_garages: {
+    id: "preset_nyc_auto",
+    name: "NYC DCWP Active Auto Dealers, Garages, Tow & Car Wash",
+    kind: "socrata",
+    config: JSON.stringify({
+      domain: "data.cityofnewyork.us",
+      dataset: "w7w3-xahh",
+      name_field: "business_name",
+      id_field: "license_nbr",
+      vertical_field: "business_category",
+      phone_field: "contact_phone",
+      borough_field: "address_borough",
+      where:
+        "license_status='Active' AND contact_phone IS NOT NULL AND address_street_name IS NOT NULL AND business_category IN ('Garage & Parking Lot', 'Secondhand Dealer - Auto', 'Tow Truck Company', 'Car Wash')",
+    }),
+    cursorField: "license_creation_date",
+    cursorValue: null,
+    signal: "new_license",
+  },
+  nyc_b2b_and_specialty_dealers: {
+    id: "preset_nyc_b2b",
+    name: "NYC DCWP Active B2B, Medical Equipment, Appliance Service, Staffing & Storage",
+    kind: "socrata",
+    config: JSON.stringify({
+      domain: "data.cityofnewyork.us",
+      dataset: "w7w3-xahh",
+      name_field: "business_name",
+      id_field: "license_nbr",
+      vertical_field: "business_category",
+      phone_field: "contact_phone",
+      borough_field: "address_borough",
+      where:
+        "license_status='Active' AND contact_phone IS NOT NULL AND address_street_name IS NOT NULL AND business_category IN ('Electronic & Home Appliance Service Dealer', 'Dealer In Products For The Disabled', 'Employment Agency', 'Self-Storage Facility', 'Secondhand Dealer - General')",
+    }),
+    cursorField: "license_creation_date",
+    cursorValue: null,
+    signal: "new_license",
+  },
+};
 
 const SIGNAL_WEIGHT: Record<string, number> = {
   license_pending: 1.0,
@@ -54,21 +124,32 @@ function str(v: unknown): string | null {
 }
 
 async function pullSocrata(
-  source: MerchantSourceRow
+  source: MerchantSourceRow,
+  options?: { limit?: number; extraWhere?: string }
 ): Promise<{ candidates: MerchantCandidate[]; newCursor: string | null }> {
   const c = cfg(source);
   const domain = str(c.domain) ?? "data.ny.gov";
   const dataset = str(c.dataset);
   if (!dataset) throw new Error("socrata source missing dataset");
-  const params = new URLSearchParams({ $limit: "500" });
+  const rawLimit = options?.limit ?? Number(c.limit ?? 500);
+  const limit = Math.max(
+    1,
+    Math.min(500, Number.isFinite(rawLimit) ? rawLimit : 500)
+  );
+  const params = new URLSearchParams({ $limit: String(limit) });
+  const whereClauses: string[] = [];
+  if (str(c.where)) whereClauses.push(`(${str(c.where)})`);
+  if (options?.extraWhere) whereClauses.push(`(${options.extraWhere})`);
   if (source.cursorField) {
-    params.set(
-      "$where",
+    whereClauses.push(
       source.cursorValue
         ? `${source.cursorField} > '${source.cursorValue}'`
         : `${source.cursorField} IS NOT NULL`
     );
     params.set("$order", `${source.cursorField} DESC`);
+  }
+  if (whereClauses.length > 0) {
+    params.set("$where", whereClauses.join(" AND "));
   }
   const res = await fetch(
     `https://${domain}/resource/${dataset}.json?${params}`
@@ -77,26 +158,38 @@ async function pullSocrata(
   const rows = (await res.json()) as Record<string, unknown>[];
   const nameField = str(c.name_field) ?? "name";
   const idField = str(c.id_field) ?? nameField;
+  const phoneField = str(c.phone_field) ?? "contact_phone";
+  const boroughField = str(c.borough_field) ?? "address_borough";
   let maxDate: string | null = null;
   const candidates = rows.map((r) => {
     const name = str(r[nameField]);
     const id = str(r[idField]) ?? name;
     const date = source.cursorField ? str(r[source.cursorField]) : null;
     if (date && (!maxDate || date > maxDate)) maxDate = date;
+    const streetLine = [str(r.address_building), str(r.address_street_name)]
+      .filter(Boolean)
+      .join(" ");
+    const composedAddress = [
+      streetLine || str(r.actual_address_of_premises),
+      str(r.address_city) ?? str(r.city),
+      str(r.address_state) ?? str(r.state_name),
+      str(r.address_zip),
+    ]
+      .filter(Boolean)
+      .join(", ");
     return {
       name: name ?? "unknown",
       externalId: `socrata:${dataset}:${id}`,
       domain: str(r[str(c.domain_field) ?? "website"]),
       address:
-        str(r[str(c.address_field) ?? "address"]) ??
-        ([str(r.actual_address_of_premises), str(r.city), str(r.state_name)]
-          .filter(Boolean)
-          .join(", ") ||
-          null),
+        str(r[str(c.address_field) ?? "address"]) ?? (composedAddress || null),
+      phone: str(r[phoneField]) ?? str(r.phone) ?? str(r.business_phone_number),
+      neighborhood:
+        str(r[boroughField]) ?? str(r.borough) ?? str(r.address_city),
       vertical: str(r[str(c.vertical_field) ?? "description"]),
       signal: source.signal,
       signalDate: date,
-      evidenceUri: `https://${domain}/resource/${dataset}.json?${idField}=${id}`,
+      evidenceUri: `https://${domain}/resource/${dataset}.json?${idField}=${encodeURIComponent(String(id ?? ""))}`,
     };
   });
   return { candidates, newCursor: maxDate };
@@ -224,11 +317,12 @@ async function pullSam(
 
 export async function pullSource(
   source: MerchantSourceRow,
-  env?: Record<string, string | undefined>
+  env?: Record<string, string | undefined>,
+  options?: { limit?: number; extraWhere?: string }
 ): Promise<{ candidates: MerchantCandidate[]; newCursor: string | null }> {
   switch (source.kind) {
     case "socrata":
-      return pullSocrata(source);
+      return pullSocrata(source, options);
     case "usaspending":
       return pullUsaspending(source);
     case "opencorporates":

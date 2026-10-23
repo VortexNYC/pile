@@ -701,5 +701,6 @@ describe("workspace lane tools", () => {
     expect(wsTool("customer_morning_brief").name).toBe(
       "customer_morning_brief"
     );
+    expect(wsTool("customer_pull_leads").name).toBe("customer_pull_leads");
   });
 });

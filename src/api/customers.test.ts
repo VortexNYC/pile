@@ -1122,8 +1122,8 @@ describe("customer sales fields (readiness/fit)", () => {
       {
         method: "POST",
         body: JSON.stringify({
-          name: "MacDougal Espresso LLC",
-          vertical: "cafe",
+          name: "MacDougal Contracting LLC",
+          vertical: "contractor",
         }),
       },
       token
@@ -1216,5 +1216,6 @@ describe("customer sales fields (readiness/fit)", () => {
     };
     expect(briefBody.items.length).toBeGreaterThanOrEqual(1);
     expect(briefBody.items[0]?.whyNow).toContain("Why now:");
+    expect(typeof briefBody.items[0]?.merchantId).toBe("string");
   });
 });

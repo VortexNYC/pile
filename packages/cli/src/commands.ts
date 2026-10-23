@@ -8892,6 +8892,31 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "customers pull leads create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/pull-leads",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "preset",
+        flag: "preset",
+      },
+      {
+        name: "borough",
+        flag: "borough",
+      },
+      {
+        name: "limit",
+        flag: "limit",
+      },
+    ],
+  },
   "deals list": {
     method: "GET",
     path: "/workspaces/{organizationId}/deals",

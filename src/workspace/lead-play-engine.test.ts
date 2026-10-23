@@ -107,8 +107,8 @@ describe("lead-play-engine (PILE-514..527, PILE-549..563)", () => {
     const receipt = runMerchantLeadPlay({
       merchant: {
         id: "m-1",
-        name: "Bleecker Osteria",
-        vertical: "restaurant",
+        name: "Metro HVAC & Contracting",
+        vertical: "home improvement contractor",
         address: "123 Bleecker St, New York, NY",
         phone: "+12125550101",
       },

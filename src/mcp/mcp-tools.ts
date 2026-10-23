@@ -13919,6 +13919,46 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdCustomersPullleads",
+    "description": "Create customer pull lead (POST /workspaces/{organizationId}/customers/pull-leads) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: preset, borough, limit.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers/pull-leads",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "preset": {
+              "type": "string",
+              "enum": [
+                "nyc_home_improvement_contractors",
+                "nyc_auto_and_garages",
+                "nyc_b2b_and_specialty_dealers"
+              ],
+              "default": "nyc_home_improvement_contractors"
+            },
+            "borough": {
+              "type": "string"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 15
+            }
+          }
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdCustomersPurge",
     "description": "Create customer purge (POST /workspaces/{organizationId}/customers/purge) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: sourcedBy, sourceSession, dryRun.",
     "method": "POST",

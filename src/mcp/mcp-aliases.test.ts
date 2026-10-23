@@ -34,5 +34,8 @@ describe("MCP tool aliases", () => {
     expect(MCP_TOOL_ALIASES.customer_morning_brief).toBe(
       "postWorkspacesOrganizationIdCustomersMorningbrief"
     );
+    expect(MCP_TOOL_ALIASES.customer_pull_leads).toBe(
+      "postWorkspacesOrganizationIdCustomersPullleads"
+    );
   });
 });

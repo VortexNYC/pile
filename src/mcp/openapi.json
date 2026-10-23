@@ -44338,6 +44338,95 @@
         "summary": "Create customer morning brief"
       }
     },
+    "/workspaces/{organizationId}/customers/pull-leads": {
+      "post": {
+        "tags": [
+          "customers"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "preset": {
+                    "type": "string",
+                    "enum": [
+                      "nyc_home_improvement_contractors",
+                      "nyc_auto_and_garages",
+                      "nyc_b2b_and_specialty_dealers"
+                    ],
+                    "default": "nyc_home_improvement_contractors"
+                  },
+                  "borough": {
+                    "type": "string"
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100,
+                    "default": 15
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Pulled non-POS SMB leads from public registries, deduplicated via SMB match key, recorded signals, and executed lead play",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sourceName": {
+                      "type": "string"
+                    },
+                    "pulledCount": {
+                      "type": "number"
+                    },
+                    "createdCount": {
+                      "type": "number"
+                    },
+                    "updatedCount": {
+                      "type": "number"
+                    },
+                    "leads": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "nullable": true
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "sourceName",
+                    "pulledCount",
+                    "createdCount",
+                    "updatedCount",
+                    "leads"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create customer pull lead"
+      }
+    },
     "/workspaces/{organizationId}/deals": {
       "get": {
         "tags": [
