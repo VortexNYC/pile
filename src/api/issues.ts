@@ -1735,6 +1735,11 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       triage?.outcome === "matched"
         ? ((await stub.getIssue(issue.id)) ?? issue)
         : issue;
+    if (responseIssue.ownerAgent) {
+      getExecutionCtx(c)?.waitUntil(
+        drainDomainEvents(c.env, stub, organizationId, getExecutionCtx(c))
+      );
+    }
     return c.json({ ...responseIssue, possibleDuplicates }, 201);
   });
 

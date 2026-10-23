@@ -7012,6 +7012,24 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         actorId
       );
     }
+    if (
+      !issue.parentId &&
+      issue.ownerAgent &&
+      !issue.isDraft &&
+      (issue.status === "todo" || issue.status === "in_progress")
+    ) {
+      await this.emitDomainEvent(
+        "substep.actionable",
+        {
+          issueId: issue.id,
+          parentId: issue.id,
+          stepKey: issue.stepKey,
+          ownerAgent: issue.ownerAgent,
+          required: issue.required,
+        },
+        `actionable:${issue.id}`
+      );
+    }
     return { issue, possibleDuplicates };
   }
 
@@ -8090,22 +8108,24 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       timer.mark("automation");
     }
 
-    // PILE-413 — a materialized sub-step becoming actionable (created todo,
-    // or moved to an actionable status / assigned an owner) emits the
-    // dispatch event; the dedupe key keeps re-emits free.
+    // PILE-413 — a materialized sub-step or top-level ownerAgent task becoming
+    // actionable (created todo, or moved to an actionable status / assigned an
+    // owner) emits the dispatch event; the dedupe key keeps re-emits free.
     if (
-      issue.parentId &&
       issue.ownerAgent &&
+      !issue.isDraft &&
       (issue.status === "todo" || issue.status === "in_progress")
     ) {
       const becameActionable =
-        old.status !== issue.status || old.ownerAgent !== issue.ownerAgent;
+        old.status !== issue.status ||
+        old.ownerAgent !== issue.ownerAgent ||
+        old.isDraft !== issue.isDraft;
       if (becameActionable) {
         await this.emitDomainEvent(
           "substep.actionable",
           {
             issueId: issue.id,
-            parentId: issue.parentId,
+            parentId: issue.parentId ?? issue.id,
             stepKey: issue.stepKey,
             ownerAgent: issue.ownerAgent,
             required: issue.required,

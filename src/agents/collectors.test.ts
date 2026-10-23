@@ -1,5 +1,7 @@
+import { Effect } from "effect";
 import { describe, expect, it, vi } from "vitest";
 
+import { CollectorSourceError, pullSourceEffect } from "./collectors-effect.js";
 import {
   PRESET_NON_POS_SMB_SOURCES,
   pullSource,
@@ -95,6 +97,57 @@ describe("scoreCandidate", () => {
       vertical: "GENERAL CONTRACTOR",
       address: "92 SEQUOIA DRIVE, CORAM, NY, 11727",
     });
+    vi.unstubAllGlobals();
+  });
+
+  it("pullSourceEffect retries transient Socrata 503 failure with Effect.retry and surfaces CollectorSourceError on unsupported kind", async () => {
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        calls += 1;
+        if (calls === 1) {
+          return new Response("busy", { status: 503 });
+        }
+        return new Response(
+          JSON.stringify([
+            {
+              license_sl_no: "100999",
+              license_type: "MASTER PLUMBER",
+              business_name: "ACME PLUMBING LLC",
+              business_phone_number: "2125550100",
+              business_email: "ops@acmeplumbing.nyc",
+            },
+          ]),
+          { status: 200 }
+        );
+      })
+    );
+    const res = await Effect.runPromise(
+      pullSourceEffect(
+        PRESET_NON_POS_SMB_SOURCES.nyc_dob_contractors_and_trades,
+        undefined,
+        { limit: 1 }
+      )
+    );
+    expect(calls).toBe(2);
+    expect(res.candidates[0]?.domain).toBe("acmeplumbing.nyc");
+
+    const bad = await Effect.runPromise(
+      Effect.flip(
+        pullSourceEffect({
+          id: "bad-1",
+          name: "bad",
+          kind: "unknown_kind",
+          config: "{}",
+          cursorField: null,
+          cursorValue: null,
+          signal: "new_license",
+        })
+      )
+    );
+    expect(bad).toBeInstanceOf(CollectorSourceError);
+    expect(bad._tag).toBe("CollectorSourceError");
     vi.unstubAllGlobals();
   });
 });

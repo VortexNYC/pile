@@ -65,6 +65,7 @@
     "better-auth": "^1.7.10",
     "chat": "^4.42.0",
     "drizzle-orm": "^0.45.4",
+    "effect": "4.0.5",
     "emoji-regex": "11.0.0",
     "hono": "^4.13.12",
     "jose": "^6.2.12",

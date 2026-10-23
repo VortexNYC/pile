@@ -105,9 +105,14 @@ export function registerLaneMcpRoutes(app: OpenAPIHono<AppContext>) {
       // Profile allowlist — the agent type's `tools` field narrows the
       // policy by denying every registered tool it doesn't name. Absent or
       // unparseable means "tier governs" (no extra deny).
-      const agentType = session.agentId
+      const directAgentType = session.agentId
         ? await stub.getAgentTypeBySlug(session.agentId)
         : undefined;
+      const agentType =
+        directAgentType ??
+        (!issue.repo && issue.ownerAgent
+          ? await stub.getAgentTypeBySlug(issue.ownerAgent)
+          : undefined);
       let profileDeny: string[] = [];
       if (agentType?.tools) {
         try {
