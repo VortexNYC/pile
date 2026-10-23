@@ -21479,7 +21479,7 @@ export interface paths {
                         /** @default 15 */
                         limit?: number;
                         offset?: number;
-                        /** @default false */
+                        /** @default true */
                         enrichWebsites?: boolean;
                         /** @default false */
                         dispatchDetectiveBatch?: boolean;

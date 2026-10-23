@@ -2814,6 +2814,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       evidenceUri?: string | null;
       posGuess?: string | null;
       posEvidenceUrl?: string | null;
+      dosId?: string | null;
+      dosFilingDate?: string | null;
     }>;
   }) {
     if (input.cursorKind && typeof input.nextOffset === "number") {
@@ -2847,6 +2849,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       ownerName: string | null;
       email: string | null;
       domain: string | null;
+      dosId: string | null;
       processor: string | null;
       vertical: string | null;
       neighborhood: string | null;
@@ -2952,7 +2955,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           cand.evidenceUri ??
           "https://data.cityofnewyork.us/resource/t8hj-ruu2",
         strength: 85,
-        summary: `Active NYC ${cand.vertical ?? "SMB"} license${cand.ownerName ? ` (Principal: ${cand.ownerName})` : ""} (${cand.externalId})`,
+        summary: `Active NYC ${cand.vertical ?? "SMB"} license${cand.ownerName ? ` (Principal: ${cand.ownerName})` : ""}${cand.dosId ? ` [NY DOS #${cand.dosId}]` : ""} (${cand.externalId})`,
       };
       signals.push(signalObj);
       data.memoryRemember(this.db, this.organizationId, {
@@ -3025,6 +3028,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         ownerName: cand.ownerName ?? null,
         email: cand.email ?? null,
         domain: customer.domain ?? null,
+        dosId: cand.dosId ?? null,
         processor: cand.posGuess ?? customer.processor ?? null,
         vertical: customer.vertical,
         neighborhood: customer.neighborhood,

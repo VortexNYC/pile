@@ -44386,7 +44386,7 @@
                   },
                   "enrichWebsites": {
                     "type": "boolean",
-                    "default": false
+                    "default": true
                   },
                   "dispatchDetectiveBatch": {
                     "type": "boolean",

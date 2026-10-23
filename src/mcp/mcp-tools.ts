@@ -13959,7 +13959,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "enrichWebsites": {
               "type": "boolean",
-              "default": false
+              "default": true
             },
             "dispatchDetectiveBatch": {
               "type": "boolean",
