@@ -8919,6 +8919,14 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "offset",
         flag: "offset",
       },
+      {
+        name: "enrichWebsites",
+        flag: "enrich-websites",
+      },
+      {
+        name: "dispatchDetectiveBatch",
+        flag: "dispatch-detective-batch",
+      },
     ],
   },
   "deals list": {

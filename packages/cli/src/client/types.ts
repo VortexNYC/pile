@@ -21479,6 +21479,10 @@ export interface paths {
                         /** @default 15 */
                         limit?: number;
                         offset?: number;
+                        /** @default false */
+                        enrichWebsites?: boolean;
+                        /** @default false */
+                        dispatchDetectiveBatch?: boolean;
                     };
                 };
             };
@@ -21495,6 +21499,7 @@ export interface paths {
                             createdCount: number;
                             updatedCount: number;
                             nextOffset: number;
+                            detectiveBatchIssueId?: string | null;
                             leads: {
                                 [key: string]: unknown;
                             }[];

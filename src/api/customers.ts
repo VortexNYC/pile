@@ -2206,6 +2206,8 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
               borough: z.string().optional(),
               limit: z.number().int().min(1).max(100).default(15),
               offset: z.number().int().min(0).optional(),
+              enrichWebsites: z.boolean().default(false),
+              dispatchDetectiveBatch: z.boolean().default(false),
             }),
           },
         },
@@ -2223,6 +2225,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
               createdCount: z.number(),
               updatedCount: z.number(),
               nextOffset: z.number(),
+              detectiveBatchIssueId: z.string().nullable().optional(),
               leads: z.array(z.record(z.string(), z.unknown())),
             }),
           },
@@ -2261,170 +2264,35 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
       extraWhere,
     });
     const nextOffset = offset + pulled.candidates.length;
-    await stub.memoryRemember({
-      entityType: "workspace",
-      entityId: organizationId,
-      kind: cursorKind,
-      fact: String(nextOffset),
-    });
+    const candidates = input.enrichWebsites
+      ? await (async () => {
+          const { Effect } = await import("effect");
+          const { enrichCandidatesWithEffect } =
+            await import("../agents/collectors-effect.js");
+          return Effect.runPromise(
+            enrichCandidatesWithEffect(pulled.candidates, {
+              concurrency: 6,
+              timeoutMs: 2500,
+            })
+          );
+        })()
+      : pulled.candidates;
 
-    const existing = await stub.listCustomers();
-    const byMatchKey = new Map<string, (typeof existing)[number]>();
-    const byExternalId = new Map<string, (typeof existing)[number]>();
-    for (const row of existing) {
-      if (row.externalId) byExternalId.set(row.externalId, row);
-      const mk = computeSmbMatchKey({
-        name: row.name,
-        address: row.address,
-        phone: row.phone,
-        domain: row.domain,
-      });
-      if (mk.matchKey) byMatchKey.set(mk.matchKey, row);
-    }
-
-    let createdCount = 0;
-    let updatedCount = 0;
-    const leads: Array<Record<string, unknown>> = [];
-
-    for (const cand of pulled.candidates) {
-      const mk = computeSmbMatchKey({
-        name: cand.name,
-        address: cand.address,
-        phone: cand.phone,
-        domain: cand.domain,
-      });
-      const matched =
-        byExternalId.get(cand.externalId) ??
-        (mk.matchKey ? byMatchKey.get(mk.matchKey) : undefined);
-
-      const customer = matched
-        ? ((await stub.updateCustomer(matched.id, {
-            domain: cand.domain ?? matched.domain,
-            address: cand.address ?? matched.address,
-            phone: mk.phoneE164 ?? cand.phone ?? matched.phone,
-            vertical: cand.vertical ?? matched.vertical,
-            neighborhood: cand.neighborhood ?? matched.neighborhood,
-            evidenceUri: cand.evidenceUri ?? matched.evidenceUri,
-            source: source.name,
-          })) ?? matched)
-        : await stub.createCustomer({
-            name: cand.name,
-            externalId: cand.externalId,
-            domain: cand.domain ?? null,
-            address: cand.address ?? null,
-            phone: mk.phoneE164 ?? cand.phone ?? null,
-            vertical: cand.vertical ?? null,
-            neighborhood: cand.neighborhood ?? null,
-            evidenceUri: cand.evidenceUri ?? null,
-            source: source.name,
-          });
-
-      if (matched) {
-        updatedCount += 1;
-      } else {
-        createdCount += 1;
-        byExternalId.set(cand.externalId, customer);
-        if (mk.matchKey) byMatchKey.set(mk.matchKey, customer);
-      }
-
-      if (cand.email) {
-        await stub.upsertContact({
-          customerId: customer.id,
-          type: cand.ownerName ? "named_person" : "business_channel",
-          role: cand.ownerName ? "owner" : null,
-          channel: "email",
-          value: cand.email,
-          label: cand.ownerName ?? customer.name,
-          status: "verified",
-          confidence: "high",
-          source: source.name,
-          evidenceUri: cand.evidenceUri ?? null,
-        });
-      }
-      if (mk.phoneE164 ?? cand.phone) {
-        await stub.upsertContact({
-          customerId: customer.id,
-          type: cand.ownerName ? "named_person" : "business_channel",
-          role: cand.ownerName ? "owner" : null,
-          channel: "phone",
-          value: (mk.phoneE164 ?? cand.phone)!,
-          label: cand.ownerName ?? customer.name,
-          status: "verified",
-          confidence: "high",
-          source: source.name,
-          evidenceUri: cand.evidenceUri ?? null,
-        });
-      }
-
-      const signalObj: MerchantSignal = {
-        id: `sig_${cand.externalId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 48)}`,
-        merchantId: customer.id,
-        type: cand.signal || source.signal || "new_license",
-        observedAt: cand.signalDate
-          ? new Date(cand.signalDate).toISOString()
-          : new Date().toISOString(),
-        source: source.name,
-        evidenceUrl:
-          cand.evidenceUri ??
-          "https://data.cityofnewyork.us/resource/t8hj-ruu2",
-        strength: 85,
-        summary: `Active NYC ${cand.vertical ?? "SMB"} license${cand.ownerName ? ` (Principal: ${cand.ownerName})` : ""} (${cand.externalId})`,
-      };
-      await stub.memoryRemember({
-        entityType: "customer",
-        entityId: customer.id,
-        kind: `signal:${signalObj.type}:${signalObj.id}`,
-        fact: JSON.stringify(signalObj),
-      });
-
-      const receipt = runMerchantLeadPlay({
-        merchant: {
-          id: customer.id,
-          name: customer.name,
-          domain: customer.domain,
-          vertical: customer.vertical,
-          neighborhood: customer.neighborhood,
-          address: customer.address,
-          phone: customer.phone,
-          processor: customer.processor,
-          ownerId: customer.ownerId,
-        },
-        signals: [signalObj],
-        contactEmail: cand.email ?? null,
-        actorUserId: c.var.workspaceIdentity.id,
-      });
-
-      await stub.updateCustomer(customer.id, {
-        priorityScore: receipt.breakdown.priorityScore,
-        fitScore: receipt.breakdown.fitScore,
-        fitStatus: receipt.breakdown.fitRating,
-        signal: receipt.breakdown.whyNow,
-      });
-
-      leads.push({
-        customerId: customer.id,
-        name: customer.name,
-        ownerName: cand.ownerName ?? null,
-        email: cand.email ?? null,
-        domain: customer.domain ?? null,
-        vertical: customer.vertical,
-        neighborhood: customer.neighborhood,
-        address: customer.address,
-        phone: customer.phone,
-        priorityScore: receipt.breakdown.priorityScore,
-        fitScore: receipt.breakdown.fitScore,
-        whyNow: receipt.breakdown.whyNow,
-        playStatus: receipt.status,
-      });
-    }
-
-    return c.json({
+    const batchResult = await stub.ingestPulledLeadsBatch({
       sourceName: source.name,
-      pulledCount: pulled.candidates.length,
-      createdCount,
-      updatedCount,
+      cursorKind,
       nextOffset,
-      leads,
+      actorUserId: c.var.workspaceIdentity.id,
+      dispatchDetectiveBatch: input.dispatchDetectiveBatch,
+      candidates,
     });
+
+    if (batchResult.detectiveBatchIssueId) {
+      getExecutionCtx(c)?.waitUntil(
+        drainDomainEvents(c.env, stub, organizationId, getExecutionCtx(c))
+      );
+    }
+
+    return c.json(batchResult);
   });
 }
