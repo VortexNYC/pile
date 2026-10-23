@@ -13298,6 +13298,97 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdCustomersAudiencequery",
+    "description": "Create customer audience query (POST /workspaces/{organizationId}/customers/audience-query) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: logic, predicates, limit.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers/audience-query",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "logic": {
+              "type": "string",
+              "enum": [
+                "and",
+                "or"
+              ],
+              "default": "and"
+            },
+            "predicates": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "field": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "op": {
+                    "type": "string",
+                    "enum": [
+                      "eq",
+                      "neq",
+                      "in",
+                      "gte",
+                      "lte",
+                      "contains",
+                      "has_signal"
+                    ]
+                  },
+                  "value": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "field",
+                  "op",
+                  "value"
+                ]
+              },
+              "default": []
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          }
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdCustomersDedupkey",
     "description": "Create customer dedup key (POST /workspaces/{organizationId}/customers/dedup-key) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, address, phone, domain (* = required).",
     "method": "POST",
@@ -13447,6 +13538,50 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "required": [
             "body"
           ]
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdCustomersIdRunplay",
+    "description": "Create customer run play (POST /workspaces/{organizationId}/customers/{id}/run-play) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: playName, html, pageUrl, contactEmail, minDraftRankScore, paidRankThreshold.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers/{id}/run-play",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "playName": {
+              "type": "string"
+            },
+            "html": {
+              "type": "string"
+            },
+            "pageUrl": {
+              "type": "string"
+            },
+            "contactEmail": {
+              "type": "string"
+            },
+            "minDraftRankScore": {
+              "type": "number"
+            },
+            "paidRankThreshold": {
+              "type": "number"
+            }
+          }
         }
       },
       "required": [
@@ -13746,6 +13881,36 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "required": [
             "rows"
           ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdCustomersMorningbrief",
+    "description": "Create customer morning brief (POST /workspaces/{organizationId}/customers/morning-brief) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: ownerId, limit.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers/morning-brief",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "ownerId": {
+              "type": "string"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
         }
       },
       "required": [

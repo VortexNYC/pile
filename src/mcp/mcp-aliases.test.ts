@@ -25,5 +25,14 @@ describe("MCP tool aliases", () => {
     expect(MCP_TOOL_ALIASES.customer_reply_ingest).toBe(
       "postWorkspacesOrganizationIdCustomersIdReplyingest"
     );
+    expect(MCP_TOOL_ALIASES.customer_audience_query).toBe(
+      "postWorkspacesOrganizationIdCustomersAudiencequery"
+    );
+    expect(MCP_TOOL_ALIASES.customer_run_play).toBe(
+      "postWorkspacesOrganizationIdCustomersIdRunplay"
+    );
+    expect(MCP_TOOL_ALIASES.customer_morning_brief).toBe(
+      "postWorkspacesOrganizationIdCustomersMorningbrief"
+    );
   });
 });

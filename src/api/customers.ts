@@ -9,6 +9,13 @@ import type { AppContext } from "../platform/middleware.js";
 import { isAdminIdentity } from "../platform/permissions.js";
 import { rls } from "../platform/rls.js";
 import {
+  type AudienceCandidateMerchant,
+  type AudienceFilterGroup,
+  buildRepMorningBrief,
+  queryDynamicAudience,
+  runMerchantLeadPlay,
+} from "../workspace/lead-play-engine.js";
+import {
   applyInboundReplyOutcome,
   classifyInboundReply,
   createStatementReceivedChecklist,
@@ -1851,6 +1858,321 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
         string,
         unknown
       > | null,
+    });
+  });
+
+  // PILE-514..517: Dynamic Saved Audience Query (AND/OR filter builder)
+  const audiencePredicateSchema = z.object({
+    field: z.string().min(1),
+    op: z.enum(["eq", "neq", "in", "gte", "lte", "contains", "has_signal"]),
+    value: z.union([
+      z.string(),
+      z.number(),
+      z.boolean(),
+      z.array(z.union([z.string(), z.number()])),
+    ]),
+  });
+
+  const audienceQueryRoute = createRoute({
+    method: "post",
+    path: "/workspaces/{organizationId}/customers/audience-query",
+    tags: ["customers"],
+    middleware: [rls("customer:view", "workspace:read")],
+    request: {
+      params: z.object({ organizationId: z.string() }),
+      body: {
+        content: {
+          "application/json": {
+            schema: z.object({
+              logic: z.enum(["and", "or"]).default("and"),
+              predicates: z.array(audiencePredicateSchema).default([]),
+              limit: z.number().int().min(1).max(200).optional(),
+            }),
+          },
+        },
+      },
+    },
+    responses: {
+      200: {
+        description: "Matched customers for dynamic audience filter",
+        content: {
+          "application/json": {
+            schema: z.object({
+              totalMatched: z.number(),
+              merchants: z.array(z.record(z.string(), z.unknown())),
+            }),
+          },
+        },
+      },
+    },
+  });
+
+  app.openapi(audienceQueryRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const all = await stub.listCustomers();
+    const candidates: AudienceCandidateMerchant[] = await Promise.all(
+      all.map(async (cust) => {
+        const suppCust = await stub.isSuppressed("customerId", cust.id);
+        const suppDomain = cust.domain
+          ? await stub.isSuppressed("domain", cust.domain)
+          : null;
+        const suppressed = Boolean(suppCust) || Boolean(suppDomain);
+        const facts = await stub.memoryRecall({
+          entityType: "customer",
+          entityId: cust.id,
+          limit: 50,
+        });
+        const signals = parseCustomerSignalFacts(facts);
+        let whyNow: string | null = cust.signal ?? null;
+        if (!whyNow && cust.customFields) {
+          try {
+            const parsed =
+              typeof cust.customFields === "string"
+                ? (JSON.parse(cust.customFields) as Record<string, unknown>)
+                : (cust.customFields as Record<string, unknown>);
+            if (typeof parsed?.whyNow === "string") whyNow = parsed.whyNow;
+          } catch {
+            whyNow = null;
+          }
+        }
+        return {
+          id: cust.id,
+          name: cust.name,
+          domain: cust.domain,
+          vertical: cust.vertical,
+          neighborhood: cust.neighborhood,
+          address: cust.address,
+          phone: cust.phone,
+          processor: cust.processor,
+          ownerId: cust.ownerId,
+          priorityScore: cust.priorityScore,
+          fitScore: cust.fitScore,
+          fitStatus: cust.fitStatus,
+          suppressed,
+          signalTypes: [...new Set(signals.map((s) => s.type))],
+          whyNow,
+        };
+      })
+    );
+
+    const filter: AudienceFilterGroup = {
+      logic: input.logic,
+      predicates: input.predicates,
+    };
+    const matched = queryDynamicAudience(candidates, filter, input.limit ?? 50);
+    return c.json({
+      totalMatched: matched.length,
+      merchants: matched as unknown as Array<Record<string, unknown>>,
+    });
+  });
+
+  // PILE-521..527: Run Autonomous Lead Play on Customer (Profiler -> Detective -> SendGate -> Drafter)
+  const runPlayRoute = createRoute({
+    method: "post",
+    path: "/workspaces/{organizationId}/customers/{id}/run-play",
+    tags: ["customers"],
+    middleware: [rls("customer:edit", "workspace:write")],
+    request: {
+      params: z.object({ organizationId: z.string(), id: z.string() }),
+      body: {
+        content: {
+          "application/json": {
+            schema: z.object({
+              playName: z.string().optional(),
+              html: z.string().optional(),
+              pageUrl: z.string().optional(),
+              contactEmail: z.string().optional(),
+              minDraftRankScore: z.number().optional(),
+              paidRankThreshold: z.number().optional(),
+            }),
+          },
+        },
+      },
+    },
+    responses: {
+      200: {
+        description: "Executed lead play and queued awaiting_approval draft",
+        content: {
+          "application/json": {
+            schema: z.record(z.string(), z.unknown()),
+          },
+        },
+      },
+      404: { description: "Customer not found" },
+    },
+  });
+
+  app.openapi(runPlayRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const customer = await stub.getCustomer(id);
+    if (!customer) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Customer not found",
+      });
+    }
+
+    const facts = await stub.memoryRecall({
+      entityType: "customer",
+      entityId: customer.id,
+      limit: 100,
+    });
+    const priorSignals = parseCustomerSignalFacts(facts);
+    const suppCust = await stub.isSuppressed("customerId", customer.id);
+    const suppDomain = customer.domain
+      ? await stub.isSuppressed("domain", customer.domain)
+      : null;
+    const suppEmail = input.contactEmail
+      ? await stub.isSuppressed("email", input.contactEmail)
+      : null;
+
+    const receipt = runMerchantLeadPlay({
+      merchant: {
+        id: customer.id,
+        name: customer.name,
+        domain: customer.domain,
+        vertical: customer.vertical,
+        neighborhood: customer.neighborhood,
+        address: customer.address,
+        phone: customer.phone,
+        processor: customer.processor,
+        ownerId: customer.ownerId,
+        priorityScore: customer.priorityScore,
+        fitScore: customer.fitScore,
+        fitStatus: customer.fitStatus,
+      },
+      signals: priorSignals,
+      html: input.html,
+      pageUrl: input.pageUrl,
+      playName: input.playName,
+      contactEmail: input.contactEmail,
+      minDraftRankScore: input.minDraftRankScore,
+      paidRankThreshold: input.paidRankThreshold,
+      suppressed: Boolean(suppCust),
+      domainSuppressed: Boolean(suppDomain),
+      emailSuppressed: Boolean(suppEmail),
+      actorUserId: c.var.workspaceIdentity.id,
+    });
+
+    await stub.updateCustomer(customer.id, {
+      priorityScore: receipt.breakdown.priorityScore,
+      fitScore: receipt.breakdown.fitScore,
+      fitStatus: receipt.breakdown.fitRating,
+      signal: receipt.breakdown.whyNow,
+      ...(receipt.posGuess ? { processor: receipt.posGuess } : {}),
+    });
+
+    if (receipt.newSignal) {
+      await stub.memoryRemember({
+        entityType: "customer",
+        entityId: customer.id,
+        kind: `signal:${receipt.newSignal.type}:${receipt.newSignal.id}`,
+        fact: JSON.stringify(receipt.newSignal),
+      });
+    }
+    await stub.memoryRemember({
+      entityType: "customer",
+      entityId: customer.id,
+      kind: `play_run:${receipt.playName}`,
+      fact: JSON.stringify(receipt),
+    });
+
+    return c.json(receipt as unknown as Record<string, unknown>);
+  });
+
+  // PILE-559: Daily Rep Morning Brief
+  const morningBriefRoute = createRoute({
+    method: "post",
+    path: "/workspaces/{organizationId}/customers/morning-brief",
+    tags: ["customers"],
+    middleware: [rls("customer:view", "workspace:read")],
+    request: {
+      params: z.object({ organizationId: z.string() }),
+      body: {
+        content: {
+          "application/json": {
+            schema: z.object({
+              ownerId: z.string().optional(),
+              limit: z.number().int().min(1).max(100).optional(),
+            }),
+          },
+        },
+      },
+    },
+    responses: {
+      200: {
+        description:
+          "Ranked daily rep morning brief with why-now and next action",
+        content: {
+          "application/json": {
+            schema: z.object({
+              generatedAt: z.string(),
+              totalCandidates: z.number(),
+              items: z.array(z.record(z.string(), z.unknown())),
+            }),
+          },
+        },
+      },
+    },
+  });
+
+  app.openapi(morningBriefRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const query = c.req.valid("json");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const all = await stub.listCustomers();
+    const candidates: AudienceCandidateMerchant[] = await Promise.all(
+      all.map(async (cust) => {
+        const suppCust = await stub.isSuppressed("customerId", cust.id);
+        const suppDomain = cust.domain
+          ? await stub.isSuppressed("domain", cust.domain)
+          : null;
+        const suppressed = Boolean(suppCust) || Boolean(suppDomain);
+        let whyNow: string | null = cust.signal ?? null;
+        if (!whyNow && cust.customFields) {
+          try {
+            const parsed =
+              typeof cust.customFields === "string"
+                ? (JSON.parse(cust.customFields) as Record<string, unknown>)
+                : (cust.customFields as Record<string, unknown>);
+            if (typeof parsed?.whyNow === "string") whyNow = parsed.whyNow;
+          } catch {
+            whyNow = null;
+          }
+        }
+        return {
+          id: cust.id,
+          name: cust.name,
+          domain: cust.domain,
+          vertical: cust.vertical,
+          neighborhood: cust.neighborhood,
+          address: cust.address,
+          phone: cust.phone,
+          processor: cust.processor,
+          ownerId: cust.ownerId,
+          priorityScore: cust.priorityScore,
+          fitScore: cust.fitScore,
+          fitStatus: cust.fitStatus,
+          suppressed,
+          whyNow,
+        };
+      })
+    );
+
+    const brief = buildRepMorningBrief({
+      merchants: candidates,
+      ownerId: query.ownerId,
+      limit: query.limit ?? 15,
+    });
+    return c.json({
+      generatedAt: brief.generatedAt,
+      totalCandidates: brief.totalCandidates,
+      items: brief.items as unknown as Array<Record<string, unknown>>,
     });
   });
 }

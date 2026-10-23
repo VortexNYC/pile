@@ -200,6 +200,8 @@ DAYTONA_VOLUME_ID = "0f79e741-e373-496b-a83f-7252cd5b9f12"
 DEVIN_MODEL = "swe-2"
 EMAIL_FROM = "notifications@pile.nyc"
 COMPUTE_PROVIDER = "cloudflare"
+LANE_SDK = "v1"
+LANE_FAILOVER = "v1"
 PUBLIC_API_URL = "https://pile.nyc"
 FEEDBACK_CHANNEL_ID = "cc2f808d-007e-48a1-870f-bd4c68ae0cd6"
 # Shared container admission ledger (PILE-302) — lanes reserve a slot before

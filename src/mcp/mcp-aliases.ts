@@ -105,6 +105,9 @@ export const MCP_TOOL_ALIASES: Readonly<Record<string, string>> = {
   customer_send_gate: "postWorkspacesOrganizationIdCustomersIdSendgate",
   customer_dedup_key: "postWorkspacesOrganizationIdCustomersDedupkey",
   customer_reply_ingest: "postWorkspacesOrganizationIdCustomersIdReplyingest",
+  customer_audience_query: "postWorkspacesOrganizationIdCustomersAudiencequery",
+  customer_run_play: "postWorkspacesOrganizationIdCustomersIdRunplay",
+  customer_morning_brief: "postWorkspacesOrganizationIdCustomersMorningbrief",
 
   // Support
   list_support_customers: "getWorkspacesOrganizationIdSupportCustomers",

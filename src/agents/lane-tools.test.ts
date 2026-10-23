@@ -694,5 +694,12 @@ describe("workspace lane tools", () => {
     expect(out.matchedCustomerId).toBe("cust-bleecker");
     expect(wsTool("customer_reply_ingest").name).toBe("customer_reply_ingest");
     expect(wsTool("customer_signals_list").name).toBe("customer_signals_list");
+    expect(wsTool("customer_audience_query").name).toBe(
+      "customer_audience_query"
+    );
+    expect(wsTool("customer_run_play").name).toBe("customer_run_play");
+    expect(wsTool("customer_morning_brief").name).toBe(
+      "customer_morning_brief"
+    );
   });
 });

@@ -2248,4 +2248,20 @@ describe("agent session scoping (PILE-453)", () => {
       expect(rows.map((r) => r.fact)).toEqual(["latest lesson"]);
     });
   });
+
+  it("updateCustomer persists processor and signal fields (PILE-532)", async () => {
+    await withDb(async (db) => {
+      const { createCustomer, updateCustomer } = await import("./index.js");
+      const cust = createCustomer(db, {
+        organizationId: WORKSPACE_ID,
+        name: "Bleecker Osteria",
+      });
+      const updated = updateCustomer(db, WORKSPACE_ID, cust.id, {
+        processor: "toast",
+        signal: "Why now: Uses Toast POS [sig_pos_1].",
+      });
+      expect(updated?.processor).toBe("toast");
+      expect(updated?.signal).toContain("Why now:");
+    });
+  });
 });

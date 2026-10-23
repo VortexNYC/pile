@@ -8805,6 +8805,93 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "customers audience query create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/audience-query",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "logic",
+        flag: "logic",
+      },
+      {
+        name: "predicates",
+        flag: "predicates",
+      },
+      {
+        name: "limit",
+        flag: "limit",
+      },
+    ],
+  },
+  "customers run play create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/{id}/run-play",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "playName",
+        flag: "play-name",
+      },
+      {
+        name: "html",
+        flag: "html",
+      },
+      {
+        name: "pageUrl",
+        flag: "page-url",
+      },
+      {
+        name: "contactEmail",
+        flag: "contact-email",
+      },
+      {
+        name: "minDraftRankScore",
+        flag: "min-draft-rank-score",
+      },
+      {
+        name: "paidRankThreshold",
+        flag: "paid-rank-threshold",
+      },
+    ],
+  },
+  "customers morning brief create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/morning-brief",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "ownerId",
+        flag: "owner-id",
+      },
+      {
+        name: "limit",
+        flag: "limit",
+      },
+    ],
+  },
   "deals list": {
     method: "GET",
     path: "/workspaces/{organizationId}/deals",
