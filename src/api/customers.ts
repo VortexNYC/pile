@@ -2277,6 +2277,8 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
                   "nyc_bookkeepers_and_cpas",
                   "nyc_vc_and_accelerators",
                   "nyc_tech_and_software_startups",
+                  "us_nppes_medical_and_dental",
+                  "us_sec_form_d_tech_startups",
                 ])
                 .default("nyc_dob_contractors_and_trades"),
               borough: z.string().optional(),
@@ -2368,6 +2370,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
       input.ownerId ??
       (organizationId === "org_vortex_main"
         ? input.preset === "nyc_tech_and_software_startups" ||
+          input.preset === "us_sec_form_d_tech_startups" ||
           input.preset === "nyc_vc_and_accelerators" ||
           input.preset === "nyc_bookkeepers_and_cpas"
           ? "0r5mlhiV0owDDL59vzGnfTTqwNBuGHgE"
@@ -2498,6 +2501,187 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
         name: b.name,
         reasons: [...b.reasons],
       })),
+    });
+  });
+
+  // Option B: Partner Referral & Monthly Residual Rev-Share Calculator (Effect)
+  const partnerResidualsRoute = createRoute({
+    method: "post",
+    path: "/workspaces/{organizationId}/customers/partner-residuals",
+    tags: ["customers"],
+    middleware: [rls("customer:view", "workspace:read")],
+    request: {
+      params: z.object({ organizationId: z.string() }),
+      body: {
+        content: {
+          "application/json": {
+            schema: z.object({
+              merchants: z.array(
+                z.object({
+                  customerId: z.string(),
+                  merchantName: z.string(),
+                  partnerId: z.string(),
+                  partnerName: z.string(),
+                  monthlyCardVolumeCents: z.number().int().min(0),
+                  monthlyAchCount: z.number().int().min(0),
+                  netCardMarginBps: z.number().optional(),
+                  netAchMarginCentsPerTx: z.number().optional(),
+                  partnerRevSharePct: z.number().min(0).max(80).optional(),
+                })
+              ),
+            }),
+          },
+        },
+      },
+    },
+    responses: {
+      200: {
+        description:
+          "Computed monthly partner residual revenue-share payouts across referred merchants using Effect",
+        content: {
+          "application/json": {
+            schema: z.object({
+              totalMerchants: z.number(),
+              totalVortexNetProfitCents: z.number(),
+              totalPartnerResidualPayoutCents: z.number(),
+              rows: z.array(z.record(z.string(), z.unknown())),
+            }),
+          },
+        },
+      },
+    },
+  });
+
+  app.openapi(partnerResidualsRoute, async (c) => {
+    const input = c.req.valid("json");
+    const { Effect } = await import("effect");
+    const { computePartnerResidualsWithEffect } =
+      await import("../agents/collectors-effect.js");
+    const result = await Effect.runPromise(
+      computePartnerResidualsWithEffect(input.merchants)
+    );
+    return c.json({
+      totalMerchants: result.totalMerchants,
+      totalVortexNetProfitCents: result.totalVortexNetProfitCents,
+      totalPartnerResidualPayoutCents: result.totalPartnerResidualPayoutCents,
+      rows: result.rows as unknown as Array<Record<string, unknown>>,
+    });
+  });
+
+  // Option C: 80/20 Daily Auto-Replenish Runner (Effect)
+  const autoReplenishRoute = createRoute({
+    method: "post",
+    path: "/workspaces/{organizationId}/customers/auto-replenish",
+    tags: ["customers"],
+    middleware: [rls("customer:edit", "workspace:write")],
+    request: {
+      params: z.object({ organizationId: z.string() }),
+      body: {
+        content: {
+          "application/json": {
+            schema: z.object({
+              totalLeads: z.number().int().min(5).max(100).default(20),
+            }),
+          },
+        },
+      },
+    },
+    responses: {
+      200: {
+        description:
+          "Executed 80/20 Core Wedge vs Exploration auto-replenish across presets using Effect and bulk DO ingest",
+        content: {
+          "application/json": {
+            schema: z.object({
+              totalPulled: z.number(),
+              totalCreated: z.number(),
+              totalUpdated: z.number(),
+              batches: z.array(
+                z.object({
+                  preset: z.string(),
+                  bucket: z.string(),
+                  ownerId: z.string(),
+                  pulledCount: z.number(),
+                  createdCount: z.number(),
+                  updatedCount: z.number(),
+                  nextOffset: z.number(),
+                })
+              ),
+            }),
+          },
+        },
+      },
+    },
+  });
+
+  app.openapi(autoReplenishRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const { Effect } = await import("effect");
+    const { planDaily8020Replenish, pullDaily8020BatchesWithEffect } =
+      await import("../agents/collectors-effect.js");
+
+    const plan = planDaily8020Replenish({ totalLeads: input.totalLeads });
+    const offsetsByPreset: Record<string, number> = {};
+    for (const item of plan) {
+      const cursorRows = await stub.memoryRecall({
+        entityType: "workspace",
+        entityId: organizationId,
+        kind: `lead_cursor:${item.preset}`,
+        limit: 1,
+      });
+      const stored = Number(cursorRows[0]?.fact ?? 0);
+      offsetsByPreset[item.preset] =
+        Number.isFinite(stored) && stored >= 0 ? stored : 0;
+    }
+
+    const pulledBatches = await Effect.runPromise(
+      pullDaily8020BatchesWithEffect(plan, offsetsByPreset)
+    );
+
+    let totalPulled = 0;
+    let totalCreated = 0;
+    let totalUpdated = 0;
+    const batches: Array<{
+      preset: string;
+      bucket: string;
+      ownerId: string;
+      pulledCount: number;
+      createdCount: number;
+      updatedCount: number;
+      nextOffset: number;
+    }> = [];
+
+    for (const b of pulledBatches) {
+      const ingested = await stub.ingestPulledLeadsBatch({
+        sourceName: b.sourceName,
+        cursorKind: `lead_cursor:${b.item.preset}`,
+        nextOffset: b.nextOffset,
+        actorUserId: c.var.workspaceIdentity.id,
+        defaultOwnerId: b.item.ownerId,
+        dispatchDetectiveBatch: false,
+        candidates: b.candidates,
+      });
+      totalPulled += ingested.pulledCount;
+      totalCreated += ingested.createdCount;
+      totalUpdated += ingested.updatedCount;
+      batches.push({
+        preset: b.item.preset,
+        bucket: b.item.bucket,
+        ownerId: b.item.ownerId,
+        pulledCount: ingested.pulledCount,
+        createdCount: ingested.createdCount,
+        updatedCount: ingested.updatedCount,
+        nextOffset: b.nextOffset,
+      });
+    }
+
+    return c.json({
+      totalPulled,
+      totalCreated,
+      totalUpdated,
+      batches,
     });
   });
 }

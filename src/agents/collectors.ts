@@ -87,7 +87,9 @@ export type NonPosSmbPresetId =
   | "nyc_b2b_and_specialty_dealers"
   | "nyc_bookkeepers_and_cpas"
   | "nyc_vc_and_accelerators"
-  | "nyc_tech_and_software_startups";
+  | "nyc_tech_and_software_startups"
+  | "us_nppes_medical_and_dental"
+  | "us_sec_form_d_tech_startups";
 
 export type LeadSheetKey =
   | "trades"
@@ -245,7 +247,14 @@ export function classifyMerchantLead(input: {
     v.includes("disabled") ||
     v.includes("medical") ||
     v.includes("dental") ||
-    v.includes("pharmacy")
+    v.includes("dentist") ||
+    v.includes("clinic") ||
+    v.includes("physical therapist") ||
+    v.includes("chiropract") ||
+    v.includes("optometr") ||
+    v.includes("health") ||
+    v.includes("pharmacy") ||
+    s.includes("nppes")
   ) {
     return {
       sheetKey: "exploration",
@@ -432,6 +441,29 @@ export const PRESET_NON_POS_SMB_SOURCES: Record<
         "(upper(current_entity_name) like '%TECHNOLOGIES%' OR upper(current_entity_name) like '%SOFTWARE%' OR upper(current_entity_name) like '%AI LABS%' OR upper(current_entity_name) like '%SYSTEMS%') AND county IN ('New York','Kings','Queens')",
     }),
     cursorField: "initial_dos_filing_date",
+    cursorValue: null,
+    signal: "corp_filing",
+  },
+  us_nppes_medical_and_dental: {
+    id: "preset_us_nppes",
+    name: "US NPPES Active Dental, Medical, PT & Specialty Health Practices",
+    kind: "nppes",
+    config: JSON.stringify({
+      state: "NY",
+      city: "BROOKLYN",
+    }),
+    cursorField: null,
+    cursorValue: null,
+    signal: "new_license",
+  },
+  us_sec_form_d_tech_startups: {
+    id: "preset_us_sec_form_d",
+    name: "SEC EDGAR Form D Newly Funded Tech Startups & Venture Offerings",
+    kind: "sec_form_d",
+    config: JSON.stringify({
+      startdt: "2026-09-01",
+    }),
+    cursorField: null,
     cursorValue: null,
     signal: "corp_filing",
   },
@@ -721,6 +753,210 @@ async function pullSam(
   return { candidates, newCursor: null };
 }
 
+function xmlTag(xml: string, tag: string): string | null {
+  const re = new RegExp(`<${tag}>([^<]+)</${tag}>`, "i");
+  const m = re.exec(xml);
+  return m?.[1]?.trim() || null;
+}
+
+async function pullNppes(
+  source: MerchantSourceRow,
+  options?: { limit?: number; offset?: number; extraWhere?: string }
+): Promise<{ candidates: MerchantCandidate[]; newCursor: string | null }> {
+  const c = cfg(source);
+  const state = str(c.state) ?? "NY";
+  const city = options?.extraWhere
+    ? options.extraWhere.replace(/^.*='([^']+)'.*$/, "$1")
+    : (str(c.city) ?? "BROOKLYN");
+  const limit = Math.max(1, Math.min(200, options?.limit ?? 15));
+  const skip = Math.max(0, options?.offset ?? 0);
+  const params = new URLSearchParams({
+    version: "2.1",
+    enumeration_type: "NPI-2",
+    state,
+    city,
+    limit: String(limit),
+    skip: String(skip),
+  });
+  const res = await fetch(`https://npiregistry.cms.hhs.gov/api/?${params}`);
+  if (!res.ok) throw new Error(`nppes ${res.status}`);
+  const body = (await res.json()) as {
+    results?: Array<{
+      number?: string;
+      basic?: {
+        organization_name?: string;
+        authorized_official_first_name?: string;
+        authorized_official_last_name?: string;
+        authorized_official_telephone_number?: string;
+        authorized_official_title_or_position?: string;
+        enumeration_date?: string;
+      };
+      addresses?: Array<{
+        address_purpose?: string;
+        address_1?: string;
+        city?: string;
+        state?: string;
+        postal_code?: string;
+        telephone_number?: string;
+      }>;
+      taxonomies?: Array<{ desc?: string; primary?: boolean }>;
+    }>;
+  };
+  const candidates: MerchantCandidate[] = (body.results ?? []).map((r) => {
+    const npi = r.number ?? "unknown";
+    const basic = r.basic ?? {};
+    const loc =
+      (r.addresses ?? []).find((a) => a.address_purpose === "LOCATION") ??
+      r.addresses?.[0];
+    const tax =
+      (r.taxonomies ?? []).find((t) => t.primary) ?? r.taxonomies?.[0];
+    const ownerName =
+      [
+        basic.authorized_official_first_name,
+        basic.authorized_official_last_name,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .trim() || null;
+    const phone =
+      str(basic.authorized_official_telephone_number) ??
+      str(loc?.telephone_number);
+    const address = [
+      loc?.address_1,
+      loc?.city,
+      loc?.state,
+      loc?.postal_code?.slice(0, 5),
+    ]
+      .filter(Boolean)
+      .join(", ");
+    return {
+      name: (basic.organization_name ?? "unknown").replace(/^\.+/, "").trim(),
+      externalId: `nppes:${npi}`,
+      domain: null,
+      address: address || null,
+      phone,
+      email: null,
+      ownerName,
+      neighborhood: loc?.city ?? city,
+      vertical: tax?.desc ?? "Medical, Dental & DME (20% Explore)",
+      signal: source.signal,
+      signalDate: basic.enumeration_date ?? null,
+      evidenceUri: `https://npiregistry.cms.hhs.gov/api/?version=2.1&number=${encodeURIComponent(npi)}`,
+    };
+  });
+  return { candidates, newCursor: null };
+}
+
+async function pullSecFormD(
+  source: MerchantSourceRow,
+  options?: { limit?: number; offset?: number }
+): Promise<{ candidates: MerchantCandidate[]; newCursor: string | null }> {
+  const c = cfg(source);
+  const startdt = str(c.startdt) ?? "2026-09-01";
+  const limit = Math.max(1, Math.min(25, options?.limit ?? 10));
+  const from = Math.max(0, options?.offset ?? 0);
+  const params = new URLSearchParams({
+    forms: "D",
+    startdt,
+    from: String(from),
+  });
+  const headers = { "User-Agent": "VortexNYC Ops@vortex.nyc" };
+  const res = await fetch(
+    `https://efts.sec.gov/LATEST/search-index?${params}`,
+    { headers }
+  );
+  if (!res.ok) throw new Error(`sec_form_d ${res.status}`);
+  const body = (await res.json()) as {
+    hits?: {
+      hits?: Array<{
+        _id?: string;
+        _source?: {
+          ciks?: string[];
+          adsh?: string;
+          display_names?: string[];
+          biz_locations?: string[];
+          file_date?: string;
+        };
+      }>;
+    };
+  };
+  const hits = (body.hits?.hits ?? []).slice(0, limit);
+  const candidates: MerchantCandidate[] = await Promise.all(
+    hits.map(async (h) => {
+      const src = h._source ?? {};
+      const adsh = src.adsh ?? h._id?.split(":")[0] ?? "unknown";
+      const cikRaw = src.ciks?.[0] ?? "";
+      const cikInt = cikRaw.replace(/^0+/, "");
+      const adshClean = adsh.replace(/-/g, "");
+      const xmlUrl =
+        cikInt && adshClean
+          ? `https://www.sec.gov/Archives/edgar/data/${cikInt}/${adshClean}/primary_doc.xml`
+          : null;
+
+      let entityName =
+        (src.display_names?.[0] ?? "unknown")
+          .replace(/\s*\(CIK\s*\d+\)\s*$/i, "")
+          .trim() || "unknown";
+      let phone: string | null = null;
+      let address: string | null = src.biz_locations?.[0] ?? null;
+      let ownerName: string | null = null;
+      let industryGroup: string | null = null;
+
+      if (xmlUrl) {
+        try {
+          const xmlRes = await fetch(xmlUrl, {
+            headers,
+            signal: AbortSignal.timeout(2500),
+          });
+          if (xmlRes.ok) {
+            const xml = (await xmlRes.text()).slice(0, 32_768);
+            entityName = xmlTag(xml, "entityName") ?? entityName;
+            phone = xmlTag(xml, "issuerPhoneNumber");
+            const street1 = xmlTag(xml, "street1");
+            const city = xmlTag(xml, "city");
+            const state = xmlTag(xml, "stateOrCountry");
+            const zip = xmlTag(xml, "zipCode");
+            if (street1 || city) {
+              address = [street1, city, state, zip].filter(Boolean).join(", ");
+            }
+            const first = xmlTag(xml, "firstName");
+            const last = xmlTag(xml, "lastName");
+            if (first || last) {
+              ownerName = [first, last].filter(Boolean).join(" ");
+            }
+            industryGroup = xmlTag(xml, "industryGroupType");
+          }
+        } catch {
+          /* fallback to index metadata */
+        }
+      }
+
+      const isFund =
+        /pooled investment|venture capital|private equity/i.test(
+          industryGroup ?? ""
+        ) || /\b(fund|ventures|capital partners|lp)\b/i.test(entityName);
+
+      return {
+        name: entityName,
+        externalId: `sec_form_d:${adsh}`,
+        domain: null,
+        address,
+        phone,
+        email: null,
+        ownerName,
+        neighborhood: src.biz_locations?.[0] ?? null,
+        vertical: isFund ? "VC / Fund Partner" : "Tech / AI / SaaS Startup",
+        signal: source.signal,
+        signalDate: src.file_date ?? null,
+        evidenceUri:
+          xmlUrl ??
+          `https://efts.sec.gov/LATEST/search-index?q=${encodeURIComponent(adsh)}`,
+      };
+    })
+  );
+  return { candidates, newCursor: null };
+}
+
 export async function pullSource(
   source: MerchantSourceRow,
   env?: Record<string, string | undefined>,
@@ -729,6 +965,10 @@ export async function pullSource(
   switch (source.kind) {
     case "socrata":
       return pullSocrata(source, options);
+    case "nppes":
+      return pullNppes(source, options);
+    case "sec_form_d":
+      return pullSecFormD(source, options);
     case "usaspending":
       return pullUsaspending(source);
     case "opencorporates":

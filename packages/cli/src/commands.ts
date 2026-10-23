@@ -8974,6 +8974,40 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "customers partner residuals create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/partner-residuals",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "merchants",
+        flag: "merchants",
+      },
+    ],
+  },
+  "customers auto replenish create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/auto-replenish",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "totalLeads",
+        flag: "total-leads",
+      },
+    ],
+  },
   "deals list": {
     method: "GET",
     path: "/workspaces/{organizationId}/deals",

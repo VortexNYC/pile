@@ -21527,7 +21527,7 @@ export interface paths {
                          * @default nyc_dob_contractors_and_trades
                          * @enum {string}
                          */
-                        preset?: "nyc_dob_contractors_and_trades" | "nyc_bic_commercial_haulers" | "nyc_dob_permit_issuances" | "nyc_home_improvement_contractors" | "nyc_auto_and_garages" | "nyc_b2b_and_specialty_dealers" | "nyc_bookkeepers_and_cpas" | "nyc_vc_and_accelerators" | "nyc_tech_and_software_startups";
+                        preset?: "nyc_dob_contractors_and_trades" | "nyc_bic_commercial_haulers" | "nyc_dob_permit_issuances" | "nyc_home_improvement_contractors" | "nyc_auto_and_garages" | "nyc_b2b_and_specialty_dealers" | "nyc_bookkeepers_and_cpas" | "nyc_vc_and_accelerators" | "nyc_tech_and_software_startups" | "us_nppes_medical_and_dental" | "us_sec_form_d_tech_startups";
                         borough?: string;
                         /** @default 15 */
                         limit?: number;
@@ -21621,6 +21621,125 @@ export interface paths {
                                 customerId: string;
                                 name: string;
                                 reasons: string[];
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/customers/partner-residuals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create customer partner residual */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        merchants: {
+                            customerId: string;
+                            merchantName: string;
+                            partnerId: string;
+                            partnerName: string;
+                            monthlyCardVolumeCents: number;
+                            monthlyAchCount: number;
+                            netCardMarginBps?: number;
+                            netAchMarginCentsPerTx?: number;
+                            partnerRevSharePct?: number;
+                        }[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Computed monthly partner residual revenue-share payouts across referred merchants using Effect */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            totalMerchants: number;
+                            totalVortexNetProfitCents: number;
+                            totalPartnerResidualPayoutCents: number;
+                            rows: {
+                                [key: string]: unknown;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/customers/auto-replenish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create customer auto replenish */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @default 20 */
+                        totalLeads?: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Executed 80/20 Core Wedge vs Exploration auto-replenish across presets using Effect and bulk DO ingest */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            totalPulled: number;
+                            totalCreated: number;
+                            totalUpdated: number;
+                            batches: {
+                                preset: string;
+                                bucket: string;
+                                ownerId: string;
+                                pulledCount: number;
+                                createdCount: number;
+                                updatedCount: number;
+                                nextOffset: number;
                             }[];
                         };
                     };

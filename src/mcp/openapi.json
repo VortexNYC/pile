@@ -44472,7 +44472,9 @@
                       "nyc_b2b_and_specialty_dealers",
                       "nyc_bookkeepers_and_cpas",
                       "nyc_vc_and_accelerators",
-                      "nyc_tech_and_software_startups"
+                      "nyc_tech_and_software_startups",
+                      "us_nppes_medical_and_dental",
+                      "us_sec_form_d_tech_startups"
                     ],
                     "default": "nyc_dob_contractors_and_trades"
                   },
@@ -44685,6 +44687,225 @@
           }
         },
         "summary": "Create customer approve batch"
+      }
+    },
+    "/workspaces/{organizationId}/customers/partner-residuals": {
+      "post": {
+        "tags": [
+          "customers"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "merchants": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "customerId": {
+                          "type": "string"
+                        },
+                        "merchantName": {
+                          "type": "string"
+                        },
+                        "partnerId": {
+                          "type": "string"
+                        },
+                        "partnerName": {
+                          "type": "string"
+                        },
+                        "monthlyCardVolumeCents": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "monthlyAchCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "netCardMarginBps": {
+                          "type": "number"
+                        },
+                        "netAchMarginCentsPerTx": {
+                          "type": "number"
+                        },
+                        "partnerRevSharePct": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 80
+                        }
+                      },
+                      "required": [
+                        "customerId",
+                        "merchantName",
+                        "partnerId",
+                        "partnerName",
+                        "monthlyCardVolumeCents",
+                        "monthlyAchCount"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "merchants"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Computed monthly partner residual revenue-share payouts across referred merchants using Effect",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "totalMerchants": {
+                      "type": "number"
+                    },
+                    "totalVortexNetProfitCents": {
+                      "type": "number"
+                    },
+                    "totalPartnerResidualPayoutCents": {
+                      "type": "number"
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "nullable": true
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "totalMerchants",
+                    "totalVortexNetProfitCents",
+                    "totalPartnerResidualPayoutCents",
+                    "rows"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create customer partner residual"
+      }
+    },
+    "/workspaces/{organizationId}/customers/auto-replenish": {
+      "post": {
+        "tags": [
+          "customers"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "totalLeads": {
+                    "type": "integer",
+                    "minimum": 5,
+                    "maximum": 100,
+                    "default": 20
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Executed 80/20 Core Wedge vs Exploration auto-replenish across presets using Effect and bulk DO ingest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "totalPulled": {
+                      "type": "number"
+                    },
+                    "totalCreated": {
+                      "type": "number"
+                    },
+                    "totalUpdated": {
+                      "type": "number"
+                    },
+                    "batches": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "preset": {
+                            "type": "string"
+                          },
+                          "bucket": {
+                            "type": "string"
+                          },
+                          "ownerId": {
+                            "type": "string"
+                          },
+                          "pulledCount": {
+                            "type": "number"
+                          },
+                          "createdCount": {
+                            "type": "number"
+                          },
+                          "updatedCount": {
+                            "type": "number"
+                          },
+                          "nextOffset": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "preset",
+                          "bucket",
+                          "ownerId",
+                          "pulledCount",
+                          "createdCount",
+                          "updatedCount",
+                          "nextOffset"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "totalPulled",
+                    "totalCreated",
+                    "totalUpdated",
+                    "batches"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create customer auto replenish"
       }
     },
     "/workspaces/{organizationId}/deals": {
