@@ -976,6 +976,14 @@ export function CustomersList() {
                               <a href={`mailto:${ct.value}`}>{ct.value}</a>
                             ) : ct.channel === "phone" ? (
                               <a href={`tel:${ct.value}`}>{ct.value}</a>
+                            ) : ct.channel === "form" ? (
+                              <a
+                                href={ct.value}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                Contact Form ↗
+                              </a>
                             ) : (
                               ct.value
                             )}

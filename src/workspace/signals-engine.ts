@@ -478,12 +478,12 @@ export function computeSmbMatchKey(input: {
     .replace(/^https?:\/\//, "")
     .replace(/^www\./, "")
     .split("/")[0]!;
-  const matchKey = [
-    normalizedName,
-    normalizedAddress || normalizedDomain || phoneE164,
-  ]
-    .filter(Boolean)
-    .join("|");
+  // Name-only keys are ambiguous — two unrelated businesses sharing a generic
+  // normalized name must never merge, so a match requires at least one
+  // disambiguating component (address, domain, or phone).
+  const disambiguator = normalizedAddress || normalizedDomain || phoneE164;
+  const matchKey =
+    normalizedName && disambiguator ? `${normalizedName}|${disambiguator}` : "";
   return {
     matchKey,
     normalizedName,

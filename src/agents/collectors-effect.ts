@@ -724,8 +724,10 @@ export const evaluateApprovedBatchWithEffect = Effect.fn(
             email: cand.contactEmail ?? null,
             permissions: {
               doNotEmail: Boolean(cand.suppressedEmail),
-              emailStatus:
-                cand.emailStatus ?? (cand.contactEmail ? "valid" : "unknown"),
+              // Honest default: an unverified email is "unknown", not "valid"
+              // — the verification gate only engages when a caller actually
+              // verified the address.
+              emailStatus: cand.emailStatus ?? "unknown",
             },
           },
           cadence: {

@@ -235,7 +235,7 @@ export interface LeadPlayRunReceipt {
   >;
   gateDecision: GateDecision;
   draftedTouch: {
-    channel: "email" | "visit" | "call";
+    channel: "email" | "visit" | "call" | "form";
     subject: string;
     body: string;
     evidenceSignalIds: string[];
@@ -257,6 +257,7 @@ export function runMerchantLeadPlay(input: {
   domainSuppressed?: boolean;
   emailSuppressed?: boolean;
   contactEmail?: string | null;
+  contactFormUrl?: string | null;
   emailStatus?: "valid" | "invalid" | "catch_all" | "role" | "unknown";
   allowUnverified?: boolean;
   actorUserId?: string;
@@ -366,11 +367,14 @@ export function runMerchantLeadPlay(input: {
   });
 
   // Step 3: Send Gate
-  const preferredChannel: "email" | "visit" | "call" = input.contactEmail
-    ? "email"
-    : input.merchant.address
-      ? "visit"
-      : "call";
+  const preferredChannel: "email" | "form" | "visit" | "call" =
+    input.contactEmail
+      ? "email"
+      : input.contactFormUrl
+        ? "form"
+        : input.merchant.address
+          ? "visit"
+          : "call";
   const gateDecision = evaluateSendGate({
     touchId: `play_${input.merchant.id}`,
     channel: preferredChannel,
@@ -389,7 +393,7 @@ export function runMerchantLeadPlay(input: {
       email: input.contactEmail ?? null,
       permissions: {
         doNotEmail: Boolean(input.emailSuppressed),
-        emailStatus: input.emailStatus ?? "valid",
+        emailStatus: input.emailStatus ?? "unknown",
       },
     },
     cadence: {

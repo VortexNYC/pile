@@ -11,7 +11,7 @@
 //   - U-005 (PILE-482): Single active cadence per merchant, re-touch cooldown
 //     from finished enrollments with >=1 completed step, and maxActiveContacts
 
-export type TouchChannel = "email" | "call" | "visit" | "linkedin";
+export type TouchChannel = "email" | "call" | "visit" | "linkedin" | "form";
 
 export type EmailVerificationStatus =
   | "valid"
@@ -396,7 +396,8 @@ export function evaluateSendGate(input: SendGateInput): GateDecision {
     if (
       input.channel === "call" ||
       input.channel === "visit" ||
-      input.channel === "email"
+      input.channel === "email" ||
+      input.channel === "form"
     ) {
       const tz = sched.timeZone || "America/New_York";
       const d = new Date(nowMs);

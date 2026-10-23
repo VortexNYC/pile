@@ -2307,9 +2307,29 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     const stub = getWorkspaceStub(c.env, organizationId);
     const allRaw = await stub.listCustomers();
     const nowMs = Date.now();
+    // Leads already reserved for a touch today (any channel) don't belong in
+    // the brief — a rep calling a lead another rep just queued causes a
+    // same-day double-touch.
+    const todayYmd = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/New_York",
+    }).format(new Date());
+    const reservedToday = new Set<string>();
+    await Promise.all(
+      ["email", "call", "visit", "linkedin", "form"].map(async (ch) => {
+        const rows = await stub.memoryRecall({
+          entityType: "customer",
+          kind: `pre_send:${ch}:${todayYmd}`,
+          limit: 500,
+        });
+        for (const row of rows) {
+          if (row.entityId) reservedToday.add(row.entityId);
+        }
+      })
+    );
     // PILE-604: Only our own "recontact:" deferrals hide a customer from the
     // brief — a human-set future nextStepDueAt (demo, proposal) keeps them in.
     const all = allRaw.filter((cust) => {
+      if (reservedToday.has(cust.id)) return false;
       if (!cust.nextStepText?.startsWith("recontact:")) return true;
       if (!cust.nextStepDueAt) return true;
       const dueMs = Date.parse(cust.nextStepDueAt);
@@ -2523,7 +2543,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
             schema: z.object({
               customerIds: z.array(z.string()).optional(),
               channel: z
-                .enum(["email", "call", "visit", "sms"])
+                .enum(["email", "call", "visit", "sms", "form"])
                 .default("call"),
               limit: z.number().int().min(1).max(100).default(25),
             }),
@@ -2585,6 +2605,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
       selected.map(async (cust) => {
         const contacts = await stub.listContacts(cust.id);
         const emailContact = contacts.find((ct) => ct.channel === "email");
+        const formContact = contacts.find((ct) => ct.channel === "form");
         const [suppCust, suppEmail, existingReservation] = await Promise.all([
           stub.isSuppressed("customerId", cust.id),
           emailContact?.value
@@ -2602,7 +2623,10 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
           customerId: cust.id,
           name: cust.name,
           channel: input.channel as TouchChannel,
-          contactEmail: emailContact?.value ?? null,
+          contactEmail:
+            input.channel === "form"
+              ? (formContact?.value ?? null)
+              : (emailContact?.value ?? null),
           phone: cust.phone,
           address: cust.address,
           suppressedCustomer: Boolean(suppCust) || alreadyReservedToday,
