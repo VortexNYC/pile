@@ -3164,6 +3164,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdCustomersIdSignals",
+    "description": "List customer signals (GET /workspaces/{organizationId}/customers/{id}/signals) Path params (top-level, required): organizationId, id.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/customers/{id}/signals",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdCustomerstatuses",
     "description": "List customer statuses (GET /workspaces/{organizationId}/customer-statuses) Path params (top-level, required): organizationId.",
     "method": "GET",
@@ -13277,6 +13298,47 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdCustomersDedupkey",
+    "description": "Create customer dedup key (POST /workspaces/{organizationId}/customers/dedup-key) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, address, phone, domain (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers/dedup-key",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "address": {
+              "type": "string",
+              "nullable": true
+            },
+            "phone": {
+              "type": "string",
+              "nullable": true
+            },
+            "domain": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          "required": [
+            "name"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdCustomersIdAttachments",
     "description": "Create customer attachment (POST /workspaces/{organizationId}/customers/{id}/attachments) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: fileName*, contentType, contentBase64* (* = required).",
     "method": "POST",
@@ -13341,6 +13403,157 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           },
           "required": [
             "body"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdCustomersIdSendgate",
+    "description": "Create customer send gate (POST /workspaces/{organizationId}/customers/{id}/send-gate) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: touchId, channel*, action, contactId, contactEmail, emailStatus, emailVerifiedAt, doNotContact, doNotEmail, doNotCall, euResident, hasExplicitConsent, allowCatchAll, allowRole, allowUnverified (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers/{id}/send-gate",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "touchId": {
+              "type": "string",
+              "default": "touch-preview"
+            },
+            "channel": {
+              "type": "string",
+              "enum": [
+                "email",
+                "call",
+                "visit",
+                "linkedin"
+              ]
+            },
+            "action": {
+              "type": "string",
+              "enum": [
+                "engage",
+                "claim"
+              ],
+              "default": "engage"
+            },
+            "contactId": {
+              "type": "string",
+              "default": "default-contact"
+            },
+            "contactEmail": {
+              "type": "string"
+            },
+            "emailStatus": {
+              "type": "string",
+              "enum": [
+                "valid",
+                "invalid",
+                "catch_all",
+                "role",
+                "unknown"
+              ]
+            },
+            "emailVerifiedAt": {
+              "type": "string"
+            },
+            "doNotContact": {
+              "type": "boolean"
+            },
+            "doNotEmail": {
+              "type": "boolean"
+            },
+            "doNotCall": {
+              "type": "boolean"
+            },
+            "euResident": {
+              "type": "boolean"
+            },
+            "hasExplicitConsent": {
+              "type": "boolean"
+            },
+            "allowCatchAll": {
+              "type": "boolean"
+            },
+            "allowRole": {
+              "type": "boolean"
+            },
+            "allowUnverified": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "channel"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdCustomersIdSignals",
+    "description": "Create customer signal (POST /workspaces/{organizationId}/customers/{id}/signals) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: type, source, evidenceUrl*, strength, summary, observedAt, html (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers/{id}/signals",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "minLength": 1
+            },
+            "source": {
+              "type": "string",
+              "minLength": 1,
+              "default": "agent"
+            },
+            "evidenceUrl": {
+              "type": "string",
+              "format": "uri"
+            },
+            "strength": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100,
+              "default": 80
+            },
+            "summary": {
+              "type": "string"
+            },
+            "observedAt": {
+              "type": "string"
+            },
+            "html": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "evidenceUrl"
           ]
         }
       },

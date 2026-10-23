@@ -9,6 +9,20 @@ import type { AppContext } from "../platform/middleware.js";
 import { isAdminIdentity } from "../platform/permissions.js";
 import { rls } from "../platform/rls.js";
 import type { workspaceEntityAttachments } from "../workspace/schema.js";
+import {
+  evaluateSendGate,
+  type EmailVerificationStatus,
+  type TouchChannel,
+} from "../workspace/send-gate.js";
+import {
+  computeSmbMatchKey,
+  detectPosTechnographics,
+  type IcpRule,
+  type MerchantSignal,
+  planDetectiveWaterfall,
+  rankMerchantSignals,
+  type SignalRuleConfig,
+} from "../workspace/signals-engine.js";
 import { getExecutionCtx } from "./execution-ctx.js";
 import {
   hiddenIssueIdsForIdentity,
@@ -1303,6 +1317,504 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
             : null,
         })
       ),
+    });
+  });
+
+  // ---- PILE-478..533: Signals, Ranker v2, SMB Dedup & Send Gate API ----
+
+  const DEFAULT_SIGNAL_RULES: SignalRuleConfig[] = [
+    {
+      type: "new_license",
+      polarity: "positive",
+      weight: 40,
+      activeForDays: 90,
+    },
+    {
+      type: "license_pending",
+      polarity: "positive",
+      weight: 35,
+      activeForDays: 90,
+    },
+    {
+      type: "ownership_change",
+      polarity: "positive",
+      weight: 35,
+      activeForDays: 90,
+    },
+    {
+      type: "new_location",
+      polarity: "positive",
+      weight: 30,
+      activeForDays: 90,
+    },
+    {
+      type: "pos_detected",
+      polarity: "positive",
+      weight: 25,
+      activeForDays: 120,
+    },
+    {
+      type: "product_signup",
+      polarity: "positive",
+      weight: 45,
+      activeForDays: 60,
+    },
+    {
+      type: "pricing_view",
+      polarity: "positive",
+      weight: 25,
+      activeForDays: 30,
+    },
+    {
+      type: "stalled_onboarding",
+      polarity: "positive",
+      weight: 35,
+      activeForDays: 45,
+    },
+    {
+      type: "negative_closure",
+      polarity: "negative",
+      weight: 80,
+      activeForDays: 365,
+    },
+  ];
+
+  const DEFAULT_ICP_RULES: IcpRule[] = [
+    {
+      id: "icp-vertical-hospitality",
+      motion: "smb_default",
+      field: "vertical",
+      op: "in",
+      value: ["restaurant", "bar", "cafe", "bakery", "hospitality", "retail"],
+      weight: 20,
+    },
+    {
+      id: "icp-has-address",
+      motion: "smb_default",
+      field: "hasAddress",
+      op: "eq",
+      value: true,
+      weight: 10,
+    },
+    {
+      id: "icp-has-phone",
+      motion: "smb_default",
+      field: "hasPhone",
+      op: "eq",
+      value: true,
+      weight: 10,
+    },
+  ];
+
+  async function loadCustomerSignals(
+    stub: ReturnType<typeof getWorkspaceStub>,
+    customerId: string
+  ): Promise<MerchantSignal[]> {
+    const facts = await stub.memoryRecall({
+      entityType: "customer",
+      entityId: customerId,
+      limit: 100,
+    });
+    const out: MerchantSignal[] = [];
+    for (const row of facts) {
+      if (!row.kind.startsWith("signal:")) continue;
+      try {
+        const parsed = JSON.parse(row.fact) as MerchantSignal;
+        if (
+          parsed &&
+          typeof parsed.id === "string" &&
+          typeof parsed.type === "string"
+        ) {
+          out.push(parsed);
+        }
+      } catch {
+        // Ignore non-JSON signal facts
+      }
+    }
+    return out;
+  }
+
+  const recordSignalRoute = createRoute({
+    method: "post",
+    path: "/workspaces/{organizationId}/customers/{id}/signals",
+    tags: ["customers"],
+    middleware: [rls("customer:edit")],
+    request: {
+      params: orgIdParam,
+      body: {
+        content: {
+          "application/json": {
+            schema: z.object({
+              type: z.string().min(1).optional(),
+              source: z.string().min(1).default("agent"),
+              evidenceUrl: z.string().url(),
+              strength: z.number().min(0).max(100).default(80),
+              summary: z.string().optional(),
+              observedAt: z.string().optional(),
+              html: z.string().optional(),
+            }),
+          },
+        },
+      },
+    },
+    responses: {
+      201: {
+        description: "Recorded signal and recomputed merchant rank",
+        content: {
+          "application/json": {
+            schema: z.object({
+              signal: z.record(z.string(), z.unknown()),
+              breakdown: z.record(z.string(), z.unknown()),
+              waterfall: z.array(z.string()),
+            }),
+          },
+        },
+      },
+      404: { description: "Customer not found" },
+    },
+  });
+
+  const listSignalsRoute = createRoute({
+    method: "get",
+    path: "/workspaces/{organizationId}/customers/{id}/signals",
+    tags: ["customers"],
+    middleware: [rls("customer:view")],
+    request: { params: orgIdParam },
+    responses: {
+      200: {
+        description:
+          "Customer signals, rank breakdown, and detective waterfall",
+        content: {
+          "application/json": {
+            schema: z.object({
+              customerId: z.string(),
+              signals: z.array(z.record(z.string(), z.unknown())),
+              breakdown: z.record(z.string(), z.unknown()),
+              waterfall: z.array(z.string()),
+            }),
+          },
+        },
+      },
+      404: { description: "Customer not found" },
+    },
+  });
+
+  const evaluateCustomerSendGateRoute = createRoute({
+    method: "post",
+    path: "/workspaces/{organizationId}/customers/{id}/send-gate",
+    tags: ["customers"],
+    middleware: [rls("customer:view")],
+    request: {
+      params: orgIdParam,
+      body: {
+        content: {
+          "application/json": {
+            schema: z.object({
+              touchId: z.string().default("touch-preview"),
+              channel: z.enum(["email", "call", "visit", "linkedin"]),
+              action: z.enum(["engage", "claim"]).default("engage"),
+              contactId: z.string().default("default-contact"),
+              contactEmail: z.string().optional(),
+              emailStatus: z
+                .enum(["valid", "invalid", "catch_all", "role", "unknown"])
+                .optional(),
+              emailVerifiedAt: z.string().optional(),
+              doNotContact: z.boolean().optional(),
+              doNotEmail: z.boolean().optional(),
+              doNotCall: z.boolean().optional(),
+              euResident: z.boolean().optional(),
+              hasExplicitConsent: z.boolean().optional(),
+              allowCatchAll: z.boolean().optional(),
+              allowRole: z.boolean().optional(),
+              allowUnverified: z.boolean().optional(),
+            }),
+          },
+        },
+      },
+    },
+    responses: {
+      200: {
+        description: "Deterministic send/claim GateDecision",
+        content: {
+          "application/json": {
+            schema: z.object({
+              touchId: z.string(),
+              channel: z.string(),
+              result: z.enum(["pass", "warn", "block"]),
+              reasons: z.array(z.string()),
+              matchedExclusions: z.array(z.string()),
+              evaluatedAt: z.string(),
+            }),
+          },
+        },
+      },
+      404: { description: "Customer not found" },
+    },
+  });
+
+  const dedupKeyRoute = createRoute({
+    method: "post",
+    path: "/workspaces/{organizationId}/customers/dedup-key",
+    tags: ["customers"],
+    middleware: [rls("customer:view")],
+    request: {
+      params: z.object({ organizationId: z.string() }),
+      body: {
+        content: {
+          "application/json": {
+            schema: z.object({
+              name: z.string().min(1),
+              address: z.string().nullable().optional(),
+              phone: z.string().nullable().optional(),
+              domain: z.string().nullable().optional(),
+            }),
+          },
+        },
+      },
+    },
+    responses: {
+      200: {
+        description:
+          "Normalized SMB match key and any matching existing customer",
+        content: {
+          "application/json": {
+            schema: z.object({
+              matchKey: z.string(),
+              normalizedName: z.string(),
+              normalizedAddress: z.string(),
+              phoneE164: z.string(),
+              normalizedDomain: z.string(),
+              matchedCustomerId: z.string().nullable(),
+            }),
+          },
+        },
+      },
+    },
+  });
+
+  app.openapi(recordSignalRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const customer = await stub.getCustomer(id);
+    if (!customer) return notFound("Customer not found");
+    const nowIso = input.observedAt ?? new Date().toISOString();
+
+    let signal: MerchantSignal;
+    let posGuess: string | null = null;
+    if (input.html) {
+      const detected = detectPosTechnographics({
+        merchantId: customer.id,
+        pageUrl: input.evidenceUrl,
+        html: input.html,
+        observedAt: nowIso,
+      });
+      posGuess = detected.posGuess;
+      if (detected.signal) {
+        signal = detected.signal;
+      } else {
+        signal = {
+          id: `sig_${crypto.randomUUID().slice(0, 12)}`,
+          merchantId: customer.id,
+          type: input.type ?? "pos_detected",
+          observedAt: nowIso,
+          source: input.source,
+          evidenceUrl: input.evidenceUrl,
+          strength: input.strength,
+          summary: input.summary ?? null,
+        };
+      }
+    } else {
+      const sigType = input.type ?? "new_license";
+      signal = {
+        id: `sig_${crypto.randomUUID().slice(0, 12)}`,
+        merchantId: customer.id,
+        type: sigType,
+        observedAt: nowIso,
+        source: input.source,
+        evidenceUrl: input.evidenceUrl,
+        strength: input.strength,
+        summary: input.summary ?? null,
+      };
+    }
+
+    await stub.memoryRemember({
+      entityType: "customer",
+      entityId: customer.id,
+      kind: `signal:${signal.type}:${signal.id}`,
+      fact: JSON.stringify(signal),
+    });
+
+    const signals = await loadCustomerSignals(stub, customer.id);
+    const breakdown = rankMerchantSignals({
+      merchantId: customer.id,
+      merchantAttrs: {
+        vertical: (customer.vertical ?? "").toLowerCase(),
+        hasAddress: Boolean(customer.address),
+        hasPhone: Boolean(customer.phone),
+      },
+      signals,
+      config: {
+        motion: "smb_default",
+        icpRules: DEFAULT_ICP_RULES,
+        signalRules: DEFAULT_SIGNAL_RULES,
+      },
+      nowIso,
+    });
+    const customFields: Record<string, string | null> =
+      typeof customer.customFields === "string"
+        ? (JSON.parse(customer.customFields) as Record<string, string | null>)
+        : {
+            ...((customer.customFields as Record<
+              string,
+              string | null
+            > | null) ?? {}),
+          };
+    customFields.whyNow = breakdown.whyNow;
+    customFields.whyNowSignalIds = breakdown.whyNowSignalIds.join(",");
+    await stub.updateCustomer(customer.id, {
+      priorityScore: breakdown.priorityScore,
+      fitScore: breakdown.fitScore,
+      fitStatus: breakdown.fitRating,
+      ...(posGuess ? { processor: posGuess } : {}),
+      evidenceUri: signal.evidenceUrl,
+      customFields,
+    });
+
+    const waterfall = planDetectiveWaterfall({
+      rankScore: breakdown.priorityScore,
+      paidRankThreshold: 75,
+      monthlyBudgetRemainingCents: 10_000,
+      estimatedPaidLookupCents: 50,
+    });
+    return c.json(
+      {
+        signal: signal as unknown as Record<string, unknown>,
+        breakdown: breakdown as unknown as Record<string, unknown>,
+        waterfall,
+      },
+      201
+    );
+  });
+
+  app.openapi(listSignalsRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const customer = await stub.getCustomer(id);
+    if (!customer) return notFound("Customer not found");
+    const signals = await loadCustomerSignals(stub, customer.id);
+    const breakdown = rankMerchantSignals({
+      merchantId: customer.id,
+      merchantAttrs: {
+        vertical: (customer.vertical ?? "").toLowerCase(),
+        hasAddress: Boolean(customer.address),
+        hasPhone: Boolean(customer.phone),
+      },
+      signals,
+      config: {
+        motion: "smb_default",
+        icpRules: DEFAULT_ICP_RULES,
+        signalRules: DEFAULT_SIGNAL_RULES,
+      },
+    });
+    const waterfall = planDetectiveWaterfall({
+      rankScore: breakdown.priorityScore,
+      paidRankThreshold: 75,
+      monthlyBudgetRemainingCents: 10_000,
+      estimatedPaidLookupCents: 50,
+    });
+    return c.json({
+      customerId: customer.id,
+      signals: signals as unknown as Array<Record<string, unknown>>,
+      breakdown: breakdown as unknown as Record<string, unknown>,
+      waterfall,
+    });
+  });
+
+  app.openapi(evaluateCustomerSendGateRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const customer = await stub.getCustomer(id);
+    if (!customer) return notFound("Customer not found");
+
+    const suppressedCustomer = await stub.isSuppressed(
+      "customerId",
+      customer.id
+    );
+    const suppressedDomain = customer.domain
+      ? await stub.isSuppressed("domain", customer.domain)
+      : null;
+    const suppressedEmail = input.contactEmail
+      ? await stub.isSuppressed("email", input.contactEmail)
+      : null;
+
+    const decision = evaluateSendGate({
+      touchId: input.touchId,
+      channel: input.channel as TouchChannel,
+      action: input.action,
+      merchant: {
+        id: customer.id,
+        domain: customer.domain,
+        permissions: {
+          doNotContact:
+            Boolean(input.doNotContact) ||
+            Boolean(suppressedCustomer) ||
+            Boolean(suppressedDomain),
+        },
+      },
+      contact: {
+        id: input.contactId,
+        email: input.contactEmail ?? null,
+        permissions: {
+          doNotEmail: Boolean(input.doNotEmail) || Boolean(suppressedEmail),
+          doNotCall: Boolean(input.doNotCall),
+          euResident: Boolean(input.euResident),
+          hasExplicitConsent: Boolean(input.hasExplicitConsent),
+          emailStatus: (input.emailStatus ??
+            "valid") as EmailVerificationStatus,
+          emailVerifiedAt: input.emailVerifiedAt ?? null,
+        },
+      },
+      cadence: {
+        allowCatchAll: input.allowCatchAll,
+        allowRole: input.allowRole,
+        allowUnverified: input.allowUnverified ?? true,
+      },
+    });
+
+    await stub.memoryRemember({
+      entityType: "customer",
+      entityId: customer.id,
+      kind: `gate_decision:${decision.touchId}`,
+      fact: JSON.stringify(decision),
+    });
+
+    return c.json(decision);
+  });
+
+  app.openapi(dedupKeyRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const key = computeSmbMatchKey(input);
+    const allCustomers = await stub.listCustomers();
+    const matched = allCustomers.find((row) => {
+      const rowKey = computeSmbMatchKey({
+        name: row.name,
+        address: row.address,
+        phone: row.phone,
+        domain: row.domain,
+      });
+      return (
+        rowKey.matchKey === key.matchKey ||
+        (Boolean(key.normalizedDomain) &&
+          rowKey.normalizedDomain === key.normalizedDomain)
+      );
+    });
+    return c.json({
+      ...key,
+      matchedCustomerId: matched?.id ?? null,
     });
   });
 }

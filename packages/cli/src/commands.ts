@@ -8605,6 +8605,173 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "customers signals list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/customers/{id}/signals",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "customers signals create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/{id}/signals",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "type",
+        flag: "type",
+      },
+      {
+        name: "source",
+        flag: "source",
+      },
+      {
+        name: "evidenceUrl",
+        flag: "evidence-url",
+      },
+      {
+        name: "strength",
+        flag: "strength",
+      },
+      {
+        name: "summary",
+        flag: "summary",
+      },
+      {
+        name: "observedAt",
+        flag: "observed-at",
+      },
+      {
+        name: "html",
+        flag: "html",
+      },
+    ],
+  },
+  "customers send gate create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/{id}/send-gate",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "touchId",
+        flag: "touch-id",
+      },
+      {
+        name: "channel",
+        flag: "channel",
+      },
+      {
+        name: "action",
+        flag: "action",
+      },
+      {
+        name: "contactId",
+        flag: "contact-id",
+      },
+      {
+        name: "contactEmail",
+        flag: "contact-email",
+      },
+      {
+        name: "emailStatus",
+        flag: "email-status",
+      },
+      {
+        name: "emailVerifiedAt",
+        flag: "email-verified-at",
+      },
+      {
+        name: "doNotContact",
+        flag: "do-not-contact",
+      },
+      {
+        name: "doNotEmail",
+        flag: "do-not-email",
+      },
+      {
+        name: "doNotCall",
+        flag: "do-not-call",
+      },
+      {
+        name: "euResident",
+        flag: "eu-resident",
+      },
+      {
+        name: "hasExplicitConsent",
+        flag: "has-explicit-consent",
+      },
+      {
+        name: "allowCatchAll",
+        flag: "allow-catch-all",
+      },
+      {
+        name: "allowRole",
+        flag: "allow-role",
+      },
+      {
+        name: "allowUnverified",
+        flag: "allow-unverified",
+      },
+    ],
+  },
+  "customers dedup key create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/dedup-key",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "address",
+        flag: "address",
+      },
+      {
+        name: "phone",
+        flag: "phone",
+      },
+      {
+        name: "domain",
+        flag: "domain",
+      },
+    ],
+  },
   "deals list": {
     method: "GET",
     path: "/workspaces/{organizationId}/deals",
