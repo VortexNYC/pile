@@ -44362,11 +44362,14 @@
                   "preset": {
                     "type": "string",
                     "enum": [
+                      "nyc_dob_contractors_and_trades",
+                      "nyc_bic_commercial_haulers",
+                      "nyc_dob_permit_issuances",
                       "nyc_home_improvement_contractors",
                       "nyc_auto_and_garages",
                       "nyc_b2b_and_specialty_dealers"
                     ],
-                    "default": "nyc_home_improvement_contractors"
+                    "default": "nyc_dob_contractors_and_trades"
                   },
                   "borough": {
                     "type": "string"
@@ -44376,6 +44379,10 @@
                     "minimum": 1,
                     "maximum": 100,
                     "default": 15
+                  },
+                  "offset": {
+                    "type": "integer",
+                    "minimum": 0
                   }
                 }
               }
@@ -44384,7 +44391,7 @@
         },
         "responses": {
           "200": {
-            "description": "Pulled non-POS SMB leads from public registries, deduplicated via SMB match key, recorded signals, and executed lead play",
+            "description": "Pulled non-POS SMB leads from public registries, deduplicated via SMB match key, created owner contacts, recorded signals, and executed lead play",
             "content": {
               "application/json": {
                 "schema": {
@@ -44402,6 +44409,9 @@
                     "updatedCount": {
                       "type": "number"
                     },
+                    "nextOffset": {
+                      "type": "number"
+                    },
                     "leads": {
                       "type": "array",
                       "items": {
@@ -44417,6 +44427,7 @@
                     "pulledCount",
                     "createdCount",
                     "updatedCount",
+                    "nextOffset",
                     "leads"
                   ]
                 }

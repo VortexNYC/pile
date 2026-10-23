@@ -18,6 +18,8 @@ export interface MerchantCandidate {
   domain?: string | null;
   address?: string | null;
   phone?: string | null;
+  email?: string | null;
+  ownerName?: string | null;
   neighborhood?: string | null;
   vertical?: string | null;
   signal: string;
@@ -25,7 +27,45 @@ export interface MerchantCandidate {
   evidenceUri?: string | null;
 }
 
+const FREEMAIL_DOMAINS = new Set([
+  "gmail.com",
+  "googlemail.com",
+  "yahoo.com",
+  "ymail.com",
+  "aol.com",
+  "hotmail.com",
+  "outlook.com",
+  "live.com",
+  "msn.com",
+  "icloud.com",
+  "me.com",
+  "mac.com",
+  "verizon.net",
+  "optimum.net",
+  "optonline.net",
+  "earthlink.net",
+  "comcast.net",
+  "att.net",
+  "sbcglobal.net",
+  "protonmail.com",
+  "proton.me",
+  "zoho.com",
+  "mail.com",
+]);
+
+export function deriveDomainFromEmail(
+  email: string | null | undefined
+): string | null {
+  if (!email || !email.includes("@")) return null;
+  const host = email.split("@")[1]?.trim().toLowerCase();
+  if (!host || !host.includes(".") || FREEMAIL_DOMAINS.has(host)) return null;
+  return host;
+}
+
 export type NonPosSmbPresetId =
+  | "nyc_dob_contractors_and_trades"
+  | "nyc_bic_commercial_haulers"
+  | "nyc_dob_permit_issuances"
   | "nyc_home_improvement_contractors"
   | "nyc_auto_and_garages"
   | "nyc_b2b_and_specialty_dealers";
@@ -34,6 +74,65 @@ export const PRESET_NON_POS_SMB_SOURCES: Record<
   NonPosSmbPresetId,
   MerchantSourceRow
 > = {
+  nyc_dob_contractors_and_trades: {
+    id: "preset_nyc_dob_lic",
+    name: "NYC DOB Active General Contractors, Plumbers, Electricians & Engineering Firms",
+    kind: "socrata",
+    config: JSON.stringify({
+      domain: "data.cityofnewyork.us",
+      dataset: "t8hj-ruu2",
+      name_field: "business_name",
+      id_field: "license_sl_no",
+      vertical_field: "license_type",
+      phone_field: "business_phone_number",
+      email_field: "business_email",
+      borough_field: "license_business_city",
+      where:
+        "license_status='ACTIVE' AND business_phone_number IS NOT NULL AND business_email IS NOT NULL AND business_name IS NOT NULL AND license_type IN ('GENERAL CONTRACTOR', 'ELECTRICAL FIRM', 'MASTER PLUMBER', 'FILING REPRESENTATIVE', 'SPECIAL INSPECTION AGENCY', 'FIRE SUPPRESSION CONTRACTOR', 'RIGGER', 'OIL BURNER INSTALLER')",
+    }),
+    cursorField: null,
+    cursorValue: null,
+    signal: "new_license",
+  },
+  nyc_bic_commercial_haulers: {
+    id: "preset_nyc_bic",
+    name: "NYC BIC Active Commercial Construction & Trade Waste Licensees",
+    kind: "socrata",
+    config: JSON.stringify({
+      domain: "data.cityofnewyork.us",
+      dataset: "867j-5pgi",
+      name_field: "account_name",
+      id_field: "bic_number",
+      vertical_field: "application_type",
+      phone_field: "phone",
+      email_field: "email",
+      borough_field: "city",
+      where:
+        "phone IS NOT NULL AND email IS NOT NULL AND account_name IS NOT NULL",
+    }),
+    cursorField: "created",
+    cursorValue: null,
+    signal: "new_license",
+  },
+  nyc_dob_permit_issuances: {
+    id: "preset_nyc_dob_permits",
+    name: "NYC DOB Active Building & Trade Permit Issuances",
+    kind: "socrata",
+    config: JSON.stringify({
+      domain: "data.cityofnewyork.us",
+      dataset: "ipu4-2q9a",
+      name_field: "permittee_s_business_name",
+      id_field: "permit_si_no",
+      vertical_field: "permittee_s_license_type",
+      phone_field: "permittee_s_phone__",
+      borough_field: "borough",
+      where:
+        "permittee_s_business_name IS NOT NULL AND permittee_s_business_name != 'N/A' AND permittee_s_phone__ IS NOT NULL",
+    }),
+    cursorField: null,
+    cursorValue: null,
+    signal: "new_license",
+  },
   nyc_home_improvement_contractors: {
     id: "preset_nyc_hic",
     name: "NYC DCWP Active Home Improvement Contractors",
@@ -125,7 +224,7 @@ function str(v: unknown): string | null {
 
 async function pullSocrata(
   source: MerchantSourceRow,
-  options?: { limit?: number; extraWhere?: string }
+  options?: { limit?: number; offset?: number; extraWhere?: string }
 ): Promise<{ candidates: MerchantCandidate[]; newCursor: string | null }> {
   const c = cfg(source);
   const domain = str(c.domain) ?? "data.ny.gov";
@@ -136,7 +235,11 @@ async function pullSocrata(
     1,
     Math.min(500, Number.isFinite(rawLimit) ? rawLimit : 500)
   );
-  const params = new URLSearchParams({ $limit: String(limit) });
+  const offset = Math.max(0, options?.offset ?? 0);
+  const params = new URLSearchParams({
+    $limit: String(limit),
+    ...(offset > 0 ? { $offset: String(offset) } : {}),
+  });
   const whereClauses: string[] = [];
   if (str(c.where)) whereClauses.push(`(${str(c.where)})`);
   if (options?.extraWhere) whereClauses.push(`(${options.extraWhere})`);
@@ -159,6 +262,7 @@ async function pullSocrata(
   const nameField = str(c.name_field) ?? "name";
   const idField = str(c.id_field) ?? nameField;
   const phoneField = str(c.phone_field) ?? "contact_phone";
+  const emailField = str(c.email_field) ?? "business_email";
   const boroughField = str(c.borough_field) ?? "address_borough";
   let maxDate: string | null = null;
   const candidates = rows.map((r) => {
@@ -166,26 +270,60 @@ async function pullSocrata(
     const id = str(r[idField]) ?? name;
     const date = source.cursorField ? str(r[source.cursorField]) : null;
     if (date && (!maxDate || date > maxDate)) maxDate = date;
-    const streetLine = [str(r.address_building), str(r.address_street_name)]
+    const streetLine = [
+      str(r.address_building) ??
+        str(r.business_house_number) ??
+        str(r.house__) ??
+        str(r.building_number),
+      str(r.address_street_name) ??
+        str(r.business_street_name) ??
+        str(r.street_name) ??
+        str(r.street),
+    ]
       .filter(Boolean)
       .join(" ");
     const composedAddress = [
-      streetLine || str(r.actual_address_of_premises),
-      str(r.address_city) ?? str(r.city),
-      str(r.address_state) ?? str(r.state_name),
-      str(r.address_zip),
+      streetLine || str(r.actual_address_of_premises) || str(r.address),
+      str(r.address_city) ?? str(r.license_business_city) ?? str(r.city),
+      str(r.address_state) ??
+        str(r.business_state) ??
+        str(r.state) ??
+        str(r.state_name),
+      str(r.address_zip) ??
+        str(r.business_zip_code) ??
+        str(r.zip_code) ??
+        str(r.postcode),
     ]
       .filter(Boolean)
       .join(", ");
+    const rawEmail = (
+      str(r[emailField]) ??
+      str(r.business_email) ??
+      str(r.email)
+    )?.toLowerCase();
+    const ownerFirst = str(r.first_name) ?? str(r.permittee_s_first_name);
+    const ownerLast = str(r.last_name) ?? str(r.permittee_s_last_name);
+    const ownerName = [ownerFirst, ownerLast].filter(Boolean).join(" ") || null;
     return {
       name: name ?? "unknown",
       externalId: `socrata:${dataset}:${id}`,
-      domain: str(r[str(c.domain_field) ?? "website"]),
+      domain:
+        str(r[str(c.domain_field) ?? "website"]) ??
+        deriveDomainFromEmail(rawEmail),
       address:
-        str(r[str(c.address_field) ?? "address"]) ?? (composedAddress || null),
-      phone: str(r[phoneField]) ?? str(r.phone) ?? str(r.business_phone_number),
+        (composedAddress || str(r[str(c.address_field) ?? "address"])) ?? null,
+      phone:
+        str(r[phoneField]) ??
+        str(r.business_phone_number) ??
+        str(r.permittee_s_phone__) ??
+        str(r.phone),
+      email: rawEmail ?? null,
+      ownerName,
       neighborhood:
-        str(r[boroughField]) ?? str(r.borough) ?? str(r.address_city),
+        str(r[boroughField]) ??
+        str(r.borough) ??
+        str(r.license_business_city) ??
+        str(r.city),
       vertical: str(r[str(c.vertical_field) ?? "description"]),
       signal: source.signal,
       signalDate: date,
@@ -318,7 +456,7 @@ async function pullSam(
 export async function pullSource(
   source: MerchantSourceRow,
   env?: Record<string, string | undefined>,
-  options?: { limit?: number; extraWhere?: string }
+  options?: { limit?: number; offset?: number; extraWhere?: string }
 ): Promise<{ candidates: MerchantCandidate[]; newCursor: string | null }> {
   switch (source.kind) {
     case "socrata":

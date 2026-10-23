@@ -13920,7 +13920,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdCustomersPullleads",
-    "description": "Create customer pull lead (POST /workspaces/{organizationId}/customers/pull-leads) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: preset, borough, limit.",
+    "description": "Create customer pull lead (POST /workspaces/{organizationId}/customers/pull-leads) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: preset, borough, limit, offset.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/customers/pull-leads",
     "inputSchema": {
@@ -13935,11 +13935,14 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "preset": {
               "type": "string",
               "enum": [
+                "nyc_dob_contractors_and_trades",
+                "nyc_bic_commercial_haulers",
+                "nyc_dob_permit_issuances",
                 "nyc_home_improvement_contractors",
                 "nyc_auto_and_garages",
                 "nyc_b2b_and_specialty_dealers"
               ],
-              "default": "nyc_home_improvement_contractors"
+              "default": "nyc_dob_contractors_and_trades"
             },
             "borough": {
               "type": "string"
@@ -13949,6 +13952,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "minimum": 1,
               "maximum": 100,
               "default": 15
+            },
+            "offset": {
+              "type": "integer",
+              "minimum": 0
             }
           }
         }

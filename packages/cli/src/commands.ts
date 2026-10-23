@@ -8915,6 +8915,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "limit",
         flag: "limit",
       },
+      {
+        name: "offset",
+        flag: "offset",
+      },
     ],
   },
   "deals list": {

@@ -52,7 +52,7 @@ describe("scoreCandidate", () => {
     expect(ancient).toBe(0);
   });
 
-  it("pulls NYC non-POS SMB presets from Socrata and extracts phone, borough, and composed street address", async () => {
+  it("pulls NYC non-POS SMB presets from Socrata and extracts phone, email, ownerName, derived domain, borough, and composed street address", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(
@@ -60,17 +60,19 @@ describe("scoreCandidate", () => {
           new Response(
             JSON.stringify([
               {
-                license_nbr: "2099111-DCA",
-                business_name: "METRO HVAC & CONTRACTING CORP",
-                business_category: "Home Improvement Contractor",
-                license_creation_date: "2026-03-10T00:00:00.000",
-                contact_phone: "7185550199",
-                address_building: "420",
-                address_street_name: "LEXINGTON AVE",
-                address_city: "NEW YORK",
-                address_state: "NY",
-                address_zip: "10170",
-                address_borough: "Manhattan",
+                license_sl_no: "100826",
+                license_type: "GENERAL CONTRACTOR",
+                first_name: "GEORGE",
+                last_name: "PAPADIONISOPOULOS",
+                business_name: "DECO CONSTRUCTION INC",
+                business_house_number: "92",
+                business_street_name: "SEQUOIA DRIVE",
+                license_business_city: "CORAM",
+                business_state: "NY",
+                business_zip_code: "11727",
+                business_email: "INFO@DECOCONSTRUCTIONINC.COM",
+                business_phone_number: "3476547642",
+                license_status: "ACTIVE",
               },
             ]),
             { status: 200 }
@@ -78,17 +80,20 @@ describe("scoreCandidate", () => {
       )
     );
     const out = await pullSource(
-      PRESET_NON_POS_SMB_SOURCES.nyc_home_improvement_contractors,
+      PRESET_NON_POS_SMB_SOURCES.nyc_dob_contractors_and_trades,
       undefined,
-      { limit: 5, extraWhere: "address_borough='Manhattan'" }
+      { limit: 5, offset: 10 }
     );
     expect(out.candidates).toHaveLength(1);
     expect(out.candidates[0]).toMatchObject({
-      name: "METRO HVAC & CONTRACTING CORP",
-      phone: "7185550199",
-      neighborhood: "Manhattan",
-      vertical: "Home Improvement Contractor",
-      address: "420 LEXINGTON AVE, NEW YORK, NY, 10170",
+      name: "DECO CONSTRUCTION INC",
+      ownerName: "GEORGE PAPADIONISOPOULOS",
+      email: "info@decoconstructioninc.com",
+      domain: "decoconstructioninc.com",
+      phone: "3476547642",
+      neighborhood: "CORAM",
+      vertical: "GENERAL CONTRACTOR",
+      address: "92 SEQUOIA DRIVE, CORAM, NY, 11727",
     });
     vi.unstubAllGlobals();
   });

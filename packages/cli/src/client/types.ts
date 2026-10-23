@@ -21471,18 +21471,19 @@ export interface paths {
                 content: {
                     "application/json": {
                         /**
-                         * @default nyc_home_improvement_contractors
+                         * @default nyc_dob_contractors_and_trades
                          * @enum {string}
                          */
-                        preset?: "nyc_home_improvement_contractors" | "nyc_auto_and_garages" | "nyc_b2b_and_specialty_dealers";
+                        preset?: "nyc_dob_contractors_and_trades" | "nyc_bic_commercial_haulers" | "nyc_dob_permit_issuances" | "nyc_home_improvement_contractors" | "nyc_auto_and_garages" | "nyc_b2b_and_specialty_dealers";
                         borough?: string;
                         /** @default 15 */
                         limit?: number;
+                        offset?: number;
                     };
                 };
             };
             responses: {
-                /** @description Pulled non-POS SMB leads from public registries, deduplicated via SMB match key, recorded signals, and executed lead play */
+                /** @description Pulled non-POS SMB leads from public registries, deduplicated via SMB match key, created owner contacts, recorded signals, and executed lead play */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -21493,6 +21494,7 @@ export interface paths {
                             pulledCount: number;
                             createdCount: number;
                             updatedCount: number;
+                            nextOffset: number;
                             leads: {
                                 [key: string]: unknown;
                             }[];
