@@ -7049,9 +7049,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     // the team first so a workspace without triage never warms the index.
     if (issue.isDraft || issue.status === "done" || issue.status === "canceled")
       return;
-    // PILE-411 — a stage sub-step is machine-materialized work with its own
+    // PILE-411 — a stage sub-step or ownerAgent-assigned task has its own
     // owner_agent, not an inbound issue needing triage.
-    if (issue.stepKey) return;
+    if (issue.stepKey || issue.ownerAgent) return;
     const env = this.env;
     this.ctx.waitUntil(
       getTeamById(createD1(env.D1), issue.teamId, this.organizationId)

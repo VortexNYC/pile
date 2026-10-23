@@ -2816,8 +2816,10 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
     async run(ctx, input) {
       const source =
         PRESET_NON_POS_SMB_SOURCES[input.preset as NonPosSmbPresetId];
+      const sourceCfg = JSON.parse(source.config) as { borough_field?: string };
+      const boroughCol = sourceCfg.borough_field ?? "address_borough";
       const extraWhere = input.borough
-        ? `upper(address_borough)=upper('${input.borough.replace(/'/g, "")}')`
+        ? `upper(${boroughCol})=upper('${input.borough.replace(/'/g, "")}')`
         : undefined;
       const pulled = await pullSource(source, undefined, {
         limit: input.limit,
