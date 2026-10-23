@@ -44383,6 +44383,14 @@
                   "offset": {
                     "type": "integer",
                     "minimum": 0
+                  },
+                  "enrichWebsites": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "dispatchDetectiveBatch": {
+                    "type": "boolean",
+                    "default": false
                   }
                 }
               }
@@ -44411,6 +44419,10 @@
                     },
                     "nextOffset": {
                       "type": "number"
+                    },
+                    "detectiveBatchIssueId": {
+                      "type": "string",
+                      "nullable": true
                     },
                     "leads": {
                       "type": "array",

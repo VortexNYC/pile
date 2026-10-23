@@ -122,6 +122,7 @@ import {
 } from "../types/workspace.js";
 import * as data from "./data/index.js";
 import { filterToSql } from "./filter.js";
+import { runMerchantLeadPlay } from "./lead-play-engine.js";
 import { workspaceMigrations } from "./migrations.js";
 import { type ReviewVerdict, rollReviewSummary } from "./review-summary.js";
 import { workspaceSchema } from "./schema-map.js";
@@ -173,6 +174,7 @@ import {
   type CommentForSearch,
   type WorkspaceSearchIndex,
 } from "./search.js";
+import { computeSmbMatchKey, type MerchantSignal } from "./signals-engine.js";
 import { inArrayJson, notInArrayJson } from "./sql.js";
 import { deliverWebhooks, retryWebhookDeliveries } from "./webhooks.js";
 
@@ -2788,6 +2790,300 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   upsertContact(input: data.ContactInput) {
     return data.upsertCustomerContact(this.db, this.organizationId, input);
+  }
+
+  async ingestPulledLeadsBatch(input: {
+    sourceName: string;
+    cursorKind?: string | null;
+    nextOffset?: number | null;
+    actorUserId?: string | null;
+    dispatchDetectiveBatch?: boolean;
+    teamId?: string | null;
+    candidates: ReadonlyArray<{
+      name: string;
+      externalId: string;
+      domain?: string | null;
+      address?: string | null;
+      phone?: string | null;
+      email?: string | null;
+      ownerName?: string | null;
+      neighborhood?: string | null;
+      vertical?: string | null;
+      signal: string;
+      signalDate?: string | null;
+      evidenceUri?: string | null;
+      posGuess?: string | null;
+      posEvidenceUrl?: string | null;
+    }>;
+  }) {
+    if (input.cursorKind && typeof input.nextOffset === "number") {
+      data.memoryRemember(this.db, this.organizationId, {
+        entityType: "workspace",
+        entityId: this.organizationId,
+        kind: input.cursorKind,
+        fact: String(input.nextOffset),
+      });
+    }
+
+    const existing = data.listCustomers(this.db, this.organizationId);
+    const byMatchKey = new Map<string, (typeof existing)[number]>();
+    const byExternalId = new Map<string, (typeof existing)[number]>();
+    for (const row of existing) {
+      if (row.externalId) byExternalId.set(row.externalId, row);
+      const mk = computeSmbMatchKey({
+        name: row.name,
+        address: row.address,
+        phone: row.phone,
+        domain: row.domain,
+      });
+      if (mk.matchKey) byMatchKey.set(mk.matchKey, row);
+    }
+
+    let createdCount = 0;
+    let updatedCount = 0;
+    const leads: Array<{
+      customerId: string;
+      name: string;
+      ownerName: string | null;
+      email: string | null;
+      domain: string | null;
+      processor: string | null;
+      vertical: string | null;
+      neighborhood: string | null;
+      address: string | null;
+      phone: string | null;
+      priorityScore: number;
+      fitScore: number;
+      whyNow: string;
+      playStatus: string;
+    }> = [];
+    const incompleteForDetective: Array<{
+      customerId: string;
+      name: string;
+      vertical: string | null;
+      address: string | null;
+      phone: string | null;
+      domain: string | null;
+    }> = [];
+
+    for (const cand of input.candidates) {
+      const mk = computeSmbMatchKey({
+        name: cand.name,
+        address: cand.address,
+        phone: cand.phone,
+        domain: cand.domain,
+      });
+      const matched =
+        byExternalId.get(cand.externalId) ??
+        (mk.matchKey ? byMatchKey.get(mk.matchKey) : undefined);
+
+      const customer = matched
+        ? (data.updateCustomer(this.db, this.organizationId, matched.id, {
+            domain: cand.domain ?? matched.domain,
+            address: cand.address ?? matched.address,
+            phone: mk.phoneE164 ?? cand.phone ?? matched.phone,
+            vertical: cand.vertical ?? matched.vertical,
+            neighborhood: cand.neighborhood ?? matched.neighborhood,
+            processor: cand.posGuess ?? matched.processor,
+            evidenceUri: cand.evidenceUri ?? matched.evidenceUri,
+            source: input.sourceName,
+          }) ?? matched)
+        : data.createCustomer(this.db, {
+            organizationId: this.organizationId,
+            name: cand.name,
+            externalId: cand.externalId,
+            domain: cand.domain ?? null,
+            address: cand.address ?? null,
+            phone: mk.phoneE164 ?? cand.phone ?? null,
+            vertical: cand.vertical ?? null,
+            neighborhood: cand.neighborhood ?? null,
+            processor: cand.posGuess ?? null,
+            evidenceUri: cand.evidenceUri ?? null,
+            source: input.sourceName,
+          });
+
+      if (matched) {
+        updatedCount += 1;
+      } else {
+        createdCount += 1;
+        byExternalId.set(cand.externalId, customer);
+        if (mk.matchKey) byMatchKey.set(mk.matchKey, customer);
+      }
+
+      if (cand.email) {
+        data.upsertCustomerContact(this.db, this.organizationId, {
+          customerId: customer.id,
+          type: cand.ownerName ? "named_person" : "business_channel",
+          role: cand.ownerName ? "owner" : null,
+          channel: "email",
+          value: cand.email,
+          label: cand.ownerName ?? customer.name,
+          status: "verified",
+          confidence: "high",
+          source: input.sourceName,
+          evidenceUri: cand.evidenceUri ?? null,
+        });
+      }
+      if (mk.phoneE164 ?? cand.phone) {
+        data.upsertCustomerContact(this.db, this.organizationId, {
+          customerId: customer.id,
+          type: cand.ownerName ? "named_person" : "business_channel",
+          role: cand.ownerName ? "owner" : null,
+          channel: "phone",
+          value: (mk.phoneE164 ?? cand.phone)!,
+          label: cand.ownerName ?? customer.name,
+          status: "verified",
+          confidence: "high",
+          source: input.sourceName,
+          evidenceUri: cand.evidenceUri ?? null,
+        });
+      }
+
+      const signals: MerchantSignal[] = [];
+      const signalObj: MerchantSignal = {
+        id: `sig_${cand.externalId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 48)}`,
+        merchantId: customer.id,
+        type: cand.signal || "new_license",
+        observedAt: cand.signalDate
+          ? new Date(cand.signalDate).toISOString()
+          : new Date().toISOString(),
+        source: input.sourceName,
+        evidenceUrl:
+          cand.evidenceUri ??
+          "https://data.cityofnewyork.us/resource/t8hj-ruu2",
+        strength: 85,
+        summary: `Active NYC ${cand.vertical ?? "SMB"} license${cand.ownerName ? ` (Principal: ${cand.ownerName})` : ""} (${cand.externalId})`,
+      };
+      signals.push(signalObj);
+      data.memoryRemember(this.db, this.organizationId, {
+        entityType: "customer",
+        entityId: customer.id,
+        kind: `signal:${signalObj.type}:${signalObj.id}`,
+        fact: JSON.stringify(signalObj),
+      });
+
+      if (cand.posGuess) {
+        const posSig: MerchantSignal = {
+          id: `sig_pos_${customer.id}_${cand.posGuess}`,
+          merchantId: customer.id,
+          type: "pos_detected",
+          observedAt: new Date().toISOString(),
+          source: "website_technographics",
+          evidenceUrl:
+            cand.posEvidenceUrl ?? `https://${cand.domain ?? "example.com"}`,
+          strength: 85,
+          summary: `Detected ${cand.posGuess.toUpperCase()} payment/billing stack on website`,
+        };
+        signals.push(posSig);
+        data.memoryRemember(this.db, this.organizationId, {
+          entityType: "customer",
+          entityId: customer.id,
+          kind: `signal:${posSig.type}:${posSig.id}`,
+          fact: JSON.stringify(posSig),
+        });
+      }
+
+      const receipt = runMerchantLeadPlay({
+        merchant: {
+          id: customer.id,
+          name: customer.name,
+          domain: customer.domain,
+          vertical: customer.vertical,
+          neighborhood: customer.neighborhood,
+          address: customer.address,
+          phone: customer.phone,
+          processor: cand.posGuess ?? customer.processor,
+          ownerId: customer.ownerId,
+        },
+        signals,
+        contactEmail: cand.email ?? null,
+        actorUserId: input.actorUserId ?? undefined,
+      });
+
+      data.updateCustomer(this.db, this.organizationId, customer.id, {
+        priorityScore: receipt.breakdown.priorityScore,
+        fitScore: receipt.breakdown.fitScore,
+        fitStatus: receipt.breakdown.fitRating,
+        ...(cand.posGuess ? { processor: cand.posGuess } : {}),
+        signal: receipt.breakdown.whyNow,
+      });
+
+      if (!cand.ownerName || !cand.email) {
+        incompleteForDetective.push({
+          customerId: customer.id,
+          name: customer.name,
+          vertical: customer.vertical,
+          address: customer.address,
+          phone: customer.phone,
+          domain: customer.domain,
+        });
+      }
+
+      leads.push({
+        customerId: customer.id,
+        name: customer.name,
+        ownerName: cand.ownerName ?? null,
+        email: cand.email ?? null,
+        domain: customer.domain ?? null,
+        processor: cand.posGuess ?? customer.processor ?? null,
+        vertical: customer.vertical,
+        neighborhood: customer.neighborhood,
+        address: customer.address,
+        phone: customer.phone,
+        priorityScore: receipt.breakdown.priorityScore,
+        fitScore: receipt.breakdown.fitScore,
+        whyNow: receipt.breakdown.whyNow,
+        playStatus: receipt.status,
+      });
+    }
+
+    let detectiveBatchIssueId: string | null = null;
+    if (input.dispatchDetectiveBatch && incompleteForDetective.length > 0) {
+      const openIssues = await this.listIssues({ limit: 50 });
+      const existingDetectiveBatch = openIssues.find(
+        (i) =>
+          (i.status === "todo" || i.status === "in_progress") &&
+          i.ownerAgent === "detective" &&
+          !i.parentId
+      );
+      if (existingDetectiveBatch) {
+        detectiveBatchIssueId = existingDetectiveBatch.id;
+      } else {
+        const batchSlice = incompleteForDetective.slice(0, 15);
+        const lines = batchSlice.map(
+          (item, idx) =>
+            `${idx + 1}. **${item.name}** (\`customerId: ${item.customerId}\`) | vertical: ${item.vertical ?? "SMB"} | address: ${item.address ?? "n/a"} | phone: ${item.phone ?? "n/a"} | domain: ${item.domain ?? "none"}`
+        );
+        const createdBatch = await this.createIssueRecord(
+          {
+            title: `Detective batch: enrich owner names & emails for ${batchSlice.length} non-POS NYC SMBs`,
+            description: [
+              "For each merchant below, find the owner/principal's name, direct email, and website domain (using NY DOS filings, NYC DOB/DCWP records, and website /about or /contact pages via web_fetch/firecrawl).",
+              "Write each enriched contact incrementally via `contact_upsert` and `customer_upsert` as you find them so partial progress is saved immediately, then post a summary comment and set this issue status to `done`.",
+              "",
+              ...lines,
+            ].join("\n"),
+            status: "todo",
+            priority: "medium",
+            ownerAgent: "detective",
+            teamId: input.teamId ?? undefined,
+            repo: null,
+          },
+          input.actorUserId ?? undefined
+        );
+        detectiveBatchIssueId = createdBatch.issue?.id ?? null;
+      }
+    }
+
+    return {
+      sourceName: input.sourceName,
+      pulledCount: input.candidates.length,
+      createdCount,
+      updatedCount,
+      nextOffset: input.nextOffset ?? 0,
+      detectiveBatchIssueId,
+      leads,
+    };
   }
 
   listContacts(customerId: string) {

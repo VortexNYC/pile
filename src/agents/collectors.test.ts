@@ -1,7 +1,12 @@
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vitest";
 
-import { CollectorSourceError, pullSourceEffect } from "./collectors-effect.js";
+import {
+  CollectorSourceError,
+  enrichCandidatesWithEffect,
+  isSafePublicDomain,
+  pullSourceEffect,
+} from "./collectors-effect.js";
 import {
   PRESET_NON_POS_SMB_SOURCES,
   pullSource,
@@ -148,6 +153,47 @@ describe("scoreCandidate", () => {
     );
     expect(bad).toBeInstanceOf(CollectorSourceError);
     expect(bad._tag).toBe("CollectorSourceError");
+    vi.unstubAllGlobals();
+  });
+
+  it("enrichCandidatesWithEffect probes public domains concurrently, fingerprints billing stack + mailto, and blocks unsafe SSRF domains", async () => {
+    expect(isSafePublicDomain("localhost")).toBe(false);
+    expect(isSafePublicDomain("127.0.0.1")).toBe(false);
+    expect(isSafePublicDomain("internal.local")).toBe(false);
+    expect(isSafePublicDomain("acmeplumbing.nyc")).toBe(true);
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            '<html><body><a href="mailto:owner@acmeplumbing.nyc">Email</a><script src="https://connect.intuit.com/quickbooks.js"></script></body></html>',
+            { status: 200 }
+          )
+      )
+    );
+    const enriched = await Effect.runPromise(
+      enrichCandidatesWithEffect([
+        {
+          name: "ACME PLUMBING LLC",
+          externalId: "socrata:t8hj-ruu2:1",
+          domain: "acmeplumbing.nyc",
+          signal: "new_license",
+        },
+        {
+          name: "LOCALHOST CO",
+          externalId: "socrata:t8hj-ruu2:2",
+          domain: "localhost",
+          signal: "new_license",
+        },
+      ])
+    );
+    expect(enriched[0]).toMatchObject({
+      email: "owner@acmeplumbing.nyc",
+      posGuess: "quickbooks",
+      posEvidenceUrl: "https://acmeplumbing.nyc",
+    });
+    expect(enriched[1]?.posGuess).toBeNull();
     vi.unstubAllGlobals();
   });
 });
