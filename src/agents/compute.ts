@@ -1347,7 +1347,17 @@ export class FailoverBackend implements ComputeBackend {
       ? never
       : [string, string, string?]
   ): Promise<ComputeSandbox | null> {
-    if (this.switched) return this.fallback.findSandbox(...a);
+    if (this.switched) {
+      try {
+        return await this.fallback.findSandbox(...a);
+      } catch (err) {
+        console.warn(
+          "[pile] compute failover: fallback findSandbox failed",
+          err
+        );
+        return null;
+      }
+    }
     let primaryErr: unknown;
     try {
       const found = await this.primary.findSandbox(...a);
@@ -1363,8 +1373,12 @@ export class FailoverBackend implements ComputeBackend {
       }
       return null;
     } catch (fallbackErr) {
+      console.warn(
+        "[pile] compute failover: fallback findSandbox probe failed",
+        fallbackErr
+      );
       if (primaryErr !== undefined) throw primaryErr;
-      throw fallbackErr;
+      return null;
     }
   }
   startRunner(...a: [ComputeSandbox, string, string, Record<string, string>?]) {

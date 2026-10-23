@@ -3,6 +3,12 @@ import { z } from "zod";
 import { GITHUB_USER_AGENT } from "../global/github-auth.js";
 import { normalizeDomain } from "../workspace/data/index.js";
 import {
+  type AudienceCandidateMerchant,
+  buildRepMorningBrief,
+  queryDynamicAudience,
+  runMerchantLeadPlay,
+} from "../workspace/lead-play-engine.js";
+import {
   applyInboundReplyOutcome,
   classifyInboundReply,
   createStatementReceivedChecklist,
@@ -2531,6 +2537,251 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
         tasks: outcome.tasks,
         statementChecklist,
       };
+    },
+  }),
+
+  defineWorkspaceTool({
+    name: "customer_audience_query",
+    description:
+      "Query a dynamic audience of customers using AND/OR filter predicates over vertical, neighborhood, priorityScore, fitStatus, processor, and signalTypes.",
+    permission: "ws:read",
+    inputSchema: z.object({
+      logic: z.enum(["and", "or"]).default("and"),
+      predicates: z
+        .array(
+          z.object({
+            field: z.string().min(1),
+            op: z.enum([
+              "eq",
+              "neq",
+              "in",
+              "gte",
+              "lte",
+              "contains",
+              "has_signal",
+            ]),
+            value: z.union([
+              z.string(),
+              z.number(),
+              z.boolean(),
+              z.array(z.union([z.string(), z.number()])),
+            ]),
+          })
+        )
+        .default([]),
+      limit: z.number().int().min(1).max(200).optional(),
+    }),
+    async run(ctx, input) {
+      const all = (await ctx.ws.listCustomers()) as Array<{
+        id: string;
+        name: string;
+        domain?: string | null;
+        vertical?: string | null;
+        neighborhood?: string | null;
+        address?: string | null;
+        phone?: string | null;
+        processor?: string | null;
+        ownerId?: string | null;
+        priorityScore?: number | null;
+        fitScore?: number | null;
+        fitStatus?: string | null;
+      }>;
+      const candidates: AudienceCandidateMerchant[] = await Promise.all(
+        all.map(async (cust) => {
+          const suppCust = await ctx.ws.isSuppressed("customerId", cust.id);
+          const suppDomain = cust.domain
+            ? await ctx.ws.isSuppressed("domain", cust.domain)
+            : null;
+          const suppressed = Boolean(suppCust) || Boolean(suppDomain);
+          const facts = (await ctx.ws.memoryRecall({
+            entityType: "customer",
+            entityId: cust.id,
+            limit: 50,
+          })) as ReadonlyArray<{ kind: string; fact: string }>;
+          const signals = parseCustomerSignalFacts(facts);
+          return {
+            id: cust.id,
+            name: cust.name,
+            domain: cust.domain,
+            vertical: cust.vertical,
+            neighborhood: cust.neighborhood,
+            address: cust.address,
+            phone: cust.phone,
+            processor: cust.processor,
+            ownerId: cust.ownerId,
+            priorityScore: cust.priorityScore,
+            fitScore: cust.fitScore,
+            fitStatus: cust.fitStatus,
+            suppressed,
+            signalTypes: [...new Set(signals.map((s) => s.type))],
+          };
+        })
+      );
+      const matched = queryDynamicAudience(
+        candidates,
+        { logic: input.logic, predicates: input.predicates },
+        input.limit ?? 50
+      );
+      return { totalMatched: matched.length, merchants: matched };
+    },
+  }),
+
+  defineWorkspaceTool({
+    name: "customer_run_play",
+    description:
+      "Execute the autonomous lead play (Profiler -> Detective waterfall -> SendGate -> Drafter awaiting_approval) on a customer.",
+    permission: "ws:write",
+    inputSchema: z.object({
+      customerId: z.string().min(1),
+      playName: z.string().optional(),
+      html: z.string().optional(),
+      pageUrl: z.string().optional(),
+      contactEmail: z.string().optional(),
+      minDraftRankScore: z.number().optional(),
+      paidRankThreshold: z.number().optional(),
+    }),
+    async run(ctx, input) {
+      const customer = (await ctx.ws.getCustomer(input.customerId)) as
+        | {
+            id: string;
+            name: string;
+            domain?: string | null;
+            vertical?: string | null;
+            neighborhood?: string | null;
+            address?: string | null;
+            phone?: string | null;
+            processor?: string | null;
+            ownerId?: string | null;
+            priorityScore?: number | null;
+            fitScore?: number | null;
+            fitStatus?: string | null;
+          }
+        | null
+        | undefined;
+      if (!customer) throw new LaneToolError("customer not found");
+      const facts = (await ctx.ws.memoryRecall({
+        entityType: "customer",
+        entityId: customer.id,
+        limit: 100,
+      })) as ReadonlyArray<{ kind: string; fact: string }>;
+      const priorSignals = parseCustomerSignalFacts(facts);
+      const suppCust = await ctx.ws.isSuppressed("customerId", customer.id);
+      const suppDomain = customer.domain
+        ? await ctx.ws.isSuppressed("domain", customer.domain)
+        : null;
+      const suppEmail = input.contactEmail
+        ? await ctx.ws.isSuppressed("email", input.contactEmail)
+        : null;
+      const receipt = runMerchantLeadPlay({
+        merchant: {
+          id: customer.id,
+          name: customer.name,
+          domain: customer.domain,
+          vertical: customer.vertical,
+          neighborhood: customer.neighborhood,
+          address: customer.address,
+          phone: customer.phone,
+          processor: customer.processor,
+          ownerId: customer.ownerId,
+          priorityScore: customer.priorityScore,
+          fitScore: customer.fitScore,
+          fitStatus: customer.fitStatus,
+        },
+        signals: priorSignals,
+        html: input.html,
+        pageUrl: input.pageUrl,
+        playName: input.playName,
+        contactEmail: input.contactEmail,
+        minDraftRankScore: input.minDraftRankScore,
+        paidRankThreshold: input.paidRankThreshold,
+        suppressed: Boolean(suppCust),
+        domainSuppressed: Boolean(suppDomain),
+        emailSuppressed: Boolean(suppEmail),
+      });
+      await ctx.ws.updateCustomer(customer.id, {
+        priorityScore: receipt.breakdown.priorityScore,
+        fitScore: receipt.breakdown.fitScore,
+        fitStatus: receipt.breakdown.fitRating,
+        ...(receipt.posGuess ? { processor: receipt.posGuess } : {}),
+      });
+      if (receipt.newSignal) {
+        await ctx.ws.memoryRemember({
+          entityType: "customer",
+          entityId: customer.id,
+          kind: `signal:${receipt.newSignal.type}:${receipt.newSignal.id}`,
+          fact: JSON.stringify(receipt.newSignal),
+          sourceSessionId: ctx.sessionId,
+          sourceAgentSlug: ctx.agentSlug,
+        });
+      }
+      await ctx.ws.memoryRemember({
+        entityType: "customer",
+        entityId: customer.id,
+        kind: `play_run:${receipt.playName}`,
+        fact: JSON.stringify(receipt),
+        sourceSessionId: ctx.sessionId,
+        sourceAgentSlug: ctx.agentSlug,
+      });
+      return receipt;
+    },
+  }),
+
+  defineWorkspaceTool({
+    name: "customer_morning_brief",
+    description:
+      "Build the daily rep morning brief of top-ranked merchants with Why Now and recommended next action.",
+    permission: "ws:read",
+    inputSchema: z.object({
+      ownerId: z.string().optional(),
+      limit: z.number().int().min(1).max(100).optional(),
+    }),
+    async run(ctx, input) {
+      const all = (await ctx.ws.listCustomers()) as Array<{
+        id: string;
+        name: string;
+        domain?: string | null;
+        vertical?: string | null;
+        neighborhood?: string | null;
+        address?: string | null;
+        phone?: string | null;
+        processor?: string | null;
+        ownerId?: string | null;
+        priorityScore?: number | null;
+        fitScore?: number | null;
+        fitStatus?: string | null;
+        signal?: string | null;
+      }>;
+      const candidates: AudienceCandidateMerchant[] = await Promise.all(
+        all.map(async (cust) => {
+          const suppCust = await ctx.ws.isSuppressed("customerId", cust.id);
+          const suppDomain = cust.domain
+            ? await ctx.ws.isSuppressed("domain", cust.domain)
+            : null;
+          const suppressed = Boolean(suppCust) || Boolean(suppDomain);
+          const whyNow: string | null = cust.signal ?? null;
+          return {
+            id: cust.id,
+            name: cust.name,
+            domain: cust.domain,
+            vertical: cust.vertical,
+            neighborhood: cust.neighborhood,
+            address: cust.address,
+            phone: cust.phone,
+            processor: cust.processor,
+            ownerId: cust.ownerId,
+            priorityScore: cust.priorityScore,
+            fitScore: cust.fitScore,
+            fitStatus: cust.fitStatus,
+            suppressed,
+            whyNow,
+          };
+        })
+      );
+      return buildRepMorningBrief({
+        merchants: candidates,
+        ownerId: input.ownerId,
+        limit: input.limit ?? 15,
+      });
     },
   }),
 ];

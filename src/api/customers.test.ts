@@ -1163,5 +1163,58 @@ describe("customer sales fields (readiness/fit)", () => {
       token
     );
     expect(((await callGate.json()) as { result: string }).result).toBe("pass");
+
+    // 7. Run play, dynamic audience query, and daily morning brief (PILE-514..527, PILE-559)
+    const playRes = await fetch(
+      `/workspaces/${organizationId}/customers/${bounceCustId}/run-play`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          html: '<script src="https://www.toasttab.com/restaurants/macdougal"></script>',
+          pageUrl: "https://macdougal.example.com",
+        }),
+      },
+      token
+    );
+    expect(playRes.status).toBe(200);
+    const playBody = (await playRes.json()) as {
+      status: string;
+      posGuess: string;
+    };
+    expect(playBody.status).toBe("awaiting_approval");
+    expect(playBody.posGuess).toBe("toast");
+
+    const audRes = await fetch(
+      `/workspaces/${organizationId}/customers/audience-query`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          logic: "and",
+          predicates: [
+            { field: "processor", op: "eq", value: "toast" },
+            { field: "signal", op: "has_signal", value: "pos_detected" },
+          ],
+        }),
+      },
+      token
+    );
+    expect(audRes.status).toBe(200);
+    const audBody = (await audRes.json()) as { totalMatched: number };
+    expect(audBody.totalMatched).toBeGreaterThanOrEqual(1);
+
+    const briefRes = await fetch(
+      `/workspaces/${organizationId}/customers/morning-brief`,
+      {
+        method: "POST",
+        body: JSON.stringify({ limit: 5 }),
+      },
+      token
+    );
+    expect(briefRes.status).toBe(200);
+    const briefBody = (await briefRes.json()) as {
+      items: Array<{ merchantId: string; whyNow: string }>;
+    };
+    expect(briefBody.items.length).toBeGreaterThanOrEqual(1);
+    expect(briefBody.items[0]?.whyNow).toContain("Why now:");
   });
 });

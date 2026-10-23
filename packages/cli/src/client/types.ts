@@ -21277,6 +21277,177 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/customers/audience-query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create customer audience query */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /**
+                         * @default and
+                         * @enum {string}
+                         */
+                        logic?: "and" | "or";
+                        /** @default [] */
+                        predicates?: {
+                            field: string;
+                            /** @enum {string} */
+                            op: "eq" | "neq" | "in" | "gte" | "lte" | "contains" | "has_signal";
+                            value: string | number | boolean | (string | number)[];
+                        }[];
+                        limit?: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Matched customers for dynamic audience filter */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            totalMatched: number;
+                            merchants: {
+                                [key: string]: unknown;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/customers/{id}/run-play": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create customer run play */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        playName?: string;
+                        html?: string;
+                        pageUrl?: string;
+                        contactEmail?: string;
+                        minDraftRankScore?: number;
+                        paidRankThreshold?: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Executed lead play and queued awaiting_approval draft */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+                /** @description Customer not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/customers/morning-brief": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create customer morning brief */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        ownerId?: string;
+                        limit?: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Ranked daily rep morning brief with why-now and next action */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            generatedAt: string;
+                            totalCandidates: number;
+                            items: {
+                                [key: string]: unknown;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/deals": {
         parameters: {
             query?: never;

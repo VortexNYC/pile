@@ -1217,4 +1217,25 @@ describe("DaytonaBackend.listSandboxes (PILE-471)", () => {
     expect(backend.kind).toBe("daytona");
     vi.unstubAllGlobals();
   });
+
+  it("FailoverBackend.findSandbox returns null when primary returns null and fallback probe throws", async () => {
+    const { ns, stub } = fakeLaneNs();
+    const env = {
+      ...daytonaTestEnv(),
+      COMPUTE_PROVIDER: "daytona",
+      LANE_FAILOVER: "v1",
+      SANDBOX_LANE: ns,
+    } as AppEnv;
+    fetchStub(
+      () => new Response(JSON.stringify({ items: [] }), { status: 200 })
+    );
+    stub.hasProcess.mockRejectedValueOnce(
+      new Error("exec() cannot be called on a container that is not running.")
+    );
+    const backend = computeBackend(env, "devin-cli");
+    expect(
+      await backend.findSandbox("sess-new-1", "vortex-lane-new")
+    ).toBeNull();
+    vi.unstubAllGlobals();
+  });
 });

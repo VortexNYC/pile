@@ -5781,6 +5781,7 @@ export function updateCustomer(
     "fit",
     "fitScore",
     "fitStatus",
+    "processor",
     "evidenceUri",
     "tierId",
     "statusId",
@@ -5789,6 +5790,8 @@ export function updateCustomer(
     "nextStepDueAt",
     "needsHuman",
     "needsHumanReason",
+    "signal",
+    "signalDate",
     "priorityScore",
   ] as const) {
     if (patch[key] !== undefined) updates[key] = patch[key];
