@@ -22,5 +22,8 @@ describe("MCP tool aliases", () => {
     expect(MCP_TOOL_ALIASES.customer_send_gate).toBe(
       "postWorkspacesOrganizationIdCustomersIdSendgate"
     );
+    expect(MCP_TOOL_ALIASES.customer_reply_ingest).toBe(
+      "postWorkspacesOrganizationIdCustomersIdReplyingest"
+    );
   });
 });

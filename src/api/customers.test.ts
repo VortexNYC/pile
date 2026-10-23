@@ -1074,5 +1074,45 @@ describe("customer sales fields (readiness/fit)", () => {
       matchedCustomerId: string | null;
     };
     expect(dedupBody.matchedCustomerId).toBe(cust.id);
+
+    // 5. POST /customers/:id/reply-ingest classifies opt-out, suppresses customer, and subsequent send-gate blocks
+    const replyRes = await fetch(
+      `/workspaces/${organizationId}/customers/${cust.id}/reply-ingest`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          subject: "Re: Quick question",
+          body: "Please unsubscribe me and remove me from your list.",
+          fromEmail: "owner@bleeckerbistro.example.com",
+        }),
+      },
+      token
+    );
+    expect(replyRes.status).toBe(200);
+    const replyBody = (await replyRes.json()) as {
+      classified: { category: string };
+      suppressed: boolean;
+    };
+    expect(replyBody.classified.category).toBe("opt_out");
+    expect(replyBody.suppressed).toBe(true);
+
+    const gateAfterOptOut = await fetch(
+      `/workspaces/${organizationId}/customers/${cust.id}/send-gate`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          channel: "email",
+          contactEmail: "owner@bleeckerbistro.example.com",
+          emailStatus: "valid",
+        }),
+      },
+      token
+    );
+    const gateAfterBody = (await gateAfterOptOut.json()) as {
+      result: string;
+      reasons: string[];
+    };
+    expect(gateAfterBody.result).toBe("block");
+    expect(gateAfterBody.reasons).toContain("MERCHANT_DO_NOT_CONTACT");
   });
 });

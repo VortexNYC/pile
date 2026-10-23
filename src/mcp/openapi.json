@@ -43957,6 +43957,98 @@
         "summary": "Create customer dedup key"
       }
     },
+    "/workspaces/{organizationId}/customers/{id}/reply-ingest": {
+      "post": {
+        "tags": [
+          "customers"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "subject": {
+                    "type": "string",
+                    "default": ""
+                  },
+                  "body": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "fromEmail": {
+                    "type": "string"
+                  },
+                  "statementFileId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "body"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Classified 16-category Unify reply, applied opt-out/bounce suppression, and created statement checklist if applicable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "classified": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "suppressed": {
+                      "type": "boolean"
+                    },
+                    "statementChecklist": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "required": [
+                    "classified",
+                    "suppressed",
+                    "statementChecklist"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Customer not found"
+          }
+        },
+        "summary": "Create customer reply ingest"
+      }
+    },
     "/workspaces/{organizationId}/deals": {
       "get": {
         "tags": [

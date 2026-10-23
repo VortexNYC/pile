@@ -8772,6 +8772,39 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "customers reply ingest create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/{id}/reply-ingest",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "subject",
+        flag: "subject",
+      },
+      {
+        name: "body",
+        flag: "body",
+      },
+      {
+        name: "fromEmail",
+        flag: "from-email",
+      },
+      {
+        name: "statementFileId",
+        flag: "statement-file-id",
+      },
+    ],
+  },
   "deals list": {
     method: "GET",
     path: "/workspaces/{organizationId}/deals",
