@@ -3143,6 +3143,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdCustomersIdContacts",
+    "description": "List customer contacts (GET /workspaces/{organizationId}/customers/{id}/contacts) Path params (top-level, required): organizationId, id.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/customers/{id}/contacts",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdCustomersIdIntake",
     "description": "List customer intake (GET /workspaces/{organizationId}/customers/{id}/intake) Path params (top-level, required): organizationId, id.",
     "method": "GET",

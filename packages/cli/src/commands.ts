@@ -8120,6 +8120,22 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "customers contacts list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/customers/{id}/contacts",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "customers purge create": {
     method: "POST",
     path: "/workspaces/{organizationId}/customers/purge",

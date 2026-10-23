@@ -1016,6 +1016,62 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     return c.json(customer);
   });
 
+  const listCustomerLeadContactsRoute = createRoute({
+    method: "get",
+    path: "/workspaces/{organizationId}/customers/{id}/contacts",
+    tags: ["customers"],
+    middleware: [rls("customer:view")],
+    request: { params: orgIdParam },
+    responses: {
+      200: {
+        description: "Verified customer contacts (owners, emails, phones)",
+        content: {
+          "application/json": {
+            schema: z.object({
+              contacts: z.array(
+                z.object({
+                  id: z.string(),
+                  customerId: z.string(),
+                  type: z.string(),
+                  role: z.string().nullable(),
+                  channel: z.string(),
+                  value: z.string(),
+                  label: z.string().nullable(),
+                  status: z.string(),
+                  confidence: z.string().nullable(),
+                  source: z.string().nullable(),
+                  evidenceUri: z.string().nullable(),
+                })
+              ),
+            }),
+          },
+        },
+      },
+    },
+  });
+
+  app.openapi(listCustomerLeadContactsRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
+    const contacts = await stub.listContacts(id);
+    return c.json({
+      contacts: contacts.map((ct) => ({
+        id: ct.id,
+        customerId: ct.customerId,
+        type: ct.type,
+        role: ct.role ?? null,
+        channel: ct.channel,
+        value: ct.value,
+        label: ct.label ?? null,
+        status: ct.status,
+        confidence: ct.confidence ?? null,
+        source: ct.source ?? null,
+        evidenceUri: ct.evidenceUri ?? null,
+      })),
+    });
+  });
+
   app.openapi(updateCustomerRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
     const input = c.req.valid("json");
