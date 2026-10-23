@@ -13964,7 +13964,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdCustomersPullleads",
-    "description": "Create customer pull lead (POST /workspaces/{organizationId}/customers/pull-leads) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: preset, borough, limit, offset, enrichWebsites, dispatchDetectiveBatch.",
+    "description": "Create customer pull lead (POST /workspaces/{organizationId}/customers/pull-leads) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: preset, borough, limit, offset, ownerId, enrichWebsites, dispatchDetectiveBatch.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/customers/pull-leads",
     "inputSchema": {
@@ -14003,6 +14003,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "offset": {
               "type": "integer",
               "minimum": 0
+            },
+            "ownerId": {
+              "type": "string"
             },
             "enrichWebsites": {
               "type": "boolean",
