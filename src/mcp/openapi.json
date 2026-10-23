@@ -44450,6 +44450,135 @@
         "summary": "Create customer pull lead"
       }
     },
+    "/workspaces/{organizationId}/customers/approve-batch": {
+      "post": {
+        "tags": [
+          "customers"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "customerIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "channel": {
+                    "type": "string",
+                    "enum": [
+                      "email",
+                      "call",
+                      "visit",
+                      "sms"
+                    ],
+                    "default": "call"
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100,
+                    "default": 25
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Evaluated Send Gate across the batch using Effect.partition and separated approved vs blocked leads",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "approvedCount": {
+                      "type": "number"
+                    },
+                    "blockedCount": {
+                      "type": "number"
+                    },
+                    "approved": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "customerId": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "channel": {
+                            "type": "string"
+                          },
+                          "recipient": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "customerId",
+                          "name",
+                          "channel",
+                          "recipient"
+                        ]
+                      }
+                    },
+                    "blocked": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "customerId": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "reasons": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "customerId",
+                          "name",
+                          "reasons"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "approvedCount",
+                    "blockedCount",
+                    "approved",
+                    "blocked"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create customer approve batch"
+      }
+    },
     "/workspaces/{organizationId}/deals": {
       "get": {
         "tags": [

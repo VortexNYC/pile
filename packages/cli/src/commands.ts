@@ -8929,6 +8929,31 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "customers approve batch create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/approve-batch",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "customerIds",
+        flag: "customer-ids",
+      },
+      {
+        name: "channel",
+        flag: "channel",
+      },
+      {
+        name: "limit",
+        flag: "limit",
+      },
+    ],
+  },
   "deals list": {
     method: "GET",
     path: "/workspaces/{organizationId}/deals",

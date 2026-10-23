@@ -1,5 +1,10 @@
 import { Effect, Schedule, Schema } from "effect";
 
+import {
+  type EmailVerificationStatus,
+  evaluateSendGate,
+  type TouchChannel,
+} from "../workspace/send-gate.js";
 import { detectPosTechnographics } from "../workspace/signals-engine.js";
 import {
   type MerchantCandidate,
@@ -22,6 +27,7 @@ export class HtmlFetchError extends Schema.TaggedError<HtmlFetchError>()(
     tier: Schema.String,
     url: Schema.String,
     message: Schema.String,
+    retryable: Schema.optional(Schema.Boolean),
   }
 ) {}
 
@@ -32,6 +38,24 @@ export class VendorBudgetExceededError extends Schema.TaggedError<VendorBudgetEx
     monthlyCapCents: Schema.Number,
     spentThisMonthCents: Schema.Number,
     requestedCents: Schema.Number,
+  }
+) {}
+
+export class ComputeBackendError extends Schema.TaggedError<ComputeBackendError>()(
+  "ComputeBackendError",
+  {
+    backend: Schema.String,
+    operation: Schema.String,
+    message: Schema.String,
+  }
+) {}
+
+export class SendGateBlockedError extends Schema.TaggedError<SendGateBlockedError>()(
+  "SendGateBlockedError",
+  {
+    customerId: Schema.String,
+    name: Schema.String,
+    reasons: Schema.Array(Schema.String),
   }
 ) {}
 
@@ -260,10 +284,8 @@ export const resolveDobPairedElectriciansEffect = Effect.fn(
     const sl = Number(m[1]);
     if (!Number.isFinite(sl)) continue;
     const nextSl = String(sl + 1);
-    const prevSl = String(sl - 1);
     slToExternalId.set(nextSl, cand.externalId);
-    slToExternalId.set(prevSl, cand.externalId);
-    querySlNos.push(`'${nextSl}'`, `'${prevSl}'`);
+    querySlNos.push(`'${nextSl}'`);
   }
 
   if (querySlNos.length === 0) {
@@ -273,7 +295,7 @@ export const resolveDobPairedElectriciansEffect = Effect.fn(
   return yield* Effect.tryPromise({
     try: async () => {
       const params = new URLSearchParams({
-        $where: `license_sl_no IN (${querySlNos.join(",")}) AND first_name IS NOT NULL`,
+        $where: `license_sl_no IN (${querySlNos.join(",")}) AND license_type='ELECTRICAL CONTRACTOR' AND first_name IS NOT NULL`,
         $limit: String(querySlNos.length),
       });
       const res = await fetch(
@@ -445,4 +467,227 @@ export const enrichCandidatesWithEffect = Effect.fn(
     (cand) => probeCandidateWebsiteEffect(cand, options),
     { concurrency }
   );
+});
+
+/**
+ * #1: Mac mini scraper HTTP wrapper with exponential backoff retry on transient
+ * 502/503/504 Cloudflare Tunnel blips, failing fast on 4xx client errors.
+ */
+export const runMacMiniFetchWithRetryEffect = Effect.fn(
+  "runMacMiniFetchWithRetryEffect"
+)(function* (input: {
+  tier: string;
+  url: string;
+  init: RequestInit;
+  timeoutMs?: number;
+}): Effect.fn.Return<Response, HtmlFetchError> {
+  return yield* Effect.tryPromise({
+    try: async () => {
+      const res = await fetch(input.url, {
+        ...input.init,
+        signal: AbortSignal.timeout(input.timeoutMs ?? 8000),
+      });
+      if (!res.ok) {
+        const retryable =
+          res.status === 429 ||
+          res.status === 502 ||
+          res.status === 503 ||
+          res.status === 504;
+        const err = new Error(
+          `${input.tier} failed: ${res.status}`
+        ) as Error & {
+          retryable?: boolean;
+        };
+        err.retryable = retryable;
+        throw err;
+      }
+      return res;
+    },
+    catch: (err) => {
+      const retryable =
+        typeof (err as { retryable?: boolean })?.retryable === "boolean"
+          ? Boolean((err as { retryable?: boolean }).retryable)
+          : true;
+      return new HtmlFetchError({
+        tier: input.tier,
+        url: input.url,
+        message: err instanceof Error ? err.message : String(err),
+        retryable,
+      });
+    },
+  }).pipe(
+    Effect.retry(
+      Schedule.max([
+        Schedule.exponential("150 millis"),
+        Schedule.recurs(2),
+      ]).pipe(
+        Schedule.setInputType<HtmlFetchError>(),
+        Schedule.while(({ input: err }) => Boolean(err.retryable))
+      )
+    )
+  );
+});
+
+/**
+ * #2: Compute backend failover via Effect.catch (`primary -> fallback`).
+ */
+export const withFailoverEffect = Effect.fn("withFailoverEffect")(function* <
+  A,
+>(input: {
+  operation: string;
+  primaryName: string;
+  fallbackName: string;
+  primary: () => Promise<A>;
+  fallback: () => Promise<A>;
+  onSwitch?: (error: ComputeBackendError) => void;
+}): Effect.fn.Return<A, ComputeBackendError> {
+  return yield* Effect.tryPromise({
+    try: () => input.primary(),
+    catch: (err) =>
+      new ComputeBackendError({
+        backend: input.primaryName,
+        operation: input.operation,
+        message: err instanceof Error ? err.message : String(err),
+      }),
+  }).pipe(
+    Effect.catch((primaryErr) => {
+      input.onSwitch?.(primaryErr);
+      return Effect.tryPromise({
+        try: () => input.fallback(),
+        catch: (fallbackErr) =>
+          new ComputeBackendError({
+            backend: input.fallbackName,
+            operation: input.operation,
+            message:
+              fallbackErr instanceof Error
+                ? fallbackErr.message
+                : String(fallbackErr),
+          }),
+      });
+    })
+  );
+});
+
+/**
+ * #3: Outbox / sweep batch runner using Effect.partition with bounded concurrency.
+ */
+export const partitionTasksWithEffect = Effect.fn("partitionTasksWithEffect")(
+  function* <Item, Out>(
+    items: ReadonlyArray<Item>,
+    runItem: (item: Item) => Promise<Out>,
+    options?: { concurrency?: number }
+  ): Effect.fn.Return<{
+    failures: Array<{ message: string }>;
+    successes: Out[];
+  }> {
+    const concurrency = Math.max(1, Math.min(10, options?.concurrency ?? 4));
+    const [successes, failures] = yield* Effect.partition(
+      items,
+      (item) =>
+        Effect.tryPromise({
+          try: () => runItem(item),
+          catch: (err) => ({
+            message: err instanceof Error ? err.message : String(err),
+          }),
+        }),
+      { concurrency }
+    );
+    return { failures, successes };
+  }
+);
+
+/**
+ * #4: Batch Approval & Send-Gate Partition Runner (`Effect.partition`).
+ * Separates a batch of leads awaiting approval into `{ approved, blocked }`.
+ */
+export interface BatchApproveCandidate {
+  customerId: string;
+  name: string;
+  channel: TouchChannel;
+  contactEmail?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  emailStatus?: EmailVerificationStatus;
+  allowUnverified?: boolean;
+  suppressedCustomer?: boolean;
+  suppressedDomain?: boolean;
+  suppressedEmail?: boolean;
+}
+
+export const evaluateApprovedBatchWithEffect = Effect.fn(
+  "evaluateApprovedBatchWithEffect"
+)(function* (
+  candidates: ReadonlyArray<BatchApproveCandidate>,
+  options?: { concurrency?: number }
+): Effect.fn.Return<{
+  approved: Array<{
+    customerId: string;
+    name: string;
+    channel: TouchChannel;
+    recipient: string | null;
+  }>;
+  blocked: Array<{
+    customerId: string;
+    name: string;
+    reasons: ReadonlyArray<string>;
+  }>;
+}> {
+  const concurrency = Math.max(1, Math.min(10, options?.concurrency ?? 5));
+  const [approved, blockedErrors] = yield* Effect.partition(
+    candidates,
+    (cand) =>
+      Effect.gen(function* () {
+        const nowIso = new Date().toISOString();
+        const gate = evaluateSendGate({
+          touchId: `approve_${cand.customerId}`,
+          channel: cand.channel,
+          action: "engage",
+          now: nowIso,
+          merchant: {
+            id: cand.customerId,
+            permissions: {
+              doNotContact:
+                Boolean(cand.suppressedCustomer) ||
+                Boolean(cand.suppressedDomain),
+            },
+          },
+          contact: {
+            id: cand.contactEmail ?? `contact_${cand.customerId}`,
+            email: cand.contactEmail ?? null,
+            permissions: {
+              doNotEmail: Boolean(cand.suppressedEmail),
+              emailStatus:
+                cand.emailStatus ?? (cand.contactEmail ? "valid" : "unknown"),
+            },
+          },
+          cadence: {
+            allowUnverified: cand.allowUnverified ?? true,
+            concurrency: "allowed",
+          },
+        });
+        if (gate.result !== "pass") {
+          return yield* new SendGateBlockedError({
+            customerId: cand.customerId,
+            name: cand.name,
+            reasons: [...gate.reasons],
+          });
+        }
+        return {
+          customerId: cand.customerId,
+          name: cand.name,
+          channel: cand.channel,
+          recipient: cand.contactEmail ?? cand.phone ?? cand.address ?? null,
+        };
+      }),
+    { concurrency }
+  );
+
+  return {
+    approved,
+    blocked: blockedErrors.map((b) => ({
+      customerId: b.customerId,
+      name: b.name,
+      reasons: b.reasons,
+    })),
+  };
 });
