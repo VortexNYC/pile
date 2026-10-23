@@ -191,15 +191,28 @@ export function categoryToReplyGroup(cat: UnifyReplyCategory): UnifyReplyGroup {
 
 /** U-023 (PILE-500): classify an inbound email reply into one of the 16 Unify
  *  categories with confidence and OOO return-date / alternate-contact extraction. */
+const EMAIL_GLOBAL_RE = /\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/g;
+const REFERRAL_KEYWORD_RE =
+  /reach out to|talk to my partner|talk to (?:my|our) (?:bookkeeper|accountant|cpa)|my bookkeeper|my accountant|our controller|better person to contact|contact [\w\s]+ instead/i;
+// The referral instruction itself — used to slice the body so the extracted
+// contact and role keywords come from the referral clause, not earlier text
+// ("my accountant will circle back ... reach out to Dave").
+const REFERRAL_ACTION_RE =
+  /reach out to|talk to|better person to contact|contact [\w\s]+ instead/i;
+const REFERRAL_ROLE_RE =
+  /\b(bookkeeper|bookkeeping|accountant|accounting|cpa|controller)\b/i;
+
 export function classifyInboundReply(
   subject: string,
   body: string,
-  nowIso = new Date().toISOString()
+  nowIso = new Date().toISOString(),
+  fromEmail?: string | null
 ): ClassifiedReply {
   const combined = `${subject}\n${body}`.toLowerCase();
-  const emailMatch = body.match(
-    /\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/
-  );
+  const fromEmailLc = fromEmail?.trim().toLowerCase() ?? null;
+  const bodyEmails = [...body.matchAll(EMAIL_GLOBAL_RE)]
+    .map((m) => m[0].toLowerCase())
+    .filter((e) => e !== fromEmailLc);
   const isoDateMatch = body.match(/\b(20\d{2}-\d{2}-\d{2})\b/);
 
   let category: UnifyReplyCategory = "neutral";
@@ -207,6 +220,7 @@ export function classifyInboundReply(
   let referralRole: "bookkeeper_cpa" | "decision_maker" | null = null;
   let recontactWindowMonths: 3 | 6 | 12 | null = null;
   let recontactAtIso: string | null = null;
+  let alternateContactEmail = bodyEmails[0] ?? null;
 
   if (
     /550\s+5\.1\.1|user unknown|address not found|does not exist|hard bounce/i.test(
@@ -270,11 +284,25 @@ export function classifyInboundReply(
   ) {
     category = "referral";
     confidence = 0.88;
-    referralRole = /\b(bookkeeper|accountant|cpa|controller|tax)\b/i.test(
-      combined
-    )
-      ? "bookkeeper_cpa"
-      : "decision_maker";
+    {
+      const bodyLc = body.toLowerCase();
+      const refIdx = bodyLc.search(REFERRAL_ACTION_RE);
+      const tail = refIdx >= 0 ? body.slice(refIdx) : body;
+      // The alternate contact must appear after the referral keyword — an
+      // email earlier in the body (quoted thread headers, signatures) is not
+      // the person being referred to.
+      const tailEmails = [...tail.matchAll(EMAIL_GLOBAL_RE)]
+        .map((m) => m[0].toLowerCase())
+        .filter((e) => e !== fromEmailLc);
+      alternateContactEmail = tailEmails[0] ?? alternateContactEmail;
+      // Role keywords must appear inside the referral clause itself (or the
+      // subject) — "my accountant will circle back" in an earlier sentence
+      // doesn't make the referred person a CPA.
+      referralRole =
+        REFERRAL_ROLE_RE.test(tail) || REFERRAL_ROLE_RE.test(subject)
+          ? "bookkeeper_cpa"
+          : "decision_maker";
+    }
   } else if (
     /let's meet|book a time|free tomorrow|stop by|come by|tuesday at|thursday at|schedule a call/i.test(
       combined
@@ -303,11 +331,15 @@ export function classifyInboundReply(
   ) {
     category = "bad_timing";
     confidence = 0.85;
+    // Explicit stated durations win over keyword heuristics ("budget, check
+    // back in 3 months" defers 3mo, not 6mo).
     if (/not this year|next year|12 months|in a year/i.test(combined)) {
       recontactWindowMonths = 12;
-    } else if (
-      /after the holidays|budget|6 months|half a year/i.test(combined)
-    ) {
+    } else if (/(?:in\s+)?6\s*months?|half a year/i.test(combined)) {
+      recontactWindowMonths = 6;
+    } else if (/(?:in\s+)?3\s*months?|next quarter/i.test(combined)) {
+      recontactWindowMonths = 3;
+    } else if (/after the holidays|budget/i.test(combined)) {
       recontactWindowMonths = 6;
     } else {
       recontactWindowMonths = 3;
@@ -328,7 +360,7 @@ export function classifyInboundReply(
     confidence,
     needsHumanReview: confidence < 0.75,
     returnDateIso: isoDateMatch ? `${isoDateMatch[1]}T09:00:00.000Z` : null,
-    alternateContactEmail: emailMatch ? emailMatch[0].toLowerCase() : null,
+    alternateContactEmail,
     referralRole,
     recontactWindowMonths,
     recontactAtIso,

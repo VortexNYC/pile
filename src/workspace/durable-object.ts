@@ -6033,6 +6033,21 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.memoryRecall(this.db, this.organizationId, query);
   }
 
+  // Check-then-write inside one DO turn so two concurrent callers cannot both
+  // claim the same (entityType, entityId, kind) slot — memoryRecall followed
+  // by a separate memoryRemember RPC is a TOCTOU race.
+  async claimMemoryOnce(input: data.MemoryInput) {
+    const existing = await data.memoryRecall(this.db, this.organizationId, {
+      entityType: input.entityType,
+      entityId: input.entityId,
+      kind: input.kind,
+      limit: 1,
+    });
+    if (existing.length > 0) return false;
+    await data.memoryRemember(this.db, this.organizationId, input);
+    return true;
+  }
+
   upsertAgentProviderConfig(input: data.AgentProviderConfigInput) {
     return data.upsertAgentProviderConfig(this.db, this.organizationId, input);
   }

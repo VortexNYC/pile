@@ -3,6 +3,7 @@ import { Effect, Schedule, Schema } from "effect";
 import {
   type EmailVerificationStatus,
   evaluateSendGate,
+  type MerchantScheduleGuard,
   type TouchChannel,
 } from "../workspace/send-gate.js";
 import { detectPosTechnographics } from "../workspace/signals-engine.js";
@@ -92,7 +93,7 @@ export function isSafePublicDomain(
 
 const MAILTO_RE = /mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,24})/i;
 const CONTACT_LINK_RE =
-  /href=["']([^"']*\/(?:contact|contact-us|get-a-quote|request-quote|estimate)[^"']*)["']/i;
+  /href=["']([^"']*\/(?:contact|contact-us|get-a-quote|request-quote|estimate)(?:[/?#][^"']*)?)["']/i;
 const FORM_ACTION_RE = /<form[^>]+action=["']([^"'#]+)["']/i;
 const CF_CHALLENGE_RE =
   /Just a moment\.\.\.|cf-browser-verification|Attention Required! \| Cloudflare/i;
@@ -680,7 +681,11 @@ export const evaluateApprovedBatchWithEffect = Effect.fn(
   "evaluateApprovedBatchWithEffect"
 )(function* (
   candidates: ReadonlyArray<BatchApproveCandidate>,
-  options?: { concurrency?: number }
+  options?: {
+    concurrency?: number;
+    now?: string;
+    schedule?: MerchantScheduleGuard;
+  }
 ): Effect.fn.Return<{
   approved: Array<{
     customerId: string;
@@ -699,12 +704,13 @@ export const evaluateApprovedBatchWithEffect = Effect.fn(
     candidates,
     (cand) =>
       Effect.gen(function* () {
-        const nowIso = new Date().toISOString();
+        const nowIso = options?.now ?? new Date().toISOString();
         const gate = evaluateSendGate({
           touchId: `approve_${cand.customerId}`,
           channel: cand.channel,
           action: "engage",
           now: nowIso,
+          ...(options?.schedule ? { schedule: options.schedule } : {}),
           merchant: {
             id: cand.customerId,
             permissions: {
