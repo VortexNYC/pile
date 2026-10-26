@@ -19231,7 +19231,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSupportFeedback",
-    "description": "Create support feedback (POST /workspaces/{organizationId}/support/feedback) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: kind*, title*, description*, url, userAgent, viewport, deviceInfo, consoleErrors, screenshotDataUrl (* = required).",
+    "description": "Create support feedback (POST /workspaces/{organizationId}/support/feedback) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: kind*, title*, description*, url, userAgent, viewport, deviceInfo, consoleErrors, consoleLogs, networkRequests, userEvents, errors, screenshotDataUrl, recordingDataUrl (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/support/feedback",
     "inputSchema": {
@@ -19319,9 +19319,137 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               },
               "maxItems": 100
             },
+            "consoleLogs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "level": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20
+                  },
+                  "message": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  "timestamp": {
+                    "type": "string",
+                    "maxLength": 60
+                  }
+                },
+                "required": [
+                  "level",
+                  "message"
+                ]
+              },
+              "maxItems": 500
+            },
+            "networkRequests": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "method": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 16
+                  },
+                  "url": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2048
+                  },
+                  "status": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 999
+                  },
+                  "duration": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 3600000
+                  },
+                  "timestamp": {
+                    "type": "string",
+                    "maxLength": 60
+                  }
+                },
+                "required": [
+                  "method",
+                  "url"
+                ]
+              },
+              "maxItems": 400
+            },
+            "userEvents": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40
+                  },
+                  "target": {
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "timestamp": {
+                    "type": "string",
+                    "maxLength": 60
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "nullable": true
+                    }
+                  }
+                },
+                "required": [
+                  "type"
+                ]
+              },
+              "maxItems": 100
+            },
+            "errors": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "message": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  "stack": {
+                    "type": "string",
+                    "maxLength": 8000
+                  },
+                  "source": {
+                    "type": "string",
+                    "maxLength": 60
+                  },
+                  "timestamp": {
+                    "type": "string",
+                    "maxLength": 60
+                  }
+                },
+                "required": [
+                  "message"
+                ]
+              },
+              "maxItems": 100
+            },
             "screenshotDataUrl": {
               "type": "string",
               "maxLength": 10000000
+            },
+            "recordingDataUrl": {
+              "type": "string",
+              "maxLength": 40000000
             }
           },
           "required": [

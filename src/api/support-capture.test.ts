@@ -1739,7 +1739,9 @@ describe("member feedback", () => {
     const fileNames = attachments.map((a) => a.fileName).toSorted();
     expect(fileNames).toEqual([
       "console-logs.json",
+      "debugger.json",
       "device-info.json",
+      "events-summary.json",
       "metadata.json",
       "screenshot.png",
     ]);
@@ -1801,8 +1803,143 @@ describe("member feedback", () => {
       .where(eq(supportTicketAttachments.ticketId, ticketId))
       .all();
     expect(attachments.map((a) => a.fileName).toSorted()).toEqual([
+      "events-summary.json",
       "metadata.json",
     ]);
+  });
+
+  it("files the full Jam-parity bundle — network, events, errors, recording", async () => {
+    const res = await feedbackFetch({
+      kind: "bug",
+      title: "Checkout hangs",
+      description: "Submit spins forever after the last deploy",
+      url: "https://app.example.com/app/acme",
+      consoleLogs: [
+        { level: "info", message: "render start" },
+        { level: "error", message: "checkout failed" },
+      ],
+      networkRequests: [
+        {
+          method: "POST",
+          url: "https://api.example.com/checkout",
+          status: 500,
+          duration: 312,
+        },
+        { method: "GET", url: "https://api.example.com/health", status: 200 },
+      ],
+      userEvents: [
+        { type: "click", target: "button.submit" },
+        { type: "navigation", target: "window" },
+      ],
+      errors: [
+        {
+          message: "TypeError: undefined is not a function",
+          stack: "TypeError: undefined...\n  at submit",
+          source: "exception",
+        },
+      ],
+      recordingDataUrl: `data:video/webm;base64,${btoa("fakewebm")}`,
+    });
+    expect(res.status).toBe(201);
+    const { ticketId } = (await res.json()) as { ticketId: string };
+
+    const db = createD1(env.D1);
+    const attachments = await db
+      .select()
+      .from(supportTicketAttachments)
+      .where(eq(supportTicketAttachments.ticketId, ticketId))
+      .all();
+    expect(attachments.map((a) => a.fileName).toSorted()).toEqual([
+      "console-logs.json",
+      "debugger.json",
+      "events-summary.json",
+      "metadata.json",
+      "network-requests.json",
+      "recording.webm",
+      "user-events.json",
+    ]);
+    const types = new Map(attachments.map((a) => [a.fileName, a.type]));
+    expect(types.get("network-requests.json")).toBe("network");
+    expect(types.get("recording.webm")).toBe("video");
+
+    const bearer = { headers: { Authorization: `Bearer ${token}` } };
+
+    // The network viewer filters on network_url / is_error.
+    const netRes = await captureFetch(
+      `/workspaces/${organizationId}/support/captures/${ticketId}/network?isError=true`,
+      bearer
+    );
+    expect(netRes.status).toBe(200);
+    const netBody = (await netRes.json()) as {
+      events: { network_url: string; network_status: number }[];
+    };
+    expect(netBody.events).toHaveLength(1);
+    expect(netBody.events[0].network_url).toContain("checkout");
+    expect(netBody.events[0].network_status).toBe(500);
+
+    // The events viewer filters on event_type / interactivity_action.
+    const evRes = await captureFetch(
+      `/workspaces/${organizationId}/support/captures/${ticketId}/events?action=click`,
+      bearer
+    );
+    expect(evRes.status).toBe(200);
+    const evBody = (await evRes.json()) as { events: unknown[] };
+    expect(evBody.events).toHaveLength(1);
+
+    // Console viewer sees logs plus the folded-in exception.
+    const conRes = await captureFetch(
+      `/workspaces/${organizationId}/support/captures/${ticketId}/console?isError=true`,
+      bearer
+    );
+    const conBody = (await conRes.json()) as {
+      events: { console_value: string }[];
+    };
+    expect(conRes.status).toBe(200);
+    expect(conBody.events).toHaveLength(2);
+    expect(
+      conBody.events.some((e) =>
+        e.console_value.includes("TypeError: undefined")
+      )
+    ).toBe(true);
+
+    // Frames exposes the recording as a video frame.
+    const framesRes = await captureFetch(
+      `/workspaces/${organizationId}/support/captures/${ticketId}/frames`,
+      bearer
+    );
+    const frames = (await framesRes.json()) as {
+      frames: { type: string; fileName: string }[];
+    };
+    expect(framesRes.status).toBe(200);
+    expect(frames.frames).toEqual([
+      { type: "video", fileName: "recording.webm", url: expect.any(String) },
+    ]);
+
+    // Metadata surfaces the events summary.
+    const metaRes = await captureFetch(
+      `/workspaces/${organizationId}/support/captures/${ticketId}/metadata`,
+      bearer
+    );
+    const meta = (await metaRes.json()) as {
+      eventsSummary: Record<string, unknown> | null;
+    };
+    expect(meta.eventsSummary).toMatchObject({
+      consoleLogs: 3,
+      networkRequests: 2,
+      userEvents: 2,
+      errors: 1,
+      recording: true,
+    });
+  });
+
+  it("rejects a malformed recording data URL", async () => {
+    const res = await feedbackFetch({
+      kind: "bug",
+      title: "x",
+      description: "y",
+      recordingDataUrl: "data:text/plain;base64,AAAA",
+    });
+    expect(res.status).toBe(400);
   });
 
   it("rejects unauthenticated feedback", async () => {

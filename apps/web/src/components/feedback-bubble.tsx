@@ -7,19 +7,26 @@ import {
 } from "@cloudflare/kumo/components/dialog";
 import { Input, InputArea } from "@cloudflare/kumo/components/input";
 import { Select } from "@cloudflare/kumo/components/select";
-import { ChatCircleDots } from "@phosphor-icons/react";
+import { ChatCircleDots, VideoCamera } from "@phosphor-icons/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
+import { FeedbackAnnotator } from "@/components/feedback-annotate";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap } from "@/lib/api";
 import {
+  blobToDataUrl,
+  canRecordScreenClip,
+  installFeedbackCapture,
+  MAX_RECORDING_MS,
+  recordScreenClip,
+} from "@/lib/feedback-capture";
+import {
   buildFeedbackBody,
   canCaptureScreenshot,
   captureScreenshotDataUrl,
-  installConsoleCapture,
   type FeedbackKind,
 } from "@/lib/feedback-context";
 import { toastError, toastSuccess } from "@/lib/toast";
@@ -32,18 +39,25 @@ export const FEEDBACK_KINDS: { value: FeedbackKind; label: string }[] = [
 
 /** Jam-style feedback bubble — floats bottom-right on every workspace
  * screen; files a bug / feature / other note straight into the
- * workspace's support tickets with auto-captured context (URL, device
- * info, recent console errors, optional screenshot). */
+ * workspace's support tickets with a Jam-parity artifact bundle: device
+ * info, console trail, network waterfall, click/key events, errors,
+ * optional screenshot (with annotation) and a short screen recording. */
 export function FeedbackBubble() {
   const workspace = useWorkspace();
   const permissions = usePermissions(workspace.id);
   const [open, setOpen] = useState(false);
 
-  // Install the always-on console lookback at layout mount so errors
-  // that happened before the dialog opened are still captured.
-  useEffect(() => installConsoleCapture(), []);
+  // Install the always-on collectors at layout mount so the console,
+  // network, click, and error trail that led up to the report is
+  // already buffered when the dialog opens.
+  useEffect(() => installFeedbackCapture(), []);
 
-  if (!permissions.isLoaded || !permissions.can("ticket", "create")) {
+  // Hide only on a confirmed denial (loaded, and the member cannot file
+  // tickets). While permissions are loading — or if the permissions
+  // query itself fails — the launcher stays visible: the feedback POST
+  // is gated server-side by ticket:create either way, and an
+  // error-or-pending state must never swallow the report UI.
+  if (permissions.isLoaded && !permissions.can("ticket", "create")) {
     return null;
   }
 
@@ -79,7 +93,10 @@ function FeedbackForm({ onDone }: { onDone: () => void }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [screenshot, setScreenshot] = useState<string | null>(null);
+  const [recording, setRecording] = useState<string | null>(null);
+  const [annotating, setAnnotating] = useState(false);
   const [capturing, setCapturing] = useState(false);
+  const [recordingClip, setRecordingClip] = useState(false);
 
   const submit = useMutation({
     mutationFn: async () =>
@@ -91,6 +108,7 @@ function FeedbackForm({ onDone }: { onDone: () => void }) {
             title,
             description,
             ...(screenshot ? { screenshotDataUrl: screenshot } : {}),
+            ...(recording ? { recordingDataUrl: recording } : {}),
           }),
         })
       ),
@@ -109,6 +127,19 @@ function FeedbackForm({ onDone }: { onDone: () => void }) {
   });
 
   const valid = title.trim().length > 0 && description.trim().length > 0;
+
+  if (annotating && screenshot) {
+    return (
+      <FeedbackAnnotator
+        src={screenshot}
+        onApply={(dataUrl) => {
+          setScreenshot(dataUrl);
+          setAnnotating(false);
+        }}
+        onCancel={() => setAnnotating(false)}
+      />
+    );
+  }
 
   return (
     <form
@@ -159,6 +190,13 @@ function FeedbackForm({ onDone }: { onDone: () => void }) {
           />
           <Button
             type="button"
+            variant="secondary"
+            onClick={() => setAnnotating(true)}
+          >
+            Annotate
+          </Button>
+          <Button
+            type="button"
             variant="ghost"
             onClick={() => setScreenshot(null)}
           >
@@ -187,9 +225,49 @@ function FeedbackForm({ onDone }: { onDone: () => void }) {
           </Button>
         </div>
       ) : null}
+      {recording ? (
+        <div className="flex items-center gap-3">
+          <video
+            src={recording}
+            aria-label="Screen recording to attach"
+            className="border-kumo-line h-16 rounded border"
+            muted
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => setRecording(null)}
+          >
+            Remove
+          </Button>
+        </div>
+      ) : canRecordScreenClip() ? (
+        <div>
+          <Button
+            type="button"
+            variant="secondary"
+            icon={<VideoCamera size={16} />}
+            loading={recordingClip}
+            onClick={async () => {
+              setRecordingClip(true);
+              try {
+                const { blob } = await recordScreenClip();
+                setRecording(await blobToDataUrl(blob));
+              } catch {
+                // Member cancelled the share picker or the browser
+                // refused — nothing to attach.
+              } finally {
+                setRecordingClip(false);
+              }
+            }}
+          >
+            Record {Math.round(MAX_RECORDING_MS / 1000)}s clip
+          </Button>
+        </div>
+      ) : null}
       <p className="text-kumo-subtle text-xs">
-        The current page URL, browser info, and recent console errors are
-        attached automatically.
+        The current page URL, browser info, console logs, network requests, and
+        recent clicks are attached automatically.
       </p>
       <div className="flex gap-2">
         <Button
