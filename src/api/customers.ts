@@ -42,6 +42,7 @@ import {
   planDetectiveWaterfall,
   rankMerchantSignals,
 } from "../workspace/signals-engine.js";
+import { CUSTOMER_TOUCH_OUTCOMES } from "../workspace/touch-outcomes.js";
 import { getExecutionCtx } from "./execution-ctx.js";
 import {
   hiddenIssueIdsForIdentity,
@@ -461,6 +462,55 @@ const updateCustomerRoute = createRoute({
     200: {
       description: "Customer updated",
       content: { "application/json": { schema: customerSchema } },
+    },
+    404: { description: "Customer not found" },
+  },
+});
+
+const logInteractionBodySchema = z.object({
+  outcome: z.enum(CUSTOMER_TOUCH_OUTCOMES).openapi({
+    description:
+      "Canonical knock outcome — drives the next-step defaults and stage auto-advance",
+  }),
+  note: z.string().max(4000).optional(),
+  nextStepText: z.string().nullable().optional(),
+  nextStepDueAt: z.string().nullable().optional(),
+});
+
+const customerInteractionSchema = z.object({
+  id: z.string(),
+  customerId: z.string(),
+  outcome: z.enum(CUSTOMER_TOUCH_OUTCOMES),
+  note: z.string().nullable(),
+  createdAt: z.string(),
+});
+
+const logCustomerInteractionRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/customers/{id}/interactions",
+  tags: ["customers"],
+  middleware: [rls("customer:edit")],
+  description:
+    "Log a field-sales touch (door knock / call outcome). Writes the interaction to customer memory, applies the outcome's default nextStepText/nextStepDueAt/needsHuman unless the body overrides them, and auto-advances statusId per the outcome→status-key map resolved against this workspace's customer_statuses. When the PILE-412 stage gate refuses the advance, the touch still lands and the response flags stageBlocked.",
+  request: {
+    params: orgIdParam,
+    body: {
+      content: { "application/json": { schema: logInteractionBodySchema } },
+    },
+  },
+  responses: {
+    201: {
+      description: "Interaction logged",
+      content: {
+        "application/json": {
+          schema: z.object({
+            interaction: customerInteractionSchema,
+            customer: customerSchema,
+            stageAdvanced: z.boolean(),
+            stageBlocked: z.boolean(),
+          }),
+        },
+      },
     },
     404: { description: "Customer not found" },
   },
@@ -1113,6 +1163,36 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
       drainDomainEvents(c.env, stub, organizationId, getExecutionCtx(c))
     );
     return c.json(customer);
+  });
+
+  app.openapi(logCustomerInteractionRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const identity = c.var.workspaceIdentity;
+    const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
+    const result = await stub.logCustomerInteraction(id, input, identity.id);
+    if (!result) return notFound("Customer not found");
+    // Stage auto-advance emits record.stage_entered — drain it into
+    // dispatches like the PATCH path does (sweep is the backstop).
+    getExecutionCtx(c)?.waitUntil(
+      drainDomainEvents(c.env, stub, organizationId, getExecutionCtx(c))
+    );
+    return c.json(
+      {
+        interaction: {
+          id: result.interactionId,
+          customerId: id,
+          outcome: input.outcome,
+          note: input.note ?? null,
+          createdAt: result.createdAt,
+        },
+        customer: result.customer,
+        stageAdvanced: result.stageAdvanced,
+        stageBlocked: result.stageBlocked,
+      },
+      201
+    );
   });
 
   app.openapi(deleteCustomerRoute, async (c) => {

@@ -4,19 +4,21 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ContactsList } from "@/components/contacts-list";
 import { CustomersList } from "@/components/customers-list";
 import { DealsList } from "@/components/deals-list";
+import { FollowUpsList } from "@/components/follow-ups-list";
 import { Page } from "@/components/page";
 import { EmptyState } from "@/components/states";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useWorkspace } from "@/hooks/use-workspace";
 
-const TABS = [
+export const TABS = [
   ["deals", "Deals", "deal"],
   ["companies", "Customers", "customer"],
   ["contacts", "Contacts", "contact"],
+  ["followups", "Follow-ups", "customer"],
 ] as const;
-type SalesTab = (typeof TABS)[number][0];
+export type SalesTab = (typeof TABS)[number][0];
 
-function isSalesTab(value: unknown): value is SalesTab {
+export function isSalesTab(value: unknown): value is SalesTab {
   return TABS.some(([t]) => t === value);
 }
 
@@ -70,6 +72,8 @@ function Sales() {
           <DealsList />
         ) : active === "companies" ? (
           <CustomersList />
+        ) : active === "followups" ? (
+          <FollowUpsList />
         ) : (
           <ContactsList />
         )}

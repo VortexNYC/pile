@@ -204,6 +204,12 @@ import {
 } from "./semantic-memory.js";
 import { computeSmbMatchKey, type MerchantSignal } from "./signals-engine.js";
 import { inArrayJson, notInArrayJson } from "./sql.js";
+import {
+  type CustomerTouchOutcome,
+  OUTCOME_DEFAULTS,
+  resolveNextStep,
+  resolveOutcomeStatusId,
+} from "./touch-outcomes.js";
 import { deliverWebhooks, retryWebhookDeliveries } from "./webhooks.js";
 
 type IssueKey = keyof Issue & keyof IssuePatch;
@@ -3626,6 +3632,96 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       );
     }
     return this.withEntityFields("customer", customer);
+  }
+
+  // PILE-651 — Log a field-sales touch. One RPC writes the interaction as
+  // customer memory (kind "outcome"), applies the outcome's default next
+  // step + needsHuman flag, and auto-advances the stage via the outcome →
+  // status-key map resolved against this workspace's own statuses. The
+  // stage gate still governs: when open required sub-steps refuse the
+  // auto-advance the touch and next step still land, flagged stageBlocked.
+  async logCustomerInteraction(
+    id: string,
+    input: {
+      outcome: CustomerTouchOutcome;
+      note?: string;
+      nextStepText?: string | null;
+      nextStepDueAt?: string | null;
+    },
+    actorId?: string
+  ) {
+    const before = data.getCustomer(this.db, this.organizationId, id);
+    if (!before) return undefined;
+    const now = new Date();
+    const defaults = OUTCOME_DEFAULTS[input.outcome];
+    const statusId = resolveOutcomeStatusId(
+      input.outcome,
+      data.listCustomerStatuses(this.db, this.organizationId)
+    );
+
+    const nextStep = resolveNextStep(input.outcome, input, now);
+    const patch: Partial<Omit<data.CustomerInput, "organizationId">> = {
+      needsHuman: defaults.needsHuman,
+      needsHumanReason: defaults.needsHumanReason,
+    };
+    if (nextStep.nextStepText !== undefined)
+      patch.nextStepText = nextStep.nextStepText;
+    if (nextStep.nextStepDueAt !== undefined)
+      patch.nextStepDueAt = nextStep.nextStepDueAt;
+
+    const advancing = statusId !== undefined && statusId !== before.statusId;
+    let stageAdvanced = false;
+    let stageBlocked = false;
+    let customer;
+    try {
+      customer = await this.updateCustomer(
+        id,
+        advancing ? { ...patch, statusId } : patch,
+        actorId
+      );
+      stageAdvanced = advancing;
+    } catch (error) {
+      // A stage-gate 409 refuses only the advance — re-apply the touch's
+      // other writes without statusId so the knock still gets logged.
+      if (
+        advancing &&
+        error instanceof VortexError &&
+        error.code === "CONFLICT"
+      ) {
+        stageBlocked = true;
+        customer = await this.updateCustomer(id, patch, actorId);
+      } else {
+        throw error;
+      }
+    }
+    if (!customer) return undefined;
+
+    const interactionId = await this.memoryRemember({
+      entityType: "customer",
+      entityId: id,
+      kind: "outcome",
+      fact: JSON.stringify({
+        outcome: input.outcome,
+        note: input.note ?? null,
+        actorId: actorId ?? null,
+        nextStepText: customer.nextStepText,
+        nextStepDueAt: customer.nextStepDueAt,
+        statusId: customer.statusId,
+        stageAdvanced,
+        stageBlocked,
+        at: now.toISOString(),
+      }),
+    });
+    this.audit("customer.touch_logged", "customer", id, actorId, {
+      outcome: { from: null, to: input.outcome },
+    });
+    return {
+      interactionId,
+      createdAt: now.toISOString(),
+      customer,
+      stageAdvanced,
+      stageBlocked,
+    };
   }
 
   // Bulk customer import — Scout's write path (PILE-403). Idempotent on

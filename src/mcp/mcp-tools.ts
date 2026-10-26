@@ -13869,6 +13869,61 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdCustomersIdInteractions",
+    "description": "Create customer interaction — Log a field-sales touch (door knock / call outcome). Writes the interaction to customer memory, applies the outcome's default nextStepText/nextStepDueAt/needsHuman unless the body overrides them, and auto-advances statusId per the outcome→status-key map resolved against this workspace's customer_statuses. When the PILE-412 stage gate refuses the advance, the touch still lands and the response flags stageBlocked. (POST /workspaces/{organizationId}/customers/{id}/interactions) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: outcome*, note, nextStepText, nextStepDueAt (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers/{id}/interactions",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "outcome": {
+              "type": "string",
+              "enum": [
+                "talked",
+                "sent_info",
+                "needs_email",
+                "quoted",
+                "callback",
+                "no_answer",
+                "not_interested",
+                "spam"
+              ],
+              "description": "Canonical knock outcome — drives the next-step defaults and stage auto-advance"
+            },
+            "note": {
+              "type": "string",
+              "maxLength": 4000
+            },
+            "nextStepText": {
+              "type": "string",
+              "nullable": true
+            },
+            "nextStepDueAt": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          "required": [
+            "outcome"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdCustomersIdReplyingest",
     "description": "Create customer reply ingest (POST /workspaces/{organizationId}/customers/{id}/reply-ingest) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: subject, body*, fromEmail, statementFileId (* = required).",
     "method": "POST",

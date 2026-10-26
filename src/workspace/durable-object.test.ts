@@ -4578,3 +4578,106 @@ describe("user view preferences display", () => {
     });
   });
 });
+
+describe("customer touch logging (PILE-651)", () => {
+  it("logCustomerInteraction writes outcome memory, defaults the next step, and auto-advances stage by key", async () => {
+    const stub = getStub();
+    await withWorkspace(stub, async (instance) => {
+      const outreach = await instance.createCustomerStatus({
+        name: `Outreach ${crypto.randomUUID().slice(0, 8)}`,
+        key: "outreach",
+        position: 1,
+      });
+      const discovery = await instance.createCustomerStatus({
+        name: `Discovery ${crypto.randomUUID().slice(0, 8)}`,
+        key: "discovery",
+        position: 2,
+      });
+      const customer = await instance.createCustomer({
+        name: "Knock target",
+        statusId: outreach.id,
+      });
+
+      const result = await instance.logCustomerInteraction(
+        customer.id,
+        { outcome: "talked", note: "Met the owner" },
+        "user-1"
+      );
+      expect(result).toBeDefined();
+      expect(result!.stageAdvanced).toBe(true);
+      expect(result!.stageBlocked).toBe(false);
+      expect(result!.customer.statusId).toBe(discovery.id);
+      expect(result!.customer.nextStepText).toBe(
+        "Follow up after conversation"
+      );
+      expect(result!.customer.needsHuman).toBe(false);
+
+      const facts = await instance.memoryRecall({
+        entityType: "customer",
+        entityId: customer.id,
+        kind: "outcome",
+      });
+      expect(facts.map((f) => f.id)).toContain(result!.interactionId);
+      const fact = JSON.parse(
+        facts.find((f) => f.id === result!.interactionId)!.fact
+      ) as { outcome: string; note: string | null; actorId: string };
+      expect(fact.outcome).toBe("talked");
+      expect(fact.note).toBe("Met the owner");
+      expect(fact.actorId).toBe("user-1");
+    });
+  });
+
+  it("no_answer keeps the stage; not_interested goes terminal and clears the step", async () => {
+    const stub = getStub();
+    await withWorkspace(stub, async (instance) => {
+      const lost = await instance.createCustomerStatus({
+        name: `Lost ${crypto.randomUUID().slice(0, 8)}`,
+        key: "lost",
+        position: 9,
+        type: "terminal",
+      });
+      const customer = await instance.createCustomer({
+        name: "Cold door",
+        statusId: (
+          await instance.createCustomerStatus({
+            name: `Prospect ${crypto.randomUUID().slice(0, 8)}`,
+            key: "prospect",
+          })
+        ).id,
+      });
+      const prospectStatusId = customer.statusId;
+
+      const miss = await instance.logCustomerInteraction(
+        customer.id,
+        { outcome: "no_answer" },
+        "user-1"
+      );
+      expect(miss!.stageAdvanced).toBe(false);
+      expect(miss!.customer.statusId).toBe(prospectStatusId);
+      expect(miss!.customer.nextStepText).toBe("Retry visit / call");
+      expect(miss!.customer.nextStepDueAt).toBeTruthy();
+
+      const dead = await instance.logCustomerInteraction(
+        customer.id,
+        { outcome: "spam" },
+        "user-1"
+      );
+      expect(dead!.stageAdvanced).toBe(true);
+      expect(dead!.customer.statusId).toBe(lost.id);
+      expect(dead!.customer.nextStepText).toBeNull();
+      expect(dead!.customer.nextStepDueAt).toBeNull();
+    });
+  });
+
+  it("returns undefined for a missing customer", async () => {
+    const stub = getStub();
+    const result = await withWorkspace(stub, (instance) =>
+      instance.logCustomerInteraction(
+        crypto.randomUUID(),
+        { outcome: "talked" },
+        "user-1"
+      )
+    );
+    expect(result).toBeUndefined();
+  });
+});

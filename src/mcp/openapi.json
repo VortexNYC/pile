@@ -43137,6 +43137,314 @@
         "summary": "List customer contacts"
       }
     },
+    "/workspaces/{organizationId}/customers/{id}/interactions": {
+      "post": {
+        "tags": [
+          "customers"
+        ],
+        "description": "Log a field-sales touch (door knock / call outcome). Writes the interaction to customer memory, applies the outcome's default nextStepText/nextStepDueAt/needsHuman unless the body overrides them, and auto-advances statusId per the outcome→status-key map resolved against this workspace's customer_statuses. When the PILE-412 stage gate refuses the advance, the touch still lands and the response flags stageBlocked.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "outcome": {
+                    "type": "string",
+                    "enum": [
+                      "talked",
+                      "sent_info",
+                      "needs_email",
+                      "quoted",
+                      "callback",
+                      "no_answer",
+                      "not_interested",
+                      "spam"
+                    ],
+                    "description": "Canonical knock outcome — drives the next-step defaults and stage auto-advance"
+                  },
+                  "note": {
+                    "type": "string",
+                    "maxLength": 4000
+                  },
+                  "nextStepText": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "nextStepDueAt": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "outcome"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Interaction logged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "interaction": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "customerId": {
+                          "type": "string"
+                        },
+                        "outcome": {
+                          "type": "string",
+                          "enum": [
+                            "talked",
+                            "sent_info",
+                            "needs_email",
+                            "quoted",
+                            "callback",
+                            "no_answer",
+                            "not_interested",
+                            "spam"
+                          ]
+                        },
+                        "note": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "customerId",
+                        "outcome",
+                        "note",
+                        "createdAt"
+                      ]
+                    },
+                    "customer": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "url": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "domain": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "bookingUrl": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "notes": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "logoUrl": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "externalId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "phone": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "address": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "vertical": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "neighborhood": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "source": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "sourceSessionId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "sourceAgentSlug": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "readiness": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "nextAction": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "fit": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "fitScore": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "fitStatus": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "processor": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "evidenceUri": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "tierId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "statusId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "ownerId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "nextStepText": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "nextStepDueAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "needsHuman": {
+                          "type": "boolean",
+                          "nullable": true
+                        },
+                        "needsHumanReason": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "priorityScore": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "customFields": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "name",
+                        "url",
+                        "domain",
+                        "bookingUrl",
+                        "notes",
+                        "logoUrl",
+                        "externalId",
+                        "phone",
+                        "address",
+                        "vertical",
+                        "neighborhood",
+                        "source",
+                        "sourceSessionId",
+                        "sourceAgentSlug",
+                        "readiness",
+                        "nextAction",
+                        "fit",
+                        "fitScore",
+                        "fitStatus",
+                        "processor",
+                        "evidenceUri",
+                        "tierId",
+                        "statusId",
+                        "ownerId",
+                        "nextStepText",
+                        "nextStepDueAt",
+                        "needsHuman",
+                        "needsHumanReason",
+                        "priorityScore",
+                        "customFields",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    },
+                    "stageAdvanced": {
+                      "type": "boolean"
+                    },
+                    "stageBlocked": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "interaction",
+                    "customer",
+                    "stageAdvanced",
+                    "stageBlocked"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Customer not found"
+          }
+        },
+        "summary": "Create customer interaction"
+      }
+    },
     "/workspaces/{organizationId}/customers/purge": {
       "post": {
         "tags": [
