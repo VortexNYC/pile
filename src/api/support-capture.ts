@@ -296,6 +296,8 @@ const revokeCaptureLinkRoute = createRoute({
   },
 });
 
+const feedbackTimestampSchema = z.string().max(60).optional();
+
 const memberFeedbackBodySchema = z.object({
   kind: z.enum(["bug", "feature", "other"]),
   title: z.string().min(1).max(200),
@@ -309,17 +311,65 @@ const memberFeedbackBodySchema = z.object({
     })
     .optional(),
   deviceInfo: z.record(z.string(), z.unknown()).optional(),
+  // Legacy error-only buffer from the first bubble iteration — still
+  // accepted so older sessions can file. New clients send consoleLogs
+  // (all levels) plus a separate errors array.
   consoleErrors: z
     .array(
       z.object({
         level: z.string().min(1).max(20),
         message: z.string().min(1).max(4000),
-        timestamp: z.string().max(60).optional(),
+        timestamp: feedbackTimestampSchema,
+      })
+    )
+    .max(100)
+    .optional(),
+  consoleLogs: z
+    .array(
+      z.object({
+        level: z.string().min(1).max(20),
+        message: z.string().min(1).max(4000),
+        timestamp: feedbackTimestampSchema,
+      })
+    )
+    .max(500)
+    .optional(),
+  networkRequests: z
+    .array(
+      z.object({
+        method: z.string().min(1).max(16),
+        url: z.string().min(1).max(2048),
+        status: z.number().int().min(0).max(999).optional(),
+        duration: z.number().nonnegative().max(3_600_000).optional(),
+        timestamp: feedbackTimestampSchema,
+      })
+    )
+    .max(400)
+    .optional(),
+  userEvents: z
+    .array(
+      z.object({
+        type: z.string().min(1).max(40),
+        target: z.string().max(500).optional(),
+        timestamp: feedbackTimestampSchema,
+        metadata: z.record(z.string(), z.unknown()).optional(),
+      })
+    )
+    .max(100)
+    .optional(),
+  errors: z
+    .array(
+      z.object({
+        message: z.string().min(1).max(4000),
+        stack: z.string().max(8000).optional(),
+        source: z.string().max(60).optional(),
+        timestamp: feedbackTimestampSchema,
       })
     )
     .max(100)
     .optional(),
   screenshotDataUrl: z.string().max(10_000_000).optional(),
+  recordingDataUrl: z.string().max(40_000_000).optional(),
 });
 
 const memberFeedbackRoute = createRoute({
@@ -1027,6 +1077,27 @@ function uploadsFromSession(session: {
 
 const SCREENSHOT_DATA_URL =
   /^data:(image\/(?:png|jpe?g|webp));base64,([A-Za-z0-9+/=\s]+)$/;
+const RECORDING_DATA_URL =
+  /^data:(video\/(?:webm|mp4));base64,([A-Za-z0-9+/=\s]+)$/;
+
+function decodeMediaDataUrl(
+  dataUrl: string,
+  pattern: RegExp,
+  field: string
+): { contentType: string; body: Uint8Array } {
+  const match = pattern.exec(dataUrl);
+  if (!match) {
+    throw new VortexError({
+      status: 400,
+      code: "BAD_REQUEST",
+      message: `${field} must be a base64 media data URL`,
+    });
+  }
+  return {
+    contentType: match[1]!,
+    body: base64ToBytes(match[2]!.replace(/\s/g, "")),
+  };
+}
 
 /** Reporter address for the ticket customer — the member's real email
  *  when their identity resolves to a user row, else a deterministic
@@ -1357,26 +1428,33 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
       body: Uint8Array;
     } | null = null;
     if (input.screenshotDataUrl) {
-      const match = SCREENSHOT_DATA_URL.exec(input.screenshotDataUrl);
-      if (!match) {
-        throw new VortexError({
-          status: 400,
-          code: "BAD_REQUEST",
-          message: "screenshotDataUrl must be a base64 image data URL",
-        });
-      }
-      const contentType = match[1]!;
+      const decoded = decodeMediaDataUrl(
+        input.screenshotDataUrl,
+        SCREENSHOT_DATA_URL,
+        "screenshotDataUrl"
+      );
       const extension =
-        contentType === "image/png"
+        decoded.contentType === "image/png"
           ? "png"
-          : contentType === "image/webp"
+          : decoded.contentType === "image/webp"
             ? "webp"
             : "jpg";
-      screenshot = {
-        contentType,
-        fileName: `screenshot.${extension}`,
-        body: base64ToBytes(match[2]!.replace(/\s/g, "")),
-      };
+      screenshot = { ...decoded, fileName: `screenshot.${extension}` };
+    }
+
+    let recording: {
+      contentType: string;
+      fileName: string;
+      body: Uint8Array;
+    } | null = null;
+    if (input.recordingDataUrl) {
+      const decoded = decodeMediaDataUrl(
+        input.recordingDataUrl,
+        RECORDING_DATA_URL,
+        "recordingDataUrl"
+      );
+      const extension = decoded.contentType === "video/mp4" ? "mp4" : "webm";
+      recording = { ...decoded, fileName: `recording.${extension}` };
     }
 
     const reporter = await db
@@ -1417,7 +1495,11 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
         ? `viewport: ${input.viewport.width}x${input.viewport.height}`
         : null,
       `reporter: ${fullName ?? "member"} <${email}> (${identity.id})`,
-      `console-errors: ${input.consoleErrors?.length ?? 0}`,
+      `console-logs: ${(input.consoleLogs?.length ?? 0) + (input.consoleErrors?.length ?? 0)}`,
+      `network-requests: ${input.networkRequests?.length ?? 0}`,
+      `user-events: ${input.userEvents?.length ?? 0}`,
+      `errors: ${input.errors?.length ?? 0}`,
+      `recording: ${recording ? "attached" : "none"}`,
     ].filter((line): line is string => line !== null);
 
     const event = await addTicketMessage(
@@ -1445,8 +1527,52 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
 
     const bucket = c.env.ATTACHMENTS_BUCKET;
     if (bucket) {
+      // Jam-parity artifact bundle — the same file names and field
+      // shapes the capture viewers (/console, /network, /events,
+      // /frames, /metadata) and agent tooling read off every other
+      // capture ticket.
+      const consoleLogs = [
+        ...(input.consoleErrors ?? []),
+        ...(input.consoleLogs ?? []),
+      ].map((entry) => ({
+        console_level: entry.level,
+        console_value: entry.message,
+        is_error: entry.level === "error",
+        timestamp: entry.timestamp ?? submittedAt,
+      }));
+      for (const error of input.errors ?? []) {
+        consoleLogs.push({
+          console_level: "error",
+          console_value: error.stack
+            ? `${error.message}\n${error.stack}`
+            : error.message,
+          is_error: true,
+          timestamp: error.timestamp ?? submittedAt,
+        });
+      }
+
+      const networkRequests = (input.networkRequests ?? []).map((request) => ({
+        network_url: request.url,
+        network_method: request.method,
+        network_status: request.status ?? null,
+        duration_ms: request.duration ?? null,
+        is_error:
+          request.status === undefined
+            ? false
+            : request.status === 0 || request.status >= 400,
+        timestamp: request.timestamp ?? submittedAt,
+      }));
+
+      const userEvents = (input.userEvents ?? []).map((userEvent) => ({
+        event_type: "interactivity",
+        interactivity_action: userEvent.type,
+        target: userEvent.target ?? null,
+        timestamp: userEvent.timestamp ?? submittedAt,
+        ...(userEvent.metadata ? { metadata: userEvent.metadata } : {}),
+      }));
+
       const artifacts: {
-        type: "screenshot" | "debugger_json" | "log";
+        type: "screenshot" | "video" | "debugger_json" | "log" | "network";
         fileName: string;
         contentType: string;
         body: Uint8Array;
@@ -1462,8 +1588,24 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
             url: input.url ?? null,
             reporter: { userId: identity.id, email, name: fullName },
             workspace: organizationId,
-            consoleErrors: input.consoleErrors?.length ?? 0,
+            consoleLogs: consoleLogs.length,
+            networkRequests: networkRequests.length,
+            userEvents: userEvents.length,
+            errors: input.errors?.length ?? 0,
             submittedAt,
+          }),
+        },
+        {
+          type: "debugger_json",
+          fileName: "events-summary.json",
+          contentType: "application/json",
+          body: jsonArtifactBytes({
+            consoleLogs: consoleLogs.length,
+            networkRequests: networkRequests.length,
+            userEvents: userEvents.length,
+            errors: input.errors?.length ?? 0,
+            screenshot: screenshot !== null,
+            recording: recording !== null,
           }),
         },
       ];
@@ -1482,19 +1624,67 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
         });
       }
 
-      if (input.consoleErrors && input.consoleErrors.length > 0) {
+      if (consoleLogs.length > 0) {
         artifacts.push({
           type: "log",
           fileName: "console-logs.json",
           contentType: "application/json",
-          body: jsonArtifactBytes(
-            input.consoleErrors.map((entry) => ({
-              console_level: entry.level,
-              console_message: entry.message,
-              is_error: entry.level === "error",
-              timestamp: entry.timestamp ?? submittedAt,
-            }))
-          ),
+          body: jsonArtifactBytes(consoleLogs),
+        });
+      }
+
+      if (networkRequests.length > 0) {
+        artifacts.push({
+          type: "network",
+          fileName: "network-requests.json",
+          contentType: "application/json",
+          body: jsonArtifactBytes(networkRequests),
+        });
+      }
+
+      if (userEvents.length > 0) {
+        artifacts.push({
+          type: "log",
+          fileName: "user-events.json",
+          contentType: "application/json",
+          body: jsonArtifactBytes(userEvents),
+        });
+      }
+
+      // Agent-facing bundle — the debugger.json agents are pointed at
+      // first when triaging a capture ticket.
+      if (
+        consoleLogs.length > 0 ||
+        networkRequests.length > 0 ||
+        userEvents.length > 0 ||
+        (input.errors?.length ?? 0) > 0
+      ) {
+        artifacts.push({
+          type: "debugger_json",
+          fileName: "debugger.json",
+          contentType: "application/json",
+          body: jsonArtifactBytes({
+            actions: (input.userEvents ?? []).map((userEvent) => ({
+              type: userEvent.type,
+              target: userEvent.target ?? null,
+              timestamp: userEvent.timestamp ?? submittedAt,
+              metadata: userEvent.metadata ?? null,
+            })),
+            logs: consoleLogs,
+            networkRequests: (input.networkRequests ?? []).map((request) => ({
+              method: request.method,
+              url: request.url,
+              status: request.status ?? null,
+              duration: request.duration ?? null,
+              timestamp: request.timestamp ?? submittedAt,
+            })),
+            errors: (input.errors ?? []).map((error) => ({
+              message: error.message,
+              stack: error.stack ?? null,
+              source: error.source ?? null,
+              timestamp: error.timestamp ?? submittedAt,
+            })),
+          }),
         });
       }
 
@@ -1504,6 +1694,15 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
           fileName: screenshot.fileName,
           contentType: screenshot.contentType,
           body: screenshot.body,
+        });
+      }
+
+      if (recording) {
+        artifacts.push({
+          type: "video",
+          fileName: recording.fileName,
+          contentType: recording.contentType,
+          body: recording.body,
         });
       }
 

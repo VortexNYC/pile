@@ -1,8 +1,19 @@
-/** Auto-captured context for the member feedback bubble. Deliberately
- * cheap: a bounded console-error ring buffer installed once at layout
- * mount plus a pure payload builder — no replay, no network recording.
- * The server turns this into standard capture artifacts (metadata.json,
- * device-info.json, console-logs.json) on the feedback ticket. */
+/** Auto-captured context for the member feedback bubble. Event capture
+ * (console trail, window errors, click/key/nav events, shallow network
+ * waterfall) lives in feedback-capture.ts on top of the capture SDK's
+ * instrumentation; this module keeps the pure payload builder plus the
+ * screenshot helpers. The server turns the submission into the same
+ * Jam-style capture artifacts (console-logs.json, network-requests.json,
+ * user-events.json, debugger.json, metadata, frames) the ticket
+ * viewers read. */
+
+import {
+  feedbackCaptureSnapshot,
+  type FeedbackConsoleLog,
+  type FeedbackError,
+  type FeedbackNetworkRequest,
+  type FeedbackUserEvent,
+} from "@/lib/feedback-capture";
 
 export type FeedbackKind = "bug" | "feature" | "other";
 
@@ -21,63 +32,12 @@ export interface FeedbackBody {
   viewport?: { width: number; height: number };
   deviceInfo?: Record<string, unknown>;
   consoleErrors?: CapturedConsoleError[];
+  consoleLogs?: FeedbackConsoleLog[];
+  networkRequests?: FeedbackNetworkRequest[];
+  userEvents?: FeedbackUserEvent[];
+  errors?: FeedbackError[];
   screenshotDataUrl?: string;
-}
-
-const MAX_CAPTURED_ERRORS = 50;
-const buffer: CapturedConsoleError[] = [];
-let installed = false;
-
-export function pushCapturedError(level: string, message: string): void {
-  buffer.push({
-    level,
-    message: message.slice(0, 2000),
-    timestamp: new Date().toISOString(),
-  });
-  if (buffer.length > MAX_CAPTURED_ERRORS) buffer.shift();
-}
-
-export function capturedConsoleErrors(): CapturedConsoleError[] {
-  return [...buffer];
-}
-
-export function formatConsoleArg(arg: unknown): string {
-  if (typeof arg === "string") return arg;
-  if (arg instanceof Error) return `${arg.name}: ${arg.message}`;
-  try {
-    return JSON.stringify(arg) ?? String(arg);
-  } catch {
-    return String(arg);
-  }
-}
-
-/** Wrap console.error/console.warn and window error events once. Safe to
- * call repeatedly and in non-DOM contexts (tests, SSR) — it no-ops. */
-export function installConsoleCapture(): void {
-  if (installed || typeof window === "undefined") return;
-  installed = true;
-  for (const level of ["error", "warn"] as const) {
-    const original = console[level].bind(console);
-    console[level] = (...args: unknown[]) => {
-      pushCapturedError(level, args.map(formatConsoleArg).join(" "));
-      original(...args);
-    };
-  }
-  window.addEventListener("error", (event) => {
-    pushCapturedError("error", event.message || "window.onerror");
-  });
-  window.addEventListener("unhandledrejection", (event) => {
-    pushCapturedError(
-      "error",
-      `unhandledrejection: ${formatConsoleArg(event.reason)}`
-    );
-  });
-}
-
-/** Test hook — module state persists across tests in a file. */
-export function resetConsoleCaptureForTests(): void {
-  buffer.length = 0;
-  installed = false;
+  recordingDataUrl?: string;
 }
 
 export function collectDeviceInfo(): Record<string, unknown> {
@@ -99,15 +59,19 @@ export function collectDeviceInfo(): Record<string, unknown> {
 }
 
 /** Shape the POST body for /workspaces/{org}/support/feedback — form
- * fields plus whatever context the browser exposes right now. */
+ * fields plus whatever context the browser exposes right now: the
+ * instrumentation snapshot (console trail, network waterfall, click/key
+ * events, errors) plus device info and any attached media. */
 export function buildFeedbackBody(input: {
   kind: FeedbackKind;
   title: string;
   description: string;
   screenshotDataUrl?: string;
+  recordingDataUrl?: string;
 }): FeedbackBody {
   const win = typeof window === "undefined" ? undefined : window;
   const nav = typeof navigator === "undefined" ? undefined : navigator;
+  const snapshot = feedbackCaptureSnapshot();
   return {
     kind: input.kind,
     title: input.title.trim(),
@@ -118,9 +82,21 @@ export function buildFeedbackBody(input: {
       ? { viewport: { width: win.innerWidth, height: win.innerHeight } }
       : {}),
     deviceInfo: collectDeviceInfo(),
-    consoleErrors: capturedConsoleErrors(),
+    ...(snapshot.consoleLogs.length > 0
+      ? { consoleLogs: snapshot.consoleLogs }
+      : {}),
+    ...(snapshot.networkRequests.length > 0
+      ? { networkRequests: snapshot.networkRequests }
+      : {}),
+    ...(snapshot.userEvents.length > 0
+      ? { userEvents: snapshot.userEvents }
+      : {}),
+    ...(snapshot.errors.length > 0 ? { errors: snapshot.errors } : {}),
     ...(input.screenshotDataUrl
       ? { screenshotDataUrl: input.screenshotDataUrl }
+      : {}),
+    ...(input.recordingDataUrl
+      ? { recordingDataUrl: input.recordingDataUrl }
       : {}),
   };
 }

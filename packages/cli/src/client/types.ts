@@ -11909,7 +11909,34 @@ export interface paths {
                             message: string;
                             timestamp?: string;
                         }[];
+                        consoleLogs?: {
+                            level: string;
+                            message: string;
+                            timestamp?: string;
+                        }[];
+                        networkRequests?: {
+                            method: string;
+                            url: string;
+                            status?: number;
+                            duration?: number;
+                            timestamp?: string;
+                        }[];
+                        userEvents?: {
+                            type: string;
+                            target?: string;
+                            timestamp?: string;
+                            metadata?: {
+                                [key: string]: unknown;
+                            };
+                        }[];
+                        errors?: {
+                            message: string;
+                            stack?: string;
+                            source?: string;
+                            timestamp?: string;
+                        }[];
                         screenshotDataUrl?: string;
+                        recordingDataUrl?: string;
                     };
                 };
             };
