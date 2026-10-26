@@ -57,6 +57,11 @@ function isPublicPath(pathname: string): boolean {
     pathname.startsWith("/api/auth") ||
     pathname.includes("/migrate/") ||
     pathname.startsWith("/mcp") ||
+    // PILE-620 — OAuth 2.0 discovery, dynamic client registration, and the
+    // authorize/token endpoints are public per RFC 8414/7591; the
+    // authorization code + PKCE exchange is the credential.
+    pathname.startsWith("/.well-known/") ||
+    pathname.startsWith("/oauth/") ||
     pathname.startsWith("/notion/") ||
     pathname.startsWith("/support/webhooks/") ||
     pathname === "/support/feedback" ||

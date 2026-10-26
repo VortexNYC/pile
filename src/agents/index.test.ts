@@ -1530,3 +1530,91 @@ describe("infra classification of dispatch failures (PILE-452)", () => {
     expect(capturedExtraEnv?.DATABASE_URL).toContain("127.0.0.1:5432/lane_");
   });
 });
+
+describe("dispatch memory profile injection + ephemeral keys (PILE-616/623)", () => {
+  it("injects static and dynamic memory sections into the lane prompt", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
+    );
+    await stub.setOrganizationId(actor.organizationId);
+    const issue = await stub.createIssue({ title: "Memory prompt test" });
+    await stub.memoryRemember({
+      entityType: "issue",
+      entityId: issue.id,
+      kind: "lesson",
+      fact: "always stage contracts first",
+    });
+    await stub.memoryRemember({
+      entityType: "issue",
+      entityId: issue.id,
+      kind: "outcome",
+      fact: "lane finished the rebuild",
+    });
+
+    let captured: AgentDispatchContext | undefined;
+    const agentId = `mock-mem-${crypto.randomUUID().slice(0, 8)}`;
+    const provider = new MockAgentProvider(agentId, {
+      dispatch: (_1, _2, _3, ctx) => {
+        captured = ctx;
+        return { id: "mem-1", agentId, status: "created" };
+      },
+    });
+    registerAgentProvider(agentId, () => provider);
+
+    await dispatchAgent(env, agentId, actor.organizationId, issue, actor);
+
+    expect(captured?.instructions).toContain("Static facts:");
+    expect(captured?.instructions).toContain(
+      "[lesson] always stage contracts first"
+    );
+    expect(captured?.instructions).toContain("Recent / dynamic context:");
+    expect(captured?.instructions).toContain(
+      "[outcome] lane finished the rebuild"
+    );
+  });
+
+  it("mints the lane api key with a 24h expiry (PILE-623)", async () => {
+    const { apikey } = await import("../global/schema.js");
+    // A dedicated workspace — the shared one accumulates live sessions
+    // across the file and hits the 25-lane concurrency cap.
+    const db = createD1(env.D1);
+    const headers = await createAdminHeaders(env, "user-1");
+    const ws = await createWorkspace(db, env, headers, {
+      name: "Ephemeral key workspace",
+      slug: `key-ws-${crypto.randomUUID().slice(0, 8)}`,
+      ownerId: actor.id,
+    });
+    const organizationId = ws!.id;
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const issue = await stub.createIssue({ title: "Ephemeral key test" });
+
+    const agentId = `mock-key-${crypto.randomUUID().slice(0, 8)}`;
+    const provider = new MockAgentProvider(agentId, {
+      dispatch: () => ({ id: "key-1", agentId, status: "created" }),
+    });
+    registerAgentProvider(agentId, () => provider);
+
+    const session = await dispatchAgent(
+      env,
+      agentId,
+      organizationId,
+      issue,
+      actor
+    );
+
+    const rows = await db
+      .select()
+      .from(apikey)
+      .where(eq(apikey.name, `agent-${session.id.slice(0, 13)}`))
+      .all();
+    expect(rows).toHaveLength(1);
+    const { createdAt, expiresAt } = rows[0];
+    expect(expiresAt).not.toBeNull();
+    const ttl = expiresAt!.getTime() - createdAt.getTime();
+    expect(ttl).toBeGreaterThan(23 * 60 * 60 * 1000);
+    expect(ttl).toBeLessThanOrEqual(25 * 60 * 60 * 1000);
+  });
+});

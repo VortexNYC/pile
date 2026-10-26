@@ -247,3 +247,185 @@ describe("MCP integration", () => {
     expect(body.result?.isError).toBe(true);
   });
 });
+
+describe("MCP resources and prompts (PILE-630)", () => {
+  it("lists resource templates and prompts, and reads entity resources", async () => {
+    const db = createD1(env.D1);
+    const now = new Date();
+    const userId = `mcp-res-${crypto.randomUUID()}`;
+    await db
+      .insert(userTable)
+      .values({
+        id: userId,
+        name: "MCP Resource User",
+        email: `${userId}@example.com`,
+        emailVerified: true,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({ target: [userTable.email] });
+    const setupAuth = await createAuth(env);
+    const setupKey = await setupAuth.api.createApiKey({
+      body: { userId, name: "setup", rateLimitEnabled: false },
+    });
+    const setupHeaders = new Headers({
+      Authorization: `Bearer ${z.object({ key: z.string() }).parse(setupKey).key}`,
+    });
+    const slug = `mcp-res-${crypto.randomUUID()}`;
+    const workspaceRes = await callTool(
+      "postWorkspaces",
+      { body: { name: "MCP resource workspace", slug } },
+      setupHeaders
+    );
+    const workspace = JSON.parse(workspaceRes.content[0].text) as {
+      id: string;
+    };
+    const adminHeaders = await workspaceAdminHeaders(workspace.id, userId);
+
+    const teamRes = await callTool(
+      "postWorkspacesOrganizationIdTeams",
+      { organizationId: workspace.id, body: { key: "RES", name: "Res" } },
+      adminHeaders
+    );
+    const team = JSON.parse(teamRes.content[0].text) as { id: string };
+    const issueRes = await callTool(
+      "postWorkspacesOrganizationIdIssues",
+      {
+        organizationId: workspace.id,
+        body: { title: "Resource test issue", teamId: team.id },
+      },
+      adminHeaders
+    );
+    const issue = JSON.parse(issueRes.content[0].text) as { id: string };
+
+    // resources/templates/list
+    const tplRes = await app.fetch(
+      mcpRequest(
+        {
+          jsonrpc: "2.0",
+          id: 10,
+          method: "resources/templates/list",
+          params: {},
+        },
+        adminHeaders
+      ),
+      env
+    );
+    expect(tplRes.status).toBe(200);
+    const tplBody = (await tplRes.json()) as {
+      result?: { resourceTemplates?: { uriTemplate: string; name: string }[] };
+    };
+    const templates = tplBody.result?.resourceTemplates ?? [];
+    const uris = templates.map((t) => t.uriTemplate);
+    expect(uris).toContain("pile://workspaces/{organizationId}/issues/{id}");
+    expect(uris).toContain("pile://workspaces/{organizationId}/documents/{id}");
+    expect(uris).toContain("pile://workspaces/{organizationId}/customers/{id}");
+    expect(uris).toContain(
+      "pile://workspaces/{organizationId}/memory/profile/{entityType}/{entityId}"
+    );
+
+    // resources/read — issue
+    const readRes = await app.fetch(
+      mcpRequest(
+        {
+          jsonrpc: "2.0",
+          id: 11,
+          method: "resources/read",
+          params: {
+            uri: `pile://workspaces/${workspace.id}/issues/${issue.id}`,
+          },
+        },
+        adminHeaders
+      ),
+      env
+    );
+    expect(readRes.status).toBe(200);
+    const readBody = (await readRes.json()) as {
+      result?: { contents?: { uri: string; text?: string }[] };
+    };
+    const contents = readBody.result?.contents ?? [];
+    expect(contents[0]?.text).toContain(issue.id);
+
+    // resources/read — memory profile
+    const memRes = await app.fetch(
+      mcpRequest(
+        {
+          jsonrpc: "2.0",
+          id: 12,
+          method: "resources/read",
+          params: {
+            uri: `pile://workspaces/${workspace.id}/memory/profile/issue/${issue.id}`,
+          },
+        },
+        adminHeaders
+      ),
+      env
+    );
+    expect(memRes.status).toBe(200);
+    const memBody = (await memRes.json()) as {
+      result?: { contents?: { text?: string }[] };
+      error?: { message: string };
+    };
+    expect(memBody.error).toBeUndefined();
+
+    // prompts/list
+    const promptList = await app.fetch(
+      mcpRequest(
+        { jsonrpc: "2.0", id: 13, method: "prompts/list", params: {} },
+        adminHeaders
+      ),
+      env
+    );
+    expect(promptList.status).toBe(200);
+    const promptListBody = (await promptList.json()) as {
+      result?: { prompts?: { name: string }[] };
+    };
+    const names = (promptListBody.result?.prompts ?? []).map((p) => p.name);
+    expect(names).toEqual(
+      expect.arrayContaining([
+        "triage-issue",
+        "morning-brief",
+        "session-handoff",
+        "memory-distill",
+      ])
+    );
+
+    // prompts/get — all four
+    for (const [name, args] of [
+      ["triage-issue", { organizationId: workspace.id, issueId: issue.id }],
+      ["morning-brief", { organizationId: workspace.id }],
+      [
+        "session-handoff",
+        { organizationId: workspace.id, issueId: issue.id, topic: "handoff" },
+      ],
+      [
+        "memory-distill",
+        {
+          organizationId: workspace.id,
+          entityType: "issue",
+          entityId: issue.id,
+        },
+      ],
+    ] as const) {
+      const get = await app.fetch(
+        mcpRequest(
+          {
+            jsonrpc: "2.0",
+            id: 14,
+            method: "prompts/get",
+            params: { name, arguments: args },
+          },
+          adminHeaders
+        ),
+        env
+      );
+      expect(get.status).toBe(200);
+      const getBody = (await get.json()) as {
+        result?: { messages?: { role: string; content: { text: string } }[] };
+        error?: { message: string };
+      };
+      expect(getBody.error).toBeUndefined();
+      expect(getBody.result?.messages?.length).toBeGreaterThan(0);
+    }
+  });
+});

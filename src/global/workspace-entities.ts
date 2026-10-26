@@ -1,8 +1,9 @@
-import { and, asc, desc, eq, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { createAuth } from "../platform/auth.js";
 import type { AppEnv } from "../platform/env.js";
+import { VortexError } from "../platform/errors.js";
 import type { D1Client } from "./db.js";
 import {
   cycles,
@@ -15,6 +16,8 @@ import {
   projects,
   roadmaps,
   states,
+  team,
+  teamMember,
 } from "./schema.js";
 
 const now = () => new Date().toISOString();
@@ -470,6 +473,108 @@ export async function createMembership(
     role: membershipRoleSchema.parse(row.role),
     createdAt: row.createdAt,
   });
+}
+
+// PILE-623 — change a member's role; demoting the last owner is refused so
+// a workspace can never end up unowned.
+export async function updateMembershipRole(
+  db: D1Client,
+  organizationId: string,
+  membershipId: string,
+  role: string
+) {
+  const existing = await db
+    .select()
+    .from(member)
+    .where(
+      and(
+        eq(member.id, membershipId),
+        eq(member.organizationId, organizationId)
+      )
+    )
+    .get();
+  if (!existing) return null;
+  if (existing.role === "owner" && role !== "owner") {
+    const otherOwners = await db
+      .select({ id: member.id })
+      .from(member)
+      .where(
+        and(
+          eq(member.organizationId, organizationId),
+          eq(member.role, "owner"),
+          sql`${member.id} != ${membershipId}`
+        )
+      )
+      .all();
+    if (otherOwners.length === 0) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: "Cannot downgrade the last workspace owner",
+      });
+    }
+  }
+  await db.update(member).set({ role }).where(eq(member.id, membershipId));
+  return mapMember({ ...existing, role });
+}
+
+// PILE-623 — remove a member and cascade their team_member installs so no
+// orphaned rows linger. Removing the last owner is refused.
+export async function deleteMembership(
+  db: D1Client,
+  organizationId: string,
+  membershipId: string
+): Promise<{ deleted: boolean; userId: string | null }> {
+  const existing = await db
+    .select()
+    .from(member)
+    .where(
+      and(
+        eq(member.id, membershipId),
+        eq(member.organizationId, organizationId)
+      )
+    )
+    .get();
+  if (!existing) return { deleted: false, userId: null };
+  if (existing.role === "owner") {
+    const otherOwners = await db
+      .select({ id: member.id })
+      .from(member)
+      .where(
+        and(
+          eq(member.organizationId, organizationId),
+          eq(member.role, "owner"),
+          sql`${member.id} != ${membershipId}`
+        )
+      )
+      .all();
+    if (otherOwners.length === 0) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message: "Cannot remove the last workspace owner",
+      });
+    }
+  }
+  const orgTeamIds = (
+    await db
+      .select({ id: team.id })
+      .from(team)
+      .where(eq(team.organizationId, organizationId))
+      .all()
+  ).map((t) => t.id);
+  if (orgTeamIds.length > 0) {
+    await db
+      .delete(teamMember)
+      .where(
+        and(
+          eq(teamMember.userId, existing.userId),
+          inArray(teamMember.teamId, orgTeamIds)
+        )
+      );
+  }
+  await db.delete(member).where(eq(member.id, membershipId));
+  return { deleted: true, userId: existing.userId };
 }
 
 // Roadmaps

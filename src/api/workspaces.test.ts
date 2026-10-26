@@ -474,3 +474,65 @@ describe("workspace create via session headers (PILE-456)", () => {
     expect(true).toBe(true);
   });
 });
+
+describe("guided onboarding (PILE-639)", () => {
+  it("seeds starter issues and returns the quickstart bundle", async () => {
+    const cookie = await getSessionCookie();
+    const res = await app.fetch(
+      new Request(onboardUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: cookie,
+          Origin: origin,
+        },
+        body: JSON.stringify({
+          name: "Seeded",
+          slug: `seeded-${crypto.randomUUID()}`,
+          seedStarterIssues: true,
+        }),
+      }),
+      env
+    );
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as {
+      workspace: { id: string };
+      token: string;
+      quickstart?: {
+        mcpUrl: string;
+        cliSetupCommand: string;
+        seededIssueIds: string[];
+      };
+    };
+    expect(body.quickstart).toBeDefined();
+    expect(body.quickstart?.mcpUrl).toBe(`${origin}/mcp`);
+    expect(body.quickstart?.cliSetupCommand).toContain(body.token);
+    expect(body.quickstart?.seededIssueIds).toHaveLength(2);
+
+    // The checklist reflects what was just provisioned.
+    const checklist = await app.fetch(
+      new Request(
+        new URL(
+          `/workspaces/${body.workspace.id}/onboarding-checklist`,
+          origin
+        ).toString(),
+        { headers: { Authorization: `Bearer ${body.token}` } }
+      ),
+      env
+    );
+    expect(checklist.status).toBe(200);
+    const cl = (await checklist.json()) as {
+      organizationId: string;
+      hasApiKey: boolean;
+      hasAgentProvider: boolean;
+      hasFirstIssue: boolean;
+      mcpUrl: string;
+      pluginManifestUrl: string;
+    };
+    expect(cl.organizationId).toBe(body.workspace.id);
+    expect(cl.hasApiKey).toBe(true);
+    expect(cl.hasFirstIssue).toBe(true);
+    expect(cl.mcpUrl).toBe(`${origin}/mcp`);
+    expect(cl.pluginManifestUrl).toBe(`${origin}/.well-known/mcp.json`);
+  });
+});

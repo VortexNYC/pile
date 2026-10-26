@@ -4,6 +4,7 @@ import {
   AGENT_SESSION_STATUSES,
   DEFAULT_GIT_IDENTITY_REPO,
   DRAFT_OUTPUT_KINDS,
+  EXTERNAL_EVENT_DELIVERY_STATUSES,
   DRAFT_OUTPUT_STATUSES,
   ISSUE_PRIORITIES,
   ISSUE_PR_STATES,
@@ -185,5 +186,19 @@ describe("draft output types (PILE-428)", () => {
       revive: true,
     } satisfies AgentSessionResult;
     expect(result.revive).toBe(true);
+  });
+
+  it("keeps the external-event delivery status picklist stable", () => {
+    // Delivery outcomes are written to the audit ledger — changing them
+    // silently corrupts the dedupe trail.
+    expect(EXTERNAL_EVENT_DELIVERY_STATUSES).toEqual([
+      "applied",
+      "already_done",
+      "no_step",
+      "no_record",
+      "unmapped",
+      "invalid_payload",
+      "invalid_signature",
+    ]);
   });
 });

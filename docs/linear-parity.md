@@ -68,6 +68,21 @@ GET    /workspaces/{organizationId}/linear-users
 GET    /workspaces/{organizationId}/linear-users/{linearId}
 POST   /workspaces/{organizationId}/memberships
 GET    /workspaces/{organizationId}/memberships
+PATCH  /workspaces/{organizationId}/memberships/{id}
+DELETE /workspaces/{organizationId}/memberships/{id}
+GET    /workspaces/{organizationId}/memory
+POST   /workspaces/{organizationId}/memory
+GET    /workspaces/{organizationId}/memory/profile
+POST   /workspaces/{organizationId}/memory/batch
+POST   /workspaces/{organizationId}/memory/extract
+PATCH  /workspaces/{organizationId}/memory/{id}
+DELETE /workspaces/{organizationId}/memory/{id}
+POST   /workspaces/{organizationId}/search
+GET    /workspaces/{organizationId}/tokens
+POST   /workspaces/{organizationId}/tokens
+DELETE /workspaces/{organizationId}/tokens/{id}
+POST   /workspaces/{organizationId}/tokens/prune
+GET    /workspaces/{organizationId}/onboarding-checklist
 POST   /workspaces/{organizationId}/invitations
 GET    /workspaces/{organizationId}/invitations
 DELETE /workspaces/{organizationId}/invitations/{id}
@@ -158,6 +173,48 @@ Based on the gap map and the current backend-first priority, the next high-lever
 
 1. **Zendesk / GitLab / Intercom integrations** — expand beyond GitHub and Slack.
 2. **Published docs site and CLI parity** — make the OpenAPI/MCP surface usable as a docs site and a real CLI.
+
+## Notion Parity Map
+
+Pile's document + workspace surface vs Notion's:
+
+| Notion surface        | Pile equivalent                                                                                | Status  |
+| --------------------- | ---------------------------------------------------------------------------------------------- | ------- |
+| Pages/documents       | `POST/GET/PATCH/DELETE /workspaces/{org}/documents`, markdown + JSON content formats           | Done    |
+| Spaces/teamspaces     | workspaces + teams with per-team scoping                                                       | Done    |
+| Permissions           | workspace memberships, `rls(...)` route guards, per-member roles                               | Done    |
+| Version history       | `workspace_documents` revision rows + issue-linked document history                            | Partial |
+| Backlinks             | issue↔document links (`GET /issues/{id}/documents`, `?issueId=` filter)                        | Partial |
+| Public share          | `GET /workspaces/{org}/documents/{id}/share` public link rows                                  | Partial |
+| Canvas/comments       | entity comments on documents + issue-embedded markdown                                         | Partial |
+| MCP prompts/resources | `pile://workspaces/{org}/documents/{id}` resource + `memory-distill`/`session-handoff` prompts | Done    |
+
+## Supermemory Parity Map
+
+Shared agent memory (`workspace_memory`) vs Supermemory's recall API:
+
+| Supermemory surface   | Pile equivalent                                                                                                                                                | Status |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| `memory` CRUD         | `POST/GET/PATCH/DELETE /workspaces/{org}/memory[/{id}]` — patch in place, forget head+superseded                                                               | Done   |
+| Supersede chains      | `supersedes` column — contradictions replace predecessors, recall returns head facts only                                                                      | Done   |
+| Memory profile        | `GET /workspaces/{org}/memory/profile` — static facts + dynamic context grouped by kind                                                                        | Done   |
+| Batch ingestion       | `POST /workspaces/{org}/memory/batch` — multi-fact writes + document→memory extraction                                                                         | Done   |
+| Extraction/"dreaming" | `POST /workspaces/{org}/memory/extract` — session/issue/document/text → durable facts                                                                          | Done   |
+| Search                | unified SMI-packed BM25 index (issues+docs+memories) + hybrid semantic recall: concept/stem expansion, trigram-cosine scoring, optional Workers AI + Vectorize | Done   |
+| MCP access            | `memory_recall`, `memory_remember`, `memory_profile`, `memory_extract`, `memory_remember_batch` tools + `memory-profile` resource                              | Done   |
+
+## CRM & Unify Outbound Map
+
+Merchant CRM + outbound surface vs Unify-style sales tooling:
+
+| Capability                   | Pile equivalent                                                                                   | Status |
+| ---------------------------- | ------------------------------------------------------------------------------------------------- | ------ |
+| Merchant records             | `customers` in the workspace DO — domain, contacts, priority score, signals                       | Done   |
+| Inbound reply classification | reply-funnel engine — opt_out/hard-bounce suppression + outcome records on email intake           | Done   |
+| Batch approval               | `POST /workspaces/{org}/customers/approve-batch` — send-gate partition, mailbox caps, cadence     | Done   |
+| Email cadence                | mailbox-aware cadence engine — enrollment, send gate, ramp, opt-out footer, `sentToday` in memory | Done   |
+| Paid-vendor enrichment       | `planDetectiveWaterfall` gated on `paidVendorConfigured` + monthly budget remaining               | Done   |
+| Morning brief                | `customer_morning_brief` — top-ranked leads + send-gate readiness                                 | Done   |
 
 ## How to update this document
 

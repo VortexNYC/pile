@@ -2289,7 +2289,12 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
       const customFields: Record<string, string | null> =
         typeof customer.customFields === "string"
           ? (JSON.parse(customer.customFields) as Record<string, string | null>)
-          : { ...(customer.customFields ?? {}) };
+          : {
+              ...(customer.customFields as Record<
+                string,
+                string | null
+              > | null),
+            };
       customFields.whyNow = breakdown.whyNow;
       customFields.whyNowSignalIds = breakdown.whyNowSignalIds.join(",");
       await ctx.ws.updateCustomer(customer.id, {

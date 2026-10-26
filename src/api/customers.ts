@@ -12,6 +12,7 @@ import { createD1 } from "../global/db.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { isAdminIdentity } from "../platform/permissions.js";
+import { captureProductEvent } from "../platform/posthog.js";
 import { rls } from "../platform/rls.js";
 import {
   type AudienceCandidateMerchant,
@@ -296,6 +297,10 @@ const orgIdParam = z.object({
   organizationId: z.string(),
   id: z.string(),
 });
+
+// Shlomo Kabareti's user id — default owner for auto-created
+// Bookkeeper / CPA Partner records in the main Vortex workspace.
+const VORTEX_MAIN_PARTNER_OWNER_ID = "0r5mlhiV0owDDL59vzGnfTTqwNBuGHgE";
 
 const listCustomersRoute = createRoute({
   method: "get",
@@ -921,6 +926,18 @@ async function scrubNeedIssueId<T extends { issueId: string | null }>(
   return hidden.includes(need.issueId) ? { ...need, issueId: null } : need;
 }
 
+async function loadCustomerSignals(
+  stub: ReturnType<typeof getWorkspaceStub>,
+  customerId: string
+): Promise<MerchantSignal[]> {
+  const facts = await stub.memoryRecall({
+    entityType: "customer",
+    entityId: customerId,
+    limit: 100,
+  });
+  return parseCustomerSignalFacts(facts);
+}
+
 export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listCustomersRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
@@ -1413,18 +1430,6 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
 
   // ---- PILE-478..533: Signals, Ranker v2, SMB Dedup & Send Gate API ----
 
-  async function loadCustomerSignals(
-    stub: ReturnType<typeof getWorkspaceStub>,
-    customerId: string
-  ): Promise<MerchantSignal[]> {
-    const facts = await stub.memoryRecall({
-      entityType: "customer",
-      entityId: customerId,
-      limit: 100,
-    });
-    return parseCustomerSignalFacts(facts);
-  }
-
   const recordSignalRoute = createRoute({
     method: "post",
     path: "/workspaces/{organizationId}/customers/{id}/signals",
@@ -1657,10 +1662,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
       typeof customer.customFields === "string"
         ? (JSON.parse(customer.customFields) as Record<string, string | null>)
         : {
-            ...((customer.customFields as Record<
-              string,
-              string | null
-            > | null) ?? {}),
+            ...(customer.customFields as Record<string, string | null> | null),
           };
     customFields.whyNow = breakdown.whyNow;
     customFields.whyNowSignalIds = breakdown.whyNowSignalIds.join(",");
@@ -1857,7 +1859,12 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     const customer = await stub.getCustomer(id);
     if (!customer) return notFound("Customer not found");
 
-    const classified = classifyInboundReply(input.subject, input.body);
+    const classified = classifyInboundReply(
+      input.subject,
+      input.body,
+      undefined,
+      input.fromEmail
+    );
     let suppressed = false;
     if (classified.category === "opt_out") {
       suppressed = true;
@@ -1938,15 +1945,19 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
           : [];
         const partnerCustomer =
           existingPartners[0] ??
+          // externalId is the dedupe key — repeat referral replies mentioning
+          // the same bookkeeper email resolve to one partner record, including
+          // freemail domains where partnerDomain is null.
           (await stub.createCustomer({
             name: partnerDomain
               ? `${partnerDomain.split(".")[0]!.toUpperCase()} CPA & BOOKKEEPING`
               : `${customer.name} Bookkeeper Partner`,
             domain: partnerDomain ?? null,
+            externalId: `referral:${classified.alternateContactEmail}`,
             vertical: "Bookkeeper / CPA Partner",
             ownerId:
               organizationId === "org_vortex_main"
-                ? "0r5mlhiV0owDDL59vzGnfTTqwNBuGHgE"
+                ? VORTEX_MAIN_PARTNER_OWNER_ID
                 : null,
             signal: `Referred by ${customer.name} (${classified.alternateContactEmail})`,
             source: "reply_referral",
@@ -1966,12 +1977,28 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
       }
     }
 
-    // PILE-604: Deferred recontactAt window (3/6/12 months) on bad_timing / budget replies
+    // PILE-604: Deferred recontactAt window (3/6/12 months) on bad_timing /
+    // budget replies. Never clobber a human-set future next step — only stamp
+    // when the field is empty, already ours, or expired.
     if (classified.category === "bad_timing" && classified.recontactAtIso) {
-      await stub.updateCustomer(customer.id, {
-        nextStepDueAt: classified.recontactAtIso,
-        nextStepText: `recontact: bad_timing (${classified.recontactWindowMonths ?? 3}mo)`,
-      });
+      const existingDueMs = customer.nextStepDueAt
+        ? Date.parse(customer.nextStepDueAt)
+        : Number.NaN;
+      const isOurDeferral =
+        customer.nextStepText?.startsWith("recontact:") ?? false;
+      const stepExpired =
+        Number.isFinite(existingDueMs) && existingDueMs <= Date.now();
+      if (
+        !customer.nextStepDueAt ||
+        isOurDeferral ||
+        !Number.isFinite(existingDueMs) ||
+        stepExpired
+      ) {
+        await stub.updateCustomer(customer.id, {
+          nextStepDueAt: classified.recontactAtIso,
+          nextStepText: `recontact: bad_timing (${classified.recontactWindowMonths ?? 3}mo)`,
+        });
+      }
     }
 
     const statementChecklist = input.statementFileId
@@ -2278,8 +2305,10 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     const stub = getWorkspaceStub(c.env, organizationId);
     const allRaw = await stub.listCustomers();
     const nowMs = Date.now();
-    // PILE-604: Exclude deferred bad_timing customers until nextStepDueAt <= now
+    // PILE-604: Only our own "recontact:" deferrals hide a customer from the
+    // brief — a human-set future nextStepDueAt (demo, proposal) keeps them in.
     const all = allRaw.filter((cust) => {
+      if (!cust.nextStepText?.startsWith("recontact:")) return true;
       if (!cust.nextStepDueAt) return true;
       const dueMs = Date.parse(cust.nextStepDueAt);
       return !Number.isFinite(dueMs) || dueMs <= nowMs;
@@ -2495,6 +2524,23 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
                 .enum(["email", "call", "visit", "sms"])
                 .default("call"),
               limit: z.number().int().min(1).max(100).default(25),
+              // PILE-609 — optional cold-email cadence wiring for
+              // channel=email batches: mailbox identity, cap override,
+              // and DNS health gate flow into executeReadyTouch.
+              mailboxId: z.string().optional(),
+              dailyCap: z.number().int().min(1).max(500).optional(),
+              domainHealth: z
+                .object({
+                  domain: z.string(),
+                  spfOk: z.boolean(),
+                  dkimOk: z.boolean(),
+                  dmarcOk: z.boolean(),
+                  mxOk: z.boolean(),
+                  checkedAt: z.string().optional(),
+                })
+                .optional(),
+              unsubscribeBaseUrl: z.string().optional(),
+              physicalAddress: z.string().optional(),
             }),
           },
         },
@@ -2515,6 +2561,9 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
                   name: z.string(),
                   channel: z.string(),
                   recipient: z.string().nullable(),
+                  optOutFooter: z.string().nullable().optional(),
+                  enrollmentStatus: z.string().optional(),
+                  mailboxSentToday: z.number().optional(),
                 })
               ),
               blocked: z.array(
@@ -2541,10 +2590,13 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
       .filter((row) =>
         idSet ? idSet.has(row.id) : (row.priorityScore ?? 0) > 0
       )
-      .sort((a, b) => (b.priorityScore ?? 0) - (a.priorityScore ?? 0))
+      .toSorted((a, b) => (b.priorityScore ?? 0) - (a.priorityScore ?? 0))
       .slice(0, input.limit);
 
-    const todayYmd = new Date().toISOString().slice(0, 10);
+    // Business day keyed on recipient time, not UTC midnight.
+    const todayYmd = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/New_York",
+    }).format(new Date());
     const preSendKind = `pre_send:${input.channel}:${todayYmd}`;
 
     const candidates = await Promise.all(
@@ -2580,15 +2632,119 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     const { Effect } = await import("effect");
     const { evaluateApprovedBatchWithEffect } =
       await import("../agents/collectors-effect.js");
+
+    // PILE-609 — for email batches, hydrate the per-mailbox daily state from
+    // workspace memory, apply cap/DNS-health overrides, run the cadence
+    // pipeline inside evaluateApprovedBatchWithEffect, then persist the
+    // advanced sentToday counter back for the next batch.
+    let mailboxState:
+      | import("../workspace/cadence-engine.js").OutboundMailbox
+      | undefined;
+    let domainHealthGate:
+      | import("../workspace/cadence-engine.js").SendingDomainHealth
+      | undefined;
+    if (input.channel === "email") {
+      const {
+        DEFAULT_COLD_MAILBOX_DAILY_CAP,
+        pauseMailboxesForUnhealthyDomain,
+        updateMailboxDailyCap,
+      } = await import("../workspace/cadence-engine.js");
+      const mailboxId = input.mailboxId ?? "default";
+      const mailboxKind = `mailbox:${mailboxId}:${todayYmd}`;
+      const recalled = await stub
+        .memoryRecall({
+          entityType: "workspace",
+          entityId: organizationId,
+          kind: mailboxKind,
+          limit: 1,
+        })
+        .catch(() => []);
+      let storedSentToday = 0;
+      if (recalled.length > 0) {
+        try {
+          const parsed = JSON.parse(recalled[0]!.fact) as {
+            sentToday?: number;
+            rampStartedAt?: string;
+          };
+          storedSentToday = parsed.sentToday ?? 0;
+        } catch {
+          storedSentToday = 0;
+        }
+      }
+      const domain = input.domainHealth?.domain ?? "cold.vortex.dev";
+      mailboxState = {
+        id: mailboxId,
+        address: `outbound@${domain}`,
+        domain,
+        ownerUserId: "system",
+        provider: "smtp",
+        state: "connected",
+        dailyCap: DEFAULT_COLD_MAILBOX_DAILY_CAP,
+        rampStartedAt: todayYmd,
+        sentToday: storedSentToday,
+      };
+      if (input.dailyCap) {
+        mailboxState = updateMailboxDailyCap(mailboxState, input.dailyCap);
+      }
+      if (input.domainHealth) {
+        domainHealthGate = {
+          ...input.domainHealth,
+          checkedAt: input.domainHealth.checkedAt ?? new Date().toISOString(),
+        };
+        mailboxState =
+          pauseMailboxesForUnhealthyDomain([mailboxState], domainHealthGate)
+            .mailboxes[0] ?? mailboxState;
+      }
+    }
+
     const partitioned = await Effect.runPromise(
-      evaluateApprovedBatchWithEffect(candidates, { concurrency: 5 })
+      evaluateApprovedBatchWithEffect(candidates, {
+        concurrency: 5,
+        ...(mailboxState ? { mailbox: mailboxState } : {}),
+        ...(domainHealthGate ? { domainHealth: domainHealthGate } : {}),
+        ...(input.unsubscribeBaseUrl
+          ? {
+              unsubscribeUrl: input.unsubscribeBaseUrl,
+            }
+          : {}),
+        ...(input.physicalAddress
+          ? { physicalAddress: input.physicalAddress }
+          : {}),
+        schedule: {
+          timeZone: "America/New_York",
+          businessHours: { startHour: 9, endHour: 18 },
+        },
+      })
     );
 
-    // PILE-608: Commit pre_send idempotency reservation for every approved touch
+    if (mailboxState && input.channel === "email") {
+      const mailboxId = input.mailboxId ?? "default";
+      const mailboxKind = `mailbox:${mailboxId}:${todayYmd}`;
+      const maxSent = partitioned.approved.reduce(
+        (acc, item) => Math.max(acc, item.mailboxSentToday ?? 0),
+        mailboxState.sentToday
+      );
+      await stub
+        .memoryRemember({
+          entityType: "workspace",
+          entityId: organizationId,
+          kind: mailboxKind,
+          fact: JSON.stringify({
+            mailboxId,
+            sentToday: maxSent,
+            rampStartedAt: todayYmd,
+            updatedAt: new Date().toISOString(),
+          }),
+        })
+        .catch(() => null);
+    }
+
+    // PILE-608: Atomic check-then-write inside the DO — two overlapping
+    // approve-batch calls cannot both reserve the same lead for the same day.
     const nowIso = new Date().toISOString();
-    await Promise.all(
+    const claims = await Promise.all(
       partitioned.approved.map((item) =>
-        stub.memoryRemember({
+        stub.claimMemoryOnce({
           entityType: "customer",
           entityId: item.customerId,
           kind: preSendKind,
@@ -2603,12 +2759,33 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
         })
       )
     );
+    const approved = partitioned.approved.filter((_, i) => claims[i]);
+    const claimBlocked = partitioned.approved
+      .filter((_, i) => !claims[i])
+      .map((item) => ({
+        customerId: item.customerId,
+        name: item.name,
+        reasons: ["ALREADY_RESERVED_TODAY"],
+      }));
+    const blocked = [...partitioned.blocked, ...claimBlocked];
 
+    captureProductEvent(
+      "customer.batch_approved",
+      {
+        organizationId,
+        actorId: c.var.workspaceIdentity?.id,
+        channel: input.channel,
+        approvedCount: partitioned.approved.length,
+        blockedCount: partitioned.blocked.length,
+      },
+      getExecutionCtx(c),
+      { env: c.env }
+    );
     return c.json({
-      approvedCount: partitioned.approved.length,
-      blockedCount: partitioned.blocked.length,
-      approved: partitioned.approved,
-      blocked: partitioned.blocked.map((b) => ({
+      approvedCount: approved.length,
+      blockedCount: blocked.length,
+      approved,
+      blocked: blocked.map((b) => ({
         customerId: b.customerId,
         name: b.name,
         reasons: [...b.reasons],

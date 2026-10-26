@@ -21,4 +21,11 @@ describe("issueTemplateDataSchema", () => {
       issueTemplateDataSchema.safeParse({ status: "not-a-status" }).success
     ).toBe(false);
   });
+
+  it("parses a minimal template payload with all fields optional", () => {
+    expect(issueTemplateDataSchema.safeParse({}).success).toBe(true);
+    expect(
+      issueTemplateDataSchema.safeParse({ priority: "high" }).success
+    ).toBe(true);
+  });
 });

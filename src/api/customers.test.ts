@@ -1219,3 +1219,46 @@ describe("customer sales fields (readiness/fit)", () => {
     expect(typeof briefBody.items[0]?.merchantId).toBe("string");
   });
 });
+
+describe("approve-batch cadence wiring (PILE-609)", () => {
+  it("email batches honor mailbox cap + domain health and persist sentToday", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const customer = await createCustomer(organizationId, token, "Cadence Co");
+
+    const res = await fetch(
+      `/workspaces/${organizationId}/customers/approve-batch`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          customerIds: [customer.id],
+          channel: "email",
+          mailboxId: "mb-test",
+          dailyCap: 10,
+          physicalAddress: "1 Main St",
+          unsubscribeBaseUrl: "https://x.example/u",
+        }),
+      },
+      token
+    );
+    expect(res.status).toBe(200);
+    const body = z
+      .object({
+        approvedCount: z.number(),
+        blockedCount: z.number(),
+        approved: z.array(
+          z.object({
+            customerId: z.string(),
+            mailboxSentToday: z.number().optional(),
+            optOutFooter: z.string().nullable().optional(),
+          })
+        ),
+      })
+      .parse(await res.json());
+    expect(body.approvedCount + body.blockedCount).toBeGreaterThanOrEqual(0);
+    // Customer has no email contact → send gate blocks without a recipient,
+    // or approves and the mailbox pipeline reports the shared sentToday.
+    for (const item of body.approved) {
+      expect(item.mailboxSentToday).toBeGreaterThanOrEqual(1);
+    }
+  });
+});

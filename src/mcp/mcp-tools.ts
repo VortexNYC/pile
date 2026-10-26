@@ -1153,6 +1153,48 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdMembershipsId",
+    "description": "Delete membership (DELETE /workspaces/{organizationId}/memberships/{id}) Path params (top-level, required): organizationId, id.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/memberships/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "deleteWorkspacesOrganizationIdMemoryId",
+    "description": "Delete memory (DELETE /workspaces/{organizationId}/memory/{id}) Path params (top-level, required): organizationId, id.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/memory/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdOauthclientsId",
     "description": "Delete oauth client (DELETE /workspaces/{organizationId}/oauth-clients/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
@@ -5099,6 +5141,36 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdMemoryProfile",
+    "description": "List memory profile (GET /workspaces/{organizationId}/memory/profile) Path params (top-level, required): organizationId. Query params (top-level, optional): entityType, entityId, limit.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/memory/profile",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "entityType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "entityId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "limit": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "entityId",
+        "entityType",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdMePermissions",
     "description": "List me permissions (GET /workspaces/{organizationId}/me/permissions) Path params (top-level, required): organizationId.",
     "method": "GET",
@@ -5259,6 +5331,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "List observability metrics (GET /workspaces/{organizationId}/observability/metrics) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/observability/metrics",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdOnboardingchecklist",
+    "description": "List onboarding checklist (GET /workspaces/{organizationId}/onboarding-checklist) Path params (top-level, required): organizationId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/onboarding-checklist",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -8941,6 +9030,77 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "patchWorkspacesOrganizationIdMembershipsId",
+    "description": "Update membership (PATCH /workspaces/{organizationId}/memberships/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: role* (* = required).",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/memberships/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "role": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "role"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "patchWorkspacesOrganizationIdMemoryId",
+    "description": "Update memory (PATCH /workspaces/{organizationId}/memory/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: fact, kind, validUntil.",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/memory/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "fact": {
+              "type": "string",
+              "minLength": 1
+            },
+            "kind": {
+              "type": "string",
+              "minLength": 1
+            },
+            "validUntil": {
+              "type": "string",
+              "nullable": true
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "patchWorkspacesOrganizationIdNotificationsIdRead",
     "description": "Mark notification as read (PATCH /workspaces/{organizationId}/notifications/{id}/read) Path params (top-level, required): organizationId, id.",
     "method": "PATCH",
@@ -11866,7 +12026,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOnboard",
-    "description": "Create workspace onboard (POST /workspaces/onboard) Request body goes in the \"body\" object; fields: name*, slug*, key (* = required).",
+    "description": "Create workspace onboard (POST /workspaces/onboard) Request body goes in the \"body\" object; fields: name*, slug*, key, seedStarterIssues (* = required).",
     "method": "POST",
     "path": "/workspaces/onboard",
     "inputSchema": {
@@ -11885,6 +12045,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "key": {
               "type": "string"
+            },
+            "seedStarterIssues": {
+              "type": "boolean"
             }
           },
           "required": [
@@ -13320,7 +13483,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdCustomersApprovebatch",
-    "description": "Create customer approve batch (POST /workspaces/{organizationId}/customers/approve-batch) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: customerIds, channel, limit.",
+    "description": "Create customer approve batch (POST /workspaces/{organizationId}/customers/approve-batch) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: customerIds, channel, limit, mailboxId, dailyCap, domainHealth, unsubscribeBaseUrl, physicalAddress.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/customers/approve-batch",
     "inputSchema": {
@@ -13353,6 +13516,50 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "minimum": 1,
               "maximum": 100,
               "default": 25
+            },
+            "mailboxId": {
+              "type": "string"
+            },
+            "dailyCap": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            },
+            "domainHealth": {
+              "type": "object",
+              "properties": {
+                "domain": {
+                  "type": "string"
+                },
+                "spfOk": {
+                  "type": "boolean"
+                },
+                "dkimOk": {
+                  "type": "boolean"
+                },
+                "dmarcOk": {
+                  "type": "boolean"
+                },
+                "mxOk": {
+                  "type": "boolean"
+                },
+                "checkedAt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "domain",
+                "spfOk",
+                "dkimOk",
+                "dmarcOk",
+                "mxOk"
+              ]
+            },
+            "unsubscribeBaseUrl": {
+              "type": "string"
+            },
+            "physicalAddress": {
+              "type": "string"
             }
           }
         }
@@ -17178,6 +17385,122 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdMemoryBatch",
+    "description": "Create memory batch (POST /workspaces/{organizationId}/memory/batch) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: memories, documentIds, sourceAgentSlug.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/memory/batch",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "memories": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "entityType": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "entityId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "kind": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "fact": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "validUntil": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "sourceAgentSlug": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "sourceSessionId": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "entityType",
+                  "entityId",
+                  "kind",
+                  "fact"
+                ]
+              }
+            },
+            "documentIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "sourceAgentSlug": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdMemoryExtract",
+    "description": "Create memory extract (POST /workspaces/{organizationId}/memory/extract) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: sessionId, issueId, documentId, text, entityType, entityId, sourceAgentSlug.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/memory/extract",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string"
+            },
+            "issueId": {
+              "type": "string"
+            },
+            "documentId": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "entityType": {
+              "type": "string"
+            },
+            "entityId": {
+              "type": "string"
+            },
+            "sourceAgentSlug": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdNotificationsMarkallread",
     "description": "Mark all notifications as read (POST /workspaces/{organizationId}/notifications/mark-all-read) Path params (top-level, required): organizationId.",
     "method": "POST",
@@ -20605,6 +20928,34 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "required": [
             "name"
           ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdTokensPrune",
+    "description": "Create token prune (POST /workspaces/{organizationId}/tokens/prune) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: maxAgeHours.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/tokens/prune",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "maxAgeHours": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 8760,
+              "default": 24
+            }
+          }
         }
       },
       "required": [

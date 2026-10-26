@@ -22,8 +22,6 @@ export const issueTemplateDataSchema = z
   })
   .partial();
 
-export type IssueTemplateData = z.infer<typeof issueTemplateDataSchema>;
-
 export function listTemplates(db: D1Client, organizationId: string) {
   return db
     .select()

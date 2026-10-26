@@ -15,6 +15,7 @@ import {
   deleteCycle,
   deleteInitiative,
   deleteLabel,
+  deleteMembership,
   deleteProject,
   findProjectByName,
   deleteRoadmap,
@@ -34,6 +35,7 @@ import {
   updateCycle,
   updateInitiative,
   updateLabel,
+  updateMembershipRole,
   updateProject,
   updateRoadmap,
 } from "../global/workspace-entities.js";
@@ -653,6 +655,55 @@ const createMembershipRoute = createRoute({
   },
 });
 
+const updateMembershipRoute = createRoute({
+  method: "patch",
+  path: "/workspaces/{organizationId}/memberships/{id}",
+  tags: ["memberships"],
+  middleware: [rls("admin")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({ role: z.string().min(1) }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Membership updated",
+      content: {
+        "application/json": { schema: membershipSchema },
+      },
+    },
+  },
+});
+
+const deleteMembershipRoute = createRoute({
+  method: "delete",
+  path: "/workspaces/{organizationId}/memberships/{id}",
+  tags: ["memberships"],
+  middleware: [rls("admin")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Membership deleted",
+      content: {
+        "application/json": {
+          schema: z.object({
+            deleted: z.boolean(),
+            id: z.string(),
+            userId: z.string(),
+          }),
+        },
+      },
+    },
+  },
+});
+
 const listRoadmapsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/roadmaps",
@@ -1246,6 +1297,35 @@ export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
       input.role
     );
     return c.json(item, 201);
+  });
+
+  app.openapi(updateMembershipRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const db = createD1(c.env.D1);
+    const item = await updateMembershipRole(db, organizationId, id, input.role);
+    if (!item) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Membership not found",
+      });
+    }
+    return c.json(item);
+  });
+
+  app.openapi(deleteMembershipRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const result = await deleteMembership(db, organizationId, id);
+    if (!result.deleted) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Membership not found",
+      });
+    }
+    return c.json({ deleted: true, id, userId: result.userId! });
   });
 
   app.openapi(listRoadmapsRoute, async (c) => {

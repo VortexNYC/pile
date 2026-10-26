@@ -16,6 +16,34 @@ describe("MCP tool aliases", () => {
     expect(aliasesFor("postWorkspacesOrganizationIdMemory")).toContain(
       "memory_remember"
     );
+  });
+
+  it("maps the PILE-616/617/627/628 memory parity operations", () => {
+    expect(MCP_TOOL_ALIASES.memory_update).toBe(
+      "patchWorkspacesOrganizationIdMemoryId"
+    );
+    expect(MCP_TOOL_ALIASES.memory_delete).toBe(
+      "deleteWorkspacesOrganizationIdMemoryId"
+    );
+    expect(MCP_TOOL_ALIASES.memory_forget).toBe(
+      "deleteWorkspacesOrganizationIdMemoryId"
+    );
+    expect(MCP_TOOL_ALIASES.memory_profile).toBe(
+      "getWorkspacesOrganizationIdMemoryProfile"
+    );
+    expect(MCP_TOOL_ALIASES.memory_remember_batch).toBe(
+      "postWorkspacesOrganizationIdMemoryBatch"
+    );
+    expect(MCP_TOOL_ALIASES.memory_extract).toBe(
+      "postWorkspacesOrganizationIdMemoryExtract"
+    );
+    // Both delete aliases resolve to the same underlying tool.
+    const delAliases = aliasesFor("deleteWorkspacesOrganizationIdMemoryId");
+    expect(delAliases).toContain("memory_delete");
+    expect(delAliases).toContain("memory_forget");
+    expect(aliasesFor("getWorkspacesOrganizationIdMemoryProfile")).toContain(
+      "memory_profile"
+    );
     expect(MCP_TOOL_ALIASES.customer_signal_record).toBe(
       "postWorkspacesOrganizationIdCustomersIdSignals"
     );

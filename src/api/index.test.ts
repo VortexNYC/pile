@@ -3845,3 +3845,25 @@ describe("lane-token auth bypass (PILE-457)", () => {
     expect(res.status).toBe(200);
   });
 });
+
+describe("agent kit discovery manifest (PILE-619)", () => {
+  it("serves /.well-known/mcp.json", async () => {
+    const res = await app.fetch(
+      new Request("http://localhost/.well-known/mcp.json"),
+      env
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      name: string;
+      mcpEndpoint: string;
+      prompts: string[];
+      resources: string[];
+    };
+    expect(body.name).toBe("pile");
+    expect(body.mcpEndpoint).toBe("http://localhost/mcp");
+    expect(body.prompts).toContain("triage-issue");
+    expect(body.resources).toContain(
+      "pile://workspaces/{organizationId}/memory/profile/{entityType}/{entityId}"
+    );
+  });
+});

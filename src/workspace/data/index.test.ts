@@ -11,6 +11,7 @@ import {
   workspaceAgentTypes,
   workspaceCustomers,
   workspaceIssues,
+  workspaceMemory,
 } from "../schema.js";
 import {
   hiddenIssueCondition,
@@ -116,6 +117,10 @@ import {
   upsertRunReceipt,
   memoryRemember,
   memoryRecall,
+  memoryUpdate,
+  memoryForget,
+  memoryProfile,
+  isDynamicMemoryFact,
   type NotificationType,
   type WorkspaceDb,
 } from "./index.js";
@@ -2249,9 +2254,184 @@ describe("agent session scoping (PILE-453)", () => {
     });
   });
 
+  it("memoryUpdate patches fact/kind/validUntil in place and returns null for missing rows (PILE-628)", async () => {
+    await withDb(async (db) => {
+      const id = await memoryRemember(db, WORKSPACE_ID, {
+        entityType: "agent",
+        entityId: "agent-patch",
+        kind: "lesson",
+        fact: "original draft",
+      });
+      expect(
+        await memoryUpdate(db, WORKSPACE_ID, crypto.randomUUID(), {
+          fact: "nope",
+        })
+      ).toBeNull();
+
+      const updated = await memoryUpdate(db, WORKSPACE_ID, id, {
+        fact: "corrected draft",
+        kind: "decision",
+        validUntil: null,
+      });
+      expect(updated?.fact).toBe("corrected draft");
+      expect(updated?.kind).toBe("decision");
+      expect(updated?.validUntil).toBeNull();
+      expect(updated?.id).toBe(id);
+      // Update is in place — no supersession, same id still the head.
+      const rows = await memoryRecall(db, WORKSPACE_ID, {
+        entityType: "agent",
+        entityId: "agent-patch",
+      });
+      expect(rows).toHaveLength(1);
+      expect(rows[0].id).toBe(id);
+      expect(rows[0].fact).toBe("corrected draft");
+    });
+  });
+
+  it("memoryForget on a head erases the whole supersede chain so ancestors never resurrect (PILE-628)", async () => {
+    await withDb(async (db) => {
+      const v1 = await memoryRemember(db, WORKSPACE_ID, {
+        entityType: "customer",
+        entityId: "cust-forget",
+        kind: "coverage",
+        fact: "v1 fact",
+      });
+      const v2 = await memoryRemember(db, WORKSPACE_ID, {
+        entityType: "customer",
+        entityId: "cust-forget",
+        kind: "coverage",
+        fact: "v2 fact",
+      });
+      const v3 = await memoryRemember(db, WORKSPACE_ID, {
+        entityType: "customer",
+        entityId: "cust-forget",
+        kind: "coverage",
+        fact: "v3 fact",
+      });
+      // Unrelated fact on the same entity survives.
+      const other = await memoryRemember(db, WORKSPACE_ID, {
+        entityType: "customer",
+        entityId: "cust-forget",
+        kind: "preference",
+        fact: "keep me",
+      });
+
+      const res = await memoryForget(db, WORKSPACE_ID, v3);
+      expect(res.deleted).toBe(true);
+      expect(res.deletedIds.toSorted()).toEqual([v1, v2, v3].toSorted());
+      // Nothing resurrects — recall sees only the untouched kind.
+      const rows = await memoryRecall(db, WORKSPACE_ID, {
+        entityType: "customer",
+        entityId: "cust-forget",
+      });
+      expect(rows.map((r) => r.id)).toEqual([other]);
+    });
+  });
+
+  it("memoryForget on a mid-chain row splices the supersede pointer (PILE-628)", async () => {
+    await withDb(async (db) => {
+      const v1 = await memoryRemember(db, WORKSPACE_ID, {
+        entityType: "repo",
+        entityId: "repo-forget",
+        kind: "note",
+        fact: "v1",
+      });
+      const v2 = await memoryRemember(db, WORKSPACE_ID, {
+        entityType: "repo",
+        entityId: "repo-forget",
+        kind: "note",
+        fact: "v2",
+      });
+      const v3 = await memoryRemember(db, WORKSPACE_ID, {
+        entityType: "repo",
+        entityId: "repo-forget",
+        kind: "note",
+        fact: "v3",
+      });
+      const res = await memoryForget(db, WORKSPACE_ID, v2);
+      expect(res.deleted).toBe(true);
+      expect(res.deletedIds).toEqual([v2]);
+      // The head now points straight at v1 — chain stays traversable.
+      const head = await db
+        .select({ supersedes: workspaceMemory.supersedes })
+        .from(workspaceMemory)
+        .where(eq(workspaceMemory.id, v3))
+        .get();
+      expect(head?.supersedes).toBe(v1);
+      const rows = await memoryRecall(db, WORKSPACE_ID, {
+        entityType: "repo",
+        entityId: "repo-forget",
+      });
+      expect(rows.map((r) => r.id)).toEqual([v3]);
+    });
+  });
+
+  it("memoryForget returns deleted:false for unknown ids (PILE-628)", async () => {
+    await withDb(async (db) => {
+      const res = await memoryForget(db, WORKSPACE_ID, crypto.randomUUID());
+      expect(res).toEqual({ deleted: false, deletedIds: [] });
+    });
+  });
+
+  it("isDynamicMemoryFact treats expiries and transient kind prefixes as dynamic (PILE-616)", () => {
+    expect(isDynamicMemoryFact({ kind: "lesson", validUntil: null })).toBe(
+      false
+    );
+    expect(
+      isDynamicMemoryFact({ kind: "lesson", validUntil: "2030-01-01" })
+    ).toBe(true);
+    expect(isDynamicMemoryFact({ kind: "outcome", validUntil: null })).toBe(
+      true
+    );
+    expect(isDynamicMemoryFact({ kind: "signal:pos", validUntil: null })).toBe(
+      true
+    );
+    expect(
+      isDynamicMemoryFact({ kind: "cursor:ingest", validUntil: null })
+    ).toBe(true);
+    expect(
+      isDynamicMemoryFact({ kind: "architecture", validUntil: null })
+    ).toBe(false);
+  });
+
+  it("memoryProfile splits static vs dynamic facts and renders a markdown summary (PILE-616)", async () => {
+    await withDb(async (db) => {
+      await memoryRemember(db, WORKSPACE_ID, {
+        entityType: "agent",
+        entityId: "profile-agent",
+        kind: "lesson",
+        fact: "always run contract:check after touching routes",
+      });
+      await memoryRemember(db, WORKSPACE_ID, {
+        entityType: "agent",
+        entityId: "profile-agent",
+        kind: "outcome",
+        fact: "lane finished the migration",
+      });
+      const profile = await memoryProfile(db, WORKSPACE_ID, {
+        entityType: "agent",
+        entityId: "profile-agent",
+      });
+      expect(profile.staticFacts.map((f) => f.kind)).toEqual(["lesson"]);
+      expect(profile.dynamicFacts.map((f) => f.kind)).toEqual(["outcome"]);
+      expect(profile.byKind.lesson).toHaveLength(1);
+      expect(profile.summary).toContain(
+        "### Static Profile (agent:profile-agent)"
+      );
+      expect(profile.summary).toContain("### Recent / Dynamic Context");
+      expect(profile.summary).toContain("[lesson] always run contract:check");
+
+      const empty = await memoryProfile(db, WORKSPACE_ID, {
+        entityType: "agent",
+        entityId: "no-such-agent",
+      });
+      expect(empty.summary).toBe("");
+      expect(empty.staticFacts).toEqual([]);
+    });
+  });
+
   it("updateCustomer persists processor and signal fields (PILE-532)", async () => {
     await withDb(async (db) => {
-      const { createCustomer, updateCustomer } = await import("./index.js");
       const cust = createCustomer(db, {
         organizationId: WORKSPACE_ID,
         name: "Bleecker Osteria",

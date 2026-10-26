@@ -253,6 +253,18 @@ const SHEET_DEFS: ReadonlyArray<{
   },
 ];
 
+/** Count rows by a key selector and return [key, count] pairs ranked by
+ * count descending — used for owner and category filter options. */
+export function rankedCounts<K extends string>(
+  keys: Iterable<K>
+): Array<[K, number]> {
+  const counts = new Map<K, number>();
+  for (const key of keys) {
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return Array.from(counts.entries()).toSorted((a, b) => b[1] - a[1]);
+}
+
 /** Notion Database / Google Sheets / Linear style dense tabular view with
  * Side Peek drawer, inline Owner assignment, sortable columns, and CSV export. */
 export function CustomersList() {
@@ -354,14 +366,15 @@ export function CustomersList() {
     });
   }, [customers.data]);
 
-  const ownerOptions = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const r of enrichedRows) {
-      if (r.classified.sheetKey === "excluded_pos") continue;
-      counts.set(r.ownerName, (counts.get(r.ownerName) ?? 0) + 1);
-    }
-    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
-  }, [enrichedRows]);
+  const ownerOptions = useMemo(
+    () =>
+      rankedCounts(
+        enrichedRows
+          .filter((r) => r.classified.sheetKey !== "excluded_pos")
+          .map((r) => r.ownerName)
+      ),
+    [enrichedRows]
+  );
 
   const ownerFilteredRows = useMemo(() => {
     if (selectedOwner === "all") return enrichedRows;
@@ -402,16 +415,10 @@ export function CustomersList() {
     });
   }, [ownerFilteredRows, activeSheet]);
 
-  const categoryOptions = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const r of sheetFiltered) {
-      counts.set(
-        r.classified.categoryLabel,
-        (counts.get(r.classified.categoryLabel) ?? 0) + 1
-      );
-    }
-    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
-  }, [sheetFiltered]);
+  const categoryOptions = useMemo(
+    () => rankedCounts(sheetFiltered.map((r) => r.classified.categoryLabel)),
+    [sheetFiltered]
+  );
 
   const visibleRows = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -435,7 +442,7 @@ export function CustomersList() {
     });
 
     const dir = sortDir === "asc" ? 1 : -1;
-    return [...filtered].sort((a, b) => {
+    return [...filtered].toSorted((a, b) => {
       if (sortField === "name") {
         return a.raw.name.localeCompare(b.raw.name) * dir;
       }

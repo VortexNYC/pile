@@ -80,6 +80,53 @@ export function capturePosthogEvent(
   }
 }
 
+// PILE-632 — typed product usage events so Posthog funnels can't drift on
+// hand-rolled event names scattered through route handlers.
+export type ProductEventName =
+  | "workspace.created"
+  | "workspace.onboarded"
+  | "issue.created"
+  | "issue.dispatched"
+  | "document.created"
+  | "memory.remembered"
+  | "memory.extracted"
+  | "customer.created"
+  | "customer.play_executed"
+  | "customer.batch_approved"
+  | "support.ticket_created"
+  | "workspace.token_minted"
+  | "workspace.invitation_created"
+  | "oauth.token_issued";
+
+export function captureProductEvent(
+  event: ProductEventName,
+  properties: {
+    organizationId?: string;
+    actorId?: string;
+    [key: string]: unknown;
+  },
+  ctx?: WaitUntilContext,
+  options?: {
+    env?: PosthogEnvLike;
+    apiKey?: string;
+    fetchImpl?: typeof fetch;
+  }
+): void {
+  capturePosthogEvent(
+    event,
+    {
+      distinct_id:
+        properties.actorId ||
+        (properties.organizationId
+          ? `workspace:${properties.organizationId}`
+          : "pile-worker"),
+      ...properties,
+    },
+    ctx,
+    options
+  );
+}
+
 export function reportWorkerException(
   surface: string,
   err: unknown,

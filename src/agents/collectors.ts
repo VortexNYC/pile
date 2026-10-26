@@ -550,7 +550,7 @@ async function pullSocrata(
     const streetLine = [
       str(r.address_building) ??
         str(r.business_house_number) ??
-        str(r.house__) ??
+        str(Reflect.get(r, "house__") as unknown) ??
         str(r.building_number) ??
         str(r.dos_process_address_1),
       str(r.address_street_name) ??
@@ -613,7 +613,7 @@ async function pullSocrata(
       phone:
         str(r[phoneField]) ??
         str(r.business_phone_number) ??
-        str(r.permittee_s_phone__) ??
+        str(Reflect.get(r, "permittee_s_phone__") as unknown) ??
         str(r.phone),
       email: rawEmail ?? null,
       ownerName,
@@ -883,8 +883,18 @@ async function pullSecFormD(
   const hits = (body.hits?.hits ?? []).slice(0, limit);
   const candidates: MerchantCandidate[] = await Promise.all(
     hits.map(async (h) => {
-      const src = h._source ?? {};
-      const adsh = src.adsh ?? h._id?.split(":")[0] ?? "unknown";
+      const src =
+        (Reflect.get(h, "_source") as
+          | {
+              ciks?: string[];
+              adsh?: string;
+              display_names?: string[];
+              biz_locations?: string[];
+              file_date?: string;
+            }
+          | undefined) ?? {};
+      const hitId = Reflect.get(h, "_id") as string | undefined;
+      const adsh = src.adsh ?? hitId?.split(":")[0] ?? "unknown";
       const cikRaw = src.ciks?.[0] ?? "";
       const cikInt = cikRaw.replace(/^0+/, "");
       const adshClean = adsh.replace(/-/g, "");

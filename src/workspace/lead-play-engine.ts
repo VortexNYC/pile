@@ -358,6 +358,9 @@ export function runMerchantLeadPlay(input: {
     estimatedPaidLookupCents: estimatedCost,
     alreadyHasVerifiedEmailAndPhone:
       Boolean(input.contactEmail) && Boolean(input.merchant.phone),
+    // PILE-610 — vendorBudget is the explicit vendor configuration carrier;
+    // without it the waterfall never plans a paid lookup.
+    paidVendorConfigured: Boolean(input.vendorBudget),
   });
   steps.push({
     step: "detective_waterfall",

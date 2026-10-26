@@ -12,6 +12,7 @@ import { issueViewer } from "./issue-access.js";
 const searchResultSchema = z.object({
   issueIds: z.array(z.string()),
   documentIds: z.array(z.string()),
+  memoryIds: z.array(z.string()),
 });
 
 const searchBodySchema = z.object({

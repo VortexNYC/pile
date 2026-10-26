@@ -61,7 +61,6 @@ export const spendCapBodySchema = z
     maxCostMicrosPerRun: z.number().int().min(0).nullable().optional(),
   })
   .strict();
-export type SpendCapBody = z.infer<typeof spendCapBodySchema>;
 
 /** Observed usage the caps are checked against. Runs count sessions created
  *  in the window; tokens/cost sum `agent_run_receipts` rows created in the

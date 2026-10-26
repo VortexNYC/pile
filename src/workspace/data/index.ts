@@ -2733,11 +2733,6 @@ export function listLinkedIssueIds(
 // both the dedupe ledger and the audit log — every inbound event lands one
 // row recording why it did or didn't move state.
 
-export type ExternalEventMapping =
-  typeof workspaceExternalEventMappings.$inferSelect;
-export type ExternalEventDelivery =
-  typeof workspaceExternalEventDeliveries.$inferSelect;
-
 export interface ExternalEventMappingInput {
   organizationId: string;
   source: string;
@@ -4608,6 +4603,214 @@ export async function memoryRecall(
     if (deduped.length >= cap) break;
   }
   return deduped;
+}
+
+// ---- PILE-628 — memory forget + update ----
+
+export interface MemoryPatch {
+  fact?: string;
+  kind?: string;
+  validUntil?: string | null;
+}
+
+export async function memoryUpdate(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string,
+  patch: MemoryPatch
+) {
+  const row = await db
+    .select()
+    .from(workspaceMemory)
+    .where(
+      and(
+        eq(workspaceMemory.id, id),
+        eq(workspaceMemory.organizationId, organizationId)
+      )
+    )
+    .get();
+  if (!row) return null;
+  const set: { fact?: string; kind?: string; validUntil?: string | null } = {};
+  if (patch.fact !== undefined) set.fact = patch.fact;
+  if (patch.kind !== undefined) set.kind = patch.kind;
+  if (patch.validUntil !== undefined) set.validUntil = patch.validUntil;
+  if (Object.keys(set).length > 0) {
+    await db.update(workspaceMemory).set(set).where(eq(workspaceMemory.id, id));
+  }
+  return { ...row, ...set };
+}
+
+/** PILE-628 — GDPR-grade forget: deleting a historical (non-head) row
+ *  splices the supersede chain around it; deleting the active head also
+ *  erases its superseded ancestors so the previous version cannot
+ *  resurrect as the new head. */
+export async function memoryForget(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+): Promise<{ deleted: boolean; deletedIds: string[] }> {
+  const target = await db
+    .select()
+    .from(workspaceMemory)
+    .where(
+      and(
+        eq(workspaceMemory.id, id),
+        eq(workspaceMemory.organizationId, organizationId)
+      )
+    )
+    .get();
+  if (!target) return { deleted: false, deletedIds: [] };
+
+  const children = await db
+    .select({ id: workspaceMemory.id })
+    .from(workspaceMemory)
+    .where(
+      and(
+        eq(workspaceMemory.organizationId, organizationId),
+        eq(workspaceMemory.supersedes, target.id)
+      )
+    )
+    .all();
+
+  let deletedIds: string[];
+  if (children.length > 0) {
+    // Historical row mid-chain — splice the chain so the child points at
+    // the deleted row's predecessor instead of dangling.
+    await db
+      .update(workspaceMemory)
+      .set({ supersedes: target.supersedes })
+      .where(
+        and(
+          eq(workspaceMemory.organizationId, organizationId),
+          eq(workspaceMemory.supersedes, target.id)
+        )
+      );
+    deletedIds = [target.id];
+  } else {
+    // Active head — erase the fact and its entire superseded history.
+    // The same-key sweep already covers every chain link (the bounded
+    // ancestor walk below is the explicit audit trail for it).
+    const chain = new Set<string>([target.id]);
+    let cursor = target.supersedes;
+    for (let hops = 0; cursor && hops < 50; hops++) {
+      if (chain.has(cursor)) break;
+      chain.add(cursor);
+      const parent = await db
+        .select({ supersedes: workspaceMemory.supersedes })
+        .from(workspaceMemory)
+        .where(
+          and(
+            eq(workspaceMemory.id, cursor),
+            eq(workspaceMemory.organizationId, organizationId)
+          )
+        )
+        .get();
+      cursor = parent?.supersedes ?? null;
+    }
+    const sameKey = await db
+      .select({ id: workspaceMemory.id })
+      .from(workspaceMemory)
+      .where(
+        and(
+          eq(workspaceMemory.organizationId, organizationId),
+          eq(workspaceMemory.entityType, target.entityType),
+          memoryEntityIdFilter(target.entityType, target.entityId),
+          eq(workspaceMemory.kind, target.kind)
+        )
+      )
+      .all();
+    for (const row of sameKey) chain.add(row.id);
+    deletedIds = [...chain];
+  }
+
+  await db
+    .delete(workspaceMemory)
+    .where(
+      and(
+        eq(workspaceMemory.organizationId, organizationId),
+        inArray(workspaceMemory.id, deletedIds)
+      )
+    );
+  return { deleted: true, deletedIds };
+}
+
+// ---- PILE-616 — entity profiles: static vs dynamic facts ----
+
+// Kinds that describe transient state rather than durable truth — lane
+// outcomes, cursors, heartbeats, temporary/session-scoped notes, and
+// signal receipts. Any fact with an expiry is dynamic regardless.
+export const TRANSIENT_MEMORY_KIND_PREFIXES = [
+  "outcome",
+  "cursor",
+  "heartbeat",
+  "temp",
+  "session",
+  "signal:",
+];
+
+export function isDynamicMemoryFact(row: {
+  kind: string;
+  validUntil: string | null;
+}): boolean {
+  return (
+    row.validUntil !== null ||
+    TRANSIENT_MEMORY_KIND_PREFIXES.some(
+      (p) =>
+        row.kind === p || row.kind.startsWith(`${p}:`) || row.kind.startsWith(p)
+    )
+  );
+}
+
+export async function memoryProfile(
+  db: WorkspaceDb,
+  organizationId: string,
+  query: { entityType: string; entityId: string; limit?: number }
+) {
+  const facts = await memoryRecall(db, organizationId, {
+    entityType: query.entityType,
+    entityId: query.entityId,
+    limit: query.limit ?? 50,
+  });
+  const staticFacts = facts.filter((f) => !isDynamicMemoryFact(f));
+  const dynamicFacts = facts.filter((f) => isDynamicMemoryFact(f));
+  const byKind: Record<string, typeof facts> = {};
+  for (const f of facts) {
+    (byKind[f.kind] ??= []).push(f);
+  }
+  const normalizedId = normalizeMemoryEntityId(
+    query.entityType,
+    query.entityId
+  );
+  let summary = "";
+  if (staticFacts.length > 0 || dynamicFacts.length > 0) {
+    const parts: string[] = [];
+    if (staticFacts.length > 0) {
+      parts.push(
+        `### Static Profile (${query.entityType}:${normalizedId})\n` +
+          staticFacts.map((f) => `- [${f.kind}] ${f.fact}`).join("\n")
+      );
+    }
+    if (dynamicFacts.length > 0) {
+      parts.push(
+        "### Recent / Dynamic Context\n" +
+          dynamicFacts
+            .map(
+              (f) =>
+                `- [${f.kind}] ${f.fact}${f.validUntil ? ` (valid until ${f.validUntil})` : ""}`
+            )
+            .join("\n")
+      );
+    }
+    summary = parts.join("\n\n");
+  }
+  return {
+    entityType: query.entityType,
+    entityId: normalizedId,
+    staticFacts,
+    dynamicFacts,
+    byKind,
+    summary,
+  };
 }
 
 export async function upsertAgentProviderConfig(
@@ -8795,27 +8998,6 @@ export function revokeSpacePermission(
   );
 }
 
-// Space ids the actor (or their teams) holds any grant on — the list-path
-// helper so listDocumentsVisibleTo pays one query, not one per doc.
-export function grantedSpaceIds(
-  db: WorkspaceDb,
-  organizationId: string,
-  actorIds: string[]
-) {
-  if (actorIds.length === 0) return new Set<string>();
-  // filter by actor — the where above selects org; match actors in JS for
-  // the team-ids expansion (small grant sets, same as documents).
-  const granted = new Set<string>();
-  for (const row of db
-    .select()
-    .from(workspaceSpacePermissions)
-    .where(eq(workspaceSpacePermissions.organizationId, organizationId))
-    .all()) {
-    if (actorIds.includes(row.actorId)) granted.add(row.spaceId);
-  }
-  return granted;
-}
-
 // Returns the effective level for an actor, or null when the doc is
 // restricted and the actor is unlisted. Team grants (Better Auth
 // organization teams) cover every member of the team.
@@ -9128,10 +9310,6 @@ export function getCustomerByDomain(
 // rule applies its action (delegate an agent, set a status) and the outcome
 // is recorded in triage_rule_evaluations. conditions/action are opaque JSON
 // here — the zod contract lives in src/global/triage-rules.ts.
-
-export type TriageRule = typeof workspaceTriageRules.$inferSelect;
-export type TriageRuleEvaluation =
-  typeof workspaceTriageRuleEvaluations.$inferSelect;
 
 export interface TriageRuleInput {
   organizationId: string;

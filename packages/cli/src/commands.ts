@@ -112,7 +112,23 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "key",
         flag: "key",
       },
+      {
+        name: "seedStarterIssues",
+        flag: "seed-starter-issues",
+      },
     ],
+  },
+  "onboarding checklist list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/onboarding-checklist",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
   },
   "scim connections list": {
     method: "GET",
@@ -207,6 +223,23 @@ export const COMMANDS: Record<string, CommandDef> = {
     ],
     query: [],
     body: [],
+  },
+  "tokens prune create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/tokens/prune",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "maxAgeHours",
+        flag: "max-age-hours",
+      },
+    ],
   },
   "oauth clients list": {
     method: "GET",
@@ -3135,6 +3168,43 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "role",
       },
     ],
+  },
+  "memberships update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/memberships/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "role",
+        flag: "role",
+      },
+    ],
+  },
+  "memberships delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/memberships/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
   },
   "roadmaps list": {
     method: "GET",
@@ -7432,6 +7502,142 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "memory profile list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/memory/profile",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "entityType",
+        flag: "entity-type",
+      },
+      {
+        name: "entityId",
+        flag: "entity-id",
+      },
+      {
+        name: "limit",
+        flag: "limit",
+      },
+    ],
+    body: [],
+  },
+  "memory batch": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/memory/batch",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "memories",
+        flag: "memories",
+      },
+      {
+        name: "documentIds",
+        flag: "document-ids",
+      },
+      {
+        name: "sourceAgentSlug",
+        flag: "source-agent-slug",
+      },
+    ],
+  },
+  "memory extract create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/memory/extract",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "sessionId",
+        flag: "session",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+      {
+        name: "documentId",
+        flag: "document-id",
+      },
+      {
+        name: "text",
+        flag: "text",
+      },
+      {
+        name: "entityType",
+        flag: "entity-type",
+      },
+      {
+        name: "entityId",
+        flag: "entity-id",
+      },
+      {
+        name: "sourceAgentSlug",
+        flag: "source-agent-slug",
+      },
+    ],
+  },
+  "memory update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/memory/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "fact",
+        flag: "fact",
+      },
+      {
+        name: "kind",
+        flag: "kind",
+      },
+      {
+        name: "validUntil",
+        flag: "valid-until",
+      },
+    ],
+  },
+  "memory delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/memory/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "agent costs list": {
     method: "GET",
     path: "/workspaces/{organizationId}/agent/costs",
@@ -8971,6 +9177,26 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "limit",
         flag: "limit",
+      },
+      {
+        name: "mailboxId",
+        flag: "mailbox-id",
+      },
+      {
+        name: "dailyCap",
+        flag: "daily-cap",
+      },
+      {
+        name: "domainHealth",
+        flag: "domain-health",
+      },
+      {
+        name: "unsubscribeBaseUrl",
+        flag: "unsubscribe-base-url",
+      },
+      {
+        name: "physicalAddress",
+        flag: "physical-address",
       },
     ],
   },
