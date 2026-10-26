@@ -125,6 +125,9 @@ const createCustomerSchema = z.object({
 const updateCustomerSchema = createCustomerSchema.partial().extend({
   url: z.string().nullable().optional(),
   domain: z.string().nullable().optional(),
+  // Nullable on PATCH so the stage control can clear a row back to "no
+  // stage"; create keeps a concrete id.
+  statusId: z.string().nullable().optional(),
   // PILE-412 — admin-only stage-gate override for the status transition:
   // proceed past open required sub-steps on linked deal issues, recording
   // the reason in audit + issue history. Non-admin callers get 403.

@@ -931,6 +931,56 @@ describe("bulk customer import (PILE-403)", () => {
     );
     expect(((await term.json()) as { type: string }).type).toBe("terminal");
   });
+
+  it("sets and clears a customer's stage via PATCH statusId", async () => {
+    const seed = await seedWorkspace();
+    const org = seed.organizationId;
+    const admin = seed.token;
+
+    const statusRes = await fetch(
+      `/workspaces/${org}/customer-statuses`,
+      {
+        method: "POST",
+        body: JSON.stringify({ name: "Outreach", position: 0 }),
+      },
+      admin
+    );
+    expect(statusRes.status).toBe(201);
+    const status = (await statusRes.json()) as { id: string };
+
+    const create = await fetch(
+      `/workspaces/${org}/customers`,
+      { method: "POST", body: JSON.stringify({ name: "Stage Co" }) },
+      admin
+    );
+    expect(create.status).toBe(201);
+    const customer = (await create.json()) as {
+      id: string;
+      statusId: string | null;
+    };
+    expect(customer.statusId).toBeNull();
+
+    const set = await fetch(
+      `/workspaces/${org}/customers/${customer.id}`,
+      { method: "PATCH", body: JSON.stringify({ statusId: status.id }) },
+      admin
+    );
+    expect(set.status).toBe(200);
+    expect(((await set.json()) as { statusId: string | null }).statusId).toBe(
+      status.id
+    );
+
+    // null clears the stage back to "no stage".
+    const clear = await fetch(
+      `/workspaces/${org}/customers/${customer.id}`,
+      { method: "PATCH", body: JSON.stringify({ statusId: null }) },
+      admin
+    );
+    expect(clear.status).toBe(200);
+    expect(
+      ((await clear.json()) as { statusId: string | null }).statusId
+    ).toBeNull();
+  });
 });
 
 describe("customer sales fields (readiness/fit)", () => {
