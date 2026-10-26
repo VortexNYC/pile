@@ -8030,7 +8030,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "statusId": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             },
             "ownerId": {
               "type": "string"

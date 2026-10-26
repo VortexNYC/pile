@@ -13,14 +13,13 @@ import {
   CustomersDisplayMenu,
   densityClasses,
   isColumnVisible,
-  normalizeSheetColor,
-  sheetRowStyle,
 } from "@/components/customers-display-menu";
 import { EntityHover } from "@/components/entity-hover";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
-import { api, unwrap } from "@/lib/api";
+import { api, stageGateBlockMessage, unwrap } from "@/lib/api";
+import { orderedStages, stageColor, stageRowTint } from "@/lib/customer-stages";
 import { formatRelative } from "@/lib/labels";
 import { toastError, toastSuccess } from "@/lib/toast";
 
@@ -270,15 +269,6 @@ const SHEET_DEFS: ReadonlyArray<{
   },
 ];
 
-/** The color accent for a row: the palette hex assigned to the sheet the
- * row was classified into, or undefined when that sheet is uncolored. */
-export function rowSheetColor(
-  sheetKey: string,
-  sheetColors: Record<string, string> | undefined
-): string | undefined {
-  return normalizeSheetColor(sheetColors?.[sheetKey]);
-}
-
 /** Count rows by a key selector and return [key, count] pairs ranked by
  * count descending — used for owner and category filter options. */
 export function rankedCounts<K extends string>(
@@ -312,18 +302,16 @@ export function CustomersList() {
   const deferredSearch = useDeferredValue(searchQuery);
   const [peekRowId, setPeekRowId] = useState<string | null>(null);
 
-  // Sheets-style display prefs — tab colors, row density, column
-  // visibility — persisted per user via me/view-preferences.
+  // Sheets-style display prefs — row density and column visibility —
+  // persisted per user via me/view-preferences. Row color is the
+  // customer's pipeline stage (customers.statusId), not a pref.
   const {
     prefs: displayPrefs,
-    setSheetColor,
-    clearSheetColors,
     setDensity,
     toggleColumn,
   } = useDisplayPrefs(workspace.id, "customers");
   const density = displayPrefs.density ?? "comfortable";
   const densityCls = densityClasses(density);
-  const sheetColors = displayPrefs.sheetColors;
   const hiddenColumns = displayPrefs.hiddenColumns;
   const columnVisible = (col: CustomerColumnKey) =>
     isColumnVisible(hiddenColumns, col);
@@ -339,6 +327,50 @@ export function CustomersList() {
         )
       ).customers,
     staleTime: 30_000,
+  });
+
+  // The pipeline stages (customer_statuses rows) — row color + the Stage
+  // column's options both come from this workspace-owned list.
+  const statuses = useQuery({
+    queryKey: wsKey(workspace.id, "customer-statuses"),
+    queryFn: async () =>
+      (
+        await unwrap(
+          api.GET("/workspaces/{organizationId}/customer-statuses", {
+            params: { path: { organizationId: workspace.id } },
+          })
+        )
+      ).statuses,
+    staleTime: 30_000,
+  });
+  const statusById = useMemo(
+    () => new Map((statuses.data ?? []).map((s) => [s.id, s])),
+    [statuses.data]
+  );
+  const stageOptions = useMemo(
+    () => orderedStages(statuses.data ?? []),
+    [statuses.data]
+  );
+
+  const patchStage = useMutation({
+    mutationFn: async (input: {
+      customerId: string;
+      statusId: string | null;
+    }) =>
+      unwrap(
+        api.PATCH("/workspaces/{organizationId}/customers/{id}", {
+          params: {
+            path: { organizationId: workspace.id, id: input.customerId },
+          },
+          body: { statusId: input.statusId },
+        })
+      ),
+    onSuccess: () => {
+      toastSuccess("Stage updated");
+      void queryClient.invalidateQueries({ queryKey: key });
+    },
+    onError: (err) =>
+      toastError(err, stageGateBlockMessage(err) ?? "Could not update stage"),
   });
 
   const patchOwner = useMutation({
@@ -399,6 +431,7 @@ export function CustomersList() {
       return {
         raw: c,
         ownerId,
+        statusId: c.statusId,
         ownerName: ownerDisplayName(ownerId),
         phone: typeof extra.phone === "string" ? extra.phone : null,
         address: typeof extra.address === "string" ? extra.address : null,
@@ -525,6 +558,10 @@ export function CustomersList() {
     () => enrichedRows.find((r) => r.raw.id === peekRowId) ?? null,
     [enrichedRows, peekRowId]
   );
+  const peekStage =
+    peekRow?.statusId != null
+      ? (statusById.get(peekRow.statusId) ?? null)
+      : null;
 
   const peekContacts = useQuery({
     queryKey: wsKey(
@@ -562,6 +599,7 @@ export function CustomersList() {
       "Name",
       "Category",
       "Wedge",
+      "Stage",
       "Owner",
       "Phone",
       "Domain",
@@ -578,6 +616,7 @@ export function CustomersList() {
           r.raw.name,
           r.classified.categoryLabel,
           r.classified.vortexWedge,
+          (r.statusId && statusById.get(r.statusId)?.name) || "",
           r.ownerName,
           r.phone ?? "",
           r.raw.domain ?? "",
@@ -609,20 +648,7 @@ export function CustomersList() {
         <Tabs
           tabs={visibleSheets.map((s) => ({
             value: s.key,
-            label: (
-              <span className="inline-flex items-center gap-1.5">
-                {rowSheetColor(s.key, sheetColors) && (
-                  <span
-                    aria-hidden
-                    className="inline-block size-2 rounded-full"
-                    style={{
-                      backgroundColor: rowSheetColor(s.key, sheetColors),
-                    }}
-                  />
-                )}
-                {s.label} · {sheetCounts[s.key]}
-              </span>
-            ),
+            label: `${s.label} · ${sheetCounts[s.key]}`,
           }))}
           value={activeSheet}
           onValueChange={(v) => {
@@ -666,17 +692,10 @@ export function CustomersList() {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
           <CustomersDisplayMenu
-            sheets={visibleSheets.map((s) => ({
-              key: s.key,
-              label: s.label,
-            }))}
-            sheetColors={sheetColors}
-            onSheetColor={setSheetColor}
             density={density}
             onDensity={setDensity}
             hiddenColumns={hiddenColumns}
             onToggleColumn={toggleColumn}
-            onClearSheetColors={clearSheetColors}
           />
           <Button
             variant="secondary"
@@ -787,6 +806,13 @@ export function CustomersList() {
                           : ""}
                       </th>
                     )}
+                    {columnVisible("stage") && (
+                      <th
+                        className={`min-w-[140px] border-r border-kumo-line px-2.5 ${densityCls.cellY}`}
+                      >
+                        Stage
+                      </th>
+                    )}
                     {columnVisible("owner") && (
                       <th
                         onClick={() => toggleSort("owner")}
@@ -859,13 +885,14 @@ export function CustomersList() {
                   {renderedRows.map((row, idx) => {
                     const customer = row.raw;
                     const isPeeked = peekRowId === customer.id;
+                    const stage = row.statusId
+                      ? (statusById.get(row.statusId) ?? null)
+                      : null;
                     return (
                       <tr
                         key={customer.id}
                         onClick={() => setPeekRowId(customer.id)}
-                        style={sheetRowStyle(
-                          rowSheetColor(row.classified.sheetKey, sheetColors)
-                        )}
+                        style={stageRowTint(stage)}
                         className={`cursor-pointer border-b border-kumo-line transition-colors ${
                           isPeeked ? "bg-kumo-tint/40" : "hover:bg-kumo-tint/20"
                         }`}
@@ -926,6 +953,47 @@ export function CustomersList() {
                             <Badge variant="secondary">
                               {row.classified.categoryLabel}
                             </Badge>
+                          </td>
+                        )}
+                        {columnVisible("stage") && (
+                          <td
+                            onClick={(e) => e.stopPropagation()}
+                            className={`border-r border-kumo-line px-2 ${density === "compact" ? "py-0.5" : "py-1"} whitespace-nowrap`}
+                          >
+                            <span className="inline-flex items-center gap-1.5">
+                              <span
+                                aria-hidden
+                                className="inline-block size-2 rounded-full border border-kumo-line"
+                                style={{
+                                  backgroundColor:
+                                    stageColor(stage) ?? "transparent",
+                                }}
+                              />
+                              <select
+                                aria-label={`Stage for ${customer.name}`}
+                                value={row.statusId ?? ""}
+                                onChange={(e) =>
+                                  patchStage.mutate({
+                                    customerId: customer.id,
+                                    statusId: e.target.value || null,
+                                  })
+                                }
+                                className="h-6 rounded border border-kumo-line bg-kumo-base px-1.5 text-xs text-kumo-default"
+                              >
+                                <option value="">No stage</option>
+                                {stageOptions.map((s) => (
+                                  <option key={s.id} value={s.id}>
+                                    {s.name}
+                                  </option>
+                                ))}
+                                {row.statusId &&
+                                  !statusById.has(row.statusId) && (
+                                    <option value={row.statusId}>
+                                      Unknown stage
+                                    </option>
+                                  )}
+                              </select>
+                            </span>
                           </td>
                         )}
                         {columnVisible("owner") && (
@@ -1046,6 +1114,16 @@ export function CustomersList() {
                   <Badge variant="secondary">
                     {peekRow.classified.categoryLabel}
                   </Badge>
+                  {peekStage && (
+                    <Badge variant="secondary">
+                      <span
+                        aria-hidden
+                        className="mr-1 inline-block size-1.5 rounded-full"
+                        style={{ backgroundColor: stageColor(peekStage) }}
+                      />
+                      {peekStage.name}
+                    </Badge>
+                  )}
                   <Badge variant="primary">{peekRow.ownerName}</Badge>
                 </div>
               </div>

@@ -11,13 +11,13 @@ describe("mergeDisplayPreferences", () => {
 
   it("merges into the target surface without dropping existing keys", () => {
     const existing = {
-      customers: { sheetColors: { trades: "#22c55e" } },
+      customers: { hiddenColumns: ["phone"] },
     };
     expect(
       mergeDisplayPreferences(existing, "customers", { density: "compact" })
     ).toEqual({
       customers: {
-        sheetColors: { trades: "#22c55e" },
+        hiddenColumns: ["phone"],
         density: "compact",
       },
     });

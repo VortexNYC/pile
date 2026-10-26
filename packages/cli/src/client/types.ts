@@ -20520,7 +20520,7 @@ export interface paths {
                         processor?: string;
                         evidenceUri?: string;
                         tierId?: string;
-                        statusId?: string;
+                        statusId?: string | null;
                         ownerId?: string;
                         nextStepText?: string | null;
                         nextStepDueAt?: string | null;

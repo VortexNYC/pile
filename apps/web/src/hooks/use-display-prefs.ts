@@ -6,9 +6,9 @@ import { api, unwrap } from "@/lib/api";
 export type SurfaceDensity = "comfortable" | "compact";
 
 /** Per-surface look-and-feel prefs — Sheets-style controls for the CRM
- * list: sheet-tab colors, row density, and hidden columns. */
+ * list: row density and hidden columns. Row color is the customer's
+ * pipeline stage (customers.statusId), not a pref. */
 export interface SurfaceDisplayPrefs {
-  sheetColors?: Record<string, string>;
   density?: SurfaceDensity;
   hiddenColumns?: string[];
 }
@@ -62,20 +62,6 @@ export function useDisplayPrefs(organizationId: string, surface: string) {
     },
   });
 
-  const setSheetColor = (sheetKey: string, color: string | null) => {
-    const sheetColors = { ...prefs.sheetColors };
-    if (color === null) {
-      delete sheetColors[sheetKey];
-    } else {
-      sheetColors[sheetKey] = color;
-    }
-    update.mutate({ sheetColors });
-  };
-
-  const clearSheetColors = () => {
-    update.mutate({ sheetColors: {} });
-  };
-
   const setDensity = (density: SurfaceDensity) => {
     update.mutate({ density });
   };
@@ -92,8 +78,6 @@ export function useDisplayPrefs(organizationId: string, surface: string) {
 
   return {
     prefs,
-    setSheetColor,
-    clearSheetColors,
     setDensity,
     toggleColumn,
     isPending: update.isPending,
