@@ -87,3 +87,10 @@ Lanes can draft an approved approach before any code is written.
 - **Always:** run `pnpm run check` before commit; no `any`; no `eslint-disable`/`@ts-ignore`.
 - **Ask first:** adding new migrations or changing the auth stack.
 - **Never:** auto-merge; expose provider secrets; add frontend code.
+
+## Memory-Aware Dispatch & Self-Tuning Review (PILE-640–642)
+
+- `dispatchAgent` injects a task-contextual memory brief into the lane prompt: repo facts for the issue's repo plus workspace-level facts, queried with `issue.title + " " + issue.description` (capped), deduplicated by memory id (PILE-640).
+- `requestPrReview` intentionally dispatches a repo-less lane (the diff is inlined), so it performs its own `entityType:"repo"` recall — newest-10 plus a contextual `search:` pass over the PR title + changed filenames (≤200 chars) — deduped, `outcome`-kind filtered, capped at 12 facts, rendered as "Repository Invariants & Past Review Lessons" ahead of the rubric (PILE-641).
+- `publishReviewVerdicts` records the top `breaking`/`must` finding of a `request-changes` verdict back into repo memory as `review_lesson:<file|general>` — the rubric self-tunes from prior blockers; memory writes are best-effort and never fail publishing.
+- `nudgeWorkLaneWithVerdict` rolls each verdict (with `findingsCount`/`fingerprints`/`scores`) into the work lane's `reviewSummary`, evaluates convergence, and appends an oscillation alert naming `persistingFingerprints` when the review loop stalls.

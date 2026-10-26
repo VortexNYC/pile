@@ -193,15 +193,18 @@ Pile's document + workspace surface vs Notion's:
 
 Shared agent memory (`workspace_memory`) vs Supermemory's recall API:
 
-| Supermemory surface   | Pile equivalent                                                                                                                                                | Status |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| `memory` CRUD         | `POST/GET/PATCH/DELETE /workspaces/{org}/memory[/{id}]` — patch in place, forget head+superseded                                                               | Done   |
-| Supersede chains      | `supersedes` column — contradictions replace predecessors, recall returns head facts only                                                                      | Done   |
-| Memory profile        | `GET /workspaces/{org}/memory/profile` — static facts + dynamic context grouped by kind                                                                        | Done   |
-| Batch ingestion       | `POST /workspaces/{org}/memory/batch` — multi-fact writes + document→memory extraction                                                                         | Done   |
-| Extraction/"dreaming" | `POST /workspaces/{org}/memory/extract` — session/issue/document/text → durable facts                                                                          | Done   |
-| Search                | unified SMI-packed BM25 index (issues+docs+memories) + hybrid semantic recall: concept/stem expansion, trigram-cosine scoring, optional Workers AI + Vectorize | Done   |
-| MCP access            | `memory_recall`, `memory_remember`, `memory_profile`, `memory_extract`, `memory_remember_batch` tools + `memory-profile` resource                              | Done   |
+| Supermemory surface    | Pile equivalent                                                                                                                                                | Status |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| `memory` CRUD          | `POST/GET/PATCH/DELETE /workspaces/{org}/memory[/{id}]` — patch in place, forget head+superseded                                                               | Done   |
+| Supersede chains       | `supersedes` column — contradictions replace predecessors, recall returns head facts only                                                                      | Done   |
+| Memory profile         | `GET /workspaces/{org}/memory/profile` — static facts + dynamic context grouped by kind                                                                        | Done   |
+| Batch ingestion        | `POST /workspaces/{org}/memory/batch` — multi-fact writes + document→memory extraction                                                                         | Done   |
+| Extraction/"dreaming"  | `POST /workspaces/{org}/memory/extract` — session/issue/document/text → durable facts                                                                          | Done   |
+| Search                 | unified SMI-packed BM25 index (issues+docs+memories) + hybrid semantic recall: concept/stem expansion, trigram-cosine scoring, optional Workers AI + Vectorize | Done   |
+| MCP access             | `memory_recall`, `memory_remember`, `memory_profile`, `memory_extract`, `memory_remember_batch` tools + `memory-profile` resource                              | Done   |
+| Commit/file provenance | `GET /workspaces/{org}/provenance` + `explain_provenance` tool — sha/file/PR/branch/repo/issue → lanes, touched files, shas, memory facts + `whySummary`       | Done   |
+| Engineering recap      | `GET /workspaces/{org}/agent/recap` + `agent_recap` tool — shipped / in-flight (trail convergence) / blocked / compute + markdown brief                        | Done   |
+| Review quality loop    | Trail HUD scores (security/slop/invariants + humanGate) on every review; `review_lesson:<file>` repo facts re-injected on later reviews                        | Done   |
 
 ## CRM & Unify Outbound Map
 

@@ -86,3 +86,9 @@ Long-form notes (handoffs, specs, decisions) go to documents — `POST /workspac
 ## 6. Unified search
 
 `POST /workspaces/{org}/search` (or `GET …/search?q=`) returns issues, documents, memories, and tickets in one ranked result set — the same SMI-packed BM25 index behind `memoryRecall`.
+
+## 7. Provenance & fleet recap
+
+- `GET /workspaces/{org}/provenance?file=<path>|sha=<sha>|issueId=<id>` (MCP `explain_provenance`) — "why does this exist": resolves a commit sha, file path, PR URL, branch, repo, or issue to the lanes, touched files, commit shas, review-convergence arc, and `workspace_memory` facts that produced it, plus a rendered `whySummary`.
+- `GET /workspaces/{org}/agent/recap?since=24h|48h|7d|168h|<ISO>` (MCP `agent_recap`) — founder-ready fleet recap: what shipped, what's in flight (with Trail convergence per lane), what's blocked (failed lanes, oscillating/stalled reviews, human-gate verdicts, paused agents), and compute spend, plus a markdown brief.
+- Posted PR reviews carry a **Trail HUD** (`security` / `slop` / `invariants` 0–100 scores + `humanGate`) and a convergence trajectory (`clean | converging | stalled | oscillating`) so multi-round review loops are visible at a glance.

@@ -80,7 +80,7 @@
     "drizzle-kit": "^0.31.11",
     "knip": "^6.42.1",
     "openapi-typescript": "^7.13.0",
-    "samlify": "2.15.1",
+    "samlify": "2.13.1",
     "secretlint": "^13.0.7",
     "tsx": "^4.23.15",
     "typescript": "^5.6.0",
@@ -95,7 +95,8 @@
   "packageManager": "pnpm@9.15.4",
   "pnpm": {
     "overrides": {
-      "@better-auth/utils": "0.5.0"
+      "@better-auth/utils": "0.5.0",
+      "samlify": "2.13.1"
     }
   }
 }

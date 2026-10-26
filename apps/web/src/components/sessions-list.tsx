@@ -25,6 +25,12 @@ type SessionRow = NonNullable<
 /** The workspace session list, scoped to a lane of work when `issueId` or
  * `agentSlug` is passed (PILE-453). Shared with the sessions route — the
  * page derives its agent filter options from the same unscoped query. */
+/** PILE-645 — summary rows + cap keep the sessions list payload small. */
+export const AGENT_SESSIONS_LIST_QUERY = {
+  summary: "1",
+  limit: "200",
+} as const;
+
 export function useAgentSessions({
   issueId,
   agentSlug,
@@ -38,7 +44,7 @@ export function useAgentSessions({
           api.GET("/workspaces/{organizationId}/agent/sessions", {
             params: {
               path: { organizationId: workspace.id },
-              query: { issueId, agentSlug },
+              query: { issueId, agentSlug, ...AGENT_SESSIONS_LIST_QUERY },
             },
           })
         )

@@ -19,6 +19,13 @@ import {
   sessionStatusVariant,
 } from "@/lib/labels";
 
+/** PILE-645 — the overview only renders a handful of live lanes; fetch
+ * summary rows capped at 30 instead of full session blobs. */
+export const LIVE_SESSIONS_LIST_QUERY = {
+  summary: "1",
+  limit: "30",
+} as const;
+
 export const Route = createFileRoute("/_authenticated/$slug/")({
   component: WorkspaceOverview,
 });
@@ -69,7 +76,10 @@ function WorkspaceOverview() {
       (
         await unwrap(
           api.GET("/workspaces/{organizationId}/agent/sessions", {
-            params: { path: { organizationId: workspace.id } },
+            params: {
+              path: { organizationId: workspace.id },
+              query: { ...LIVE_SESSIONS_LIST_QUERY },
+            },
           })
         )
       ).sessions,

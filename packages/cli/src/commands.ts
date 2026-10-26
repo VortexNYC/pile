@@ -6834,6 +6834,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "includeTrashed",
         flag: "include-trashed",
       },
+      {
+        name: "summary",
+        flag: "summary",
+      },
     ],
     body: [],
   },

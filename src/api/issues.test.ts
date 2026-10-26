@@ -2119,4 +2119,17 @@ describe("triage rules on issue create (PILE-427)", () => {
       z.object({ sensitive: z.boolean() }).parse(await patched.json()).sensitive
     ).toBe(false);
   });
+
+  it("returns an empty list cleanly when a filter matches nothing (skips subStepProgress RPC, PILE-645)", async () => {
+    const res = await fetch(
+      `/workspaces/${organizationId}/issues?search=${crypto.randomUUID()}&limit=5`,
+      {},
+      token
+    );
+    expect(res.status).toBe(200);
+    const body = z
+      .object({ issues: z.array(z.object({ id: z.string() })) })
+      .parse(await res.json());
+    expect(body.issues).toHaveLength(0);
+  });
 });

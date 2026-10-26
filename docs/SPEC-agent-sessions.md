@@ -96,3 +96,10 @@ Authorization:
 ## Better Auth alignment
 
 Current auth resolves to `WorkspaceIdentity { id, organizationId, type, permissions }`. The `actorId`/`actorType` columns in `agent_sessions` map directly to that identity. When Pile migrates agent auth to Better Auth (`@better-auth/api-key` for workspace-scoped keys or `@better-auth/agent-auth` for the Agent Auth Protocol), the session/activity surface does not change: the middleware resolves a `WorkspaceIdentity` and the session records `actorId`/`actorType`.
+
+## Fleet Observability & Provenance (PILE-623, 640–644)
+
+- `GET /workspaces/{organizationId}/provenance` (MCP `explain_provenance`) — resolves a `sha`, `file`, `prUrl`, `branch`, `repo`, or `issueId` to the issues, lane sessions (with per-session review convergence), touched files, commit shas, and workspace-memory facts that produced it, plus a markdown `whySummary`.
+- `GET /workspaces/{organizationId}/agent/recap` (MCP `agent_recap`) — engineering fleet recap over `?since=24h|48h|7d|168h|<ISO>` and optional `?repo=`: `shipped` (closed issues, completed work lanes, distilled memories), `inFlight` (active lanes each annotated with trail convergence + review-round count), `blocked` (failed lanes on open issues, oscillating/stalled review arcs with persisting fingerprints, `humanGate` verdicts, paused agents), `compute` (per-agent settled duration), and a rendered `markdownBrief`.
+- `POST /workspaces/{organizationId}/tokens/prune` — janitor that deletes ephemeral lane API keys older than their 24h TTL (lane tokens minted at dispatch expire automatically; PILE-623).
+- Review lifecycle records (PILE-642): every parsed review verdict carries `findingsCount`, per-finding `fingerprints`, and multi-axis `scores` (`security`, `slop`, `invariants` 0–100 + `humanGate`) rolled into the work lane's `reviewSummary`; `evaluateReviewConvergence` classifies the last five verdicts as `clean | converging | stalled | oscillating` and oscillation alerts are appended to the work-lane nudge.

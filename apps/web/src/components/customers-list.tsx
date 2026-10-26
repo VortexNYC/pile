@@ -5,7 +5,7 @@ import { Tabs } from "@cloudflare/kumo/components/tabs";
 import { Buildings, Plus, X } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 
 import { CompanyLogo } from "@/components/company-logo";
 import { EntityHover } from "@/components/entity-hover";
@@ -36,6 +36,14 @@ const KNOWN_OWNERS: Record<string, string> = {
   "0r5mlhiV0owDDL59vzGnfTTqwNBuGHgE": "Shlomo",
   ecH8c2QyUL9IldR7F59YLtvG58s76UIh: "Ronny",
 };
+
+// PILE-645 — render window for the companies table.
+export const PAGE_SIZE = 75;
+
+/** Rows rendered in the current window (pagination by slicing). */
+export function windowRows<T>(rows: ReadonlyArray<T>, limit: number): T[] {
+  return rows.slice(0, limit);
+}
 
 const OWNER_SELECT_OPTIONS = [
   { id: "", label: "Unassigned" },
@@ -277,6 +285,13 @@ export function CustomersList() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [sortField, setSortField] = useState<SortField>("score");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [visibleLimit, setVisibleLimit] = useState(PAGE_SIZE);
+  // PILE-645 — reset the render window when the sheet/owner/category
+  // filter changes.
+  useEffect(() => {
+    setVisibleLimit(PAGE_SIZE);
+  }, [activeSheet, selectedOwner, selectedCategory]);
+  const deferredSearch = useDeferredValue(searchQuery);
   const [peekRowId, setPeekRowId] = useState<string | null>(null);
 
   const customers = useQuery({
@@ -289,6 +304,7 @@ export function CustomersList() {
           })
         )
       ).customers,
+    staleTime: 30_000,
   });
 
   const patchOwner = useMutation({
@@ -421,7 +437,7 @@ export function CustomersList() {
   );
 
   const visibleRows = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
+    const q = deferredSearch.trim().toLowerCase();
     const filtered = sheetFiltered.filter((r) => {
       if (
         selectedCategory !== "all" &&
@@ -467,7 +483,9 @@ export function CustomersList() {
       }
       return ((a.priorityScore ?? 0) - (b.priorityScore ?? 0)) * dir;
     });
-  }, [sheetFiltered, selectedCategory, searchQuery, sortField, sortDir]);
+  }, [sheetFiltered, selectedCategory, deferredSearch, sortField, sortDir]);
+
+  const renderedRows = windowRows(visibleRows, visibleLimit);
 
   const peekRow = useMemo(
     () => enrichedRows.find((r) => r.raw.id === peekRowId) ?? null,
@@ -758,7 +776,7 @@ export function CustomersList() {
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleRows.map((row, idx) => {
+                  {renderedRows.map((row, idx) => {
                     const customer = row.raw;
                     const isPeeked = peekRowId === customer.id;
                     return (
@@ -885,6 +903,21 @@ export function CustomersList() {
                   })}
                 </tbody>
               </table>
+              <div className="flex items-center justify-between border-t border-kumo-line px-3 py-2 text-xs text-kumo-subtle">
+                <span>
+                  Showing {Math.min(visibleLimit, visibleRows.length)} of{" "}
+                  {visibleRows.length} companies
+                </span>
+                {visibleRows.length > visibleLimit && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setVisibleLimit((n) => n + PAGE_SIZE)}
+                  >
+                    Show more ({visibleRows.length - visibleLimit} remaining)
+                  </Button>
+                )}
+              </div>
             </div>
           )}
         </div>

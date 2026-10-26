@@ -204,6 +204,9 @@ const listRoute = createRoute({
         .string()
         .transform((v) => v === "true")
         .optional(),
+      // PILE-645 — `summary=1` returns every field but strips `content`
+      // (BlockNote JSON / markdown bodies are the bulk of list payloads).
+      summary: z.string().optional(),
     }),
   },
   responses: {
@@ -930,7 +933,13 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
       : !canAccess(identity.permissions, "read")
         ? await stub.listDocumentsForActor(identity.id, args)
         : await stub.listDocumentsVisibleTo(identity.id, teamIds, args);
-    return c.json({ documents: rows.map(toResponse) });
+    const stripContent = query.summary === "1" || query.summary === "true";
+    return c.json({
+      documents: rows.map((row) => {
+        const doc = toResponse(row);
+        return stripContent ? { ...doc, content: "" } : doc;
+      }),
+    });
   });
 
   app.openapi(createRouteDef, async (c) => {

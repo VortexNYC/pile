@@ -23,6 +23,12 @@ interface CommandItem {
 
 /** ⌘K jump-bar — Linear's command palette. Searches open issues and
  * jumps to any surface in the workspace. */
+/** PILE-645 — heavy palette feeds (documents, customers) only fetch once
+ * the operator has typed a search term. */
+export function paletteDeepQueryEnabled(open: boolean, query: string) {
+  return open && query.trim().length > 0;
+}
+
 export function CommandMenu() {
   const workspace = useWorkspace();
 
@@ -60,6 +66,7 @@ export function CommandMenu() {
       ).issues,
     enabled: open,
     placeholderData: keepPreviousData,
+    staleTime: 60_000,
   });
   const documents = useQuery({
     queryKey: wsKey(workspace.id, "palette-documents", { search: query }),
@@ -69,12 +76,14 @@ export function CommandMenu() {
           api.GET("/workspaces/{organizationId}/documents", {
             params: {
               path: { organizationId: workspace.id },
+              query: { summary: "1" },
             },
           })
         )
       ).documents,
-    enabled: open,
+    enabled: paletteDeepQueryEnabled(open, query),
     placeholderData: keepPreviousData,
+    staleTime: 60_000,
   });
   const tickets = useQuery({
     queryKey: wsKey(workspace.id, "palette-tickets", { search: query }),
@@ -91,6 +100,7 @@ export function CommandMenu() {
       ).tickets,
     enabled: open,
     placeholderData: keepPreviousData,
+    staleTime: 60_000,
   });
   const customers = useQuery({
     queryKey: wsKey(workspace.id, "palette-customers", { search: query }),
@@ -102,8 +112,9 @@ export function CommandMenu() {
           })
         )
       ).customers,
-    enabled: open,
+    enabled: paletteDeepQueryEnabled(open, query),
     placeholderData: keepPreviousData,
+    staleTime: 60_000,
   });
 
   const staticItems: CommandItem[] = useMemo(

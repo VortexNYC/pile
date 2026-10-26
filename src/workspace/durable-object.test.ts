@@ -4536,3 +4536,21 @@ describe("provenance + fleet recap (PILE-643/644)", () => {
     expect(out.markdownBrief).toContain("Blocked / Needs Decision");
   });
 });
+
+describe("setOrganizationId memoization (PILE-645)", () => {
+  it("skips the storage write when the id is already persisted", async () => {
+    const stub = getStub();
+    await withWorkspace(stub, async (instance) => {
+      const org = crypto.randomUUID();
+      await instance.setOrganizationId(org);
+      expect(Reflect.get(instance, "persistedOrganizationId")).toBe(org);
+      // second call with the same id must not write again
+      await instance.setOrganizationId(org);
+      expect(Reflect.get(instance, "persistedOrganizationId")).toBe(org);
+      const next = crypto.randomUUID();
+      await instance.setOrganizationId(next);
+      expect(Reflect.get(instance, "persistedOrganizationId")).toBe(next);
+      expect(instance.organizationId).toBe(next);
+    });
+  });
+});
