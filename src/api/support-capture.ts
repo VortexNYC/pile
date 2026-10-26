@@ -14,6 +14,7 @@ import {
   supportCaptureSessions,
   supportTicketAttachments,
   supportTickets,
+  user,
 } from "../global/schema.js";
 import {
   countCaptureLinkSessions,
@@ -292,6 +293,61 @@ const revokeCaptureLinkRoute = createRoute({
     404: {
       description: "Not found",
     },
+  },
+});
+
+const memberFeedbackBodySchema = z.object({
+  kind: z.enum(["bug", "feature", "other"]),
+  title: z.string().min(1).max(200),
+  description: z.string().min(1).max(8000),
+  url: z.string().max(2048).optional(),
+  userAgent: z.string().max(500).optional(),
+  viewport: z
+    .object({
+      width: z.number().int().nonnegative(),
+      height: z.number().int().nonnegative(),
+    })
+    .optional(),
+  deviceInfo: z.record(z.string(), z.unknown()).optional(),
+  consoleErrors: z
+    .array(
+      z.object({
+        level: z.string().min(1).max(20),
+        message: z.string().min(1).max(4000),
+        timestamp: z.string().max(60).optional(),
+      })
+    )
+    .max(100)
+    .optional(),
+  screenshotDataUrl: z.string().max(10_000_000).optional(),
+});
+
+const memberFeedbackRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/support/feedback",
+  tags: ["support-capture"],
+  middleware: [rls("ticket:create")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    body: {
+      content: {
+        "application/json": { schema: memberFeedbackBodySchema },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Member feedback filed as a support ticket",
+      content: {
+        "application/json": {
+          schema: z.object({
+            ticketId: z.string(),
+            ticketNumber: z.number(),
+          }),
+        },
+      },
+    },
+    400: { description: "Invalid screenshot payload" },
   },
 });
 
@@ -969,6 +1025,29 @@ function uploadsFromSession(session: {
   ) as CaptureUploadRecord[];
 }
 
+const SCREENSHOT_DATA_URL =
+  /^data:(image\/(?:png|jpe?g|webp));base64,([A-Za-z0-9+/=\s]+)$/;
+
+/** Reporter address for the ticket customer — the member's real email
+ *  when their identity resolves to a user row, else a deterministic
+ *  non-routable local part so agent-key actors still land on a stable
+ *  customer record. */
+export function feedbackReporterEmail(
+  identity: { id: string; type: string },
+  userEmail: string | null | undefined
+): string {
+  if (userEmail) return userEmail.toLowerCase().trim();
+  const local = `${identity.type}-${identity.id}`
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `${local || "unknown"}@feedback.pile.internal`;
+}
+
+function jsonArtifactBytes(data: unknown): Uint8Array {
+  return new TextEncoder().encode(scrubCaptureText(JSON.stringify(data)));
+}
+
 function base64ToBytes(value: string): Uint8Array<ArrayBuffer> {
   const binary = atob(value);
   const bytes = new Uint8Array(binary.length);
@@ -1259,6 +1338,205 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
     const link = await revokeCaptureLink(db, organizationId, linkId);
     const origin = new URL(c.req.url).origin;
     return c.json(captureLinkSchema.parse(linkToResponse(link, origin)));
+  });
+
+  // Jam-style in-app feedback: an authenticated member files a bug /
+  // feature request straight into the workspace's tickets. One shot —
+  // no public key, token, or upload session — but the context (device
+  // info, console errors, screenshot) still lands as standard capture
+  // artifacts so the captures viewers read it like any other capture.
+  app.openapi(memberFeedbackRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const identity = c.var.workspaceIdentity;
+    const db = createD1(c.env.D1);
+
+    let screenshot: {
+      contentType: string;
+      fileName: string;
+      body: Uint8Array;
+    } | null = null;
+    if (input.screenshotDataUrl) {
+      const match = SCREENSHOT_DATA_URL.exec(input.screenshotDataUrl);
+      if (!match) {
+        throw new VortexError({
+          status: 400,
+          code: "BAD_REQUEST",
+          message: "screenshotDataUrl must be a base64 image data URL",
+        });
+      }
+      const contentType = match[1]!;
+      const extension =
+        contentType === "image/png"
+          ? "png"
+          : contentType === "image/webp"
+            ? "webp"
+            : "jpg";
+      screenshot = {
+        contentType,
+        fileName: `screenshot.${extension}`,
+        body: base64ToBytes(match[2]!.replace(/\s/g, "")),
+      };
+    }
+
+    const reporter = await db
+      .select({ email: user.email, name: user.name })
+      .from(user)
+      .where(eq(user.id, identity.id))
+      .get();
+    const email = feedbackReporterEmail(identity, reporter?.email);
+    const fullName = reporter?.name ?? null;
+
+    const customer = await findOrCreateCustomerByEmail(
+      db,
+      organizationId,
+      email,
+      fullName,
+      "capture"
+    );
+
+    const ticket = await createTicket(
+      db,
+      {
+        organizationId,
+        customerId: customer.id,
+        title: `[feedback:${input.kind}] ${input.title}`,
+        priority: "medium",
+        sourceChannel: "capture",
+        externalSource: "api",
+      },
+      c.env
+    );
+
+    const submittedAt = new Date().toISOString();
+    const contextLines = [
+      `kind: ${input.kind}`,
+      `url: ${input.url ?? "unknown"}`,
+      `user-agent: ${input.userAgent ?? "unknown"}`,
+      input.viewport
+        ? `viewport: ${input.viewport.width}x${input.viewport.height}`
+        : null,
+      `reporter: ${fullName ?? "member"} <${email}> (${identity.id})`,
+      `console-errors: ${input.consoleErrors?.length ?? 0}`,
+    ].filter((line): line is string => line !== null);
+
+    const event = await addTicketMessage(
+      db,
+      organizationId,
+      ticket.id,
+      {
+        direction: "inbound",
+        textContent: `${input.description}\n\n--- context ---\n${contextLines.join("\n")}`,
+        markdownContent: input.description,
+        channel: "capture",
+        userId: identity.type === "user" ? identity.id : null,
+        actorType: identity.type === "user" ? "user" : "agent",
+        actorId: identity.id,
+        subType: "member-feedback",
+        metadata: {
+          kind: input.kind,
+          reportedByUserId: identity.id,
+          reportedByEmail: email,
+          url: input.url ?? null,
+        },
+      },
+      c.env
+    );
+
+    const bucket = c.env.ATTACHMENTS_BUCKET;
+    if (bucket) {
+      const artifacts: {
+        type: "screenshot" | "debugger_json" | "log";
+        fileName: string;
+        contentType: string;
+        body: Uint8Array;
+      }[] = [
+        {
+          type: "debugger_json",
+          fileName: "metadata.json",
+          contentType: "application/json",
+          body: jsonArtifactBytes({
+            source: "member-feedback",
+            kind: input.kind,
+            title: input.title,
+            url: input.url ?? null,
+            reporter: { userId: identity.id, email, name: fullName },
+            workspace: organizationId,
+            consoleErrors: input.consoleErrors?.length ?? 0,
+            submittedAt,
+          }),
+        },
+      ];
+
+      const deviceInfo = {
+        ...input.deviceInfo,
+        ...(input.userAgent ? { userAgent: input.userAgent } : {}),
+        ...(input.viewport ? { viewport: input.viewport } : {}),
+      };
+      if (Object.keys(deviceInfo).length > 0) {
+        artifacts.push({
+          type: "debugger_json",
+          fileName: "device-info.json",
+          contentType: "application/json",
+          body: jsonArtifactBytes(deviceInfo),
+        });
+      }
+
+      if (input.consoleErrors && input.consoleErrors.length > 0) {
+        artifacts.push({
+          type: "log",
+          fileName: "console-logs.json",
+          contentType: "application/json",
+          body: jsonArtifactBytes(
+            input.consoleErrors.map((entry) => ({
+              console_level: entry.level,
+              console_message: entry.message,
+              is_error: entry.level === "error",
+              timestamp: entry.timestamp ?? submittedAt,
+            }))
+          ),
+        });
+      }
+
+      if (screenshot) {
+        artifacts.push({
+          type: "screenshot",
+          fileName: screenshot.fileName,
+          contentType: screenshot.contentType,
+          body: screenshot.body,
+        });
+      }
+
+      const origin = new URL(c.req.url).origin;
+      await Promise.all(
+        artifacts.map(async (artifact) => {
+          const r2Key = `${organizationId}/capture/feedback-${ticket.id}/${artifact.type}/${artifact.fileName}`;
+          await bucket.put(
+            r2Key,
+            new Blob([artifact.body as BlobPart], {
+              type: artifact.contentType,
+            }),
+            { httpMetadata: { contentType: artifact.contentType } }
+          );
+          const attachmentId = crypto.randomUUID();
+          await db.insert(supportTicketAttachments).values({
+            id: attachmentId,
+            organizationId,
+            ticketId: ticket.id,
+            eventId: event.id,
+            type: artifact.type,
+            contentType: artifact.contentType,
+            r2Key,
+            size: artifact.body.byteLength,
+            url: `${origin}/support/capture/artifacts/${attachmentId}`,
+            fileName: artifact.fileName,
+            createdAt: submittedAt,
+          });
+        })
+      );
+    }
+
+    return c.json({ ticketId: ticket.id, ticketNumber: ticket.number }, 201);
   });
 
   app.openapi(tokenRoute, async (c) => {
