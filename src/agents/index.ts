@@ -18,6 +18,7 @@ import {
   type AgentSession,
   type Issue,
 } from "../types/workspace.js";
+import { isDynamicMemoryFact } from "../workspace/data/index.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
 import {
   parseEffortModels,
@@ -753,14 +754,33 @@ export async function dispatchAgent(
       return true;
     });
     if (facts.length > 0) {
+      // PILE-616 — split the entity profile: durable static facts
+      // (conventions, lessons, architecture) up front, transient dynamic
+      // context (recent outcomes, signals, expiring holds) after, so the
+      // lane reads a structured profile instead of a flat list.
+      const staticFacts = facts.filter((f) => !isDynamicMemoryFact(f));
+      const dynamicFacts = facts.filter((f) => isDynamicMemoryFact(f));
+      const sections: string[] = [];
+      if (staticFacts.length > 0) {
+        sections.push(
+          "Static facts:\n" +
+            staticFacts.map((f) => `- [${f.kind}] ${f.fact}`).join("\n")
+        );
+      }
+      if (dynamicFacts.length > 0) {
+        sections.push(
+          "Recent / dynamic context:\n" +
+            dynamicFacts
+              .map(
+                (f) =>
+                  `- [${f.kind}] ${f.fact}${f.validUntil ? ` (expires ${f.validUntil})` : ""}`
+              )
+              .join("\n")
+        );
+      }
       memoryText =
         "Workspace memory (prior facts for this work — treat as given):\n" +
-        facts
-          .map(
-            (f) =>
-              `- [${f.kind}] ${f.fact}${f.validUntil ? ` (expires ${f.validUntil})` : ""}`
-          )
-          .join("\n") +
+        sections.join("\n\n") +
         "\n\nWhen you finish, call memory_remember for durable facts " +
         "you learned (coverage swept, lessons, entity notes) so the " +
         "next lane starts with them.";
@@ -889,6 +909,10 @@ export async function dispatchAgent(
         body: {
           userId: actor.id,
           name: `agent-${session.id.slice(0, 13)}`,
+          // PILE-623 — ephemeral lane tokens live 24h; the sweep's
+          // pruneStaleEphemeralAgentKeys janitor removes any stragglers
+          // past the TTL (or already expired) on each pass.
+          expiresIn: 60 * 60 * 24,
           rateLimitEnabled: false,
           metadata: {
             organizationId,

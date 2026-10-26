@@ -7432,6 +7432,142 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "memory profile list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/memory/profile",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "entityType",
+        flag: "entity-type",
+      },
+      {
+        name: "entityId",
+        flag: "entity-id",
+      },
+      {
+        name: "limit",
+        flag: "limit",
+      },
+    ],
+    body: [],
+  },
+  "memory batch": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/memory/batch",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "memories",
+        flag: "memories",
+      },
+      {
+        name: "documentIds",
+        flag: "document-ids",
+      },
+      {
+        name: "sourceAgentSlug",
+        flag: "source-agent-slug",
+      },
+    ],
+  },
+  "memory extract create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/memory/extract",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "sessionId",
+        flag: "session",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+      {
+        name: "documentId",
+        flag: "document-id",
+      },
+      {
+        name: "text",
+        flag: "text",
+      },
+      {
+        name: "entityType",
+        flag: "entity-type",
+      },
+      {
+        name: "entityId",
+        flag: "entity-id",
+      },
+      {
+        name: "sourceAgentSlug",
+        flag: "source-agent-slug",
+      },
+    ],
+  },
+  "memory update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/memory/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "fact",
+        flag: "fact",
+      },
+      {
+        name: "kind",
+        flag: "kind",
+      },
+      {
+        name: "validUntil",
+        flag: "valid-until",
+      },
+    ],
+  },
+  "memory delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/memory/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "agent costs list": {
     method: "GET",
     path: "/workspaces/{organizationId}/agent/costs",

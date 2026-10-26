@@ -1,7 +1,9 @@
-import { createD1 } from "../global/db.js";
+import { and, inArray, isNotNull, lte, or, sql } from "drizzle-orm";
+
+import { createD1, type D1Client } from "../global/db.js";
 import { getInstallationTokenForRepo } from "../global/github-auth.js";
 import type { PileRepoConfig } from "../global/pile-repo-config.js";
-import { organization } from "../global/schema.js";
+import { apikey, organization } from "../global/schema.js";
 import { replyLaneResultToTicket } from "../global/support-escalation.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkerEnv } from "../platform/middleware.js";
@@ -19,6 +21,7 @@ import {
   RATE_LIMIT_PAUSE_PREFIX,
 } from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
+import { extractFactsFromMarkdown } from "../workspace/memory-extractor.js";
 import { computeBackend, sweepOrphanSandboxes } from "./compute.js";
 import type { ComputeBackend } from "./compute.js";
 import { resolveGeneratedConflict } from "./conflict-fix.js";
@@ -1028,7 +1031,7 @@ async function promoteQueuedSession(
  *  write" layer (Supermemory-style). Always records the lane's outcome
  *  as an entity fact; when env.AI is bound, runs an extraction pass
  *  over the result for structured facts the lane forgot to record. */
-async function extractSettledMemory(
+export async function extractSettledMemory(
   _env: WorkerEnv,
   stub: {
     memoryRemember(input: {
@@ -1057,18 +1060,74 @@ async function extractSettledMemory(
             typeof (result as { result?: unknown }).result === "string"
           ? (result as { result: string }).result
           : JSON.stringify(result ?? "");
-    const tail = summary.slice(-800);
-    await stub.memoryRemember({
-      entityType: "issue",
-      entityId: session.issueId ?? session.id,
-      kind: "outcome",
-      fact: `lane completed: ${tail}`,
-      sourceSessionId: session.id,
-      sourceAgentSlug: session.agentId ?? null,
+    // PILE-627 — structured distillation: labeled/sectioned statements
+    // become typed facts (root_cause, decision, lesson, verification,
+    // outcome); an unstructured summary falls back to a single outcome.
+    const candidates = extractFactsFromMarkdown({
+      text: summary,
+      defaultEntityType: "issue",
+      defaultEntityId: session.issueId ?? session.id,
+      maxFacts: 5,
     });
+    if (candidates.length === 0) {
+      candidates.push({
+        entityType: "issue",
+        entityId: session.issueId ?? session.id,
+        kind: "outcome",
+        fact: `lane completed: ${summary.slice(-800)}`,
+      });
+    }
+    // Sequential — same-key candidates must supersede in order.
+    const writeNext = async (at: number): Promise<void> => {
+      if (at >= candidates.length) return;
+      await stub.memoryRemember({
+        ...candidates[at],
+        sourceSessionId: session.id,
+        sourceAgentSlug: session.agentId ?? null,
+      });
+      return writeNext(at + 1);
+    };
+    await writeNext(0);
   } catch {
     // Memory extraction is best-effort — never break the settle path.
   }
+}
+
+/** PILE-623 — janitor for ephemeral lane tokens. Dispatch mints
+ *  `agent-<8hex>-<4hex>` api keys with a 24h `expiresIn`; this deletes
+ *  any that are older than a day or already past `expiresAt` so the
+ *  apikey table doesn't accumulate dead credentials. Returns the number
+ *  of rows removed. */
+export async function pruneStaleEphemeralAgentKeys(
+  db: D1Client,
+  nowMs = Date.now()
+): Promise<number> {
+  const stale = await db
+    .select({ id: apikey.id })
+    .from(apikey)
+    .where(
+      and(
+        // agent-<8hex>-<4hex> — `?` single-char GLOBs because a 12-class
+        // bracket pattern trips SQLite's pattern complexity limit.
+        sql`${apikey.name} GLOB 'agent-????????-????'`,
+        or(
+          lte(apikey.createdAt, new Date(nowMs - 24 * 60 * 60 * 1000)),
+          and(
+            isNotNull(apikey.expiresAt),
+            lte(apikey.expiresAt, new Date(nowMs))
+          )
+        )
+      )
+    )
+    .all();
+  if (stale.length === 0) return 0;
+  await db.delete(apikey).where(
+    inArray(
+      apikey.id,
+      stale.map((r) => r.id)
+    )
+  );
+  return stale.length;
 }
 
 export async function releasePausedSessions(
@@ -1554,6 +1613,9 @@ export async function sweepAgentSessions(
     .from(organization)
     .all();
   const now = Date.now();
+  // PILE-623 — janitor pass: reap expired/stale `agent-<8hex>-<4hex>`
+  // api keys minted at dispatch (1.4k stale rows existed before the TTL).
+  await pruneStaleEphemeralAgentKeys(d1, now).catch(() => 0);
   for (const { id } of orgs) {
     try {
       const stub = env.WORKSPACE_DURABLE_OBJECT.get(

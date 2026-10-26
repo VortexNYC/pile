@@ -18563,6 +18563,304 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/memory/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List memory profile */
+        get: {
+            parameters: {
+                query: {
+                    entityType: string;
+                    entityId: string;
+                    limit?: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Entity memory profile — static vs dynamic facts */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            entityType: string;
+                            entityId: string;
+                            staticFacts: {
+                                id: string;
+                                entityType: string;
+                                entityId: string;
+                                kind: string;
+                                fact: string;
+                                sourceSessionId: string | null;
+                                sourceAgentSlug: string | null;
+                                validUntil: string | null;
+                                createdAt: string;
+                            }[];
+                            dynamicFacts: {
+                                id: string;
+                                entityType: string;
+                                entityId: string;
+                                kind: string;
+                                fact: string;
+                                sourceSessionId: string | null;
+                                sourceAgentSlug: string | null;
+                                validUntil: string | null;
+                                createdAt: string;
+                            }[];
+                            byKind: {
+                                [key: string]: {
+                                    id: string;
+                                    entityType: string;
+                                    entityId: string;
+                                    kind: string;
+                                    fact: string;
+                                    sourceSessionId: string | null;
+                                    sourceAgentSlug: string | null;
+                                    validUntil: string | null;
+                                    createdAt: string;
+                                }[];
+                            };
+                            summary: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/memory/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create memory batch */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        memories?: {
+                            entityType: string;
+                            entityId: string;
+                            kind: string;
+                            fact: string;
+                            validUntil?: string | null;
+                            sourceAgentSlug?: string | null;
+                            sourceSessionId?: string | null;
+                        }[];
+                        documentIds?: string[];
+                        sourceAgentSlug?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Memories written */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ids: string[];
+                            count: number;
+                            extractedFromDocuments: number;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/memory/extract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create memory extract */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        sessionId?: string;
+                        issueId?: string;
+                        documentId?: string;
+                        text?: string;
+                        entityType?: string;
+                        entityId?: string;
+                        sourceAgentSlug?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Facts extracted and persisted */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ids: string[];
+                            facts: {
+                                id: string;
+                                entityType: string;
+                                entityId: string;
+                                kind: string;
+                                fact: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/memory/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete memory */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Memory fact forgotten */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            deleted: boolean;
+                            id: string;
+                            deletedCount: number;
+                        };
+                    };
+                };
+                /** @description Memory fact not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** Update memory */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        fact?: string;
+                        kind?: string;
+                        validUntil?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Memory fact updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            memory: {
+                                id: string;
+                                entityType: string;
+                                entityId: string;
+                                kind: string;
+                                fact: string;
+                                sourceSessionId: string | null;
+                                sourceAgentSlug: string | null;
+                                validUntil: string | null;
+                                createdAt: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Memory fact not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        trace?: never;
+    };
     "/workspaces/{organizationId}/agent/costs": {
         parameters: {
             query?: never;

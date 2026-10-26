@@ -38766,6 +38766,616 @@
         "summary": "Create memory"
       }
     },
+    "/workspaces/{organizationId}/memory/profile": {
+      "get": {
+        "tags": [
+          "memory"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "entityType",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "entityId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Entity memory profile — static vs dynamic facts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "entityType": {
+                      "type": "string"
+                    },
+                    "entityId": {
+                      "type": "string"
+                    },
+                    "staticFacts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "entityType": {
+                            "type": "string"
+                          },
+                          "entityId": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "fact": {
+                            "type": "string"
+                          },
+                          "sourceSessionId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "sourceAgentSlug": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "validUntil": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "entityType",
+                          "entityId",
+                          "kind",
+                          "fact",
+                          "sourceSessionId",
+                          "sourceAgentSlug",
+                          "validUntil",
+                          "createdAt"
+                        ]
+                      }
+                    },
+                    "dynamicFacts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "entityType": {
+                            "type": "string"
+                          },
+                          "entityId": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "fact": {
+                            "type": "string"
+                          },
+                          "sourceSessionId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "sourceAgentSlug": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "validUntil": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "entityType",
+                          "entityId",
+                          "kind",
+                          "fact",
+                          "sourceSessionId",
+                          "sourceAgentSlug",
+                          "validUntil",
+                          "createdAt"
+                        ]
+                      }
+                    },
+                    "byKind": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "entityType": {
+                              "type": "string"
+                            },
+                            "entityId": {
+                              "type": "string"
+                            },
+                            "kind": {
+                              "type": "string"
+                            },
+                            "fact": {
+                              "type": "string"
+                            },
+                            "sourceSessionId": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "sourceAgentSlug": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "validUntil": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "createdAt": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "entityType",
+                            "entityId",
+                            "kind",
+                            "fact",
+                            "sourceSessionId",
+                            "sourceAgentSlug",
+                            "validUntil",
+                            "createdAt"
+                          ]
+                        }
+                      }
+                    },
+                    "summary": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "entityType",
+                    "entityId",
+                    "staticFacts",
+                    "dynamicFacts",
+                    "byKind",
+                    "summary"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List memory profile"
+      }
+    },
+    "/workspaces/{organizationId}/memory/batch": {
+      "post": {
+        "tags": [
+          "memory"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "memories": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "entityType": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "entityId": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "kind": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "fact": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "validUntil": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "sourceAgentSlug": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "sourceSessionId": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "entityType",
+                        "entityId",
+                        "kind",
+                        "fact"
+                      ]
+                    }
+                  },
+                  "documentIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "sourceAgentSlug": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Memories written",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "count": {
+                      "type": "number"
+                    },
+                    "extractedFromDocuments": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "ids",
+                    "count",
+                    "extractedFromDocuments"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create memory batch"
+      }
+    },
+    "/workspaces/{organizationId}/memory/extract": {
+      "post": {
+        "tags": [
+          "memory"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sessionId": {
+                    "type": "string"
+                  },
+                  "issueId": {
+                    "type": "string"
+                  },
+                  "documentId": {
+                    "type": "string"
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "entityType": {
+                    "type": "string"
+                  },
+                  "entityId": {
+                    "type": "string"
+                  },
+                  "sourceAgentSlug": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Facts extracted and persisted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ids": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "facts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "entityType": {
+                            "type": "string"
+                          },
+                          "entityId": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "fact": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "entityType",
+                          "entityId",
+                          "kind",
+                          "fact"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "ids",
+                    "facts"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create memory extract"
+      }
+    },
+    "/workspaces/{organizationId}/memory/{id}": {
+      "patch": {
+        "tags": [
+          "memory"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "fact": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "kind": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "validUntil": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Memory fact updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "memory": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "entityType": {
+                          "type": "string"
+                        },
+                        "entityId": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "fact": {
+                          "type": "string"
+                        },
+                        "sourceSessionId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "sourceAgentSlug": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "validUntil": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "entityType",
+                        "entityId",
+                        "kind",
+                        "fact",
+                        "sourceSessionId",
+                        "sourceAgentSlug",
+                        "validUntil",
+                        "createdAt"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "memory"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Memory fact not found"
+          }
+        },
+        "summary": "Update memory"
+      },
+      "delete": {
+        "tags": [
+          "memory"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Memory fact forgotten",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "deleted": {
+                      "type": "boolean"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "deletedCount": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "deleted",
+                    "id",
+                    "deletedCount"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Memory fact not found"
+          }
+        },
+        "summary": "Delete memory"
+      }
+    },
     "/workspaces/{organizationId}/agent/costs": {
       "get": {
         "tags": [

@@ -3695,6 +3695,168 @@ describe("spend caps + run receipts (PILE-425)", () => {
     expect(result.recalled.map((r) => r.id)).toContain(memId);
   });
 
+  it("memoryUpdate patches in place and memoryForget erases head + superseded history (PILE-628)", async () => {
+    const stub = getStub();
+    const entityId = `forget-${crypto.randomUUID().slice(0, 8)}`;
+    const v1 = await withWorkspace(stub, (i) =>
+      i.memoryRemember({
+        entityType: "customer",
+        entityId,
+        kind: "coverage",
+        fact: "stale corridor fact",
+      })
+    );
+    const head = await withWorkspace(stub, (i) =>
+      i.memoryRemember({
+        entityType: "customer",
+        entityId,
+        kind: "coverage",
+        fact: "current corridor fact",
+      })
+    );
+
+    const updated = await withWorkspace(stub, (i) =>
+      i.memoryUpdate(head, { fact: "corrected corridor fact" })
+    );
+    expect(updated?.fact).toBe("corrected corridor fact");
+    expect(
+      await withWorkspace(stub, (i) =>
+        i.memoryUpdate(crypto.randomUUID(), { fact: "ghost" })
+      )
+    ).toBeNull();
+
+    const res = await withWorkspace(stub, (i) => i.memoryForget(head));
+    expect(res.deleted).toBe(true);
+    expect(res.deletedIds.toSorted()).toEqual([v1, head].toSorted());
+    const recalled = await withWorkspace(stub, (i) =>
+      i.memoryRecall({ entityType: "customer", entityId })
+    );
+    expect(recalled).toEqual([]);
+    expect(
+      await withWorkspace(stub, (i) => i.memoryForget(crypto.randomUUID()))
+    ).toEqual({ deleted: false, deletedIds: [] });
+  });
+
+  it("memoryProfile splits static and dynamic facts with a markdown summary (PILE-616)", async () => {
+    const stub = getStub();
+    const entityId = `prof-${crypto.randomUUID().slice(0, 8)}`;
+    await withWorkspace(stub, (i) =>
+      i.memoryRemember({
+        entityType: "repo",
+        entityId,
+        kind: "convention",
+        fact: "migrations always run through wrangler deploy -e production",
+      })
+    );
+    await withWorkspace(stub, (i) =>
+      i.memoryRemember({
+        entityType: "repo",
+        entityId,
+        kind: "outcome",
+        fact: "lane completed the rollout",
+      })
+    );
+    const profile = await withWorkspace(stub, (i) =>
+      i.memoryProfile({ entityType: "repo", entityId })
+    );
+    expect(profile.staticFacts.map((f) => f.kind)).toEqual(["convention"]);
+    expect(profile.dynamicFacts.map((f) => f.kind)).toEqual(["outcome"]);
+    expect(profile.byKind.convention).toHaveLength(1);
+    expect(profile.summary).toContain(`### Static Profile (repo:${entityId})`);
+    expect(profile.summary).toContain("### Recent / Dynamic Context");
+  });
+
+  it("memoryRememberBatch writes explicit memories and extracts facts from documents (PILE-617)", async () => {
+    const stub = getStub();
+    const doc = await withWorkspace(stub, (i) =>
+      i.createDocument({
+        title: "Incident notes",
+        contentFormat: "markdown",
+        content: [
+          "## Lessons",
+          "- retries must be idempotent because the queue can redeliver",
+          "- always pin the worker account id on wrangler deploys",
+        ].join("\n"),
+        createdById: "user-1",
+      })
+    );
+    const res = await withWorkspace(stub, (i) =>
+      i.memoryRememberBatch({
+        memories: [
+          {
+            entityType: "workspace",
+            entityId: "batch-ws",
+            kind: "lesson",
+            fact: "explicit batch fact",
+          },
+        ],
+        documentIds: [doc.id],
+        sourceAgentSlug: "dreamer",
+      })
+    );
+    expect(res.count).toBe(3);
+    expect(res.extractedFromDocuments).toBe(2);
+    const recalled = await withWorkspace(stub, (i) =>
+      i.memoryRecall({ entityType: "document", entityId: doc.id })
+    );
+    // Same-key extraction supersedes in order — recall surfaces only the
+    // latest lesson head.
+    expect(recalled.map((r) => r.kind)).toEqual(["lesson"]);
+    expect(recalled[0].fact).toContain(
+      "always pin the worker account id on wrangler deploys"
+    );
+    const ws = await withWorkspace(stub, (i) =>
+      i.memoryRecall({ entityType: "workspace", entityId: "batch-ws" })
+    );
+    expect(ws.map((r) => r.fact)).toEqual(["explicit batch fact"]);
+  });
+
+  it("memoryExtract distills labeled facts from text and an issue's comments (PILE-627)", async () => {
+    const stub = getStub();
+    const res = await withWorkspace(stub, (i) =>
+      i.memoryExtract({
+        text: [
+          "Wrap-up for the lane.",
+          "**Root cause:** ORM query loaded full bodies into the isolate",
+          "**Fix:** SUBSTR-bounded paged build keeps peak heap under the cap",
+        ].join("\n"),
+        entityType: "workspace",
+        entityId: "extract-ws",
+      })
+    );
+    expect(res.ids).toHaveLength(2);
+    expect(res.facts.map((f) => f.kind).toSorted()).toEqual([
+      "fix",
+      "root_cause",
+    ]);
+    const recalled = await withWorkspace(stub, (i) =>
+      i.memoryRecall({ entityType: "workspace", entityId: "extract-ws" })
+    );
+    expect(recalled).toHaveLength(2);
+
+    const issue = await withWorkspace(stub, (i) =>
+      i.createIssue({
+        title: "Extraction host",
+        description:
+          "**Decision:** use tombstone deletes for the posting lists",
+      })
+    );
+    await withWorkspace(stub, (i) =>
+      i.createComment({
+        entityType: "issue",
+        entityId: issue.id,
+        authorId: "user-1",
+        body: "**Lesson:** the comment lesson fact for extraction coverage",
+      })
+    );
+    const issueRes = await withWorkspace(stub, (i) =>
+      i.memoryExtract({ issueId: issue.id })
+    );
+    expect(issueRes.facts.length).toBeGreaterThanOrEqual(1);
+    expect(issueRes.facts[0].entityType).toBe("issue");
+    expect(issueRes.facts[0].entityId).toBe(issue.identifier ?? issue.id);
+  });
+
   it("exposes storage and search index metrics via getStorageMetrics (PILE-633)", async () => {
     const id = env.WORKSPACE_DURABLE_OBJECT.idFromName("pile-633-metrics");
     const stub = env.WORKSPACE_DURABLE_OBJECT.get(id);

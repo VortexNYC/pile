@@ -129,6 +129,8 @@ import {
 import * as data from "./data/index.js";
 import { filterToSql } from "./filter.js";
 import { runMerchantLeadPlay } from "./lead-play-engine.js";
+import { extractFactsFromMarkdown } from "./memory-extractor.js";
+import type { ExtractedMemoryCandidate } from "./memory-extractor.js";
 import { workspaceMigrations } from "./migrations.js";
 import { type ReviewVerdict, rollReviewSummary } from "./review-summary.js";
 import { workspaceSchema } from "./schema-map.js";
@@ -6338,6 +6340,25 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.listLaneCosts(this.db, this.organizationId, args);
   }
 
+  // Resolve the {id, teamId} an issue-entity memory rows hang on so the
+  // search doc inherits the issue's team scoping.
+  private async memoryIssueMeta(
+    entityType: string,
+    entityId: string
+  ): Promise<{ id: string; teamId: string } | undefined> {
+    if (entityType !== "issue") return undefined;
+    return this.db
+      .select({ id: workspaceIssues.id, teamId: workspaceIssues.teamId })
+      .from(workspaceIssues)
+      .where(
+        or(
+          eq(workspaceIssues.id, entityId),
+          eq(workspaceIssues.identifier, entityId.toUpperCase())
+        )
+      )
+      .get();
+  }
+
   async memoryRemember(input: data.MemoryInput) {
     await this.ready;
     const id = await data.memoryRemember(this.db, this.organizationId, input);
@@ -6350,22 +6371,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       .where(eq(workspaceMemory.id, id))
       .get();
     if (row) {
-      const issueMeta =
-        row.entityType === "issue"
-          ? await this.db
-              .select({
-                id: workspaceIssues.id,
-                teamId: workspaceIssues.teamId,
-              })
-              .from(workspaceIssues)
-              .where(
-                or(
-                  eq(workspaceIssues.id, row.entityId),
-                  eq(workspaceIssues.identifier, row.entityId.toUpperCase())
-                )
-              )
-              .get()
-          : undefined;
+      const issueMeta = await this.memoryIssueMeta(
+        row.entityType,
+        row.entityId
+      );
       const supersedes = row.supersedes;
       const memory: MemoryForSearch = {
         id: row.id,
@@ -6467,6 +6476,255 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       if (out.length >= limit) break;
     }
     return out;
+  }
+
+  // PILE-628 — patch a memory fact in place (fact/kind/validUntil) and
+  // re-sync the warm search index.
+  async memoryUpdate(id: string, patch: data.MemoryPatch, actorId?: string) {
+    await this.ready;
+    const updated = await data.memoryUpdate(
+      this.db,
+      this.organizationId,
+      id,
+      patch
+    );
+    if (!updated) return null;
+    this.audit("memory.updated", "memory", id, actorId);
+    const issueMeta = await this.memoryIssueMeta(
+      updated.entityType,
+      updated.entityId
+    );
+    const memory: MemoryForSearch = {
+      id: updated.id,
+      entityType: updated.entityType,
+      entityId: updated.entityId,
+      kind: updated.kind,
+      fact: updated.fact,
+      createdAt: updated.createdAt,
+      issueId: issueMeta?.id,
+      teamId: issueMeta?.teamId,
+    };
+    await this.syncSearchIndex((index) =>
+      indexMemorySearchDocument(index, memory)
+    );
+    return updated;
+  }
+
+  // PILE-628 — forget a memory fact (and, on an active head, its whole
+  // superseded history) so prior versions never resurrect.
+  async memoryForget(id: string, actorId?: string) {
+    await this.ready;
+    const res = await data.memoryForget(this.db, this.organizationId, id);
+    if (!res.deleted) return { deleted: false, deletedIds: [] };
+    this.audit("memory.deleted", "memory", id, actorId);
+    await this.syncSearchIndex(async (index) => {
+      await Promise.all(
+        res.deletedIds.map((delId) => removeMemorySearchDocument(index, delId))
+      );
+    });
+    return res;
+  }
+
+  // PILE-616 — entity profile: active head facts split into durable
+  // (static) and transient (dynamic) groups with a markdown summary for
+  // dispatch prompt injection.
+  async memoryProfile(query: {
+    entityType: string;
+    entityId: string;
+    limit?: number;
+  }) {
+    await this.ready;
+    return data.memoryProfile(this.db, this.organizationId, query);
+  }
+
+  // PILE-617 — batch write: explicit memory items plus facts extracted
+  // from documents (markdown notes produce root_cause/decision/lesson
+  // rows without a lane remembering to write them).
+  async memoryRememberBatch(input: {
+    memories?: data.MemoryInput[];
+    documentIds?: string[];
+    sourceAgentSlug?: string | null;
+    sourceSessionId?: string | null;
+  }): Promise<{
+    ids: string[];
+    count: number;
+    extractedFromDocuments: number;
+  }> {
+    await this.ready;
+    const items: data.MemoryInput[] = [...(input.memories ?? [])];
+    let extractedFromDocuments = 0;
+    if (input.documentIds && input.documentIds.length > 0) {
+      const docs = await this.db
+        .select()
+        .from(workspaceDocuments)
+        .where(
+          and(
+            isNull(workspaceDocuments.trashedAt),
+            inArrayJson(workspaceDocuments.id, input.documentIds)
+          )
+        )
+        .all();
+      for (const doc of docs) {
+        const plain =
+          doc.contentFormat === "markdown"
+            ? doc.content
+            : blockNoteToPlainText(doc.content);
+        const candidates = extractFactsFromMarkdown({
+          text: `# ${doc.title}\n${plain}`,
+          defaultEntityType: doc.issueId ? "issue" : "document",
+          defaultEntityId: doc.issueId ?? doc.id,
+          maxFacts: 10,
+        });
+        for (const cand of candidates) {
+          items.push({
+            ...cand,
+            sourceAgentSlug: input.sourceAgentSlug ?? null,
+            sourceSessionId: input.sourceSessionId ?? null,
+          });
+        }
+        extractedFromDocuments += candidates.length;
+      }
+    }
+    // Sequential persistence — same-key facts in one batch must supersede
+    // in order, so Promise.all is wrong here. Recursion keeps
+    // no-await-in-loop clean.
+    const ids: string[] = [];
+    const rememberNext = async (at: number): Promise<void> => {
+      if (at >= items.length) return;
+      ids.push(await this.memoryRemember(items[at]));
+      return rememberNext(at + 1);
+    };
+    await rememberNext(0);
+    return { ids, count: ids.length, extractedFromDocuments };
+  }
+
+  // PILE-627 — "dreaming": distill structured facts from text, a session
+  // result, a document, or an issue's description + comments and persist
+  // them as memory.
+  async memoryExtract(input: {
+    sessionId?: string;
+    issueId?: string;
+    documentId?: string;
+    text?: string;
+    entityType?: string;
+    entityId?: string;
+    sourceAgentSlug?: string | null;
+  }): Promise<{
+    ids: string[];
+    facts: Array<{
+      id: string;
+      entityType: string;
+      entityId: string;
+      kind: string;
+      fact: string;
+    }>;
+  }> {
+    await this.ready;
+    const candidates: ExtractedMemoryCandidate[] = [];
+
+    if (input.text) {
+      candidates.push(
+        ...extractFactsFromMarkdown({
+          text: input.text,
+          defaultEntityType:
+            input.entityType ?? (input.issueId ? "issue" : "workspace"),
+          defaultEntityId:
+            input.entityId ?? input.issueId ?? this.organizationId,
+        })
+      );
+    }
+
+    if (input.sessionId) {
+      const session = await this.db
+        .select()
+        .from(workspaceAgentSessions)
+        .where(eq(workspaceAgentSessions.id, input.sessionId))
+        .get();
+      if (session) {
+        const activities = await data.listAgentActivities(this.db, session.id, {
+          limit: 100,
+        });
+        // Thought/response/error/action/artifact messages carry the
+        // knowledge; status/elicitation/prompt rows are control noise.
+        const substantive = activities.filter(
+          (a) =>
+            a.type !== "status" &&
+            a.type !== "elicitation" &&
+            a.type !== "prompt"
+        );
+        const text =
+          `# Session ${session.id}\n${session.result ?? ""}\n` +
+          substantive.map((a) => `- ${a.message}`).join("\n");
+        candidates.push(
+          ...extractFactsFromMarkdown({
+            text,
+            defaultEntityType: "issue",
+            defaultEntityId: session.issueId ?? session.id,
+          })
+        );
+      }
+    }
+
+    if (input.documentId) {
+      const doc = await this.db
+        .select()
+        .from(workspaceDocuments)
+        .where(eq(workspaceDocuments.id, input.documentId))
+        .get();
+      if (doc) {
+        const plain =
+          doc.contentFormat === "markdown"
+            ? doc.content
+            : blockNoteToPlainText(doc.content);
+        candidates.push(
+          ...extractFactsFromMarkdown({
+            text: `# ${doc.title}\n${plain}`,
+            defaultEntityType: doc.issueId ? "issue" : "document",
+            defaultEntityId: doc.issueId ?? doc.id,
+          })
+        );
+      }
+    }
+
+    if (input.issueId) {
+      const issue = await this.getIssue(input.issueId);
+      if (issue) {
+        const comments = await this.listComments(issue.id);
+        const text =
+          `# ${issue.identifier} ${issue.title}\n${issue.description ?? ""}\n` +
+          comments.map((c) => `- ${c.body}`).join("\n");
+        candidates.push(
+          ...extractFactsFromMarkdown({
+            text,
+            defaultEntityType: "issue",
+            defaultEntityId: issue.identifier ?? issue.id,
+          })
+        );
+      }
+    }
+
+    const ids: string[] = [];
+    const facts: Array<{
+      id: string;
+      entityType: string;
+      entityId: string;
+      kind: string;
+      fact: string;
+    }> = [];
+    const persistNext = async (at: number): Promise<void> => {
+      if (at >= candidates.length) return;
+      const cand = candidates[at];
+      const id = await this.memoryRemember({
+        ...cand,
+        sourceSessionId: input.sessionId ?? null,
+        sourceAgentSlug: input.sourceAgentSlug ?? null,
+      });
+      ids.push(id);
+      facts.push({ id, ...cand });
+      return persistNext(at + 1);
+    };
+    await persistNext(0);
+    return { ids, facts };
   }
 
   upsertAgentProviderConfig(input: data.AgentProviderConfigInput) {

@@ -1153,6 +1153,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdMemoryId",
+    "description": "Delete memory (DELETE /workspaces/{organizationId}/memory/{id}) Path params (top-level, required): organizationId, id.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/memory/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdOauthclientsId",
     "description": "Delete oauth client (DELETE /workspaces/{organizationId}/oauth-clients/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
@@ -5099,6 +5120,36 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdMemoryProfile",
+    "description": "List memory profile (GET /workspaces/{organizationId}/memory/profile) Path params (top-level, required): organizationId. Query params (top-level, optional): entityType, entityId, limit.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/memory/profile",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "entityType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "entityId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "limit": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "entityId",
+        "entityType",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdMePermissions",
     "description": "List me permissions (GET /workspaces/{organizationId}/me/permissions) Path params (top-level, required): organizationId.",
     "method": "GET",
@@ -8930,6 +8981,44 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "color": {
               "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "patchWorkspacesOrganizationIdMemoryId",
+    "description": "Update memory (PATCH /workspaces/{organizationId}/memory/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: fact, kind, validUntil.",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/memory/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "fact": {
+              "type": "string",
+              "minLength": 1
+            },
+            "kind": {
+              "type": "string",
+              "minLength": 1
+            },
+            "validUntil": {
+              "type": "string",
+              "nullable": true
             }
           }
         }
@@ -17170,6 +17259,122 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "kind",
             "fact"
           ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdMemoryBatch",
+    "description": "Create memory batch (POST /workspaces/{organizationId}/memory/batch) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: memories, documentIds, sourceAgentSlug.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/memory/batch",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "memories": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "entityType": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "entityId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "kind": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "fact": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "validUntil": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "sourceAgentSlug": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "sourceSessionId": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "entityType",
+                  "entityId",
+                  "kind",
+                  "fact"
+                ]
+              }
+            },
+            "documentIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "sourceAgentSlug": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdMemoryExtract",
+    "description": "Create memory extract (POST /workspaces/{organizationId}/memory/extract) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: sessionId, issueId, documentId, text, entityType, entityId, sourceAgentSlug.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/memory/extract",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string"
+            },
+            "issueId": {
+              "type": "string"
+            },
+            "documentId": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "entityType": {
+              "type": "string"
+            },
+            "entityId": {
+              "type": "string"
+            },
+            "sourceAgentSlug": {
+              "type": "string"
+            }
+          }
         }
       },
       "required": [
