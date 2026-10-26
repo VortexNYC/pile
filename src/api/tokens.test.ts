@@ -187,4 +187,103 @@ describe("agent tokens", () => {
     );
     expect(res.status).toBe(400);
   });
+
+  it("DELETE cascades the token's team_member installs (PILE-623)", async () => {
+    const { organizationId, adminToken } = await seed();
+    const minted = await mintAgent(organizationId, adminToken, {
+      name: "retire-me",
+      actorType: "agent",
+      permissions: "read",
+    });
+    expect(minted.res.status).toBe(201);
+    const list = await fetch(
+      `/workspaces/${organizationId}/tokens`,
+      {},
+      adminToken
+    );
+    const { tokens } = z
+      .object({
+        tokens: z.array(z.object({ id: z.string(), name: z.string() })),
+      })
+      .parse(await list.json());
+    const token = tokens.find((t) => t.name === "retire-me");
+    expect(token).toBeDefined();
+
+    const db = createD1(env.D1);
+    const { apikey, teamMember } = await import("../global/schema.js");
+    const keyRow = await db
+      .select({ referenceId: apikey.referenceId })
+      .from(apikey)
+      .where(eq(apikey.id, token!.id))
+      .get();
+    const installsBefore = await db
+      .select()
+      .from(teamMember)
+      .where(eq(teamMember.userId, keyRow!.referenceId))
+      .all();
+    expect(installsBefore.length).toBeGreaterThan(0);
+
+    const del = await fetch(
+      `/workspaces/${organizationId}/tokens/${token!.id}`,
+      { method: "DELETE" },
+      adminToken
+    );
+    expect(del.status).toBe(204);
+    const installsAfter = await db
+      .select()
+      .from(teamMember)
+      .where(eq(teamMember.userId, keyRow!.referenceId))
+      .all();
+    expect(installsAfter).toHaveLength(0);
+  });
+
+  it("POST /tokens/prune removes stale agent-* lane keys only (PILE-623)", async () => {
+    const { organizationId, adminToken } = await seed();
+    const db = createD1(env.D1);
+    const { apikey } = await import("../global/schema.js");
+    const now = Date.now();
+    const day = 24 * 60 * 60 * 1000;
+    await db.insert(apikey).values([
+      {
+        id: `k-${crypto.randomUUID()}`,
+        name: "agent-deadbeef-cafe",
+        key: `key-${crypto.randomUUID()}`,
+        referenceId: "user-1",
+        metadata: JSON.stringify({
+          organizationId,
+          permissions: "admin",
+          actorType: "agent",
+        }),
+        createdAt: new Date(now - 2 * day),
+        updatedAt: new Date(now - 2 * day),
+      },
+      {
+        id: `k-${crypto.randomUUID()}`,
+        name: "agent-feedface-babe",
+        key: `key-${crypto.randomUUID()}`,
+        referenceId: "user-1",
+        metadata: JSON.stringify({
+          organizationId: "other-org",
+          permissions: "admin",
+          actorType: "agent",
+        }),
+        createdAt: new Date(now - 2 * day),
+        updatedAt: new Date(now - 2 * day),
+      },
+    ]);
+    const res = await fetch(
+      `/workspaces/${organizationId}/tokens/prune`,
+      { method: "POST", body: JSON.stringify({ maxAgeHours: 24 }) },
+      adminToken
+    );
+    expect(res.status).toBe(200);
+    const { pruned } = z.object({ pruned: z.number() }).parse(await res.json());
+    expect(pruned).toBe(1);
+    const left = await db
+      .select({ name: apikey.name })
+      .from(apikey)
+      .where(eq(apikey.name, "agent-feedface-babe"))
+      .get();
+    expect(left?.name).toBe("agent-feedface-babe");
+  });
 });

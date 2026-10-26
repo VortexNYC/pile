@@ -235,6 +235,8 @@ describe("Unify-parity Signals, Ranker v2, Provenance & Technographics (PILE-507
         estimatedPaidLookupCents: 50,
       })
     ).toEqual(["pile_records", "public_registries", "website_crawl"]);
+    // PILE-610 — rank + budget alone never plan paid_vendor without an
+    // explicitly configured vendor.
     expect(
       planDetectiveWaterfall({
         rankScore: 88,
@@ -242,12 +244,40 @@ describe("Unify-parity Signals, Ranker v2, Provenance & Technographics (PILE-507
         monthlyBudgetRemainingCents: 10_000,
         estimatedPaidLookupCents: 50,
       })
+    ).toEqual(["pile_records", "public_registries", "website_crawl"]);
+    expect(
+      planDetectiveWaterfall({
+        rankScore: 88,
+        paidRankThreshold: 80,
+        monthlyBudgetRemainingCents: 10_000,
+        estimatedPaidLookupCents: 50,
+        paidVendorConfigured: false,
+      })
+    ).toEqual(["pile_records", "public_registries", "website_crawl"]);
+    expect(
+      planDetectiveWaterfall({
+        rankScore: 88,
+        paidRankThreshold: 80,
+        monthlyBudgetRemainingCents: 10_000,
+        estimatedPaidLookupCents: 50,
+        paidVendorConfigured: true,
+      })
     ).toEqual([
       "pile_records",
       "public_registries",
       "website_crawl",
       "paid_vendor",
     ]);
+    // Configured vendor still respects rank + budget gates.
+    expect(
+      planDetectiveWaterfall({
+        rankScore: 10,
+        paidRankThreshold: 80,
+        monthlyBudgetRemainingCents: 10_000,
+        estimatedPaidLookupCents: 50,
+        paidVendorConfigured: true,
+      })
+    ).toEqual(["pile_records", "public_registries", "website_crawl"]);
     expect(
       DEFAULT_SIGNAL_RULES.find((r) => r.type === "negative_closure")?.polarity
     ).toBe("negative");

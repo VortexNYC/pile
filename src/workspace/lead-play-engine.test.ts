@@ -126,6 +126,12 @@ describe("lead-play-engine (PILE-514..527, PILE-549..563)", () => {
       html: '<script src="https://www.toasttab.com/restaurants/bleecker"></script>',
       pageUrl: "https://bleeckerosteria.com",
       paidRankThreshold: 60,
+      // PILE-610 — paid_vendor requires explicit vendor configuration.
+      vendorBudget: {
+        vendor: "hunter",
+        monthlyCapCents: 10_000,
+        spentThisMonthCents: 0,
+      },
       nowIso: NOW,
     });
 

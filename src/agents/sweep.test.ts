@@ -4504,6 +4504,62 @@ describe("ephemeral lane token janitor (PILE-623)", () => {
       "test-user-search-admin",
     ]);
   });
+
+  it("scopes pruning by organizationId metadata and maxAgeMs override", async () => {
+    const db = createD1(env.D1);
+    const { apikey } = await import("../global/schema.js");
+    const { pruneStaleEphemeralAgentKeys } = await import("./sweep.js");
+    const now = Date.now();
+    const rows = [
+      // Fresh key in the target workspace — only a maxAgeMs=0 sweep takes it.
+      {
+        id: `k-${crypto.randomUUID()}`,
+        name: "agent-00aa11bb-22cc",
+        key: `key-${crypto.randomUUID()}`,
+        referenceId: "user-1",
+        metadata: JSON.stringify({ organizationId: "org_target" }),
+        createdAt: new Date(now),
+        updatedAt: new Date(now),
+      },
+      // Fresh key in a different workspace — must survive org-scoped runs.
+      {
+        id: `k-${crypto.randomUUID()}`,
+        name: "agent-33dd44ee-55ff",
+        key: `key-${crypto.randomUUID()}`,
+        referenceId: "user-1",
+        metadata: JSON.stringify({ organizationId: "org_other" }),
+        createdAt: new Date(now),
+        updatedAt: new Date(now),
+      },
+    ];
+    for (const row of rows) {
+      await db.insert(apikey).values(row).onConflictDoNothing();
+    }
+    // Default 24h window leaves both fresh keys alone.
+    expect(
+      await pruneStaleEphemeralAgentKeys(db, now, {
+        organizationId: "org_target",
+      })
+    ).toBe(0);
+    // maxAgeMs: 0 prunes every matching key — but only in the scoped org.
+    expect(
+      await pruneStaleEphemeralAgentKeys(db, now, {
+        organizationId: "org_target",
+        maxAgeMs: 0,
+      })
+    ).toBe(1);
+    const remaining = await db
+      .select({ name: apikey.name })
+      .from(apikey)
+      .where(
+        inArray(
+          apikey.id,
+          rows.map((r) => r.id)
+        )
+      )
+      .all();
+    expect(remaining.map((r) => r.name)).toEqual(["agent-33dd44ee-55ff"]);
+  });
 });
 
 describe("extractSettledMemory structured dreaming (PILE-627)", () => {

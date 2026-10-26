@@ -12,6 +12,11 @@ import {
   type WebhookSource,
 } from "../global/webhook-queue.js";
 import type { WorkerEnv } from "../platform/middleware.js";
+import type { WorkspaceDO } from "../workspace/durable-object.js";
+import {
+  applyInboundReplyOutcome,
+  classifyInboundReply,
+} from "../workspace/reply-funnel-engine.js";
 
 export interface IncomingEmailMessage {
   from: string;
@@ -124,12 +129,133 @@ const emailQueuePayloadSchema = z.object({
   inReplyTo: z.string().nullable(),
 });
 
+/**
+ * PILE-611 — route an inbound reply through the reply-funnel classifier and
+ * apply the deterministic outcome: opt-outs and hard bounces write suppression
+ * rows so the sender is never emailed again. Resolution is best-effort — an
+ * email/domain match finds the existing customer but never creates one just
+ * for a bounce or unrelated message.
+ */
+export async function applyAutomatedInboundReplyClassification(
+  stub: DurableObjectStub<WorkspaceDO>,
+  input: {
+    customerId: string | null;
+    fromEmail: string;
+    subject: string;
+    text: string;
+  }
+) {
+  const classified = classifyInboundReply(input.subject, input.text);
+  const fromLower = input.fromEmail.toLowerCase();
+  const emailDomain = fromLower.split("@")[1] ?? "";
+
+  let resolvedCustomerId = input.customerId;
+  if (!resolvedCustomerId) {
+    const customers = await stub.listCustomers();
+    const domainMatch = customers.find(
+      (cust) =>
+        cust.domain &&
+        emailDomain &&
+        cust.domain.replace(/^www\./, "").toLowerCase() === emailDomain
+    );
+    if (domainMatch) {
+      resolvedCustomerId = domainMatch.id;
+    } else {
+      // Bounded exact-email scan across contacts — never creates a customer.
+      const scan = customers.slice(0, 50);
+      const contactLists = await Promise.all(
+        scan.map((cust) =>
+          stub.listContacts(cust.id).catch(
+            () =>
+              [] as Array<{
+                channel: string;
+                value: string;
+              }>
+          )
+        )
+      );
+      const hit = contactLists.findIndex((contacts) =>
+        contacts.some(
+          (ct) =>
+            ct.channel === "email" && ct.value?.toLowerCase() === fromLower
+        )
+      );
+      if (hit >= 0) resolvedCustomerId = scan[hit]!.id;
+    }
+  }
+
+  if (classified.category === "opt_out") {
+    await stub.upsertSuppression({
+      kind: "email",
+      value: fromLower,
+      customerId: resolvedCustomerId ?? undefined,
+      reason: "reply:opt_out",
+      source: "inbound_email_webhook",
+    });
+    if (resolvedCustomerId) {
+      await stub.upsertSuppression({
+        kind: "customerId",
+        value: resolvedCustomerId,
+        customerId: resolvedCustomerId,
+        reason: "reply:opt_out",
+        source: "inbound_email_webhook",
+      });
+    }
+  } else if (classified.category === "hard_bounce") {
+    await stub.upsertSuppression({
+      kind: "email",
+      value: fromLower,
+      customerId: resolvedCustomerId ?? undefined,
+      reason: "reply:hard_bounce",
+      source: "inbound_email_webhook",
+    });
+  }
+
+  const outcome = applyInboundReplyOutcome({
+    enrollment: {
+      id: `enr_${resolvedCustomerId ?? "inbound"}`,
+      merchantId: resolvedCustomerId ?? "unknown",
+      contactId: fromLower,
+      cadenceId: "default",
+      cadenceVersion: 1,
+      mailboxId: "default",
+      status: "active",
+      enrolledBy: "system",
+      touches: [],
+    },
+    contactPermissions: { emailStatus: "valid" },
+    classified,
+    existingTasks: [],
+  });
+
+  return {
+    classified,
+    suppressed:
+      classified.category === "opt_out" ||
+      classified.category === "hard_bounce",
+    outcome,
+  };
+}
+
 export async function processEmailWebhookPayload(
   db: D1Client,
   env: WorkerEnv,
   payload: unknown
 ) {
   const data = emailQueuePayloadSchema.parse(payload);
+  // PILE-611 — classify the reply and apply opt-out/bounce suppressions
+  // before the message is filed; best-effort so intake never blocks on it.
+  if (env.WORKSPACE_DURABLE_OBJECT) {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(data.organizationId)
+    );
+    await applyAutomatedInboundReplyClassification(stub, {
+      customerId: null,
+      fromEmail: data.from,
+      subject: data.subject,
+      text: data.text,
+    }).catch(() => null);
+  }
   return processIncomingMessage(
     db,
     data.organizationId,
@@ -213,6 +339,18 @@ export async function processEmailIntakePayload(
     attachments: data.attachments,
     receivedAt: data.receivedAt,
   });
+
+  // PILE-611 — a newly filed inbound email is also run through the reply
+  // classifier so opt-outs and hard bounces suppress the sender before any
+  // outbound touch can reach them. Best-effort — filing never blocks on it.
+  if (isNew) {
+    await applyAutomatedInboundReplyClassification(stub, {
+      customerId,
+      fromEmail: data.from,
+      subject: data.subject,
+      text: data.text,
+    }).catch(() => null);
+  }
 
   // PILE-427 — a newly filed intake item is an inbound record: triage
   // rules decide delegation/status, and the evaluation is logged. Only

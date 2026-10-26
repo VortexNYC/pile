@@ -624,6 +624,7 @@ export function planDetectiveWaterfall(input: {
   monthlyBudgetRemainingCents: number;
   estimatedPaidLookupCents: number;
   alreadyHasVerifiedEmailAndPhone?: boolean;
+  paidVendorConfigured?: boolean;
 }): Array<
   "pile_records" | "public_registries" | "website_crawl" | "paid_vendor"
 > {
@@ -633,7 +634,10 @@ export function planDetectiveWaterfall(input: {
   const steps: Array<
     "pile_records" | "public_registries" | "website_crawl" | "paid_vendor"
   > = ["pile_records", "public_registries", "website_crawl"];
+  // PILE-610 — paid lookups additionally require an explicitly configured
+  // vendor; rank+budget alone never plan a paid_vendor step.
   if (
+    Boolean(input.paidVendorConfigured) &&
     input.rankScore >= input.paidRankThreshold &&
     input.monthlyBudgetRemainingCents >= input.estimatedPaidLookupCents
   ) {

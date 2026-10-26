@@ -625,3 +625,87 @@ describe("scoreCandidate", () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe("PILE-609/610 cadence + paid vendor wiring", () => {
+  it("paidVendorEnrich fills missing emails under budget and degrades gracefully on overrun", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("<html></html>", { status: 200 }))
+    );
+    const candidates = [
+      {
+        name: "No Email Co",
+        externalId: "v-1",
+        domain: null,
+        email: null,
+        signal: "new_license",
+      },
+    ];
+    const enriched = await Effect.runPromise(
+      enrichCandidatesWithEffect(candidates, {
+        timeoutMs: 500,
+        paidVendorBudget: {
+          vendor: "hunter",
+          monthlyCapCents: 10_000,
+          spentThisMonthCents: 0,
+          requestedCents: 50,
+        },
+        paidVendorEnrich: async () => ({ email: "found@vendor.io" }),
+      })
+    );
+    expect(enriched[0]?.email).toBe("found@vendor.io");
+
+    const overBudget = await Effect.runPromise(
+      enrichCandidatesWithEffect(candidates, {
+        timeoutMs: 500,
+        paidVendorBudget: {
+          vendor: "hunter",
+          monthlyCapCents: 10,
+          spentThisMonthCents: 10,
+          requestedCents: 50,
+        },
+        paidVendorEnrich: async () => ({ email: "should-not-run@vendor.io" }),
+      })
+    );
+    expect(overBudget[0]?.email ?? null).toBeNull();
+    vi.unstubAllGlobals();
+  });
+
+  it("email batch approval runs the cadence pipeline and reports mailbox sentToday", async () => {
+    const result = await Effect.runPromise(
+      evaluateApprovedBatchWithEffect(
+        [
+          {
+            customerId: "c-cad",
+            name: "Cadence Co",
+            channel: "email",
+            contactEmail: "owner@cadence.example",
+            emailStatus: "valid",
+            mailbox: {
+              id: "mb-1",
+              address: "outbound@cold.example",
+              domain: "cold.example",
+              ownerUserId: "u-1",
+              provider: "smtp" as const,
+              state: "connected" as const,
+              dailyCap: 20,
+              rampStartedAt: "2020-01-01T00:00:00.000Z",
+              sentToday: 0,
+            },
+            unsubscribeUrl: "https://x.example/u",
+            physicalAddress: "1 Main St",
+            subject: "Hello",
+            body: "Quick question about your permits.",
+          },
+        ],
+        { concurrency: 1 }
+      )
+    );
+    expect(result.approved).toHaveLength(1);
+    const item = result.approved[0]!;
+    // The single-step enrollment ends once its only touch executes.
+    expect(item.enrollmentStatus).toBe("ended");
+    expect(item.mailboxSentToday).toBe(1);
+    expect(item.optOutFooter).toContain("1 Main St");
+  });
+});

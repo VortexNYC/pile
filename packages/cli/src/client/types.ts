@@ -567,6 +567,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/tokens/prune": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create token prune */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @default 24 */
+                        maxAgeHours?: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Stale ephemeral agent keys pruned */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            pruned: number;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/oauth-clients": {
         parameters: {
             query?: never;
@@ -8031,6 +8078,84 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/memberships/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete membership */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Membership deleted */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            deleted: boolean;
+                            id: string;
+                            userId: string;
+                        };
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** Update membership */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        role: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Membership updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            userId: string;
+                            role: string;
+                            createdAt: string;
+                        };
+                    };
+                };
+            };
+        };
         trace?: never;
     };
     "/workspaces/{organizationId}/roadmaps": {
@@ -21896,6 +22021,18 @@ export interface paths {
                         channel?: "email" | "call" | "visit" | "sms";
                         /** @default 25 */
                         limit?: number;
+                        mailboxId?: string;
+                        dailyCap?: number;
+                        domainHealth?: {
+                            domain: string;
+                            spfOk: boolean;
+                            dkimOk: boolean;
+                            dmarcOk: boolean;
+                            mxOk: boolean;
+                            checkedAt?: string;
+                        };
+                        unsubscribeBaseUrl?: string;
+                        physicalAddress?: string;
                     };
                 };
             };
@@ -21914,6 +22051,9 @@ export interface paths {
                                 name: string;
                                 channel: string;
                                 recipient: string | null;
+                                optOutFooter?: string | null;
+                                enrollmentStatus?: string;
+                                mailboxSentToday?: number;
                             }[];
                             blocked: {
                                 customerId: string;

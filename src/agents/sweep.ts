@@ -1100,33 +1100,38 @@ export async function extractSettledMemory(
  *  of rows removed. */
 export async function pruneStaleEphemeralAgentKeys(
   db: D1Client,
-  nowMs = Date.now()
+  nowMs = Date.now(),
+  options?: { organizationId?: string; maxAgeMs?: number }
 ): Promise<number> {
+  const maxAgeMs = options?.maxAgeMs ?? 24 * 60 * 60 * 1000;
+  const conditions = [
+    // agent-<8hex>-<4hex> — `?` single-char GLOBs because a 12-class
+    // bracket pattern trips SQLite's pattern complexity limit.
+    sql`${apikey.name} GLOB 'agent-????????-????'`,
+    or(
+      lte(apikey.createdAt, new Date(nowMs - maxAgeMs)),
+      and(isNotNull(apikey.expiresAt), lte(apikey.expiresAt, new Date(nowMs)))
+    ),
+  ];
+  // PILE-623 — when an organizationId scope is given, keep only keys whose
+  // Better Auth metadata pins them to that workspace.
+  if (options?.organizationId) {
+    // instr() — D1 rejects even simple %...% LIKE patterns as "too complex"
+    // on this table, so substring containment must not use LIKE/GLOB.
+    conditions.push(
+      sql`instr(${apikey.metadata}, ${`"organizationId":"${options.organizationId}"`}) > 0`
+    );
+  }
+  // PILE-623 — the delete runs as a single SQL statement: fetching ids and
+  // deleting via IN() exceeds D1's bound-parameter cap on workspaces with
+  // ~1.4k stale lane keys.
   const stale = await db
     .select({ id: apikey.id })
     .from(apikey)
-    .where(
-      and(
-        // agent-<8hex>-<4hex> — `?` single-char GLOBs because a 12-class
-        // bracket pattern trips SQLite's pattern complexity limit.
-        sql`${apikey.name} GLOB 'agent-????????-????'`,
-        or(
-          lte(apikey.createdAt, new Date(nowMs - 24 * 60 * 60 * 1000)),
-          and(
-            isNotNull(apikey.expiresAt),
-            lte(apikey.expiresAt, new Date(nowMs))
-          )
-        )
-      )
-    )
+    .where(and(...conditions))
     .all();
   if (stale.length === 0) return 0;
-  await db.delete(apikey).where(
-    inArray(
-      apikey.id,
-      stale.map((r) => r.id)
-    )
-  );
+  await db.delete(apikey).where(and(...conditions));
   return stale.length;
 }
 

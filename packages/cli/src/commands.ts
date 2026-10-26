@@ -208,6 +208,23 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "tokens prune create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/tokens/prune",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "maxAgeHours",
+        flag: "max-age-hours",
+      },
+    ],
+  },
   "oauth clients list": {
     method: "GET",
     path: "/workspaces/{organizationId}/oauth-clients",
@@ -3135,6 +3152,43 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "role",
       },
     ],
+  },
+  "memberships update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/memberships/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "role",
+        flag: "role",
+      },
+    ],
+  },
+  "memberships delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/memberships/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
   },
   "roadmaps list": {
     method: "GET",
@@ -9107,6 +9161,26 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "limit",
         flag: "limit",
+      },
+      {
+        name: "mailboxId",
+        flag: "mailbox-id",
+      },
+      {
+        name: "dailyCap",
+        flag: "daily-cap",
+      },
+      {
+        name: "domainHealth",
+        flag: "domain-health",
+      },
+      {
+        name: "unsubscribeBaseUrl",
+        flag: "unsubscribe-base-url",
+      },
+      {
+        name: "physicalAddress",
+        flag: "physical-address",
       },
     ],
   },

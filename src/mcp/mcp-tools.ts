@@ -1153,6 +1153,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "deleteWorkspacesOrganizationIdMembershipsId",
+    "description": "Delete membership (DELETE /workspaces/{organizationId}/memberships/{id}) Path params (top-level, required): organizationId, id.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/memberships/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "deleteWorkspacesOrganizationIdMemoryId",
     "description": "Delete memory (DELETE /workspaces/{organizationId}/memory/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
@@ -8992,6 +9013,39 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "patchWorkspacesOrganizationIdMembershipsId",
+    "description": "Update membership (PATCH /workspaces/{organizationId}/memberships/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: role* (* = required).",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/memberships/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "role": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "role"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "patchWorkspacesOrganizationIdMemoryId",
     "description": "Update memory (PATCH /workspaces/{organizationId}/memory/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: fact, kind, validUntil.",
     "method": "PATCH",
@@ -13409,7 +13463,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdCustomersApprovebatch",
-    "description": "Create customer approve batch (POST /workspaces/{organizationId}/customers/approve-batch) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: customerIds, channel, limit.",
+    "description": "Create customer approve batch (POST /workspaces/{organizationId}/customers/approve-batch) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: customerIds, channel, limit, mailboxId, dailyCap, domainHealth, unsubscribeBaseUrl, physicalAddress.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/customers/approve-batch",
     "inputSchema": {
@@ -13442,6 +13496,50 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "minimum": 1,
               "maximum": 100,
               "default": 25
+            },
+            "mailboxId": {
+              "type": "string"
+            },
+            "dailyCap": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            },
+            "domainHealth": {
+              "type": "object",
+              "properties": {
+                "domain": {
+                  "type": "string"
+                },
+                "spfOk": {
+                  "type": "boolean"
+                },
+                "dkimOk": {
+                  "type": "boolean"
+                },
+                "dmarcOk": {
+                  "type": "boolean"
+                },
+                "mxOk": {
+                  "type": "boolean"
+                },
+                "checkedAt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "domain",
+                "spfOk",
+                "dkimOk",
+                "dmarcOk",
+                "mxOk"
+              ]
+            },
+            "unsubscribeBaseUrl": {
+              "type": "string"
+            },
+            "physicalAddress": {
+              "type": "string"
             }
           }
         }
@@ -20810,6 +20908,34 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "required": [
             "name"
           ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdTokensPrune",
+    "description": "Create token prune (POST /workspaces/{organizationId}/tokens/prune) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: maxAgeHours.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/tokens/prune",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "maxAgeHours": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 8760,
+              "default": 24
+            }
+          }
         }
       },
       "required": [

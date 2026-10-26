@@ -2495,6 +2495,23 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
                 .enum(["email", "call", "visit", "sms"])
                 .default("call"),
               limit: z.number().int().min(1).max(100).default(25),
+              // PILE-609 — optional cold-email cadence wiring for
+              // channel=email batches: mailbox identity, cap override,
+              // and DNS health gate flow into executeReadyTouch.
+              mailboxId: z.string().optional(),
+              dailyCap: z.number().int().min(1).max(500).optional(),
+              domainHealth: z
+                .object({
+                  domain: z.string(),
+                  spfOk: z.boolean(),
+                  dkimOk: z.boolean(),
+                  dmarcOk: z.boolean(),
+                  mxOk: z.boolean(),
+                  checkedAt: z.string().optional(),
+                })
+                .optional(),
+              unsubscribeBaseUrl: z.string().optional(),
+              physicalAddress: z.string().optional(),
             }),
           },
         },
@@ -2515,6 +2532,9 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
                   name: z.string(),
                   channel: z.string(),
                   recipient: z.string().nullable(),
+                  optOutFooter: z.string().nullable().optional(),
+                  enrollmentStatus: z.string().optional(),
+                  mailboxSentToday: z.number().optional(),
                 })
               ),
               blocked: z.array(
@@ -2541,7 +2561,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
       .filter((row) =>
         idSet ? idSet.has(row.id) : (row.priorityScore ?? 0) > 0
       )
-      .sort((a, b) => (b.priorityScore ?? 0) - (a.priorityScore ?? 0))
+      .toSorted((a, b) => (b.priorityScore ?? 0) - (a.priorityScore ?? 0))
       .slice(0, input.limit);
 
     const todayYmd = new Date().toISOString().slice(0, 10);
@@ -2580,9 +2600,108 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     const { Effect } = await import("effect");
     const { evaluateApprovedBatchWithEffect } =
       await import("../agents/collectors-effect.js");
+
+    // PILE-609 — for email batches, hydrate the per-mailbox daily state from
+    // workspace memory, apply cap/DNS-health overrides, run the cadence
+    // pipeline inside evaluateApprovedBatchWithEffect, then persist the
+    // advanced sentToday counter back for the next batch.
+    let mailboxState:
+      | import("../workspace/cadence-engine.js").OutboundMailbox
+      | undefined;
+    let domainHealthGate:
+      | import("../workspace/cadence-engine.js").SendingDomainHealth
+      | undefined;
+    if (input.channel === "email") {
+      const {
+        DEFAULT_COLD_MAILBOX_DAILY_CAP,
+        pauseMailboxesForUnhealthyDomain,
+        updateMailboxDailyCap,
+      } = await import("../workspace/cadence-engine.js");
+      const mailboxId = input.mailboxId ?? "default";
+      const mailboxKind = `mailbox:${mailboxId}:${todayYmd}`;
+      const recalled = await stub
+        .memoryRecall({
+          entityType: "workspace",
+          entityId: organizationId,
+          kind: mailboxKind,
+          limit: 1,
+        })
+        .catch(() => []);
+      let storedSentToday = 0;
+      if (recalled.length > 0) {
+        try {
+          const parsed = JSON.parse(recalled[0]!.fact) as {
+            sentToday?: number;
+            rampStartedAt?: string;
+          };
+          storedSentToday = parsed.sentToday ?? 0;
+        } catch {
+          storedSentToday = 0;
+        }
+      }
+      const domain = input.domainHealth?.domain ?? "cold.vortex.dev";
+      mailboxState = {
+        id: mailboxId,
+        address: `outbound@${domain}`,
+        domain,
+        ownerUserId: "system",
+        provider: "smtp",
+        state: "connected",
+        dailyCap: DEFAULT_COLD_MAILBOX_DAILY_CAP,
+        rampStartedAt: todayYmd,
+        sentToday: storedSentToday,
+      };
+      if (input.dailyCap) {
+        mailboxState = updateMailboxDailyCap(mailboxState, input.dailyCap);
+      }
+      if (input.domainHealth) {
+        domainHealthGate = {
+          ...input.domainHealth,
+          checkedAt: input.domainHealth.checkedAt ?? new Date().toISOString(),
+        };
+        mailboxState =
+          pauseMailboxesForUnhealthyDomain([mailboxState], domainHealthGate)
+            .mailboxes[0] ?? mailboxState;
+      }
+    }
+
     const partitioned = await Effect.runPromise(
-      evaluateApprovedBatchWithEffect(candidates, { concurrency: 5 })
+      evaluateApprovedBatchWithEffect(candidates, {
+        concurrency: 5,
+        ...(mailboxState ? { mailbox: mailboxState } : {}),
+        ...(domainHealthGate ? { domainHealth: domainHealthGate } : {}),
+        ...(input.unsubscribeBaseUrl
+          ? {
+              unsubscribeUrl: input.unsubscribeBaseUrl,
+            }
+          : {}),
+        ...(input.physicalAddress
+          ? { physicalAddress: input.physicalAddress }
+          : {}),
+      })
     );
+
+    if (mailboxState && input.channel === "email") {
+      const mailboxId = input.mailboxId ?? "default";
+      const mailboxKind = `mailbox:${mailboxId}:${todayYmd}`;
+      const maxSent = partitioned.approved.reduce(
+        (acc, item) => Math.max(acc, item.mailboxSentToday ?? 0),
+        mailboxState.sentToday
+      );
+      await stub
+        .memoryRemember({
+          entityType: "workspace",
+          entityId: organizationId,
+          kind: mailboxKind,
+          fact: JSON.stringify({
+            mailboxId,
+            sentToday: maxSent,
+            rampStartedAt: todayYmd,
+            updatedAt: new Date().toISOString(),
+          }),
+        })
+        .catch(() => null);
+    }
 
     // PILE-608: Commit pre_send idempotency reservation for every approved touch
     const nowIso = new Date().toISOString();
