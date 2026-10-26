@@ -191,6 +191,11 @@ import {
   type SearchDocument,
   type WorkspaceSearchIndex,
 } from "./search.js";
+import {
+  computeSemanticSimilarity,
+  expandSemanticQuery,
+  queryVectorizeMemories,
+} from "./semantic-memory.js";
 import { computeSmbMatchKey, type MerchantSignal } from "./signals-engine.js";
 import { inArrayJson, notInArrayJson } from "./sql.js";
 import { deliverWebhooks, retryWebhookDeliveries } from "./webhooks.js";
@@ -6412,30 +6417,45 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     // the remainder from the BM25 index so multi-term and fuzzy queries
     // still land ("did we sweep smith?" vs "corridor:smith-st sweep").
     const index = await this.ensureSearchIndex();
-    const matchedIds = await searchMemories(index, search, limit * 2);
+    // PILE-613 — concept-expand the BM25 query and merge optional
+    // Vectorize hits so synonyms/morphological variants still recall.
+    const matchedIds = await searchMemories(
+      index,
+      expandSemanticQuery(search),
+      limit * 2
+    );
+    const vectorIds = await queryVectorizeMemories(
+      this.env as Parameters<typeof queryVectorizeMemories>[0],
+      this.organizationId,
+      search,
+      limit
+    );
+    const allMatched = [...new Set([...matchedIds, ...vectorIds])];
     const have = new Set(rows.map((r) => r.id));
-    const missing = matchedIds.filter((id) => !have.has(id));
-    if (missing.length === 0) return rows;
+    const missing = allMatched.filter((id) => !have.has(id));
     const now = new Date().toISOString();
-    const extraRows = await this.db
-      .select()
-      .from(workspaceMemory)
-      .where(
-        and(
-          eq(workspaceMemory.organizationId, this.organizationId),
-          inArrayJson(workspaceMemory.id, missing),
-          sql`${workspaceMemory.id} NOT IN (SELECT ${workspaceMemory.supersedes} FROM ${workspaceMemory} WHERE ${workspaceMemory.organizationId} = ${this.organizationId} AND ${workspaceMemory.supersedes} IS NOT NULL)`,
-          or(
-            isNull(workspaceMemory.validUntil),
-            gt(workspaceMemory.validUntil, now)
-          )!,
-          query.entityType
-            ? eq(workspaceMemory.entityType, query.entityType)
-            : undefined,
-          query.kind ? eq(workspaceMemory.kind, query.kind) : undefined
-        )
-      )
-      .all();
+    const extraRows =
+      missing.length === 0
+        ? []
+        : await this.db
+            .select()
+            .from(workspaceMemory)
+            .where(
+              and(
+                eq(workspaceMemory.organizationId, this.organizationId),
+                inArrayJson(workspaceMemory.id, missing),
+                sql`${workspaceMemory.id} NOT IN (SELECT ${workspaceMemory.supersedes} FROM ${workspaceMemory} WHERE ${workspaceMemory.organizationId} = ${this.organizationId} AND ${workspaceMemory.supersedes} IS NOT NULL)`,
+                or(
+                  isNull(workspaceMemory.validUntil),
+                  gt(workspaceMemory.validUntil, now)
+                )!,
+                query.entityType
+                  ? eq(workspaceMemory.entityType, query.entityType)
+                  : undefined,
+                query.kind ? eq(workspaceMemory.kind, query.kind) : undefined
+              )
+            )
+            .all();
     const byId = new Map(extraRows.map((r) => [r.id, r]));
     const ISSUE_IDENTIFIER_RE = /^[a-z]+-\d+$/i;
     const normalizeEntityId = (entityType: string, entityId: string) =>
@@ -6466,7 +6486,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       )
     );
     const out = [...rows];
-    for (const id of matchedIds) {
+    for (const id of allMatched) {
       const row = byId.get(id);
       if (!row || !entityIdMatches(row.entityId)) continue;
       const key = `${row.entityType}\0${normalizeEntityId(row.entityType, row.entityId)}\0${row.kind}`;
@@ -6474,6 +6494,59 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       seen.add(key);
       out.push(row);
       if (out.length >= limit) break;
+    }
+
+    // PILE-613 — still room? Scan recent active head facts and score them
+    // with the hybrid similarity (token-overlap + char-trigram cosine) so
+    // concept-adjacent memories surface even when BM25 misses entirely.
+    if (out.length < limit) {
+      const candidates = await this.db
+        .select()
+        .from(workspaceMemory)
+        .where(
+          and(
+            eq(workspaceMemory.organizationId, this.organizationId),
+            sql`${workspaceMemory.id} NOT IN (SELECT ${workspaceMemory.supersedes} FROM ${workspaceMemory} WHERE ${workspaceMemory.organizationId} = ${this.organizationId} AND ${workspaceMemory.supersedes} IS NOT NULL)`,
+            or(
+              isNull(workspaceMemory.validUntil),
+              gt(workspaceMemory.validUntil, now)
+            )!,
+            query.entityType
+              ? eq(workspaceMemory.entityType, query.entityType)
+              : undefined,
+            query.entityId
+              ? eq(workspaceMemory.entityId, query.entityId)
+              : undefined,
+            query.kind ? eq(workspaceMemory.kind, query.kind) : undefined
+          )
+        )
+        .orderBy(desc(workspaceMemory.createdAt))
+        .limit(200)
+        .all();
+      const scored = candidates
+        .filter(
+          (r) =>
+            entityIdMatches(r.entityId) &&
+            !seen.has(
+              `${r.entityType}\0${normalizeEntityId(r.entityType, r.entityId)}\0${r.kind}`
+            )
+        )
+        .map((r) => ({
+          row: r,
+          score: computeSemanticSimilarity(
+            search,
+            `${r.entityType} ${r.entityId} ${r.kind} ${r.fact}`
+          ),
+        }))
+        .filter((s) => s.score >= 0.22)
+        .sort((a, b) => b.score - a.score);
+      for (const { row } of scored) {
+        const key = `${row.entityType}\0${normalizeEntityId(row.entityType, row.entityId)}\0${row.kind}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(row);
+        if (out.length >= limit) break;
+      }
     }
     return out;
   }

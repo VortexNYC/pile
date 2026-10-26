@@ -3,7 +3,9 @@ import type { OpenAPIHono } from "@hono/zod-openapi";
 
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
+import { captureProductEvent } from "../platform/posthog.js";
 import { rls } from "../platform/rls.js";
+import { getExecutionCtx } from "./execution-ctx.js";
 import { getWorkspaceStub } from "./stub.js";
 
 const memorySchema = z.object({
@@ -335,6 +337,17 @@ export function registerMemoryRoutes(app: OpenAPIHono<AppContext>) {
       validUntil: body.validUntil ?? null,
       sourceAgentSlug: body.sourceAgentSlug ?? null,
     });
+    captureProductEvent(
+      "memory.remembered",
+      {
+        organizationId,
+        actorId: c.get("workspaceIdentity")?.id,
+        kind: body.kind,
+        sourceAgentSlug: body.sourceAgentSlug ?? null,
+      },
+      getExecutionCtx(c),
+      { env: c.env }
+    );
     return c.json({ id }, 200);
   });
 
@@ -359,6 +372,17 @@ export function registerMemoryRoutes(app: OpenAPIHono<AppContext>) {
       documentIds: body.documentIds,
       sourceAgentSlug: body.sourceAgentSlug ?? null,
     });
+    captureProductEvent(
+      "memory.remembered",
+      {
+        organizationId,
+        actorId: c.get("workspaceIdentity")?.id,
+        batchSize: body.memories?.length ?? 0,
+        sourceAgentSlug: body.sourceAgentSlug ?? null,
+      },
+      getExecutionCtx(c),
+      { env: c.env }
+    );
     return c.json(res, 200);
   });
 
@@ -375,6 +399,18 @@ export function registerMemoryRoutes(app: OpenAPIHono<AppContext>) {
       entityId: body.entityId,
       sourceAgentSlug: body.sourceAgentSlug ?? null,
     });
+    captureProductEvent(
+      "memory.extracted",
+      {
+        organizationId,
+        actorId: c.get("workspaceIdentity")?.id,
+        sessionId: body.sessionId ?? null,
+        issueId: body.issueId ?? null,
+        documentId: body.documentId ?? null,
+      },
+      getExecutionCtx(c),
+      { env: c.env }
+    );
     return c.json(res, 200);
   });
 

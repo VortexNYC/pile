@@ -3695,6 +3695,41 @@ describe("spend caps + run receipts (PILE-425)", () => {
     expect(result.recalled.map((r) => r.id)).toContain(memId);
   });
 
+  it("memoryRecall fills LIKE/BM25 misses with hybrid semantic expansion (PILE-613)", async () => {
+    const stub = getStub();
+    const marker = crypto.randomUUID().slice(0, 8);
+    const memId = await withWorkspace(stub, (i) =>
+      i.memoryRemember({
+        entityType: "corridor",
+        entityId: `smith-st-${marker}`,
+        kind: "coverage",
+        fact: `corridor:smith-st-${marker} swept yesterday`,
+      })
+    );
+    const oomId = await withWorkspace(stub, (i) =>
+      i.memoryRemember({
+        entityType: "workspace",
+        entityId: `oom-${marker}`,
+        kind: "lesson",
+        fact: `OOM reset on large workspace ${marker}`,
+      })
+    );
+
+    // "did we sweep" — the fact says "swept", so verbatim LIKE and BM25
+    // both miss; the concept+stem expansion and similarity scan fill it in.
+    const sweep = await withWorkspace(stub, (i) =>
+      i.memoryRecall({ search: `did we sweep smith-st-${marker}` })
+    );
+    expect(sweep.map((r) => r.id)).toContain(memId);
+
+    // "isolate heap crash" — the fact says "OOM reset"; only the OOM/crash
+    // concept group connects them.
+    const crash = await withWorkspace(stub, (i) =>
+      i.memoryRecall({ search: "isolate heap crash" })
+    );
+    expect(crash.map((r) => r.id)).toContain(oomId);
+  });
+
   it("memoryUpdate patches in place and memoryForget erases head + superseded history (PILE-628)", async () => {
     const stub = getStub();
     const entityId = `forget-${crypto.randomUUID().slice(0, 8)}`;

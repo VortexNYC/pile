@@ -1104,6 +1104,9 @@
                   },
                   "key": {
                     "type": "string"
+                  },
+                  "seedStarterIssues": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -1226,6 +1229,28 @@
                     },
                     "token": {
                       "type": "string"
+                    },
+                    "quickstart": {
+                      "type": "object",
+                      "properties": {
+                        "mcpUrl": {
+                          "type": "string"
+                        },
+                        "cliSetupCommand": {
+                          "type": "string"
+                        },
+                        "seededIssueIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "mcpUrl",
+                        "cliSetupCommand",
+                        "seededIssueIds"
+                      ]
                     }
                   },
                   "required": [
@@ -1239,6 +1264,64 @@
           }
         },
         "summary": "Create workspace onboard"
+      }
+    },
+    "/workspaces/{organizationId}/onboarding-checklist": {
+      "get": {
+        "tags": [
+          "workspaces"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Guided onboarding checklist state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "organizationId": {
+                      "type": "string"
+                    },
+                    "hasApiKey": {
+                      "type": "boolean"
+                    },
+                    "hasAgentProvider": {
+                      "type": "boolean"
+                    },
+                    "hasFirstIssue": {
+                      "type": "boolean"
+                    },
+                    "mcpUrl": {
+                      "type": "string"
+                    },
+                    "pluginManifestUrl": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "organizationId",
+                    "hasApiKey",
+                    "hasAgentProvider",
+                    "hasFirstIssue",
+                    "mcpUrl",
+                    "pluginManifestUrl"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List onboarding checklist"
       }
     },
     "/workspaces/{organizationId}/scim/connections": {

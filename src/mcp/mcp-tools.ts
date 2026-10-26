@@ -5344,6 +5344,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdOnboardingchecklist",
+    "description": "List onboarding checklist (GET /workspaces/{organizationId}/onboarding-checklist) Path params (top-level, required): organizationId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/onboarding-checklist",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdPipelineLint",
     "description": "List pipeline lint (GET /workspaces/{organizationId}/pipeline/lint) Path params (top-level, required): organizationId.",
     "method": "GET",
@@ -12009,7 +12026,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOnboard",
-    "description": "Create workspace onboard (POST /workspaces/onboard) Request body goes in the \"body\" object; fields: name*, slug*, key (* = required).",
+    "description": "Create workspace onboard (POST /workspaces/onboard) Request body goes in the \"body\" object; fields: name*, slug*, key, seedStarterIssues (* = required).",
     "method": "POST",
     "path": "/workspaces/onboard",
     "inputSchema": {
@@ -12028,6 +12045,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "key": {
               "type": "string"
+            },
+            "seedStarterIssues": {
+              "type": "boolean"
             }
           },
           "required": [

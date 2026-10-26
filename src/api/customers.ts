@@ -12,6 +12,7 @@ import { createD1 } from "../global/db.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { isAdminIdentity } from "../platform/permissions.js";
+import { captureProductEvent } from "../platform/posthog.js";
 import { rls } from "../platform/rls.js";
 import {
   type AudienceCandidateMerchant,
@@ -2723,6 +2724,18 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
       )
     );
 
+    captureProductEvent(
+      "customer.batch_approved",
+      {
+        organizationId,
+        actorId: c.var.workspaceIdentity?.id,
+        channel: input.channel,
+        approvedCount: partitioned.approved.length,
+        blockedCount: partitioned.blocked.length,
+      },
+      getExecutionCtx(c),
+      { env: c.env }
+    );
     return c.json({
       approvedCount: partitioned.approved.length,
       blockedCount: partitioned.blocked.length,

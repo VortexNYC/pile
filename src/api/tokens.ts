@@ -16,8 +16,10 @@ import { createAuth } from "../platform/auth.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { canAccess, parsePermissionSet } from "../platform/permissions.js";
+import { captureProductEvent } from "../platform/posthog.js";
 import { rls } from "../platform/rls.js";
 import { emitWorkspaceAudit } from "./audit-emit.js";
+import { getExecutionCtx } from "./execution-ctx.js";
 
 const tokenSchema = z.object({
   id: z.string(),
@@ -371,6 +373,17 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
       }
     );
 
+    captureProductEvent(
+      "workspace.token_minted",
+      {
+        organizationId,
+        actorId: identity.id,
+        name: parsed.name ?? input.name,
+        actorType,
+      },
+      getExecutionCtx(c),
+      { env: c.env }
+    );
     return c.json(
       {
         id: parsed.id,

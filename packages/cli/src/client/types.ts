@@ -297,6 +297,7 @@ export interface paths {
                         name: string;
                         slug: string;
                         key?: string;
+                        seedStarterIssues?: boolean;
                     };
                 };
             };
@@ -334,11 +335,61 @@ export interface paths {
                                 updatedAt: string;
                             };
                             token: string;
+                            quickstart?: {
+                                mcpUrl: string;
+                                cliSetupCommand: string;
+                                seededIssueIds: string[];
+                            };
                         };
                     };
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/onboarding-checklist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List onboarding checklist */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Guided onboarding checklist state */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            organizationId: string;
+                            hasApiKey: boolean;
+                            hasAgentProvider: boolean;
+                            hasFirstIssue: boolean;
+                            mcpUrl: string;
+                            pluginManifestUrl: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;

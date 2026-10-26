@@ -9,6 +9,7 @@ import { listWorkspacesForUser } from "../global/workspaces.js";
 import { createAuth } from "../platform/auth.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
+import { captureProductEvent } from "../platform/posthog.js";
 import { rls } from "../platform/rls.js";
 import { getSessionUserId } from "../platform/session.js";
 
@@ -805,6 +806,18 @@ export function registerOAuthRoutes(app: OpenAPIHono<AppContext>) {
         },
       });
       const parsed = result as { key?: string };
+      captureProductEvent(
+        "oauth.token_issued",
+        {
+          organizationId: stored.organizationId,
+          actorId: userId,
+          clientId: stored.clientId,
+          grantType: "authorization_code",
+          scope: stored.scope,
+        },
+        undefined,
+        { env: c.env }
+      );
       return c.json({
         access_token: parsed.key,
         token_type: "Bearer",
@@ -846,6 +859,17 @@ export function registerOAuthRoutes(app: OpenAPIHono<AppContext>) {
         organizationId?: string;
         permissions?: string;
       };
+      captureProductEvent(
+        "oauth.token_issued",
+        {
+          organizationId: meta.organizationId,
+          clientId,
+          grantType: "client_credentials",
+          scope: meta.permissions ?? "read",
+        },
+        undefined,
+        { env: c.env }
+      );
       return c.json({
         access_token: clientSecret,
         token_type: "Bearer",

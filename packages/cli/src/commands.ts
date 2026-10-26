@@ -112,7 +112,23 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "key",
         flag: "key",
       },
+      {
+        name: "seedStarterIssues",
+        flag: "seed-starter-issues",
+      },
     ],
+  },
+  "onboarding checklist list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/onboarding-checklist",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
   },
   "scim connections list": {
     method: "GET",
