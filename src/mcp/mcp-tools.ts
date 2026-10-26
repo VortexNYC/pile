@@ -13344,7 +13344,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "email",
                 "call",
                 "visit",
-                "sms"
+                "sms",
+                "form"
               ],
               "default": "call"
             },

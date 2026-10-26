@@ -21595,7 +21595,7 @@ export interface paths {
                          * @default call
                          * @enum {string}
                          */
-                        channel?: "email" | "call" | "visit" | "sms";
+                        channel?: "email" | "call" | "visit" | "sms" | "form";
                         /** @default 25 */
                         limit?: number;
                     };
