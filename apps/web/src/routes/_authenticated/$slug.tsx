@@ -19,6 +19,7 @@ import { CreateIssueDialog } from "@/components/create-issue-dialog";
 import { CreateMenu } from "@/components/create-menu";
 import { CreateRoadmapDialog } from "@/components/create-roadmap-dialog";
 import { CreateTicketDialog } from "@/components/create-ticket-dialog";
+import { FeedbackBubble } from "@/components/feedback-bubble";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -29,14 +30,21 @@ export const Route = createFileRoute("/_authenticated/$slug")({
   component: WorkspaceLayout,
 });
 
+/** Match the route param to a workspace — accepts the slug or the org
+ * id, since CLI-side links (pile.nyc/app/<org>/...) carry the
+ * organizationId, not the slug. */
+export function resolveWorkspace<T extends { id: string; slug: string }>(
+  workspaces: T[] | undefined,
+  slug: string
+): T | null {
+  return workspaces?.find((w) => w.slug === slug || w.id === slug) ?? null;
+}
+
 function WorkspaceLayout() {
   const { slug } = Route.useParams();
   const navigate = useNavigate();
   const workspaces = useWorkspaces();
-  // Accept the org id too — CLI-side links (pile.nyc/app/<org>/...) carry
-  // the organizationId, not the slug.
-  const workspace =
-    workspaces.data?.find((w) => w.slug === slug || w.id === slug) ?? null;
+  const workspace = resolveWorkspace(workspaces.data, slug);
   const workspaceId = workspace?.id;
 
   // better-auth-ui's member screens act on the session's active org.
@@ -83,6 +91,7 @@ function WorkspaceLayout() {
         <CreateDealDialog />
         <CreateInitiativeDialog />
         <CreateRoadmapDialog />
+        <FeedbackBubble />
         <AppSidebar workspace={workspace} workspaces={workspaces.data} />
         <div className="flex h-dvh min-h-0 min-w-0 flex-1 flex-col">
           <header className="border-kumo-hairline flex h-14 shrink-0 items-center gap-2 border-b px-4">

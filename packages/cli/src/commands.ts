@@ -4950,6 +4950,34 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "support feedback create": {
+    method: "POST",
+    path: "/support/feedback",
+    params: [],
+    query: [],
+    body: [
+      {
+        name: "subject",
+        flag: "subject",
+      },
+      {
+        name: "text",
+        flag: "text",
+      },
+      {
+        name: "fromEmail",
+        flag: "from-email",
+      },
+      {
+        name: "fromName",
+        flag: "from-name",
+      },
+      {
+        name: "context",
+        flag: "context",
+      },
+    ],
+  },
   "support capture token create": {
     method: "POST",
     path: "/support/capture/token",
@@ -5753,34 +5781,6 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "createdAt",
         flag: "created-at",
-      },
-    ],
-  },
-  "support feedback create": {
-    method: "POST",
-    path: "/support/feedback",
-    params: [],
-    query: [],
-    body: [
-      {
-        name: "subject",
-        flag: "subject",
-      },
-      {
-        name: "text",
-        flag: "text",
-      },
-      {
-        name: "fromEmail",
-        flag: "from-email",
-      },
-      {
-        name: "fromName",
-        flag: "from-name",
-      },
-      {
-        name: "context",
-        flag: "context",
       },
     ],
   },

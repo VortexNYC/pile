@@ -1654,3 +1654,187 @@ describe("support-capture API", () => {
     expect(new Uint8Array(await storedBin!.arrayBuffer())).toEqual(png);
   });
 });
+
+describe("member feedback", () => {
+  let organizationId: string;
+  let token: string;
+  let sessionHeaders: Headers;
+
+  beforeAll(async () => {
+    const seeded = await seedWorkspace();
+    organizationId = seeded.organizationId;
+    token = seeded.token;
+    sessionHeaders = await createAdminHeaders(env, "user-capture");
+  });
+
+  function feedbackFetch(
+    body: Record<string, unknown>,
+    headers?: Headers
+  ): Promise<Response> {
+    const merged = new Headers(headers ?? sessionHeaders);
+    merged.set("Content-Type", "application/json");
+    return captureFetch(`/workspaces/${organizationId}/support/feedback`, {
+      method: "POST",
+      headers: merged,
+      body: JSON.stringify(body),
+    });
+  }
+
+  it("files a member feedback ticket with captured context artifacts", async () => {
+    const res = await feedbackFetch({
+      kind: "bug",
+      title: "Cannot open tickets",
+      description: "Clicking a ticket row does nothing",
+      url: "https://app.example.com/app/acme/tickets",
+      userAgent: "vitest-agent/1.0",
+      viewport: { width: 1440, height: 900 },
+      deviceInfo: { platform: "TestOS" },
+      consoleErrors: [
+        { level: "error", message: "TypeError: cannot read properties" },
+        { level: "warn", message: "slow query" },
+      ],
+      screenshotDataUrl: `data:image/png;base64,${btoa("fakepng")}`,
+    });
+    expect(res.status).toBe(201);
+    const { ticketId, ticketNumber } = (await res.json()) as {
+      ticketId: string;
+      ticketNumber: number;
+    };
+    expect(ticketId).toBeTruthy();
+    expect(ticketNumber).toBeGreaterThan(0);
+
+    const db = createD1(env.D1);
+    const ticket = await getTicketById(db, organizationId, ticketId);
+    expect(ticket).not.toBeNull();
+    expect(ticket!.title).toBe("[feedback:bug] Cannot open tickets");
+    expect(ticket!.sourceChannel).toBe("capture");
+
+    // The reporter resolves server-side to the session user's email —
+    // the client cannot spoof a different reporter.
+    const customer = await db
+      .select()
+      .from(supportCustomers)
+      .where(eq(supportCustomers.id, ticket!.customerId))
+      .get();
+    expect(customer!.email).toBe("capture-user@example.com");
+
+    const feedbackEvent = ticket!.events.find(
+      (e) => e.subType === "member-feedback"
+    );
+    expect(feedbackEvent).toBeDefined();
+    expect(feedbackEvent!.message?.textContent).toContain(
+      "Clicking a ticket row does nothing"
+    );
+    expect(feedbackEvent!.message?.textContent).toContain(
+      "https://app.example.com/app/acme/tickets"
+    );
+
+    // Standard capture artifacts — readable by the workspace capture
+    // viewers (/support/captures/{ticketId}/metadata, /console, /frames).
+    const attachments = await db
+      .select()
+      .from(supportTicketAttachments)
+      .where(eq(supportTicketAttachments.ticketId, ticketId))
+      .all();
+    const fileNames = attachments.map((a) => a.fileName).toSorted();
+    expect(fileNames).toEqual([
+      "console-logs.json",
+      "device-info.json",
+      "metadata.json",
+      "screenshot.png",
+    ]);
+    for (const attachment of attachments) {
+      expect(attachment.r2Key).toContain(
+        `${organizationId}/capture/feedback-${ticketId}/`
+      );
+      const stored = await env.ATTACHMENTS_BUCKET.get(attachment.r2Key!);
+      expect(stored).not.toBeNull();
+    }
+
+    // The console viewer reads console-logs.json back with level/error
+    // filters intact.
+    const consoleRes = await captureFetch(
+      `/workspaces/${organizationId}/support/captures/${ticketId}/console?isError=true`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    expect(consoleRes.status).toBe(200);
+    const consoleBody = (await consoleRes.json()) as {
+      events: { console_level: string; is_error: boolean }[];
+    };
+    expect(consoleBody.events).toHaveLength(1);
+    expect(consoleBody.events[0].console_level).toBe("error");
+
+    const metaRes = await captureFetch(
+      `/workspaces/${organizationId}/support/captures/${ticketId}/metadata`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    expect(metaRes.status).toBe(200);
+    const meta = (await metaRes.json()) as {
+      deviceInfo: Record<string, unknown> | null;
+      metadata: Record<string, unknown> | null;
+    };
+    expect(meta.deviceInfo).toMatchObject({
+      platform: "TestOS",
+      userAgent: "vitest-agent/1.0",
+    });
+    expect(meta.metadata).toMatchObject({
+      source: "member-feedback",
+      kind: "bug",
+    });
+  });
+
+  it("files feedback without a screenshot or console errors", async () => {
+    const res = await feedbackFetch({
+      kind: "feature",
+      title: "Dark mode for tickets",
+      description: "Please add a dark theme option",
+    });
+    expect(res.status).toBe(201);
+    const { ticketId } = (await res.json()) as { ticketId: string };
+    const db = createD1(env.D1);
+    const ticket = await getTicketById(db, organizationId, ticketId);
+    expect(ticket!.title).toBe("[feedback:feature] Dark mode for tickets");
+
+    const attachments = await db
+      .select()
+      .from(supportTicketAttachments)
+      .where(eq(supportTicketAttachments.ticketId, ticketId))
+      .all();
+    expect(attachments.map((a) => a.fileName).toSorted()).toEqual([
+      "metadata.json",
+    ]);
+  });
+
+  it("rejects unauthenticated feedback", async () => {
+    const res = await feedbackFetch(
+      { kind: "bug", title: "x", description: "y" },
+      new Headers()
+    );
+    // 401/403 depending on which middleware rejects first — either way,
+    // no ticket is created.
+    expect([401, 403]).toContain(res.status);
+  });
+
+  it("rejects a malformed screenshot data URL", async () => {
+    const res = await feedbackFetch({
+      kind: "other",
+      title: "Something",
+      description: "Details here",
+      screenshotDataUrl: "not-a-data-url",
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("derives a deterministic fallback email for non-user identities", async () => {
+    const { feedbackReporterEmail } = await import("../api/support-capture.js");
+    expect(
+      feedbackReporterEmail(
+        { id: "user-capture", type: "user" },
+        "Capture-User@Example.com"
+      )
+    ).toBe("capture-user@example.com");
+    expect(
+      feedbackReporterEmail({ id: "lane:foo/bar", type: "agent" }, null)
+    ).toBe("agent-lane-foo-bar@feedback.pile.internal");
+  });
+});

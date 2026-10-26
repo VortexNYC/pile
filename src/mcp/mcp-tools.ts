@@ -19230,6 +19230,113 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdSupportFeedback",
+    "description": "Create support feedback (POST /workspaces/{organizationId}/support/feedback) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: kind*, title*, description*, url, userAgent, viewport, deviceInfo, consoleErrors, screenshotDataUrl (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/feedback",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "bug",
+                "feature",
+                "other"
+              ]
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8000
+            },
+            "url": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "userAgent": {
+              "type": "string",
+              "maxLength": 500
+            },
+            "viewport": {
+              "type": "object",
+              "properties": {
+                "width": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "height": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "width",
+                "height"
+              ]
+            },
+            "deviceInfo": {
+              "type": "object",
+              "additionalProperties": {
+                "nullable": true
+              }
+            },
+            "consoleErrors": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "level": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20
+                  },
+                  "message": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  "timestamp": {
+                    "type": "string",
+                    "maxLength": 60
+                  }
+                },
+                "required": [
+                  "level",
+                  "message"
+                ]
+              },
+              "maxItems": 100
+            },
+            "screenshotDataUrl": {
+              "type": "string",
+              "maxLength": 10000000
+            }
+          },
+          "required": [
+            "kind",
+            "title",
+            "description"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdSupportImports",
     "description": "Create support import (POST /workspaces/{organizationId}/support/imports) Path params (top-level, required): organizationId. Request body goes in the \"body\" object.",
     "method": "POST",

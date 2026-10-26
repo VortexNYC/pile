@@ -11869,6 +11869,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/support/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create support feedback */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        kind: "bug" | "feature" | "other";
+                        title: string;
+                        description: string;
+                        url?: string;
+                        userAgent?: string;
+                        viewport?: {
+                            width: number;
+                            height: number;
+                        };
+                        deviceInfo?: {
+                            [key: string]: unknown;
+                        };
+                        consoleErrors?: {
+                            level: string;
+                            message: string;
+                            timestamp?: string;
+                        }[];
+                        screenshotDataUrl?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Member feedback filed as a support ticket */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ticketId: string;
+                            ticketNumber: number;
+                        };
+                    };
+                };
+                /** @description Invalid screenshot payload */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/support/capture/token": {
         parameters: {
             query?: never;
