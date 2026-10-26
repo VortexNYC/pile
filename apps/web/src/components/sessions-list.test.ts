@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { groupSessionsByScope, scopeGroupTitle } from "./sessions-list";
+import {
+  AGENT_SESSIONS_LIST_QUERY,
+  groupSessionsByScope,
+  scopeGroupTitle,
+} from "./sessions-list";
 
 const lane = (
   agentId: string,
@@ -107,5 +111,14 @@ describe("scopeGroupTitle", () => {
       "agent-uuid"
     );
     expect(scopeGroupTitle("agent-uuid", [])).toBe("agent-uuid");
+  });
+});
+
+describe("AGENT_SESSIONS_LIST_QUERY (PILE-645)", () => {
+  it("locks the summary-row fetch contract (no result/activity blobs)", () => {
+    expect(AGENT_SESSIONS_LIST_QUERY).toEqual({
+      summary: "1",
+      limit: "200",
+    });
   });
 });

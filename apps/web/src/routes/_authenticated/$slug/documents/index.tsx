@@ -12,6 +12,9 @@ import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap } from "@/lib/api";
 import { formatRelative } from "@/lib/labels";
 
+/** PILE-645 — list documents without their BlockNote/markdown bodies. */
+export const DOCUMENTS_LIST_QUERY = { summary: "1" } as const;
+
 export const Route = createFileRoute("/_authenticated/$slug/documents/")({
   component: DocumentsList,
 });
@@ -25,7 +28,10 @@ function DocumentsList() {
       (
         await unwrap(
           api.GET("/workspaces/{organizationId}/documents", {
-            params: { path: { organizationId: workspace.id } },
+            params: {
+              path: { organizationId: workspace.id },
+              query: { ...DOCUMENTS_LIST_QUERY },
+            },
           })
         )
       ).documents.filter((d) => !d.isTemplate),

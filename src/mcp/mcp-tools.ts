@@ -3518,7 +3518,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdDocuments",
-    "description": "List documents (GET /workspaces/{organizationId}/documents) Path params (top-level, required): organizationId. Query params (top-level, optional): projectId, issueId, initiativeId, parentDocumentId, spaceId, isTemplate, includeTrashed.",
+    "description": "List documents (GET /workspaces/{organizationId}/documents) Path params (top-level, required): organizationId. Query params (top-level, optional): projectId, issueId, initiativeId, parentDocumentId, spaceId, isTemplate, includeTrashed, summary.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/documents",
     "inputSchema": {
@@ -3546,6 +3546,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "type": "string"
         },
         "includeTrashed": {
+          "type": "string"
+        },
+        "summary": {
           "type": "string"
         }
       },

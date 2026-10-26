@@ -53,9 +53,16 @@ not a window onto a channel.
   - Per-agent concurrency ceilings (`maxConcurrentLanes`) with reserved implementation capacity (`reviewConcurrencyCap`), provider-advertised rate-limit parking with exponential backoff, and window/per-run spend & token caps (`GET /workspaces/:org/agent/costs`).
 - **Workspace Memory & Guidance Packs:**
   - `GET/POST /workspaces/:org/memory` (MCP `memory_recall` / `memory_remember`): entity-keyed facts (`issue`, `repo`, `agent`, `workspace`, `customer`) with automatic superseding, `validUntil` TTL, and automatic recall injection into dispatched lanes.
+  - Memory Engine: `GET /workspaces/:org/memory/profile` per-entity rollups, `POST /memory/batch` batch ingestion, `POST /memory/extract` auto-extraction, `PATCH`/`DELETE /memory/{id}` update/forget, and hybrid semantic recall (LIKE → BM25 → optional Workers AI Vectorize with concept expansion).
   - Hierarchical guidance packs (`workspace → team → status → step`) resolved and version-stamped onto every agent session.
+- **Review Quality & Engineering Observability:**
+  - Task-contextual repo+workspace memory briefs injected at dispatch; blocking `request-changes` findings are recorded back as `review_lesson:<file>` repo facts and re-injected as "Repository Invariants & Past Review Lessons" on later reviews.
+  - Multi-axis Trail HUD scores on every posted PR review (`security`, `slop`, `invariants` 0–100 + `humanGate`), finding fingerprints, and last-5 convergence tracking (clean / converging / stalled / oscillating) with oscillation alerts nudged to the work lane.
+  - `GET /workspaces/:org/provenance` (MCP `explain_provenance`) resolves a sha, file, PR, branch, repo, or issue to the lanes, touched files, commit shas, and memory facts that produced it, with a markdown `whySummary`.
+  - `GET /workspaces/:org/agent/recap` (MCP `agent_recap`) — founder-ready fleet recap: shipped / in-flight with trail convergence / blocked (failed, oscillating, human-gate, paused) / compute, plus a rendered markdown brief.
 - **First-Class Agent Surfaces (MCP, CLI, SDK):**
   - Workspace MCP (`/mcp`) and per-session Lane MCP (`/workspaces/:org/agent/sessions/:id/mcp`) exposing the full OpenAPI surface plus lane-scoped git/PR/memory/CRM tools.
+  - OAuth 2.0 + PKCE connector registration: `/.well-known/oauth-authorization-server`, `/.well-known/oauth-protected-resource`, `/.well-known/mcp.json`, and `server.json` so hosted MCP clients can discover and connect.
   - Generated TypeScript CLI (`@vortex-api/pile`) and SDK.
 - **GitHub & GitLab Sync:** `POST /github` and `POST /gitlab` webhooks sync PR/MR state, check runs, review verdicts, and branch lifecycle back onto issues.
 - **Rate Limiting:** `/api/auth/*` via Better Auth (D1-backed, per-IP by `cf-connecting-ip`; defaults: 100 req/60s global, 3 req/10s on sign-in/sign-up). Behind a non-Cloudflare edge, either overwrite `cf-connecting-ip` at your proxy or change `advanced.ipAddress.ipAddressHeaders` in `src/platform/auth.ts`.

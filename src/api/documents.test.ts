@@ -549,4 +549,47 @@ describe("space permission routes (PILE-447)", () => {
       .parse(await res.json());
     expect(body.documents.map((d) => d.id)).toContain(doc.id);
   });
+
+  it("returns content: '' with ?summary=1 but full content on GET /{id} (PILE-645)", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const created = await fetch(
+      `/workspaces/${organizationId}/documents`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          title: "Summary strip proof",
+          contentFormat: "markdown",
+          content: "FullBodyShouldNotBeInSummaryList",
+        }),
+      },
+      token
+    );
+    expect(created.status).toBe(201);
+    const doc = z.object({ id: z.string() }).parse(await created.json());
+
+    const list = await fetch(
+      `/workspaces/${organizationId}/documents?summary=1`,
+      {},
+      token
+    );
+    expect(list.status).toBe(200);
+    const listed = z
+      .object({
+        documents: z.array(
+          z.object({ id: z.string(), title: z.string(), content: z.unknown() })
+        ),
+      })
+      .parse(await list.json());
+    const row = listed.documents.find((d) => d.id === doc.id);
+    expect(row?.title).toBe("Summary strip proof");
+    expect(row?.content).toBe("");
+
+    const full = await fetch(
+      `/workspaces/${organizationId}/documents/${doc.id}`,
+      {},
+      token
+    );
+    const fullDoc = z.object({ content: z.unknown() }).parse(await full.json());
+    expect(fullDoc.content).toBe("FullBodyShouldNotBeInSummaryList");
+  });
 });

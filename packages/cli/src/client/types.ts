@@ -17130,6 +17130,7 @@ export interface paths {
                     spaceId?: string;
                     isTemplate?: string;
                     includeTrashed?: string;
+                    summary?: string;
                 };
                 header?: never;
                 path: {

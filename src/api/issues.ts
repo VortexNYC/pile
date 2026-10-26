@@ -1305,12 +1305,13 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     const query = c.req.valid("query");
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
-    const stub = await getStub(c.env, organizationId);
-    const visibleTeamIds = await loadVisibleTeamIds(
-      db,
-      organizationId,
-      identity
-    );
+    // PILE-645 — stub binding, team visibility, and the RLS viewer are
+    // independent; fetch them in parallel.
+    const [stub, visibleTeamIds, viewer] = await Promise.all([
+      getStub(c.env, organizationId),
+      loadVisibleTeamIds(db, organizationId, identity),
+      issueViewer(db, identity),
+    ]);
     if (query.identifier) {
       const issue = await stub.getIssueByIdentifier(query.identifier);
       if (issue) {
@@ -1327,9 +1328,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     if (query.view) {
-      const view = await (
-        await getStub(c.env, organizationId)
-      ).getSavedView(query.view);
+      const view = await stub.getSavedView(query.view);
       if (
         !view ||
         (view.ownerId !== identity.id &&
@@ -1363,13 +1362,15 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       args.parentId = (await stub.getIssue(args.parentId))?.id ?? args.parentId;
     }
     args.teamIds = visibleTeamIds;
-    args.viewer = await issueViewer(db, identity);
+    args.viewer = viewer;
     const issues = await stub.listIssues(args);
     // PILE-414 — attach sub-step progress for the board chip in one batch
-    // call instead of per-issue children fetches.
-    const progress = await stub.subStepProgressFor(
-      issues.map((issue) => issue.id)
-    );
+    // call instead of per-issue children fetches (skip the DO RPC on empty
+    // pages — PILE-645).
+    const progress: Record<string, unknown> =
+      issues.length === 0
+        ? {}
+        : await stub.subStepProgressFor(issues.map((issue) => issue.id));
     const nextCursor =
       issues.length === query.limit && issues.length > 0
         ? encodeCursor({
@@ -1474,13 +1475,13 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     const query = c.req.valid("query");
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
-    const stub = await getStub(c.env, organizationId);
-    const visibleTeamIds = await loadVisibleTeamIds(
-      db,
-      organizationId,
-      identity
-    );
     const args = toListArgs(query);
+    // PILE-645 — same parallelization as the primary list route.
+    const [stub, visibleTeamIds, viewer] = await Promise.all([
+      getStub(c.env, organizationId),
+      loadVisibleTeamIds(db, organizationId, identity),
+      issueViewer(db, identity),
+    ]);
     args.status = "triage";
     args.isDraft = false;
     args.hideSnoozed =
@@ -1489,13 +1490,14 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       args.parentId = (await stub.getIssue(args.parentId))?.id ?? args.parentId;
     }
     args.teamIds = visibleTeamIds;
-    args.viewer = await issueViewer(db, identity);
+    args.viewer = viewer;
     const issues = await stub.listIssues(args);
     // PILE-414 — attach sub-step progress for the board chip in one batch
-    // call instead of per-issue children fetches.
-    const progress = await stub.subStepProgressFor(
-      issues.map((issue) => issue.id)
-    );
+    // call instead of per-issue children fetches (skip on empty pages).
+    const progress: Record<string, unknown> =
+      issues.length === 0
+        ? {}
+        : await stub.subStepProgressFor(issues.map((issue) => issue.id));
     const nextCursor =
       issues.length === query.limit && issues.length > 0
         ? encodeCursor({

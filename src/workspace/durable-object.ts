@@ -455,6 +455,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           "__telemetry_inflight_op"
         ),
       ]);
+      this.persistedOrganizationId = stored ?? null;
       if (stored && !this.ctx.id.name) {
         // Name-less DOs (newUniqueId) still need the stored org id; named
         // ids already have it via ctx.id.name.
@@ -688,9 +689,15 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }
   }
 
+  // PILE-645 — callers invoke setOrganizationId on every request; only hit
+  // storage when the value actually changed.
+  private persistedOrganizationId: string | null = null;
+
   async setOrganizationId(id: string) {
     this.organizationId = id;
+    if (this.persistedOrganizationId === id) return;
     await this.ctx.storage.put("organizationId", id);
+    this.persistedOrganizationId = id;
   }
 
   async fetch(request: Request): Promise<Response> {

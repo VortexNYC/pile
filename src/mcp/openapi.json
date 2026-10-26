@@ -35953,6 +35953,14 @@
             "required": false,
             "name": "includeTrashed",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "summary",
+            "in": "query"
           }
         ],
         "responses": {
