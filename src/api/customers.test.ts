@@ -1312,3 +1312,169 @@ describe("approve-batch cadence wiring (PILE-609)", () => {
     }
   });
 });
+
+describe("customer interactions — log-touch (PILE-651)", () => {
+  let organizationId = "";
+  let token = "";
+
+  const customerShape = z.object({
+    id: z.string(),
+    statusId: z.string().nullable(),
+    nextStepText: z.string().nullable(),
+    nextStepDueAt: z.string().nullable(),
+    needsHuman: z.boolean().nullable(),
+    needsHumanReason: z.string().nullable(),
+  });
+
+  const interactionResponse = z.object({
+    interaction: z.object({
+      id: z.string(),
+      customerId: z.string(),
+      outcome: z.string(),
+      note: z.string().nullable(),
+      createdAt: z.string(),
+    }),
+    customer: customerShape,
+    stageAdvanced: z.boolean(),
+    stageBlocked: z.boolean(),
+  });
+
+  async function createStatus(name: string, key: string) {
+    const res = await fetch(
+      `/workspaces/${organizationId}/customer-statuses`,
+      { method: "POST", body: JSON.stringify({ name, key }) },
+      token
+    );
+    expect(res.status).toBe(201);
+    return z
+      .object({ id: z.string(), key: z.string() })
+      .parse(await res.json());
+  }
+
+  async function logTouch(customerId: string, body: Record<string, unknown>) {
+    return fetch(
+      `/workspaces/${organizationId}/customers/${customerId}/interactions`,
+      { method: "POST", body: JSON.stringify(body) },
+      token
+    );
+  }
+
+  let discoveryStatusId = "";
+  let outreachStatusId = "";
+  let lostStatusId = "";
+
+  beforeAll(async () => {
+    ({ organizationId, token } = await seedWorkspace());
+    discoveryStatusId = (await createStatus("Discovery", "discovery")).id;
+    outreachStatusId = (await createStatus("Outreach", "outreach")).id;
+    lostStatusId = (await createStatus("Lost", "lost")).id;
+  });
+
+  it("talked advances to discovery, sets default next step, records memory", async () => {
+    const customer = await createCustomer(organizationId, token, "Knock Co");
+
+    const res = await logTouch(customer.id, {
+      outcome: "talked",
+      note: "Owner wants a demo",
+    });
+    expect(res.status).toBe(201);
+    const body = interactionResponse.parse(await res.json());
+    expect(body.interaction.customerId).toBe(customer.id);
+    expect(body.interaction.outcome).toBe("talked");
+    expect(body.interaction.note).toBe("Owner wants a demo");
+    expect(body.stageAdvanced).toBe(true);
+    expect(body.stageBlocked).toBe(false);
+    expect(body.customer.statusId).toBe(discoveryStatusId);
+    expect(body.customer.statusId).not.toBe(outreachStatusId);
+    expect(body.customer.nextStepText).toBe("Follow up after conversation");
+    expect(Date.parse(body.customer.nextStepDueAt!)).toBeGreaterThan(
+      Date.now()
+    );
+    expect(body.customer.needsHuman).toBe(false);
+
+    // The touch landed in customer memory under kind "outcome".
+    const mem = await fetch(
+      `/workspaces/${organizationId}/memory?entityType=customer&entityId=${customer.id}&kind=outcome`,
+      {},
+      token
+    );
+    expect(mem.status).toBe(200);
+    const { memories } = z
+      .object({
+        memories: z.array(z.object({ id: z.string(), fact: z.string() })),
+      })
+      .parse(await mem.json());
+    expect(memories.map((m) => m.id)).toContain(body.interaction.id);
+    const fact = JSON.parse(
+      memories.find((m) => m.id === body.interaction.id)!.fact
+    ) as { outcome: string; stageAdvanced: boolean };
+    expect(fact.outcome).toBe("talked");
+    expect(fact.stageAdvanced).toBe(true);
+  });
+
+  it("callback keeps the stage and honors an explicit callback date", async () => {
+    const customer = await createCustomer(organizationId, token, "Later Co");
+    const res = await logTouch(customer.id, {
+      outcome: "callback",
+      nextStepText: "Call back Tuesday",
+      nextStepDueAt: "2026-10-27T14:00:00.000Z",
+    });
+    expect(res.status).toBe(201);
+    const body = interactionResponse.parse(await res.json());
+    expect(body.stageAdvanced).toBe(false);
+    expect(body.customer.statusId).toBeNull();
+    expect(body.customer.nextStepText).toBe("Call back Tuesday");
+    expect(body.customer.nextStepDueAt).toBe("2026-10-27T14:00:00.000Z");
+  });
+
+  it("not_interested moves to lost and clears the pending next step", async () => {
+    const create = await fetch(
+      `/workspaces/${organizationId}/customers`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "No Thanks Co",
+          nextStepText: "Re-knock",
+          nextStepDueAt: "2026-10-20T00:00:00.000Z",
+          needsHuman: true,
+          needsHumanReason: "unreachable",
+        }),
+      },
+      token
+    );
+    const customer = customerShape.parse(await create.json());
+
+    const res = await logTouch(customer.id, { outcome: "not_interested" });
+    expect(res.status).toBe(201);
+    const body = interactionResponse.parse(await res.json());
+    expect(body.stageAdvanced).toBe(true);
+    expect(body.customer.statusId).toBe(lostStatusId);
+    expect(body.customer.nextStepText).toBeNull();
+    expect(body.customer.nextStepDueAt).toBeNull();
+    expect(body.customer.needsHuman).toBe(false);
+    expect(body.customer.needsHumanReason).toBeNull();
+  });
+
+  it("needs_email flags the record for a human", async () => {
+    const customer = await createCustomer(organizationId, token, "NoEmail Co");
+    const res = await logTouch(customer.id, { outcome: "needs_email" });
+    expect(res.status).toBe(201);
+    const body = interactionResponse.parse(await res.json());
+    expect(body.customer.needsHuman).toBe(true);
+    expect(body.customer.needsHumanReason).toBe("Missing decision-maker email");
+    expect(body.customer.nextStepText).toBe(
+      "Find decision-maker email and send intro"
+    );
+  });
+
+  it("404s a missing customer and 400s an unknown outcome", async () => {
+    const missing = await logTouch(crypto.randomUUID(), {
+      outcome: "talked",
+    });
+    expect(missing.status).toBe(404);
+
+    const customer = await createCustomer(organizationId, token, "Bad Outcome");
+    const bad = await logTouch(customer.id, { outcome: "went_well" });
+    expect(bad.status).toBe(400);
+  });
+});

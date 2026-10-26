@@ -20647,6 +20647,117 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/customers/{id}/interactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create customer interaction
+         * @description Log a field-sales touch (door knock / call outcome). Writes the interaction to customer memory, applies the outcome's default nextStepText/nextStepDueAt/needsHuman unless the body overrides them, and auto-advances statusId per the outcome→status-key map resolved against this workspace's customer_statuses. When the PILE-412 stage gate refuses the advance, the touch still lands and the response flags stageBlocked.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /**
+                         * @description Canonical knock outcome — drives the next-step defaults and stage auto-advance
+                         * @enum {string}
+                         */
+                        outcome: "talked" | "sent_info" | "needs_email" | "quoted" | "callback" | "no_answer" | "not_interested" | "spam";
+                        note?: string;
+                        nextStepText?: string | null;
+                        nextStepDueAt?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Interaction logged */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            interaction: {
+                                id: string;
+                                customerId: string;
+                                /** @enum {string} */
+                                outcome: "talked" | "sent_info" | "needs_email" | "quoted" | "callback" | "no_answer" | "not_interested" | "spam";
+                                note: string | null;
+                                createdAt: string;
+                            };
+                            customer: {
+                                id: string;
+                                organizationId: string;
+                                name: string;
+                                url: string | null;
+                                domain: string | null;
+                                bookingUrl: string | null;
+                                notes: string | null;
+                                logoUrl: string | null;
+                                externalId: string | null;
+                                phone: string | null;
+                                address: string | null;
+                                vertical: string | null;
+                                neighborhood: string | null;
+                                source: string | null;
+                                sourceSessionId: string | null;
+                                sourceAgentSlug: string | null;
+                                readiness: string | null;
+                                nextAction: string | null;
+                                fit: string | null;
+                                fitScore: number | null;
+                                fitStatus: string | null;
+                                processor: string | null;
+                                evidenceUri: string | null;
+                                tierId: string | null;
+                                statusId: string | null;
+                                ownerId: string | null;
+                                nextStepText: string | null;
+                                nextStepDueAt: string | null;
+                                needsHuman: boolean | null;
+                                needsHumanReason: string | null;
+                                priorityScore: number | null;
+                                customFields: {
+                                    [key: string]: string;
+                                };
+                                createdAt: string;
+                                updatedAt: string;
+                            };
+                            stageAdvanced: boolean;
+                            stageBlocked: boolean;
+                        };
+                    };
+                };
+                /** @description Customer not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/customers/purge": {
         parameters: {
             query?: never;

@@ -8408,6 +8408,39 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "customers interactions create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/{id}/interactions",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "outcome",
+        flag: "outcome",
+      },
+      {
+        name: "note",
+        flag: "note",
+      },
+      {
+        name: "nextStepText",
+        flag: "next-step-text",
+      },
+      {
+        name: "nextStepDueAt",
+        flag: "next-step-due-at",
+      },
+    ],
+  },
   "customers purge create": {
     method: "POST",
     path: "/workspaces/{organizationId}/customers/purge",

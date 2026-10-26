@@ -15,11 +15,13 @@ import {
   isColumnVisible,
 } from "@/components/customers-display-menu";
 import { EntityHover } from "@/components/entity-hover";
+import { LogTouchDialog } from "@/components/log-touch-dialog";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, stageGateBlockMessage, unwrap } from "@/lib/api";
 import { orderedStages, stageColor, stageRowTint } from "@/lib/customer-stages";
+import { isFollowUpOverdue } from "@/lib/follow-ups";
 import { formatRelative } from "@/lib/labels";
 import { toastError, toastSuccess } from "@/lib/toast";
 
@@ -59,7 +61,8 @@ const OWNER_SELECT_OPTIONS = [
   { id: "ecH8c2QyUL9IldR7F59YLtvG58s76UIh", label: "Ronny" },
 ] as const;
 
-function ownerDisplayName(ownerId: string | null | undefined): string {
+/** Shared with the Follow-ups tab — "Shlomo"/"Ronny" or a shortened id. */
+export function ownerDisplayName(ownerId: string | null | undefined): string {
   if (!ownerId) return "Unassigned";
   return KNOWN_OWNERS[ownerId] ?? ownerId.slice(0, 8);
 }
@@ -301,6 +304,11 @@ export function CustomersList() {
   }, [activeSheet, selectedOwner, selectedCategory]);
   const deferredSearch = useDeferredValue(searchQuery);
   const [peekRowId, setPeekRowId] = useState<string | null>(null);
+  // PILE-651 — the row a "Log touch" dialog is open for.
+  const [logTouchTarget, setLogTouchTarget] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   // Sheets-style display prefs — row density and column visibility —
   // persisted per user via me/view-preferences. Row color is the
@@ -433,6 +441,10 @@ export function CustomersList() {
         ownerId,
         statusId: c.statusId,
         ownerName: ownerDisplayName(ownerId),
+        nextStepText:
+          typeof extra.nextStepText === "string" ? extra.nextStepText : null,
+        nextStepDueAt:
+          typeof extra.nextStepDueAt === "string" ? extra.nextStepDueAt : null,
         phone: typeof extra.phone === "string" ? extra.phone : null,
         address: typeof extra.address === "string" ? extra.address : null,
         neighborhood:
@@ -932,18 +944,45 @@ export function CustomersList() {
                                     · {customer.domain}
                                   </span>
                                 )}
+                                {isFollowUpOverdue(row.nextStepDueAt) && (
+                                  <span
+                                    title={`${row.nextStepText ?? "Next step"} — due ${formatRelative(row.nextStepDueAt!)}`}
+                                    className="inline-flex items-center gap-1 rounded bg-red-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-red-500"
+                                  >
+                                    <span
+                                      aria-hidden
+                                      className="size-1.5 rounded-full bg-red-500"
+                                    />
+                                    Due
+                                  </span>
+                                )}
                               </Link>
                             </EntityHover>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setPeekRowId(isPeeked ? null : customer.id);
-                              }}
-                              className="rounded border border-kumo-line px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-kumo-subtle hover:text-kumo-default"
-                            >
-                              Peek
-                            </button>
+                            <span className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setLogTouchTarget({
+                                    id: customer.id,
+                                    name: customer.name,
+                                  });
+                                }}
+                                className="rounded border border-kumo-line px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-kumo-subtle hover:text-kumo-default"
+                              >
+                                Log
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPeekRowId(isPeeked ? null : customer.id);
+                                }}
+                                className="rounded border border-kumo-line px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-kumo-subtle hover:text-kumo-default"
+                              >
+                                Peek
+                              </button>
+                            </span>
                           </div>
                         </td>
                         {columnVisible("category") && (
@@ -1262,6 +1301,15 @@ export function CustomersList() {
           </div>
         )}
       </div>
+
+      <LogTouchDialog
+        customerId={logTouchTarget?.id ?? null}
+        customerName={logTouchTarget?.name ?? ""}
+        open={logTouchTarget !== null}
+        onOpenChange={(o) => {
+          if (!o) setLogTouchTarget(null);
+        }}
+      />
     </div>
   );
 }
