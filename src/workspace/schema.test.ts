@@ -20,6 +20,7 @@ import {
   workspaceStageTemplates,
   workspaceTriageRuleEvaluations,
   workspaceTriageRules,
+  workspaceUserPreferences,
 } from "./schema.js";
 
 describe("workspaceAgentSessions schema", () => {
@@ -86,6 +87,29 @@ describe("workspaceEntityAttachments schema", () => {
       "name" in c ? c.name : String(c)
     );
     expect(columns).toEqual(["organization_id", "entity_type", "entity_id"]);
+  });
+});
+
+describe("workspaceUserPreferences schema", () => {
+  it("exposes the display column as nullable text for per-surface prefs", () => {
+    const column = workspaceUserPreferences.display;
+    expect(column.name).toBe("display");
+    expect(column.notNull).toBe(false);
+    expect(column.dataType).toBe("string");
+    const config = getTableConfig(workspaceUserPreferences);
+    expect(config.name).toBe("user_workspace_preferences");
+    const names = config.columns.map((c) => c.name);
+    for (const col of [
+      "organization_id",
+      "user_id",
+      "default_view_id",
+      "hidden_surfaces",
+      "favorites",
+      "display",
+      "updated_at",
+    ]) {
+      expect(names).toContain(col);
+    }
   });
 });
 

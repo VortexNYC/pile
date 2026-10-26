@@ -13188,6 +13188,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "favorites",
         flag: "favorites",
       },
+      {
+        name: "display",
+        flag: "display",
+      },
     ],
   },
   "saved views get": {

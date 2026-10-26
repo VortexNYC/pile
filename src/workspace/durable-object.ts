@@ -4381,6 +4381,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.setFavorites(this.db, this.organizationId, userId, favorites);
   }
 
+  setDisplay(userId: string, display: data.DisplayPrefsMap | null) {
+    return data.setDisplay(this.db, this.organizationId, userId, display);
+  }
+
   setDefaultView(userId: string, defaultViewId: string | null) {
     return data.setDefaultView(
       this.db,

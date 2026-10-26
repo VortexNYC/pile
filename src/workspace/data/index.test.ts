@@ -78,6 +78,8 @@ import {
   getAgentSession,
   getEntityAttachment,
   getNotificationPreferences,
+  getUserViewPreferences,
+  setDisplay,
   hasIssueAccess,
   hiddenIssueIds,
   listIssuePermissions,
@@ -352,6 +354,47 @@ describe("notification preferences", () => {
       expect(updated?.email).toBe(true);
       expect(updated?.emailExplicit).toBe(true);
       expect(updated?.mutedTypes).toBe("issue_updated");
+    });
+  });
+});
+
+describe("user view preferences display", () => {
+  it("round-trips the display JSON blob without touching other pref columns", async () => {
+    await withDb(async (db) => {
+      const userId = `display-${crypto.randomUUID()}`;
+      const display = {
+        customers: {
+          sheetColors: { trades: "#22c55e" },
+          density: "compact" as const,
+          hiddenColumns: ["phone"],
+        },
+      };
+      await setDisplay(db, WORKSPACE_ID, userId, display);
+      const row = getUserViewPreferences(db, WORKSPACE_ID, userId);
+      expect(row?.display).toBe(JSON.stringify(display));
+      expect(row?.hiddenSurfaces).toBeNull();
+      expect(row?.favorites).toBeNull();
+    });
+  });
+
+  it("updates the stored blob in place and clears it with null", async () => {
+    await withDb(async (db) => {
+      const userId = `display-${crypto.randomUUID()}`;
+      await setDisplay(db, WORKSPACE_ID, userId, {
+        customers: { density: "compact" },
+      });
+      await setDisplay(db, WORKSPACE_ID, userId, {
+        customers: { hiddenColumns: ["location"] },
+        issues: { density: "comfortable" },
+      });
+      let row = getUserViewPreferences(db, WORKSPACE_ID, userId);
+      expect(JSON.parse(row!.display!)).toEqual({
+        customers: { hiddenColumns: ["location"] },
+        issues: { density: "comfortable" },
+      });
+      await setDisplay(db, WORKSPACE_ID, userId, null);
+      row = getUserViewPreferences(db, WORKSPACE_ID, userId);
+      expect(row?.display).toBeNull();
     });
   });
 });

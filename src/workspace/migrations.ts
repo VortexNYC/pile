@@ -1504,6 +1504,11 @@ const v89 = `ALTER TABLE draft_outputs ADD COLUMN agent_slug TEXT
 ALTER TABLE draft_outputs ADD COLUMN prompt_version TEXT
 --> statement-breakpoint
 ALTER TABLE draft_outputs ADD COLUMN original_payload TEXT`;
+
+// Per-surface display prefs (CRM sheet colors, density, hidden columns) —
+// a JSON blob so the shape can grow without more column churn.
+const v102 = `ALTER TABLE user_workspace_preferences ADD COLUMN display TEXT`;
+
 const v69 = `CREATE TABLE comments_new (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -1779,6 +1784,7 @@ export const workspaceMigrations = {
       { idx: 98, when: 98, tag: "v99", breakpoints: true },
       { idx: 99, when: 99, tag: "v100", breakpoints: true },
       { idx: 100, when: 100, tag: "v101", breakpoints: true },
+      { idx: 101, when: 101, tag: "v102", breakpoints: false },
     ],
   },
   migrations: {
@@ -1883,5 +1889,6 @@ export const workspaceMigrations = {
     m0098: v99,
     m0099: v100,
     m0100: v101,
+    m0101: v102,
   },
 } satisfies Parameters<typeof migrate>[1];

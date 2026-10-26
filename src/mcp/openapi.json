@@ -69273,12 +69273,41 @@
                           "addedAt"
                         ]
                       }
+                    },
+                    "display": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "sheetColors": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "density": {
+                            "type": "string",
+                            "enum": [
+                              "comfortable",
+                              "compact"
+                            ]
+                          },
+                          "hiddenColumns": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
                     }
                   },
                   "required": [
                     "defaultViewId",
                     "hiddenSurfaces",
-                    "favorites"
+                    "favorites",
+                    "display"
                   ]
                 }
               }
@@ -69352,6 +69381,34 @@
                         "addedAt"
                       ]
                     }
+                  },
+                  "display": {
+                    "type": "object",
+                    "nullable": true,
+                    "additionalProperties": {
+                      "type": "object",
+                      "properties": {
+                        "sheetColors": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "density": {
+                          "type": "string",
+                          "enum": [
+                            "comfortable",
+                            "compact"
+                          ]
+                        },
+                        "hiddenColumns": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -69376,11 +69433,76 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "favorites": {
+                      "type": "array",
+                      "nullable": true,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "issue",
+                              "document"
+                            ]
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "identifier": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "addedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "id",
+                          "title",
+                          "addedAt"
+                        ]
+                      }
+                    },
+                    "display": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "sheetColors": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "density": {
+                            "type": "string",
+                            "enum": [
+                              "comfortable",
+                              "compact"
+                            ]
+                          },
+                          "hiddenColumns": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      }
                     }
                   },
                   "required": [
                     "defaultViewId",
-                    "hiddenSurfaces"
+                    "hiddenSurfaces",
+                    "favorites",
+                    "display"
                   ]
                 }
               }
