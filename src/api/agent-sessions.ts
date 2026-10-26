@@ -601,6 +601,78 @@ const fleetHealthRoute = createRoute({
   },
 });
 
+// PILE-643 — commit/file provenance ("entire why"): resolves a sha, file
+// path, PR URL, branch, repo, or issue id to the lanes + memory facts that
+// produced it.
+const provenanceRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/provenance",
+  tags: ["agent-sessions"],
+  middleware: [rls("issue:view")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    query: z.object({
+      repo: z.string().optional(),
+      sha: z.string().optional(),
+      file: z.string().optional(),
+      branch: z.string().optional(),
+      prUrl: z.string().optional(),
+      issueId: z.string().optional(),
+      limit: z.string().optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description:
+        "Provenance: issues, lane sessions (with review convergence), touched files, commit shas, and memory facts explaining the queried artifact",
+      content: {
+        "application/json": {
+          schema: z.object({
+            query: z.record(z.string(), z.unknown()),
+            entries: z.array(z.record(z.string(), z.unknown())),
+            whySummary: z.string(),
+          }),
+        },
+      },
+    },
+  },
+});
+
+// PILE-644 — engineering fleet recap: shipped / in-flight & convergence /
+// blocked / compute, plus a founder-ready markdown brief.
+const fleetRecapRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/agent/recap",
+  tags: ["agent-sessions"],
+  middleware: [rls("session:view", "agent:read")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    query: z.object({
+      since: z.string().optional(),
+      repo: z.string().optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description:
+        "Engineering fleet recap: shipped, in-flight with trail convergence, blocked/decision-needed, compute totals, markdown brief",
+      content: {
+        "application/json": {
+          schema: z.object({
+            since: z.string(),
+            repo: z.string().nullable(),
+            shipped: z.record(z.string(), z.unknown()),
+            inFlight: z.record(z.string(), z.unknown()),
+            blocked: z.record(z.string(), z.unknown()),
+            compute: z.record(z.string(), z.unknown()),
+            markdownBrief: z.string(),
+          }),
+        },
+      },
+    },
+  },
+});
+
 const issueLiveRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/issues/{issueId}/live",
@@ -2225,6 +2297,30 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
       },
       200
     );
+  });
+
+  app.openapi(provenanceRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const query = c.req.valid("query");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const out = await stub.explainProvenance({
+      repo: query.repo,
+      sha: query.sha,
+      file: query.file,
+      branch: query.branch,
+      prUrl: query.prUrl,
+      issueId: query.issueId,
+      ...(query.limit ? { limit: Number(query.limit) } : {}),
+    });
+    return c.json(out, 200);
+  });
+
+  app.openapi(fleetRecapRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const { since, repo } = c.req.valid("query");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const out = await stub.getEngineeringFleetRecap({ since, repo });
+    return c.json(out, 200);
   });
 
   app.openapi(issueLiveRoute, async (c) => {

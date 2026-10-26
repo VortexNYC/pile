@@ -4432,3 +4432,107 @@ describe("session scoping options (PILE-453)", () => {
     expect(Array.isArray(rows)).toBe(true);
   });
 });
+
+describe("provenance + fleet recap (PILE-643/644)", () => {
+  it("explainProvenance matches file, sha, and issueId to lanes and memory", async () => {
+    const stub = getStub();
+    const out = await withWorkspace(stub, async (instance) => {
+      const issue = await instance.createIssue({
+        title: "Fix durable-object.ts provenance",
+        repo: "acme/web",
+      });
+      await instance.updateIssue(issue.id, {
+        prUrl: "https://github.com/acme/web/pull/9",
+      });
+      const session = await instance.createAgentSession({
+        agentId: "devin-cli",
+        issueId: issue.id,
+        status: "completed",
+        provider: "devin-cli",
+        actorId: "u1",
+        actorType: "user",
+      });
+      await instance.addAgentSessionEvent({
+        sessionId: session.id,
+        type: "review.requested",
+        message: "review requested",
+        payload: {
+          files: ["src/workspace/durable-object.ts"],
+          repo: "acme/web",
+          headSha: "abc1234def5678",
+        },
+      });
+      await instance.memoryRemember({
+        entityType: "issue",
+        entityId: issue.id,
+        kind: "lesson",
+        fact: "durable-object.ts needs sqlite migrations for new tables",
+      });
+      const byFile = await instance.explainProvenance({
+        file: "durable-object.ts",
+      });
+      const bySha = await instance.explainProvenance({ sha: "abc1234" });
+      const byIssue = await instance.explainProvenance({
+        issueId: issue.id,
+      });
+      return { byFile, bySha, byIssue };
+    });
+    expect(out.byFile.entries.length).toBeGreaterThan(0);
+    expect(out.byFile.entries[0]?.touchedFiles).toContain(
+      "src/workspace/durable-object.ts"
+    );
+    expect(out.byFile.whySummary).toContain("durable-object.ts");
+    expect(out.bySha.entries.length).toBeGreaterThan(0);
+    expect(
+      out.bySha.entries.flatMap((e) => e.sessions)[0]?.convergence.status
+    ).toBeDefined();
+    expect(out.byIssue.entries[0]?.memories.length).toBeGreaterThan(0);
+  });
+
+  it("getEngineeringFleetRecap buckets shipped, in-flight, blocked, compute", async () => {
+    const stub = getStub();
+    const out = await withWorkspace(stub, async (instance) => {
+      const doneIssue = await instance.createIssue({
+        title: "Recap shipped",
+        status: "done",
+      });
+      const done = await instance.createAgentSession({
+        agentId: "devin-cli",
+        issueId: doneIssue.id,
+        status: "completed",
+        provider: "devin-cli",
+        actorId: "u1",
+        actorType: "user",
+      });
+      await instance.updateAgentSession(done.id, {
+        endedAt: new Date().toISOString(),
+      });
+      const wip = await instance.createIssue({ title: "Recap wip" });
+      await instance.createAgentSession({
+        agentId: "devin-cli",
+        issueId: wip.id,
+        status: "running",
+        provider: "devin-cli",
+        actorId: "u1",
+        actorType: "user",
+      });
+      await instance.recordLaneCost({
+        sessionId: done.id,
+        agentSlug: "devin-cli",
+        issueId: doneIssue.id,
+        provider: "devin-cli",
+        status: "completed",
+        durationMs: 1200,
+        settledAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+      });
+      return instance.getEngineeringFleetRecap({ since: "24h" });
+    });
+    expect(out.shipped.closedIssues.length).toBeGreaterThan(0);
+    expect(out.inFlight.activeLanes.length).toBeGreaterThan(0);
+    expect(out.compute.totalSessions).toBeGreaterThan(0);
+    expect(out.markdownBrief).toContain("# Engineering Fleet Recap");
+    expect(out.markdownBrief).toContain("In Flight & Trail Convergence");
+    expect(out.markdownBrief).toContain("Blocked / Needs Decision");
+  });
+});

@@ -7478,6 +7478,208 @@
         "summary": "List agent fleet health"
       }
     },
+    "/workspaces/{organizationId}/provenance": {
+      "get": {
+        "tags": [
+          "agent-sessions"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "repo",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "sha",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "file",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "branch",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "prUrl",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "issueId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Provenance: issues, lane sessions (with review convergence), touched files, commit shas, and memory facts explaining the queried artifact",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "query": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "entries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "nullable": true
+                        }
+                      }
+                    },
+                    "whySummary": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "query",
+                    "entries",
+                    "whySummary"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List provenance"
+      }
+    },
+    "/workspaces/{organizationId}/agent/recap": {
+      "get": {
+        "tags": [
+          "agent-sessions"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "since",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "repo",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Engineering fleet recap: shipped, in-flight with trail convergence, blocked/decision-needed, compute totals, markdown brief",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "since": {
+                      "type": "string"
+                    },
+                    "repo": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "shipped": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "inFlight": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "blocked": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "compute": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "markdownBrief": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "since",
+                    "repo",
+                    "shipped",
+                    "inFlight",
+                    "blocked",
+                    "compute",
+                    "markdownBrief"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List agent recap"
+      }
+    },
     "/workspaces/{organizationId}/issues/{issueId}/live": {
       "get": {
         "tags": [

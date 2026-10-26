@@ -90,6 +90,8 @@ export const MCP_TOOL_ALIASES: Readonly<Record<string, string>> = {
 
   // Memory
   memory_recall: "getWorkspacesOrganizationIdMemory",
+  explain_provenance: "getWorkspacesOrganizationIdProvenance",
+  agent_recap: "getWorkspacesOrganizationIdAgentRecap",
   memory_remember: "postWorkspacesOrganizationIdMemory",
   memory_update: "patchWorkspacesOrganizationIdMemoryId",
   memory_delete: "deleteWorkspacesOrganizationIdMemoryId",

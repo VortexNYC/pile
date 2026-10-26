@@ -4225,3 +4225,72 @@ describe("spend caps + run receipts (PILE-425)", () => {
     expect(receipt?.costSource).toBe("reported");
   });
 });
+
+describe("provenance + fleet recap routes (PILE-643/644)", () => {
+  let organizationId: string;
+  let token: string;
+
+  beforeAll(async () => {
+    const headers = await createAdminHeaders(env, "user-1");
+    const workspace = await createWorkspace(createD1(env.D1), env, headers, {
+      name: "Provenance Recap WS",
+      slug: `prov-${crypto.randomUUID().slice(0, 8)}`,
+      ownerId: "user-1",
+    });
+    organizationId = workspace!.id;
+    const auth = await createAuth(env);
+    const result = await auth.api.createApiKey({
+      body: {
+        userId: "user-1",
+        name: "prov-test",
+        metadata: { organizationId, permissions: "admin" },
+        permissions: { workspace: ["admin"] },
+      },
+    });
+    token = z.object({ key: z.string() }).parse(result).key;
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+  });
+
+  it("GET /provenance returns entries and a why summary", async () => {
+    const res = await app.fetch(
+      request(
+        `/workspaces/${organizationId}/provenance?file=durable-object.ts`,
+        {
+          token,
+        }
+      ),
+      env
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json<{
+      entries: { touchedFiles: string[] }[];
+      whySummary: string;
+    }>();
+    expect(body.whySummary).toContain("Provenance");
+    expect(Array.isArray(body.entries)).toBe(true);
+  });
+
+  it("GET /agent/recap returns the four recap buckets + markdown brief", async () => {
+    const res = await app.fetch(
+      request(`/workspaces/${organizationId}/agent/recap?since=24h`, {
+        token,
+      }),
+      env
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json<{
+      since: string;
+      shipped: Record<string, unknown>;
+      inFlight: { activeLanes: unknown[]; reviewRoundsCompleted: number };
+      blocked: Record<string, unknown>;
+      compute: { totalSessions: number; totalDurationSeconds: number };
+      markdownBrief: string;
+    }>();
+    expect(body.markdownBrief).toContain("# Engineering Fleet Recap");
+    expect(Array.isArray(body.inFlight.activeLanes)).toBe(true);
+    expect(body.compute.totalSessions).toBeGreaterThanOrEqual(0);
+  });
+});

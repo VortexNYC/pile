@@ -69,4 +69,13 @@ describe("MCP tool aliases", () => {
       "postWorkspacesOrganizationIdCustomersApprovebatch"
     );
   });
+
+  it("maps explain_provenance and agent_recap (PILE-643/644)", () => {
+    expect(MCP_TOOL_ALIASES.explain_provenance).toBe(
+      "getWorkspacesOrganizationIdProvenance"
+    );
+    expect(MCP_TOOL_ALIASES.agent_recap).toBe(
+      "getWorkspacesOrganizationIdAgentRecap"
+    );
+  });
 });
