@@ -6539,7 +6539,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           ),
         }))
         .filter((s) => s.score >= 0.22)
-        .sort((a, b) => b.score - a.score);
+        .toSorted((a, b) => b.score - a.score);
       for (const { row } of scored) {
         const key = `${row.entityType}\0${normalizeEntityId(row.entityType, row.entityId)}\0${row.kind}`;
         if (seen.has(key)) continue;
@@ -6798,6 +6798,21 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     };
     await persistNext(0);
     return { ids, facts };
+  }
+
+  // Check-then-write inside one DO turn so two concurrent callers cannot both
+  // claim the same (entityType, entityId, kind) slot — memoryRecall followed
+  // by a separate memoryRemember RPC is a TOCTOU race.
+  async claimMemoryOnce(input: data.MemoryInput) {
+    const existing = await data.memoryRecall(this.db, this.organizationId, {
+      entityType: input.entityType,
+      entityId: input.entityId,
+      kind: input.kind,
+      limit: 1,
+    });
+    if (existing.length > 0) return false;
+    await data.memoryRemember(this.db, this.organizationId, input);
+    return true;
   }
 
   upsertAgentProviderConfig(input: data.AgentProviderConfigInput) {

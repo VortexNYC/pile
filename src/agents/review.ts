@@ -26,10 +26,8 @@ import { dispatchAgent, getAgentProvider } from "./index.js";
 import { nudgeLane, resolveLaneForIssue } from "./nudge.js";
 
 export const REVIEW_CHECK_NAME = "pile-review";
-export const SECURITY_CHECK_NAME = "pile-security";
 export const REVIEW_PURPOSE = "review";
 export const DEFAULT_REVIEW_AGENT = "devin-cli";
-export const DEFAULT_MAX_REVIEW_ROUNDS = 1;
 
 export type ReviewRiskTier = "low" | "medium" | "high";
 

@@ -703,4 +703,9 @@ describe("workspace lane tools", () => {
     );
     expect(wsTool("customer_pull_leads").name).toBe("customer_pull_leads");
   });
+
+  it("exposes the send-gate and dedup tools by name", () => {
+    expect(wsTool("customer_send_gate").name).toBe("customer_send_gate");
+    expect(wsTool("customer_dedup_key").name).toBe("customer_dedup_key");
+  });
 });

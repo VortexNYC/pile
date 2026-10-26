@@ -2733,11 +2733,6 @@ export function listLinkedIssueIds(
 // both the dedupe ledger and the audit log — every inbound event lands one
 // row recording why it did or didn't move state.
 
-export type ExternalEventMapping =
-  typeof workspaceExternalEventMappings.$inferSelect;
-export type ExternalEventDelivery =
-  typeof workspaceExternalEventDeliveries.$inferSelect;
-
 export interface ExternalEventMappingInput {
   organizationId: string;
   source: string;
@@ -9003,27 +8998,6 @@ export function revokeSpacePermission(
   );
 }
 
-// Space ids the actor (or their teams) holds any grant on — the list-path
-// helper so listDocumentsVisibleTo pays one query, not one per doc.
-export function grantedSpaceIds(
-  db: WorkspaceDb,
-  organizationId: string,
-  actorIds: string[]
-) {
-  if (actorIds.length === 0) return new Set<string>();
-  // filter by actor — the where above selects org; match actors in JS for
-  // the team-ids expansion (small grant sets, same as documents).
-  const granted = new Set<string>();
-  for (const row of db
-    .select()
-    .from(workspaceSpacePermissions)
-    .where(eq(workspaceSpacePermissions.organizationId, organizationId))
-    .all()) {
-    if (actorIds.includes(row.actorId)) granted.add(row.spaceId);
-  }
-  return granted;
-}
-
 // Returns the effective level for an actor, or null when the doc is
 // restricted and the actor is unlisted. Team grants (Better Auth
 // organization teams) cover every member of the team.
@@ -9336,10 +9310,6 @@ export function getCustomerByDomain(
 // rule applies its action (delegate an agent, set a status) and the outcome
 // is recorded in triage_rule_evaluations. conditions/action are opaque JSON
 // here — the zod contract lives in src/global/triage-rules.ts.
-
-export type TriageRule = typeof workspaceTriageRules.$inferSelect;
-export type TriageRuleEvaluation =
-  typeof workspaceTriageRuleEvaluations.$inferSelect;
 
 export interface TriageRuleInput {
   organizationId: string;

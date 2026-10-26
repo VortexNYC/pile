@@ -1,4 +1,4 @@
-import { and, inArray, isNotNull, lte, or, sql } from "drizzle-orm";
+import { and, isNotNull, lte, or, sql } from "drizzle-orm";
 
 import { createD1, type D1Client } from "../global/db.js";
 import { getInstallationTokenForRepo } from "../global/github-auth.js";

@@ -241,4 +241,13 @@ describe("Unify-parity Reply Classifier, OOO/Bounce Kill-Switch, Statement Check
       approvalEditRate: 1,
     });
   });
+
+  it("classifies a referral hand-off with contact extraction", () => {
+    const referral = classifyInboundReply(
+      "Re: pricing",
+      "Not my area — please reach out to Dana, our controller, at dana@bistro.com."
+    );
+    expect(referral.category).toBe("referral");
+    expect(referral.alternateContactEmail).toBe("dana@bistro.com");
+  });
 });

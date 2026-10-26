@@ -11,6 +11,7 @@ import { registerAgentProvider } from "./index.js";
 import {
   buildReviewDiff,
   classifyReviewRiskTier,
+  DEFAULT_REVIEW_AGENT,
   evaluateReviewCase,
   filterDiffGroundedFindings,
   parseReviewVerdict,
@@ -1245,5 +1246,13 @@ describe("requestPrReview / publishReviewVerdicts", () => {
     );
     expect(grounded.findings).toHaveLength(1);
     expect(grounded.verdict).toBe("comment");
+  });
+
+  it("keeps the review check name and purpose constants stable", () => {
+    // GitHub check-run names are a public contract — the check-name prefix
+    // pins dashboards and branch-protection rules.
+    expect(REVIEW_CHECK_NAME).toBe("pile-review");
+    expect(REVIEW_PURPOSE).toBe("review");
+    expect(DEFAULT_REVIEW_AGENT).toBe("devin-cli");
   });
 });

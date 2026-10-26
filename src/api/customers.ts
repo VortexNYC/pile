@@ -298,6 +298,10 @@ const orgIdParam = z.object({
   id: z.string(),
 });
 
+// Shlomo Kabareti's user id — default owner for auto-created
+// Bookkeeper / CPA Partner records in the main Vortex workspace.
+const VORTEX_MAIN_PARTNER_OWNER_ID = "0r5mlhiV0owDDL59vzGnfTTqwNBuGHgE";
+
 const listCustomersRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/customers",
@@ -922,6 +926,18 @@ async function scrubNeedIssueId<T extends { issueId: string | null }>(
   return hidden.includes(need.issueId) ? { ...need, issueId: null } : need;
 }
 
+async function loadCustomerSignals(
+  stub: ReturnType<typeof getWorkspaceStub>,
+  customerId: string
+): Promise<MerchantSignal[]> {
+  const facts = await stub.memoryRecall({
+    entityType: "customer",
+    entityId: customerId,
+    limit: 100,
+  });
+  return parseCustomerSignalFacts(facts);
+}
+
 export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listCustomersRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
@@ -1414,18 +1430,6 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
 
   // ---- PILE-478..533: Signals, Ranker v2, SMB Dedup & Send Gate API ----
 
-  async function loadCustomerSignals(
-    stub: ReturnType<typeof getWorkspaceStub>,
-    customerId: string
-  ): Promise<MerchantSignal[]> {
-    const facts = await stub.memoryRecall({
-      entityType: "customer",
-      entityId: customerId,
-      limit: 100,
-    });
-    return parseCustomerSignalFacts(facts);
-  }
-
   const recordSignalRoute = createRoute({
     method: "post",
     path: "/workspaces/{organizationId}/customers/{id}/signals",
@@ -1658,10 +1662,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
       typeof customer.customFields === "string"
         ? (JSON.parse(customer.customFields) as Record<string, string | null>)
         : {
-            ...((customer.customFields as Record<
-              string,
-              string | null
-            > | null) ?? {}),
+            ...(customer.customFields as Record<string, string | null> | null),
           };
     customFields.whyNow = breakdown.whyNow;
     customFields.whyNowSignalIds = breakdown.whyNowSignalIds.join(",");
@@ -1858,7 +1859,12 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     const customer = await stub.getCustomer(id);
     if (!customer) return notFound("Customer not found");
 
-    const classified = classifyInboundReply(input.subject, input.body);
+    const classified = classifyInboundReply(
+      input.subject,
+      input.body,
+      undefined,
+      input.fromEmail
+    );
     let suppressed = false;
     if (classified.category === "opt_out") {
       suppressed = true;
@@ -1939,15 +1945,19 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
           : [];
         const partnerCustomer =
           existingPartners[0] ??
+          // externalId is the dedupe key — repeat referral replies mentioning
+          // the same bookkeeper email resolve to one partner record, including
+          // freemail domains where partnerDomain is null.
           (await stub.createCustomer({
             name: partnerDomain
               ? `${partnerDomain.split(".")[0]!.toUpperCase()} CPA & BOOKKEEPING`
               : `${customer.name} Bookkeeper Partner`,
             domain: partnerDomain ?? null,
+            externalId: `referral:${classified.alternateContactEmail}`,
             vertical: "Bookkeeper / CPA Partner",
             ownerId:
               organizationId === "org_vortex_main"
-                ? "0r5mlhiV0owDDL59vzGnfTTqwNBuGHgE"
+                ? VORTEX_MAIN_PARTNER_OWNER_ID
                 : null,
             signal: `Referred by ${customer.name} (${classified.alternateContactEmail})`,
             source: "reply_referral",
@@ -1967,12 +1977,28 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
       }
     }
 
-    // PILE-604: Deferred recontactAt window (3/6/12 months) on bad_timing / budget replies
+    // PILE-604: Deferred recontactAt window (3/6/12 months) on bad_timing /
+    // budget replies. Never clobber a human-set future next step — only stamp
+    // when the field is empty, already ours, or expired.
     if (classified.category === "bad_timing" && classified.recontactAtIso) {
-      await stub.updateCustomer(customer.id, {
-        nextStepDueAt: classified.recontactAtIso,
-        nextStepText: `recontact: bad_timing (${classified.recontactWindowMonths ?? 3}mo)`,
-      });
+      const existingDueMs = customer.nextStepDueAt
+        ? Date.parse(customer.nextStepDueAt)
+        : Number.NaN;
+      const isOurDeferral =
+        customer.nextStepText?.startsWith("recontact:") ?? false;
+      const stepExpired =
+        Number.isFinite(existingDueMs) && existingDueMs <= Date.now();
+      if (
+        !customer.nextStepDueAt ||
+        isOurDeferral ||
+        !Number.isFinite(existingDueMs) ||
+        stepExpired
+      ) {
+        await stub.updateCustomer(customer.id, {
+          nextStepDueAt: classified.recontactAtIso,
+          nextStepText: `recontact: bad_timing (${classified.recontactWindowMonths ?? 3}mo)`,
+        });
+      }
     }
 
     const statementChecklist = input.statementFileId
@@ -2279,8 +2305,10 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     const stub = getWorkspaceStub(c.env, organizationId);
     const allRaw = await stub.listCustomers();
     const nowMs = Date.now();
-    // PILE-604: Exclude deferred bad_timing customers until nextStepDueAt <= now
+    // PILE-604: Only our own "recontact:" deferrals hide a customer from the
+    // brief — a human-set future nextStepDueAt (demo, proposal) keeps them in.
     const all = allRaw.filter((cust) => {
+      if (!cust.nextStepText?.startsWith("recontact:")) return true;
       if (!cust.nextStepDueAt) return true;
       const dueMs = Date.parse(cust.nextStepDueAt);
       return !Number.isFinite(dueMs) || dueMs <= nowMs;
@@ -2565,7 +2593,10 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
       .toSorted((a, b) => (b.priorityScore ?? 0) - (a.priorityScore ?? 0))
       .slice(0, input.limit);
 
-    const todayYmd = new Date().toISOString().slice(0, 10);
+    // Business day keyed on recipient time, not UTC midnight.
+    const todayYmd = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/New_York",
+    }).format(new Date());
     const preSendKind = `pre_send:${input.channel}:${todayYmd}`;
 
     const candidates = await Promise.all(
@@ -2679,6 +2710,10 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
         ...(input.physicalAddress
           ? { physicalAddress: input.physicalAddress }
           : {}),
+        schedule: {
+          timeZone: "America/New_York",
+          businessHours: { startHour: 9, endHour: 18 },
+        },
       })
     );
 
@@ -2704,11 +2739,12 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
         .catch(() => null);
     }
 
-    // PILE-608: Commit pre_send idempotency reservation for every approved touch
+    // PILE-608: Atomic check-then-write inside the DO — two overlapping
+    // approve-batch calls cannot both reserve the same lead for the same day.
     const nowIso = new Date().toISOString();
-    await Promise.all(
+    const claims = await Promise.all(
       partitioned.approved.map((item) =>
-        stub.memoryRemember({
+        stub.claimMemoryOnce({
           entityType: "customer",
           entityId: item.customerId,
           kind: preSendKind,
@@ -2723,6 +2759,15 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
         })
       )
     );
+    const approved = partitioned.approved.filter((_, i) => claims[i]);
+    const claimBlocked = partitioned.approved
+      .filter((_, i) => !claims[i])
+      .map((item) => ({
+        customerId: item.customerId,
+        name: item.name,
+        reasons: ["ALREADY_RESERVED_TODAY"],
+      }));
+    const blocked = [...partitioned.blocked, ...claimBlocked];
 
     captureProductEvent(
       "customer.batch_approved",
@@ -2737,10 +2782,10 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
       { env: c.env }
     );
     return c.json({
-      approvedCount: partitioned.approved.length,
-      blockedCount: partitioned.blocked.length,
-      approved: partitioned.approved,
-      blocked: partitioned.blocked.map((b) => ({
+      approvedCount: approved.length,
+      blockedCount: blocked.length,
+      approved,
+      blocked: blocked.map((b) => ({
         customerId: b.customerId,
         name: b.name,
         reasons: [...b.reasons],

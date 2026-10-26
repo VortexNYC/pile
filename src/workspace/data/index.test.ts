@@ -2432,7 +2432,6 @@ describe("agent session scoping (PILE-453)", () => {
 
   it("updateCustomer persists processor and signal fields (PILE-532)", async () => {
     await withDb(async (db) => {
-      const { createCustomer, updateCustomer } = await import("./index.js");
       const cust = createCustomer(db, {
         organizationId: WORKSPACE_ID,
         name: "Bleecker Osteria",

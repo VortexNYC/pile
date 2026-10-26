@@ -16,6 +16,7 @@ import {
   isSafePublicDomain,
   partitionTasksWithEffect,
   planDaily8020Replenish,
+  probeCandidateWebsiteEffect,
   pullDaily8020BatchesWithEffect,
   pullSourceEffect,
   runMacMiniFetchWithRetryEffect,
@@ -170,7 +171,7 @@ describe("scoreCandidate", () => {
       )
     );
     expect(bad).toBeInstanceOf(CollectorSourceError);
-    expect(bad._tag).toBe("CollectorSourceError");
+    expect(Reflect.get(bad, "_tag")).toBe("CollectorSourceError");
     vi.unstubAllGlobals();
   });
 
@@ -313,7 +314,7 @@ describe("scoreCandidate", () => {
       )
     );
     expect(budgetErr).toBeInstanceOf(VendorBudgetExceededError);
-    expect(budgetErr._tag).toBe("VendorBudgetExceededError");
+    expect(Reflect.get(budgetErr, "_tag")).toBe("VendorBudgetExceededError");
     vi.unstubAllGlobals();
   });
 
@@ -622,6 +623,96 @@ describe("scoreCandidate", () => {
     });
     expect(nightGate.result).toBe("block");
     expect(nightGate.reasons).toContain("OUTSIDE_HOURS");
+
+    // Referral role keywords must sit inside the referral clause — an
+    // accountant mentioned earlier doesn't make the referred person a CPA.
+    const uncorrelatedRef = classifyInboundReply(
+      "Re: Vortex",
+      "My accountant will circle back next week. In the meantime reach out to Dave at dave@merchant.nyc instead.",
+      "2026-10-23T14:00:00.000Z"
+    );
+    expect(uncorrelatedRef.category).toBe("referral");
+    expect(uncorrelatedRef.referralRole).toBe("decision_maker");
+    expect(uncorrelatedRef.alternateContactEmail).toBe("dave@merchant.nyc");
+
+    // The sender's own signature email is never an alternate contact.
+    const selfSig = classifyInboundReply(
+      "Re: Vortex",
+      "Talk to my bookkeeper, he handles it.\n\nMarco Lamberti\nmarco@lambertielectric.com",
+      "2026-10-23T14:00:00.000Z",
+      "marco@lambertielectric.com"
+    );
+    expect(selfSig.category).toBe("referral");
+    expect(selfSig.alternateContactEmail).toBeNull();
+
+    // Explicit stated durations beat keyword heuristics.
+    const explicit3mo = classifyInboundReply(
+      "Re: Vortex",
+      "Tight on budget, check back in 3 months.",
+      "2026-10-23T14:00:00.000Z"
+    );
+    expect(explicit3mo.recontactWindowMonths).toBe(3);
+    expect(explicit3mo.recontactAtIso).toBe("2027-01-23T14:00:00.000Z");
+
+    // "/contactless-payments" is not a contact form link.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            "<html><body><a href='/contactless-payments'>Tap to Pay</a></body></html>",
+            { status: 200 }
+          )
+      )
+    );
+    const contactless = await Effect.runPromise(
+      probeCandidateWebsiteEffect(
+        { ...base, domain: "merchant.nyc" },
+        { lookupDos: false }
+      )
+    );
+    expect(contactless.contactFormUrl).toBeNull();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            "<html><body><a href='/contact'>Contact Us</a></body></html>",
+            { status: 200 }
+          )
+      )
+    );
+    const withForm = await Effect.runPromise(
+      probeCandidateWebsiteEffect(
+        { ...base, domain: "merchant.nyc" },
+        { lookupDos: false }
+      )
+    );
+    expect(withForm.contactFormUrl).toBe("https://merchant.nyc/contact");
+
+    // evaluateApprovedBatchWithEffect wires schedule through to the gate.
+    const nightBatch = await Effect.runPromise(
+      evaluateApprovedBatchWithEffect(
+        [
+          {
+            customerId: "c_night",
+            name: "Night Merchant",
+            channel: "email",
+            contactEmail: "o@x.com",
+          },
+        ],
+        {
+          now: "2026-10-23T06:00:00.000Z",
+          schedule: {
+            timeZone: "America/New_York",
+            businessHours: { startHour: 9, endHour: 18 },
+          },
+        }
+      )
+    );
+    expect(nightBatch.approved).toHaveLength(0);
+    expect(nightBatch.blocked[0]?.reasons).toContain("OUTSIDE_HOURS");
     vi.unstubAllGlobals();
   });
 });
