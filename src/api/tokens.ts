@@ -69,7 +69,10 @@ const listTokensRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/tokens",
   tags: ["tokens"],
-  middleware: [rls("admin")],
+  // Members self-serve their own keys (e.g. `pile auth login`, MCP setup);
+  // the handler scopes the list to the caller's referenceId. Admins see
+  // every key including agent installs.
+  middleware: [rls("read")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -91,7 +94,7 @@ const createTokenRoute = createRoute({
   tags: ["tokens"],
   // Members self-serve keys (e.g. `pile auth login`); the handler clamps the
   // requested permissions to the caller's own set so nobody mints past their
-  // role. Listing and deleting stay admin-only.
+  // role.
   middleware: [rls("write")],
   request: {
     params: z.object({ organizationId: z.string() }),
@@ -115,7 +118,9 @@ const deleteTokenRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/tokens/{id}",
   tags: ["tokens"],
-  middleware: [rls("admin")],
+  // Admins revoke any key; members revoke only keys they own (the handler
+  // 404s on rows with a different referenceId so existence never leaks).
+  middleware: [rls("write")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -182,14 +187,20 @@ function parseApiKeyMetadata(metadata: string | null | undefined): {
 export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listTokensRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
+    const identity = c.var.workspaceIdentity;
     const db = createD1(c.env.D1);
     const rows = await db.select().from(apikey).all();
+    const isAdmin = canAccess(identity.permissions, "admin");
     const filtered = rows
       .map((row) => ({
         row,
         parsed: parseApiKeyMetadata(row.metadata),
       }))
-      .filter(({ parsed }) => parsed?.organizationId === organizationId);
+      .filter(
+        ({ row, parsed }) =>
+          parsed?.organizationId === organizationId &&
+          (isAdmin || row.referenceId === identity.id)
+      );
     // Agent keys' team installs live on teamMember keyed by the apikey's
     // referenceId (the agent's synthetic user).
     // Lane sessions mint one key per run; all share the dispatching
@@ -404,10 +415,14 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(deleteTokenRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
+    const identity = c.var.workspaceIdentity;
     const db = createD1(c.env.D1);
     const row = await db.select().from(apikey).where(eq(apikey.id, id)).get();
     const parsed = parseApiKeyMetadata(row?.metadata);
-    if (!row || parsed?.organizationId !== organizationId) {
+    const ownsKey =
+      canAccess(identity.permissions, "admin") ||
+      (row !== undefined && row.referenceId === identity.id);
+    if (!row || parsed?.organizationId !== organizationId || !ownsKey) {
       throw new VortexError({
         code: "NOT_FOUND",
         status: 404,
