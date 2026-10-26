@@ -63,11 +63,12 @@ const SETTINGS = [
   },
   { title: "Surfaces", path: "settings/surfaces", icon: Layout },
   { title: "Fields", path: "settings/fields", icon: Layout },
+  // Developer is self-serve — members mint and revoke their own API keys
+  // (the API scopes the token list to the caller); it is not admin-gated.
   {
     title: "Developer",
     path: "settings/developer",
     icon: Key,
-    admin: true,
   },
   {
     title: "Agents",
@@ -76,6 +77,14 @@ const SETTINGS = [
     admin: true,
   },
 ] as const;
+
+/** Settings entries a member may see — admin-flagged items only for
+ * admins; the Settings group itself renders on `settings:view`. */
+export function visibleSettingsPaths(isAdmin: boolean): string[] {
+  return SETTINGS.filter(
+    (item) => !("admin" in item && item.admin) || isAdmin
+  ).map((item) => item.path);
+}
 
 export function AppSidebar({
   workspace,
@@ -206,9 +215,8 @@ export function AppSidebar({
           <Sidebar.Group>
             <Sidebar.GroupLabel>Settings</Sidebar.GroupLabel>
             <Sidebar.Menu>
-              {SETTINGS.filter(
-                (item) =>
-                  !("admin" in item && item.admin) || permissions.isAdmin
+              {SETTINGS.filter((item) =>
+                visibleSettingsPaths(permissions.isAdmin).includes(item.path)
               ).map((item) => (
                 <Sidebar.MenuButton
                   key={item.path}

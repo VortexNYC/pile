@@ -18,6 +18,14 @@ export const Route = createFileRoute(
   component: DeveloperSettings,
 });
 
+/** Members self-serve personal API keys — the token list is scoped to
+ * the caller server-side, so non-admins see and revoke only their own. */
+export function developerDescription(isAdmin: boolean): string {
+  return isAdmin
+    ? "API keys for the CLI, agents, and MCP. Keys are workspace-scoped."
+    : "API keys for your CLI and MCP access — you see and revoke only your own keys.";
+}
+
 function DeveloperSettings() {
   const workspace = useWorkspace();
   const permissions = usePermissions(workspace.id);
@@ -74,21 +82,11 @@ function DeveloperSettings() {
   if (!permissions.isLoaded) {
     return <LoadingState label="Checking access" />;
   }
-  if (!permissions.isAdmin) {
-    return (
-      <Page title="Developer">
-        <EmptyState
-          title="Admins only"
-          description="API keys are restricted to workspace admins."
-        />
-      </Page>
-    );
-  }
 
   return (
     <Page
       title="Developer"
-      description="API keys for the CLI, agents, and MCP. Keys are workspace-scoped."
+      description={developerDescription(permissions.isAdmin)}
     >
       <LayerCard>
         <LayerCard.Primary className="flex flex-col gap-4 p-5">
