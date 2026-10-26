@@ -32062,6 +32062,7 @@ export interface paths {
                         "application/json": {
                             issueIds: string[];
                             documentIds: string[];
+                            memoryIds: string[];
                         };
                     };
                 };

@@ -2154,7 +2154,7 @@ describe("WorkspaceDO", () => {
     );
   });
 
-  it("skips a cold index build for warn dedupe and warms it in the background", async () => {
+  it("answers warn dedupe on a cold DO without ever building the index (PILE-612)", async () => {
     const stub = getStub();
     const title = `Cold index probe ${crypto.randomUUID().slice(0, 8)} deploy receipts`;
     // Seed, then evict — the next RPC lands on a fresh DO with no search
@@ -2164,26 +2164,42 @@ describe("WorkspaceDO", () => {
     );
     await evictDurableObject(stub);
 
-    const cold = await withWorkspace(stub, (instance) =>
-      instance.createIssueWithDuplicates({ title: `${title} v2` }, undefined, {
-        teamIds: [seeded.teamId],
-        block: false,
-      })
-    );
-    // Cold index → warn dedupe skipped, but the create itself succeeds —
-    // the 42s cold build used to sit on this path and 500 the request.
-    expect(cold.issue).not.toBeNull();
-    expect(cold.possibleDuplicates).toEqual([]);
+    const cold = await withWorkspace(stub, async (instance) => {
+      const created = await instance.createIssueWithDuplicates(
+        { title: `${title} v2` },
+        undefined,
+        { teamIds: [seeded.teamId], block: false }
+      );
+      return {
+        created,
+        builtByWrite: Reflect.get(instance, "searchIndex") !== null,
+      };
+    });
+    // Cold DO → warn dedupe falls back to a direct SQLite title scan and
+    // still reports the seeded near-duplicate — without paying the cold
+    // index build that used to sit on this path and 500 the request.
+    expect(cold.created.issue).not.toBeNull();
+    expect(
+      cold.created.possibleDuplicates.map((hit) => hit.issue.id)
+    ).toContain(seeded.id);
+    expect(cold.builtByWrite).toBe(false);
 
-    // The skip kicks an off-path build — once it lands, dedupe works again.
-    await withWorkspace(stub, (instance) => instance.flushSearchIndex());
-    const warm = await withWorkspace(stub, (instance) =>
-      instance.createIssueWithDuplicates({ title: `${title} v3` }, undefined, {
-        teamIds: [seeded.teamId],
-        block: false,
-      })
-    );
-    expect(warm.possibleDuplicates.length).toBeGreaterThan(0);
+    // Block mode uses the same fallback on a cold DO — no index build.
+    await evictDurableObject(stub);
+    const blocked = await withWorkspace(stub, async (instance) => {
+      const created = await instance.createIssueWithDuplicates(
+        { title },
+        undefined,
+        { teamIds: [seeded.teamId], block: true }
+      );
+      return {
+        created,
+        builtByWrite: Reflect.get(instance, "searchIndex") !== null,
+      };
+    });
+    expect(blocked.created.issue).toBeNull();
+    expect(blocked.created.possibleDuplicates.length).toBeGreaterThan(0);
+    expect(blocked.builtByWrite).toBe(false);
   });
 
   it("re-anchors waiting dependents of a dead session onto its retry", async () => {
@@ -3643,6 +3659,109 @@ describe("spend caps + run receipts (PILE-425)", () => {
       })
     );
     expect(recalled.map((m) => m.fact)).toEqual(["current v3"]);
+  });
+
+  it("indexes workspace_memory into unified search and BM25 recall (PILE-618/629)", async () => {
+    const stub = getStub();
+    const marker = crypto.randomUUID().slice(0, 8);
+    const issue = await withWorkspace(stub, (i) =>
+      // Title deliberately shares no tokens with the query — the issue hit
+      // can only arrive through the attached memory's issueId.
+      i.createIssue({ title: "Memory host" })
+    );
+    const memId = await withWorkspace(stub, (i) =>
+      i.memoryRemember({
+        entityType: "issue",
+        entityId: issue.identifier ?? issue.id,
+        kind: "corridor",
+        fact: `zebroid-${marker} corridor sweep returned seventeen active licenses`,
+      })
+    );
+
+    const result = await withWorkspace(stub, async (i) => {
+      // First search warms the index — the memory's issue attachment is
+      // resolved from its ISSUE-KEY entityId during the build.
+      const all = await i.searchAll(`zebroid-${marker}`, [issue.teamId], 10);
+      // LIKE recall can't match "zebroid-<marker> licenses" — it is not a
+      // verbatim substring of the fact — so the BM25 index fills it in.
+      const recalled = await i.memoryRecall({
+        search: `zebroid-${marker} licenses`,
+      });
+      return { all, recalled };
+    });
+    expect(result.all.memoryIds).toContain(memId);
+    // The issue-attached memory contributes its issue to issue search.
+    expect(result.all.issueIds).toContain(issue.id);
+    expect(result.recalled.map((r) => r.id)).toContain(memId);
+  });
+
+  it("exposes storage and search index metrics via getStorageMetrics (PILE-633)", async () => {
+    const id = env.WORKSPACE_DURABLE_OBJECT.idFromName("pile-633-metrics");
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(id);
+    const result = await withWorkspace(stub, async (instance) => {
+      await instance.createIssue({ title: "Metrics probe issue" });
+      const cold = await instance.getStorageMetrics();
+      await instance.searchAll("anything", [], 5);
+      const warm = await instance.getStorageMetrics();
+      return { cold, warm };
+    });
+    expect(result.cold.databaseSizeBytes).toBeGreaterThan(0);
+    expect(result.cold.searchIndexWarm).toBe(false);
+    expect(result.warm.searchIndexWarm).toBe(true);
+    expect(result.warm.activeDocs).toBeGreaterThan(0);
+    expect(result.warm.vocabSize).toBeGreaterThan(0);
+  });
+
+  it("reports and clears a stale in-flight telemetry breadcrumb on init (PILE-633)", async () => {
+    const id = env.WORKSPACE_DURABLE_OBJECT.idFromName("pile-633-reset");
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(id);
+    // Plant the breadcrumb as if the isolate died mid-build, then evict so
+    // the next access re-runs initialize().
+    await runInDurableObject(stub, async (_instance, ctx) => {
+      await ctx.storage.put("__telemetry_inflight_op", {
+        op: "buildSearchIndex",
+        startedAt: 1234567890,
+      });
+    });
+    await evictDurableObject(stub);
+
+    const bodies: Array<Record<string, unknown>> = [];
+    const prevFetch = globalThis.fetch;
+    const prevKey = env.POSTHOG_PROJECT_KEY;
+    env.POSTHOG_PROJECT_KEY = "phc_test_key";
+    globalThis.fetch = (async (
+      input: RequestInfo | URL,
+      init?: RequestInit
+    ): Promise<Response> => {
+      if (String(input).includes("posthog.com")) {
+        bodies.push(
+          JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>
+        );
+        return new Response("ok", { status: 200 });
+      }
+      return prevFetch(input, init);
+    }) as typeof fetch;
+    try {
+      const leftover = await runInDurableObject(stub, async (instance, ctx) => {
+        await instance.setOrganizationId("pile-633-reset");
+        await instance.getStorageMetrics(); // forces `ready` to settle
+        return ctx.storage.get("__telemetry_inflight_op");
+      });
+      expect(leftover).toBeUndefined();
+    } finally {
+      globalThis.fetch = prevFetch;
+      env.POSTHOG_PROJECT_KEY = prevKey;
+    }
+    const exception = bodies.find(
+      (body) =>
+        body.event === "$exception" &&
+        (body.properties as Record<string, unknown>).surface ===
+          "workspace-do.isolate-reset"
+    );
+    expect(exception).toBeDefined();
+    const props = exception?.properties as Record<string, unknown>;
+    expect(props.op).toBe("buildSearchIndex");
+    expect(props.startedAt).toBe(1234567890);
   });
 
   it("carries usage on the result into the finalized receipt", async () => {

@@ -5,6 +5,7 @@ import {
   desc,
   eq,
   exists,
+  gt,
   gte,
   inArray,
   isNotNull,
@@ -93,6 +94,10 @@ import { getWorkspaceById } from "../global/workspaces.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import { createPhaseTimer, logSlowPhases } from "../platform/phase-timer.js";
+import {
+  capturePosthogEvent,
+  reportWorkerException,
+} from "../platform/posthog.js";
 import { notifySlack } from "../slack/bot.js";
 import type { AppEnv } from "../types/env.js";
 import {
@@ -149,6 +154,7 @@ import {
   workspaceReactions,
   workspaceSavedViews,
   workspaceMcpServers,
+  workspaceMemory,
   workspaceUserPreferences,
   workspaceViewFavorites,
   workspaceWebhookSubscriptions,
@@ -164,15 +170,23 @@ import {
   DUPLICATE_MIN_SCORE,
   findDuplicateCandidates,
   findSimilarIssues,
+  getSearchIndexMetrics,
+  indexMemorySearchDocument,
   insertMultiple as insertSearchDocs,
   issueToSearchDocument,
+  memoryToSearchDocument,
   normalizeIssueTitle,
+  remove,
   removeIssueDocuments,
+  removeMemorySearchDocument,
   similarityTerms,
   titleOverlapScore,
   searchDocuments,
   searchIssues,
+  searchMemories,
   type CommentForSearch,
+  type MemoryForSearch,
+  type SearchDocument,
   type WorkspaceSearchIndex,
 } from "./search.js";
 import { computeSmbMatchKey, type MerchantSignal } from "./signals-engine.js";
@@ -419,19 +433,61 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   private async initialize() {
-    const [stored, , backfilled] = await Promise.all([
-      this.ctx.storage.get<string>("organizationId"),
-      this.runMigrations(),
-      this.ctx.storage.get<boolean>("workspaceDataBackfilled"),
-    ]);
-    if (stored && !this.ctx.id.name) {
-      // Name-less DOs (newUniqueId) still need the stored org id; named
-      // ids already have it via ctx.id.name.
-      this.organizationId = stored;
+    try {
+      const [stored, , backfilled, crashedOp] = await Promise.all([
+        this.ctx.storage.get<string>("organizationId"),
+        this.runMigrations(),
+        this.ctx.storage.get<boolean>("workspaceDataBackfilled"),
+        this.ctx.storage.get<{ op: string; startedAt: number }>(
+          "__telemetry_inflight_op"
+        ),
+      ]);
+      if (stored && !this.ctx.id.name) {
+        // Name-less DOs (newUniqueId) still need the stored org id; named
+        // ids already have it via ctx.id.name.
+        this.organizationId = stored;
+      }
+      if (!backfilled) {
+        await this.backfillLegacyData();
+        await this.ctx.storage.put("workspaceDataBackfilled", true);
+      }
+      // PILE-633 — a leftover in-flight breadcrumb means the isolate was
+      // reset mid-operation (OOM kill on a cold index build is the known
+      // offender). Report it once, then clear the key.
+      if (crashedOp) {
+        await this.ctx.storage.delete("__telemetry_inflight_op");
+        reportWorkerException(
+          "workspace-do.isolate-reset",
+          new Error(`Durable Object isolate reset during ${crashedOp.op}`),
+          this.ctx,
+          {
+            organizationId: this.organizationId,
+            op: crashedOp.op,
+            startedAt: crashedOp.startedAt,
+            databaseSizeBytes: this.safeDatabaseSize(),
+          },
+          { env: this.env }
+        );
+      }
+    } catch (err) {
+      reportWorkerException(
+        "workspace-do.init",
+        err,
+        this.ctx,
+        { organizationId: this.organizationId },
+        { env: this.env }
+      );
+      throw err;
     }
-    if (!backfilled) {
-      await this.backfillLegacyData();
-      await this.ctx.storage.put("workspaceDataBackfilled", true);
+  }
+
+  /** DO SQLite footprint in bytes — best-effort, 0 when the storage SQL
+   *  surface is unavailable (e.g. inside transaction-less test doubles). */
+  private safeDatabaseSize(): number {
+    try {
+      return this.ctx.storage.sql.databaseSize;
+    } catch {
+      return 0;
     }
   }
 
@@ -727,72 +783,212 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }
   }
 
+  // PILE-612 — the index build pages every table through SQLite SUBSTR so
+  // multi-hundred-KB bodies are never materialized in the 128 MB isolate.
+  // The in-flight breadcrumb in storage lets a post-reset initialize()
+  // report which op was running when the isolate died (PILE-633).
   private async buildSearchIndex(): Promise<WorkspaceSearchIndex> {
-    const index = await createWorkspaceSearchIndex();
-    const [issues, commentRows, documentRows] = await Promise.all([
-      this.db.select().from(workspaceIssues).all(),
-      this.db
-        .select({
-          id: workspaceComments.id,
-          issueId: workspaceComments.entityId,
-          body: workspaceComments.body,
-          createdAt: workspaceComments.createdAt,
-        })
-        .from(workspaceComments)
-        .all(),
-      this.db
-        .select({
-          id: workspaceDocuments.id,
-          title: workspaceDocuments.title,
-          content: workspaceDocuments.content,
-          createdAt: workspaceDocuments.createdAt,
-        })
-        .from(workspaceDocuments)
-        .where(isNull(workspaceDocuments.trashedAt))
-        .all(),
-    ]);
+    const startedAt = Date.now();
+    await this.ctx.storage.put("__telemetry_inflight_op", {
+      op: "buildSearchIndex",
+      startedAt,
+    });
+    try {
+      const index = createWorkspaceSearchIndex();
+      const PAGE_SIZE = 500;
+      const DOCUMENT_PAGE_SIZE = 200;
+      const MAX_INDEXED_COMMENTS = 2_500;
+      // issue.id and ISSUE-KEY → {id, teamId} so comment/memory rows
+      // resolve their issue without holding full issue rows.
+      const issueMeta = new Map<string, { id: string; teamId: string }>();
+      const resolveIssueMeta = (key: string | null | undefined) =>
+        key === null || key === undefined
+          ? undefined
+          : (issueMeta.get(key) ?? issueMeta.get(key.toUpperCase()));
 
-    const issueById = new Map(issues.map((issue) => [issue.id, issue]));
-    const docs: Array<ReturnType<typeof issueToSearchDocument>> = [];
-    for (const issue of issues) {
-      docs.push(issueToSearchDocument(issue));
-    }
-    for (const comment of commentRows) {
-      if (!comment.issueId) continue;
-      const issue = issueById.get(comment.issueId);
-      docs.push(
-        commentToSearchDocument({
-          id: comment.id,
-          issueId: comment.issueId,
-          teamId: issue?.teamId ?? "",
-          body: comment.body,
-          createdAt: comment.createdAt,
-        })
-      );
-    }
-    for (const doc of documentRows) {
-      docs.push(documentToSearchDocument(doc));
-    }
-    // Index in batches and yield between them — a mature workspace's build
-    // is tens of seconds of tokenization; one synchronous insertMultiple
-    // starves the DO's event loop and every concurrent request hangs past
-    // the request budget (issue-create 500s, ~40s).
-    // insertSearchDocs resolves after yielding the event loop, so the
-    // sequential batches never starve concurrent DO requests.
-    const insertBatch = async (start: number) => {
-      await insertSearchDocs(index, docs.slice(start, start + 250));
-      await Promise.resolve();
-    };
-    await docs
-      .map((_, i) => i)
-      .filter((i) => i % 250 === 0)
-      .reduce(
-        (chain, i) => chain.then(() => insertBatch(i)),
-        Promise.resolve()
-      );
+      // Yield between pages (`await Promise.resolve()`) — a mature
+      // workspace's build is still seconds of tokenization; one synchronous
+      // run would starve concurrent DO requests past the request budget
+      // (issue-create 500s, ~40s). Pages recurse rather than loop-await so
+      // sequential pagination stays lint-clean.
+      const indexIssuePages = async (offset: number): Promise<void> => {
+        const page = await this.db
+          .select({
+            id: workspaceIssues.id,
+            teamId: workspaceIssues.teamId,
+            identifier: workspaceIssues.identifier,
+            title: workspaceIssues.title,
+            description: sql<
+              string | null
+            >`SUBSTR(${workspaceIssues.description}, 1, 8192)`,
+            status: workspaceIssues.status,
+          })
+          .from(workspaceIssues)
+          .orderBy(asc(workspaceIssues.id))
+          .limit(PAGE_SIZE)
+          .offset(offset)
+          .all();
+        for (const issue of page) {
+          const meta = { id: issue.id, teamId: issue.teamId };
+          issueMeta.set(issue.id, meta);
+          if (issue.identifier) {
+            issueMeta.set(issue.identifier.toUpperCase(), meta);
+          }
+        }
+        await insertSearchDocs(index, page.map(issueToSearchDocument));
+        await Promise.resolve();
+        if (page.length < PAGE_SIZE) return;
+        return indexIssuePages(offset + PAGE_SIZE);
+      };
+      await indexIssuePages(0);
 
-    this.searchIndex = index;
-    return index;
+      // Newest comments first, capped — old comment tails add vocabulary
+      // and build time long after they stop helping recall.
+      const indexCommentPages = async (
+        offset: number,
+        indexed: number
+      ): Promise<void> => {
+        if (indexed >= MAX_INDEXED_COMMENTS) return;
+        const pageSize = Math.min(PAGE_SIZE, MAX_INDEXED_COMMENTS - indexed);
+        const page = await this.db
+          .select({
+            id: workspaceComments.id,
+            issueId: workspaceComments.entityId,
+            body: sql<string>`SUBSTR(${workspaceComments.body}, 1, 4096)`,
+            createdAt: workspaceComments.createdAt,
+          })
+          .from(workspaceComments)
+          .where(eq(workspaceComments.entityType, "issue"))
+          .orderBy(desc(workspaceComments.createdAt))
+          .limit(pageSize)
+          .offset(offset)
+          .all();
+        const docs: SearchDocument[] = [];
+        for (const comment of page) {
+          if (!comment.issueId) continue;
+          const meta = resolveIssueMeta(comment.issueId);
+          if (!meta) continue;
+          docs.push(
+            commentToSearchDocument({
+              id: comment.id,
+              issueId: meta.id,
+              teamId: meta.teamId,
+              body: comment.body,
+              createdAt: comment.createdAt,
+            })
+          );
+        }
+        await insertSearchDocs(index, docs);
+        await Promise.resolve();
+        if (page.length < pageSize) return;
+        return indexCommentPages(offset + page.length, indexed + page.length);
+      };
+      await indexCommentPages(0, 0);
+
+      const indexDocumentPages = async (offset: number): Promise<void> => {
+        const page = await this.db
+          .select({
+            id: workspaceDocuments.id,
+            title: workspaceDocuments.title,
+            content: sql<string>`SUBSTR(${workspaceDocuments.content}, 1, 16384)`,
+            createdAt: workspaceDocuments.createdAt,
+          })
+          .from(workspaceDocuments)
+          .where(isNull(workspaceDocuments.trashedAt))
+          .orderBy(asc(workspaceDocuments.id))
+          .limit(DOCUMENT_PAGE_SIZE)
+          .offset(offset)
+          .all();
+        await insertSearchDocs(index, page.map(documentToSearchDocument));
+        await Promise.resolve();
+        if (page.length < DOCUMENT_PAGE_SIZE) return;
+        return indexDocumentPages(offset + DOCUMENT_PAGE_SIZE);
+      };
+      await indexDocumentPages(0);
+
+      // PILE-618/629 — workspace_memory facts ride the same index so
+      // unified search and BM25 recall can find them. Only active heads.
+      const now = new Date().toISOString();
+      const indexMemoryPages = async (offset: number): Promise<void> => {
+        const page = await this.db
+          .select({
+            id: workspaceMemory.id,
+            entityType: workspaceMemory.entityType,
+            entityId: workspaceMemory.entityId,
+            kind: workspaceMemory.kind,
+            fact: sql<string>`SUBSTR(${workspaceMemory.fact}, 1, 4096)`,
+            createdAt: workspaceMemory.createdAt,
+          })
+          .from(workspaceMemory)
+          .where(
+            and(
+              eq(workspaceMemory.organizationId, this.organizationId),
+              sql`${workspaceMemory.id} NOT IN (SELECT ${workspaceMemory.supersedes} FROM ${workspaceMemory} WHERE ${workspaceMemory.organizationId} = ${this.organizationId} AND ${workspaceMemory.supersedes} IS NOT NULL)`,
+              or(
+                isNull(workspaceMemory.validUntil),
+                gt(workspaceMemory.validUntil, now)
+              )!
+            )
+          )
+          .orderBy(asc(workspaceMemory.id))
+          .limit(PAGE_SIZE)
+          .offset(offset)
+          .all();
+        const docs: SearchDocument[] = [];
+        for (const row of page) {
+          const meta =
+            row.entityType === "issue"
+              ? resolveIssueMeta(row.entityId)
+              : undefined;
+          docs.push(
+            memoryToSearchDocument({
+              id: row.id,
+              entityType: row.entityType,
+              entityId: row.entityId,
+              kind: row.kind,
+              fact: row.fact,
+              createdAt: row.createdAt,
+              issueId: meta?.id,
+              teamId: meta?.teamId,
+            })
+          );
+        }
+        await insertSearchDocs(index, docs);
+        await Promise.resolve();
+        if (page.length < PAGE_SIZE) return;
+        return indexMemoryPages(offset + PAGE_SIZE);
+      };
+      await indexMemoryPages(0);
+
+      this.searchIndex = index;
+      capturePosthogEvent(
+        "workspace_do.search_index_built",
+        {
+          distinct_id: `workspace:${this.organizationId}`,
+          organizationId: this.organizationId,
+          durationMs: Date.now() - startedAt,
+          ...getSearchIndexMetrics(index),
+          databaseSizeBytes: this.safeDatabaseSize(),
+        },
+        this.ctx,
+        { env: this.env }
+      );
+      return index;
+    } catch (err) {
+      reportWorkerException(
+        "workspace-do.search-index",
+        err,
+        this.ctx,
+        {
+          organizationId: this.organizationId,
+          databaseSizeBytes: this.safeDatabaseSize(),
+        },
+        { env: this.env }
+      );
+      throw err;
+    } finally {
+      await this.ctx.storage.delete("__telemetry_inflight_op");
+    }
   }
 
   private emitWebSockets(event: RealtimeEvent): void {
@@ -855,14 +1051,63 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   async alarm() {
-    const result = await retryWebhookDeliveries(
-      this.db,
-      this.env,
-      this.organizationId
-    );
-    if (result.hasMore && result.retryAt) {
-      await this.ctx.storage.setAlarm(result.retryAt);
+    try {
+      // PILE-633 — per-alarm storage/index gauge so DO memory pressure is
+      // visible fleet-wide, not just on isolate resets.
+      capturePosthogEvent(
+        "workspace_do.storage_metrics",
+        {
+          distinct_id: `workspace:${this.organizationId}`,
+          organizationId: this.organizationId,
+          databaseSizeBytes: this.safeDatabaseSize(),
+          searchIndexWarm: this.searchIndex !== null,
+          ...(this.searchIndex
+            ? getSearchIndexMetrics(this.searchIndex)
+            : { activeDocs: 0, totalSlots: 0, vocabSize: 0 }),
+        },
+        this.ctx,
+        { env: this.env }
+      );
+      const result = await retryWebhookDeliveries(
+        this.db,
+        this.env,
+        this.organizationId
+      );
+      if (result.hasMore && result.retryAt) {
+        await this.ctx.storage.setAlarm(result.retryAt);
+      }
+    } catch (err) {
+      reportWorkerException(
+        "workspace-do.alarm",
+        err,
+        this.ctx,
+        {
+          organizationId: this.organizationId,
+          databaseSizeBytes: this.safeDatabaseSize(),
+        },
+        { env: this.env }
+      );
+      throw err;
     }
+  }
+
+  /** PILE-633 — DO storage + search-index metrics for diagnostics and
+   *  tests (mirrors the `workspace_do.storage_metrics` gauge payload). */
+  async getStorageMetrics(): Promise<{
+    databaseSizeBytes: number;
+    searchIndexWarm: boolean;
+    activeDocs: number;
+    totalSlots: number;
+    vocabSize: number;
+  }> {
+    await this.ready;
+    return {
+      databaseSizeBytes: this.safeDatabaseSize(),
+      searchIndexWarm: this.searchIndex !== null,
+      ...(this.searchIndex
+        ? getSearchIndexMetrics(this.searchIndex)
+        : { activeDocs: 0, totalSlots: 0, vocabSize: 0 }),
+    };
   }
 
   async listComments(issueId: string) {
@@ -2351,12 +2596,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (deleted) {
       this.audit("document.deleted", "document", id, actorId);
       if (this.searchIndex) {
-        const { remove } = await import("@orama/orama");
-        try {
-          await remove(this.searchIndex, id);
-        } catch {
-          // Not indexed; ignore.
-        }
+        await remove(this.searchIndex, id);
       }
       await this.emit({
         type: "document.deleted",
@@ -2822,7 +3062,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }>;
   }) {
     if (input.cursorKind && typeof input.nextOffset === "number") {
-      data.memoryRemember(this.db, this.organizationId, {
+      await this.memoryRemember({
         entityType: "workspace",
         entityId: this.organizationId,
         kind: input.cursorKind,
@@ -2872,6 +3112,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       domain: string | null;
     }> = [];
 
+    const pendingMemoryWrites: Array<Promise<string>> = [];
     for (const cand of input.candidates) {
       const mk = computeSmbMatchKey({
         name: cand.name,
@@ -2984,12 +3225,14 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         summary: `Active NYC ${cand.vertical ?? "SMB"} license${cand.ownerName ? ` (Principal: ${cand.ownerName})` : ""}${cand.dosId ? ` [NY DOS #${cand.dosId}]` : ""} (${cand.externalId})`,
       };
       signals.push(signalObj);
-      data.memoryRemember(this.db, this.organizationId, {
-        entityType: "customer",
-        entityId: customer.id,
-        kind: `signal:${signalObj.type}:${signalObj.id}`,
-        fact: JSON.stringify(signalObj),
-      });
+      pendingMemoryWrites.push(
+        data.memoryRemember(this.db, this.organizationId, {
+          entityType: "customer",
+          entityId: customer.id,
+          kind: `signal:${signalObj.type}:${signalObj.id}`,
+          fact: JSON.stringify(signalObj),
+        })
+      );
 
       if (cand.posGuess) {
         const posSig: MerchantSignal = {
@@ -3004,12 +3247,14 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           summary: `Detected ${cand.posGuess.toUpperCase()} payment/billing stack on website`,
         };
         signals.push(posSig);
-        data.memoryRemember(this.db, this.organizationId, {
-          entityType: "customer",
-          entityId: customer.id,
-          kind: `signal:${posSig.type}:${posSig.id}`,
-          fact: JSON.stringify(posSig),
-        });
+        pendingMemoryWrites.push(
+          data.memoryRemember(this.db, this.organizationId, {
+            entityType: "customer",
+            entityId: customer.id,
+            kind: `signal:${posSig.type}:${posSig.id}`,
+            fact: JSON.stringify(posSig),
+          })
+        );
       }
 
       const receipt = runMerchantLeadPlay({
@@ -3064,6 +3309,37 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         fitScore: receipt.breakdown.fitScore,
         whyNow: receipt.breakdown.whyNow,
         playStatus: receipt.status,
+      });
+    }
+
+    // Keep a warm search index current for the signal facts written above
+    // — one post-loop sync instead of an await per candidate.
+    if (pendingMemoryWrites.length > 0) {
+      const memoryIds = await Promise.all(pendingMemoryWrites);
+      const memoryRows = await this.db
+        .select()
+        .from(workspaceMemory)
+        .where(inArrayJson(workspaceMemory.id, memoryIds))
+        .all();
+      await this.syncSearchIndex(async (index) => {
+        await Promise.all(
+          memoryRows.flatMap((row) => {
+            const writes = row.supersedes
+              ? [removeMemorySearchDocument(index, row.supersedes)]
+              : [];
+            writes.push(
+              indexMemorySearchDocument(index, {
+                id: row.id,
+                entityType: row.entityType,
+                entityId: row.entityId,
+                kind: row.kind,
+                fact: row.fact,
+                createdAt: row.createdAt,
+              })
+            );
+            return writes;
+          })
+        );
       });
     }
 
@@ -3672,13 +3948,18 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     limit = 50,
     viewer?: IssueViewer,
     docViewer?: { actorId: string; admin: boolean }
-  ): Promise<{ issueIds: string[]; documentIds: string[] }> {
+  ): Promise<{
+    issueIds: string[];
+    documentIds: string[];
+    memoryIds: string[];
+  }> {
     const index = await this.ensureSearchIndex();
-    const [issueIds, documentIds] = await Promise.all([
+    const [issueIds, documentIds, memoryIds] = await Promise.all([
       teamIds.length > 0
         ? searchIssues(index, query, teamIds, limit)
         : Promise.resolve([]),
       searchDocuments(index, query, limit),
+      searchMemories(index, query, limit),
     ]);
     const hidden = new Set(this.hiddenIssueIdsFor(viewer));
     let visibleDocs = documentIds;
@@ -3721,6 +4002,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return {
       issueIds: issueIds.filter((id) => !hidden.has(id)),
       documentIds: visibleDocs,
+      memoryIds,
     };
   }
 
@@ -3759,52 +4041,89 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     await this.ready;
     if (teamIds.length === 0) return [];
     const hidden = new Set(this.hiddenIssueIdsFor(viewer));
-    if (similarityTerms(title).length === 0) {
-      // No indexable terms — the index can't help, and generic titles like
-      // "Fix it" are the likeliest collisions. Match them verbatim instead.
-      const wanted = title.toLowerCase();
-      const normalized = normalizeIssueTitle(title);
-      const rows = await this.db
-        .select()
-        .from(workspaceIssues)
-        .where(inArrayJson(workspaceIssues.teamId, teamIds))
-        .all();
-      return rows
+    const terms = similarityTerms(title);
+    // PILE-612 — never pay the cold-index build on this path: a cold DO
+    // (post-deploy eviction) building the search index inline used to hang
+    // issue creation past the request budget. When the index isn't already
+    // warm (or the title has no indexable terms), the same ranking runs
+    // directly against SQLite — warn-mode dedupe then works even on the
+    // very first create after an eviction.
+    if (this.searchIndex !== null && terms.length > 0) {
+      const hits = await findDuplicateCandidates(
+        this.searchIndex,
+        title,
+        teamIds
+      );
+      const matches = await Promise.all(
+        hits.map((hit) => this.getIssue(hit.issueId))
+      );
+      return matches
         .flatMap((issue) => {
           if (
+            !issue ||
             hidden.has(issue.id) ||
+            !teamIds.includes(issue.teamId) ||
             issue.status === "done" ||
             issue.status === "canceled"
           )
             return [];
-          const sameTitle =
-            issue.title.toLowerCase() === wanted ||
-            (normalized !== "" &&
-              normalizeIssueTitle(issue.title) === normalized);
-          return sameTitle ? [{ issue, score: 1 }] : [];
+          const score = titleOverlapScore(title, issue.title);
+          return score >= DUPLICATE_MIN_SCORE ? [{ issue, score }] : [];
         })
+        .toSorted((a, b) => b.score - a.score)
         .slice(0, limit);
     }
-    const index = await this.ensureSearchIndex();
-    const hits = await findDuplicateCandidates(index, title, teamIds);
-    const matches = await Promise.all(
-      hits.map((hit) => this.getIssue(hit.issueId))
-    );
-    return matches
-      .flatMap((issue) => {
+    const rows = await this.db
+      .select({
+        id: workspaceIssues.id,
+        title: workspaceIssues.title,
+        status: workspaceIssues.status,
+      })
+      .from(workspaceIssues)
+      .where(inArrayJson(workspaceIssues.teamId, teamIds))
+      .all();
+    if (terms.length === 0) {
+      // No indexable terms — the index can't help, and generic titles like
+      // "Fix it" are the likeliest collisions. Match them verbatim instead.
+      const wanted = title.toLowerCase();
+      const normalized = normalizeIssueTitle(title);
+      const matched = rows
+        .flatMap((row) => {
+          if (
+            hidden.has(row.id) ||
+            row.status === "done" ||
+            row.status === "canceled"
+          )
+            return [];
+          const sameTitle =
+            row.title.toLowerCase() === wanted ||
+            (normalized !== "" &&
+              normalizeIssueTitle(row.title) === normalized);
+          return sameTitle ? [{ id: row.id }] : [];
+        })
+        .slice(0, limit);
+      const issues = await Promise.all(
+        matched.map((row) => this.getIssue(row.id))
+      );
+      return issues.flatMap((issue) => (issue ? [{ issue, score: 1 }] : []));
+    }
+    const top = rows
+      .flatMap((row) => {
         if (
-          !issue ||
-          hidden.has(issue.id) ||
-          !teamIds.includes(issue.teamId) ||
-          issue.status === "done" ||
-          issue.status === "canceled"
+          hidden.has(row.id) ||
+          row.status === "done" ||
+          row.status === "canceled"
         )
           return [];
-        const score = titleOverlapScore(title, issue.title);
-        return score >= DUPLICATE_MIN_SCORE ? [{ issue, score }] : [];
+        const score = titleOverlapScore(title, row.title);
+        return score >= DUPLICATE_MIN_SCORE ? [{ id: row.id, score }] : [];
       })
       .toSorted((a, b) => b.score - a.score)
       .slice(0, limit);
+    const issues = await Promise.all(top.map((r) => this.getIssue(r.id)));
+    return issues.flatMap((issue, i) =>
+      issue ? [{ issue, score: top[i].score }] : []
+    );
   }
 
   // Extract [[doc slug/id]] and ISSUE-KEY references from content.
@@ -6019,18 +6338,135 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.listLaneCosts(this.db, this.organizationId, args);
   }
 
-  memoryRemember(input: data.MemoryInput) {
-    return data.memoryRemember(this.db, this.organizationId, input);
+  async memoryRemember(input: data.MemoryInput) {
+    await this.ready;
+    const id = await data.memoryRemember(this.db, this.organizationId, input);
+    // PILE-618/629 — a warm search index tracks memory writes: index the
+    // new head fact and drop the head it superseded. On a cold index this
+    // is a no-op; the next build picks the row up from storage.
+    const row = await this.db
+      .select()
+      .from(workspaceMemory)
+      .where(eq(workspaceMemory.id, id))
+      .get();
+    if (row) {
+      const issueMeta =
+        row.entityType === "issue"
+          ? await this.db
+              .select({
+                id: workspaceIssues.id,
+                teamId: workspaceIssues.teamId,
+              })
+              .from(workspaceIssues)
+              .where(
+                or(
+                  eq(workspaceIssues.id, row.entityId),
+                  eq(workspaceIssues.identifier, row.entityId.toUpperCase())
+                )
+              )
+              .get()
+          : undefined;
+      const supersedes = row.supersedes;
+      const memory: MemoryForSearch = {
+        id: row.id,
+        entityType: row.entityType,
+        entityId: row.entityId,
+        kind: row.kind,
+        fact: row.fact,
+        createdAt: row.createdAt,
+        issueId: issueMeta?.id,
+        teamId: issueMeta?.teamId,
+      };
+      await this.syncSearchIndex(async (index) => {
+        if (supersedes) {
+          await removeMemorySearchDocument(index, supersedes);
+        }
+        await indexMemorySearchDocument(index, memory);
+      });
+    }
+    return id;
   }
 
-  memoryRecall(query: {
+  async memoryRecall(query: {
     entityType?: string;
     entityId?: string;
     kind?: string;
     search?: string;
     limit?: number;
   }) {
-    return data.memoryRecall(this.db, this.organizationId, query);
+    await this.ready;
+    const rows = await data.memoryRecall(this.db, this.organizationId, query);
+    const limit = query.limit ?? 25;
+    const search = query.search?.trim();
+    if (!search || rows.length >= limit) return rows;
+    // PILE-618/629 — LIKE recall only matches the verbatim substring; fill
+    // the remainder from the BM25 index so multi-term and fuzzy queries
+    // still land ("did we sweep smith?" vs "corridor:smith-st sweep").
+    const index = await this.ensureSearchIndex();
+    const matchedIds = await searchMemories(index, search, limit * 2);
+    const have = new Set(rows.map((r) => r.id));
+    const missing = matchedIds.filter((id) => !have.has(id));
+    if (missing.length === 0) return rows;
+    const now = new Date().toISOString();
+    const extraRows = await this.db
+      .select()
+      .from(workspaceMemory)
+      .where(
+        and(
+          eq(workspaceMemory.organizationId, this.organizationId),
+          inArrayJson(workspaceMemory.id, missing),
+          sql`${workspaceMemory.id} NOT IN (SELECT ${workspaceMemory.supersedes} FROM ${workspaceMemory} WHERE ${workspaceMemory.organizationId} = ${this.organizationId} AND ${workspaceMemory.supersedes} IS NOT NULL)`,
+          or(
+            isNull(workspaceMemory.validUntil),
+            gt(workspaceMemory.validUntil, now)
+          )!,
+          query.entityType
+            ? eq(workspaceMemory.entityType, query.entityType)
+            : undefined,
+          query.kind ? eq(workspaceMemory.kind, query.kind) : undefined
+        )
+      )
+      .all();
+    const byId = new Map(extraRows.map((r) => [r.id, r]));
+    const ISSUE_IDENTIFIER_RE = /^[a-z]+-\d+$/i;
+    const normalizeEntityId = (entityType: string, entityId: string) =>
+      entityType === "issue" && ISSUE_IDENTIFIER_RE.test(entityId)
+        ? entityId.toUpperCase()
+        : entityId;
+    const entityIdMatches = (entityId: string) => {
+      if (!query.entityId) return true;
+      if (
+        query.entityType === "issue" &&
+        ISSUE_IDENTIFIER_RE.test(query.entityId)
+      ) {
+        return (
+          entityId === query.entityId ||
+          entityId === query.entityId.toUpperCase() ||
+          entityId === query.entityId.toLowerCase()
+        );
+      }
+      return entityId === query.entityId;
+    };
+    // Same (entityType, normalizedEntityId, kind) head dedupe as
+    // data.memoryRecall — BM25 extras join behind the LIKE rows in rank
+    // order.
+    const seen = new Set(
+      rows.map(
+        (r) =>
+          `${r.entityType}\0${normalizeEntityId(r.entityType, r.entityId)}\0${r.kind}`
+      )
+    );
+    const out = [...rows];
+    for (const id of matchedIds) {
+      const row = byId.get(id);
+      if (!row || !entityIdMatches(row.entityId)) continue;
+      const key = `${row.entityType}\0${normalizeEntityId(row.entityType, row.entityId)}\0${row.kind}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(row);
+      if (out.length >= limit) break;
+    }
+    return out;
   }
 
   upsertAgentProviderConfig(input: data.AgentProviderConfigInput) {
@@ -7200,30 +7636,19 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       }
     }
 
-    // Warn-mode dedupe is best-effort — on a cold DO (post-deploy
-    // eviction) building the search index reads every issue/comment/doc
-    // in the workspace (~tens of seconds on mature orgs), which used to
-    // hang issue creation past the request budget. Use only an index that
-    // is already built — even an in-flight build can exceed the request
-    // budget, so never await it here. The skip warms the index off the
-    // request path; dedupe=block keeps its guarantee by paying the build.
-    const dedupeIndex = dedupe ? this.searchIndex : null;
-    if (dedupe && !dedupeIndex) {
-      if (dedupe.block) {
-        await this.ensureSearchIndex();
-      } else {
-        this.ctx.waitUntil(this.ensureSearchIndex().catch(() => undefined));
-      }
-    }
-    const possibleDuplicates =
-      dedupe && (dedupe.block || dedupeIndex)
-        ? await this.findPossibleDuplicates(
-            input.title,
-            dedupe.teamIds,
-            5,
-            dedupe.viewer
-          )
-        : [];
+    // PILE-612 — dedupe never builds the search index: a cold DO building
+    // it inline used to hang issue creation past the request budget
+    // (~tens of seconds on mature orgs). findPossibleDuplicates falls back
+    // to a direct SQLite title scan when no warm index exists, so warn and
+    // block modes both work on a cold DO.
+    const possibleDuplicates = dedupe
+      ? await this.findPossibleDuplicates(
+          input.title,
+          dedupe.teamIds,
+          5,
+          dedupe.viewer
+        )
+      : [];
     if (dedupe?.block && possibleDuplicates.length > 0) {
       return { issue: null, possibleDuplicates };
     }

@@ -68618,11 +68618,18 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "memoryIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
                     "issueIds",
-                    "documentIds"
+                    "documentIds",
+                    "memoryIds"
                   ]
                 }
               }

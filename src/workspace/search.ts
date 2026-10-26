@@ -1,15 +1,14 @@
-import {
-  create,
-  insert,
-  insertMultiple,
-  remove,
-  search,
-  type Orama,
-  type TypedDocument,
-} from "@orama/orama";
-
 import type { Issue } from "../types/workspace.js";
 
+// PILE-612 — compact in-DO BM25 index. `@orama/orama` built a per-character
+// Radix tree plus per-token object maps and retained full description/body
+// copies, which consumed ~172 MB retained / ~790 MB peak on mature
+// workspaces and reset the 128 MB Durable Object isolate. This index keeps
+// postings packed into 30-bit V8 SMIs (single-doc tokens stored as a bare
+// `number`, no array allocation), stores no body/description text, and
+// tombstones deletes so removals are O(1).
+
+/** Kept exported for compatibility — describes the logical document shape. */
 export const searchSchema = {
   id: "string",
   kind: "enum",
@@ -21,30 +20,407 @@ export const searchSchema = {
   body: "string",
   status: "enum",
   documentId: "enum",
+  memoryId: "enum",
 } as const;
 
-export type WorkspaceSearchIndex = Orama<typeof searchSchema>;
-export type SearchDocument = TypedDocument<WorkspaceSearchIndex>;
-
-export function createWorkspaceSearchIndex(): WorkspaceSearchIndex {
-  return create({ schema: searchSchema, sort: { enabled: false } });
+export interface SearchDocument {
+  id: string;
+  kind: string;
+  issueId: string;
+  teamId: string;
+  identifier: string;
+  title: string;
+  description: string;
+  body: string;
+  status: string;
+  documentId: string;
+  memoryId?: string;
 }
 
-const MAX_SEARCH_TEXT_CHARS = 32_768;
+const MAX_SEARCH_TEXT_CHARS = 8_192;
 const MAX_SEARCH_TOKEN_CHARS = 256;
+const MAX_STORED_TITLE_CHARS = 512;
+const MAX_UNIQUE_TOKENS_PER_DOC = 192;
+const MAX_QUERY_TERMS = 32;
 
-/** Bound text length and single-token length before handing to Orama:
- *  Orama's replaceDiacritics calls `String.fromCharCode(...charCodes)` per
- *  token, which throws `RangeError: Maximum call stack size exceeded` in V8
- *  when a single contiguous token exceeds ~65k characters (VTX-649). */
+const TOKEN_RE = /[a-z0-9]{2,64}/g;
+
+const BM25_K1 = 1.2;
+const BM25_B = 0.75;
+
+/** Per-entry metadata. Deliberately excludes `description`/`body` text —
+ *  those are tokenized on insert and immediately garbage-collected, which
+ *  is what keeps the index inside the DO isolate's 128 MB ceiling. */
+interface IndexedEntry {
+  id: string;
+  kind: string;
+  issueId: string;
+  teamId: string;
+  identifierLower: string;
+  /** Sanitized title capped at 512 chars — needed verbatim by
+   *  `titleOverlapScore` when re-ranking duplicate candidates. */
+  title: string;
+  status: string;
+  documentId: string;
+  memoryId: string;
+  titleLen: number;
+  descLen: number;
+  bodyLen: number;
+  deleted: boolean;
+}
+
+export interface WorkspaceSearchIndex {
+  /** Slot-addressed entries; slots are never reused (deletes tombstone). */
+  entries: IndexedEntry[];
+  idToSlot: Map<string, number>;
+  /** issueId → every indexed entry attached to it (issue, comments,
+   *  issue-scoped memories) for O(1) removeIssueDocuments. */
+  issueToSlots: Map<string, Set<number>>;
+  /** token → packed posting(s). Each posting packs
+   *  (slot << 10) | (bodyTf << 6) | (descTf << 3) | titleTf into a 30-bit
+   *  SMI; a token seen in exactly one doc stores the bare `number`. */
+  postings: Map<string, number | number[]>;
+  activeCount: number;
+  totalTitleLen: number;
+  totalDescLen: number;
+  totalBodyLen: number;
+}
+
+export function createWorkspaceSearchIndex(): WorkspaceSearchIndex {
+  return {
+    entries: [],
+    idToSlot: new Map(),
+    issueToSlots: new Map(),
+    postings: new Map(),
+    activeCount: 0,
+    totalTitleLen: 0,
+    totalDescLen: 0,
+    totalBodyLen: 0,
+  };
+}
+
+export interface SearchIndexMetrics {
+  activeDocs: number;
+  totalSlots: number;
+  vocabSize: number;
+}
+
+export function getSearchIndexMetrics(
+  index: WorkspaceSearchIndex
+): SearchIndexMetrics {
+  return {
+    activeDocs: index.activeCount,
+    totalSlots: index.entries.length,
+    vocabSize: index.postings.size,
+  };
+}
+
+/** Bound text length and single-token length before tokenization: a
+ *  multi-hundred-KB log dump or a single contiguous 200 KB token (VTX-649)
+ *  must not dominate the index build. */
 export function sanitizeSearchText(text: string | null | undefined): string {
   if (!text) return "";
   return text
-    .slice(0, MAX_SEARCH_TEXT_CHARS)
-    .replace(/\S{256,}/g, (token) => token.slice(0, MAX_SEARCH_TOKEN_CHARS));
+    .replace(/\S{256,}/g, (token) => token.slice(0, MAX_SEARCH_TOKEN_CHARS))
+    .slice(0, MAX_SEARCH_TEXT_CHARS);
 }
 
-export function issueToSearchDocument(issue: Issue): SearchDocument {
+/** Lowercase alphanumeric tokens (2–64 chars) → term frequencies. Unique
+ *  tokens are capped so a noisy document cannot explode vocabulary size. */
+function tokenizeField(text: string): Map<string, number> {
+  const counts = new Map<string, number>();
+  if (!text) return counts;
+  for (const match of text.toLowerCase().matchAll(TOKEN_RE)) {
+    const token = match[0];
+    const prev = counts.get(token);
+    if (prev === undefined) {
+      if (counts.size >= MAX_UNIQUE_TOKENS_PER_DOC) continue;
+      counts.set(token, 1);
+    } else {
+      counts.set(token, prev + 1);
+    }
+  }
+  return counts;
+}
+
+function tokenCount(counts: Map<string, number>): number {
+  let total = 0;
+  for (const count of counts.values()) total += count;
+  return total;
+}
+
+function addPosting(
+  index: WorkspaceSearchIndex,
+  token: string,
+  packed: number
+): void {
+  const existing = index.postings.get(token);
+  if (existing === undefined) {
+    index.postings.set(token, packed);
+  } else if (typeof existing === "number") {
+    index.postings.set(token, [existing, packed]);
+  } else {
+    existing.push(packed);
+  }
+}
+
+function markDeleted(index: WorkspaceSearchIndex, slot: number): void {
+  const entry = index.entries[slot];
+  if (entry.deleted) return;
+  entry.deleted = true;
+  index.activeCount -= 1;
+  index.totalTitleLen -= entry.titleLen;
+  index.totalDescLen -= entry.descLen;
+  index.totalBodyLen -= entry.bodyLen;
+  index.idToSlot.delete(entry.id);
+  if (entry.issueId) index.issueToSlots.get(entry.issueId)?.delete(slot);
+}
+
+function removeSync(index: WorkspaceSearchIndex, id: string): void {
+  const slot = index.idToSlot.get(id);
+  if (slot === undefined) return;
+  markDeleted(index, slot);
+}
+
+function insertSync(index: WorkspaceSearchIndex, doc: SearchDocument): void {
+  if (index.idToSlot.has(doc.id)) {
+    removeSync(index, doc.id);
+  }
+  const titleText = sanitizeSearchText(doc.title);
+  const descText = sanitizeSearchText(doc.description);
+  const bodyText = sanitizeSearchText(doc.body);
+  const titleCounts = tokenizeField(titleText);
+  const descCounts = tokenizeField(descText);
+  const bodyCounts = tokenizeField(bodyText);
+
+  const slot = index.entries.length;
+  const entry: IndexedEntry = {
+    id: doc.id,
+    kind: doc.kind ?? "",
+    issueId: doc.issueId ?? "",
+    teamId: doc.teamId ?? "",
+    identifierLower: (doc.identifier ?? "").toLowerCase(),
+    title: titleText.slice(0, MAX_STORED_TITLE_CHARS),
+    status: doc.status ?? "",
+    documentId: doc.documentId ?? "",
+    memoryId: doc.memoryId ?? "",
+    titleLen: tokenCount(titleCounts),
+    descLen: tokenCount(descCounts),
+    bodyLen: tokenCount(bodyCounts),
+    deleted: false,
+  };
+  index.entries.push(entry);
+  index.idToSlot.set(doc.id, slot);
+  if (entry.issueId) {
+    let slots = index.issueToSlots.get(entry.issueId);
+    if (!slots) {
+      slots = new Set();
+      index.issueToSlots.set(entry.issueId, slots);
+    }
+    slots.add(slot);
+  }
+  index.activeCount += 1;
+  index.totalTitleLen += entry.titleLen;
+  index.totalDescLen += entry.descLen;
+  index.totalBodyLen += entry.bodyLen;
+
+  // Merge per-field term frequencies into a single packed posting per
+  // token: title tf in bits 0-2, description in 3-5, body in 6-9.
+  const tfs = new Map<string, number>();
+  for (const [token, tf] of bodyCounts) {
+    tfs.set(token, Math.min(tf, 15) << 6);
+  }
+  for (const [token, tf] of descCounts) {
+    tfs.set(token, (tfs.get(token) ?? 0) | (Math.min(tf, 7) << 3));
+  }
+  for (const [token, tf] of titleCounts) {
+    tfs.set(token, (tfs.get(token) ?? 0) | Math.min(tf, 7));
+  }
+  for (const [token, tfsPacked] of tfs) {
+    addPosting(index, token, (slot << 10) | tfsPacked);
+  }
+}
+
+export function insert(
+  index: WorkspaceSearchIndex,
+  doc: SearchDocument
+): Promise<void> {
+  insertSync(index, doc);
+  return Promise.resolve();
+}
+
+export function insertMultiple(
+  index: WorkspaceSearchIndex,
+  docs: SearchDocument[]
+): Promise<void> {
+  for (const doc of docs) {
+    insertSync(index, doc);
+  }
+  return Promise.resolve();
+}
+
+export function remove(index: WorkspaceSearchIndex, id: string): Promise<void> {
+  removeSync(index, id);
+  return Promise.resolve();
+}
+
+export async function removeIssueDocuments(
+  index: WorkspaceSearchIndex,
+  issueId: string
+): Promise<void> {
+  const slots = index.issueToSlots.get(issueId);
+  if (!slots) return;
+  for (const slot of slots) {
+    markDeleted(index, slot);
+  }
+  index.issueToSlots.delete(issueId);
+}
+
+// ---- query side ----
+
+function queryTerms(query: string): string[] {
+  const terms: string[] = [];
+  const seen = new Set<string>();
+  for (const match of query.toLowerCase().matchAll(TOKEN_RE)) {
+    if (seen.has(match[0])) continue;
+    seen.add(match[0]);
+    terms.push(match[0]);
+    if (terms.length >= MAX_QUERY_TERMS) break;
+  }
+  return terms;
+}
+
+/** Levenshtein distance ≤ 1, computed without a full DP table. */
+function withinEditDistanceOne(a: string, b: string): boolean {
+  const la = a.length;
+  const lb = b.length;
+  if (Math.abs(la - lb) > 1) return false;
+  if (la === lb) {
+    let diff = 0;
+    for (let i = 0; i < la; i++) {
+      if (a[i] !== b[i] && ++diff > 1) return false;
+    }
+    return diff <= 1;
+  }
+  const [short, long] = la < lb ? [a, b] : [b, a];
+  let i = 0;
+  let j = 0;
+  let skipped = false;
+  while (i < short.length && j < long.length) {
+    if (short[i] === long[j]) {
+      i++;
+      j++;
+      continue;
+    }
+    if (skipped) return false;
+    skipped = true;
+    j++;
+  }
+  return true;
+}
+
+/** Vocabulary terms matching `term` — exact, plus edit-distance-1
+ *  expansions when tolerance allows (only applied to terms ≥ 4 chars;
+ *  shorter terms fuzz-match noise). */
+function expandTerm(
+  index: WorkspaceSearchIndex,
+  term: string,
+  tolerance: number
+): string[] {
+  const expanded: string[] = [];
+  if (index.postings.has(term)) expanded.push(term);
+  if (tolerance > 0 && term.length >= 4) {
+    for (const token of index.postings.keys()) {
+      if (token !== term && withinEditDistanceOne(term, token)) {
+        expanded.push(token);
+      }
+    }
+  }
+  return expanded;
+}
+
+function bm25Tf(tf: number, docLen: number, avgDocLen: number): number {
+  if (tf <= 0) return 0;
+  const norm = BM25_K1 * (1 - BM25_B + (BM25_B * docLen) / avgDocLen);
+  return (tf * (BM25_K1 + 1)) / (tf + norm);
+}
+
+interface FieldBoosts {
+  title: number;
+  description: number;
+  body: number;
+}
+
+/** BM25 scores per slot for a tokenized query. Tombstoned postings are
+ *  skipped lazily — removal never rewrites posting lists. */
+function scoreSlots(
+  index: WorkspaceSearchIndex,
+  query: string,
+  boosts: FieldBoosts,
+  tolerance: number,
+  filter?: (entry: IndexedEntry) => boolean
+): Map<number, number> {
+  const scores = new Map<number, number>();
+  const n = Math.max(index.activeCount, 1);
+  const avgTitle = Math.max(index.totalTitleLen / n, 1);
+  const avgDesc = Math.max(index.totalDescLen / n, 1);
+  const avgBody = Math.max(index.totalBodyLen / n, 1);
+
+  const scorePacked = (packed: number, idf: number) => {
+    const slot = packed >>> 10;
+    const entry = index.entries[slot];
+    if (entry.deleted) return;
+    if (filter && !filter(entry)) return;
+    const bodyTf = (packed >>> 6) & 0x0f;
+    const descTf = (packed >>> 3) & 0x07;
+    const titleTf = packed & 0x07;
+    const score =
+      idf *
+      (boosts.title * bm25Tf(titleTf, entry.titleLen, avgTitle) +
+        boosts.description * bm25Tf(descTf, entry.descLen, avgDesc) +
+        boosts.body * bm25Tf(bodyTf, entry.bodyLen, avgBody));
+    if (score > 0) {
+      scores.set(slot, (scores.get(slot) ?? 0) + score);
+    }
+  };
+
+  for (const term of queryTerms(query)) {
+    const expanded = expandTerm(index, term, tolerance);
+    let df = 0;
+    for (const token of expanded) {
+      const posting = index.postings.get(token);
+      df += typeof posting === "number" ? 1 : (posting?.length ?? 0);
+    }
+    if (df === 0) continue;
+    const idf = Math.log(1 + (n - df + 0.5) / (df + 0.5));
+    if (idf <= 0) continue;
+    for (const token of expanded) {
+      const posting = index.postings.get(token);
+      if (posting === undefined) continue;
+      if (typeof posting === "number") {
+        scorePacked(posting, idf);
+      } else {
+        for (const packed of posting) scorePacked(packed, idf);
+      }
+    }
+  }
+  return scores;
+}
+
+function rankedSlots(scores: Map<number, number>): number[] {
+  return [...scores.entries()]
+    .toSorted((a, b) => b[1] - a[1])
+    .map(([slot]) => slot);
+}
+
+// ---- document mappers ----
+
+export function issueToSearchDocument(
+  issue: Pick<
+    Issue,
+    "id" | "teamId" | "identifier" | "title" | "description" | "status"
+  >
+): SearchDocument {
   return {
     id: issue.id,
     kind: "issue",
@@ -137,15 +513,39 @@ export function documentToSearchDocument(
   };
 }
 
+export interface MemoryForSearch {
+  id: string;
+  entityType: string;
+  entityId: string;
+  kind: string;
+  fact: string;
+  createdAt: string;
+  /** Resolved workspace issue/team when the fact is attached to an issue —
+   *  lets issue search and team scoping see it. */
+  issueId?: string;
+  teamId?: string;
+}
+
+export function memoryToSearchDocument(mem: MemoryForSearch): SearchDocument {
+  return {
+    id: `memory:${mem.id}`,
+    kind: "memory",
+    issueId: mem.issueId ?? "",
+    teamId: mem.teamId ?? "",
+    identifier: "",
+    title: sanitizeSearchText(`${mem.entityType} ${mem.entityId} ${mem.kind}`),
+    description: "",
+    body: sanitizeSearchText(mem.fact),
+    status: "",
+    documentId: "",
+    memoryId: mem.id,
+  };
+}
+
 export async function indexDocumentSearchDocument(
   index: WorkspaceSearchIndex,
   doc: DocumentForSearch
 ) {
-  try {
-    await remove(index, doc.id);
-  } catch {
-    // Document may not exist; ignore.
-  }
   await insert(index, documentToSearchDocument(doc));
 }
 
@@ -153,11 +553,6 @@ export async function indexIssueDocument(
   index: WorkspaceSearchIndex,
   issue: Issue
 ) {
-  try {
-    await remove(index, issue.id);
-  } catch {
-    // Document may not exist; ignore.
-  }
   await insert(index, issueToSearchDocument(issue));
 }
 
@@ -165,24 +560,24 @@ export async function indexCommentDocument(
   index: WorkspaceSearchIndex,
   comment: CommentForSearch
 ) {
-  try {
-    await remove(index, comment.id);
-  } catch {
-    // Document may not exist; ignore.
-  }
   await insert(index, commentToSearchDocument(comment));
 }
 
-export async function removeIssueDocuments(
+export async function indexMemorySearchDocument(
   index: WorkspaceSearchIndex,
-  issueId: string
+  mem: MemoryForSearch
 ) {
-  const result = await search(index, {
-    where: { issueId: { eq: issueId } },
-    limit: 1000,
-  });
-  await Promise.all(result.hits.map((hit) => remove(index, hit.id)));
+  await insert(index, memoryToSearchDocument(mem));
 }
+
+export async function removeMemorySearchDocument(
+  index: WorkspaceSearchIndex,
+  memoryId: string
+) {
+  await remove(index, `memory:${memoryId}`);
+}
+
+// ---- searches ----
 
 export async function searchIssues(
   index: WorkspaceSearchIndex,
@@ -190,55 +585,96 @@ export async function searchIssues(
   teamIds: string[],
   limit = 1000
 ): Promise<string[]> {
-  const where = teamIds.length > 0 ? { teamId: { in: teamIds } } : undefined;
-  const [identifierResult, contentResult] = await Promise.all([
-    search(index, {
-      term: query,
-      properties: ["identifier"],
-      limit,
-      exact: true,
-      tolerance: 0,
-      where,
-    }),
-    search(index, {
-      term: query,
-      properties: ["title", "description", "body"],
-      limit,
-      tolerance: 1,
-      boost: {
-        title: 2,
-        description: 1,
-        body: 0.5,
-      },
-      where,
-    }),
-  ]);
+  // Only issue-attached entries answer an issue query — documents and
+  // unattached memories (issueId "") must not consume the result limit.
+  const inScope = (entry: IndexedEntry) =>
+    entry.issueId.length > 0 &&
+    (teamIds.length === 0 || teamIds.includes(entry.teamId));
+  const queryLower = query.toLowerCase().trim();
 
-  const ids = new Set<string>();
-  for (const hit of identifierResult.hits) {
-    const doc = hit.document as SearchDocument;
-    ids.add(String(doc.issueId || doc.id));
+  // Identifier hits rank first — "VTX-123" or any substring of it should
+  // surface the exact issue ahead of content matches.
+  const out: string[] = [];
+  const seen = new Set<string>();
+  if (queryLower.length > 0) {
+    for (const entry of index.entries) {
+      if (entry.deleted || entry.identifierLower.length === 0) continue;
+      if (!inScope(entry)) continue;
+      if (
+        entry.identifierLower === queryLower ||
+        (queryLower.length >= 2 && entry.identifierLower.includes(queryLower))
+      ) {
+        const key = entry.issueId || entry.id;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(key);
+        if (out.length >= limit) return out;
+      }
+    }
   }
-  for (const hit of contentResult.hits) {
-    const doc = hit.document as SearchDocument;
-    ids.add(String(doc.issueId || doc.id));
+
+  const scores = scoreSlots(
+    index,
+    query,
+    { title: 2, description: 1, body: 0.5 },
+    1,
+    inScope
+  );
+  for (const slot of rankedSlots(scores)) {
+    const entry = index.entries[slot];
+    const key = entry.issueId || entry.id;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(key);
+    if (out.length >= limit) break;
   }
-  return [...ids];
+  return out;
 }
-
-export { insertMultiple };
 
 export async function searchDocuments(
   index: WorkspaceSearchIndex,
   query: string,
   limit = 50
 ): Promise<string[]> {
-  const result = await search(index, {
-    term: query,
-    where: { kind: { eq: "document" } },
-    limit,
-  });
-  return result.hits.map((hit) => String(hit.document.documentId));
+  const scores = scoreSlots(
+    index,
+    query,
+    { title: 2, description: 0, body: 1 },
+    1,
+    (entry) => entry.kind === "document"
+  );
+  const out: string[] = [];
+  for (const slot of rankedSlots(scores)) {
+    const documentId = index.entries[slot].documentId;
+    if (!documentId) continue;
+    out.push(documentId);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+export async function searchMemories(
+  index: WorkspaceSearchIndex,
+  query: string,
+  limit = 50
+): Promise<string[]> {
+  const scores = scoreSlots(
+    index,
+    query,
+    { title: 2, description: 0, body: 1 },
+    1,
+    (entry) => entry.kind === "memory"
+  );
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const slot of rankedSlots(scores)) {
+    const memoryId = index.entries[slot].memoryId;
+    if (!memoryId || seen.has(memoryId)) continue;
+    seen.add(memoryId);
+    out.push(memoryId);
+    if (out.length >= limit) break;
+  }
+  return out;
 }
 
 export interface SimilarIssueHit {
@@ -307,23 +743,23 @@ export async function findSimilarIssues(
 ): Promise<SimilarIssueHit[]> {
   const terms = similarityTerms(issue.title, issue.description);
   if (terms.length === 0) return [];
-  const result = await search(index, {
-    term: terms.join(" "),
-    properties: ["title", "description"],
-    boost: { title: 2, description: 1 },
-    tolerance: 0,
-    where:
-      teamIds.length > 0
-        ? { kind: { eq: "issue" }, teamId: { in: teamIds } }
-        : { kind: { eq: "issue" } },
-    limit: limit + 1,
-  });
+  const scores = scoreSlots(
+    index,
+    terms.join(" "),
+    { title: 2, description: 1, body: 0 },
+    0,
+    (entry) =>
+      entry.kind === "issue" &&
+      (teamIds.length === 0 || teamIds.includes(entry.teamId))
+  );
   const hits: SimilarIssueHit[] = [];
-  for (const hit of result.hits) {
-    const doc = hit.document as SearchDocument;
-    const issueId = String(doc.issueId || doc.id);
+  for (const [slot, score] of [...scores.entries()].toSorted(
+    (a, b) => b[1] - a[1]
+  )) {
+    const entry = index.entries[slot];
+    const issueId = entry.issueId || entry.id;
     if (issueId === issue.id) continue;
-    hits.push({ issueId, score: hit.score });
+    hits.push({ issueId, score });
     if (hits.length >= limit) break;
   }
   return hits;
@@ -373,23 +809,22 @@ export async function findDuplicateCandidates(
 ): Promise<DuplicateCandidateHit[]> {
   const terms = similarityTerms(title);
   if (terms.length === 0) return [];
-  const result = await search(index, {
-    term: terms.join(" "),
-    properties: ["title"],
-    tolerance: 0,
-    where:
-      teamIds.length > 0
-        ? { kind: { eq: "issue" }, teamId: { in: teamIds } }
-        : { kind: { eq: "issue" } },
-    limit: DUPLICATE_CANDIDATE_POOL,
-  });
+  const scores = scoreSlots(
+    index,
+    terms.join(" "),
+    { title: 1, description: 0, body: 0 },
+    0,
+    (entry) =>
+      entry.kind === "issue" &&
+      (teamIds.length === 0 || teamIds.includes(entry.teamId))
+  );
   const hits: DuplicateCandidateHit[] = [];
-  for (const hit of result.hits) {
-    const doc = hit.document as SearchDocument;
-    if (CLOSED_STATUSES.has(String(doc.status))) continue;
-    const score = titleOverlapScore(title, doc.title);
+  for (const slot of rankedSlots(scores).slice(0, DUPLICATE_CANDIDATE_POOL)) {
+    const entry = index.entries[slot];
+    if (CLOSED_STATUSES.has(entry.status)) continue;
+    const score = titleOverlapScore(title, entry.title);
     if (score < DUPLICATE_MIN_SCORE) continue;
-    hits.push({ issueId: String(doc.issueId || doc.id), score });
+    hits.push({ issueId: entry.issueId || entry.id, score });
   }
   return hits.toSorted((a, b) => b.score - a.score);
 }

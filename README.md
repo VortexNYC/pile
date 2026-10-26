@@ -40,7 +40,7 @@ not a window onto a channel.
 
 - **Runtime & HTTP:** Cloudflare Workers, Hono + `@hono/zod-openapi` (typed routes, `/openapi.json`, generated CLI/SDK/MCP)
 - **Data:** Cloudflare D1 (global metadata, RBAC, auth) + Durable Objects SQLite (per-workspace issues, docs, CRM, memory, and agent state) with Drizzle ORM
-- **Search:** `@orama/orama` in-DO full-text + enum index across issues, comments, and BlockNote/Markdown documents
+- **Search:** compact SMI-packed in-DO BM25 index across issues, comments, `workspace_memory` facts, and BlockNote/Markdown documents
 - **Auth:** Better Auth (human sessions + dynamic org RBAC) and workspace/lane-scoped bearer tokens for agents
 - **Web Console (`apps/web`):** React + Vite SPA served under `/app` (Kumo components + Phosphor icons)
 
