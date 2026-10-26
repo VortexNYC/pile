@@ -2154,7 +2154,7 @@ describe("WorkspaceDO", () => {
     );
   });
 
-  it("skips a cold index build for warn dedupe and warms it in the background", async () => {
+  it("answers warn dedupe on a cold DO without ever building the index (PILE-612)", async () => {
     const stub = getStub();
     const title = `Cold index probe ${crypto.randomUUID().slice(0, 8)} deploy receipts`;
     // Seed, then evict — the next RPC lands on a fresh DO with no search
@@ -2164,26 +2164,42 @@ describe("WorkspaceDO", () => {
     );
     await evictDurableObject(stub);
 
-    const cold = await withWorkspace(stub, (instance) =>
-      instance.createIssueWithDuplicates({ title: `${title} v2` }, undefined, {
-        teamIds: [seeded.teamId],
-        block: false,
-      })
-    );
-    // Cold index → warn dedupe skipped, but the create itself succeeds —
-    // the 42s cold build used to sit on this path and 500 the request.
-    expect(cold.issue).not.toBeNull();
-    expect(cold.possibleDuplicates).toEqual([]);
+    const cold = await withWorkspace(stub, async (instance) => {
+      const created = await instance.createIssueWithDuplicates(
+        { title: `${title} v2` },
+        undefined,
+        { teamIds: [seeded.teamId], block: false }
+      );
+      return {
+        created,
+        builtByWrite: Reflect.get(instance, "searchIndex") !== null,
+      };
+    });
+    // Cold DO → warn dedupe falls back to a direct SQLite title scan and
+    // still reports the seeded near-duplicate — without paying the cold
+    // index build that used to sit on this path and 500 the request.
+    expect(cold.created.issue).not.toBeNull();
+    expect(
+      cold.created.possibleDuplicates.map((hit) => hit.issue.id)
+    ).toContain(seeded.id);
+    expect(cold.builtByWrite).toBe(false);
 
-    // The skip kicks an off-path build — once it lands, dedupe works again.
-    await withWorkspace(stub, (instance) => instance.flushSearchIndex());
-    const warm = await withWorkspace(stub, (instance) =>
-      instance.createIssueWithDuplicates({ title: `${title} v3` }, undefined, {
-        teamIds: [seeded.teamId],
-        block: false,
-      })
-    );
-    expect(warm.possibleDuplicates.length).toBeGreaterThan(0);
+    // Block mode uses the same fallback on a cold DO — no index build.
+    await evictDurableObject(stub);
+    const blocked = await withWorkspace(stub, async (instance) => {
+      const created = await instance.createIssueWithDuplicates(
+        { title },
+        undefined,
+        { teamIds: [seeded.teamId], block: true }
+      );
+      return {
+        created,
+        builtByWrite: Reflect.get(instance, "searchIndex") !== null,
+      };
+    });
+    expect(blocked.created.issue).toBeNull();
+    expect(blocked.created.possibleDuplicates.length).toBeGreaterThan(0);
+    expect(blocked.builtByWrite).toBe(false);
   });
 
   it("re-anchors waiting dependents of a dead session onto its retry", async () => {
@@ -3643,6 +3659,306 @@ describe("spend caps + run receipts (PILE-425)", () => {
       })
     );
     expect(recalled.map((m) => m.fact)).toEqual(["current v3"]);
+  });
+
+  it("indexes workspace_memory into unified search and BM25 recall (PILE-618/629)", async () => {
+    const stub = getStub();
+    const marker = crypto.randomUUID().slice(0, 8);
+    const issue = await withWorkspace(stub, (i) =>
+      // Title deliberately shares no tokens with the query — the issue hit
+      // can only arrive through the attached memory's issueId.
+      i.createIssue({ title: "Memory host" })
+    );
+    const memId = await withWorkspace(stub, (i) =>
+      i.memoryRemember({
+        entityType: "issue",
+        entityId: issue.identifier ?? issue.id,
+        kind: "corridor",
+        fact: `zebroid-${marker} corridor sweep returned seventeen active licenses`,
+      })
+    );
+
+    const result = await withWorkspace(stub, async (i) => {
+      // First search warms the index — the memory's issue attachment is
+      // resolved from its ISSUE-KEY entityId during the build.
+      const all = await i.searchAll(`zebroid-${marker}`, [issue.teamId], 10);
+      // LIKE recall can't match "zebroid-<marker> licenses" — it is not a
+      // verbatim substring of the fact — so the BM25 index fills it in.
+      const recalled = await i.memoryRecall({
+        search: `zebroid-${marker} licenses`,
+      });
+      return { all, recalled };
+    });
+    expect(result.all.memoryIds).toContain(memId);
+    // The issue-attached memory contributes its issue to issue search.
+    expect(result.all.issueIds).toContain(issue.id);
+    expect(result.recalled.map((r) => r.id)).toContain(memId);
+  });
+
+  it("memoryRecall fills LIKE/BM25 misses with hybrid semantic expansion (PILE-613)", async () => {
+    const stub = getStub();
+    const marker = crypto.randomUUID().slice(0, 8);
+    const memId = await withWorkspace(stub, (i) =>
+      i.memoryRemember({
+        entityType: "corridor",
+        entityId: `smith-st-${marker}`,
+        kind: "coverage",
+        fact: `corridor:smith-st-${marker} swept yesterday`,
+      })
+    );
+    const oomId = await withWorkspace(stub, (i) =>
+      i.memoryRemember({
+        entityType: "workspace",
+        entityId: `oom-${marker}`,
+        kind: "lesson",
+        fact: `OOM reset on large workspace ${marker}`,
+      })
+    );
+
+    // "did we sweep" — the fact says "swept", so verbatim LIKE and BM25
+    // both miss; the concept+stem expansion and similarity scan fill it in.
+    const sweep = await withWorkspace(stub, (i) =>
+      i.memoryRecall({ search: `did we sweep smith-st-${marker}` })
+    );
+    expect(sweep.map((r) => r.id)).toContain(memId);
+
+    // "isolate heap crash" — the fact says "OOM reset"; only the OOM/crash
+    // concept group connects them.
+    const crash = await withWorkspace(stub, (i) =>
+      i.memoryRecall({ search: "isolate heap crash" })
+    );
+    expect(crash.map((r) => r.id)).toContain(oomId);
+  });
+
+  it("memoryUpdate patches in place and memoryForget erases head + superseded history (PILE-628)", async () => {
+    const stub = getStub();
+    const entityId = `forget-${crypto.randomUUID().slice(0, 8)}`;
+    const v1 = await withWorkspace(stub, (i) =>
+      i.memoryRemember({
+        entityType: "customer",
+        entityId,
+        kind: "coverage",
+        fact: "stale corridor fact",
+      })
+    );
+    const head = await withWorkspace(stub, (i) =>
+      i.memoryRemember({
+        entityType: "customer",
+        entityId,
+        kind: "coverage",
+        fact: "current corridor fact",
+      })
+    );
+
+    const updated = await withWorkspace(stub, (i) =>
+      i.memoryUpdate(head, { fact: "corrected corridor fact" })
+    );
+    expect(updated?.fact).toBe("corrected corridor fact");
+    expect(
+      await withWorkspace(stub, (i) =>
+        i.memoryUpdate(crypto.randomUUID(), { fact: "ghost" })
+      )
+    ).toBeNull();
+
+    const res = await withWorkspace(stub, (i) => i.memoryForget(head));
+    expect(res.deleted).toBe(true);
+    expect(res.deletedIds.toSorted()).toEqual([v1, head].toSorted());
+    const recalled = await withWorkspace(stub, (i) =>
+      i.memoryRecall({ entityType: "customer", entityId })
+    );
+    expect(recalled).toEqual([]);
+    expect(
+      await withWorkspace(stub, (i) => i.memoryForget(crypto.randomUUID()))
+    ).toEqual({ deleted: false, deletedIds: [] });
+  });
+
+  it("memoryProfile splits static and dynamic facts with a markdown summary (PILE-616)", async () => {
+    const stub = getStub();
+    const entityId = `prof-${crypto.randomUUID().slice(0, 8)}`;
+    await withWorkspace(stub, (i) =>
+      i.memoryRemember({
+        entityType: "repo",
+        entityId,
+        kind: "convention",
+        fact: "migrations always run through wrangler deploy -e production",
+      })
+    );
+    await withWorkspace(stub, (i) =>
+      i.memoryRemember({
+        entityType: "repo",
+        entityId,
+        kind: "outcome",
+        fact: "lane completed the rollout",
+      })
+    );
+    const profile = await withWorkspace(stub, (i) =>
+      i.memoryProfile({ entityType: "repo", entityId })
+    );
+    expect(profile.staticFacts.map((f) => f.kind)).toEqual(["convention"]);
+    expect(profile.dynamicFacts.map((f) => f.kind)).toEqual(["outcome"]);
+    expect(profile.byKind.convention).toHaveLength(1);
+    expect(profile.summary).toContain(`### Static Profile (repo:${entityId})`);
+    expect(profile.summary).toContain("### Recent / Dynamic Context");
+  });
+
+  it("memoryRememberBatch writes explicit memories and extracts facts from documents (PILE-617)", async () => {
+    const stub = getStub();
+    const doc = await withWorkspace(stub, (i) =>
+      i.createDocument({
+        title: "Incident notes",
+        contentFormat: "markdown",
+        content: [
+          "## Lessons",
+          "- retries must be idempotent because the queue can redeliver",
+          "- always pin the worker account id on wrangler deploys",
+        ].join("\n"),
+        createdById: "user-1",
+      })
+    );
+    const res = await withWorkspace(stub, (i) =>
+      i.memoryRememberBatch({
+        memories: [
+          {
+            entityType: "workspace",
+            entityId: "batch-ws",
+            kind: "lesson",
+            fact: "explicit batch fact",
+          },
+        ],
+        documentIds: [doc.id],
+        sourceAgentSlug: "dreamer",
+      })
+    );
+    expect(res.count).toBe(3);
+    expect(res.extractedFromDocuments).toBe(2);
+    const recalled = await withWorkspace(stub, (i) =>
+      i.memoryRecall({ entityType: "document", entityId: doc.id })
+    );
+    // Same-key extraction supersedes in order — recall surfaces only the
+    // latest lesson head.
+    expect(recalled.map((r) => r.kind)).toEqual(["lesson"]);
+    expect(recalled[0].fact).toContain(
+      "always pin the worker account id on wrangler deploys"
+    );
+    const ws = await withWorkspace(stub, (i) =>
+      i.memoryRecall({ entityType: "workspace", entityId: "batch-ws" })
+    );
+    expect(ws.map((r) => r.fact)).toEqual(["explicit batch fact"]);
+  });
+
+  it("memoryExtract distills labeled facts from text and an issue's comments (PILE-627)", async () => {
+    const stub = getStub();
+    const res = await withWorkspace(stub, (i) =>
+      i.memoryExtract({
+        text: [
+          "Wrap-up for the lane.",
+          "**Root cause:** ORM query loaded full bodies into the isolate",
+          "**Fix:** SUBSTR-bounded paged build keeps peak heap under the cap",
+        ].join("\n"),
+        entityType: "workspace",
+        entityId: "extract-ws",
+      })
+    );
+    expect(res.ids).toHaveLength(2);
+    expect(res.facts.map((f) => f.kind).toSorted()).toEqual([
+      "fix",
+      "root_cause",
+    ]);
+    const recalled = await withWorkspace(stub, (i) =>
+      i.memoryRecall({ entityType: "workspace", entityId: "extract-ws" })
+    );
+    expect(recalled).toHaveLength(2);
+
+    const issue = await withWorkspace(stub, (i) =>
+      i.createIssue({
+        title: "Extraction host",
+        description:
+          "**Decision:** use tombstone deletes for the posting lists",
+      })
+    );
+    await withWorkspace(stub, (i) =>
+      i.createComment({
+        entityType: "issue",
+        entityId: issue.id,
+        authorId: "user-1",
+        body: "**Lesson:** the comment lesson fact for extraction coverage",
+      })
+    );
+    const issueRes = await withWorkspace(stub, (i) =>
+      i.memoryExtract({ issueId: issue.id })
+    );
+    expect(issueRes.facts.length).toBeGreaterThanOrEqual(1);
+    expect(issueRes.facts[0].entityType).toBe("issue");
+    expect(issueRes.facts[0].entityId).toBe(issue.identifier ?? issue.id);
+  });
+
+  it("exposes storage and search index metrics via getStorageMetrics (PILE-633)", async () => {
+    const id = env.WORKSPACE_DURABLE_OBJECT.idFromName("pile-633-metrics");
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(id);
+    const result = await withWorkspace(stub, async (instance) => {
+      await instance.createIssue({ title: "Metrics probe issue" });
+      const cold = await instance.getStorageMetrics();
+      await instance.searchAll("anything", [], 5);
+      const warm = await instance.getStorageMetrics();
+      return { cold, warm };
+    });
+    expect(result.cold.databaseSizeBytes).toBeGreaterThan(0);
+    expect(result.cold.searchIndexWarm).toBe(false);
+    expect(result.warm.searchIndexWarm).toBe(true);
+    expect(result.warm.activeDocs).toBeGreaterThan(0);
+    expect(result.warm.vocabSize).toBeGreaterThan(0);
+  });
+
+  it("reports and clears a stale in-flight telemetry breadcrumb on init (PILE-633)", async () => {
+    const id = env.WORKSPACE_DURABLE_OBJECT.idFromName("pile-633-reset");
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(id);
+    // Plant the breadcrumb as if the isolate died mid-build, then evict so
+    // the next access re-runs initialize().
+    await runInDurableObject(stub, async (_instance, ctx) => {
+      await ctx.storage.put("__telemetry_inflight_op", {
+        op: "buildSearchIndex",
+        startedAt: 1234567890,
+      });
+    });
+    await evictDurableObject(stub);
+
+    const bodies: Array<Record<string, unknown>> = [];
+    const prevFetch = globalThis.fetch;
+    const prevKey = env.POSTHOG_PROJECT_KEY;
+    env.POSTHOG_PROJECT_KEY = "phc_test_key";
+    globalThis.fetch = (async (
+      input: RequestInfo | URL,
+      init?: RequestInit
+    ): Promise<Response> => {
+      if (String(input).includes("posthog.com")) {
+        bodies.push(
+          JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>
+        );
+        return new Response("ok", { status: 200 });
+      }
+      return prevFetch(input, init);
+    }) as typeof fetch;
+    try {
+      const leftover = await runInDurableObject(stub, async (instance, ctx) => {
+        await instance.setOrganizationId("pile-633-reset");
+        await instance.getStorageMetrics(); // forces `ready` to settle
+        return ctx.storage.get("__telemetry_inflight_op");
+      });
+      expect(leftover).toBeUndefined();
+    } finally {
+      globalThis.fetch = prevFetch;
+      env.POSTHOG_PROJECT_KEY = prevKey;
+    }
+    const exception = bodies.find(
+      (body) =>
+        body.event === "$exception" &&
+        (body.properties as Record<string, unknown>).surface ===
+          "workspace-do.isolate-reset"
+    );
+    expect(exception).toBeDefined();
+    const props = exception?.properties as Record<string, unknown>;
+    expect(props.op).toBe("buildSearchIndex");
+    expect(props.startedAt).toBe(1234567890);
   });
 
   it("carries usage on the result into the finalized receipt", async () => {

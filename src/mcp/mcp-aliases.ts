@@ -91,6 +91,12 @@ export const MCP_TOOL_ALIASES: Readonly<Record<string, string>> = {
   // Memory
   memory_recall: "getWorkspacesOrganizationIdMemory",
   memory_remember: "postWorkspacesOrganizationIdMemory",
+  memory_update: "patchWorkspacesOrganizationIdMemoryId",
+  memory_delete: "deleteWorkspacesOrganizationIdMemoryId",
+  memory_forget: "deleteWorkspacesOrganizationIdMemoryId",
+  memory_profile: "getWorkspacesOrganizationIdMemoryProfile",
+  memory_remember_batch: "postWorkspacesOrganizationIdMemoryBatch",
+  memory_extract: "postWorkspacesOrganizationIdMemoryExtract",
 
   // Notifications
   list_notifications: "getWorkspacesOrganizationIdNotifications",

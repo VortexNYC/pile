@@ -78,7 +78,10 @@ import { registerMemoryRoutes } from "./memory.js";
 import { registerNotificationRoutes } from "./notifications.js";
 import { registerNotionWebhookRoute } from "./notion-webhook.js";
 import { registerNotionRoutes } from "./notion.js";
-import { registerOAuthClientRoutes } from "./oauth-clients.js";
+import {
+  registerOAuthClientRoutes,
+  registerOAuthRoutes,
+} from "./oauth-clients.js";
 import { registerObservabilityRoutes } from "./observability.js";
 import { registerPipelineRuntimeRoutes } from "./pipeline-runtime.js";
 import { registerPrRoutes } from "./pr.js";
@@ -262,6 +265,7 @@ registerSCIMRoutes(app);
 registerTokenRoutes(app);
 registerClipperRoutes(app);
 registerOAuthClientRoutes(app);
+registerOAuthRoutes(app);
 registerIssueRoutes(app);
 registerAgentSessionRoutes(app);
 registerGuidanceRoutes(app);
@@ -566,6 +570,34 @@ app.get("/.well-known/security.txt", (c) =>
     "Contact: mailto:security@vortexnyc.com\nPreferred-Languages: en\nCanonical: https://pile.nyc/.well-known/security.txt\n"
   )
 );
+
+// PILE-619 — first-party agent kit discovery manifest.
+app.get("/.well-known/mcp.json", (c) => {
+  const origin = new URL(c.req.url).origin;
+  return c.json({
+    name: "pile",
+    version: "0.1.1",
+    description:
+      "Pile — agent-native issue tracker, support desk, CRM, and shared workspace memory on Cloudflare Workers.",
+    mcpEndpoint: `${origin}/mcp`,
+    oauthProtectedResource: `${origin}/.well-known/oauth-protected-resource`,
+    oauthAuthorizationServer: `${origin}/.well-known/oauth-authorization-server`,
+    skills: ["pile-mcp", "pile-cli", "pile-sdk", "pile-agent"],
+    prompts: [
+      "triage-issue",
+      "morning-brief",
+      "session-handoff",
+      "memory-distill",
+    ],
+    resources: [
+      "pile://workspaces/{organizationId}/agent-context",
+      "pile://workspaces/{organizationId}/issues/{id}",
+      "pile://workspaces/{organizationId}/documents/{id}",
+      "pile://workspaces/{organizationId}/customers/{id}",
+      "pile://workspaces/{organizationId}/memory/profile/{entityType}/{entityId}",
+    ],
+  });
+});
 
 app.get("/status", (c) => c.redirect("/health", 308));
 

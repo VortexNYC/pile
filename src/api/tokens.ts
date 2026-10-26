@@ -16,8 +16,10 @@ import { createAuth } from "../platform/auth.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { canAccess, parsePermissionSet } from "../platform/permissions.js";
+import { captureProductEvent } from "../platform/posthog.js";
 import { rls } from "../platform/rls.js";
 import { emitWorkspaceAudit } from "./audit-emit.js";
+import { getExecutionCtx } from "./execution-ctx.js";
 
 const tokenSchema = z.object({
   id: z.string(),
@@ -119,6 +121,40 @@ const deleteTokenRoute = createRoute({
   },
   responses: {
     204: { description: "Token deleted" },
+  },
+});
+
+// PILE-623 — manual janitor: prune stale ephemeral `agent-*` lane keys on
+// demand. `maxAgeHours: 0` drops every lane key regardless of age. Registered
+// before `/tokens/{id}` so the literal path wins route resolution.
+const pruneTokensRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/tokens/prune",
+  tags: ["tokens"],
+  middleware: [rls("admin")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z
+            .object({
+              maxAgeHours: z.number().min(0).max(8760).default(24),
+            })
+            .optional(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Stale ephemeral agent keys pruned",
+      content: {
+        "application/json": {
+          schema: z.object({ pruned: z.number() }),
+        },
+      },
+    },
   },
 });
 
@@ -337,6 +373,17 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
       }
     );
 
+    captureProductEvent(
+      "workspace.token_minted",
+      {
+        organizationId,
+        actorId: identity.id,
+        name: parsed.name ?? input.name,
+        actorType,
+      },
+      getExecutionCtx(c),
+      { env: c.env }
+    );
     return c.json(
       {
         id: parsed.id,
@@ -367,10 +414,38 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
         message: "Token not found",
       });
     }
+    // PILE-623 — agent installs record team access on team_member keyed by
+    // the resolved agent user (the key's referenceId); cascade on both ids
+    // so deleting a token never leaves orphaned team_member rows.
+    await db
+      .delete(teamMember)
+      .where(inArray(teamMember.userId, [id, row.referenceId]));
     await db.delete(apikey).where(eq(apikey.id, id));
     await emitWorkspaceAudit(c, organizationId, "token.deleted", "token", id, {
       name: { from: row.name ?? null, to: null },
     });
     return c.body(null, 204);
+  });
+
+  app.openapi(pruneTokensRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const db = createD1(c.env.D1);
+    const { pruneStaleEphemeralAgentKeys } = await import("../agents/sweep.js");
+    const pruned = await pruneStaleEphemeralAgentKeys(db, Date.now(), {
+      organizationId,
+      maxAgeMs: (input?.maxAgeHours ?? 24) * 3600_000,
+    });
+    await emitWorkspaceAudit(
+      c,
+      organizationId,
+      "token.pruned",
+      "token",
+      organizationId,
+      {
+        count: { from: null, to: pruned },
+      }
+    );
+    return c.json({ pruned });
   });
 }

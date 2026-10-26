@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { createD1 } from "../global/db.js";
@@ -4434,5 +4434,179 @@ describe("syncOpenPrSessions terminal-work gating (PILE-452)", () => {
     expect(dispatches).toBe(0);
     const sessions = await stub.listAgentSessions({ issueId: issue.id });
     expect(sessions).toHaveLength(1);
+  });
+});
+
+describe("ephemeral lane token janitor (PILE-623)", () => {
+  it("prunes agent-* keys older than 24h or past expiresAt, keeps fresh and non-agent keys", async () => {
+    const db = createD1(env.D1);
+    const { apikey } = await import("../global/schema.js");
+    const { pruneStaleEphemeralAgentKeys } = await import("./sweep.js");
+    const now = Date.now();
+    const day = 24 * 60 * 60 * 1000;
+    const rows = [
+      // Stale — created >24h ago, no expiry recorded.
+      {
+        id: `k-${crypto.randomUUID()}`,
+        name: "agent-51d22c5f-bdfe",
+        key: `key-${crypto.randomUUID()}`,
+        referenceId: "user-1",
+        createdAt: new Date(now - 2 * day),
+        updatedAt: new Date(now - 2 * day),
+      },
+      // Expired — fresh creation but expiresAt already passed.
+      {
+        id: `k-${crypto.randomUUID()}`,
+        name: "agent-9f81c3ab-12cd",
+        key: `key-${crypto.randomUUID()}`,
+        referenceId: "user-1",
+        expiresAt: new Date(now - 1000),
+        createdAt: new Date(now - 1000),
+        updatedAt: new Date(now - 1000),
+      },
+      // Fresh lane key — under 24h, expires in the future.
+      {
+        id: `k-${crypto.randomUUID()}`,
+        name: "agent-a1b2c3d4-e5f6",
+        key: `key-${crypto.randomUUID()}`,
+        referenceId: "user-1",
+        expiresAt: new Date(now + day),
+        createdAt: new Date(now),
+        updatedAt: new Date(now),
+      },
+      // Old but not an agent-* key — user token must survive.
+      {
+        id: `k-${crypto.randomUUID()}`,
+        name: "test-user-search-admin",
+        key: `key-${crypto.randomUUID()}`,
+        referenceId: "user-1",
+        createdAt: new Date(now - 30 * day),
+        updatedAt: new Date(now - 30 * day),
+      },
+    ];
+    for (const row of rows) {
+      await db.insert(apikey).values(row).onConflictDoNothing();
+    }
+    const pruned = await pruneStaleEphemeralAgentKeys(db, now);
+    expect(pruned).toBe(2);
+    const remaining = await db
+      .select({ id: apikey.id, name: apikey.name })
+      .from(apikey)
+      .where(
+        inArray(
+          apikey.id,
+          rows.map((r) => r.id)
+        )
+      )
+      .all();
+    expect(remaining.map((r) => r.name).toSorted()).toEqual([
+      "agent-a1b2c3d4-e5f6",
+      "test-user-search-admin",
+    ]);
+  });
+
+  it("scopes pruning by organizationId metadata and maxAgeMs override", async () => {
+    const db = createD1(env.D1);
+    const { apikey } = await import("../global/schema.js");
+    const { pruneStaleEphemeralAgentKeys } = await import("./sweep.js");
+    const now = Date.now();
+    const rows = [
+      // Fresh key in the target workspace — only a maxAgeMs=0 sweep takes it.
+      {
+        id: `k-${crypto.randomUUID()}`,
+        name: "agent-00aa11bb-22cc",
+        key: `key-${crypto.randomUUID()}`,
+        referenceId: "user-1",
+        metadata: JSON.stringify({ organizationId: "org_target" }),
+        createdAt: new Date(now),
+        updatedAt: new Date(now),
+      },
+      // Fresh key in a different workspace — must survive org-scoped runs.
+      {
+        id: `k-${crypto.randomUUID()}`,
+        name: "agent-33dd44ee-55ff",
+        key: `key-${crypto.randomUUID()}`,
+        referenceId: "user-1",
+        metadata: JSON.stringify({ organizationId: "org_other" }),
+        createdAt: new Date(now),
+        updatedAt: new Date(now),
+      },
+    ];
+    for (const row of rows) {
+      await db.insert(apikey).values(row).onConflictDoNothing();
+    }
+    // Default 24h window leaves both fresh keys alone.
+    expect(
+      await pruneStaleEphemeralAgentKeys(db, now, {
+        organizationId: "org_target",
+      })
+    ).toBe(0);
+    // maxAgeMs: 0 prunes every matching key — but only in the scoped org.
+    expect(
+      await pruneStaleEphemeralAgentKeys(db, now, {
+        organizationId: "org_target",
+        maxAgeMs: 0,
+      })
+    ).toBe(1);
+    const remaining = await db
+      .select({ name: apikey.name })
+      .from(apikey)
+      .where(
+        inArray(
+          apikey.id,
+          rows.map((r) => r.id)
+        )
+      )
+      .all();
+    expect(remaining.map((r) => r.name)).toEqual(["agent-33dd44ee-55ff"]);
+  });
+});
+
+describe("extractSettledMemory structured dreaming (PILE-627)", () => {
+  it("records typed facts extracted from the lane result", async () => {
+    const { extractSettledMemory } = await import("./sweep.js");
+    const writes: Array<Record<string, unknown>> = [];
+    const stub = {
+      memoryRemember: async (input: Record<string, unknown>) => {
+        writes.push(input);
+        return crypto.randomUUID();
+      },
+    };
+    await extractSettledMemory(
+      env,
+      stub,
+      { id: "sess-1", issueId: "VTX-1", agentId: "mock" },
+      "Done.\n**Root cause:** the queue lacked idempotency keys\n**Lesson:** verify against prod after deploys"
+    );
+    expect(writes.map((w) => w.kind).toSorted()).toEqual([
+      "lesson",
+      "root_cause",
+    ]);
+    expect(writes[0].entityType).toBe("issue");
+    expect(writes[0].entityId).toBe("VTX-1");
+    expect(writes[0].sourceSessionId).toBe("sess-1");
+  });
+
+  it("falls back to a single outcome fact for unstructured results", async () => {
+    const { extractSettledMemory } = await import("./sweep.js");
+    const writes: Array<Record<string, unknown>> = [];
+    const stub = {
+      memoryRemember: async (input: Record<string, unknown>) => {
+        writes.push(input);
+        return crypto.randomUUID();
+      },
+    };
+    // A bare string under 20 chars fails the extractor's fallback floor,
+    // so the wrapper still writes the outcome fact.
+    await extractSettledMemory(
+      env,
+      stub,
+      { id: "sess-2", issueId: null, agentId: "mock" },
+      { result: "shipped it" }
+    );
+    expect(writes).toHaveLength(1);
+    expect(writes[0].kind).toBe("outcome");
+    expect(writes[0].entityId).toBe("sess-2");
+    expect(String(writes[0].fact)).toContain("lane completed");
   });
 });

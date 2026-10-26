@@ -59,7 +59,6 @@
     "@cloudflare/sandbox": "0.12.10",
     "@hono/zod-openapi": "1.6.3",
     "@modelcontextprotocol/server": "^2.3.1",
-    "@orama/orama": "3.1.18",
     "@react-email/components": "1.0.12",
     "@react-email/render": "2.1.0",
     "better-auth": "^1.7.10",

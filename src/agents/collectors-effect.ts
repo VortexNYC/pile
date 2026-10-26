@@ -1,6 +1,19 @@
 import { Effect, Schedule, Schema } from "effect";
 
 import {
+  approveEnrollment,
+  type CadenceTemplate,
+  createDraftedEnrollment,
+  DEFAULT_COLD_MAILBOX_DAILY_CAP,
+  evaluateSendingDomainHealth,
+  executeReadyTouch,
+  type MerchantSalesFields,
+  type OutboundMailbox,
+  pauseMailboxesForUnhealthyDomain,
+  renderOptOutFooter,
+  type SendingDomainHealth,
+} from "../workspace/cadence-engine.js";
+import {
   type EmailVerificationStatus,
   evaluateSendGate,
   type TouchChannel,
@@ -513,6 +526,15 @@ export const enrichCandidatesWithEffect = Effect.fn(
     obscuraBaseUrl?: string;
     firecrawlBaseUrl?: string;
     lookupDos?: boolean;
+    paidVendorBudget?: {
+      vendor: string;
+      monthlyCapCents: number;
+      spentThisMonthCents: number;
+      requestedCents: number;
+    };
+    paidVendorEnrich?: (
+      cand: EnrichedMerchantCandidate
+    ) => Promise<Partial<EnrichedMerchantCandidate>>;
   }
 ): Effect.fn.Return<EnrichedMerchantCandidate[]> {
   const concurrency = Math.max(1, Math.min(10, options?.concurrency ?? 6));
@@ -526,7 +548,29 @@ export const enrichCandidatesWithEffect = Effect.fn(
   }));
   return yield* Effect.forEach(
     withPairedOwners,
-    (cand) => probeCandidateWebsiteEffect(cand, options),
+    (cand) =>
+      Effect.gen(function* () {
+        const probed = yield* probeCandidateWebsiteEffect(cand, options);
+        // PILE-610 — paid vendor is the last waterfall step: it only runs
+        // when a vendor fn + budget envelope are configured and the free
+        // crawl still didn't surface an email. Budget overruns and vendor
+        // errors degrade gracefully to the crawled result.
+        if (
+          probed.email ||
+          !options?.paidVendorBudget ||
+          !options?.paidVendorEnrich
+        ) {
+          return probed;
+        }
+        const enriched = yield* withPaidVendorBudgetEffect(
+          options.paidVendorBudget,
+          Effect.tryPromise({
+            try: () => options.paidVendorEnrich!(probed),
+            catch: () => null,
+          })
+        ).pipe(Effect.catch(() => Effect.succeed(null)));
+        return enriched ? { ...probed, ...enriched } : probed;
+      }),
     { concurrency }
   );
 });
@@ -674,19 +718,54 @@ export interface BatchApproveCandidate {
   suppressedCustomer?: boolean;
   suppressedDomain?: boolean;
   suppressedEmail?: boolean;
+  // PILE-609 — optional cadence wiring: when an email-channel candidate
+  // carries (or options carries) a mailbox, the approval runs the full
+  // drafted-enrollment -> approve -> executeReadyTouch pipeline.
+  mailbox?: OutboundMailbox;
+  domainHealth?: SendingDomainHealth;
+  unsubscribeUrl?: string;
+  physicalAddress?: string;
+  subject?: string;
+  body?: string;
+  salesFields?: Partial<MerchantSalesFields>;
+}
+
+function defaultBatchMailbox(nowIso: string): OutboundMailbox {
+  return {
+    id: "batch-default",
+    address: "outbound@cold.vortex.dev",
+    domain: "cold.vortex.dev",
+    ownerUserId: "system",
+    provider: "smtp",
+    state: "connected",
+    dailyCap: DEFAULT_COLD_MAILBOX_DAILY_CAP,
+    rampStartedAt: nowIso,
+    sentToday: 0,
+  };
 }
 
 export const evaluateApprovedBatchWithEffect = Effect.fn(
   "evaluateApprovedBatchWithEffect"
 )(function* (
   candidates: ReadonlyArray<BatchApproveCandidate>,
-  options?: { concurrency?: number }
+  options?: {
+    concurrency?: number;
+    mailbox?: OutboundMailbox;
+    domainHealth?: SendingDomainHealth;
+    unsubscribeUrl?: string;
+    physicalAddress?: string;
+    approverUserId?: string;
+    onMailboxUpdate?: (mailbox: OutboundMailbox) => void;
+  }
 ): Effect.fn.Return<{
   approved: Array<{
     customerId: string;
     name: string;
     channel: TouchChannel;
     recipient: string | null;
+    optOutFooter?: string | null;
+    enrollmentStatus?: string;
+    mailboxSentToday?: number;
   }>;
   blocked: Array<{
     customerId: string;
@@ -695,6 +774,19 @@ export const evaluateApprovedBatchWithEffect = Effect.fn(
   }>;
 }> {
   const concurrency = Math.max(1, Math.min(10, options?.concurrency ?? 5));
+  // PILE-609 — a single working mailbox is shared across the batch so the
+  // daily-cap ramp and sentToday counter advance touch by touch.
+  const nowStartIso = new Date().toISOString();
+  let workingMailbox: OutboundMailbox =
+    options?.mailbox ?? defaultBatchMailbox(nowStartIso);
+  let domainHealthy = true;
+  const batchHealth = options?.domainHealth;
+  if (batchHealth) {
+    domainHealthy = evaluateSendingDomainHealth(batchHealth).healthy;
+    workingMailbox =
+      pauseMailboxesForUnhealthyDomain([workingMailbox], batchHealth)
+        .mailboxes[0] ?? workingMailbox;
+  }
   const [approved, blockedErrors] = yield* Effect.partition(
     candidates,
     (cand) =>
@@ -734,11 +826,136 @@ export const evaluateApprovedBatchWithEffect = Effect.fn(
             reasons: [...gate.reasons],
           });
         }
-        return {
+        const base = {
           customerId: cand.customerId,
           name: cand.name,
           channel: cand.channel,
           recipient: cand.contactEmail ?? cand.phone ?? cand.address ?? null,
+          optOutFooter: null as string | null,
+          enrollmentStatus: undefined as string | undefined,
+          mailboxSentToday: undefined as number | undefined,
+        };
+        const mailbox = cand.mailbox ?? options?.mailbox;
+        if (cand.channel !== "email" || !mailbox) {
+          return base;
+        }
+        if (cand.mailbox) workingMailbox = cand.mailbox;
+        const candHealth = cand.domainHealth ?? options?.domainHealth;
+        if (candHealth) {
+          domainHealthy = evaluateSendingDomainHealth(candHealth).healthy;
+          workingMailbox =
+            pauseMailboxesForUnhealthyDomain([workingMailbox], candHealth)
+              .mailboxes[0] ?? workingMailbox;
+        }
+        const body = cand.body ?? `Approved outreach for ${cand.name}.`;
+        const template: CadenceTemplate = {
+          id: `batch_${cand.channel}`,
+          name: "Approve batch",
+          motion: "outbound",
+          version: 1,
+          status: "published",
+          steps: [
+            {
+              id: "step_1",
+              type: "approved_email",
+              parentStepId: null,
+              delayMinutes: 0,
+              subject: cand.subject,
+            },
+          ],
+        };
+        const drafted = createDraftedEnrollment({
+          id: `enr_${cand.customerId}`,
+          merchantId: cand.customerId,
+          contactId: cand.contactEmail ?? `contact_${cand.customerId}`,
+          template,
+          mailboxId: workingMailbox.id,
+          enrolledBy: "approve-batch",
+          promptVersion: "approve-batch-v1",
+          whyNow: "batch approval",
+          draftsByStepId: {
+            step_1: {
+              subject: cand.subject,
+              body,
+              evidenceRefs: [`customer:${cand.customerId}`],
+            },
+          },
+        });
+        const gateContext = {
+          action: "engage" as const,
+          now: nowIso,
+          merchant: {
+            id: cand.customerId,
+            permissions: {
+              doNotContact:
+                Boolean(cand.suppressedCustomer) ||
+                Boolean(cand.suppressedDomain),
+            },
+          },
+          contact: {
+            id: cand.contactEmail ?? `contact_${cand.customerId}`,
+            email: cand.contactEmail ?? null,
+            permissions: {
+              doNotEmail: Boolean(cand.suppressedEmail),
+              emailStatus:
+                cand.emailStatus ?? (cand.contactEmail ? "valid" : "unknown"),
+            },
+          },
+          cadence: {
+            allowUnverified: cand.allowUnverified ?? true,
+            concurrency: "allowed" as const,
+          },
+        };
+        const approvedRes = approveEnrollment(
+          drafted,
+          options?.approverUserId ?? "approve-batch",
+          gateContext
+        );
+        const firstTouch = approvedRes.enrollment.touches[0];
+        if (!firstTouch) {
+          return yield* new SendGateBlockedError({
+            customerId: cand.customerId,
+            name: cand.name,
+            reasons: ["no executable touch"],
+          });
+        }
+        const executed = executeReadyTouch({
+          enrollment: approvedRes.enrollment,
+          touchId: firstTouch.id,
+          template,
+          mailbox: workingMailbox,
+          domainHealthy,
+          gateContext,
+          unsubscribeUrl:
+            cand.unsubscribeUrl ??
+            options?.unsubscribeUrl ??
+            "https://pile.nyc/unsubscribe",
+          physicalAddress:
+            cand.physicalAddress ?? options?.physicalAddress ?? "Vortex NYC",
+          nowIso,
+        });
+        workingMailbox = executed.mailbox;
+        options?.onMailboxUpdate?.(workingMailbox);
+        if (executed.outcome === "blocked" || executed.outcome === "paused") {
+          return yield* new SendGateBlockedError({
+            customerId: cand.customerId,
+            name: cand.name,
+            reasons: executed.gateDecision?.reasons ?? [executed.outcome],
+          });
+        }
+        return {
+          ...base,
+          optOutFooter: renderOptOutFooter({
+            variants: template.optOutVariants ?? [],
+            unsubscribeUrl:
+              cand.unsubscribeUrl ??
+              options?.unsubscribeUrl ??
+              "https://pile.nyc/unsubscribe",
+            physicalAddress:
+              cand.physicalAddress ?? options?.physicalAddress ?? "Vortex NYC",
+          }),
+          enrollmentStatus: executed.enrollment.status,
+          mailboxSentToday: workingMailbox.sentToday,
         };
       }),
     { concurrency }

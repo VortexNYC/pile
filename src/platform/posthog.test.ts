@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   capturePosthogEvent,
+  captureProductEvent,
   isProductionTelemetryEnabled,
   PILE_POSTHOG_PROJECT_KEY,
   reportWorkerException,
@@ -88,6 +89,43 @@ describe("PostHog worker telemetry (PILE-597)", () => {
     expect(calls[0].event).toBe("pile_sweep_heartbeat");
     expect((calls[0].properties as Record<string, unknown>).product).toBe(
       "pile"
+    );
+  });
+});
+
+describe("captureProductEvent (PILE-632)", () => {
+  it("derives distinct_id from actorId, then workspace, then worker", async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    const fetchImpl = async (_input: unknown, init?: RequestInit) => {
+      calls.push(
+        JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>
+      );
+      return new Response("ok", { status: 200 });
+    };
+    captureProductEvent(
+      "memory.remembered",
+      { organizationId: "org-1", actorId: "user-9" },
+      undefined,
+      { fetchImpl }
+    );
+    captureProductEvent(
+      "customer.batch_approved",
+      { organizationId: "org-2" },
+      undefined,
+      { fetchImpl }
+    );
+    captureProductEvent("issue.created", {}, undefined, { fetchImpl });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(calls).toHaveLength(3);
+    expect(calls[0].event).toBe("memory.remembered");
+    expect((calls[0].properties as Record<string, unknown>).distinct_id).toBe(
+      "user-9"
+    );
+    expect((calls[1].properties as Record<string, unknown>).distinct_id).toBe(
+      "workspace:org-2"
+    );
+    expect((calls[2].properties as Record<string, unknown>).distinct_id).toBe(
+      "pile-worker"
     );
   });
 });
