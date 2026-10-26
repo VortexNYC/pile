@@ -741,6 +741,27 @@ export async function dispatchAgent(
       entityId: organizationId,
       limit: 10,
     });
+    // PILE-640 — task-contextual brief: the entity/repo/agent lists above
+    // are newest-N windows, so an older but topically-relevant fact drops
+    // out. Re-run recall with the issue title+description as the search
+    // text and surface semantic/BM25 matches that fell outside the windows.
+    const taskQuery = [issue.title, issue.description]
+      .filter(Boolean)
+      .join(" ")
+      .slice(0, 240)
+      .trim();
+    const contextualRepoFacts =
+      issue.repo && taskQuery
+        ? await stub.memoryRecall({
+            entityType: "repo",
+            entityId: issue.repo,
+            search: taskQuery,
+            limit: 10,
+          })
+        : [];
+    const contextualWorkspaceFacts = taskQuery
+      ? await stub.memoryRecall({ search: taskQuery, limit: 8 })
+      : [];
     const seenFactIds = new Set<string>();
     const facts = [
       ...(entityFacts ?? []),
@@ -753,7 +774,17 @@ export async function dispatchAgent(
       seenFactIds.add(f.id);
       return true;
     });
-    if (facts.length > 0) {
+    // Contextual hits not already covered by the base windows — these are
+    // the facts semantic recall rescued from beyond the newest-N cap.
+    const contextualFacts = [
+      ...(contextualRepoFacts ?? []),
+      ...(contextualWorkspaceFacts ?? []),
+    ].filter((f) => {
+      if (seenFactIds.has(f.id)) return false;
+      seenFactIds.add(f.id);
+      return true;
+    });
+    if (facts.length > 0 || contextualFacts.length > 0) {
       // PILE-616 — split the entity profile: durable static facts
       // (conventions, lessons, architecture) up front, transient dynamic
       // context (recent outcomes, signals, expiring holds) after, so the
@@ -776,6 +807,12 @@ export async function dispatchAgent(
                   `- [${f.kind}] ${f.fact}${f.validUntil ? ` (expires ${f.validUntil})` : ""}`
               )
               .join("\n")
+        );
+      }
+      if (contextualFacts.length > 0) {
+        sections.push(
+          "Task-relevant recall (matched on this issue's text):\n" +
+            contextualFacts.map((f) => `- [${f.kind}] ${f.fact}`).join("\n")
         );
       }
       memoryText =
