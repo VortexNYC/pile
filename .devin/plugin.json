@@ -1,0 +1,17 @@
+{
+  "name": "pile-agent-kit",
+  "version": "0.1.1",
+  "description": "First-party Pile agent kit — MCP server, CLI, SDK, and agent skills for issues, documents, CRM, support, and workspace memory.",
+  "mcpServers": {
+    "pile": {
+      "type": "http",
+      "url": "https://pile.nyc/mcp"
+    }
+  },
+  "skills": [
+    ".devin/skills/pile-mcp/SKILL.md",
+    ".devin/skills/pile-cli/SKILL.md",
+    ".devin/skills/pile-sdk/SKILL.md",
+    ".devin/skills/pile-agent/SKILL.md"
+  ]
+}

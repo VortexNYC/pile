@@ -6,6 +6,7 @@ dist
 .devin/*
 !.devin/skills/
 !.devin/rules/
+!.devin/plugin.json
 coverage
 *.log
 backups/
