@@ -1573,6 +1573,57 @@ describe("dispatch memory profile injection + ephemeral keys (PILE-616/623)", ()
     );
   });
 
+  it("recalls task-contextual repo and workspace memories matching the issue title/description even past the newest-10 cap (PILE-640)", async () => {
+    // A dedicated workspace — the shared one accumulates live sessions
+    // across the file and hits the 25-lane concurrency cap.
+    const db = createD1(env.D1);
+    const headers = await createAdminHeaders(env, "user-1");
+    const ws = await createWorkspace(db, env, headers, {
+      name: "Contextual memory workspace",
+      slug: `ctx-ws-${crypto.randomUUID().slice(0, 8)}`,
+      ownerId: actor.id,
+    });
+    const organizationId = ws!.id;
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    // The zebroid lesson lands first; 12 newer unrelated facts then push it
+    // out of the newest-10 repo window — only the contextual search recall
+    // can rescue it.
+    await stub.memoryRemember({
+      entityType: "repo",
+      entityId: "acme/web",
+      kind: "lesson",
+      fact: "zebroid billing rounding requires half-even integer cents",
+    });
+    for (let i = 0; i < 12; i++) {
+      await stub.memoryRemember({
+        entityType: "repo",
+        entityId: "acme/web",
+        kind: "note",
+        fact: `unrelated deploy cadence note number ${i}`,
+      });
+    }
+    let captured: AgentDispatchContext | undefined;
+    const agentId = `mock-ctx-${crypto.randomUUID().slice(0, 8)}`;
+    const provider = new MockAgentProvider(agentId, {
+      dispatch: (_1, _2, _3, ctx) => {
+        captured = ctx;
+        return { id: "ctx-1", agentId, status: "created" };
+      },
+    });
+    registerAgentProvider(agentId, () => provider);
+    const issue = await stub.createIssue({
+      title: "Fix zebroid billing rounding mismatch",
+      repo: "acme/web",
+    });
+    await dispatchAgent(env, agentId, organizationId, issue, actor);
+    expect(captured?.instructions).toContain(
+      "zebroid billing rounding requires half-even integer cents"
+    );
+  });
+
   it("mints the lane api key with a 24h expiry (PILE-623)", async () => {
     const { apikey } = await import("../global/schema.js");
     // A dedicated workspace — the shared one accumulates live sessions

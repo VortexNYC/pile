@@ -1370,6 +1370,68 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "provenance list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/provenance",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "repo",
+        flag: "repo",
+      },
+      {
+        name: "sha",
+        flag: "sha",
+      },
+      {
+        name: "file",
+        flag: "file",
+      },
+      {
+        name: "branch",
+        flag: "branch",
+      },
+      {
+        name: "prUrl",
+        flag: "pr-url",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+      {
+        name: "limit",
+        flag: "limit",
+      },
+    ],
+    body: [],
+  },
+  "agent recap list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/agent/recap",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "since",
+        flag: "since",
+      },
+      {
+        name: "repo",
+        flag: "repo",
+      },
+    ],
+    body: [],
+  },
   "issues live": {
     method: "GET",
     path: "/workspaces/{organizationId}/issues/{issueId}/live",

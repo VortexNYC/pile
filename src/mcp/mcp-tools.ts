@@ -2438,6 +2438,29 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdAgentRecap",
+    "description": "List agent recap (GET /workspaces/{organizationId}/agent/recap) Path params (top-level, required): organizationId. Query params (top-level, optional): since, repo.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/agent/recap",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "since": {
+          "type": "string"
+        },
+        "repo": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdAgentReceipts",
     "description": "List agent receipts (GET /workspaces/{organizationId}/agent/receipts) Path params (top-level, required): organizationId. Query params (top-level, optional): sessionId, agentId, issueId, stepKey, dealId, since, until, limit.",
     "method": "GET",
@@ -5567,6 +5590,44 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         "id",
         "organizationId",
         "projectId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdProvenance",
+    "description": "List provenance (GET /workspaces/{organizationId}/provenance) Path params (top-level, required): organizationId. Query params (top-level, optional): repo, sha, file, branch, prUrl, issueId, limit.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/provenance",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "repo": {
+          "type": "string"
+        },
+        "sha": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        },
+        "branch": {
+          "type": "string"
+        },
+        "prUrl": {
+          "type": "string"
+        },
+        "issueId": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
       ]
     }
   },

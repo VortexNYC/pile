@@ -2983,6 +2983,117 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/provenance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List provenance */
+        get: {
+            parameters: {
+                query?: {
+                    repo?: string;
+                    sha?: string;
+                    file?: string;
+                    branch?: string;
+                    prUrl?: string;
+                    issueId?: string;
+                    limit?: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Provenance: issues, lane sessions (with review convergence), touched files, commit shas, and memory facts explaining the queried artifact */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            query: {
+                                [key: string]: unknown;
+                            };
+                            entries: {
+                                [key: string]: unknown;
+                            }[];
+                            whySummary: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/agent/recap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List agent recap */
+        get: {
+            parameters: {
+                query?: {
+                    since?: string;
+                    repo?: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Engineering fleet recap: shipped, in-flight with trail convergence, blocked/decision-needed, compute totals, markdown brief */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            since: string;
+                            repo: string | null;
+                            shipped: {
+                                [key: string]: unknown;
+                            };
+                            inFlight: {
+                                [key: string]: unknown;
+                            };
+                            blocked: {
+                                [key: string]: unknown;
+                            };
+                            compute: {
+                                [key: string]: unknown;
+                            };
+                            markdownBrief: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/issues/{issueId}/live": {
         parameters: {
             query?: never;

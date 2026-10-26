@@ -41,13 +41,6 @@
     "selfhost": "bash scripts/selfhost.sh",
     "seed:local": "tsx scripts/seed-local.ts",
     "scan:secrets": "secretlint . --no-gitignore --secretlintignore .secretlintignore",
-    "entire:review": "entire review",
-    "entire:investigate": "entire investigate",
-    "entire:why": "entire why",
-    "entire:blame": "entire blame",
-    "entire:experts": "entire experts",
-    "entire:tokens": "entire tokens",
-    "entire:tokens:profile": "entire tokens profile",
     "docs:bundle": "tsx scripts/generate-docs-bundle.ts",
     "runner:bundle": "tsx scripts/generate-runner-bundle.ts"
   },

@@ -132,10 +132,16 @@ import { runMerchantLeadPlay } from "./lead-play-engine.js";
 import { extractFactsFromMarkdown } from "./memory-extractor.js";
 import type { ExtractedMemoryCandidate } from "./memory-extractor.js";
 import { workspaceMigrations } from "./migrations.js";
-import { type ReviewVerdict, rollReviewSummary } from "./review-summary.js";
+import {
+  evaluateReviewConvergence,
+  parseReviewSummary,
+  type ReviewVerdict,
+  rollReviewSummary,
+} from "./review-summary.js";
 import { workspaceSchema } from "./schema-map.js";
 import {
   workspaceAgentActivities,
+  workspaceAgentSessionEvents,
   workspaceAgentSessions,
   workspaceAttachments,
   workspaceComments,
@@ -6343,6 +6349,471 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
 
   listLaneCosts(args?: { agentSlug?: string; since?: string; limit?: number }) {
     return data.listLaneCosts(this.db, this.organizationId, args);
+  }
+
+  // PILE-643 — commit/file provenance ("why does this line exist"): match
+  // the query against issues, lane sessions, session-event payloads, and
+  // workspace memory so a sha/file/PR resolves to the work that made it.
+  async explainProvenance(query: {
+    repo?: string;
+    sha?: string;
+    file?: string;
+    branch?: string;
+    prUrl?: string;
+    issueId?: string;
+    limit?: number;
+  }) {
+    await this.ready;
+    const shaNorm = query.sha?.trim().toLowerCase();
+    const fileNorm = query.file?.trim().toLowerCase();
+    const limit = Math.min(Math.max(query.limit ?? 10, 1), 50);
+    const [sessions, issues, events] = await Promise.all([
+      this.listAgentSessions({ limit: 250 }),
+      this.db.select().from(workspaceIssues).all(),
+      this.db
+        .select()
+        .from(workspaceAgentSessionEvents)
+        .orderBy(desc(workspaceAgentSessionEvents.createdAt))
+        .limit(500)
+        .all(),
+    ]);
+    const memories = await this.memoryRecall({ limit: 200 });
+    const issueById = new Map(issues.map((i) => [i.id, i]));
+
+    const sessionMatch = (s: (typeof sessions)[number]) => {
+      const eventsFor = events.filter((e) => e.sessionId === s.id);
+      const payloadText = eventsFor
+        .map((e) => (e.payload ?? "").toLowerCase())
+        .join("\n");
+      const issue = issueById.get(s.issueId);
+      if (query.issueId) {
+        const q = query.issueId.toUpperCase();
+        const hit =
+          issue?.id === query.issueId ||
+          issue?.identifier?.toUpperCase() === q ||
+          s.issueId === query.issueId;
+        if (!hit) return false;
+      }
+      if (query.repo) {
+        const r = query.repo.toLowerCase();
+        if (
+          issue?.repo?.toLowerCase() !== r &&
+          !payloadText.includes(`"repo":"${r}"`) &&
+          !payloadText.includes(r)
+        )
+          return false;
+      }
+      if (query.branch) {
+        if (issue?.branch !== query.branch && s.branch !== query.branch)
+          return false;
+      }
+      if (query.prUrl) {
+        if (
+          issue?.prUrl !== query.prUrl &&
+          s.prUrl !== query.prUrl &&
+          !payloadText.includes(query.prUrl.toLowerCase())
+        )
+          return false;
+      }
+      if (shaNorm) {
+        const hit =
+          s.lastReviewedSha?.toLowerCase().startsWith(shaNorm) ||
+          payloadText.includes(shaNorm) ||
+          (s.result ?? "").toLowerCase().includes(shaNorm);
+        if (!hit) return false;
+      }
+      if (fileNorm) {
+        const hit =
+          payloadText.includes(fileNorm) ||
+          (s.result ?? "").toLowerCase().includes(fileNorm) ||
+          (issue?.title ?? "").toLowerCase().includes(fileNorm) ||
+          (issue?.description ?? "").toLowerCase().includes(fileNorm);
+        if (!hit) return false;
+      }
+      return true;
+    };
+
+    const matchedSessions = sessions.filter(sessionMatch);
+    const issueMatch = (i: (typeof issues)[number]) => {
+      if (query.issueId) {
+        const q = query.issueId.toUpperCase();
+        if (!(i.id === query.issueId || i.identifier?.toUpperCase() === q))
+          return false;
+      }
+      if (query.repo && i.repo?.toLowerCase() !== query.repo.toLowerCase())
+        return false;
+      if (query.branch && i.branch !== query.branch) return false;
+      if (query.prUrl && i.prUrl !== query.prUrl) return false;
+      if (fileNorm) {
+        const text = `${i.title} ${i.description ?? ""}`.toLowerCase();
+        const onSession = matchedSessions.some((s) => s.issueId === i.id);
+        if (!text.includes(fileNorm) && !onSession) return false;
+      }
+      return true;
+    };
+    const matchedIssues = new Set(issues.filter(issueMatch).map((i) => i.id));
+    const sessionLinkedIds = new Set(matchedSessions.map((s) => s.issueId));
+    for (const s of matchedSessions) matchedIssues.add(s.issueId);
+    // Session-linked issues carry the lane evidence — rank them ahead of
+    // looser text matches so they survive the limit slice.
+    const orderedIssueIds = [...matchedIssues].toSorted(
+      (a, b) =>
+        Number(sessionLinkedIds.has(b)) - Number(sessionLinkedIds.has(a))
+    );
+
+    const matchedMemories = memories.filter((m) => {
+      if (!fileNorm) {
+        if (query.issueId) {
+          const q = query.issueId.toUpperCase();
+          return m.entityId === query.issueId || m.entityId.toUpperCase() === q;
+        }
+        return false;
+      }
+      return (
+        m.fact.toLowerCase().includes(fileNorm) ||
+        m.kind.toLowerCase().includes(fileNorm)
+      );
+    });
+
+    const matchedFilesSet = new Set<string>();
+    const matchedShasSet = new Set<string>();
+    const fileEntryRe = /[\w./-]+\.[a-z]{1,6}/gi;
+    const shaRe = /\b[0-9a-f]{7,40}\b/g;
+    for (const e of events.filter((ev) =>
+      matchedSessions.some((s) => s.id === ev.sessionId)
+    )) {
+      const payload = e.payload ?? "";
+      try {
+        const parsed = JSON.parse(payload) as { files?: string[] };
+        for (const f of parsed.files ?? []) matchedFilesSet.add(f);
+      } catch {
+        // not JSON — fall through to text scan
+      }
+      if (fileNorm && payload.toLowerCase().includes(fileNorm)) {
+        for (const m of payload.matchAll(fileEntryRe))
+          matchedFilesSet.add(m[0]);
+      }
+      if (shaNorm) {
+        for (const m of payload.matchAll(shaRe)) {
+          if (m[0].startsWith(shaNorm)) matchedShasSet.add(m[0]);
+        }
+      } else {
+        for (const m of payload.matchAll(shaRe)) matchedShasSet.add(m[0]);
+      }
+    }
+    for (const s of matchedSessions) {
+      if (s.lastReviewedSha) matchedShasSet.add(s.lastReviewedSha);
+      if (fileNorm) {
+        for (const m of (s.result ?? "").matchAll(fileEntryRe))
+          matchedFilesSet.add(m[0]);
+      }
+    }
+
+    const entries = orderedIssueIds.slice(0, limit).map((issueId) => {
+      const issue = issueById.get(issueId);
+      const forIssue = matchedSessions.filter((s) => s.issueId === issueId);
+      return {
+        issue: issue
+          ? {
+              id: issue.id,
+              identifier: issue.identifier,
+              title: issue.title,
+              status: issue.status,
+              repo: issue.repo,
+              branch: issue.branch,
+              prUrl: issue.prUrl,
+            }
+          : null,
+        sessions: forIssue.map((s) => ({
+          id: s.id,
+          agentId: s.agentId,
+          purpose: s.purpose ?? null,
+          status: s.status,
+          lastReviewedSha: s.lastReviewedSha ?? null,
+          createdAt: s.createdAt,
+          endedAt: s.endedAt ?? null,
+          promptExcerpt: (s.plan ?? "").slice(0, 400),
+          resultExcerpt: (s.result ?? "").slice(0, 400),
+          convergence: evaluateReviewConvergence(
+            parseReviewSummary(s.reviewSummary ?? null)
+          ),
+        })),
+        touchedFiles: [...matchedFilesSet].slice(0, 50),
+        commitShas: [...matchedShasSet].slice(0, 20),
+        memories: matchedMemories.slice(0, 15).map((m) => ({
+          id: m.id,
+          entityType: m.entityType,
+          entityId: m.entityId,
+          kind: m.kind,
+          fact: m.fact,
+          sourceSessionId: m.sourceSessionId,
+          createdAt: m.createdAt,
+        })),
+      };
+    });
+
+    const firstIssue = entries.find((e) => e.issue)?.issue;
+    const convos = entries
+      .flatMap((e) => e.sessions)
+      .map((s) => s.convergence)
+      .filter((c) => c.rounds > 0);
+    const whySummary = [
+      `### Provenance${query.file ? ` for \`${query.file}\`` : ""}${query.sha ? ` @ \`${query.sha}\`` : ""}`,
+      firstIssue
+        ? `- **Issue:** ${firstIssue.identifier ?? firstIssue.id} — "${firstIssue.title}" (${firstIssue.status})${firstIssue.repo ? ` on ${firstIssue.repo}` : ""}${firstIssue.prUrl ? ` · ${firstIssue.prUrl}` : ""}`
+        : "- **Issue:** none matched",
+      `- **Lanes:** ${matchedSessions.length} session(s) matched${convos.length > 0 ? `; latest review arc: ${convos[0].trajectory}` : ""}`,
+      `- **Commit shas:** ${[...matchedShasSet].slice(0, 8).join(", ") || "none found"}`,
+      `- **Touched files:** ${[...matchedFilesSet].slice(0, 15).join(", ") || "none recorded"}`,
+      `- **Memory facts:** ${matchedMemories.length} related workspace-memory row(s)${matchedMemories[0] ? ` — e.g. [${matchedMemories[0].kind}] ${matchedMemories[0].fact.slice(0, 120)}` : ""}`,
+    ].join("\n");
+
+    return { query, entries, whySummary };
+  }
+
+  // PILE-644 — founder-ready engineering fleet recap: what shipped, what's
+  // in flight (with trail convergence), what's blocked, and compute spend.
+  async getEngineeringFleetRecap(args?: { since?: string; repo?: string }) {
+    await this.ready;
+    const sinceRaw = (args?.since ?? "24h").trim();
+    const hours = /^(\d+)h$/.exec(sinceRaw)?.[1];
+    const days = /^(\d+)d$/.exec(sinceRaw)?.[1];
+    const cutoffMs = hours
+      ? Date.now() - Number(hours) * 3_600_000
+      : days
+        ? Date.now() - Number(days) * 86_400_000
+        : Date.parse(sinceRaw);
+    const cutoff = Number.isFinite(cutoffMs)
+      ? new Date(cutoffMs)
+      : new Date(Date.now() - 86_400_000);
+    const cutoffIso = cutoff.toISOString();
+
+    const [sessions, issues, laneCosts, pausedAgents] = await Promise.all([
+      this.listAgentSessions({ limit: 500 }),
+      this.db.select().from(workspaceIssues).all(),
+      this.listLaneCosts({ since: cutoffIso, limit: 500 }),
+      this.listAgentPauses(),
+    ]);
+    const issueById = new Map(issues.map((i) => [i.id, i]));
+    const repoOk = (repo: string | null | undefined) =>
+      !args?.repo || repo === args.repo;
+    const endTime = (s: (typeof sessions)[number]) => s.endedAt ?? s.updatedAt;
+    const convergenceFor = (s: (typeof sessions)[number]) =>
+      evaluateReviewConvergence(parseReviewSummary(s.reviewSummary ?? null));
+
+    const completedSessions = sessions.filter(
+      (s) =>
+        s.purpose !== "review" &&
+        s.status === "completed" &&
+        endTime(s) >= cutoffIso &&
+        repoOk(issueById.get(s.issueId)?.repo)
+    );
+    const closedIssues = issues.filter(
+      (i) => i.status === "done" && i.updatedAt >= cutoffIso && repoOk(i.repo)
+    );
+    const memoriesDistilled = (await this.memoryRecall({ limit: 500 })).filter(
+      (m) => m.createdAt >= cutoffIso && m.kind !== "outcome"
+    );
+
+    const ACTIVE = new Set(["running", "starting", "queued", "created"]);
+    const activeLanes = sessions
+      .filter(
+        (s) => ACTIVE.has(s.status) && repoOk(issueById.get(s.issueId)?.repo)
+      )
+      .map((s) => {
+        const issue = issueById.get(s.issueId);
+        return {
+          sessionId: s.id,
+          agentId: s.agentId,
+          purpose: s.purpose ?? null,
+          status: s.status,
+          issueId: s.issueId,
+          issueIdentifier: issue?.identifier ?? null,
+          issueTitle: issue?.title ?? null,
+          repo: issue?.repo ?? null,
+          prUrl: issue?.prUrl ?? s.prUrl ?? null,
+          createdAt: s.createdAt,
+          convergence: convergenceFor(s),
+        };
+      });
+    const reviewRoundsCompleted = sessions.filter(
+      (s) =>
+        s.purpose === "review" &&
+        s.status === "completed" &&
+        endTime(s) >= cutoffIso
+    ).length;
+
+    const failedLanes = sessions
+      .filter(
+        (s) =>
+          s.purpose !== "review" &&
+          s.status === "failed" &&
+          endTime(s) >= cutoffIso &&
+          issueById.get(s.issueId)?.status !== "done" &&
+          repoOk(issueById.get(s.issueId)?.repo)
+      )
+      .map((s) => {
+        const issue = issueById.get(s.issueId);
+        return {
+          sessionId: s.id,
+          agentId: s.agentId,
+          issueId: s.issueId,
+          issueIdentifier: issue?.identifier ?? null,
+          issueTitle: issue?.title ?? null,
+          errorExcerpt: (s.result ?? "").slice(0, 240),
+        };
+      });
+    const oscillatingReviews = sessions
+      .filter((s) => repoOk(issueById.get(s.issueId)?.repo))
+      .map((s) => ({ s, conv: convergenceFor(s) }))
+      .filter(({ conv }) => conv.oscillating || conv.status === "stalled")
+      .map(({ s, conv }) => {
+        const issue = issueById.get(s.issueId);
+        return {
+          sessionId: s.id,
+          issueId: s.issueId,
+          issueIdentifier: issue?.identifier ?? null,
+          prUrl: issue?.prUrl ?? s.prUrl ?? null,
+          trajectory: conv.trajectory,
+          persistingFingerprints: conv.persistingFingerprints,
+        };
+      });
+    const humanGateRequired = sessions
+      .filter((s) => repoOk(issueById.get(s.issueId)?.repo))
+      .map((s) => ({
+        s,
+        latest: parseReviewSummary(s.reviewSummary ?? null).at(-1),
+      }))
+      .filter(({ latest }) => latest?.scores?.humanGate === true)
+      .map(({ s }) => {
+        const issue = issueById.get(s.issueId);
+        return {
+          sessionId: s.id,
+          issueId: s.issueId,
+          issueIdentifier: issue?.identifier ?? null,
+          prUrl: issue?.prUrl ?? s.prUrl ?? null,
+        };
+      });
+
+    const byAgent: Record<
+      string,
+      { sessions: number; durationSeconds: number }
+    > = {};
+    let totalDurationMs = 0;
+    for (const c of laneCosts) {
+      totalDurationMs += c.durationMs;
+      const key = c.agentSlug ?? "unknown";
+      const agg = (byAgent[key] ??= { sessions: 0, durationSeconds: 0 });
+      agg.sessions += 1;
+      agg.durationSeconds += Math.round(c.durationMs / 1000);
+    }
+    const totalDurationSeconds = Math.round(totalDurationMs / 1000);
+
+    const shippedLines = closedIssues
+      .slice(0, 15)
+      .map(
+        (i) =>
+          `- ${i.identifier ?? i.id}: ${i.title}${i.prUrl ? ` (${i.prUrl})` : ""}`
+      )
+      .join("\n");
+    const flightLines = activeLanes
+      .slice(0, 15)
+      .map(
+        (l) =>
+          `- [${l.status}] ${l.agentId}${l.issueIdentifier ? ` on ${l.issueIdentifier}` : ""}${l.repo ? ` (${l.repo})` : ""} — ${l.convergence.trajectory}`
+      )
+      .join("\n");
+    const blockedLines = [
+      ...failedLanes
+        .slice(0, 10)
+        .map(
+          (f) =>
+            `- failed: ${f.agentId}${f.issueIdentifier ? ` on ${f.issueIdentifier}` : ""} — ${f.errorExcerpt.slice(0, 120)}`
+        ),
+      ...oscillatingReviews
+        .slice(0, 10)
+        .map(
+          (o) =>
+            `- review loop: ${o.issueIdentifier ?? o.issueId} — ${o.trajectory}`
+        ),
+      ...humanGateRequired
+        .slice(0, 10)
+        .map((h) => `- human gate: ${h.issueIdentifier ?? h.issueId}`),
+      ...pausedAgents.map((p) => `- agent paused: ${p.agentId}`),
+    ].join("\n");
+    const computeLines = Object.entries(byAgent)
+      .toSorted((a, b) => b[1].durationSeconds - a[1].durationSeconds)
+      .map(
+        ([slug, agg]) =>
+          `- ${slug}: ${agg.sessions} runs, ${agg.durationSeconds}s`
+      )
+      .join("\n");
+
+    const markdownBrief = [
+      `# Engineering Fleet Recap (since ${cutoffIso})`,
+      "",
+      `## 1. What Shipped (${closedIssues.length} issues closed, ${completedSessions.length} lanes completed, ${memoriesDistilled.length} memories distilled)`,
+      shippedLines || "- none",
+      "",
+      `## 2. In Flight & Trail Convergence (${activeLanes.length} active lanes, ${reviewRoundsCompleted} review rounds)`,
+      flightLines || "- none",
+      "",
+      `## 3. Blocked / Needs Decision (${failedLanes.length} failed, ${oscillatingReviews.length} oscillating/stalled, ${humanGateRequired.length} human-gate, ${pausedAgents.length} paused agents)`,
+      blockedLines || "- none",
+      "",
+      `## 4. Compute (${laneCosts.length} settled runs, ${totalDurationSeconds}s total compute)`,
+      computeLines || "- none",
+    ].join("\n");
+
+    return {
+      since: cutoffIso,
+      repo: args?.repo ?? null,
+      shipped: {
+        completedSessions: completedSessions.map((s) => ({
+          sessionId: s.id,
+          agentId: s.agentId,
+          issue: (() => {
+            const i = issueById.get(s.issueId);
+            return i
+              ? {
+                  identifier: i.identifier,
+                  title: i.title,
+                  repo: i.repo,
+                  prUrl: i.prUrl,
+                }
+              : null;
+          })(),
+        })),
+        closedIssues: closedIssues.map((i) => ({
+          id: i.id,
+          identifier: i.identifier,
+          title: i.title,
+          repo: i.repo,
+          prUrl: i.prUrl,
+        })),
+        memoriesDistilled: memoriesDistilled.map((m) => ({
+          id: m.id,
+          kind: m.kind,
+          entityType: m.entityType,
+          entityId: m.entityId,
+          fact: m.fact.slice(0, 240),
+          createdAt: m.createdAt,
+        })),
+      },
+      inFlight: { activeLanes, reviewRoundsCompleted },
+      blocked: {
+        failedLanes,
+        oscillatingReviews,
+        humanGateRequired,
+        pausedAgents,
+      },
+      compute: {
+        totalSessions: laneCosts.length,
+        totalDurationSeconds,
+        byAgent,
+      },
+      markdownBrief,
+    };
   }
 
   // Resolve the {id, teamId} an issue-entity memory rows hang on so the
