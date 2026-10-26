@@ -8,8 +8,17 @@ import { Link } from "@tanstack/react-router";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 
 import { CompanyLogo } from "@/components/company-logo";
+import {
+  type CustomerColumnKey,
+  CustomersDisplayMenu,
+  densityClasses,
+  isColumnVisible,
+  normalizeSheetColor,
+  sheetRowStyle,
+} from "@/components/customers-display-menu";
 import { EntityHover } from "@/components/entity-hover";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap } from "@/lib/api";
 import { formatRelative } from "@/lib/labels";
@@ -261,6 +270,15 @@ const SHEET_DEFS: ReadonlyArray<{
   },
 ];
 
+/** The color accent for a row: the palette hex assigned to the sheet the
+ * row was classified into, or undefined when that sheet is uncolored. */
+export function rowSheetColor(
+  sheetKey: string,
+  sheetColors: Record<string, string> | undefined
+): string | undefined {
+  return normalizeSheetColor(sheetColors?.[sheetKey]);
+}
+
 /** Count rows by a key selector and return [key, count] pairs ranked by
  * count descending — used for owner and category filter options. */
 export function rankedCounts<K extends string>(
@@ -293,6 +311,22 @@ export function CustomersList() {
   }, [activeSheet, selectedOwner, selectedCategory]);
   const deferredSearch = useDeferredValue(searchQuery);
   const [peekRowId, setPeekRowId] = useState<string | null>(null);
+
+  // Sheets-style display prefs — tab colors, row density, column
+  // visibility — persisted per user via me/view-preferences.
+  const {
+    prefs: displayPrefs,
+    setSheetColor,
+    clearSheetColors,
+    setDensity,
+    toggleColumn,
+  } = useDisplayPrefs(workspace.id, "customers");
+  const density = displayPrefs.density ?? "comfortable";
+  const densityCls = densityClasses(density);
+  const sheetColors = displayPrefs.sheetColors;
+  const hiddenColumns = displayPrefs.hiddenColumns;
+  const columnVisible = (col: CustomerColumnKey) =>
+    isColumnVisible(hiddenColumns, col);
 
   const customers = useQuery({
     queryKey: key,
@@ -575,7 +609,20 @@ export function CustomersList() {
         <Tabs
           tabs={visibleSheets.map((s) => ({
             value: s.key,
-            label: `${s.label} · ${sheetCounts[s.key]}`,
+            label: (
+              <span className="inline-flex items-center gap-1.5">
+                {rowSheetColor(s.key, sheetColors) && (
+                  <span
+                    aria-hidden
+                    className="inline-block size-2 rounded-full"
+                    style={{
+                      backgroundColor: rowSheetColor(s.key, sheetColors),
+                    }}
+                  />
+                )}
+                {s.label} · {sheetCounts[s.key]}
+              </span>
+            ),
           }))}
           value={activeSheet}
           onValueChange={(v) => {
@@ -617,6 +664,19 @@ export function CustomersList() {
             placeholder="Filter rows…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          <CustomersDisplayMenu
+            sheets={visibleSheets.map((s) => ({
+              key: s.key,
+              label: s.label,
+            }))}
+            sheetColors={sheetColors}
+            onSheetColor={setSheetColor}
+            density={density}
+            onDensity={setDensity}
+            hiddenColumns={hiddenColumns}
+            onToggleColumn={toggleColumn}
+            onClearSheetColors={clearSheetColors}
           />
           <Button
             variant="secondary"
@@ -694,16 +754,18 @@ export function CustomersList() {
             <div className="overflow-x-auto rounded border border-kumo-line bg-kumo-base">
               <table
                 aria-label="Companies"
-                className="w-full border-collapse text-left text-xs"
+                className={`w-full border-collapse text-left ${densityCls.table}`}
               >
                 <thead>
                   <tr className="border-b border-kumo-line bg-kumo-tint/30 text-[11px] font-medium uppercase tracking-wider text-kumo-subtle select-none">
-                    <th className="w-10 border-r border-kumo-line px-2 py-1.5 text-right font-mono">
+                    <th
+                      className={`w-10 border-r border-kumo-line px-2 ${densityCls.cellY} text-right font-mono`}
+                    >
                       #
                     </th>
                     <th
                       onClick={() => toggleSort("name")}
-                      className="min-w-[220px] cursor-pointer border-r border-kumo-line px-2.5 py-1.5 hover:text-kumo-default"
+                      className={`min-w-[220px] cursor-pointer border-r border-kumo-line px-2.5 ${densityCls.cellY} hover:text-kumo-default`}
                     >
                       Company{" "}
                       {sortField === "name"
@@ -712,67 +774,85 @@ export function CustomersList() {
                           : "↓"
                         : ""}
                     </th>
-                    <th
-                      onClick={() => toggleSort("category")}
-                      className="min-w-[180px] cursor-pointer border-r border-kumo-line px-2.5 py-1.5 hover:text-kumo-default"
-                    >
-                      Category{" "}
-                      {sortField === "category"
-                        ? sortDir === "asc"
-                          ? "↑"
-                          : "↓"
-                        : ""}
-                    </th>
-                    <th
-                      onClick={() => toggleSort("owner")}
-                      className="min-w-[100px] cursor-pointer border-r border-kumo-line px-2.5 py-1.5 hover:text-kumo-default"
-                    >
-                      Owner{" "}
-                      {sortField === "owner"
-                        ? sortDir === "asc"
-                          ? "↑"
-                          : "↓"
-                        : ""}
-                    </th>
-                    <th className="min-w-[125px] border-r border-kumo-line px-2.5 py-1.5">
-                      Phone
-                    </th>
-                    <th
-                      onClick={() => toggleSort("location")}
-                      className="min-w-[220px] cursor-pointer border-r border-kumo-line px-2.5 py-1.5 hover:text-kumo-default"
-                    >
-                      Location{" "}
-                      {sortField === "location"
-                        ? sortDir === "asc"
-                          ? "↑"
-                          : "↓"
-                        : ""}
-                    </th>
-                    <th className="min-w-[260px] border-r border-kumo-line px-2.5 py-1.5">
-                      Principal & Signal
-                    </th>
-                    <th
-                      onClick={() => toggleSort("score")}
-                      className="min-w-[90px] cursor-pointer border-r border-kumo-line px-2.5 py-1.5 hover:text-kumo-default"
-                    >
-                      Score{" "}
-                      {sortField === "score"
-                        ? sortDir === "asc"
-                          ? "↑"
-                          : "↓"
-                        : ""}
-                    </th>
-                    <th
-                      onClick={() => toggleSort("added")}
-                      className="w-24 cursor-pointer px-2.5 py-1.5 hover:text-kumo-default"
-                    >
-                      Added{" "}
-                      {sortField === "added"
-                        ? sortDir === "asc"
-                          ? "↑"
-                          : "↓"
-                        : ""}
-                    </th>
+                    {columnVisible("category") && (
+                      <th
+                        onClick={() => toggleSort("category")}
+                        className={`min-w-[180px] cursor-pointer border-r border-kumo-line px-2.5 ${densityCls.cellY} hover:text-kumo-default`}
+                      >
+                        Category{" "}
+                        {sortField === "category"
+                          ? sortDir === "asc"
+                            ? "↑"
+                            : "↓"
+                          : ""}
+                      </th>
+                    )}
+                    {columnVisible("owner") && (
+                      <th
+                        onClick={() => toggleSort("owner")}
+                        className={`min-w-[100px] cursor-pointer border-r border-kumo-line px-2.5 ${densityCls.cellY} hover:text-kumo-default`}
+                      >
+                        Owner{" "}
+                        {sortField === "owner"
+                          ? sortDir === "asc"
+                            ? "↑"
+                            : "↓"
+                          : ""}
+                      </th>
+                    )}
+                    {columnVisible("phone") && (
+                      <th
+                        className={`min-w-[125px] border-r border-kumo-line px-2.5 ${densityCls.cellY}`}
+                      >
+                        Phone
+                      </th>
+                    )}
+                    {columnVisible("location") && (
+                      <th
+                        onClick={() => toggleSort("location")}
+                        className={`min-w-[220px] cursor-pointer border-r border-kumo-line px-2.5 ${densityCls.cellY} hover:text-kumo-default`}
+                      >
+                        Location{" "}
+                        {sortField === "location"
+                          ? sortDir === "asc"
+                            ? "↑"
+                            : "↓"
+                          : ""}
+                      </th>
+                    )}
+                    {columnVisible("signal") && (
+                      <th
+                        className={`min-w-[260px] border-r border-kumo-line px-2.5 ${densityCls.cellY}`}
+                      >
+                        Principal & Signal
+                      </th>
+                    )}
+                    {columnVisible("score") && (
+                      <th
+                        onClick={() => toggleSort("score")}
+                        className={`min-w-[90px] cursor-pointer border-r border-kumo-line px-2.5 ${densityCls.cellY} hover:text-kumo-default`}
+                      >
+                        Score{" "}
+                        {sortField === "score"
+                          ? sortDir === "asc"
+                            ? "↑"
+                            : "↓"
+                          : ""}
+                      </th>
+                    )}
+                    {columnVisible("added") && (
+                      <th
+                        onClick={() => toggleSort("added")}
+                        className={`w-24 cursor-pointer px-2.5 ${densityCls.cellY} hover:text-kumo-default`}
+                      >
+                        Added{" "}
+                        {sortField === "added"
+                          ? sortDir === "asc"
+                            ? "↑"
+                            : "↓"
+                          : ""}
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -783,14 +863,21 @@ export function CustomersList() {
                       <tr
                         key={customer.id}
                         onClick={() => setPeekRowId(customer.id)}
+                        style={sheetRowStyle(
+                          rowSheetColor(row.classified.sheetKey, sheetColors)
+                        )}
                         className={`cursor-pointer border-b border-kumo-line transition-colors ${
                           isPeeked ? "bg-kumo-tint/40" : "hover:bg-kumo-tint/20"
                         }`}
                       >
-                        <td className="border-r border-kumo-line px-2 py-1.5 text-right font-mono text-[11px] text-kumo-subtle">
+                        <td
+                          className={`border-r border-kumo-line px-2 ${densityCls.cellY} text-right font-mono text-[11px] text-kumo-subtle`}
+                        >
                           {idx + 1}
                         </td>
-                        <td className="border-r border-kumo-line px-2.5 py-1.5 whitespace-nowrap">
+                        <td
+                          className={`border-r border-kumo-line px-2.5 ${densityCls.cellY} whitespace-nowrap`}
+                        >
                           <div className="flex items-center justify-between gap-2">
                             <EntityHover
                               title={customer.name}
@@ -832,72 +919,97 @@ export function CustomersList() {
                             </button>
                           </div>
                         </td>
-                        <td className="border-r border-kumo-line px-2.5 py-1.5 whitespace-nowrap">
-                          <Badge variant="secondary">
-                            {row.classified.categoryLabel}
-                          </Badge>
-                        </td>
-                        <td
-                          onClick={(e) => e.stopPropagation()}
-                          className="border-r border-kumo-line px-2 py-1 whitespace-nowrap"
-                        >
-                          <select
-                            aria-label={`Owner for ${customer.name}`}
-                            value={row.ownerId ?? ""}
-                            onChange={(e) =>
-                              patchOwner.mutate({
-                                customerId: customer.id,
-                                ownerId: e.target.value || undefined,
-                              })
-                            }
-                            className="h-6 rounded border border-kumo-line bg-kumo-base px-1.5 text-xs text-kumo-default"
+                        {columnVisible("category") && (
+                          <td
+                            className={`border-r border-kumo-line px-2.5 ${densityCls.cellY} whitespace-nowrap`}
                           >
-                            {OWNER_SELECT_OPTIONS.map((opt) => (
-                              <option key={opt.id} value={opt.id}>
-                                {opt.label}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td
-                          onClick={(e) => e.stopPropagation()}
-                          className="border-r border-kumo-line px-2.5 py-1.5 whitespace-nowrap font-mono"
-                        >
-                          {row.phone ? (
-                            <a
-                              href={`tel:${row.phone}`}
-                              className="text-kumo-link hover:underline"
+                            <Badge variant="secondary">
+                              {row.classified.categoryLabel}
+                            </Badge>
+                          </td>
+                        )}
+                        {columnVisible("owner") && (
+                          <td
+                            onClick={(e) => e.stopPropagation()}
+                            className={`border-r border-kumo-line px-2 ${density === "compact" ? "py-0.5" : "py-1"} whitespace-nowrap`}
+                          >
+                            <select
+                              aria-label={`Owner for ${customer.name}`}
+                              value={row.ownerId ?? ""}
+                              onChange={(e) =>
+                                patchOwner.mutate({
+                                  customerId: customer.id,
+                                  ownerId: e.target.value || undefined,
+                                })
+                              }
+                              className="h-6 rounded border border-kumo-line bg-kumo-base px-1.5 text-xs text-kumo-default"
                             >
-                              {row.phone}
-                            </a>
-                          ) : (
-                            <span className="text-kumo-subtle">—</span>
-                          )}
-                        </td>
-                        <td className="border-r border-kumo-line px-2.5 py-1.5 whitespace-nowrap">
-                          <span className="truncate block max-w-[230px] text-kumo-subtle">
-                            {row.neighborhood ? `${row.neighborhood} · ` : ""}
-                            {row.address ?? "—"}
-                          </span>
-                        </td>
-                        <td className="border-r border-kumo-line px-2.5 py-1.5">
-                          <span className="truncate block max-w-[290px] text-kumo-subtle">
-                            {row.signal ?? row.classified.vortexWedge}
-                          </span>
-                        </td>
-                        <td className="border-r border-kumo-line px-2.5 py-1.5 whitespace-nowrap font-mono">
-                          {row.fitScore != null || row.priorityScore != null ? (
-                            <span>
-                              F{row.fitScore ?? "—"} · P
-                              {row.priorityScore ?? "—"}
+                              {OWNER_SELECT_OPTIONS.map((opt) => (
+                                <option key={opt.id} value={opt.id}>
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                        )}
+                        {columnVisible("phone") && (
+                          <td
+                            onClick={(e) => e.stopPropagation()}
+                            className={`border-r border-kumo-line px-2.5 ${densityCls.cellY} whitespace-nowrap font-mono`}
+                          >
+                            {row.phone ? (
+                              <a
+                                href={`tel:${row.phone}`}
+                                className="text-kumo-link hover:underline"
+                              >
+                                {row.phone}
+                              </a>
+                            ) : (
+                              <span className="text-kumo-subtle">—</span>
+                            )}
+                          </td>
+                        )}
+                        {columnVisible("location") && (
+                          <td
+                            className={`border-r border-kumo-line px-2.5 ${densityCls.cellY} whitespace-nowrap`}
+                          >
+                            <span className="truncate block max-w-[230px] text-kumo-subtle">
+                              {row.neighborhood ? `${row.neighborhood} · ` : ""}
+                              {row.address ?? "—"}
                             </span>
-                          ) : (
-                            <span className="text-kumo-subtle">—</span>
-                          )}
-                        </td>
-                        <td className="px-2.5 py-1.5 whitespace-nowrap text-kumo-subtle">
-                          {formatRelative(customer.createdAt)}
-                        </td>
+                          </td>
+                        )}
+                        {columnVisible("signal") && (
+                          <td
+                            className={`border-r border-kumo-line px-2.5 ${densityCls.cellY}`}
+                          >
+                            <span className="truncate block max-w-[290px] text-kumo-subtle">
+                              {row.signal ?? row.classified.vortexWedge}
+                            </span>
+                          </td>
+                        )}
+                        {columnVisible("score") && (
+                          <td
+                            className={`border-r border-kumo-line px-2.5 ${densityCls.cellY} whitespace-nowrap font-mono`}
+                          >
+                            {row.fitScore != null ||
+                            row.priorityScore != null ? (
+                              <span>
+                                F{row.fitScore ?? "—"} · P
+                                {row.priorityScore ?? "—"}
+                              </span>
+                            ) : (
+                              <span className="text-kumo-subtle">—</span>
+                            )}
+                          </td>
+                        )}
+                        {columnVisible("added") && (
+                          <td
+                            className={`px-2.5 ${densityCls.cellY} whitespace-nowrap text-kumo-subtle`}
+                          >
+                            {formatRelative(customer.createdAt)}
+                          </td>
+                        )}
                       </tr>
                     );
                   })}

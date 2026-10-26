@@ -4554,3 +4554,27 @@ describe("setOrganizationId memoization (PILE-645)", () => {
     });
   });
 });
+
+describe("user view preferences display", () => {
+  it("stores and returns the per-surface display blob via the DO", async () => {
+    const stub = getStub();
+    await withWorkspace(stub, async (instance) => {
+      const userId = `display-${crypto.randomUUID()}`;
+      const display = {
+        customers: {
+          sheetColors: { trades: "#3b82f6" },
+          density: "compact" as const,
+          hiddenColumns: ["phone", "location"],
+        },
+      };
+      const prefs = await instance.setDisplay(userId, display);
+      expect(prefs?.display).toBe(JSON.stringify(display));
+
+      const read = await instance.getUserViewPreferences(userId);
+      expect(JSON.parse(read!.display!)).toEqual(display);
+
+      const cleared = await instance.setDisplay(userId, null);
+      expect(cleared?.display).toBeNull();
+    });
+  });
+});

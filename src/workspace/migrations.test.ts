@@ -43,6 +43,15 @@ describe("workspaceMigrations", () => {
   });
 });
 
+describe("v102 display prefs", () => {
+  it("adds the display JSON column to user_workspace_preferences", () => {
+    const sql = workspaceMigrations.migrations.m0101;
+    expect(sql).toContain(
+      "ALTER TABLE user_workspace_preferences ADD COLUMN display TEXT"
+    );
+  });
+});
+
 describe("v71 pipeline hygiene", () => {
   it("adds external_id + hygiene columns and dedupe indexes", () => {
     const sql = workspaceMigrations.migrations.m0071;

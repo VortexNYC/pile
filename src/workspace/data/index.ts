@@ -772,6 +772,47 @@ export interface EntityFavorite {
   addedAt: string;
 }
 
+/** Per-surface display prefs keyed by surface name ("customers", …). Each
+ * surface holds sheet-tab colors, row density, and hidden columns — the
+ * Sheets-style look controls the CRM list persists per user. */
+export interface SurfaceDisplayPrefs {
+  sheetColors?: Record<string, string>;
+  density?: "comfortable" | "compact";
+  hiddenColumns?: string[];
+}
+
+export type DisplayPrefsMap = Record<string, SurfaceDisplayPrefs>;
+
+export async function setDisplay(
+  db: WorkspaceDb,
+  organizationId: string,
+  userId: string,
+  display: DisplayPrefsMap | null
+) {
+  const value = display ? JSON.stringify(display) : null;
+  const existing = await getUserViewPreferences(db, organizationId, userId);
+  const ts = new Date().toISOString();
+  if (existing) {
+    await db
+      .update(workspaceUserPreferences)
+      .set({ display: value, updatedAt: ts })
+      .where(
+        and(
+          eq(workspaceUserPreferences.organizationId, organizationId),
+          eq(workspaceUserPreferences.userId, userId)
+        )
+      );
+  } else {
+    await db.insert(workspaceUserPreferences).values({
+      organizationId,
+      userId,
+      display: value,
+      updatedAt: ts,
+    });
+  }
+  return getUserViewPreferences(db, organizationId, userId);
+}
+
 export async function setFavorites(
   db: WorkspaceDb,
   organizationId: string,
