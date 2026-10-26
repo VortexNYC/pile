@@ -53,6 +53,7 @@ async function generatePrivateKeyPem(): Promise<string> {
     true,
     ["sign", "verify"]
   );
+  if (!("privateKey" in pair)) throw new Error("expected a CryptoKeyPair");
   const pkcs8 = await crypto.subtle.exportKey("pkcs8", pair.privateKey);
   if (!(pkcs8 instanceof ArrayBuffer)) throw new Error("pkcs8 export failed");
   const b64 = btoa(String.fromCharCode(...new Uint8Array(pkcs8)));

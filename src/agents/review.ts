@@ -20,6 +20,13 @@ import {
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { AgentSession, Issue } from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
+import {
+  evaluateReviewConvergence,
+  parseReviewSummary,
+  rollReviewSummary,
+  type ReviewConvergenceSummary,
+  type TrailScores,
+} from "../workspace/review-summary.js";
 import { loadProviderConfig } from "./credentials.js";
 import { resolveAgentEnv } from "./daytona.js";
 import { dispatchAgent, getAgentProvider } from "./index.js";
@@ -72,6 +79,11 @@ export interface ParsedReview {
   findings: ReviewFinding[];
   /** The lane's report carried no machine-readable verdict block. */
   unstructured: boolean;
+  /** PILE-642 — stable per-finding ids so a follow-up round can tell "same
+   *  finding still open" from "newly introduced finding". */
+  fingerprints: string[];
+  /** PILE-642 — multi-axis health read for the review HUD. */
+  scores: TrailScores;
 }
 
 export interface ReviewTarget {
@@ -148,6 +160,61 @@ const publishedPayloadSchema = z.object({
 
 type RequestedPayload = z.infer<typeof requestedPayloadSchema>;
 
+// PILE-642 — a finding's identity across review rounds: file + severity +
+// normalized title. Rounds that raise the same fingerprint are the same
+// unresolved problem; a new fingerprint under request-changes is regression.
+export function computeFindingFingerprint(
+  f: Pick<ReviewFinding, "severity" | "title" | "file">
+): string {
+  return `${f.file ?? "global"}:${f.severity}:${f.title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 48)}`;
+}
+
+const clampScore = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
+
+const SECURITY_FINDING_RE =
+  /\b(sec|auth|token|secret|xss|sql|ssrf|csrf|permission|rls|leak|key|inject)\b/i;
+const SLOP_FINDING_RE =
+  /\b(unused|dead|comment|todo|console|any|cast|duplicate|redundant|slop)\b/i;
+
+/** Deduct per severity inside each axis — security findings hit the security
+ *  score, slop hits slop, everything else (contracts, bugs, regressions,
+ *  migrations, tests) hits invariants. `humanGate` trips on any breaking
+ *  finding or a security score under 70. */
+export function computeReviewTrailScores(
+  findings: ReadonlyArray<ReviewFinding>
+): TrailScores {
+  const deduct: Record<FindingSeverity, number> = {
+    breaking: 35,
+    must: 20,
+    minor: 5,
+  };
+  let security = 100;
+  let slop = 100;
+  let invariants = 100;
+  for (const f of findings) {
+    const text = `${f.title} ${f.detail ?? ""} ${f.file ?? ""}`;
+    const hit = deduct[f.severity];
+    if (SECURITY_FINDING_RE.test(text)) security -= hit;
+    else if (SLOP_FINDING_RE.test(text)) slop -= hit;
+    else invariants -= hit;
+  }
+  const scores = {
+    security: clampScore(security),
+    slop: clampScore(slop),
+    invariants: clampScore(invariants),
+    humanGate: false,
+  };
+  return {
+    ...scores,
+    humanGate:
+      findings.some((f) => f.severity === "breaking") || scores.security < 70,
+  };
+}
+
 /** Deterministically filter out hallucinated findings whose `file` is not in
  *  the PR's reviewable changed files (Michael Thiessen / Pullfrog rule), and
  *  recompute `verdict` from the surviving grounded findings. */
@@ -172,6 +239,10 @@ export function filterDiffGroundedFindings(
     verdict: review.unstructured
       ? review.verdict
       : verdictFromFindings(grounded),
+    // Recomputed — a dropped hallucinated finding must not keep its
+    // fingerprint or its score hit alive.
+    fingerprints: grounded.map(computeFindingFingerprint),
+    scores: computeReviewTrailScores(grounded),
   };
 }
 
@@ -248,6 +319,8 @@ export function parseReviewVerdict(report: string | null): ParsedReview {
       summary: (block.data.summary ?? "").trim(),
       findings,
       unstructured: false,
+      fingerprints: findings.map(computeFindingFingerprint),
+      scores: computeReviewTrailScores(findings),
     };
   }
   const tagged =
@@ -258,6 +331,8 @@ export function parseReviewVerdict(report: string | null): ParsedReview {
     summary: text || "The review lane produced no report.",
     findings: [],
     unstructured: true,
+    fingerprints: [],
+    scores: computeReviewTrailScores([]),
   };
 }
 
@@ -294,7 +369,8 @@ export function reviewCommentMarker(headSha: string): string {
  *  address → ℹ️ minor → ✅ clean. */
 export function renderReviewBody(
   review: ParsedReview,
-  headSha: string
+  headSha: string,
+  convergence?: ReviewConvergenceSummary
 ): string {
   const by = (s: FindingSeverity) =>
     review.findings.filter((f) => f.severity === s);
@@ -303,6 +379,12 @@ export function renderReviewBody(
     `### Pile review: ${VERDICT_HEADLINE[review.verdict]}`,
     "",
     `Reviewed \`${headSha.slice(0, 12)}\`.`,
+    `**Trail HUD:** Security \`${review.scores.security}/100\` · Invariants \`${review.scores.invariants}/100\` · Slop \`${review.scores.slop}/100\` · Human gate \`${review.scores.humanGate ? "required" : "clear"}\``,
+    ...(convergence && convergence.rounds >= 2
+      ? [
+          `**Trail convergence (round ${convergence.rounds}):** ${convergence.trajectory}`,
+        ]
+      : []),
     "",
   ];
   if (review.summary) lines.push(review.summary, "");
@@ -524,7 +606,8 @@ export function buildReviewDiff(
 export function buildReviewInstructions(
   target: ReviewTarget,
   diff: string,
-  skippedGenerated: string[]
+  skippedGenerated: string[],
+  repoMemoryFacts?: ReadonlyArray<{ kind: string; fact: string }>
 ): string {
   const body = (target.body ?? "").trim();
   return [
@@ -545,6 +628,13 @@ export function buildReviewInstructions(
       ? [
           "",
           `Generated artifacts excluded from the diff (regenerated from source, do not review): ${skippedGenerated.join(", ")}`,
+        ]
+      : []),
+    ...(repoMemoryFacts && repoMemoryFacts.length > 0
+      ? [
+          "",
+          "## Repository Invariants & Past Review Lessons (Enforce on this diff)",
+          ...repoMemoryFacts.map((f) => `- [${f.kind}] ${f.fact}`),
         ]
       : []),
     "",
@@ -1051,10 +1141,49 @@ export async function requestPrReview(
       .map((f) => f.filename);
     const riskTier = classifyReviewRiskTier(reviewable, config);
     const selectedModel = resolveReviewModel(config, riskTier);
+    // PILE-641 — the review lane is repo-less on purpose (diff inlined), but
+    // that meant dispatchAgent's repo-memory recall never ran. Recall the
+    // repo's stored invariants + past review lessons directly, newest-10
+    // plus a contextual pass matched on the PR title + changed filenames.
+    let repoFacts: ReadonlyArray<{ kind: string; fact: string }> = [];
+    try {
+      const searchText = [target.title, ...reviewable.map((f) => f.filename)]
+        .filter(Boolean)
+        .join(" ")
+        .slice(0, 200);
+      const [recent, contextual] = await Promise.all([
+        stub.memoryRecall({
+          entityType: "repo",
+          entityId: target.repoFull,
+          limit: 10,
+        }),
+        searchText
+          ? stub.memoryRecall({
+              entityType: "repo",
+              entityId: target.repoFull,
+              search: searchText,
+              limit: 8,
+            })
+          : Promise.resolve([]),
+      ]);
+      const seen = new Set<string>();
+      repoFacts = [...(recent ?? []), ...(contextual ?? [])]
+        .filter((f) => {
+          if (f.kind === "outcome") return false; // raw lane tails, not lessons
+          if (seen.has(f.id)) return false;
+          seen.add(f.id);
+          return true;
+        })
+        .slice(0, 12);
+    } catch {
+      // Memory recall is best-effort — never block a review dispatch on it.
+      repoFacts = [];
+    }
     const instructions = buildReviewInstructions(
       target,
       buildReviewDiff(reviewable),
-      skipped
+      skipped,
+      repoFacts
     );
     const providerConfig = await loadProviderConfig(env, stub, agentId);
     try {
@@ -1249,11 +1378,40 @@ async function nudgeWorkLaneWithVerdict(
     });
     if (!workLane) return;
     const issue = await stub.getIssue(session.issueId).catch(() => undefined);
+    // PILE-642 — roll this verdict into the work lane's review summary so
+    // the convergence window sees every round, then evaluate it: an
+    // oscillating arc means the lane keeps re-breaking (or re-flagging) the
+    // same fingerprints — name them so the lane changes strategy.
+    const rolled = rollReviewSummary(workLane.reviewSummary, {
+      reviewId: reviewId ?? Date.now(),
+      reviewer: "pile-review",
+      state: review.verdict,
+      sha: req.headSha,
+      excerpt: review.summary,
+      findingsCount: review.findings.length,
+      fingerprints: review.fingerprints,
+      scores: review.scores,
+    });
+    await stub
+      .updateAgentSession(workLane.id, {
+        reviewSummary: rolled.reviewSummary,
+      })
+      .catch(() => undefined);
+    const convergence = evaluateReviewConvergence(
+      parseReviewSummary(rolled.reviewSummary)
+    );
+    const oscillationAlert =
+      convergence.oscillating && convergence.persistingFingerprints.length > 0
+        ? `\n\n⚠️ Trail oscillation detected (round ${convergence.rounds}) — these findings keep coming back:\n` +
+          convergence.persistingFingerprints.map((fp) => `- ${fp}`).join("\n") +
+          "\nDo not repeat the same patch shape — change strategy."
+        : "";
     await nudgeLane(env, stub, organizationId, workLane, issue, req.prUrl, {
       prompt:
         `Pile's review lane ${review.verdict === "request-changes" ? "requested changes" : "left review feedback"} ` +
         `on ${req.prUrl} (sha ${req.headSha.slice(0, 12)}).\n\n${body}\n\n` +
-        "Address the review feedback on the PR and push.",
+        "Address the review feedback on the PR and push." +
+        oscillationAlert,
       reason: "review feedback",
       dedupeKey:
         reviewId !== null ? `review-${reviewId}` : `pile-review-${req.headSha}`,
@@ -1446,6 +1604,27 @@ export async function publishReviewVerdicts(
         },
       });
       published++;
+
+      // PILE-641 — a request-changes verdict with a blocking finding becomes
+      // a repo review lesson so the next review lane (and dispatch brief)
+      // enforces it. Best-effort: memory is never on the publish hot path.
+      if (review && review.verdict === "request-changes") {
+        const blocking = review.findings.filter(
+          (f) => f.severity === "breaking" || f.severity === "must"
+        );
+        const top = blocking[0];
+        if (top) {
+          await stub
+            .memoryRemember({
+              entityType: "repo",
+              entityId: req.repo,
+              kind: `review_lesson:${top.file ?? "general"}`,
+              fact: `[${top.severity}] ${top.title}${top.file ? ` (${top.file})` : ""}${top.detail ? ` — ${top.detail.slice(0, 200)}` : ""}`,
+              sourceSessionId: session.id,
+            })
+            .catch(() => {});
+        }
+      }
 
       if (review && review.verdict !== "approve" && body !== null) {
         await nudgeWorkLaneWithVerdict(
