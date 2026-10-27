@@ -27226,7 +27226,8 @@
                       "debugger_json",
                       "log",
                       "network",
-                      "replay"
+                      "replay",
+                      "transcript"
                     ],
                     "default": "screenshot"
                   },
@@ -27249,7 +27250,8 @@
                             "debugger_json",
                             "log",
                             "network",
-                            "replay"
+                            "replay",
+                            "transcript"
                           ]
                         },
                         "fileName": {
@@ -27328,7 +27330,8 @@
                               "debugger_json",
                               "log",
                               "network",
-                              "replay"
+                              "replay",
+                              "transcript"
                             ]
                           },
                           "fileName": {
@@ -27384,7 +27387,8 @@
                 "debugger_json",
                 "log",
                 "network",
-                "replay"
+                "replay",
+                "transcript"
               ]
             },
             "required": true,
