@@ -764,4 +764,69 @@ describe("pipeline runtime (PILE-401/405/413)", () => {
     expect(delivery).toBeDefined();
     expect(delivery?.internal).toBe(true);
   });
+
+  it("reruns a single sub-step — new dispatch, prior run kept (PILE-424)", async () => {
+    // The sub-step's owner resolves to a registered agent type, so rerun
+    // re-dispatches it as a fresh lane rather than waking an external owner.
+    const type = await fetch(
+      `/workspaces/${org}/agent-types`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          slug: "scout",
+          name: "Scout",
+          providerAgentId: "mock-scout",
+        }),
+      },
+      admin
+    );
+    expect(type.status).toBe(200);
+    const { child } = await createRequiredSubStep("Rerunnable step");
+
+    const rerun = await fetch(
+      `/workspaces/${org}/substeps/${child.id}/rerun`,
+      { method: "POST" },
+      admin
+    );
+    expect(rerun.status).toBe(200);
+    const body = z
+      .object({ ok: z.literal(true), ownerAgent: z.string() })
+      .parse(await rerun.json());
+    expect(body.ownerAgent).toBe("scout");
+
+    const stub = getWorkspaceStub(env, org);
+    await drainDomainEvents(env, stub, org);
+    const first = await stub.listAgentSessions({ issueId: child.id });
+    expect(first.length).toBe(1);
+
+    // A rerun while a run is live collides with the active-session cap —
+    // finish the first, then re-run: a second session, first kept.
+    await stub.applyAgentSessionResult(first[0].id, {
+      status: "completed",
+      result: "scouted",
+    });
+    const again = await fetch(
+      `/workspaces/${org}/substeps/${child.id}/rerun`,
+      { method: "POST" },
+      admin
+    );
+    expect(again.status).toBe(200);
+    await drainDomainEvents(env, stub, org);
+    const sessions = await stub.listAgentSessions({ issueId: child.id });
+    expect(sessions.length).toBe(2);
+
+    // Non-sub-steps refuse — a top-level issue has no parent to re-dispatch.
+    const topRes = await fetch(
+      `/workspaces/${org}/issues`,
+      { method: "POST", body: JSON.stringify({ title: "top-level" }) },
+      admin
+    );
+    const top = z.object({ id: z.string() }).parse(await topRes.json());
+    const refused = await fetch(
+      `/workspaces/${org}/substeps/${top.id}/rerun`,
+      { method: "POST" },
+      admin
+    );
+    expect(refused.status).toBe(404);
+  });
 });
