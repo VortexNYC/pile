@@ -79,6 +79,59 @@ describe("pipeline runtime (PILE-401/405/413)", () => {
     );
   });
 
+  // PILE-439 — create persists the same fields update does; a first POST
+  // must not drop kind/endpointUrl/endpointSecret/prompt/model/tools.
+  it("persists kind/endpoint/profile fields on agent-type create", async () => {
+    const ext = await fetch(
+      `/workspaces/${org}/agent-types`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          slug: "ext-owner",
+          name: "External Owner",
+          providerAgentId: "flue",
+          kind: "external",
+          endpointUrl: "https://ext.example.test/hook",
+          endpointSecret: "sekret",
+          prompt: "You triage.",
+          model: "tier-1",
+          tools: '["issues.list"]',
+        }),
+      },
+      admin
+    );
+    expect(ext.status).toBe(200);
+    expect(await ext.json()).toMatchObject({
+      slug: "ext_owner",
+      kind: "external",
+      endpointUrl: "https://ext.example.test/hook",
+      hasEndpointSecret: true,
+      prompt: "You triage.",
+      model: "tier-1",
+      tools: '["issues.list"]',
+    });
+
+    const human = await fetch(
+      `/workspaces/${org}/agent-types`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          slug: "human-owner",
+          name: "Human Owner",
+          providerAgentId: "mock-scout",
+          kind: "human",
+        }),
+      },
+      admin
+    );
+    expect(human.status).toBe(200);
+    expect(await human.json()).toMatchObject({
+      slug: "human_owner",
+      kind: "human",
+      hasEndpointSecret: false,
+    });
+  });
+
   it("CRUDs agent types and stage configs", async () => {
     const type = await fetch(
       `/workspaces/${org}/agent-types`,
@@ -614,5 +667,101 @@ describe("pipeline runtime (PILE-401/405/413)", () => {
     expect(payload.event).toBe("agent.session_failed");
     expect(payload.issueId).toBe(child.id);
     expect(payload.session?.status).toBe("failed");
+  });
+
+  it("POSTs substep.orphaned to the external chief_of_staff instead of dispatching a lane (PILE-440)", async () => {
+    const endpoint = "https://chief.example.test/orphan";
+    const type = await fetch(
+      `/workspaces/${org}/agent-types`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          slug: "chief_of_staff",
+          name: "Chief of Staff",
+          providerAgentId: "flue",
+          kind: "external",
+          endpointUrl: endpoint,
+          endpointSecret: "orphan-secret",
+        }),
+      },
+      admin
+    );
+    expect(type.status).toBe(200);
+
+    // A sub-step whose ownerAgent resolves to nothing is the orphan —
+    // moving it to an actionable status fires substep.actionable.
+    const parentRes = await fetch(
+      `/workspaces/${org}/issues`,
+      { method: "POST", body: JSON.stringify({ title: "orphan parent" }) },
+      admin
+    );
+    const parent = z
+      .object({ id: z.string() })
+      .parse(await parentRes.json());
+    const childRes = await fetch(
+      `/workspaces/${org}/issues`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          title: "orphaned step",
+          parentId: parent.id,
+          stepKey: `step_${crypto.randomUUID().slice(0, 6)}`,
+          required: true,
+          ownerAgent: `ghost-${crypto.randomUUID().slice(0, 6)}`,
+        }),
+      },
+      admin
+    );
+    const child = z.object({ id: z.string() }).parse(await childRes.json());
+    const moved = await fetch(
+      `/workspaces/${org}/issues/${child.id}`,
+      { method: "PATCH", body: JSON.stringify({ status: "todo" }) },
+      admin
+    );
+    expect(moved.status).toBe(200);
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const stub = getWorkspaceStub(env, org);
+      await drainDomainEvents(env, stub, org);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    const orphanCall = fetchMock.mock.calls.find(
+      ([u]) => u === endpoint
+    ) as unknown as [string, RequestInit] | undefined;
+    expect(orphanCall).toBeDefined();
+    const headers = orphanCall![1].headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer orphan-secret");
+    const payload = z
+      .object({
+        event: z.literal("substep.orphaned"),
+        issueId: z.string(),
+        parentId: z.string(),
+        agent: z.literal("chief_of_staff"),
+      })
+      .parse(JSON.parse(orphanCall![1].body as string));
+    expect(payload.issueId).toBe(child.id);
+    expect(payload.parentId).toBe(parent.id);
+
+    // No lane was launched for the external owner.
+    const stub = getWorkspaceStub(env, org);
+    const sessions = await stub.listAgentSessions({ issueId: child.id });
+    expect(sessions).toHaveLength(0);
+
+    // The dispatch attempt lands as an internal delivery record.
+    const comments = await stub.listComments(child.id);
+    const delivery = comments.find(
+      (comment) =>
+        comment.externalSource === "pipeline-runtime" &&
+        comment.body.includes("substep.orphaned") &&
+        comment.body.includes("delivered")
+    );
+    expect(delivery).toBeDefined();
+    expect(delivery?.internal).toBe(true);
   });
 });

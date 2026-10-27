@@ -846,6 +846,25 @@ describe("requestPrReview / publishReviewVerdicts", () => {
     return lane;
   }
 
+  // PILE-646 — a lane that dispatched fine and then died mid-run ("runner
+  // exited (code 0) without a result file") must still complete the check
+  // run it opened; the PR can never wait on a pending pile-review forever.
+  it("completes the check run neutral when the review lane fails mid-run", async () => {
+    const issue = await laneIssue();
+    const t = target("sha-mid-run-death");
+    await deadReviewLane(issue, t.headSha, t.prUrl);
+    const publishGh = fakeGithub({ config: REVIEW_CONFIG, files: [] });
+    await publishReviewVerdicts(stub, publishDeps(publishGh));
+    const patch = publishGh.calls.find(
+      (c) => c.method === "PATCH" && c.url.endsWith("/check-runs/1")
+    );
+    expect(patch?.body).toMatchObject({
+      status: "completed",
+      conclusion: "neutral",
+      output: { title: "Review lane failed" },
+    });
+  });
+
   // PILE-445 — a lane that dies on sandbox provisioning must never leave the
   // pile-review check pending forever.
   it("resolves the check run neutral when the lane fails to provision", async () => {

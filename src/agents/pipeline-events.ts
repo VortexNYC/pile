@@ -404,7 +404,39 @@ async function handleSubstepActionable(
     // "chief_of_staff" agent type gets dispatched with the orphan step;
     // if none exists, fall back to a comment a human can triage.
     const chief = await resolveOwner(stub, "chief_of_staff");
-    if (chief && chief.kind !== "human") {
+    if (chief && chief.kind === "external" && chief.endpointUrl) {
+      const parent = await stub.getIssue(payload.parentId);
+      await dispatchExternal(
+        env,
+        stub,
+        chief,
+        {
+          event: "substep.orphaned",
+          organizationId,
+          issueId: issue.id,
+          parentId: payload.parentId,
+          stepKey: issue.stepKey ?? null,
+          issue: {
+            id: issue.id,
+            identifier: issue.identifier,
+            title: issue.title,
+          },
+          parent: parent
+            ? {
+                id: parent.id,
+                identifier: parent.identifier,
+                title: parent.title,
+              }
+            : null,
+          agent: chief.slug,
+          conversationKey: conversationKey(payload.parentId, chief.slug),
+        },
+        ctx,
+        { issueId: issue.id }
+      );
+      return;
+    }
+    if (chief && chief.kind !== "human" && chief.kind !== "external") {
       const parent = await stub.getIssue(payload.parentId);
       await dispatchAgent(
         env,
