@@ -1,11 +1,11 @@
 import type { OpenAPIHono } from "@hono/zod-openapi";
 import { createRoute, z } from "@hono/zod-openapi";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { createMiddleware } from "hono/factory";
 
 import { createD1 } from "../global/db.js";
 import { deleteWorkspaceData } from "../global/deletion.js";
-import { member, organization } from "../global/schema.js";
+import { apikey, member, organization } from "../global/schema.js";
 import { safeJSON } from "../global/team-metadata.js";
 import { createTeam, getDefaultTeam, setDefaultTeam } from "../global/teams.js";
 import {
@@ -17,16 +17,23 @@ import {
 } from "../global/workspaces.js";
 import { createAuth } from "../platform/auth.js";
 import { VortexError } from "../platform/errors.js";
-import { toApiKeyWorkspaceIdentity } from "../platform/identity.js";
+import {
+  apiKeyWorkspaceScope,
+  toApiKeyWorkspaceIdentity,
+} from "../platform/identity.js";
 import {
   requireHumanSession,
   type AppContext,
 } from "../platform/middleware.js";
+import { captureProductEvent } from "../platform/posthog.js";
+import { rls } from "../platform/rls.js";
 import {
   getSessionUserId,
   sessionHeadersForAuthApi,
 } from "../platform/session.js";
 import { emitWorkspaceAudit } from "./audit-emit.js";
+import { getExecutionCtx } from "./execution-ctx.js";
+import { getWorkspaceStub } from "./stub.js";
 
 const workspaceSchema = z.object({
   id: z.string(),
@@ -285,6 +292,7 @@ const onboardWorkspaceRoute = createRoute({
             name: z.string().min(1),
             slug: z.string().min(1),
             key: z.string().optional(),
+            seedStarterIssues: z.boolean().optional(),
           }),
         },
       },
@@ -299,6 +307,40 @@ const onboardWorkspaceRoute = createRoute({
             workspace: workspaceSchema,
             team: teamSchema,
             token: z.string(),
+            quickstart: z
+              .object({
+                mcpUrl: z.string(),
+                cliSetupCommand: z.string(),
+                seededIssueIds: z.array(z.string()),
+              })
+              .optional(),
+          }),
+        },
+      },
+    },
+  },
+});
+
+const onboardingChecklistRoute = createRoute({
+  method: "get",
+  path: "/workspaces/{organizationId}/onboarding-checklist",
+  tags: ["workspaces"],
+  middleware: [rls("settings:view")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Guided onboarding checklist state",
+      content: {
+        "application/json": {
+          schema: z.object({
+            organizationId: z.string(),
+            hasApiKey: z.boolean(),
+            hasAgentProvider: z.boolean(),
+            hasFirstIssue: z.boolean(),
+            mcpUrl: z.string(),
+            pluginManifestUrl: z.string(),
           }),
         },
       },
@@ -339,11 +381,45 @@ export function registerWorkspaceRoutes(app: OpenAPIHono<AppContext>) {
         name: { from: null, to: item.name },
       }
     );
+    captureProductEvent(
+      "workspace.created",
+      { organizationId: item.id, actorId: ownerId, slug: item.slug },
+      getExecutionCtx(c),
+      { env: c.env }
+    );
     return c.json(item, 201);
   });
 
   app.openapi(listWorkspacesRoute, async (c) => {
     const db = createD1(c.env.D1);
+    // VTX-751 — a workspace-scoped API key resolves a session for its owner
+    // through requireHumanSession, which used to leak every workspace the
+    // OWNER belongs to. A key only authorizes its bound workspace, so
+    // answer with just that one.
+    const token = (c.req.header("Authorization") ?? "")
+      .replace(/^Bearer\s+/i, "")
+      .trim();
+    if (token) {
+      const auth = await createAuth(c.env);
+      const result: unknown = await auth.api
+        .verifyApiKey({ body: { key: token } })
+        .catch(() => null);
+      if (
+        result &&
+        typeof result === "object" &&
+        "valid" in result &&
+        result.valid &&
+        "key" in result &&
+        result.key
+      ) {
+        const scopedOrganizationId = apiKeyWorkspaceScope(result.key);
+        if (scopedOrganizationId !== undefined) {
+          const item = await getWorkspaceById(db, scopedOrganizationId);
+          return c.json({ workspaces: item ? [item] : [] });
+        }
+      }
+      // Non-API-key bearer credentials fall through to the session list.
+    }
     const userId = c.get("userId");
     if (!userId) {
       throw new VortexError({
@@ -555,6 +631,97 @@ export function registerWorkspaceRoutes(app: OpenAPIHono<AppContext>) {
       },
     });
     const parsed = z.object({ key: z.string() }).parse(keyResult);
-    return c.json({ workspace, team, token: parsed.key }, 201);
+    const execCtx = getExecutionCtx(c);
+    captureProductEvent(
+      "workspace.onboarded",
+      { organizationId: workspace.id, actorId: ownerId, slug: workspace.slug },
+      execCtx,
+      { env: c.env }
+    );
+    captureProductEvent(
+      "workspace.token_minted",
+      { organizationId: workspace.id, actorId: ownerId, name: "default-admin" },
+      execCtx,
+      { env: c.env }
+    );
+
+    // PILE-639 — guided onboarding: seed two connect-your-agent issues and
+    // hand the client a ready-to-paste MCP URL + CLI setup command.
+    let quickstart:
+      | { mcpUrl: string; cliSetupCommand: string; seededIssueIds: string[] }
+      | undefined;
+    if (input.seedStarterIssues && c.env.WORKSPACE_DURABLE_OBJECT) {
+      const seededIssueIds: string[] = [];
+      try {
+        const stub = getWorkspaceStub(c.env, workspace.id);
+        for (const title of [
+          "Connect your coding agent via MCP or CLI",
+          "Configure GitHub App and agent provider credentials",
+        ]) {
+          const issue = await stub.createIssue(
+            {
+              title,
+              description:
+                "Seeded by the onboarding flow — see docs/user-onboarding.md for the full quickstart.",
+              status: "backlog",
+              teamId: team.id,
+            },
+            ownerId
+          );
+          seededIssueIds.push(issue.id);
+        }
+      } catch {
+        // Starter issues are best-effort — never block onboarding on them.
+      }
+      const origin = new URL(c.req.url).origin;
+      quickstart = {
+        mcpUrl: `${origin}/mcp`,
+        cliSetupCommand: `pile config set --base-url ${origin} --api-key ${parsed.key}`,
+        seededIssueIds,
+      };
+    }
+    return c.json({ workspace, team, token: parsed.key, quickstart }, 201);
+  });
+
+  app.openapi(onboardingChecklistRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const origin = new URL(c.req.url).origin;
+
+    const keyRow = await db
+      .select({ id: apikey.id })
+      .from(apikey)
+      .where(
+        sql`instr(${apikey.metadata}, ${`"organizationId":"${organizationId}"`}) > 0`
+      )
+      .get();
+
+    // Provider credentials and the first issue live in the workspace DO.
+    let hasAgentProvider = false;
+    let hasFirstIssue = false;
+    try {
+      const stub = getWorkspaceStub(c.env, organizationId);
+      const [providers, issues] = await Promise.all([
+        stub.listAgentProviderConfigs().catch(() => [] as unknown[]),
+        stub.listIssues({ limit: 1 }).catch(() => [] as unknown[]),
+      ]);
+      hasAgentProvider = (providers as unknown[]).length > 0;
+      hasFirstIssue = (issues as unknown[]).length > 0;
+    } catch {
+      // Checklist is best-effort — a DO that cannot answer yet just shows
+      // the unchecked state.
+    }
+
+    return c.json(
+      {
+        organizationId,
+        hasApiKey: Boolean(keyRow),
+        hasAgentProvider,
+        hasFirstIssue,
+        mcpUrl: `${origin}/mcp`,
+        pluginManifestUrl: `${origin}/.well-known/mcp.json`,
+      },
+      200
+    );
   });
 }

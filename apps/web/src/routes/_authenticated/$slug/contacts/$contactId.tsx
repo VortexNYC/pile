@@ -14,6 +14,12 @@ import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap } from "@/lib/api";
 import { formatRelative, TICKET_STATUS_LABELS } from "@/lib/labels";
 
+/** PILE-653 — the contact's deals rail rides the bounded list contract;
+ *  contactId is finally honored server-side. */
+export function contactDealsQuery(contactId: string) {
+  return { contactId, summary: "1", limit: 500 } as const;
+}
+
 export const Route = createFileRoute(
   "/_authenticated/$slug/contacts/$contactId"
 )({
@@ -78,7 +84,7 @@ function ContactDetail() {
           api.GET("/workspaces/{organizationId}/deals", {
             params: {
               path: { organizationId },
-              query: { contactId },
+              query: contactDealsQuery(contactId),
             },
           })
         )

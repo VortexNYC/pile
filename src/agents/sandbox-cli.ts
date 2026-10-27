@@ -110,6 +110,13 @@ const runnerResultSchema = z.object({
   // The runner sets this when the run died on the substrate (git transport,
   // codeload, token mint) rather than on the task — gates the infra retry.
   infraFailure: z.boolean().optional(),
+  // Provider capacity ceiling (free-model rate limit, account 429) — the
+  // lane is retryable after the provider's reset window, not failed.
+  rateLimited: z.boolean().optional(),
+  // ISO instant the provider advertised for the reset (devin prints
+  // "reset in 49s (at 15:44 UTC)"; codex/claude "try again in 30s").
+  // When present the park ends at this instant, not a fixed hold.
+  rateLimitUntil: z.string().optional(),
   // PILE-425 — cumulative run usage the driver extracted from the agent
   // CLI's output; lands on the session's run receipt.
   usage: runUsageSchema.optional(),
@@ -157,6 +164,11 @@ export interface SandboxCliDescriptor {
   };
   /** Require a repo + git identity even for dispatch (codex cloud tasks). */
   requiresRepo?: boolean;
+  /** VTX-621 — cap on concurrent live lanes for this agent type. Past the
+   *  cap, dispatches park as paused holds; the sweep lifts the marker
+   *  pause when a slot frees. Guards one shared provider account against
+   *  bursts that trip its own rate limit. */
+  maxConcurrentLanes?: number;
   /** Keep the sandbox after terminal result so follow-up prompts can resume
    *  it (devin), and check runnerBusy in poll before reading the result. */
   followup?: boolean;
@@ -450,6 +462,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
   readonly id: string;
   readonly keepsTerminalSandbox: boolean;
   readonly supportsSecondaryRepos: boolean;
+  readonly maxConcurrentLanes?: number;
 
   constructor(
     private env: AppEnv,
@@ -459,6 +472,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
     this.keepsTerminalSandbox = d.followup === true;
     // Codex runs on OpenAI's cloud, which never sees the sandbox's ~/xrepo.
     this.supportsSecondaryRepos = d.driver !== "codex";
+    this.maxConcurrentLanes = d.maxConcurrentLanes;
   }
 
   private async note(
@@ -603,6 +617,33 @@ export class SandboxCliAgentProvider implements AgentProvider {
 
   private sandboxName(sessionId: string): string {
     return `${this.d.namePrefix}-${sessionId.replace(/[^a-zA-Z0-9]/g, "").slice(0, 12)}`;
+  }
+
+  /**
+   * PILE-467 — re-read the lane's tracker status mid-provision. A cancel
+   * lands while start() is still inside waitUntil; without a fresh read the
+   * provision path keeps going and creates a sandbox *after* cancel deleted
+   * the old one — a leaked container nobody will ever poll.
+   */
+  private async sessionIsTerminal(
+    organizationId: string,
+    sessionId: string
+  ): Promise<boolean> {
+    if (!("WORKSPACE_DURABLE_OBJECT" in this.env)) return false;
+    try {
+      const env = this.env as WorkerEnv;
+      const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+        env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+      );
+      await stub.setOrganizationId(organizationId);
+      const status = (await stub.getAgentSession(sessionId))?.status;
+      return (
+        status === "canceled" || status === "failed" || status === "completed"
+      );
+    } catch {
+      // A failed status read must not kill a healthy provision.
+      return false;
+    }
   }
 
   private resolveCredential(purpose?: string | null): {
@@ -884,6 +925,30 @@ export class SandboxCliAgentProvider implements AgentProvider {
       }
       await withTimeout(
         (async () => {
+          // PILE-467 — a cancel can land while this provision is still in
+          // waitUntil: re-check the tracker status at each step and tear
+          // down whatever was created instead of resurrecting a dead lane.
+          const abortIfTerminal = async (
+            created?: ComputeSandbox
+          ): Promise<boolean> => {
+            if (!(await this.sessionIsTerminal(organizationId, sessionId)))
+              return false;
+            if (created) {
+              await compute.deleteSandbox(created).catch(() => {});
+            }
+            await this.note(
+              organizationId,
+              sessionId,
+              "status",
+              created
+                ? `${this.id} sandbox deleted — session went terminal mid-provision`
+                : `${this.id} provision aborted — session is already terminal`,
+              created ? { sandbox: created.id } : {},
+              { parentId: spanId }
+            );
+            return true;
+          };
+
           const provisionDeadline = Date.now() + PROVISION_TIMEOUT_MS;
           const existing = await compute.findSandbox(sessionId, name);
           if (existing) {
@@ -900,6 +965,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
 
           for (let attempt = 1; attempt <= START_MAX_ATTEMPTS; attempt++) {
             try {
+              if (await abortIfTerminal()) return;
               const sandbox = await compute.createSandbox({
                 name,
                 sessionId,
@@ -930,6 +996,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
                 },
                 { parentId: spanId }
               );
+              if (await abortIfTerminal(sandbox)) return;
               const cacheEnv = await this.mountLaneCache(
                 compute,
                 sandbox,
@@ -951,6 +1018,7 @@ export class SandboxCliAgentProvider implements AgentProvider {
               if (compute.waitForRunner) {
                 await compute.waitForRunner(sandbox, sessionId, 60_000);
               }
+              if (await abortIfTerminal(sandbox)) return;
               await this.note(
                 organizationId,
                 sessionId,
@@ -1280,6 +1348,8 @@ export class SandboxCliAgentProvider implements AgentProvider {
       prState,
       branch: result.branch ?? null,
       infraFailure: result.infraFailure,
+      rateLimited: result.rateLimited,
+      rateLimitUntil: result.rateLimitUntil,
       usage: result.usage ?? null,
     };
   }

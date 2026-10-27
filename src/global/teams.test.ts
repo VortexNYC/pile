@@ -6,9 +6,11 @@ import { createAdminHeaders } from "../platform/test-auth.js";
 import { createD1 } from "./db.js";
 import { organization, team, user as userTable } from "./schema.js";
 import {
+  canAccessTeam,
   createTeam,
   getDefaultTeam,
   getTeamById,
+  getVisibleTeamIds,
   listTeams,
   setDefaultTeam,
 } from "./teams.js";
@@ -138,5 +140,22 @@ describe("setDefaultTeam", () => {
     const result = await setDefaultTeam(db, organizationId, legacy.id);
     expect(result?.isDefault).toBe(true);
     expect((await getDefaultTeam(db, organizationId))?.id).toBe(legacy.id);
+  });
+
+  it("grants team access and visibility to the team owner even without admin or team_member row (VTX-649)", async () => {
+    const ownerId = "user-team-owner-check";
+    const { db, organizationId } = await seedWorkspace(ownerId);
+    const priv = await createTeam(db, env, new Headers(), {
+      organizationId,
+      key: "PRIV",
+      name: "Private Owned Team",
+      ownerId,
+      isPublic: false,
+    });
+    const nonAdminOwner = { id: ownerId, permissions: ["read"] };
+    expect(await canAccessTeam(db, priv.id, nonAdminOwner)).toBe(true);
+    expect(
+      await getVisibleTeamIds(db, organizationId, nonAdminOwner)
+    ).toContain(priv.id);
   });
 });

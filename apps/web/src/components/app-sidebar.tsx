@@ -63,11 +63,12 @@ const SETTINGS = [
   },
   { title: "Surfaces", path: "settings/surfaces", icon: Layout },
   { title: "Fields", path: "settings/fields", icon: Layout },
+  // Developer is self-serve — members mint and revoke their own API keys
+  // (the API scopes the token list to the caller); it is not admin-gated.
   {
     title: "Developer",
     path: "settings/developer",
     icon: Key,
-    admin: true,
   },
   {
     title: "Agents",
@@ -76,6 +77,23 @@ const SETTINGS = [
     admin: true,
   },
 ] as const;
+
+/** Settings entries a member may see — admin-flagged items only for
+ * admins; the Settings group itself renders on `settings:view`. */
+export function visibleSettingsPaths(isAdmin: boolean): string[] {
+  return SETTINGS.filter(
+    (item) => !("admin" in item && item.admin) || isAdmin
+  ).map((item) => item.path);
+}
+
+/** Chrome visibility for permission-gated nav. Only a *loaded*, explicit
+ * denial hides an item — while the permissions query is in flight (or
+ * errored) the sidebar stays complete instead of collapsing mid-load and
+ * snapping back (feedback-bubble.tsx gates the same way; the server still
+ * enforces the real grant on every API call). */
+export function navItemVisible(isLoaded: boolean, allowed: boolean): boolean {
+  return !isLoaded || allowed;
+}
 
 export function AppSidebar({
   workspace,
@@ -163,7 +181,10 @@ export function AppSidebar({
               .filter(
                 (item) =>
                   !("resource" in item) ||
-                  permissions.can(item.resource as never, "view")
+                  navItemVisible(
+                    permissions.isLoaded,
+                    permissions.can(item.resource, "view")
+                  )
               )
               .map((item) => (
                 <Sidebar.MenuButton
@@ -202,13 +223,15 @@ export function AppSidebar({
             </Sidebar.Menu>
           </Sidebar.Group>
         ) : null}
-        {permissions.can("settings", "view") ? (
+        {navItemVisible(
+          permissions.isLoaded,
+          permissions.can("settings", "view")
+        ) ? (
           <Sidebar.Group>
             <Sidebar.GroupLabel>Settings</Sidebar.GroupLabel>
             <Sidebar.Menu>
-              {SETTINGS.filter(
-                (item) =>
-                  !("admin" in item && item.admin) || permissions.isAdmin
+              {SETTINGS.filter((item) =>
+                visibleSettingsPaths(permissions.isAdmin).includes(item.path)
               ).map((item) => (
                 <Sidebar.MenuButton
                   key={item.path}

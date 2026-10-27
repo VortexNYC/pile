@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  getLaneDbProvider,
   laneDbConfigForRepo,
+  PgxLaneDb,
   PlanetScaleLaneDb,
   type LaneDbRef,
 } from "./lane-db.js";
@@ -88,8 +90,10 @@ describe("PlanetScaleLaneDb", () => {
       "lane.connect.psdb.cloud"
     );
     expect(provisioned.env.PAYMENTS_STORAGE_ALLOW_REMOTE).toBe("1");
-    expect(provisioned.ref.branch).toBe("lane-sess-abc");
-    expect(provisioned.ref.roleId).toBe("role-1");
+    expect(provisioned.ref).toMatchObject({
+      branch: "lane-sess-abc",
+      roleId: "role-1",
+    });
   });
 
   it("teardown deletes the role then the branch", async () => {
@@ -112,5 +116,41 @@ describe("PlanetScaleLaneDb", () => {
     await provider.teardown(ref);
     expect(deleted[0]).toContain("/branches/lane-s1/roles/role-1");
     expect(deleted[1]).toContain("/branches/lane-s1");
+  });
+});
+
+describe("PgxLaneDb (VTX-651)", () => {
+  it("parses pgx repo config and provisions PILE_PGX_* + local DATABASE_URL", async () => {
+    const metadata = {
+      laneDb: {
+        "VortexNYC/vortex": {
+          provider: "pgx",
+          template: "vortex_seeded",
+          ttl: "4h",
+          port: 5432,
+        },
+      },
+    };
+    const cfg = laneDbConfigForRepo(metadata, "VortexNYC/vortex");
+    expect(cfg).toEqual({
+      provider: "pgx",
+      template: "vortex_seeded",
+      ttl: "4h",
+      port: 5432,
+    });
+    const provider = getLaneDbProvider({} as never, undefined, "pgx");
+    expect(provider).toBeInstanceOf(PgxLaneDb);
+    const provisioned = await provider!.provision(cfg!, "sess-1234-abcd");
+    expect(provisioned.ref).toEqual({
+      provider: "pgx",
+      template: "vortex_seeded",
+      branch: "lane_sess_1234_abcd",
+      ttl: "4h",
+    });
+    expect(provisioned.env.PILE_PGX_TEMPLATE).toBe("vortex_seeded");
+    expect(provisioned.env.PILE_PGX_BRANCH).toBe("lane_sess_1234_abcd");
+    expect(provisioned.env.DATABASE_URL).toBe(
+      "postgresql://postgres:postgres@127.0.0.1:5432/lane_sess_1234_abcd"
+    );
   });
 });

@@ -11,3 +11,5 @@ coverage
 backups/
 /.vite-hooks/_/
 /.devin/mcp_config.json
+__pycache__/
+*.py[cod]

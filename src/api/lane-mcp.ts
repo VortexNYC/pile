@@ -105,9 +105,14 @@ export function registerLaneMcpRoutes(app: OpenAPIHono<AppContext>) {
       // Profile allowlist — the agent type's `tools` field narrows the
       // policy by denying every registered tool it doesn't name. Absent or
       // unparseable means "tier governs" (no extra deny).
-      const agentType = session.agentId
+      const directAgentType = session.agentId
         ? await stub.getAgentTypeBySlug(session.agentId)
         : undefined;
+      const agentType =
+        directAgentType ??
+        (!issue.repo && issue.ownerAgent
+          ? await stub.getAgentTypeBySlug(issue.ownerAgent)
+          : undefined);
       let profileDeny: string[] = [];
       if (agentType?.tools) {
         try {
@@ -127,19 +132,29 @@ export function registerLaneMcpRoutes(app: OpenAPIHono<AppContext>) {
 
       const [owner, name] = (issue.repo ?? "").split("/");
       const repoScoped = Boolean(owner && name);
-      const repoPolicy = repoScoped
+      const baseRepoPolicy = repoScoped
         ? laneToolPolicyForRepo(
             await orgMetadata(c.env, organizationId),
             `${owner}/${name}`
           )
         : null;
+      // The profile allowlist narrows the repo surface too — without this a
+      // repo-scoped lane's tools/list (and call-time policy) ignores the
+      // agent type's `tools` field entirely.
+      const repoPolicy =
+        baseRepoPolicy && profileDeny.length > 0
+          ? laneToolPolicy(baseRepoPolicy.tier, [
+              ...baseRepoPolicy.deny,
+              ...profileDeny,
+            ])
+          : baseRepoPolicy;
       // Workspace-domain tools (issue/document/customer/memory/usage) run
       // under the pipeline tier on every lane — repo tiers govern the
       // GitHub surface only, so without this a repo-scoped lane's
       // tools/list omits them even though the profile permits the calls.
       const wsPolicy = laneToolPolicy("pipeline", [
         ...profileDeny,
-        ...(repoPolicy?.deny ?? []),
+        ...(baseRepoPolicy?.deny ?? []),
       ]);
 
       const branch = session.branch ?? issue.branch ?? `issue-${issue.id}`;

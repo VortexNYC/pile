@@ -126,6 +126,7 @@ const upsertIntegrationRoute = createRoute({
 // Inbound webhook — cal.com posts bookings here; verified by shared
 // secret (their X-Cal-Signature-256 HMAC or our x-pile-webhook-secret).
 const webhookRoute = createRoute({
+  security: [],
   method: "post",
   path: "/webhooks/comms/{organizationId}/{source}",
   tags: ["comms"],

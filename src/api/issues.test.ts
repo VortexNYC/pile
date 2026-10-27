@@ -565,6 +565,25 @@ describe("issues API", () => {
   });
 
   it("clears nullable fields when PATCHed with null", async () => {
+    // VTX-769 — refs must resolve; mint a real project + labels first.
+    const projectRes = await fetch(
+      `/workspaces/${organizationId}/projects`,
+      { method: "POST", body: JSON.stringify({ name: "Clearable" }) },
+      token
+    );
+    const projectId = z
+      .object({ id: z.string() })
+      .parse(await projectRes.json()).id;
+    const mkLabel = async (name: string) => {
+      const res = await fetch(
+        `/workspaces/${organizationId}/labels`,
+        { method: "POST", body: JSON.stringify({ name }) },
+        token
+      );
+      return z.object({ id: z.string() }).parse(await res.json()).id;
+    };
+    const labelA = await mkLabel(`a-${crypto.randomUUID().slice(0, 8)}`);
+    const labelB = await mkLabel(`b-${crypto.randomUUID().slice(0, 8)}`);
     const createRes = await fetch(
       `/workspaces/${organizationId}/issues`,
       {
@@ -576,8 +595,8 @@ describe("issues API", () => {
           branch: "issue-255",
           estimate: 3,
           assigneeId: "user-issues",
-          projectId: "project-1",
-          labelIds: ["label-a"],
+          projectId,
+          labelIds: [labelA],
         }),
       },
       token
@@ -624,7 +643,7 @@ describe("issues API", () => {
         assigneeId: z.string().nullable(),
         projectId: z.string().nullable(),
         cycleId: z.string().nullable(),
-        labelIds: z.string().nullable(),
+        labelIds: z.array(z.string()),
         parentId: z.string().nullable(),
         snoozedUntil: z.string().nullable(),
       })
@@ -637,7 +656,7 @@ describe("issues API", () => {
       assigneeId: null,
       projectId: null,
       cycleId: null,
-      labelIds: null,
+      labelIds: [],
       parentId: null,
       snoozedUntil: null,
     });
@@ -647,7 +666,7 @@ describe("issues API", () => {
       `/workspaces/${organizationId}/issues/${issue.id}`,
       {
         method: "PATCH",
-        body: JSON.stringify({ labelIds: ["label-b"] }),
+        body: JSON.stringify({ labelIds: [labelB] }),
       },
       token
     );
@@ -660,9 +679,9 @@ describe("issues API", () => {
     expect(clearedLabels.status).toBe(200);
     expect(
       z
-        .object({ labelIds: z.string().nullable() })
+        .object({ labelIds: z.array(z.string()) })
         .parse(await clearedLabels.json()).labelIds
-    ).toBeNull();
+    ).toEqual([]);
 
     // non-nullable fields still reject null
     const badTitle = await fetch(
@@ -1166,14 +1185,14 @@ describe("issues API", () => {
       .object({
         teamId: z.string(),
         projectId: z.string().nullable(),
-        labelIds: z.string().nullable(),
+        labelIds: z.array(z.string()),
         identifier: z.string().nullable(),
         status: z.string(),
       })
       .parse(await res.json());
     expect(issue.teamId).toBe(team.id);
     expect(issue.projectId).toBe(project.id);
-    expect(issue.labelIds).toBe(label.id);
+    expect(issue.labelIds).toEqual([label.id]);
     expect(issue.identifier).toMatch(/^CLIP-\d+$/);
     expect(issue.status).toBe("triage");
   });
@@ -1645,9 +1664,7 @@ describe("possible duplicates on create (PILE-163)", () => {
       token
     );
     expect(createRes.status).toBe(201);
-    const issue = z
-      .object({ id: z.string() })
-      .parse(await createRes.json());
+    const issue = z.object({ id: z.string() }).parse(await createRes.json());
 
     const assignRes = await fetch(
       `/workspaces/${organizationId}/issues/${issue.id}/assign`,
@@ -2120,5 +2137,152 @@ describe("triage rules on issue create (PILE-427)", () => {
     expect(
       z.object({ sensitive: z.boolean() }).parse(await patched.json()).sensitive
     ).toBe(false);
+  });
+
+  it("returns an empty list cleanly when a filter matches nothing (skips subStepProgress RPC, PILE-645)", async () => {
+    const res = await fetch(
+      `/workspaces/${organizationId}/issues?search=${crypto.randomUUID()}&limit=5`,
+      {},
+      token
+    );
+    expect(res.status).toBe(200);
+    const body = z
+      .object({ issues: z.array(z.object({ id: z.string() })) })
+      .parse(await res.json());
+    expect(body.issues).toHaveLength(0);
+  });
+});
+
+describe("issue reference validation (VTX-769)", () => {
+  it("rejects unknown projectId, cycleId, labelIds, and assigneeId with 400", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const ghost = "00000000-0000-4000-8000-000000000000";
+    for (const patch of [
+      { projectId: ghost },
+      { cycleId: ghost },
+      { labelIds: [ghost] },
+      { assigneeId: ghost },
+    ]) {
+      const res = await fetch(
+        `/workspaces/${organizationId}/issues`,
+        {
+          method: "POST",
+          body: JSON.stringify({ title: "ref probe", ...patch }),
+        },
+        token
+      );
+      expect(res.status).toBe(400);
+    }
+  });
+
+  it("serializes labelIds as an array (never a bare string)", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const label = await fetch(
+      `/workspaces/${organizationId}/labels`,
+      {
+        method: "POST",
+        body: JSON.stringify({ name: `lbl-${crypto.randomUUID()}` }),
+      },
+      token
+    );
+    expect(label.status).toBe(201);
+    const labelId = z.object({ id: z.string() }).parse(await label.json()).id;
+    const created = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      {
+        method: "POST",
+        body: JSON.stringify({ title: "labels", labelIds: [labelId] }),
+      },
+      token
+    );
+    expect(created.status).toBe(201);
+    const issue = z
+      .object({ labelIds: z.array(z.string()) })
+      .parse(await created.json());
+    expect(issue.labelIds).toEqual([labelId]);
+  });
+
+  it("rejects a NUL byte in the description", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const res = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      {
+        method: "POST",
+        body: JSON.stringify({ title: "nul", description: "a\u0000b" }),
+      },
+      token
+    );
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("issue relation validation (VTX-770)", () => {
+  it("409s a duplicate relation, 400s self and reciprocal blocks", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const mk = async () => {
+      const res = await fetch(
+        `/workspaces/${organizationId}/issues`,
+        { method: "POST", body: JSON.stringify({ title: "rel" }) },
+        token
+      );
+      return z.object({ id: z.string() }).parse(await res.json()).id;
+    };
+    const a = await mk();
+    const b = await mk();
+
+    const first = await fetch(
+      `/workspaces/${organizationId}/issues/${a}/relations`,
+      {
+        method: "POST",
+        body: JSON.stringify({ toIssueId: b, type: "blocks" }),
+      },
+      token
+    );
+    expect(first.status).toBe(201);
+
+    const dupe = await fetch(
+      `/workspaces/${organizationId}/issues/${a}/relations`,
+      {
+        method: "POST",
+        body: JSON.stringify({ toIssueId: b, type: "blocks" }),
+      },
+      token
+    );
+    expect(dupe.status).toBe(409);
+
+    const self = await fetch(
+      `/workspaces/${organizationId}/issues/${a}/relations`,
+      {
+        method: "POST",
+        body: JSON.stringify({ toIssueId: a, type: "related" }),
+      },
+      token
+    );
+    expect(self.status).toBe(400);
+
+    const reciprocal = await fetch(
+      `/workspaces/${organizationId}/issues/${b}/relations`,
+      {
+        method: "POST",
+        body: JSON.stringify({ toIssueId: a, type: "blocks" }),
+      },
+      token
+    );
+    expect(reciprocal.status).toBe(400);
+  });
+});
+
+describe("batch update route metadata (VTX-772)", () => {
+  it("describes issues/batch as an update, not a create", async () => {
+    const res = await app.fetch(
+      new Request("https://example.com/openapi.json"),
+      env
+    );
+    const doc = (await res.json()) as {
+      paths: Record<string, { post?: { summary?: string } }>;
+    };
+    expect(
+      doc.paths["/workspaces/{organizationId}/issues/batch"]?.post?.summary
+    ).toContain("patch");
   });
 });

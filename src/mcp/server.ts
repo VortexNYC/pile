@@ -5,9 +5,25 @@ import {
   WebStandardStreamableHTTPServerTransport,
 } from "@modelcontextprotocol/server";
 import { CfWorkerJsonSchemaValidator } from "@modelcontextprotocol/server/validators/cf-worker";
+import { z } from "zod";
 
-import type { WorkerEnv } from "../platform/middleware.js";
-import { aliasesFor, MCP_TOOL_ALIASES } from "./mcp-aliases.js";
+import {
+  apiKeyWorkspaceScope,
+  type WorkspaceIdentity,
+} from "../platform/identity.js";
+import {
+  clampApiKeyIdentity,
+  verifyApiKeyToken,
+  type WorkerEnv,
+} from "../platform/middleware.js";
+import { canAccess } from "../platform/permissions.js";
+import { routePermissionsFor } from "../platform/rls.js";
+import { getSessionUserId } from "../platform/session.js";
+import {
+  aliasesFor,
+  MCP_TOOL_ALIASES,
+  MCP_TOOL_DEPRECATED_ALIASES,
+} from "./mcp-aliases.js";
 import { MCP_TOOLS } from "./mcp-tools.js";
 
 type HonoApp = {
@@ -44,14 +60,101 @@ const ALIAS_TOOLS = Object.entries(MCP_TOOL_ALIASES).map(([alias, target]) => {
     throw new Error(`MCP alias ${alias} points at unknown tool ${target}`);
   }
   const generated = GENERATED_TOOLS[index];
+  const deprecated = MCP_TOOL_DEPRECATED_ALIASES[alias];
   return {
     ...generated,
     name: alias,
-    description: `${MCP_TOOLS[index].description} Same as ${target}.`,
+    description: `${deprecated ? `Deprecated — use ${deprecated} instead. ` : ""}${MCP_TOOLS[index].description} Same as ${target}.`,
   };
 });
 
 const TOOLS = [...GENERATED_TOOLS, ...ALIAS_TOOLS];
+
+// VTX-753 — tools/list is scoped to the caller: a workspace API key sees
+// only the tools its resolved permissions can actually invoke, an
+// unauthenticated caller sees none, and session/account-level credentials
+// see the full generated surface (their grant set varies per workspace, so
+// per-call rls remains the enforcement point).
+type McpCaller =
+  | { kind: "workspace-key"; identity: WorkspaceIdentity }
+  | { kind: "account" }
+  | { kind: "anonymous" };
+
+async function resolveMcpCaller(
+  request: Request,
+  env: WorkerEnv
+): Promise<McpCaller> {
+  const header = request.headers.get("authorization") ?? "";
+  const token = header.replace(/^Bearer\s+/i, "").trim();
+  if (token) {
+    try {
+      const key = await verifyApiKeyToken(env, token);
+      if (apiKeyWorkspaceScope(key) !== undefined) {
+        return {
+          kind: "workspace-key",
+          identity: await clampApiKeyIdentity(env, key),
+        };
+      }
+      // A verified key with no workspace metadata is an account-level
+      // credential — it cannot reach workspace routes, so it gets the
+      // account surface only.
+      return { kind: "account" };
+    } catch {
+      // Not a usable API key (invalid, expired, or a non-key bearer
+      // credential) — fall through to the session check.
+    }
+  }
+  const userId = await getSessionUserId(env, request).catch(() => null);
+  return userId ? { kind: "account" } : { kind: "anonymous" };
+}
+
+const WORKSPACE_SCOPED_PATH = "/workspaces/{organizationId}/";
+
+/** Mirror of the rls() gate for visibility filtering: any listed spec that
+ * passes canAccess suffices. `project:*` specs resolve against per-project
+ * membership at call time — a bare key can't prove them at list time, so
+ * project-role-only tools are hidden. */
+function keySatisfiesPermissions(
+  permissions: string[],
+  required: readonly string[] | undefined
+): boolean {
+  if (required === undefined || required.length === 0) return true;
+  if (canAccess(permissions, "admin")) return true;
+  const resourceSpecs = required.filter(
+    (spec) => spec !== "project:lead" && spec !== "project:member"
+  );
+  if (resourceSpecs.length === 0) return false;
+  return resourceSpecs.some((spec) => {
+    const [resource, action] = spec.includes(":")
+      ? (spec.split(":", 2) as [string, string])
+      : (["workspace", spec] as const);
+    return canAccess(permissions, action, resource);
+  });
+}
+
+function toolsForCaller(caller: McpCaller) {
+  if (caller.kind === "anonymous") return [];
+  if (caller.kind === "account") return TOOLS;
+  return TOOLS.filter((tool) => {
+    if (!tool.path.startsWith(WORKSPACE_SCOPED_PATH)) {
+      // Account-level routes (/workspaces list/create, /workspaces/{id})
+      // authenticate on the key owner's session — visible to any verified key.
+      return true;
+    }
+    return keySatisfiesPermissions(
+      caller.identity.permissions,
+      routePermissionsFor(tool.method, tool.path)
+    );
+  });
+}
+
+// VTX-750 — a list call over MCP used to return every document with its
+// full body (~700KB for one workspace). List endpoints that offer a light
+// projection get it by default on this surface; callers opt back into full
+// content with summary=0. Keyed by method+path so aliases inherit.
+const DEFAULT_QUERY_PARAMS = new Map<string, Record<string, string>>([
+  ["get /workspaces/{organizationId}/documents", { summary: "1" }],
+]);
 
 function fillPath(path: string, input: Record<string, unknown>): string {
   return path.replace(/\{([^}]+)\}/gu, (_match, name: string) => {
@@ -73,7 +176,8 @@ export async function handleMcpRequest(
     version: "0.1.0",
   });
 
-  for (const tool of TOOLS) {
+  const caller = await resolveMcpCaller(request, env);
+  for (const tool of toolsForCaller(caller)) {
     server.registerTool(
       tool.name,
       {
@@ -91,6 +195,14 @@ export async function handleMcpRequest(
         for (const [key, value] of Object.entries(input)) {
           if (key === "body" || pathParamNames.has(key)) continue;
           if (value !== undefined) query.set(key, String(value));
+        }
+        const defaults = DEFAULT_QUERY_PARAMS.get(
+          `${tool.method.toLowerCase()} ${tool.path}`
+        );
+        if (defaults) {
+          for (const [key, value] of Object.entries(defaults)) {
+            if (!query.has(key)) query.set(key, value);
+          }
         }
 
         const url = new URL(request.url);
@@ -221,6 +333,217 @@ export async function handleMcpRequest(
         String(variables.organizationId),
         "application/json"
       )
+  );
+
+  // PILE-630 — entity resources proxy the workspace REST API so MCP clients
+  // can read issues, documents, customers, and memory profiles by URI.
+  const proxyJsonResource = async (apiPath: string, uri: string) => {
+    const url = new URL(request.url);
+    const headers = new Headers();
+    const auth = request.headers.get("authorization");
+    if (auth !== null) headers.set("authorization", auth);
+    const workspaceHeader = request.headers.get("x-workspace-id");
+    if (workspaceHeader !== null)
+      headers.set("x-workspace-id", workspaceHeader);
+
+    const proxyReq = new Request(`${url.origin}${apiPath}`, {
+      method: "GET",
+      headers,
+    });
+    const response = await app.fetch(proxyReq, env);
+    const text = await response.text();
+    if (!response.ok) {
+      throw new Error(`Resource request failed: ${response.status}`);
+    }
+    return {
+      contents: [{ uri, mimeType: "application/json", text }],
+    };
+  };
+
+  server.registerResource(
+    "issue",
+    new ResourceTemplate("pile://workspaces/{organizationId}/issues/{id}", {
+      list: undefined,
+    }),
+    {
+      description: "A workspace issue (bug, task, or epic) as JSON.",
+      mimeType: "application/json",
+    },
+    async (_uri, variables) =>
+      proxyJsonResource(
+        `/workspaces/${encodeURIComponent(String(variables.organizationId))}/issues/${encodeURIComponent(String(variables.id))}`,
+        String(_uri)
+      )
+  );
+
+  server.registerResource(
+    "document",
+    new ResourceTemplate("pile://workspaces/{organizationId}/documents/{id}", {
+      list: undefined,
+    }),
+    {
+      description: "A workspace document (notes, specs, handoffs) as JSON.",
+      mimeType: "application/json",
+    },
+    async (_uri, variables) =>
+      proxyJsonResource(
+        `/workspaces/${encodeURIComponent(String(variables.organizationId))}/documents/${encodeURIComponent(String(variables.id))}`,
+        String(_uri)
+      )
+  );
+
+  server.registerResource(
+    "customer",
+    new ResourceTemplate("pile://workspaces/{organizationId}/customers/{id}", {
+      list: undefined,
+    }),
+    {
+      description: "A workspace customer (CRM merchant) as JSON.",
+      mimeType: "application/json",
+    },
+    async (_uri, variables) =>
+      proxyJsonResource(
+        `/workspaces/${encodeURIComponent(String(variables.organizationId))}/customers/${encodeURIComponent(String(variables.id))}`,
+        String(_uri)
+      )
+  );
+
+  server.registerResource(
+    "memory-profile",
+    new ResourceTemplate(
+      "pile://workspaces/{organizationId}/memory/profile/{entityType}/{entityId}",
+      { list: undefined }
+    ),
+    {
+      description:
+        "Entity memory profile — static facts, dynamic context, and grouped kinds.",
+      mimeType: "application/json",
+    },
+    async (_uri, variables) =>
+      proxyJsonResource(
+        `/workspaces/${encodeURIComponent(String(variables.organizationId))}/memory/profile?entityType=${encodeURIComponent(String(variables.entityType))}&entityId=${encodeURIComponent(String(variables.entityId))}`,
+        String(_uri)
+      )
+  );
+
+  // PILE-630 — starter prompts give connectors opinionated playbooks that
+  // orchestrate the standard tools for common agent workflows.
+  server.registerPrompt(
+    "triage-issue",
+    {
+      title: "Triage an issue",
+      description:
+        "Triage a workspace issue: fetch it, recall its memory profile and similar issues, then report and label.",
+      argsSchema: {
+        organizationId: z.string(),
+        issueId: z.string(),
+      },
+    },
+    async ({ organizationId, issueId }) => ({
+      messages: [
+        {
+          role: "user" as const,
+          content: {
+            type: "text" as const,
+            text: [
+              `Triage issue ${issueId} in workspace ${organizationId}.`,
+              `1. Call get_issue for ${issueId} to read the full report.`,
+              `2. Call memory_profile with entityType "issue" and entityId "${issueId}" to recall everything the workspace already knows.`,
+              `3. Call find_similar_issues to catch possible duplicates.`,
+              `4. Post a triage report as a comment: summary, severity guess, duplicate links, and suggested labels.`,
+              `5. Apply the labels you recommended and mark duplicates when confident.`,
+            ].join("\n"),
+          },
+        },
+      ],
+    })
+  );
+
+  server.registerPrompt(
+    "morning-brief",
+    {
+      title: "Workspace morning brief",
+      description:
+        "Summarize today's top-ranked leads, send-gate readiness, and the plays worth running.",
+      argsSchema: {
+        organizationId: z.string(),
+      },
+    },
+    async ({ organizationId }) => ({
+      messages: [
+        {
+          role: "user" as const,
+          content: {
+            type: "text" as const,
+            text: [
+              `Produce the morning brief for workspace ${organizationId}.`,
+              `1. Call customer_morning_brief for ${organizationId}.`,
+              `2. Inspect the top-ranked leads: who is send-gate ready, who is blocked and why.`,
+              `3. Summarize the actionable plays: first touches to send, follow-ups due, and anything needing a human.`,
+            ].join("\n"),
+          },
+        },
+      ],
+    })
+  );
+
+  server.registerPrompt(
+    "session-handoff",
+    {
+      title: "Write a session handoff",
+      description:
+        "Distill durable facts from a session into workspace memory and a linked markdown document.",
+      argsSchema: {
+        organizationId: z.string(),
+        issueId: z.string(),
+        topic: z.string(),
+      },
+    },
+    async ({ organizationId, issueId, topic }) => ({
+      messages: [
+        {
+          role: "user" as const,
+          content: {
+            type: "text" as const,
+            text: [
+              `Write a session handoff for ${issueId} in workspace ${organizationId} covering "${topic}".`,
+              `1. Distill the durable facts from your work — decisions, root causes, lessons, outcomes — and record them with memory_extract (or memory_remember for each fact).`,
+              `2. Create a linked markdown document via create_document with title "${issueId} — ${topic}", contentFormat "markdown", and issueId "${issueId}" so the next session can pick it up.`,
+            ].join("\n"),
+          },
+        },
+      ],
+    })
+  );
+
+  server.registerPrompt(
+    "memory-distill",
+    {
+      title: "Distill an entity's memory",
+      description:
+        "Fetch an entity's memory profile and consolidate new durable facts with memory_extract.",
+      argsSchema: {
+        organizationId: z.string(),
+        entityType: z.string(),
+        entityId: z.string(),
+      },
+    },
+    async ({ organizationId, entityType, entityId }) => ({
+      messages: [
+        {
+          role: "user" as const,
+          content: {
+            type: "text" as const,
+            text: [
+              `Distill memory for ${entityType}:${entityId} in workspace ${organizationId}.`,
+              `1. Call memory_profile with entityType "${entityType}" and entityId "${entityId}" to see the static facts and dynamic context already stored.`,
+              `2. Run memory_extract over the relevant source (session, document, or issue) to pull out new durable facts.`,
+              `3. Store each fact with memory_remember, keyed to ${entityType}:${entityId}, skipping anything the profile already covers.`,
+            ].join("\n"),
+          },
+        },
+      ],
+    })
   );
 
   const transport = new WebStandardStreamableHTTPServerTransport({

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { flattenStatements } from "./identity.js";
 import { adminRole, guestRole, memberRole, ownerRole } from "./access.js";
+import { flattenStatements } from "./identity.js";
 
 // The api-key minting clamp (middleware) strips any grant that is not in the
 // member's role statements — `agent` must be a declared resource on the human
@@ -19,5 +19,17 @@ describe("agent resource grants", () => {
     const flat = flattenStatements(guestRole.statements);
     expect(flat).not.toContain("agent:read");
     expect(flat).not.toContain("agent:write");
+  });
+
+  it("member/admin/owner roles carry memory grants while guests do not (VTX-636)", () => {
+    for (const role of [memberRole, adminRole, ownerRole]) {
+      const flat = flattenStatements(role.statements);
+      expect(flat).toContain("memory:view");
+      expect(flat).toContain("memory:create");
+      expect(flat).toContain("memory:edit");
+    }
+    const guestFlat = flattenStatements(guestRole.statements);
+    expect(guestFlat).not.toContain("memory:view");
+    expect(guestFlat).not.toContain("memory:create");
   });
 });

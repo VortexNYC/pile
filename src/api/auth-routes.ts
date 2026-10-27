@@ -150,6 +150,9 @@ function buildRoute(endpoint: Endpoint) {
     path: endpoint.path,
     operationId: endpoint.fn,
     tags: ["Auth"],
+    // Better Auth cookie/bearer endpoints are public by design — they mint
+    // credentials rather than require them.
+    security: [],
     request,
     responses: {
       200: {

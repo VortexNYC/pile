@@ -159,6 +159,50 @@ export function notificationTarget(item: {
   return item.issueId ? { kind: "issue", id: item.issueId } : null;
 }
 
+export type NotificationRoute =
+  | {
+      to: "/$slug/issues/$issueId";
+      params: { slug: string; issueId: string };
+    }
+  | {
+      to: "/$slug/tickets/$ticketId";
+      params: { slug: string; ticketId: string };
+    }
+  | {
+      to: "/$slug/documents/$documentId";
+      params: { slug: string; documentId: string };
+    };
+
+/**
+ * Typed router destination for a notification target — pass the result
+ * straight to `useNavigate()`'s `navigate()`. Keeping the `to`/`params`
+ * pair typed means a renamed route fails typecheck here once, instead of
+ * at every call site that opened the wrong detail page (PILE-652 — the
+ * inbox previously sent document/ticket notifications to /issues/:id).
+ */
+export function notificationRoute(
+  slug: string,
+  target: NotificationTarget
+): NotificationRoute {
+  switch (target.kind) {
+    case "document":
+      return {
+        to: "/$slug/documents/$documentId",
+        params: { slug, documentId: target.id },
+      };
+    case "ticket":
+      return {
+        to: "/$slug/tickets/$ticketId",
+        params: { slug, ticketId: target.id },
+      };
+    case "issue":
+      return {
+        to: "/$slug/issues/$issueId",
+        params: { slug, issueId: target.id },
+      };
+  }
+}
+
 export function notificationLabel(type: string): string {
   const known = NOTIFICATION_LABELS[type];
   if (known) return known;

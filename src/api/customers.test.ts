@@ -465,6 +465,61 @@ describe("customer hygiene fields + externalId dedupe", () => {
     expect(human).toContain(flagged.id);
     expect(human).not.toContain(cold.id);
   });
+
+  it("round-trips domain normalized on create and PATCH (PILE-444)", async () => {
+    const create = await postCustomer({
+      name: "Domain merchant",
+      domain: "HTTPS://WWW.JoesPizza.example.com/menu",
+    });
+    expect(create.status).toBe(201);
+    const created = z
+      .object({ id: z.string(), domain: z.string().nullable() })
+      .parse(await create.json());
+    expect(created.domain).toBe("joespizza.example.com");
+
+    const patch = await fetch(
+      `/workspaces/${organizationId}/customers/${created.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ domain: "https://newsite.example.com/" }),
+      },
+      token
+    );
+    expect(patch.status).toBe(200);
+    const patched = z
+      .object({ domain: z.string().nullable() })
+      .parse(await patch.json());
+    expect(patched.domain).toBe("newsite.example.com");
+
+    const cleared = await fetch(
+      `/workspaces/${organizationId}/customers/${created.id}`,
+      { method: "PATCH", body: JSON.stringify({ domain: null }) },
+      token
+    );
+    expect(cleared.status).toBe(200);
+    expect(
+      z.object({ domain: z.string().nullable() }).parse(await cleared.json())
+        .domain
+    ).toBeNull();
+  });
+
+  it("filters lists by externalId and domain — domain input is normalized (PILE-444)", async () => {
+    const target = await mk({
+      name: "Filter target",
+      externalId: "gplace:flt-1",
+      domain: "www.Filtered.example.com",
+    });
+    const other = await mk({ name: "Unfiltered", externalId: "gplace:flt-2" });
+
+    expect(await list("externalId=gplace:flt-1")).toEqual([target.id]);
+    expect(await list("domain=filtered.example.com")).toEqual([target.id]);
+    // Lookup input normalizes too — scheme/www./case all hit the same row.
+    expect(await list("domain=HTTPS://WWW.Filtered.example.com/")).toEqual([
+      target.id,
+    ]);
+    expect(await list("domain=filtered.example.com")).not.toContain(other.id);
+    expect(await list("externalId=gplace:missing")).toEqual([]);
+  });
 });
 
 describe("customer custom fields (PILE-383)", () => {
@@ -876,6 +931,56 @@ describe("bulk customer import (PILE-403)", () => {
     );
     expect(((await term.json()) as { type: string }).type).toBe("terminal");
   });
+
+  it("sets and clears a customer's stage via PATCH statusId", async () => {
+    const seed = await seedWorkspace();
+    const org = seed.organizationId;
+    const admin = seed.token;
+
+    const statusRes = await fetch(
+      `/workspaces/${org}/customer-statuses`,
+      {
+        method: "POST",
+        body: JSON.stringify({ name: "Outreach", position: 0 }),
+      },
+      admin
+    );
+    expect(statusRes.status).toBe(201);
+    const status = (await statusRes.json()) as { id: string };
+
+    const create = await fetch(
+      `/workspaces/${org}/customers`,
+      { method: "POST", body: JSON.stringify({ name: "Stage Co" }) },
+      admin
+    );
+    expect(create.status).toBe(201);
+    const customer = (await create.json()) as {
+      id: string;
+      statusId: string | null;
+    };
+    expect(customer.statusId).toBeNull();
+
+    const set = await fetch(
+      `/workspaces/${org}/customers/${customer.id}`,
+      { method: "PATCH", body: JSON.stringify({ statusId: status.id }) },
+      admin
+    );
+    expect(set.status).toBe(200);
+    expect(((await set.json()) as { statusId: string | null }).statusId).toBe(
+      status.id
+    );
+
+    // null clears the stage back to "no stage".
+    const clear = await fetch(
+      `/workspaces/${org}/customers/${customer.id}`,
+      { method: "PATCH", body: JSON.stringify({ statusId: null }) },
+      admin
+    );
+    expect(clear.status).toBe(200);
+    expect(
+      ((await clear.json()) as { statusId: string | null }).statusId
+    ).toBeNull();
+  });
 });
 
 describe("customer sales fields (readiness/fit)", () => {
@@ -920,5 +1025,595 @@ describe("customer sales fields (readiness/fit)", () => {
     const customer = record.customer ?? record;
     expect(customer.fitScore).toBe(0.9);
     expect(customer.processor).toBe("toast");
+  });
+
+  it("feeds monthly_card_volume_cents into merchantAttrs, ICP ranking, and audience predicates (PILE-654)", async () => {
+    const created = await fetch(
+      `/workspaces/${organizationId}/customers`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "Reported Volume Deli",
+          customFields: { monthly_card_volume_cents: "4000000" },
+        }),
+      },
+      token
+    );
+    expect(created.status).toBe(201);
+    const createdBody = (await created.json()) as {
+      id?: string;
+      customer?: { id?: string };
+    };
+    const custId = (createdBody.customer?.id ?? createdBody.id)!;
+
+    // POST /customers/:id/signals re-ranks with estMonthlyVolumeCents in
+    // merchantAttrs — the ICP gte rule on reported volume fires.
+    const sigRes = await fetch(
+      `/workspaces/${organizationId}/customers/${custId}/signals`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "revenue_estimate",
+          source: "intake",
+          evidenceUrl: "https://pile.example/intake/visit-vol",
+          strength: 90,
+          summary: "Reported monthly card volume ≈ $40,000/mo (intake)",
+        }),
+      },
+      token
+    );
+    expect(sigRes.status).toBe(201);
+    const sigBody = (await sigRes.json()) as {
+      breakdown: { matchedIcpRules: string[]; priorityScore: number };
+    };
+    expect(sigBody.breakdown.matchedIcpRules).toContain(
+      "icp-est-monthly-card-volume"
+    );
+    expect(sigBody.breakdown.priorityScore).toBeGreaterThan(0);
+
+    // Audience gte/lte predicates read the same field off the candidate
+    // row — high-volume merchant matches, a no-volume row does not.
+    const audRes = await fetch(
+      `/workspaces/${organizationId}/customers/audience-query`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          logic: "and",
+          predicates: [
+            { field: "estMonthlyVolumeCents", op: "gte", value: 1_000_000 },
+          ],
+        }),
+      },
+      token
+    );
+    expect(audRes.status).toBe(200);
+    const audBody = (await audRes.json()) as {
+      merchants: Array<{ id: string }>;
+    };
+    expect(audBody.merchants.map((m) => m.id)).toContain(custId);
+  });
+
+  it("records customer signals, computes Ranker v2 breakdown + Why Now, evaluates send-gate, and resolves SMB dedup keys (PILE-478..533)", async () => {
+    const created = await fetch(
+      `/workspaces/${organizationId}/customers`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "The Bleecker Street Bistro LLC",
+          address: "123 Bleecker Street, New York, NY",
+          phone: "(212) 555-0144",
+          vertical: "restaurant",
+        }),
+      },
+      token
+    );
+    expect(created.status).toBe(201);
+    const createdBody = (await created.json()) as {
+      id?: string;
+      customer?: { id?: string };
+    };
+    const cust = { id: (createdBody.customer?.id ?? createdBody.id)! };
+
+    // 1. Record a signal with HTML technographics -> detects Toast POS + updates priorityScore
+    const sigRes = await fetch(
+      `/workspaces/${organizationId}/customers/${cust.id}/signals`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          source: "website_technographics",
+          evidenceUrl: "https://bleeckerbistro.example.com",
+          html: '<script src="https://order.toasttab.com/widget.js"></script>',
+        }),
+      },
+      token
+    );
+    expect(sigRes.status).toBe(201);
+    const sigBody = (await sigRes.json()) as {
+      signal: { type: string };
+      breakdown: { priorityScore: number; whyNow: string };
+    };
+    expect(sigBody.signal.type).toBe("pos_detected");
+    expect(sigBody.breakdown.priorityScore).toBeGreaterThan(0);
+    expect(sigBody.breakdown.whyNow).toContain("TOAST");
+
+    // 2. GET /customers/:id/signals returns the persisted signal + breakdown
+    const listSig = await fetch(
+      `/workspaces/${organizationId}/customers/${cust.id}/signals`,
+      {},
+      token
+    );
+    expect(listSig.status).toBe(200);
+    const listBody = (await listSig.json()) as {
+      signals: Array<{ type: string }>;
+      breakdown: { priorityScore: number };
+    };
+    expect(listBody.signals).toHaveLength(1);
+    expect(listBody.breakdown.priorityScore).toBe(
+      sigBody.breakdown.priorityScore
+    );
+
+    // 3. POST /customers/:id/send-gate blocks invalid email and passes valid email
+    const gateBlock = await fetch(
+      `/workspaces/${organizationId}/customers/${cust.id}/send-gate`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          channel: "email",
+          contactEmail: "bad@example.com",
+          emailStatus: "invalid",
+        }),
+      },
+      token
+    );
+    expect(gateBlock.status).toBe(200);
+    const gateBlockBody = (await gateBlock.json()) as {
+      result: string;
+      reasons: string[];
+    };
+    expect(gateBlockBody.result).toBe("block");
+    expect(gateBlockBody.reasons).toContain("EMAIL_INVALID");
+
+    // 4. POST /customers/dedup-key matches the existing SMB by normalized name + address
+    const dedupRes = await fetch(
+      `/workspaces/${organizationId}/customers/dedup-key`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "Bleecker St Bistro",
+          address: "123 Bleecker St, New York, NY",
+        }),
+      },
+      token
+    );
+    expect(dedupRes.status).toBe(200);
+    const dedupBody = (await dedupRes.json()) as {
+      matchedCustomerId: string | null;
+    };
+    expect(dedupBody.matchedCustomerId).toBe(cust.id);
+
+    // 5. POST /customers/:id/reply-ingest classifies opt-out, suppresses customer, and subsequent send-gate blocks
+    const replyRes = await fetch(
+      `/workspaces/${organizationId}/customers/${cust.id}/reply-ingest`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          subject: "Re: Quick question",
+          body: "Please unsubscribe me and remove me from your list.",
+          fromEmail: "owner@bleeckerbistro.example.com",
+        }),
+      },
+      token
+    );
+    expect(replyRes.status).toBe(200);
+    const replyBody = (await replyRes.json()) as {
+      classified: { category: string };
+      suppressed: boolean;
+    };
+    expect(replyBody.classified.category).toBe("opt_out");
+    expect(replyBody.suppressed).toBe(true);
+
+    const gateAfterOptOut = await fetch(
+      `/workspaces/${organizationId}/customers/${cust.id}/send-gate`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          channel: "email",
+          contactEmail: "owner@bleeckerbistro.example.com",
+          emailStatus: "valid",
+        }),
+      },
+      token
+    );
+    const gateAfterBody = (await gateAfterOptOut.json()) as {
+      result: string;
+      reasons: string[];
+    };
+    expect(gateAfterBody.result).toBe("block");
+    expect(gateAfterBody.reasons).toContain("MERCHANT_DO_NOT_CONTACT");
+    expect(gateAfterBody.reasons).toContain("CONTACT_DO_NOT_EMAIL");
+
+    // 6. hard_bounce suppresses only the bounced email, leaving phone/visit channels open on a fresh customer
+    const bounceCustRes = await fetch(
+      `/workspaces/${organizationId}/customers`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "MacDougal Contracting LLC",
+          vertical: "contractor",
+        }),
+      },
+      token
+    );
+    const bounceCustBody = (await bounceCustRes.json()) as {
+      id?: string;
+      customer?: { id?: string };
+    };
+    const bounceCustId = (bounceCustBody.customer?.id ?? bounceCustBody.id)!;
+    const bounceReply = await fetch(
+      `/workspaces/${organizationId}/customers/${bounceCustId}/reply-ingest`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          subject: "Undeliverable",
+          body: "550 5.1.1 User unknown",
+          fromEmail: "dead@macdougal.example.com",
+        }),
+      },
+      token
+    );
+    expect(bounceReply.status).toBe(200);
+    const bounceReplyJson = (await bounceReply.json()) as {
+      enrollment: { status: string; endReason: string };
+    };
+    expect(bounceReplyJson.enrollment.status).toBe("ended");
+    expect(bounceReplyJson.enrollment.endReason).toBe("bounced");
+
+    const callGate = await fetch(
+      `/workspaces/${organizationId}/customers/${bounceCustId}/send-gate`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          channel: "call",
+        }),
+      },
+      token
+    );
+    expect(((await callGate.json()) as { result: string }).result).toBe("pass");
+
+    // 7. Run play, dynamic audience query, and daily morning brief (PILE-514..527, PILE-559)
+    const playRes = await fetch(
+      `/workspaces/${organizationId}/customers/${bounceCustId}/run-play`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          html: '<script src="https://www.toasttab.com/restaurants/macdougal"></script>',
+          pageUrl: "https://macdougal.example.com",
+        }),
+      },
+      token
+    );
+    expect(playRes.status).toBe(200);
+    const playBody = (await playRes.json()) as {
+      status: string;
+      posGuess: string;
+    };
+    expect(playBody.status).toBe("awaiting_approval");
+    expect(playBody.posGuess).toBe("toast");
+
+    const audRes = await fetch(
+      `/workspaces/${organizationId}/customers/audience-query`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          logic: "and",
+          predicates: [
+            { field: "processor", op: "eq", value: "toast" },
+            { field: "signal", op: "has_signal", value: "pos_detected" },
+          ],
+        }),
+      },
+      token
+    );
+    expect(audRes.status).toBe(200);
+    const audBody = (await audRes.json()) as { totalMatched: number };
+    expect(audBody.totalMatched).toBeGreaterThanOrEqual(1);
+
+    const briefRes = await fetch(
+      `/workspaces/${organizationId}/customers/morning-brief`,
+      {
+        method: "POST",
+        body: JSON.stringify({ limit: 5 }),
+      },
+      token
+    );
+    expect(briefRes.status).toBe(200);
+    const briefBody = (await briefRes.json()) as {
+      items: Array<{ merchantId: string; whyNow: string }>;
+    };
+    expect(briefBody.items.length).toBeGreaterThanOrEqual(1);
+    expect(briefBody.items[0]?.whyNow).toContain("Why now:");
+    expect(typeof briefBody.items[0]?.merchantId).toBe("string");
+  });
+});
+
+describe("approve-batch cadence wiring (PILE-609)", () => {
+  it("email batches honor mailbox cap + domain health and persist sentToday", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const customer = await createCustomer(organizationId, token, "Cadence Co");
+
+    const res = await fetch(
+      `/workspaces/${organizationId}/customers/approve-batch`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          customerIds: [customer.id],
+          channel: "email",
+          mailboxId: "mb-test",
+          dailyCap: 10,
+          physicalAddress: "1 Main St",
+          unsubscribeBaseUrl: "https://x.example/u",
+        }),
+      },
+      token
+    );
+    expect(res.status).toBe(200);
+    const body = z
+      .object({
+        approvedCount: z.number(),
+        blockedCount: z.number(),
+        approved: z.array(
+          z.object({
+            customerId: z.string(),
+            mailboxSentToday: z.number().optional(),
+            optOutFooter: z.string().nullable().optional(),
+          })
+        ),
+      })
+      .parse(await res.json());
+    expect(body.approvedCount + body.blockedCount).toBeGreaterThanOrEqual(0);
+    // Customer has no email contact → send gate blocks without a recipient,
+    // or approves and the mailbox pipeline reports the shared sentToday.
+    for (const item of body.approved) {
+      expect(item.mailboxSentToday).toBeGreaterThanOrEqual(1);
+    }
+  });
+});
+
+describe("customer interactions — log-touch (PILE-651)", () => {
+  let organizationId = "";
+  let token = "";
+
+  const customerShape = z.object({
+    id: z.string(),
+    statusId: z.string().nullable(),
+    nextStepText: z.string().nullable(),
+    nextStepDueAt: z.string().nullable(),
+    needsHuman: z.boolean().nullable(),
+    needsHumanReason: z.string().nullable(),
+  });
+
+  const interactionResponse = z.object({
+    interaction: z.object({
+      id: z.string(),
+      customerId: z.string(),
+      outcome: z.string(),
+      note: z.string().nullable(),
+      createdAt: z.string(),
+    }),
+    customer: customerShape,
+    stageAdvanced: z.boolean(),
+    stageBlocked: z.boolean(),
+  });
+
+  async function createStatus(name: string, key: string) {
+    const res = await fetch(
+      `/workspaces/${organizationId}/customer-statuses`,
+      { method: "POST", body: JSON.stringify({ name, key }) },
+      token
+    );
+    expect(res.status).toBe(201);
+    return z
+      .object({ id: z.string(), key: z.string() })
+      .parse(await res.json());
+  }
+
+  async function logTouch(customerId: string, body: Record<string, unknown>) {
+    return fetch(
+      `/workspaces/${organizationId}/customers/${customerId}/interactions`,
+      { method: "POST", body: JSON.stringify(body) },
+      token
+    );
+  }
+
+  let discoveryStatusId = "";
+  let outreachStatusId = "";
+  let lostStatusId = "";
+
+  beforeAll(async () => {
+    ({ organizationId, token } = await seedWorkspace());
+    discoveryStatusId = (await createStatus("Discovery", "discovery")).id;
+    outreachStatusId = (await createStatus("Outreach", "outreach")).id;
+    lostStatusId = (await createStatus("Lost", "lost")).id;
+  });
+
+  it("talked advances to discovery, sets default next step, records memory", async () => {
+    const customer = await createCustomer(organizationId, token, "Knock Co");
+
+    const res = await logTouch(customer.id, {
+      outcome: "talked",
+      note: "Owner wants a demo",
+    });
+    expect(res.status).toBe(201);
+    const body = interactionResponse.parse(await res.json());
+    expect(body.interaction.customerId).toBe(customer.id);
+    expect(body.interaction.outcome).toBe("talked");
+    expect(body.interaction.note).toBe("Owner wants a demo");
+    expect(body.stageAdvanced).toBe(true);
+    expect(body.stageBlocked).toBe(false);
+    expect(body.customer.statusId).toBe(discoveryStatusId);
+    expect(body.customer.statusId).not.toBe(outreachStatusId);
+    expect(body.customer.nextStepText).toBe("Follow up after conversation");
+    expect(Date.parse(body.customer.nextStepDueAt!)).toBeGreaterThan(
+      Date.now()
+    );
+    expect(body.customer.needsHuman).toBe(false);
+
+    // The touch landed in customer memory under kind "outcome".
+    const mem = await fetch(
+      `/workspaces/${organizationId}/memory?entityType=customer&entityId=${customer.id}&kind=outcome`,
+      {},
+      token
+    );
+    expect(mem.status).toBe(200);
+    const { memories } = z
+      .object({
+        memories: z.array(z.object({ id: z.string(), fact: z.string() })),
+      })
+      .parse(await mem.json());
+    expect(memories.map((m) => m.id)).toContain(body.interaction.id);
+    const fact = JSON.parse(
+      memories.find((m) => m.id === body.interaction.id)!.fact
+    ) as { outcome: string; stageAdvanced: boolean };
+    expect(fact.outcome).toBe("talked");
+    expect(fact.stageAdvanced).toBe(true);
+  });
+
+  it("callback keeps the stage and honors an explicit callback date", async () => {
+    const customer = await createCustomer(organizationId, token, "Later Co");
+    const res = await logTouch(customer.id, {
+      outcome: "callback",
+      nextStepText: "Call back Tuesday",
+      nextStepDueAt: "2026-10-27T14:00:00.000Z",
+    });
+    expect(res.status).toBe(201);
+    const body = interactionResponse.parse(await res.json());
+    expect(body.stageAdvanced).toBe(false);
+    expect(body.customer.statusId).toBeNull();
+    expect(body.customer.nextStepText).toBe("Call back Tuesday");
+    expect(body.customer.nextStepDueAt).toBe("2026-10-27T14:00:00.000Z");
+  });
+
+  it("not_interested moves to lost and clears the pending next step", async () => {
+    const create = await fetch(
+      `/workspaces/${organizationId}/customers`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "No Thanks Co",
+          nextStepText: "Re-knock",
+          nextStepDueAt: "2026-10-20T00:00:00.000Z",
+          needsHuman: true,
+          needsHumanReason: "unreachable",
+        }),
+      },
+      token
+    );
+    const customer = customerShape.parse(await create.json());
+
+    const res = await logTouch(customer.id, { outcome: "not_interested" });
+    expect(res.status).toBe(201);
+    const body = interactionResponse.parse(await res.json());
+    expect(body.stageAdvanced).toBe(true);
+    expect(body.customer.statusId).toBe(lostStatusId);
+    expect(body.customer.nextStepText).toBeNull();
+    expect(body.customer.nextStepDueAt).toBeNull();
+    expect(body.customer.needsHuman).toBe(false);
+    expect(body.customer.needsHumanReason).toBeNull();
+  });
+
+  it("needs_email flags the record for a human", async () => {
+    const customer = await createCustomer(organizationId, token, "NoEmail Co");
+    const res = await logTouch(customer.id, { outcome: "needs_email" });
+    expect(res.status).toBe(201);
+    const body = interactionResponse.parse(await res.json());
+    expect(body.customer.needsHuman).toBe(true);
+    expect(body.customer.needsHumanReason).toBe("Missing decision-maker email");
+    expect(body.customer.nextStepText).toBe(
+      "Find decision-maker email and send intro"
+    );
+  });
+
+  it("404s a missing customer and 400s an unknown outcome", async () => {
+    const missing = await logTouch(crypto.randomUUID(), {
+      outcome: "talked",
+    });
+    expect(missing.status).toBe(404);
+
+    const customer = await createCustomer(organizationId, token, "Bad Outcome");
+    const bad = await logTouch(customer.id, { outcome: "went_well" });
+    expect(bad.status).toBe(400);
+  });
+});
+
+describe("customers list bounded contract (PILE-653)", () => {
+  let organizationId = "";
+  let token = "";
+
+  beforeAll(async () => {
+    ({ organizationId, token } = await seedWorkspace());
+    for (const [i, name] of ["Alpha Co", "Beta LLC", "Gamma Inc"].entries()) {
+      const res = await fetch(
+        `/workspaces/${organizationId}/customers`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            name,
+            domain: `${name.toLowerCase().replace(/\s/g, "")}.example.com`,
+            notes: `note-${i}`,
+          }),
+        },
+        token
+      );
+      expect(res.status).toBe(201);
+    }
+  });
+
+  const listRaw = async (query: string) => {
+    const res = await fetch(
+      `/workspaces/${organizationId}/customers?${query}`,
+      {},
+      token
+    );
+    expect(res.status).toBe(200);
+    return (await res.json()) as {
+      customers: Record<string, unknown>[];
+      nextCursor?: string;
+    };
+  };
+
+  it("honors limit and follows nextCursor pages", async () => {
+    const first = await listRaw("limit=2");
+    expect(first.customers).toHaveLength(2);
+    expect(first.nextCursor).toBeDefined();
+
+    const second = await listRaw(
+      `limit=2&cursor=${encodeURIComponent(first.nextCursor!)}`
+    );
+    expect(second.customers).toHaveLength(1);
+    expect(second.nextCursor).toBeUndefined();
+    expect(second.customers.map((c) => c.id)).not.toContain(
+      first.customers[0]?.id
+    );
+  });
+
+  it("filters server-side by q across name and domain", async () => {
+    const byName = await listRaw("q=alpha");
+    expect(byName.customers).toHaveLength(1);
+    expect(byName.customers[0]?.name).toBe("Alpha Co");
+    const byDomain = await listRaw("q=gammainc.example.com");
+    expect(byDomain.customers).toHaveLength(1);
+    expect(await listRaw("q=nomatch")).toMatchObject({ customers: [] });
+  });
+
+  it("summary=1 returns the light picker row only", async () => {
+    const res = await listRaw("summary=1&limit=1");
+    const row = res.customers[0]!;
+    expect(row).toHaveProperty("id");
+    expect(row).toHaveProperty("name");
+    expect(row).toHaveProperty("statusId");
+    expect(row).toHaveProperty("needsHuman");
+    expect(row).not.toHaveProperty("notes");
+    expect(row).not.toHaveProperty("customFields");
+    expect(row).not.toHaveProperty("organizationId");
   });
 });

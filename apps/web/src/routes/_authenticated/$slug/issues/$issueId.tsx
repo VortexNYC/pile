@@ -25,6 +25,7 @@ import { Markdown } from "@/components/markdown";
 import { Page } from "@/components/page";
 import { PrChip } from "@/components/pr-chip";
 import { planProgress } from "@/components/session-plan";
+import { AGENT_SESSIONS_LIST_QUERY } from "@/components/sessions-list";
 import { ShareButton } from "@/components/share-button";
 import { ErrorState, LoadingState } from "@/components/states";
 import { useFavorites } from "@/hooks/use-favorites";
@@ -52,6 +53,16 @@ import { toastError, toastSuccess } from "@/lib/toast";
 export const Route = createFileRoute("/_authenticated/$slug/issues/$issueId")({
   component: IssueDetail,
 });
+
+/** PILE-653 — the issue page polls its lane sessions on the summary-row
+ *  contract and caps both lookups; the detail rail only needs scalars. */
+export function issueSessionsQuery(issueId: string) {
+  return { issueId, ...AGENT_SESSIONS_LIST_QUERY };
+}
+
+export function childIssuesQuery(parentId: string) {
+  return { parentId, limit: 100 };
+}
 
 function IssueDetail() {
   const { issueId } = Route.useParams();
@@ -101,7 +112,7 @@ function IssueDetail() {
           api.GET("/workspaces/{organizationId}/agent/sessions", {
             params: {
               path: { organizationId },
-              query: { issueId },
+              query: issueSessionsQuery(issueId),
             },
           })
         )
@@ -235,7 +246,7 @@ function IssueDetail() {
           api.GET("/workspaces/{organizationId}/issues", {
             params: {
               path: { organizationId },
-              query: { parentId: issueId },
+              query: childIssuesQuery(issueId),
             },
           })
         )
@@ -367,9 +378,7 @@ function IssueDetail() {
     ...(rels?.inverseRelations ?? []),
   ];
   const watchers = subscribers.data ?? [];
-  const issueLabels = (data.labelIds ?? "")
-    .split(",")
-    .filter((id) => id.length > 0)
+  const issueLabels = (data.labelIds ?? [])
     .map((id) => labels.data?.find((l) => l.id === id))
     .filter((l): l is NonNullable<typeof l> => !!l);
   const project = data.projectId
@@ -482,13 +491,9 @@ function IssueDetail() {
         }
         center={
           <>
-            {/* title context, description, sub-issues, activity */}
-            {/* the rail is lg-only; keep the PR chip visible below that */}
-            {prChip(data) ? (
-              <div className="lg:hidden">
-                <PrChip issue={data} link />
-              </div>
-            ) : null}
+            {/* title context, description, sub-issues, activity — the rail
+                stacks under this column on <lg, so nothing needs a mobile
+                duplicate here (PILE-653). */}
             {editing ? (
               <LayerCard>
                 <LayerCard.Primary className="p-6">

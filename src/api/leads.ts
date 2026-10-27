@@ -25,6 +25,7 @@ const leadSchema = z.object({
 });
 
 const leadRoute = createRoute({
+  security: [],
   method: "post",
   path: "/public/leads/{organizationId}",
   tags: ["leads"],

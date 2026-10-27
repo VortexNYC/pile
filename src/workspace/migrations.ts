@@ -1504,6 +1504,11 @@ const v89 = `ALTER TABLE draft_outputs ADD COLUMN agent_slug TEXT
 ALTER TABLE draft_outputs ADD COLUMN prompt_version TEXT
 --> statement-breakpoint
 ALTER TABLE draft_outputs ADD COLUMN original_payload TEXT`;
+
+// Per-surface display prefs (CRM sheet colors, density, hidden columns) —
+// a JSON blob so the shape can grow without more column churn.
+const v102 = `ALTER TABLE user_workspace_preferences ADD COLUMN display TEXT`;
+
 const v69 = `CREATE TABLE comments_new (
   id TEXT PRIMARY KEY,
   organization_id TEXT NOT NULL,
@@ -1677,8 +1682,8 @@ CREATE INDEX IF NOT EXISTS issue_shares_issue_idx ON issue_shares (organization_
 
 // PILE-474 — the compute backend a lane's sandbox lives on + its handle;
 // pinned at start() so poll/cancel/sendPrompt survive provider flag flips.
-const v102 = `ALTER TABLE agent_sessions ADD COLUMN compute_backend TEXT`;
-const v103 = `ALTER TABLE agent_sessions ADD COLUMN sandbox_id TEXT`;
+const v103 = `ALTER TABLE agent_sessions ADD COLUMN compute_backend TEXT`;
+const v104 = `ALTER TABLE agent_sessions ADD COLUMN sandbox_id TEXT`;
 
 export const workspaceMigrations = {
   journal: {
@@ -1784,8 +1789,9 @@ export const workspaceMigrations = {
       { idx: 98, when: 98, tag: "v99", breakpoints: true },
       { idx: 99, when: 99, tag: "v100", breakpoints: true },
       { idx: 100, when: 100, tag: "v101", breakpoints: true },
-      { idx: 101, when: 101, tag: "v102", breakpoints: true },
+      { idx: 101, when: 101, tag: "v102", breakpoints: false },
       { idx: 102, when: 102, tag: "v103", breakpoints: true },
+      { idx: 103, when: 103, tag: "v104", breakpoints: true },
     ],
   },
   migrations: {
@@ -1892,5 +1898,6 @@ export const workspaceMigrations = {
     m0100: v101,
     m0101: v102,
     m0102: v103,
+    m0103: v104,
   },
 } satisfies Parameters<typeof migrate>[1];

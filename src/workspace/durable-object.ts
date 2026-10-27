@@ -5,6 +5,7 @@ import {
   desc,
   eq,
   exists,
+  gt,
   gte,
   inArray,
   isNotNull,
@@ -21,6 +22,7 @@ import { migrate } from "drizzle-orm/durable-sqlite/migrator";
 import { alias } from "drizzle-orm/sqlite-core";
 import { z } from "zod";
 
+import { classifyMerchantLead } from "../agents/collectors.js";
 import { encryptSecret } from "../agents/credentials.js";
 import {
   LANE_PROGRESS_HEARTBEAT_MS,
@@ -86,12 +88,20 @@ import {
 } from "../global/schema.js";
 import { safeJSON } from "../global/team-metadata.js";
 import { getDefaultTeam, getTeamById } from "../global/teams.js";
-import { listLabels } from "../global/workspace-entities.js";
+import {
+  listLabels,
+  mergeDuplicateLabels,
+  mergeDuplicateStates,
+} from "../global/workspace-entities.js";
 import { getWorkspaceMembership } from "../global/workspaces.js";
 import { getWorkspaceById } from "../global/workspaces.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import { createPhaseTimer, logSlowPhases } from "../platform/phase-timer.js";
+import {
+  capturePosthogEvent,
+  reportWorkerException,
+} from "../platform/posthog.js";
 import { notifySlack } from "../slack/bot.js";
 import type { AppEnv } from "../types/env.js";
 import {
@@ -117,14 +127,26 @@ import {
   type IssueViewer,
   type ListIssuesArgs,
   type RealtimeEvent,
+  type SearchResultItem,
+  RATE_LIMIT_HOLD_MS,
+  RATE_LIMIT_PAUSE_PREFIX,
 } from "../types/workspace.js";
 import * as data from "./data/index.js";
 import { filterToSql } from "./filter.js";
+import { runMerchantLeadPlay } from "./lead-play-engine.js";
+import { extractFactsFromMarkdown } from "./memory-extractor.js";
+import type { ExtractedMemoryCandidate } from "./memory-extractor.js";
 import { workspaceMigrations } from "./migrations.js";
-import { type ReviewVerdict, rollReviewSummary } from "./review-summary.js";
+import {
+  evaluateReviewConvergence,
+  parseReviewSummary,
+  type ReviewVerdict,
+  rollReviewSummary,
+} from "./review-summary.js";
 import { workspaceSchema } from "./schema-map.js";
 import {
   workspaceAgentActivities,
+  workspaceAgentSessionEvents,
   workspaceAgentSessions,
   workspaceAttachments,
   workspaceComments,
@@ -145,6 +167,7 @@ import {
   workspaceReactions,
   workspaceSavedViews,
   workspaceMcpServers,
+  workspaceMemory,
   workspaceUserPreferences,
   workspaceViewFavorites,
   workspaceWebhookSubscriptions,
@@ -160,18 +183,42 @@ import {
   DUPLICATE_MIN_SCORE,
   findDuplicateCandidates,
   findSimilarIssues,
+  getSearchIndexMetrics,
+  indexMemorySearchDocument,
   insertMultiple as insertSearchDocs,
   issueToSearchDocument,
+  memoryToSearchDocument,
   normalizeIssueTitle,
+  remove,
   removeIssueDocuments,
+  removeMemorySearchDocument,
   similarityTerms,
   titleOverlapScore,
-  searchDocuments,
+  searchDocumentsRanked,
   searchIssues,
+  searchIssuesRanked,
+  searchMemories,
+  searchMemoriesRanked,
+  searchSnippet,
+  type RankedSearchHit,
   type CommentForSearch,
+  type MemoryForSearch,
+  type SearchDocument,
   type WorkspaceSearchIndex,
 } from "./search.js";
+import {
+  computeSemanticSimilarity,
+  expandSemanticQuery,
+  queryVectorizeMemories,
+} from "./semantic-memory.js";
+import { computeSmbMatchKey, type MerchantSignal } from "./signals-engine.js";
 import { inArrayJson, notInArrayJson } from "./sql.js";
+import {
+  type CustomerTouchOutcome,
+  OUTCOME_DEFAULTS,
+  resolveNextStep,
+  resolveOutcomeStatusId,
+} from "./touch-outcomes.js";
 import { deliverWebhooks, retryWebhookDeliveries } from "./webhooks.js";
 
 type IssueKey = keyof Issue & keyof IssuePatch;
@@ -194,6 +241,50 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return Array.from({ length: Math.ceil(arr.length / size) }, (_, i) =>
     arr.slice(i * size, (i + 1) * size)
   );
+}
+
+// VTX-638 — exponential backoff on the park ceiling: a lane that keeps
+// dying on the provider's rate limit doubles its hold per strike (20m →
+// 40m → 60m cap) instead of re-parking into the same window forever.
+const RATE_LIMIT_MAX_HOLD_MS = 60 * 60 * 1000;
+
+/** The instant a rate-limit park ends: the provider's advertised reset
+ *  when it parses, lands in the future, and sits inside the strike-
+ *  escalated ceiling — else the ceiling itself. A past/absent advertised
+ *  instant can't un-park a lane early. */
+function rateLimitHoldUntil(
+  result: { rateLimitUntil?: string | null },
+  retryCount = 0
+): string {
+  const advertised = Date.parse(result.rateLimitUntil ?? "");
+  const ceiling =
+    Date.now() +
+    Math.min(RATE_LIMIT_HOLD_MS * 2 ** retryCount, RATE_LIMIT_MAX_HOLD_MS);
+  return new Date(
+    Number.isFinite(advertised) && advertised > Date.now()
+      ? Math.min(advertised, ceiling)
+      : ceiling
+  ).toISOString();
+}
+
+/** The rate-limit pause reason to persist, or null when the write should
+ *  be skipped: an operator/spend-cap pause (any reason without the
+ *  prefix) is never touched, and a shorter backoff must not shorten a
+ *  longer park still in flight — the escalation is the point. */
+function rateLimitPauseReason(
+  existing: { reason?: string | null } | undefined,
+  result: { rateLimitUntil?: string | null },
+  retryCount: number
+): string | null {
+  if (existing && !existing.reason?.startsWith(RATE_LIMIT_PAUSE_PREFIX))
+    return null;
+  const existingUntil = existing?.reason
+    ? Date.parse(existing.reason.slice(RATE_LIMIT_PAUSE_PREFIX.length))
+    : Number.NaN;
+  const next = rateLimitHoldUntil(result, retryCount);
+  if (Number.isFinite(existingUntil) && Date.parse(next) <= existingUntil)
+    return null;
+  return `${RATE_LIMIT_PAUSE_PREFIX}${next}`;
 }
 
 function isTerminalStatus(status: IssueStatus): boolean {
@@ -370,19 +461,62 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   private async initialize() {
-    const [stored, , backfilled] = await Promise.all([
-      this.ctx.storage.get<string>("organizationId"),
-      this.runMigrations(),
-      this.ctx.storage.get<boolean>("workspaceDataBackfilled"),
-    ]);
-    if (stored && !this.ctx.id.name) {
-      // Name-less DOs (newUniqueId) still need the stored org id; named
-      // ids already have it via ctx.id.name.
-      this.organizationId = stored;
+    try {
+      const [stored, , backfilled, crashedOp] = await Promise.all([
+        this.ctx.storage.get<string>("organizationId"),
+        this.runMigrations(),
+        this.ctx.storage.get<boolean>("workspaceDataBackfilled"),
+        this.ctx.storage.get<{ op: string; startedAt: number }>(
+          "__telemetry_inflight_op"
+        ),
+      ]);
+      this.persistedOrganizationId = stored ?? null;
+      if (stored && !this.ctx.id.name) {
+        // Name-less DOs (newUniqueId) still need the stored org id; named
+        // ids already have it via ctx.id.name.
+        this.organizationId = stored;
+      }
+      if (!backfilled) {
+        await this.backfillLegacyData();
+        await this.ctx.storage.put("workspaceDataBackfilled", true);
+      }
+      // PILE-633 — a leftover in-flight breadcrumb means the isolate was
+      // reset mid-operation (OOM kill on a cold index build is the known
+      // offender). Report it once, then clear the key.
+      if (crashedOp) {
+        await this.ctx.storage.delete("__telemetry_inflight_op");
+        reportWorkerException(
+          "workspace-do.isolate-reset",
+          new Error(`Durable Object isolate reset during ${crashedOp.op}`),
+          this.ctx,
+          {
+            organizationId: this.organizationId,
+            op: crashedOp.op,
+            startedAt: crashedOp.startedAt,
+            databaseSizeBytes: this.safeDatabaseSize(),
+          },
+          { env: this.env }
+        );
+      }
+    } catch (err) {
+      reportWorkerException(
+        "workspace-do.init",
+        err,
+        this.ctx,
+        { organizationId: this.organizationId },
+        { env: this.env }
+      );
+      throw err;
     }
-    if (!backfilled) {
-      await this.backfillLegacyData();
-      await this.ctx.storage.put("workspaceDataBackfilled", true);
+  }
+
+  /** DO SQLite footprint in bytes — best-effort, 0 when the storage SQL
+   *  surface is unavailable (e.g. inside transaction-less test doubles). */
+  private safeDatabaseSize(): number {
+    try {
+      return this.ctx.storage.sql.databaseSize;
+    } catch {
+      return 0;
     }
   }
 
@@ -570,9 +704,15 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }
   }
 
+  // PILE-645 — callers invoke setOrganizationId on every request; only hit
+  // storage when the value actually changed.
+  private persistedOrganizationId: string | null = null;
+
   async setOrganizationId(id: string) {
     this.organizationId = id;
+    if (this.persistedOrganizationId === id) return;
     await this.ctx.storage.put("organizationId", id);
+    this.persistedOrganizationId = id;
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -678,72 +818,212 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }
   }
 
+  // PILE-612 — the index build pages every table through SQLite SUBSTR so
+  // multi-hundred-KB bodies are never materialized in the 128 MB isolate.
+  // The in-flight breadcrumb in storage lets a post-reset initialize()
+  // report which op was running when the isolate died (PILE-633).
   private async buildSearchIndex(): Promise<WorkspaceSearchIndex> {
-    const index = await createWorkspaceSearchIndex();
-    const [issues, commentRows, documentRows] = await Promise.all([
-      this.db.select().from(workspaceIssues).all(),
-      this.db
-        .select({
-          id: workspaceComments.id,
-          issueId: workspaceComments.entityId,
-          body: workspaceComments.body,
-          createdAt: workspaceComments.createdAt,
-        })
-        .from(workspaceComments)
-        .all(),
-      this.db
-        .select({
-          id: workspaceDocuments.id,
-          title: workspaceDocuments.title,
-          content: workspaceDocuments.content,
-          createdAt: workspaceDocuments.createdAt,
-        })
-        .from(workspaceDocuments)
-        .where(isNull(workspaceDocuments.trashedAt))
-        .all(),
-    ]);
+    const startedAt = Date.now();
+    await this.ctx.storage.put("__telemetry_inflight_op", {
+      op: "buildSearchIndex",
+      startedAt,
+    });
+    try {
+      const index = createWorkspaceSearchIndex();
+      const PAGE_SIZE = 500;
+      const DOCUMENT_PAGE_SIZE = 200;
+      const MAX_INDEXED_COMMENTS = 2_500;
+      // issue.id and ISSUE-KEY → {id, teamId} so comment/memory rows
+      // resolve their issue without holding full issue rows.
+      const issueMeta = new Map<string, { id: string; teamId: string }>();
+      const resolveIssueMeta = (key: string | null | undefined) =>
+        key === null || key === undefined
+          ? undefined
+          : (issueMeta.get(key) ?? issueMeta.get(key.toUpperCase()));
 
-    const issueById = new Map(issues.map((issue) => [issue.id, issue]));
-    const docs: Array<ReturnType<typeof issueToSearchDocument>> = [];
-    for (const issue of issues) {
-      docs.push(issueToSearchDocument(issue));
-    }
-    for (const comment of commentRows) {
-      if (!comment.issueId) continue;
-      const issue = issueById.get(comment.issueId);
-      docs.push(
-        commentToSearchDocument({
-          id: comment.id,
-          issueId: comment.issueId,
-          teamId: issue?.teamId ?? "",
-          body: comment.body,
-          createdAt: comment.createdAt,
-        })
-      );
-    }
-    for (const doc of documentRows) {
-      docs.push(documentToSearchDocument(doc));
-    }
-    // Index in batches and yield between them — a mature workspace's build
-    // is tens of seconds of tokenization; one synchronous insertMultiple
-    // starves the DO's event loop and every concurrent request hangs past
-    // the request budget (issue-create 500s, ~40s).
-    // insertSearchDocs resolves after yielding the event loop, so the
-    // sequential batches never starve concurrent DO requests.
-    const insertBatch = async (start: number) => {
-      await insertSearchDocs(index, docs.slice(start, start + 250));
-      await Promise.resolve();
-    };
-    await docs
-      .map((_, i) => i)
-      .filter((i) => i % 250 === 0)
-      .reduce(
-        (chain, i) => chain.then(() => insertBatch(i)),
-        Promise.resolve()
-      );
+      // Yield between pages (`await Promise.resolve()`) — a mature
+      // workspace's build is still seconds of tokenization; one synchronous
+      // run would starve concurrent DO requests past the request budget
+      // (issue-create 500s, ~40s). Pages recurse rather than loop-await so
+      // sequential pagination stays lint-clean.
+      const indexIssuePages = async (offset: number): Promise<void> => {
+        const page = await this.db
+          .select({
+            id: workspaceIssues.id,
+            teamId: workspaceIssues.teamId,
+            identifier: workspaceIssues.identifier,
+            title: workspaceIssues.title,
+            description: sql<
+              string | null
+            >`SUBSTR(${workspaceIssues.description}, 1, 8192)`,
+            status: workspaceIssues.status,
+          })
+          .from(workspaceIssues)
+          .orderBy(asc(workspaceIssues.id))
+          .limit(PAGE_SIZE)
+          .offset(offset)
+          .all();
+        for (const issue of page) {
+          const meta = { id: issue.id, teamId: issue.teamId };
+          issueMeta.set(issue.id, meta);
+          if (issue.identifier) {
+            issueMeta.set(issue.identifier.toUpperCase(), meta);
+          }
+        }
+        await insertSearchDocs(index, page.map(issueToSearchDocument));
+        await Promise.resolve();
+        if (page.length < PAGE_SIZE) return;
+        return indexIssuePages(offset + PAGE_SIZE);
+      };
+      await indexIssuePages(0);
 
-    this.searchIndex = index;
-    return index;
+      // Newest comments first, capped — old comment tails add vocabulary
+      // and build time long after they stop helping recall.
+      const indexCommentPages = async (
+        offset: number,
+        indexed: number
+      ): Promise<void> => {
+        if (indexed >= MAX_INDEXED_COMMENTS) return;
+        const pageSize = Math.min(PAGE_SIZE, MAX_INDEXED_COMMENTS - indexed);
+        const page = await this.db
+          .select({
+            id: workspaceComments.id,
+            issueId: workspaceComments.entityId,
+            body: sql<string>`SUBSTR(${workspaceComments.body}, 1, 4096)`,
+            createdAt: workspaceComments.createdAt,
+          })
+          .from(workspaceComments)
+          .where(eq(workspaceComments.entityType, "issue"))
+          .orderBy(desc(workspaceComments.createdAt))
+          .limit(pageSize)
+          .offset(offset)
+          .all();
+        const docs: SearchDocument[] = [];
+        for (const comment of page) {
+          if (!comment.issueId) continue;
+          const meta = resolveIssueMeta(comment.issueId);
+          if (!meta) continue;
+          docs.push(
+            commentToSearchDocument({
+              id: comment.id,
+              issueId: meta.id,
+              teamId: meta.teamId,
+              body: comment.body,
+              createdAt: comment.createdAt,
+            })
+          );
+        }
+        await insertSearchDocs(index, docs);
+        await Promise.resolve();
+        if (page.length < pageSize) return;
+        return indexCommentPages(offset + page.length, indexed + page.length);
+      };
+      await indexCommentPages(0, 0);
+
+      const indexDocumentPages = async (offset: number): Promise<void> => {
+        const page = await this.db
+          .select({
+            id: workspaceDocuments.id,
+            title: workspaceDocuments.title,
+            content: sql<string>`SUBSTR(${workspaceDocuments.content}, 1, 16384)`,
+            createdAt: workspaceDocuments.createdAt,
+          })
+          .from(workspaceDocuments)
+          .where(isNull(workspaceDocuments.trashedAt))
+          .orderBy(asc(workspaceDocuments.id))
+          .limit(DOCUMENT_PAGE_SIZE)
+          .offset(offset)
+          .all();
+        await insertSearchDocs(index, page.map(documentToSearchDocument));
+        await Promise.resolve();
+        if (page.length < DOCUMENT_PAGE_SIZE) return;
+        return indexDocumentPages(offset + DOCUMENT_PAGE_SIZE);
+      };
+      await indexDocumentPages(0);
+
+      // PILE-618/629 — workspace_memory facts ride the same index so
+      // unified search and BM25 recall can find them. Only active heads.
+      const now = new Date().toISOString();
+      const indexMemoryPages = async (offset: number): Promise<void> => {
+        const page = await this.db
+          .select({
+            id: workspaceMemory.id,
+            entityType: workspaceMemory.entityType,
+            entityId: workspaceMemory.entityId,
+            kind: workspaceMemory.kind,
+            fact: sql<string>`SUBSTR(${workspaceMemory.fact}, 1, 4096)`,
+            createdAt: workspaceMemory.createdAt,
+          })
+          .from(workspaceMemory)
+          .where(
+            and(
+              eq(workspaceMemory.organizationId, this.organizationId),
+              sql`${workspaceMemory.id} NOT IN (SELECT ${workspaceMemory.supersedes} FROM ${workspaceMemory} WHERE ${workspaceMemory.organizationId} = ${this.organizationId} AND ${workspaceMemory.supersedes} IS NOT NULL)`,
+              or(
+                isNull(workspaceMemory.validUntil),
+                gt(workspaceMemory.validUntil, now)
+              )!
+            )
+          )
+          .orderBy(asc(workspaceMemory.id))
+          .limit(PAGE_SIZE)
+          .offset(offset)
+          .all();
+        const docs: SearchDocument[] = [];
+        for (const row of page) {
+          const meta =
+            row.entityType === "issue"
+              ? resolveIssueMeta(row.entityId)
+              : undefined;
+          docs.push(
+            memoryToSearchDocument({
+              id: row.id,
+              entityType: row.entityType,
+              entityId: row.entityId,
+              kind: row.kind,
+              fact: row.fact,
+              createdAt: row.createdAt,
+              issueId: meta?.id,
+              teamId: meta?.teamId,
+            })
+          );
+        }
+        await insertSearchDocs(index, docs);
+        await Promise.resolve();
+        if (page.length < PAGE_SIZE) return;
+        return indexMemoryPages(offset + PAGE_SIZE);
+      };
+      await indexMemoryPages(0);
+
+      this.searchIndex = index;
+      capturePosthogEvent(
+        "workspace_do.search_index_built",
+        {
+          distinct_id: `workspace:${this.organizationId}`,
+          organizationId: this.organizationId,
+          durationMs: Date.now() - startedAt,
+          ...getSearchIndexMetrics(index),
+          databaseSizeBytes: this.safeDatabaseSize(),
+        },
+        this.ctx,
+        { env: this.env }
+      );
+      return index;
+    } catch (err) {
+      reportWorkerException(
+        "workspace-do.search-index",
+        err,
+        this.ctx,
+        {
+          organizationId: this.organizationId,
+          databaseSizeBytes: this.safeDatabaseSize(),
+        },
+        { env: this.env }
+      );
+      throw err;
+    } finally {
+      await this.ctx.storage.delete("__telemetry_inflight_op");
+    }
   }
 
   private emitWebSockets(event: RealtimeEvent): void {
@@ -806,14 +1086,63 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   async alarm() {
-    const result = await retryWebhookDeliveries(
-      this.db,
-      this.env,
-      this.organizationId
-    );
-    if (result.hasMore && result.retryAt) {
-      await this.ctx.storage.setAlarm(result.retryAt);
+    try {
+      // PILE-633 — per-alarm storage/index gauge so DO memory pressure is
+      // visible fleet-wide, not just on isolate resets.
+      capturePosthogEvent(
+        "workspace_do.storage_metrics",
+        {
+          distinct_id: `workspace:${this.organizationId}`,
+          organizationId: this.organizationId,
+          databaseSizeBytes: this.safeDatabaseSize(),
+          searchIndexWarm: this.searchIndex !== null,
+          ...(this.searchIndex
+            ? getSearchIndexMetrics(this.searchIndex)
+            : { activeDocs: 0, totalSlots: 0, vocabSize: 0 }),
+        },
+        this.ctx,
+        { env: this.env }
+      );
+      const result = await retryWebhookDeliveries(
+        this.db,
+        this.env,
+        this.organizationId
+      );
+      if (result.hasMore && result.retryAt) {
+        await this.ctx.storage.setAlarm(result.retryAt);
+      }
+    } catch (err) {
+      reportWorkerException(
+        "workspace-do.alarm",
+        err,
+        this.ctx,
+        {
+          organizationId: this.organizationId,
+          databaseSizeBytes: this.safeDatabaseSize(),
+        },
+        { env: this.env }
+      );
+      throw err;
     }
+  }
+
+  /** PILE-633 — DO storage + search-index metrics for diagnostics and
+   *  tests (mirrors the `workspace_do.storage_metrics` gauge payload). */
+  async getStorageMetrics(): Promise<{
+    databaseSizeBytes: number;
+    searchIndexWarm: boolean;
+    activeDocs: number;
+    totalSlots: number;
+    vocabSize: number;
+  }> {
+    await this.ready;
+    return {
+      databaseSizeBytes: this.safeDatabaseSize(),
+      searchIndexWarm: this.searchIndex !== null,
+      ...(this.searchIndex
+        ? getSearchIndexMetrics(this.searchIndex)
+        : { activeDocs: 0, totalSlots: 0, vocabSize: 0 }),
+    };
   }
 
   async listComments(issueId: string) {
@@ -1790,12 +2119,66 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.getIssueRelation(this.db, this.organizationId, id);
   }
 
-  createIssueRelation(values: {
+  async createIssueRelation(values: {
     fromIssueId: string;
     toIssueId: string;
     type: string;
   }) {
-    return data.createIssueRelation(this.db, this.organizationId, values);
+    // VTX-770 — reject the shapes the unique index or the graph cannot hold,
+    // and map the race to 409 instead of letting SQLite surface a 500.
+    if (values.fromIssueId === values.toIssueId) {
+      throw VortexError.fromCode(
+        "BAD_REQUEST",
+        "An issue cannot be related to itself"
+      );
+    }
+    const duplicate = data
+      .listIssueRelations(this.db, this.organizationId, values.fromIssueId)
+      .find((r) => r.toIssueId === values.toIssueId && r.type === values.type);
+    if (duplicate) {
+      throw new VortexError({
+        code: "CONFLICT",
+        status: 409,
+        message: "Relation already exists",
+        details: { relationId: duplicate.id },
+      });
+    }
+    if (values.type === "blocks") {
+      const reciprocal = data
+        .listIssueRelations(this.db, this.organizationId, values.toIssueId)
+        .find((r) => r.toIssueId === values.fromIssueId && r.type === "blocks");
+      if (reciprocal) {
+        throw VortexError.fromCode(
+          "BAD_REQUEST",
+          "Reciprocal blocks relations form a cycle"
+        );
+      }
+    }
+    try {
+      return await data.createIssueRelation(
+        this.db,
+        this.organizationId,
+        values
+      );
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        /unique constraint failed/i.test(error.message)
+      ) {
+        throw new VortexError({
+          code: "CONFLICT",
+          status: 409,
+          message: "Relation already exists",
+        });
+      }
+      if (
+        error instanceof Error &&
+        error.message.startsWith("Invalid relation type")
+      ) {
+        throw VortexError.fromCode("BAD_REQUEST", error.message);
+      }
+      throw error;
+    }
   }
 
   deleteIssueRelation(id: string) {
@@ -2077,6 +2460,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     });
   }
 
+  getEntityLink(id: string) {
+    return data.getEntityLink(this.db, this.organizationId, id);
+  }
+
   unlinkEntities(id: string) {
     return data.unlinkEntities(this.db, this.organizationId, id);
   }
@@ -2214,10 +2601,15 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     // Insert and extracted links commit atomically so a link-sync failure
     // cannot leave an orphaned document that a retry would duplicate.
     const doc = this.ctx.storage.transactionSync(() => {
-      const created = data.createDocument(this.db, {
-        ...input,
-        organizationId: this.organizationId,
-      });
+      let created: ReturnType<typeof data.createDocument>;
+      try {
+        created = data.createDocument(this.db, {
+          ...input,
+          organizationId: this.organizationId,
+        });
+      } catch (error) {
+        throw this.documentWriteError(error);
+      }
       this.syncDocumentLinks(
         created.id,
         created.content,
@@ -2245,19 +2637,41 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.getDocument(this.db, this.organizationId, id);
   }
 
+  private documentWriteError(error: unknown): VortexError {
+    if (error instanceof data.DocumentValidationError) {
+      return new VortexError({
+        code: error.conflict ? "CONFLICT" : "BAD_REQUEST",
+        status: error.conflict ? 409 : 400,
+        message: error.message,
+      });
+    }
+    return error instanceof VortexError
+      ? error
+      : new VortexError({
+          code: "INTERNAL_ERROR",
+          status: 500,
+          message: "Internal error",
+        });
+  }
+
   async updateDocument(
     id: string,
     update: data.DocumentUpdate,
     actorId: string
   ) {
     const doc = this.ctx.storage.transactionSync(() => {
-      const updated = data.updateDocument(
-        this.db,
-        this.organizationId,
-        id,
-        update,
-        actorId
-      );
+      let updated: ReturnType<typeof data.updateDocument>;
+      try {
+        updated = data.updateDocument(
+          this.db,
+          this.organizationId,
+          id,
+          update,
+          actorId
+        );
+      } catch (error) {
+        throw this.documentWriteError(error);
+      }
       if (updated && update.content !== undefined) {
         this.syncDocumentLinks(id, updated.content, updated.contentFormat);
       }
@@ -2302,12 +2716,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     if (deleted) {
       this.audit("document.deleted", "document", id, actorId);
       if (this.searchIndex) {
-        const { remove } = await import("@orama/orama");
-        try {
-          await remove(this.searchIndex, id);
-        } catch {
-          // Not indexed; ignore.
-        }
+        await remove(this.searchIndex, id);
       }
       await this.emit({
         type: "document.deleted",
@@ -2744,6 +3153,365 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.upsertCustomerContact(this.db, this.organizationId, input);
   }
 
+  async ingestPulledLeadsBatch(input: {
+    sourceName: string;
+    cursorKind?: string | null;
+    nextOffset?: number | null;
+    actorUserId?: string | null;
+    defaultOwnerId?: string | null;
+    dispatchDetectiveBatch?: boolean;
+    teamId?: string | null;
+    candidates: ReadonlyArray<{
+      name: string;
+      externalId: string;
+      domain?: string | null;
+      address?: string | null;
+      phone?: string | null;
+      email?: string | null;
+      ownerName?: string | null;
+      neighborhood?: string | null;
+      vertical?: string | null;
+      signal: string;
+      signalDate?: string | null;
+      evidenceUri?: string | null;
+      posGuess?: string | null;
+      posEvidenceUrl?: string | null;
+      contactFormUrl?: string | null;
+      dosId?: string | null;
+      dosFilingDate?: string | null;
+    }>;
+  }) {
+    if (input.cursorKind && typeof input.nextOffset === "number") {
+      await this.memoryRemember({
+        entityType: "workspace",
+        entityId: this.organizationId,
+        kind: input.cursorKind,
+        fact: String(input.nextOffset),
+      });
+    }
+
+    const existing = data.listCustomers(this.db, this.organizationId);
+    const byMatchKey = new Map<string, (typeof existing)[number]>();
+    const byExternalId = new Map<string, (typeof existing)[number]>();
+    for (const row of existing) {
+      if (row.externalId) byExternalId.set(row.externalId, row);
+      const mk = computeSmbMatchKey({
+        name: row.name,
+        address: row.address,
+        phone: row.phone,
+        domain: row.domain,
+      });
+      if (mk.matchKey) byMatchKey.set(mk.matchKey, row);
+    }
+
+    let createdCount = 0;
+    let updatedCount = 0;
+    const leads: Array<{
+      customerId: string;
+      name: string;
+      ownerName: string | null;
+      email: string | null;
+      domain: string | null;
+      dosId: string | null;
+      processor: string | null;
+      vertical: string | null;
+      neighborhood: string | null;
+      address: string | null;
+      phone: string | null;
+      priorityScore: number;
+      fitScore: number;
+      whyNow: string;
+      playStatus: string;
+    }> = [];
+    const incompleteForDetective: Array<{
+      customerId: string;
+      name: string;
+      vertical: string | null;
+      address: string | null;
+      phone: string | null;
+      domain: string | null;
+    }> = [];
+
+    const pendingMemoryWrites: Array<Promise<string>> = [];
+    for (const cand of input.candidates) {
+      const mk = computeSmbMatchKey({
+        name: cand.name,
+        address: cand.address,
+        phone: cand.phone,
+        domain: cand.domain,
+      });
+      const matched =
+        byExternalId.get(cand.externalId) ??
+        (mk.matchKey ? byMatchKey.get(mk.matchKey) : undefined);
+
+      const classified = classifyMerchantLead({
+        name: cand.name,
+        vertical: cand.vertical,
+        source: input.sourceName,
+      });
+      const normalizedVertical = classified.categoryLabel;
+
+      const customer = matched
+        ? (data.updateCustomer(this.db, this.organizationId, matched.id, {
+            domain: cand.domain ?? matched.domain,
+            address: cand.address ?? matched.address,
+            phone: mk.phoneE164 ?? cand.phone ?? matched.phone,
+            vertical: normalizedVertical,
+            neighborhood: cand.neighborhood ?? matched.neighborhood,
+            processor: cand.posGuess ?? matched.processor,
+            ownerId: matched.ownerId ?? input.defaultOwnerId ?? null,
+            evidenceUri: cand.evidenceUri ?? matched.evidenceUri,
+            source: input.sourceName,
+          }) ?? matched)
+        : data.createCustomer(this.db, {
+            organizationId: this.organizationId,
+            name: cand.name,
+            externalId: cand.externalId,
+            domain: cand.domain ?? null,
+            address: cand.address ?? null,
+            phone: mk.phoneE164 ?? cand.phone ?? null,
+            vertical: normalizedVertical,
+            neighborhood: cand.neighborhood ?? null,
+            processor: cand.posGuess ?? null,
+            ownerId: input.defaultOwnerId ?? null,
+            evidenceUri: cand.evidenceUri ?? null,
+            source: input.sourceName,
+          });
+
+      if (matched) {
+        updatedCount += 1;
+      } else {
+        createdCount += 1;
+        byExternalId.set(cand.externalId, customer);
+        if (mk.matchKey) byMatchKey.set(mk.matchKey, customer);
+      }
+
+      if (cand.email) {
+        data.upsertCustomerContact(this.db, this.organizationId, {
+          customerId: customer.id,
+          type: cand.ownerName ? "named_person" : "business_channel",
+          role: cand.ownerName ? "owner" : null,
+          channel: "email",
+          value: cand.email,
+          label: cand.ownerName ?? customer.name,
+          status: "verified",
+          confidence: "high",
+          source: input.sourceName,
+          evidenceUri: cand.evidenceUri ?? null,
+        });
+      }
+      if (mk.phoneE164 ?? cand.phone) {
+        data.upsertCustomerContact(this.db, this.organizationId, {
+          customerId: customer.id,
+          type: cand.ownerName ? "named_person" : "business_channel",
+          role: cand.ownerName ? "owner" : null,
+          channel: "phone",
+          value: (mk.phoneE164 ?? cand.phone)!,
+          label: cand.ownerName ?? customer.name,
+          status: "verified",
+          confidence: "high",
+          source: input.sourceName,
+          evidenceUri: cand.evidenceUri ?? null,
+        });
+      }
+      if (cand.contactFormUrl) {
+        data.upsertCustomerContact(this.db, this.organizationId, {
+          customerId: customer.id,
+          type: "business_channel",
+          role: "owner",
+          channel: "form",
+          value: cand.contactFormUrl,
+          label: `${customer.name} Contact Form`,
+          status: "verified",
+          confidence: "medium",
+          source: input.sourceName,
+          evidenceUri: cand.contactFormUrl,
+        });
+      }
+
+      const signals: MerchantSignal[] = [];
+      const signalObj: MerchantSignal = {
+        id: `sig_${cand.externalId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 48)}`,
+        merchantId: customer.id,
+        type: cand.signal || "new_license",
+        observedAt: cand.signalDate
+          ? new Date(cand.signalDate).toISOString()
+          : new Date().toISOString(),
+        source: input.sourceName,
+        evidenceUrl:
+          cand.evidenceUri ??
+          "https://data.cityofnewyork.us/resource/t8hj-ruu2",
+        strength: 85,
+        summary: `Active NYC ${cand.vertical ?? "SMB"} license${cand.ownerName ? ` (Principal: ${cand.ownerName})` : ""}${cand.dosId ? ` [NY DOS #${cand.dosId}]` : ""} (${cand.externalId})`,
+      };
+      signals.push(signalObj);
+      pendingMemoryWrites.push(
+        data.memoryRemember(this.db, this.organizationId, {
+          entityType: "customer",
+          entityId: customer.id,
+          kind: `signal:${signalObj.type}:${signalObj.id}`,
+          fact: JSON.stringify(signalObj),
+        })
+      );
+
+      if (cand.posGuess) {
+        const posSig: MerchantSignal = {
+          id: `sig_pos_${customer.id}_${cand.posGuess}`,
+          merchantId: customer.id,
+          type: "pos_detected",
+          observedAt: new Date().toISOString(),
+          source: "website_technographics",
+          evidenceUrl:
+            cand.posEvidenceUrl ?? `https://${cand.domain ?? "example.com"}`,
+          strength: 85,
+          summary: `Detected ${cand.posGuess.toUpperCase()} payment/billing stack on website`,
+        };
+        signals.push(posSig);
+        pendingMemoryWrites.push(
+          data.memoryRemember(this.db, this.organizationId, {
+            entityType: "customer",
+            entityId: customer.id,
+            kind: `signal:${posSig.type}:${posSig.id}`,
+            fact: JSON.stringify(posSig),
+          })
+        );
+      }
+
+      const receipt = runMerchantLeadPlay({
+        merchant: {
+          id: customer.id,
+          name: customer.name,
+          domain: customer.domain,
+          vertical: customer.vertical,
+          neighborhood: customer.neighborhood,
+          address: customer.address,
+          phone: customer.phone,
+          processor: cand.posGuess ?? customer.processor,
+          ownerId: customer.ownerId,
+        },
+        signals,
+        contactEmail: cand.email ?? null,
+        actorUserId: input.actorUserId ?? undefined,
+      });
+
+      data.updateCustomer(this.db, this.organizationId, customer.id, {
+        priorityScore: receipt.breakdown.priorityScore,
+        fitScore: receipt.breakdown.fitScore,
+        fitStatus: receipt.breakdown.fitRating,
+        ...(cand.posGuess ? { processor: cand.posGuess } : {}),
+        signal: receipt.breakdown.whyNow,
+      });
+
+      if (!cand.ownerName || !cand.email) {
+        incompleteForDetective.push({
+          customerId: customer.id,
+          name: customer.name,
+          vertical: customer.vertical,
+          address: customer.address,
+          phone: customer.phone,
+          domain: customer.domain,
+        });
+      }
+
+      leads.push({
+        customerId: customer.id,
+        name: customer.name,
+        ownerName: cand.ownerName ?? null,
+        email: cand.email ?? null,
+        domain: customer.domain ?? null,
+        dosId: cand.dosId ?? null,
+        processor: cand.posGuess ?? customer.processor ?? null,
+        vertical: customer.vertical,
+        neighborhood: customer.neighborhood,
+        address: customer.address,
+        phone: customer.phone,
+        priorityScore: receipt.breakdown.priorityScore,
+        fitScore: receipt.breakdown.fitScore,
+        whyNow: receipt.breakdown.whyNow,
+        playStatus: receipt.status,
+      });
+    }
+
+    // Keep a warm search index current for the signal facts written above
+    // — one post-loop sync instead of an await per candidate.
+    if (pendingMemoryWrites.length > 0) {
+      const memoryIds = await Promise.all(pendingMemoryWrites);
+      const memoryRows = await this.db
+        .select()
+        .from(workspaceMemory)
+        .where(inArrayJson(workspaceMemory.id, memoryIds))
+        .all();
+      await this.syncSearchIndex(async (index) => {
+        await Promise.all(
+          memoryRows.flatMap((row) => {
+            const writes = row.supersedes
+              ? [removeMemorySearchDocument(index, row.supersedes)]
+              : [];
+            writes.push(
+              indexMemorySearchDocument(index, {
+                id: row.id,
+                entityType: row.entityType,
+                entityId: row.entityId,
+                kind: row.kind,
+                fact: row.fact,
+                createdAt: row.createdAt,
+              })
+            );
+            return writes;
+          })
+        );
+      });
+    }
+
+    let detectiveBatchIssueId: string | null = null;
+    if (input.dispatchDetectiveBatch && incompleteForDetective.length > 0) {
+      const openIssues = await this.listIssues({ limit: 50 });
+      const existingDetectiveBatch = openIssues.find(
+        (i) =>
+          (i.status === "todo" || i.status === "in_progress") &&
+          i.ownerAgent === "detective" &&
+          !i.parentId
+      );
+      if (existingDetectiveBatch) {
+        detectiveBatchIssueId = existingDetectiveBatch.id;
+      } else {
+        const batchSlice = incompleteForDetective.slice(0, 15);
+        const lines = batchSlice.map(
+          (item, idx) =>
+            `${idx + 1}. **${item.name}** (\`customerId: ${item.customerId}\`) | vertical: ${item.vertical ?? "SMB"} | address: ${item.address ?? "n/a"} | phone: ${item.phone ?? "n/a"} | domain: ${item.domain ?? "none"}`
+        );
+        const createdBatch = await this.createIssueRecord(
+          {
+            title: `Detective batch: enrich owner names & emails for ${batchSlice.length} non-POS NYC SMBs`,
+            description: [
+              "For each merchant below, find the owner/principal's name, direct email, and website domain (using NY DOS filings, NYC DOB/DCWP records, and website /about or /contact pages via web_fetch/firecrawl).",
+              "Write each enriched contact incrementally via `contact_upsert` and `customer_upsert` as you find them so partial progress is saved immediately, then post a summary comment and set this issue status to `done`.",
+              "",
+              ...lines,
+            ].join("\n"),
+            status: "todo",
+            priority: "medium",
+            ownerAgent: "detective",
+            teamId: input.teamId ?? undefined,
+            repo: null,
+          },
+          input.actorUserId ?? undefined
+        );
+        detectiveBatchIssueId = createdBatch.issue?.id ?? null;
+      }
+    }
+
+    return {
+      sourceName: input.sourceName,
+      pulledCount: input.candidates.length,
+      createdCount,
+      updatedCount,
+      nextOffset: input.nextOffset ?? 0,
+      detectiveBatchIssueId,
+      leads,
+    };
+  }
+
   listContacts(customerId: string) {
     return data.listCustomerContacts(this.db, this.organizationId, customerId);
   }
@@ -2752,6 +3520,8 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     cold?: boolean;
     dueBefore?: string;
     needsHuman?: boolean;
+    externalId?: string;
+    domain?: string;
   }) {
     return this.withEntityFieldsList(
       "customer",
@@ -2956,6 +3726,96 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       );
     }
     return this.withEntityFields("customer", customer);
+  }
+
+  // PILE-651 — Log a field-sales touch. One RPC writes the interaction as
+  // customer memory (kind "outcome"), applies the outcome's default next
+  // step + needsHuman flag, and auto-advances the stage via the outcome →
+  // status-key map resolved against this workspace's own statuses. The
+  // stage gate still governs: when open required sub-steps refuse the
+  // auto-advance the touch and next step still land, flagged stageBlocked.
+  async logCustomerInteraction(
+    id: string,
+    input: {
+      outcome: CustomerTouchOutcome;
+      note?: string;
+      nextStepText?: string | null;
+      nextStepDueAt?: string | null;
+    },
+    actorId?: string
+  ) {
+    const before = data.getCustomer(this.db, this.organizationId, id);
+    if (!before) return undefined;
+    const now = new Date();
+    const defaults = OUTCOME_DEFAULTS[input.outcome];
+    const statusId = resolveOutcomeStatusId(
+      input.outcome,
+      data.listCustomerStatuses(this.db, this.organizationId)
+    );
+
+    const nextStep = resolveNextStep(input.outcome, input, now);
+    const patch: Partial<Omit<data.CustomerInput, "organizationId">> = {
+      needsHuman: defaults.needsHuman,
+      needsHumanReason: defaults.needsHumanReason,
+    };
+    if (nextStep.nextStepText !== undefined)
+      patch.nextStepText = nextStep.nextStepText;
+    if (nextStep.nextStepDueAt !== undefined)
+      patch.nextStepDueAt = nextStep.nextStepDueAt;
+
+    const advancing = statusId !== undefined && statusId !== before.statusId;
+    let stageAdvanced = false;
+    let stageBlocked = false;
+    let customer;
+    try {
+      customer = await this.updateCustomer(
+        id,
+        advancing ? { ...patch, statusId } : patch,
+        actorId
+      );
+      stageAdvanced = advancing;
+    } catch (error) {
+      // A stage-gate 409 refuses only the advance — re-apply the touch's
+      // other writes without statusId so the knock still gets logged.
+      if (
+        advancing &&
+        error instanceof VortexError &&
+        error.code === "CONFLICT"
+      ) {
+        stageBlocked = true;
+        customer = await this.updateCustomer(id, patch, actorId);
+      } else {
+        throw error;
+      }
+    }
+    if (!customer) return undefined;
+
+    const interactionId = await this.memoryRemember({
+      entityType: "customer",
+      entityId: id,
+      kind: "outcome",
+      fact: JSON.stringify({
+        outcome: input.outcome,
+        note: input.note ?? null,
+        actorId: actorId ?? null,
+        nextStepText: customer.nextStepText,
+        nextStepDueAt: customer.nextStepDueAt,
+        statusId: customer.statusId,
+        stageAdvanced,
+        stageBlocked,
+        at: now.toISOString(),
+      }),
+    });
+    this.audit("customer.touch_logged", "customer", id, actorId, {
+      outcome: { from: null, to: input.outcome },
+    });
+    return {
+      interactionId,
+      createdAt: now.toISOString(),
+      customer,
+      stageAdvanced,
+      stageBlocked,
+    };
   }
 
   // Bulk customer import — Scout's write path (PILE-403). Idempotent on
@@ -3285,32 +4145,41 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.listDocumentWatchers(this.db, documentId);
   }
 
-  async searchDocuments(query: string, limit = 50): Promise<string[]> {
+  async searchDocuments(query: string, limit = 50): Promise<RankedSearchHit[]> {
     const index = await this.ensureSearchIndex();
-    return searchDocuments(index, query, limit);
+    return searchDocumentsRanked(index, query, limit);
   }
 
-  // `teamIds` is the caller's resolved visibility set — an empty array means
-  // no issues are in scope (never "unfiltered").
+  // VTX-758 — one hydrated hit per result: the id arrays stay for callers
+  // that only need references; `results` carries title/snippet/score so a
+  // client can render a result list without a follow-up fetch per id.
   async searchAll(
     query: string,
     teamIds: string[],
     limit = 50,
     viewer?: IssueViewer,
     docViewer?: { actorId: string; admin: boolean }
-  ): Promise<{ issueIds: string[]; documentIds: string[] }> {
+  ): Promise<{
+    issueIds: string[];
+    documentIds: string[];
+    memoryIds: string[];
+    results: SearchResultItem[];
+  }> {
     const index = await this.ensureSearchIndex();
-    const [issueIds, documentIds] = await Promise.all([
+    const [issueHits, documentHits, memoryHits] = await Promise.all([
       teamIds.length > 0
-        ? searchIssues(index, query, teamIds, limit)
+        ? searchIssuesRanked(index, query, teamIds, limit)
         : Promise.resolve([]),
-      searchDocuments(index, query, limit),
+      searchDocumentsRanked(index, query, limit),
+      searchMemoriesRanked(index, query, limit),
     ]);
     const hidden = new Set(this.hiddenIssueIdsFor(viewer));
-    let visibleDocs = documentIds;
+    const visibleIssueHits = issueHits.filter((hit) => !hidden.has(hit.id));
+    let visibleDocHits = documentHits;
     // PILE-409: restricted-space docs and grant-gated docs don't leak
     // through search. Admins see everything; others need a grant.
-    if (documentIds.length > 0 && docViewer && !docViewer.admin) {
+    if (documentHits.length > 0 && docViewer && !docViewer.admin) {
+      const documentIds = documentHits.map((hit) => hit.id);
       const restrictedSpaces = data.restrictedSpaceIds(
         this.db,
         this.organizationId
@@ -3336,18 +4205,142 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
             .all()
         ).map((d) => [d.id, d.spaceId])
       );
-      visibleDocs = documentIds.filter((id) => {
-        if (granted.has(id)) return true;
-        const spaceId = spaceByDoc.get(id);
+      visibleDocHits = documentHits.filter((hit) => {
+        if (granted.has(hit.id)) return true;
+        const spaceId = spaceByDoc.get(hit.id);
         if (spaceId && restrictedSpaces.has(spaceId)) return false;
-        if (grantGated.has(id)) return false;
+        if (grantGated.has(hit.id)) return false;
         return true;
       });
     }
+    const results = await this.hydrateSearchResults(
+      query,
+      visibleIssueHits,
+      visibleDocHits,
+      memoryHits,
+      limit
+    );
     return {
-      issueIds: issueIds.filter((id) => !hidden.has(id)),
-      documentIds: visibleDocs,
+      issueIds: visibleIssueHits.map((hit) => hit.id),
+      documentIds: visibleDocHits.map((hit) => hit.id),
+      memoryIds: memoryHits.map((hit) => hit.id),
+      results,
     };
+  }
+
+  // Hydrates the top-ranked hits across types. Entities are batch-fetched
+  // per type — deleted rows simply drop out of the result list.
+  private async hydrateSearchResults(
+    query: string,
+    issueHits: RankedSearchHit[],
+    documentHits: RankedSearchHit[],
+    memoryHits: RankedSearchHit[],
+    limit: number
+  ): Promise<SearchResultItem[]> {
+    const merged = [
+      ...issueHits.map((hit) => ({ ...hit, type: "issue" as const })),
+      ...documentHits.map((hit) => ({ ...hit, type: "document" as const })),
+      ...memoryHits.map((hit) => ({ ...hit, type: "memory" as const })),
+    ]
+      .toSorted((a, b) => b.score - a.score)
+      .slice(0, limit);
+
+    const idsFor = (type: "issue" | "document" | "memory") =>
+      merged.filter((hit) => hit.type === type).map((hit) => hit.id);
+    const issueIds = idsFor("issue");
+    const documentIds = idsFor("document");
+    const memoryIds = idsFor("memory");
+
+    const [issueRows, documentRows, memoryRows] = await Promise.all([
+      issueIds.length > 0
+        ? this.db
+            .select({
+              id: workspaceIssues.id,
+              identifier: workspaceIssues.identifier,
+              title: workspaceIssues.title,
+              description: workspaceIssues.description,
+            })
+            .from(workspaceIssues)
+            .where(inArrayJson(workspaceIssues.id, issueIds))
+            .all()
+        : Promise.resolve([]),
+      documentIds.length > 0
+        ? this.db
+            .select({
+              id: workspaceDocuments.id,
+              title: workspaceDocuments.title,
+              content: workspaceDocuments.content,
+              contentFormat: workspaceDocuments.contentFormat,
+            })
+            .from(workspaceDocuments)
+            .where(inArrayJson(workspaceDocuments.id, documentIds))
+            .all()
+        : Promise.resolve([]),
+      memoryIds.length > 0
+        ? this.db
+            .select({
+              id: workspaceMemory.id,
+              entityType: workspaceMemory.entityType,
+              entityId: workspaceMemory.entityId,
+              kind: workspaceMemory.kind,
+              fact: workspaceMemory.fact,
+            })
+            .from(workspaceMemory)
+            .where(inArrayJson(workspaceMemory.id, memoryIds))
+            .all()
+        : Promise.resolve([]),
+    ]);
+
+    const issueById = new Map(issueRows.map((row) => [row.id, row]));
+    const documentById = new Map(documentRows.map((row) => [row.id, row]));
+    const memoryById = new Map(memoryRows.map((row) => [row.id, row]));
+
+    return merged.flatMap((hit): SearchResultItem[] => {
+      if (hit.type === "issue") {
+        const row = issueById.get(hit.id);
+        if (!row) return [];
+        return [
+          {
+            type: "issue" as const,
+            id: row.id,
+            identifier: row.identifier,
+            title: row.title,
+            snippet: searchSnippet(row.description ?? row.title, query),
+            score: hit.score,
+          },
+        ];
+      }
+      if (hit.type === "document") {
+        const row = documentById.get(hit.id);
+        if (!row) return [];
+        const body =
+          row.contentFormat === "markdown"
+            ? row.content
+            : blockNoteToPlainText(row.content);
+        return [
+          {
+            type: "document" as const,
+            id: row.id,
+            identifier: null,
+            title: row.title,
+            snippet: searchSnippet(body || row.title, query),
+            score: hit.score,
+          },
+        ];
+      }
+      const row = memoryById.get(hit.id);
+      if (!row) return [];
+      return [
+        {
+          type: "memory" as const,
+          id: row.id,
+          identifier: null,
+          title: `${row.entityType}:${row.entityId} (${row.kind})`,
+          snippet: searchSnippet(row.fact, query),
+          score: hit.score,
+        },
+      ];
+    });
   }
 
   async findSimilarIssues(
@@ -3385,52 +4378,89 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     await this.ready;
     if (teamIds.length === 0) return [];
     const hidden = new Set(this.hiddenIssueIdsFor(viewer));
-    if (similarityTerms(title).length === 0) {
-      // No indexable terms — the index can't help, and generic titles like
-      // "Fix it" are the likeliest collisions. Match them verbatim instead.
-      const wanted = title.toLowerCase();
-      const normalized = normalizeIssueTitle(title);
-      const rows = await this.db
-        .select()
-        .from(workspaceIssues)
-        .where(inArrayJson(workspaceIssues.teamId, teamIds))
-        .all();
-      return rows
+    const terms = similarityTerms(title);
+    // PILE-612 — never pay the cold-index build on this path: a cold DO
+    // (post-deploy eviction) building the search index inline used to hang
+    // issue creation past the request budget. When the index isn't already
+    // warm (or the title has no indexable terms), the same ranking runs
+    // directly against SQLite — warn-mode dedupe then works even on the
+    // very first create after an eviction.
+    if (this.searchIndex !== null && terms.length > 0) {
+      const hits = await findDuplicateCandidates(
+        this.searchIndex,
+        title,
+        teamIds
+      );
+      const matches = await Promise.all(
+        hits.map((hit) => this.getIssue(hit.issueId))
+      );
+      return matches
         .flatMap((issue) => {
           if (
+            !issue ||
             hidden.has(issue.id) ||
+            !teamIds.includes(issue.teamId) ||
             issue.status === "done" ||
             issue.status === "canceled"
           )
             return [];
-          const sameTitle =
-            issue.title.toLowerCase() === wanted ||
-            (normalized !== "" &&
-              normalizeIssueTitle(issue.title) === normalized);
-          return sameTitle ? [{ issue, score: 1 }] : [];
+          const score = titleOverlapScore(title, issue.title);
+          return score >= DUPLICATE_MIN_SCORE ? [{ issue, score }] : [];
         })
+        .toSorted((a, b) => b.score - a.score)
         .slice(0, limit);
     }
-    const index = await this.ensureSearchIndex();
-    const hits = await findDuplicateCandidates(index, title, teamIds);
-    const matches = await Promise.all(
-      hits.map((hit) => this.getIssue(hit.issueId))
-    );
-    return matches
-      .flatMap((issue) => {
+    const rows = await this.db
+      .select({
+        id: workspaceIssues.id,
+        title: workspaceIssues.title,
+        status: workspaceIssues.status,
+      })
+      .from(workspaceIssues)
+      .where(inArrayJson(workspaceIssues.teamId, teamIds))
+      .all();
+    if (terms.length === 0) {
+      // No indexable terms — the index can't help, and generic titles like
+      // "Fix it" are the likeliest collisions. Match them verbatim instead.
+      const wanted = title.toLowerCase();
+      const normalized = normalizeIssueTitle(title);
+      const matched = rows
+        .flatMap((row) => {
+          if (
+            hidden.has(row.id) ||
+            row.status === "done" ||
+            row.status === "canceled"
+          )
+            return [];
+          const sameTitle =
+            row.title.toLowerCase() === wanted ||
+            (normalized !== "" &&
+              normalizeIssueTitle(row.title) === normalized);
+          return sameTitle ? [{ id: row.id }] : [];
+        })
+        .slice(0, limit);
+      const issues = await Promise.all(
+        matched.map((row) => this.getIssue(row.id))
+      );
+      return issues.flatMap((issue) => (issue ? [{ issue, score: 1 }] : []));
+    }
+    const top = rows
+      .flatMap((row) => {
         if (
-          !issue ||
-          hidden.has(issue.id) ||
-          !teamIds.includes(issue.teamId) ||
-          issue.status === "done" ||
-          issue.status === "canceled"
+          hidden.has(row.id) ||
+          row.status === "done" ||
+          row.status === "canceled"
         )
           return [];
-        const score = titleOverlapScore(title, issue.title);
-        return score >= DUPLICATE_MIN_SCORE ? [{ issue, score }] : [];
+        const score = titleOverlapScore(title, row.title);
+        return score >= DUPLICATE_MIN_SCORE ? [{ id: row.id, score }] : [];
       })
       .toSorted((a, b) => b.score - a.score)
       .slice(0, limit);
+    const issues = await Promise.all(top.map((r) => this.getIssue(r.id)));
+    return issues.flatMap((issue, i) =>
+      issue ? [{ issue, score: top[i].score }] : []
+    );
   }
 
   // Extract [[doc slug/id]] and ISSUE-KEY references from content.
@@ -3668,6 +4698,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.setFavorites(this.db, this.organizationId, userId, favorites);
   }
 
+  setDisplay(userId: string, display: data.DisplayPrefsMap | null) {
+    return data.setDisplay(this.db, this.organizationId, userId, display);
+  }
+
   setDefaultView(userId: string, defaultViewId: string | null) {
     return data.setDefaultView(
       this.db,
@@ -3736,8 +4770,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
   }
 
   // Encrypted GitHub installation token currently held by each lane, keyed by
-  // session. Swapping returns the previous one so callers can revoke it; the
-  // reaper takes and revokes whatever is left once a session is terminal.
+  // session. Swapping returns the previous ciphertext; callers no longer
+  // revoke it on mint (VTX-634) — displaced tokens self-expire inside the
+  // ~1h TTL while the reaper takes and revokes what a terminal lane holds.
   async swapLaneGithubToken(
     sessionId: string,
     encrypted: string
@@ -4507,7 +5542,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     actor: { actorId?: string | null; actorType?: string | null } = {}
   ) {
     await this.ready;
-    const result = data.seedStageTemplates(
+    const result = await data.seedStageTemplates(
       this.db,
       this.organizationId,
       actor.actorId
@@ -4523,6 +5558,55 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           skipped: { from: null, to: result.skipped },
         },
         { actorType: actor.actorType }
+      );
+    }
+    return result;
+  }
+
+  /** VTX-752 — merge same-name labels/states and re-point every reference:
+   *  the D1 merges collapse the global rows and return dup→canonical maps,
+   *  then the DO-side helpers rewrite issue `label_ids` CSVs and
+   *  `git_automation_states.state_id` in this workspace's SQLite. */
+  async dedupeWorkspaceEntities(actor: { actorId?: string | null } = {}) {
+    await this.ready;
+    const d1 = createD1(this.env.D1);
+    const labelsResult = await mergeDuplicateLabels(d1, this.organizationId);
+    const statesResult = await mergeDuplicateStates(d1, this.organizationId);
+    const validLabelIds = new Set(
+      (await listLabels(d1, this.organizationId)).map((l) => l.id)
+    );
+    const issuesRepointed = await data.repointIssueLabelIds(
+      this.db,
+      this.organizationId,
+      labelsResult.idMap,
+      validLabelIds
+    );
+    const gitAutomationsRepointed = await data.repointGitAutomationStates(
+      this.db,
+      this.organizationId,
+      statesResult.idMap
+    );
+    const result = {
+      labelsMerged: labelsResult.merged,
+      statesMerged: statesResult.merged,
+      issuesRepointed,
+      gitAutomationsRepointed,
+    };
+    if (result.labelsMerged > 0 || result.statesMerged > 0) {
+      this.audit(
+        "workspace.entities_deduped",
+        "workspace",
+        this.organizationId,
+        actor.actorId,
+        {
+          labelsMerged: { from: null, to: result.labelsMerged },
+          statesMerged: { from: null, to: result.statesMerged },
+          issuesRepointed: { from: null, to: result.issuesRepointed },
+          gitAutomationsRepointed: {
+            from: null,
+            to: result.gitAutomationsRepointed,
+          },
+        }
       );
     }
     return result;
@@ -5644,18 +6728,939 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.listLaneCosts(this.db, this.organizationId, args);
   }
 
-  memoryRemember(input: data.MemoryInput) {
-    return data.memoryRemember(this.db, this.organizationId, input);
+  // PILE-643 — commit/file provenance ("why does this line exist"): match
+  // the query against issues, lane sessions, session-event payloads, and
+  // workspace memory so a sha/file/PR resolves to the work that made it.
+  async explainProvenance(query: {
+    repo?: string;
+    sha?: string;
+    file?: string;
+    branch?: string;
+    prUrl?: string;
+    issueId?: string;
+    limit?: number;
+  }) {
+    await this.ready;
+    const shaNorm = query.sha?.trim().toLowerCase();
+    const fileNorm = query.file?.trim().toLowerCase();
+    const limit = Math.min(Math.max(query.limit ?? 10, 1), 50);
+    const [sessions, issues, events] = await Promise.all([
+      this.listAgentSessions({ limit: 250 }),
+      this.db.select().from(workspaceIssues).all(),
+      this.db
+        .select()
+        .from(workspaceAgentSessionEvents)
+        .orderBy(desc(workspaceAgentSessionEvents.createdAt))
+        .limit(500)
+        .all(),
+    ]);
+    const memories = await this.memoryRecall({ limit: 200 });
+    const issueById = new Map(issues.map((i) => [i.id, i]));
+
+    const sessionMatch = (s: (typeof sessions)[number]) => {
+      const eventsFor = events.filter((e) => e.sessionId === s.id);
+      const payloadText = eventsFor
+        .map((e) => (e.payload ?? "").toLowerCase())
+        .join("\n");
+      const issue = issueById.get(s.issueId);
+      if (query.issueId) {
+        const q = query.issueId.toUpperCase();
+        const hit =
+          issue?.id === query.issueId ||
+          issue?.identifier?.toUpperCase() === q ||
+          s.issueId === query.issueId;
+        if (!hit) return false;
+      }
+      if (query.repo) {
+        const r = query.repo.toLowerCase();
+        if (
+          issue?.repo?.toLowerCase() !== r &&
+          !payloadText.includes(`"repo":"${r}"`) &&
+          !payloadText.includes(r)
+        )
+          return false;
+      }
+      if (query.branch) {
+        if (issue?.branch !== query.branch && s.branch !== query.branch)
+          return false;
+      }
+      if (query.prUrl) {
+        if (
+          issue?.prUrl !== query.prUrl &&
+          s.prUrl !== query.prUrl &&
+          !payloadText.includes(query.prUrl.toLowerCase())
+        )
+          return false;
+      }
+      if (shaNorm) {
+        const hit =
+          s.lastReviewedSha?.toLowerCase().startsWith(shaNorm) ||
+          payloadText.includes(shaNorm) ||
+          (s.result ?? "").toLowerCase().includes(shaNorm);
+        if (!hit) return false;
+      }
+      if (fileNorm) {
+        const hit =
+          payloadText.includes(fileNorm) ||
+          (s.result ?? "").toLowerCase().includes(fileNorm) ||
+          (issue?.title ?? "").toLowerCase().includes(fileNorm) ||
+          (issue?.description ?? "").toLowerCase().includes(fileNorm);
+        if (!hit) return false;
+      }
+      return true;
+    };
+
+    const matchedSessions = sessions.filter(sessionMatch);
+    const issueMatch = (i: (typeof issues)[number]) => {
+      if (query.issueId) {
+        const q = query.issueId.toUpperCase();
+        if (!(i.id === query.issueId || i.identifier?.toUpperCase() === q))
+          return false;
+      }
+      if (query.repo && i.repo?.toLowerCase() !== query.repo.toLowerCase())
+        return false;
+      if (query.branch && i.branch !== query.branch) return false;
+      if (query.prUrl && i.prUrl !== query.prUrl) return false;
+      if (fileNorm) {
+        const text = `${i.title} ${i.description ?? ""}`.toLowerCase();
+        const onSession = matchedSessions.some((s) => s.issueId === i.id);
+        if (!text.includes(fileNorm) && !onSession) return false;
+      }
+      return true;
+    };
+    const matchedIssues = new Set(issues.filter(issueMatch).map((i) => i.id));
+    const sessionLinkedIds = new Set(matchedSessions.map((s) => s.issueId));
+    for (const s of matchedSessions) matchedIssues.add(s.issueId);
+    // Session-linked issues carry the lane evidence — rank them ahead of
+    // looser text matches so they survive the limit slice.
+    const orderedIssueIds = [...matchedIssues].toSorted(
+      (a, b) =>
+        Number(sessionLinkedIds.has(b)) - Number(sessionLinkedIds.has(a))
+    );
+
+    const matchedMemories = memories.filter((m) => {
+      if (!fileNorm) {
+        if (query.issueId) {
+          const q = query.issueId.toUpperCase();
+          return m.entityId === query.issueId || m.entityId.toUpperCase() === q;
+        }
+        return false;
+      }
+      return (
+        m.fact.toLowerCase().includes(fileNorm) ||
+        m.kind.toLowerCase().includes(fileNorm)
+      );
+    });
+
+    const matchedFilesSet = new Set<string>();
+    const matchedShasSet = new Set<string>();
+    const fileEntryRe = /[\w./-]+\.[a-z]{1,6}/gi;
+    const shaRe = /\b[0-9a-f]{7,40}\b/g;
+    for (const e of events.filter((ev) =>
+      matchedSessions.some((s) => s.id === ev.sessionId)
+    )) {
+      const payload = e.payload ?? "";
+      try {
+        const parsed = JSON.parse(payload) as { files?: string[] };
+        for (const f of parsed.files ?? []) matchedFilesSet.add(f);
+      } catch {
+        // not JSON — fall through to text scan
+      }
+      if (fileNorm && payload.toLowerCase().includes(fileNorm)) {
+        for (const m of payload.matchAll(fileEntryRe))
+          matchedFilesSet.add(m[0]);
+      }
+      if (shaNorm) {
+        for (const m of payload.matchAll(shaRe)) {
+          if (m[0].startsWith(shaNorm)) matchedShasSet.add(m[0]);
+        }
+      } else {
+        for (const m of payload.matchAll(shaRe)) matchedShasSet.add(m[0]);
+      }
+    }
+    for (const s of matchedSessions) {
+      if (s.lastReviewedSha) matchedShasSet.add(s.lastReviewedSha);
+      if (fileNorm) {
+        for (const m of (s.result ?? "").matchAll(fileEntryRe))
+          matchedFilesSet.add(m[0]);
+      }
+    }
+
+    const entries = orderedIssueIds.slice(0, limit).map((issueId) => {
+      const issue = issueById.get(issueId);
+      const forIssue = matchedSessions.filter((s) => s.issueId === issueId);
+      return {
+        issue: issue
+          ? {
+              id: issue.id,
+              identifier: issue.identifier,
+              title: issue.title,
+              status: issue.status,
+              repo: issue.repo,
+              branch: issue.branch,
+              prUrl: issue.prUrl,
+            }
+          : null,
+        sessions: forIssue.map((s) => ({
+          id: s.id,
+          agentId: s.agentId,
+          purpose: s.purpose ?? null,
+          status: s.status,
+          lastReviewedSha: s.lastReviewedSha ?? null,
+          createdAt: s.createdAt,
+          endedAt: s.endedAt ?? null,
+          promptExcerpt: (s.plan ?? "").slice(0, 400),
+          resultExcerpt: (s.result ?? "").slice(0, 400),
+          convergence: evaluateReviewConvergence(
+            parseReviewSummary(s.reviewSummary ?? null)
+          ),
+        })),
+        touchedFiles: [...matchedFilesSet].slice(0, 50),
+        commitShas: [...matchedShasSet].slice(0, 20),
+        memories: matchedMemories.slice(0, 15).map((m) => ({
+          id: m.id,
+          entityType: m.entityType,
+          entityId: m.entityId,
+          kind: m.kind,
+          fact: m.fact,
+          sourceSessionId: m.sourceSessionId,
+          createdAt: m.createdAt,
+        })),
+      };
+    });
+
+    const firstIssue = entries.find((e) => e.issue)?.issue;
+    const convos = entries
+      .flatMap((e) => e.sessions)
+      .map((s) => s.convergence)
+      .filter((c) => c.rounds > 0);
+    const whySummary = [
+      `### Provenance${query.file ? ` for \`${query.file}\`` : ""}${query.sha ? ` @ \`${query.sha}\`` : ""}`,
+      firstIssue
+        ? `- **Issue:** ${firstIssue.identifier ?? firstIssue.id} — "${firstIssue.title}" (${firstIssue.status})${firstIssue.repo ? ` on ${firstIssue.repo}` : ""}${firstIssue.prUrl ? ` · ${firstIssue.prUrl}` : ""}`
+        : "- **Issue:** none matched",
+      `- **Lanes:** ${matchedSessions.length} session(s) matched${convos.length > 0 ? `; latest review arc: ${convos[0].trajectory}` : ""}`,
+      `- **Commit shas:** ${[...matchedShasSet].slice(0, 8).join(", ") || "none found"}`,
+      `- **Touched files:** ${[...matchedFilesSet].slice(0, 15).join(", ") || "none recorded"}`,
+      `- **Memory facts:** ${matchedMemories.length} related workspace-memory row(s)${matchedMemories[0] ? ` — e.g. [${matchedMemories[0].kind}] ${matchedMemories[0].fact.slice(0, 120)}` : ""}`,
+    ].join("\n");
+
+    return { query, entries, whySummary };
   }
 
-  memoryRecall(query: {
+  // PILE-644 — founder-ready engineering fleet recap: what shipped, what's
+  // in flight (with trail convergence), what's blocked, and compute spend.
+  async getEngineeringFleetRecap(args?: { since?: string; repo?: string }) {
+    await this.ready;
+    const sinceRaw = (args?.since ?? "24h").trim();
+    const hours = /^(\d+)h$/.exec(sinceRaw)?.[1];
+    const days = /^(\d+)d$/.exec(sinceRaw)?.[1];
+    const cutoffMs = hours
+      ? Date.now() - Number(hours) * 3_600_000
+      : days
+        ? Date.now() - Number(days) * 86_400_000
+        : Date.parse(sinceRaw);
+    const cutoff = Number.isFinite(cutoffMs)
+      ? new Date(cutoffMs)
+      : new Date(Date.now() - 86_400_000);
+    const cutoffIso = cutoff.toISOString();
+
+    const [sessions, issues, laneCosts, pausedAgents] = await Promise.all([
+      this.listAgentSessions({ limit: 500 }),
+      this.db.select().from(workspaceIssues).all(),
+      this.listLaneCosts({ since: cutoffIso, limit: 500 }),
+      this.listAgentPauses(),
+    ]);
+    const issueById = new Map(issues.map((i) => [i.id, i]));
+    const repoOk = (repo: string | null | undefined) =>
+      !args?.repo || repo === args.repo;
+    const endTime = (s: (typeof sessions)[number]) => s.endedAt ?? s.updatedAt;
+    const convergenceFor = (s: (typeof sessions)[number]) =>
+      evaluateReviewConvergence(parseReviewSummary(s.reviewSummary ?? null));
+
+    const completedSessions = sessions.filter(
+      (s) =>
+        s.purpose !== "review" &&
+        s.status === "completed" &&
+        endTime(s) >= cutoffIso &&
+        repoOk(issueById.get(s.issueId)?.repo)
+    );
+    const closedIssues = issues.filter(
+      (i) => i.status === "done" && i.updatedAt >= cutoffIso && repoOk(i.repo)
+    );
+    const memoriesDistilled = (await this.memoryRecall({ limit: 500 })).filter(
+      (m) => m.createdAt >= cutoffIso && m.kind !== "outcome"
+    );
+
+    const ACTIVE = new Set(["running", "starting", "queued", "created"]);
+    const activeLanes = sessions
+      .filter(
+        (s) => ACTIVE.has(s.status) && repoOk(issueById.get(s.issueId)?.repo)
+      )
+      .map((s) => {
+        const issue = issueById.get(s.issueId);
+        return {
+          sessionId: s.id,
+          agentId: s.agentId,
+          purpose: s.purpose ?? null,
+          status: s.status,
+          issueId: s.issueId,
+          issueIdentifier: issue?.identifier ?? null,
+          issueTitle: issue?.title ?? null,
+          repo: issue?.repo ?? null,
+          prUrl: issue?.prUrl ?? s.prUrl ?? null,
+          createdAt: s.createdAt,
+          convergence: convergenceFor(s),
+        };
+      });
+    const reviewRoundsCompleted = sessions.filter(
+      (s) =>
+        s.purpose === "review" &&
+        s.status === "completed" &&
+        endTime(s) >= cutoffIso
+    ).length;
+
+    const failedLanes = sessions
+      .filter(
+        (s) =>
+          s.purpose !== "review" &&
+          s.status === "failed" &&
+          endTime(s) >= cutoffIso &&
+          issueById.get(s.issueId)?.status !== "done" &&
+          repoOk(issueById.get(s.issueId)?.repo)
+      )
+      .map((s) => {
+        const issue = issueById.get(s.issueId);
+        return {
+          sessionId: s.id,
+          agentId: s.agentId,
+          issueId: s.issueId,
+          issueIdentifier: issue?.identifier ?? null,
+          issueTitle: issue?.title ?? null,
+          errorExcerpt: (s.result ?? "").slice(0, 240),
+        };
+      });
+    const oscillatingReviews = sessions
+      .filter((s) => repoOk(issueById.get(s.issueId)?.repo))
+      .map((s) => ({ s, conv: convergenceFor(s) }))
+      .filter(({ conv }) => conv.oscillating || conv.status === "stalled")
+      .map(({ s, conv }) => {
+        const issue = issueById.get(s.issueId);
+        return {
+          sessionId: s.id,
+          issueId: s.issueId,
+          issueIdentifier: issue?.identifier ?? null,
+          prUrl: issue?.prUrl ?? s.prUrl ?? null,
+          trajectory: conv.trajectory,
+          persistingFingerprints: conv.persistingFingerprints,
+        };
+      });
+    const humanGateRequired = sessions
+      .filter((s) => repoOk(issueById.get(s.issueId)?.repo))
+      .map((s) => ({
+        s,
+        latest: parseReviewSummary(s.reviewSummary ?? null).at(-1),
+      }))
+      .filter(({ latest }) => latest?.scores?.humanGate === true)
+      .map(({ s }) => {
+        const issue = issueById.get(s.issueId);
+        return {
+          sessionId: s.id,
+          issueId: s.issueId,
+          issueIdentifier: issue?.identifier ?? null,
+          prUrl: issue?.prUrl ?? s.prUrl ?? null,
+        };
+      });
+
+    const byAgent: Record<
+      string,
+      { sessions: number; durationSeconds: number }
+    > = {};
+    let totalDurationMs = 0;
+    for (const c of laneCosts) {
+      totalDurationMs += c.durationMs;
+      const key = c.agentSlug ?? "unknown";
+      const agg = (byAgent[key] ??= { sessions: 0, durationSeconds: 0 });
+      agg.sessions += 1;
+      agg.durationSeconds += Math.round(c.durationMs / 1000);
+    }
+    const totalDurationSeconds = Math.round(totalDurationMs / 1000);
+
+    const shippedLines = closedIssues
+      .slice(0, 15)
+      .map(
+        (i) =>
+          `- ${i.identifier ?? i.id}: ${i.title}${i.prUrl ? ` (${i.prUrl})` : ""}`
+      )
+      .join("\n");
+    const flightLines = activeLanes
+      .slice(0, 15)
+      .map(
+        (l) =>
+          `- [${l.status}] ${l.agentId}${l.issueIdentifier ? ` on ${l.issueIdentifier}` : ""}${l.repo ? ` (${l.repo})` : ""} — ${l.convergence.trajectory}`
+      )
+      .join("\n");
+    const blockedLines = [
+      ...failedLanes
+        .slice(0, 10)
+        .map(
+          (f) =>
+            `- failed: ${f.agentId}${f.issueIdentifier ? ` on ${f.issueIdentifier}` : ""} — ${f.errorExcerpt.slice(0, 120)}`
+        ),
+      ...oscillatingReviews
+        .slice(0, 10)
+        .map(
+          (o) =>
+            `- review loop: ${o.issueIdentifier ?? o.issueId} — ${o.trajectory}`
+        ),
+      ...humanGateRequired
+        .slice(0, 10)
+        .map((h) => `- human gate: ${h.issueIdentifier ?? h.issueId}`),
+      ...pausedAgents.map((p) => `- agent paused: ${p.agentId}`),
+    ].join("\n");
+    const computeLines = Object.entries(byAgent)
+      .toSorted((a, b) => b[1].durationSeconds - a[1].durationSeconds)
+      .map(
+        ([slug, agg]) =>
+          `- ${slug}: ${agg.sessions} runs, ${agg.durationSeconds}s`
+      )
+      .join("\n");
+
+    const markdownBrief = [
+      `# Engineering Fleet Recap (since ${cutoffIso})`,
+      "",
+      `## 1. What Shipped (${closedIssues.length} issues closed, ${completedSessions.length} lanes completed, ${memoriesDistilled.length} memories distilled)`,
+      shippedLines || "- none",
+      "",
+      `## 2. In Flight & Trail Convergence (${activeLanes.length} active lanes, ${reviewRoundsCompleted} review rounds)`,
+      flightLines || "- none",
+      "",
+      `## 3. Blocked / Needs Decision (${failedLanes.length} failed, ${oscillatingReviews.length} oscillating/stalled, ${humanGateRequired.length} human-gate, ${pausedAgents.length} paused agents)`,
+      blockedLines || "- none",
+      "",
+      `## 4. Compute (${laneCosts.length} settled runs, ${totalDurationSeconds}s total compute)`,
+      computeLines || "- none",
+    ].join("\n");
+
+    return {
+      since: cutoffIso,
+      repo: args?.repo ?? null,
+      shipped: {
+        completedSessions: completedSessions.map((s) => ({
+          sessionId: s.id,
+          agentId: s.agentId,
+          issue: (() => {
+            const i = issueById.get(s.issueId);
+            return i
+              ? {
+                  identifier: i.identifier,
+                  title: i.title,
+                  repo: i.repo,
+                  prUrl: i.prUrl,
+                }
+              : null;
+          })(),
+        })),
+        closedIssues: closedIssues.map((i) => ({
+          id: i.id,
+          identifier: i.identifier,
+          title: i.title,
+          repo: i.repo,
+          prUrl: i.prUrl,
+        })),
+        memoriesDistilled: memoriesDistilled.map((m) => ({
+          id: m.id,
+          kind: m.kind,
+          entityType: m.entityType,
+          entityId: m.entityId,
+          fact: m.fact.slice(0, 240),
+          createdAt: m.createdAt,
+        })),
+      },
+      inFlight: { activeLanes, reviewRoundsCompleted },
+      blocked: {
+        failedLanes,
+        oscillatingReviews,
+        humanGateRequired,
+        pausedAgents,
+      },
+      compute: {
+        totalSessions: laneCosts.length,
+        totalDurationSeconds,
+        byAgent,
+      },
+      markdownBrief,
+    };
+  }
+
+  // Resolve the {id, teamId} an issue-entity memory rows hang on so the
+  // search doc inherits the issue's team scoping.
+  private async memoryIssueMeta(
+    entityType: string,
+    entityId: string
+  ): Promise<{ id: string; teamId: string } | undefined> {
+    if (entityType !== "issue") return undefined;
+    return this.db
+      .select({ id: workspaceIssues.id, teamId: workspaceIssues.teamId })
+      .from(workspaceIssues)
+      .where(
+        or(
+          eq(workspaceIssues.id, entityId),
+          eq(workspaceIssues.identifier, entityId.toUpperCase())
+        )
+      )
+      .get();
+  }
+
+  async memoryRemember(input: data.MemoryInput) {
+    await this.ready;
+    const id = await data.memoryRemember(this.db, this.organizationId, input);
+    // PILE-618/629 — a warm search index tracks memory writes: index the
+    // new head fact and drop the head it superseded. On a cold index this
+    // is a no-op; the next build picks the row up from storage.
+    const row = await this.db
+      .select()
+      .from(workspaceMemory)
+      .where(eq(workspaceMemory.id, id))
+      .get();
+    if (row) {
+      const issueMeta = await this.memoryIssueMeta(
+        row.entityType,
+        row.entityId
+      );
+      const supersedes = row.supersedes;
+      const memory: MemoryForSearch = {
+        id: row.id,
+        entityType: row.entityType,
+        entityId: row.entityId,
+        kind: row.kind,
+        fact: row.fact,
+        createdAt: row.createdAt,
+        issueId: issueMeta?.id,
+        teamId: issueMeta?.teamId,
+      };
+      await this.syncSearchIndex(async (index) => {
+        if (supersedes) {
+          await removeMemorySearchDocument(index, supersedes);
+        }
+        await indexMemorySearchDocument(index, memory);
+      });
+    }
+    return id;
+  }
+
+  async memoryRecall(query: {
     entityType?: string;
     entityId?: string;
     kind?: string;
     search?: string;
     limit?: number;
   }) {
-    return data.memoryRecall(this.db, this.organizationId, query);
+    await this.ready;
+    const rows = await data.memoryRecall(this.db, this.organizationId, query);
+    const limit = query.limit ?? 25;
+    const search = query.search?.trim();
+    if (!search || rows.length >= limit) return rows;
+    // PILE-618/629 — LIKE recall only matches the verbatim substring; fill
+    // the remainder from the BM25 index so multi-term and fuzzy queries
+    // still land ("did we sweep smith?" vs "corridor:smith-st sweep").
+    const index = await this.ensureSearchIndex();
+    // PILE-613 — concept-expand the BM25 query and merge optional
+    // Vectorize hits so synonyms/morphological variants still recall.
+    const matchedIds = await searchMemories(
+      index,
+      expandSemanticQuery(search),
+      limit * 2
+    );
+    const vectorIds = await queryVectorizeMemories(
+      this.env as Parameters<typeof queryVectorizeMemories>[0],
+      this.organizationId,
+      search,
+      limit
+    );
+    const allMatched = [...new Set([...matchedIds, ...vectorIds])];
+    const have = new Set(rows.map((r) => r.id));
+    const missing = allMatched.filter((id) => !have.has(id));
+    const now = new Date().toISOString();
+    const extraRows =
+      missing.length === 0
+        ? []
+        : await this.db
+            .select()
+            .from(workspaceMemory)
+            .where(
+              and(
+                eq(workspaceMemory.organizationId, this.organizationId),
+                inArrayJson(workspaceMemory.id, missing),
+                sql`${workspaceMemory.id} NOT IN (SELECT ${workspaceMemory.supersedes} FROM ${workspaceMemory} WHERE ${workspaceMemory.organizationId} = ${this.organizationId} AND ${workspaceMemory.supersedes} IS NOT NULL)`,
+                or(
+                  isNull(workspaceMemory.validUntil),
+                  gt(workspaceMemory.validUntil, now)
+                )!,
+                query.entityType
+                  ? eq(workspaceMemory.entityType, query.entityType)
+                  : undefined,
+                query.kind ? eq(workspaceMemory.kind, query.kind) : undefined
+              )
+            )
+            .all();
+    const byId = new Map(extraRows.map((r) => [r.id, r]));
+    const ISSUE_IDENTIFIER_RE = /^[a-z]+-\d+$/i;
+    const normalizeEntityId = (entityType: string, entityId: string) =>
+      entityType === "issue" && ISSUE_IDENTIFIER_RE.test(entityId)
+        ? entityId.toUpperCase()
+        : entityId;
+    const entityIdMatches = (entityId: string) => {
+      if (!query.entityId) return true;
+      if (
+        query.entityType === "issue" &&
+        ISSUE_IDENTIFIER_RE.test(query.entityId)
+      ) {
+        return (
+          entityId === query.entityId ||
+          entityId === query.entityId.toUpperCase() ||
+          entityId === query.entityId.toLowerCase()
+        );
+      }
+      return entityId === query.entityId;
+    };
+    // Same (entityType, normalizedEntityId, kind) head dedupe as
+    // data.memoryRecall — BM25 extras join behind the LIKE rows in rank
+    // order.
+    const seen = new Set(
+      rows.map(
+        (r) =>
+          `${r.entityType}\0${normalizeEntityId(r.entityType, r.entityId)}\0${r.kind}`
+      )
+    );
+    const out = [...rows];
+    for (const id of allMatched) {
+      const row = byId.get(id);
+      if (!row || !entityIdMatches(row.entityId)) continue;
+      const key = `${row.entityType}\0${normalizeEntityId(row.entityType, row.entityId)}\0${row.kind}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(row);
+      if (out.length >= limit) break;
+    }
+
+    // PILE-613 — still room? Scan recent active head facts and score them
+    // with the hybrid similarity (token-overlap + char-trigram cosine) so
+    // concept-adjacent memories surface even when BM25 misses entirely.
+    if (out.length < limit) {
+      const candidates = await this.db
+        .select()
+        .from(workspaceMemory)
+        .where(
+          and(
+            eq(workspaceMemory.organizationId, this.organizationId),
+            sql`${workspaceMemory.id} NOT IN (SELECT ${workspaceMemory.supersedes} FROM ${workspaceMemory} WHERE ${workspaceMemory.organizationId} = ${this.organizationId} AND ${workspaceMemory.supersedes} IS NOT NULL)`,
+            or(
+              isNull(workspaceMemory.validUntil),
+              gt(workspaceMemory.validUntil, now)
+            )!,
+            query.entityType
+              ? eq(workspaceMemory.entityType, query.entityType)
+              : undefined,
+            query.entityId
+              ? eq(workspaceMemory.entityId, query.entityId)
+              : undefined,
+            query.kind ? eq(workspaceMemory.kind, query.kind) : undefined
+          )
+        )
+        .orderBy(desc(workspaceMemory.createdAt))
+        .limit(200)
+        .all();
+      const scored = candidates
+        .filter(
+          (r) =>
+            entityIdMatches(r.entityId) &&
+            !seen.has(
+              `${r.entityType}\0${normalizeEntityId(r.entityType, r.entityId)}\0${r.kind}`
+            )
+        )
+        .map((r) => ({
+          row: r,
+          score: computeSemanticSimilarity(
+            search,
+            `${r.entityType} ${r.entityId} ${r.kind} ${r.fact}`
+          ),
+        }))
+        .filter((s) => s.score >= 0.22)
+        .toSorted((a, b) => b.score - a.score);
+      for (const { row } of scored) {
+        const key = `${row.entityType}\0${normalizeEntityId(row.entityType, row.entityId)}\0${row.kind}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(row);
+        if (out.length >= limit) break;
+      }
+    }
+    return out;
+  }
+
+  // PILE-628 — patch a memory fact in place (fact/kind/validUntil) and
+  // re-sync the warm search index.
+  async memoryUpdate(id: string, patch: data.MemoryPatch, actorId?: string) {
+    await this.ready;
+    const updated = await data.memoryUpdate(
+      this.db,
+      this.organizationId,
+      id,
+      patch
+    );
+    if (!updated) return null;
+    this.audit("memory.updated", "memory", id, actorId);
+    const issueMeta = await this.memoryIssueMeta(
+      updated.entityType,
+      updated.entityId
+    );
+    const memory: MemoryForSearch = {
+      id: updated.id,
+      entityType: updated.entityType,
+      entityId: updated.entityId,
+      kind: updated.kind,
+      fact: updated.fact,
+      createdAt: updated.createdAt,
+      issueId: issueMeta?.id,
+      teamId: issueMeta?.teamId,
+    };
+    await this.syncSearchIndex((index) =>
+      indexMemorySearchDocument(index, memory)
+    );
+    return updated;
+  }
+
+  // PILE-628 — forget a memory fact (and, on an active head, its whole
+  // superseded history) so prior versions never resurrect.
+  async memoryForget(id: string, actorId?: string) {
+    await this.ready;
+    const res = await data.memoryForget(this.db, this.organizationId, id);
+    if (!res.deleted) return { deleted: false, deletedIds: [] };
+    this.audit("memory.deleted", "memory", id, actorId);
+    await this.syncSearchIndex(async (index) => {
+      await Promise.all(
+        res.deletedIds.map((delId) => removeMemorySearchDocument(index, delId))
+      );
+    });
+    return res;
+  }
+
+  // PILE-616 — entity profile: active head facts split into durable
+  // (static) and transient (dynamic) groups with a markdown summary for
+  // dispatch prompt injection.
+  async memoryProfile(query: {
+    entityType: string;
+    entityId: string;
+    limit?: number;
+  }) {
+    await this.ready;
+    return data.memoryProfile(this.db, this.organizationId, query);
+  }
+
+  // PILE-617 — batch write: explicit memory items plus facts extracted
+  // from documents (markdown notes produce root_cause/decision/lesson
+  // rows without a lane remembering to write them).
+  async memoryRememberBatch(input: {
+    memories?: data.MemoryInput[];
+    documentIds?: string[];
+    sourceAgentSlug?: string | null;
+    sourceSessionId?: string | null;
+  }): Promise<{
+    ids: string[];
+    count: number;
+    extractedFromDocuments: number;
+  }> {
+    await this.ready;
+    const items: data.MemoryInput[] = [...(input.memories ?? [])];
+    let extractedFromDocuments = 0;
+    if (input.documentIds && input.documentIds.length > 0) {
+      const docs = await this.db
+        .select()
+        .from(workspaceDocuments)
+        .where(
+          and(
+            isNull(workspaceDocuments.trashedAt),
+            inArrayJson(workspaceDocuments.id, input.documentIds)
+          )
+        )
+        .all();
+      for (const doc of docs) {
+        const plain =
+          doc.contentFormat === "markdown"
+            ? doc.content
+            : blockNoteToPlainText(doc.content);
+        const candidates = extractFactsFromMarkdown({
+          text: `# ${doc.title}\n${plain}`,
+          defaultEntityType: doc.issueId ? "issue" : "document",
+          defaultEntityId: doc.issueId ?? doc.id,
+          maxFacts: 10,
+        });
+        for (const cand of candidates) {
+          items.push({
+            ...cand,
+            sourceAgentSlug: input.sourceAgentSlug ?? null,
+            sourceSessionId: input.sourceSessionId ?? null,
+          });
+        }
+        extractedFromDocuments += candidates.length;
+      }
+    }
+    // Sequential persistence — same-key facts in one batch must supersede
+    // in order, so Promise.all is wrong here. Recursion keeps
+    // no-await-in-loop clean.
+    const ids: string[] = [];
+    const rememberNext = async (at: number): Promise<void> => {
+      if (at >= items.length) return;
+      ids.push(await this.memoryRemember(items[at]));
+      return rememberNext(at + 1);
+    };
+    await rememberNext(0);
+    return { ids, count: ids.length, extractedFromDocuments };
+  }
+
+  // PILE-627 — "dreaming": distill structured facts from text, a session
+  // result, a document, or an issue's description + comments and persist
+  // them as memory.
+  async memoryExtract(input: {
+    sessionId?: string;
+    issueId?: string;
+    documentId?: string;
+    text?: string;
+    entityType?: string;
+    entityId?: string;
+    sourceAgentSlug?: string | null;
+  }): Promise<{
+    ids: string[];
+    facts: Array<{
+      id: string;
+      entityType: string;
+      entityId: string;
+      kind: string;
+      fact: string;
+    }>;
+  }> {
+    await this.ready;
+    const candidates: ExtractedMemoryCandidate[] = [];
+
+    if (input.text) {
+      candidates.push(
+        ...extractFactsFromMarkdown({
+          text: input.text,
+          defaultEntityType:
+            input.entityType ?? (input.issueId ? "issue" : "workspace"),
+          defaultEntityId:
+            input.entityId ?? input.issueId ?? this.organizationId,
+        })
+      );
+    }
+
+    if (input.sessionId) {
+      const session = await this.db
+        .select()
+        .from(workspaceAgentSessions)
+        .where(eq(workspaceAgentSessions.id, input.sessionId))
+        .get();
+      if (session) {
+        const activities = await data.listAgentActivities(this.db, session.id, {
+          limit: 100,
+        });
+        // Thought/response/error/action/artifact messages carry the
+        // knowledge; status/elicitation/prompt rows are control noise.
+        const substantive = activities.filter(
+          (a) =>
+            a.type !== "status" &&
+            a.type !== "elicitation" &&
+            a.type !== "prompt"
+        );
+        const text =
+          `# Session ${session.id}\n${session.result ?? ""}\n` +
+          substantive.map((a) => `- ${a.message}`).join("\n");
+        candidates.push(
+          ...extractFactsFromMarkdown({
+            text,
+            defaultEntityType: "issue",
+            defaultEntityId: session.issueId ?? session.id,
+          })
+        );
+      }
+    }
+
+    if (input.documentId) {
+      const doc = await this.db
+        .select()
+        .from(workspaceDocuments)
+        .where(eq(workspaceDocuments.id, input.documentId))
+        .get();
+      if (doc) {
+        const plain =
+          doc.contentFormat === "markdown"
+            ? doc.content
+            : blockNoteToPlainText(doc.content);
+        candidates.push(
+          ...extractFactsFromMarkdown({
+            text: `# ${doc.title}\n${plain}`,
+            defaultEntityType: doc.issueId ? "issue" : "document",
+            defaultEntityId: doc.issueId ?? doc.id,
+          })
+        );
+      }
+    }
+
+    if (input.issueId) {
+      const issue = await this.getIssue(input.issueId);
+      if (issue) {
+        const comments = await this.listComments(issue.id);
+        const text =
+          `# ${issue.identifier} ${issue.title}\n${issue.description ?? ""}\n` +
+          comments.map((c) => `- ${c.body}`).join("\n");
+        candidates.push(
+          ...extractFactsFromMarkdown({
+            text,
+            defaultEntityType: "issue",
+            defaultEntityId: issue.identifier ?? issue.id,
+          })
+        );
+      }
+    }
+
+    const ids: string[] = [];
+    const facts: Array<{
+      id: string;
+      entityType: string;
+      entityId: string;
+      kind: string;
+      fact: string;
+    }> = [];
+    const persistNext = async (at: number): Promise<void> => {
+      if (at >= candidates.length) return;
+      const cand = candidates[at];
+      const id = await this.memoryRemember({
+        ...cand,
+        sourceSessionId: input.sessionId ?? null,
+        sourceAgentSlug: input.sourceAgentSlug ?? null,
+      });
+      ids.push(id);
+      facts.push({ id, ...cand });
+      return persistNext(at + 1);
+    };
+    await persistNext(0);
+    return { ids, facts };
+  }
+
+  // Check-then-write inside one DO turn so two concurrent callers cannot both
+  // claim the same (entityType, entityId, kind) slot — memoryRecall followed
+  // by a separate memoryRemember RPC is a TOCTOU race.
+  async claimMemoryOnce(input: data.MemoryInput) {
+    const existing = await data.memoryRecall(this.db, this.organizationId, {
+      entityType: input.entityType,
+      entityId: input.entityId,
+      kind: input.kind,
+      limit: 1,
+    });
+    if (existing.length > 0) return false;
+    await data.memoryRemember(this.db, this.organizationId, input);
+    return true;
   }
 
   upsertAgentProviderConfig(input: data.AgentProviderConfigInput) {
@@ -5884,6 +7889,39 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       }
       if (result.infraFailure !== undefined)
         set.infraFailure = result.infraFailure ? 1 : 0;
+      // VTX-621 — a provider capacity death parks the whole agent type
+      // until its reset instead of every lane burning retries into the
+      // same wall. The sweep lifts the pause once the reason's timestamp
+      // passes. infraFailure stays unset: a capacity death is not a
+      // substrate failure and must not feed the provider/fleet streaks
+      // (retry eligibility rides polled.rateLimited on the sweep side).
+      // An existing operator/spend-cap pause (a reason without the
+      // prefix) is left alone — never overwritten, never lifted early.
+      if (result.rateLimited) {
+        const existingPause = data.getAgentPause(
+          this.db,
+          this.organizationId,
+          oldSession.agentId
+        );
+        const reason = rateLimitPauseReason(
+          existingPause,
+          result,
+          oldSession.retryCount ?? 0
+        );
+        if (reason) {
+          await data
+            .upsertAgentPause(
+              this.db,
+              this.organizationId,
+              oldSession.agentId,
+              {
+                reason,
+                createdBy: "system",
+              }
+            )
+            .catch(() => {});
+        }
+      }
       if (result.result !== undefined) set.result = result.result;
       if (result.url !== undefined) set.url = result.url;
       if (result.providerSessionId !== undefined)
@@ -5953,6 +7991,28 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     }
     if (result.infraFailure !== undefined)
       set.infraFailure = result.infraFailure ? 1 : 0;
+    // VTX-621 — same rate-limit park as the issue-less path above; lanes
+    // always carry an issue, so this is the branch that actually runs.
+    if (result.rateLimited) {
+      const existingPause = data.getAgentPause(
+        this.db,
+        this.organizationId,
+        oldSession.agentId
+      );
+      const reason = rateLimitPauseReason(
+        existingPause,
+        result,
+        oldSession.retryCount ?? 0
+      );
+      if (reason) {
+        await data
+          .upsertAgentPause(this.db, this.organizationId, oldSession.agentId, {
+            reason,
+            createdBy: "system",
+          })
+          .catch(() => {});
+      }
+    }
     if (result.result !== undefined) set.result = result.result;
     if (result.url !== undefined) set.url = result.url;
     if (result.providerSessionId !== undefined)
@@ -6770,30 +8830,19 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       }
     }
 
-    // Warn-mode dedupe is best-effort — on a cold DO (post-deploy
-    // eviction) building the search index reads every issue/comment/doc
-    // in the workspace (~tens of seconds on mature orgs), which used to
-    // hang issue creation past the request budget. Use only an index that
-    // is already built — even an in-flight build can exceed the request
-    // budget, so never await it here. The skip warms the index off the
-    // request path; dedupe=block keeps its guarantee by paying the build.
-    const dedupeIndex = dedupe ? this.searchIndex : null;
-    if (dedupe && !dedupeIndex) {
-      if (dedupe.block) {
-        await this.ensureSearchIndex();
-      } else {
-        this.ctx.waitUntil(this.ensureSearchIndex().catch(() => undefined));
-      }
-    }
-    const possibleDuplicates =
-      dedupe && (dedupe.block || dedupeIndex)
-        ? await this.findPossibleDuplicates(
-            input.title,
-            dedupe.teamIds,
-            5,
-            dedupe.viewer
-          )
-        : [];
+    // PILE-612 — dedupe never builds the search index: a cold DO building
+    // it inline used to hang issue creation past the request budget
+    // (~tens of seconds on mature orgs). findPossibleDuplicates falls back
+    // to a direct SQLite title scan when no warm index exists, so warn and
+    // block modes both work on a cold DO.
+    const possibleDuplicates = dedupe
+      ? await this.findPossibleDuplicates(
+          input.title,
+          dedupe.teamIds,
+          5,
+          dedupe.viewer
+        )
+      : [];
     if (dedupe?.block && possibleDuplicates.length > 0) {
       return { issue: null, possibleDuplicates };
     }
@@ -6908,6 +8957,24 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         actorId
       );
     }
+    if (
+      !issue.parentId &&
+      issue.ownerAgent &&
+      !issue.isDraft &&
+      (issue.status === "todo" || issue.status === "in_progress")
+    ) {
+      await this.emitDomainEvent(
+        "substep.actionable",
+        {
+          issueId: issue.id,
+          parentId: issue.id,
+          stepKey: issue.stepKey,
+          ownerAgent: issue.ownerAgent,
+          required: issue.required,
+        },
+        `actionable:${issue.id}`
+      );
+    }
     return { issue, possibleDuplicates };
   }
 
@@ -6927,9 +8994,9 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     // the team first so a workspace without triage never warms the index.
     if (issue.isDraft || issue.status === "done" || issue.status === "canceled")
       return;
-    // PILE-411 — a stage sub-step is machine-materialized work with its own
+    // PILE-411 — a stage sub-step or ownerAgent-assigned task has its own
     // owner_agent, not an inbound issue needing triage.
-    if (issue.stepKey) return;
+    if (issue.stepKey || issue.ownerAgent) return;
     const env = this.env;
     this.ctx.waitUntil(
       getTeamById(createD1(env.D1), issue.teamId, this.organizationId)
@@ -7986,22 +10053,24 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       timer.mark("automation");
     }
 
-    // PILE-413 — a materialized sub-step becoming actionable (created todo,
-    // or moved to an actionable status / assigned an owner) emits the
-    // dispatch event; the dedupe key keeps re-emits free.
+    // PILE-413 — a materialized sub-step or top-level ownerAgent task becoming
+    // actionable (created todo, or moved to an actionable status / assigned an
+    // owner) emits the dispatch event; the dedupe key keeps re-emits free.
     if (
-      issue.parentId &&
       issue.ownerAgent &&
+      !issue.isDraft &&
       (issue.status === "todo" || issue.status === "in_progress")
     ) {
       const becameActionable =
-        old.status !== issue.status || old.ownerAgent !== issue.ownerAgent;
+        old.status !== issue.status ||
+        old.ownerAgent !== issue.ownerAgent ||
+        old.isDraft !== issue.isDraft;
       if (becameActionable) {
         await this.emitDomainEvent(
           "substep.actionable",
           {
             issueId: issue.id,
-            parentId: issue.parentId,
+            parentId: issue.parentId ?? issue.id,
             stepKey: issue.stepKey,
             ownerAgent: issue.ownerAgent,
             required: issue.required,

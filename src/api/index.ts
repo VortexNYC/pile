@@ -17,6 +17,8 @@ import {
   workspaceAuthMiddleware,
 } from "../platform/middleware.js";
 import { observabilityMiddleware } from "../platform/observability.js";
+import { reportWorkerException } from "../platform/posthog.js";
+import { collectRoutePermissions } from "../platform/rls.js";
 import { securityMiddleware } from "../platform/security.js";
 import { registerActivityRoutes } from "./activities.js";
 import { registerActivityFeedRoutes } from "./activity-feed.js";
@@ -77,8 +79,12 @@ import { registerMemoryRoutes } from "./memory.js";
 import { registerNotificationRoutes } from "./notifications.js";
 import { registerNotionWebhookRoute } from "./notion-webhook.js";
 import { registerNotionRoutes } from "./notion.js";
-import { registerOAuthClientRoutes } from "./oauth-clients.js";
+import {
+  registerOAuthClientRoutes,
+  registerOAuthRoutes,
+} from "./oauth-clients.js";
 import { registerObservabilityRoutes } from "./observability.js";
+import { bearerAuthScheme, openapiDocumentConfig } from "./openapi-doc.js";
 import { registerPipelineRuntimeRoutes } from "./pipeline-runtime.js";
 import { registerPrRoutes } from "./pr.js";
 import { registerProjectMemberRoutes } from "./project-members.js";
@@ -135,9 +141,40 @@ const app = new OpenAPIHono<AppContext>({
   },
 });
 
+// VTX-753 — harvest each route's declared rls() grants as it registers so
+// the MCP server can reduce tools/list to what a caller's key authorizes.
+// The wrap is transparent: it records metadata, then delegates.
+{
+  type OpenapiRegister = (typeof app)["openapi"];
+  const inner: OpenapiRegister = app.openapi.bind(app);
+  const collect = (
+    route: { method?: unknown; path?: unknown; middleware?: unknown },
+    handler: unknown,
+    hook?: unknown
+  ): unknown => {
+    collectRoutePermissions(route);
+    return Reflect.apply(inner, app, [route, handler, hook]);
+  };
+  app.openapi = collect as OpenapiRegister;
+}
+
 app.onError((err, c) => {
   console.error("unhandled route error", c.req.path, err);
-  return toErrorResponse(err);
+  const res = toErrorResponse(err);
+  if (res.status >= 500) {
+    reportWorkerException(
+      "api",
+      err,
+      getExecutionCtx(c),
+      {
+        method: c.req.method,
+        path: c.req.path,
+        status: res.status,
+      },
+      { env: c.env }
+    );
+  }
+  return res;
 });
 
 app.use("*", observabilityMiddleware);
@@ -247,6 +284,7 @@ registerSCIMRoutes(app);
 registerTokenRoutes(app);
 registerClipperRoutes(app);
 registerOAuthClientRoutes(app);
+registerOAuthRoutes(app);
 registerIssueRoutes(app);
 registerAgentSessionRoutes(app);
 registerGuidanceRoutes(app);
@@ -546,11 +584,42 @@ app.get("/llms-full.txt", (c) => {
   return c.text(`# Pile — full documentation\n${body}`);
 });
 
-app.get("/.well-known/security.txt", (c) =>
-  c.text(
-    "Contact: mailto:security@vortexnyc.com\nPreferred-Languages: en\nCanonical: https://pile.nyc/.well-known/security.txt\n"
-  )
-);
+app.get("/.well-known/security.txt", (c) => {
+  // RFC 9116 — Expires is mandatory and should sit under a year out; rolling
+  // it forward ~90 days per request keeps the file self-refreshing.
+  const expires = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+  return c.text(
+    `Contact: mailto:security@vortexnyc.com\nExpires: ${expires.toISOString()}\nPreferred-Languages: en\nCanonical: https://pile.nyc/.well-known/security.txt\n`
+  );
+});
+
+// PILE-619 — first-party agent kit discovery manifest.
+app.get("/.well-known/mcp.json", (c) => {
+  const origin = new URL(c.req.url).origin;
+  return c.json({
+    name: "pile",
+    version: "0.1.1",
+    description:
+      "Pile — agent-native issue tracker, support desk, CRM, and shared workspace memory on Cloudflare Workers.",
+    mcpEndpoint: `${origin}/mcp`,
+    oauthProtectedResource: `${origin}/.well-known/oauth-protected-resource`,
+    oauthAuthorizationServer: `${origin}/.well-known/oauth-authorization-server`,
+    skills: ["pile-mcp", "pile-cli", "pile-sdk", "pile-agent"],
+    prompts: [
+      "triage-issue",
+      "morning-brief",
+      "session-handoff",
+      "memory-distill",
+    ],
+    resources: [
+      "pile://workspaces/{organizationId}/agent-context",
+      "pile://workspaces/{organizationId}/issues/{id}",
+      "pile://workspaces/{organizationId}/documents/{id}",
+      "pile://workspaces/{organizationId}/customers/{id}",
+      "pile://workspaces/{organizationId}/memory/profile/{entityType}/{entityId}",
+    ],
+  });
+});
 
 app.get("/status", (c) => c.redirect("/health", 308));
 
@@ -563,6 +632,12 @@ app.get("/docs/:name", (c) => {
   return c.text(doc, 200, { "Content-Type": "text/markdown; charset=utf-8" });
 });
 
+app.openAPIRegistry.registerComponent(
+  "securitySchemes",
+  "bearerAuth",
+  bearerAuthScheme
+);
+
 app.doc("/openapi.json", {
   openapi: "3.0.0",
   info: {
@@ -570,6 +645,7 @@ app.doc("/openapi.json", {
     version: "0.1.0",
     description: "Agent-native issue tracker on Cloudflare Workers.",
   },
+  ...openapiDocumentConfig,
 });
 
 app.all("/mcp", async (c) => {

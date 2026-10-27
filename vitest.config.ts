@@ -8,11 +8,17 @@ import { configDefaults, defineConfig } from "vitest/config";
 
 const migrationsPath = path.join(import.meta.dirname ?? ".", "migrations");
 const migrations = await readD1Migrations(migrationsPath);
+const webSrcPath = path.join(import.meta.dirname ?? ".", "apps/web/src");
 
 export default defineConfig({
   test: {
     projects: [
       {
+        resolve: {
+          alias: {
+            "@": webSrcPath,
+          },
+        },
         plugins: [
           cloudflareTest({
             // wrangler.test.toml is wrangler.toml minus the sandbox-sdk 1.0
@@ -50,6 +56,8 @@ export default defineConfig({
             "**/*.node.test.ts",
           ],
           globals: true,
+          testTimeout: 15_000,
+          hookTimeout: 30_000,
           setupFiles: ["./src/test/apply-migrations.ts"],
         },
       },

@@ -17,11 +17,457 @@ export interface MerchantCandidate {
   externalId: string;
   domain?: string | null;
   address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  ownerName?: string | null;
+  neighborhood?: string | null;
   vertical?: string | null;
   signal: string;
   signalDate?: string | null;
   evidenceUri?: string | null;
 }
+
+const FREEMAIL_DOMAINS = new Set([
+  "gmail.com",
+  "googlemail.com",
+  "yahoo.com",
+  "ymail.com",
+  "aol.com",
+  "hotmail.com",
+  "outlook.com",
+  "live.com",
+  "msn.com",
+  "icloud.com",
+  "me.com",
+  "mac.com",
+  "verizon.net",
+  "optimum.net",
+  "optonline.net",
+  "earthlink.net",
+  "comcast.net",
+  "att.net",
+  "sbcglobal.net",
+  "protonmail.com",
+  "proton.me",
+  "zoho.com",
+  "mail.com",
+]);
+
+const FREEMAIL_PREFIXES = [
+  "gmail.",
+  "googlemail.",
+  "yahoo.",
+  "ymail.",
+  "aol.",
+  "hotmail.",
+  "outlook.",
+  "live.",
+  "msn.",
+  "icloud.",
+  "protonmail.",
+  "proton.",
+];
+
+export function deriveDomainFromEmail(
+  email: string | null | undefined
+): string | null {
+  if (!email || !email.includes("@")) return null;
+  const host = email.split("@")[1]?.trim().toLowerCase();
+  if (!host || !host.includes(".") || FREEMAIL_DOMAINS.has(host)) return null;
+  if (FREEMAIL_PREFIXES.some((p) => host.startsWith(p))) return null;
+  return host;
+}
+
+export type NonPosSmbPresetId =
+  | "nyc_dob_contractors_and_trades"
+  | "nyc_bic_commercial_haulers"
+  | "nyc_dob_permit_issuances"
+  | "nyc_home_improvement_contractors"
+  | "nyc_auto_and_garages"
+  | "nyc_b2b_and_specialty_dealers"
+  | "nyc_bookkeepers_and_cpas"
+  | "nyc_vc_and_accelerators"
+  | "nyc_tech_and_software_startups"
+  | "us_nppes_medical_and_dental"
+  | "us_sec_form_d_tech_startups";
+
+export type LeadSheetKey =
+  | "trades"
+  | "tech"
+  | "partners_accounting"
+  | "partners_vc"
+  | "exploration"
+  | "excluded_pos";
+
+export interface MerchantLeadClassification {
+  sheetKey: LeadSheetKey;
+  categoryLabel: string;
+  vortexWedge: string;
+}
+
+export function classifyMerchantLead(input: {
+  name?: string | null;
+  vertical?: string | null;
+  source?: string | null;
+}): MerchantLeadClassification {
+  const v = (input.vertical ?? "").toLowerCase();
+  const n = (input.name ?? "").toLowerCase();
+  const s = (input.source ?? "").toLowerCase();
+
+  if (
+    v.includes("bookkeep") ||
+    v.includes("cpa") ||
+    v.includes("account") ||
+    v.includes("tax") ||
+    s.includes("bookkeep") ||
+    s.includes("cpa") ||
+    /\b(cpa|bookkeeping|accounting|tax service)\b/.test(n)
+  ) {
+    return {
+      sheetKey: "partners_accounting",
+      categoryLabel: "Bookkeeper / CPA Partner",
+      vortexWedge: "Partner Residual Rev-Share (20-100+ SMB Client Book)",
+    };
+  }
+
+  if (
+    v.includes("venture") ||
+    v.includes("capital partner") ||
+    v.includes("accelerator") ||
+    s.includes("venture") ||
+    /\b(ventures|capital partners|venture partners|seed fund)\b/.test(n)
+  ) {
+    return {
+      sheetKey: "partners_vc",
+      categoryLabel: "VC / Fund Partner",
+      vortexWedge: "Portfolio Startup Perks + Partner Rev-Share",
+    };
+  }
+
+  if (
+    v.includes("tech") ||
+    v.includes("software") ||
+    v.includes("saas") ||
+    s.includes("startup") ||
+    /\b(technologies|software|ai labs)\b/.test(n)
+  ) {
+    return {
+      sheetKey: "tech",
+      categoryLabel: "Tech / AI / SaaS Startup",
+      vortexWedge: "Polar/Stripe Parity: SDKs + Subscriptions + $10 ACH",
+    };
+  }
+
+  if (
+    v.includes("restaurant") ||
+    v.includes("bar") ||
+    v.includes("cafe") ||
+    v.includes("bakery") ||
+    v.includes("pizzeria") ||
+    v.includes("deli") ||
+    v.includes("nightclub") ||
+    v.includes("excluded") ||
+    /\b(pizzeria|osteria|bistro|taqueria|bakery|bagel|cafe|beer hall|delicatessen|grill)\b/.test(
+      n
+    )
+  ) {
+    return {
+      sheetKey: "excluded_pos",
+      categoryLabel: "Restaurant / POS (Excluded)",
+      vortexWedge: "Excluded — Requires Restaurant POS",
+    };
+  }
+
+  if (v.includes("electrical")) {
+    return {
+      sheetKey: "trades",
+      categoryLabel: "Electrical Contractor",
+      vortexWedge: "Hosted Invoice + $10-Capped ACH + Surcharging",
+    };
+  }
+  if (
+    v.includes("plumber") ||
+    v.includes("plumbing") ||
+    v.includes("oil burner") ||
+    v.includes("fire suppression") ||
+    v === "mp"
+  ) {
+    return {
+      sheetKey: "trades",
+      categoryLabel: "Plumbing, Heating & Fire",
+      vortexWedge: "Hosted Invoice + $10-Capped ACH + Surcharging",
+    };
+  }
+  if (
+    v.includes("filing representative") ||
+    v.includes("special inspection") ||
+    v.includes("engineering") ||
+    v.includes("architect")
+  ) {
+    return {
+      sheetKey: "trades",
+      categoryLabel: "Architecture, Engineering & Expediting",
+      vortexWedge: "Retainers + Milestone Invoices + $10 ACH",
+    };
+  }
+  if (v.includes("license") || s.includes("trade waste") || s.includes("bic")) {
+    return {
+      sheetKey: "trades",
+      categoryLabel: "Commercial Hauling & Demolition",
+      vortexWedge: "Recurring B2B Invoices + Card-on-File + ACH",
+    };
+  }
+  if (
+    v.includes("general contractor") ||
+    v.includes("home improvement") ||
+    v.includes("contractor") ||
+    v.includes("rigger") ||
+    v === "gc"
+  ) {
+    return {
+      sheetKey: "trades",
+      categoryLabel: "General & Home Improvement Contractor",
+      vortexWedge: "Hosted Invoice + $10-Capped ACH + Deposit Links",
+    };
+  }
+
+  if (
+    v.includes("garage") ||
+    v.includes("auto") ||
+    v.includes("tow") ||
+    v.includes("car wash")
+  ) {
+    return {
+      sheetKey: "exploration",
+      categoryLabel: "Auto, Garage & Towing (20% Explore)",
+      vortexWedge: "Countertop Terminal + Surcharging + Text-to-Pay",
+    };
+  }
+  if (
+    v.includes("disabled") ||
+    v.includes("medical") ||
+    v.includes("dental") ||
+    v.includes("dentist") ||
+    v.includes("clinic") ||
+    v.includes("physical therapist") ||
+    v.includes("chiropract") ||
+    v.includes("optometr") ||
+    v.includes("health") ||
+    v.includes("pharmacy") ||
+    s.includes("nppes")
+  ) {
+    return {
+      sheetKey: "exploration",
+      categoryLabel: "Medical, Dental & DME (20% Explore)",
+      vortexWedge: "Hosted Payment Links + Card-on-File + Terminal",
+    };
+  }
+
+  return {
+    sheetKey: "exploration",
+    categoryLabel: input.vertical || "B2B & Specialty SMB (20% Explore)",
+    vortexWedge: "Invoicing + Payment Links + ACH",
+  };
+}
+
+export const PRESET_NON_POS_SMB_SOURCES: Record<
+  NonPosSmbPresetId,
+  MerchantSourceRow
+> = {
+  nyc_dob_contractors_and_trades: {
+    id: "preset_nyc_dob_lic",
+    name: "NYC DOB Active General Contractors, Plumbers, Electricians & Engineering Firms",
+    kind: "socrata",
+    config: JSON.stringify({
+      domain: "data.cityofnewyork.us",
+      dataset: "t8hj-ruu2",
+      name_field: "business_name",
+      id_field: "license_sl_no",
+      vertical_field: "license_type",
+      phone_field: "business_phone_number",
+      email_field: "business_email",
+      borough_field: "license_business_city",
+      where:
+        "license_status='ACTIVE' AND business_phone_number IS NOT NULL AND business_email IS NOT NULL AND business_name IS NOT NULL AND license_type IN ('GENERAL CONTRACTOR', 'ELECTRICAL FIRM', 'MASTER PLUMBER', 'FILING REPRESENTATIVE', 'SPECIAL INSPECTION AGENCY', 'FIRE SUPPRESSION CONTRACTOR', 'RIGGER', 'OIL BURNER INSTALLER')",
+    }),
+    cursorField: null,
+    cursorValue: null,
+    signal: "new_license",
+  },
+  nyc_bic_commercial_haulers: {
+    id: "preset_nyc_bic",
+    name: "NYC BIC Active Commercial Construction & Trade Waste Licensees",
+    kind: "socrata",
+    config: JSON.stringify({
+      domain: "data.cityofnewyork.us",
+      dataset: "867j-5pgi",
+      name_field: "account_name",
+      id_field: "bic_number",
+      vertical_field: "application_type",
+      phone_field: "phone",
+      email_field: "email",
+      borough_field: "city",
+      where:
+        "phone IS NOT NULL AND email IS NOT NULL AND account_name IS NOT NULL",
+    }),
+    cursorField: "created",
+    cursorValue: null,
+    signal: "new_license",
+  },
+  nyc_dob_permit_issuances: {
+    id: "preset_nyc_dob_permits",
+    name: "NYC DOB Active Building & Trade Permit Issuances",
+    kind: "socrata",
+    config: JSON.stringify({
+      domain: "data.cityofnewyork.us",
+      dataset: "ipu4-2q9a",
+      name_field: "permittee_s_business_name",
+      id_field: "permit_si_no",
+      vertical_field: "permittee_s_license_type",
+      phone_field: "permittee_s_phone__",
+      borough_field: "borough",
+      where:
+        "permittee_s_business_name IS NOT NULL AND permittee_s_business_name != 'N/A' AND permittee_s_phone__ IS NOT NULL",
+    }),
+    cursorField: null,
+    cursorValue: null,
+    signal: "new_license",
+  },
+  nyc_home_improvement_contractors: {
+    id: "preset_nyc_hic",
+    name: "NYC DCWP Active Home Improvement Contractors",
+    kind: "socrata",
+    config: JSON.stringify({
+      domain: "data.cityofnewyork.us",
+      dataset: "w7w3-xahh",
+      name_field: "business_name",
+      id_field: "license_nbr",
+      vertical_field: "business_category",
+      phone_field: "contact_phone",
+      borough_field: "address_borough",
+      where:
+        "license_status='Active' AND contact_phone IS NOT NULL AND address_street_name IS NOT NULL AND business_category='Home Improvement Contractor'",
+    }),
+    cursorField: "license_creation_date",
+    cursorValue: null,
+    signal: "new_license",
+  },
+  nyc_auto_and_garages: {
+    id: "preset_nyc_auto",
+    name: "NYC DCWP Active Auto Dealers, Garages, Tow & Car Wash",
+    kind: "socrata",
+    config: JSON.stringify({
+      domain: "data.cityofnewyork.us",
+      dataset: "w7w3-xahh",
+      name_field: "business_name",
+      id_field: "license_nbr",
+      vertical_field: "business_category",
+      phone_field: "contact_phone",
+      borough_field: "address_borough",
+      where:
+        "license_status='Active' AND contact_phone IS NOT NULL AND address_street_name IS NOT NULL AND business_category IN ('Garage & Parking Lot', 'Secondhand Dealer - Auto', 'Tow Truck Company', 'Car Wash')",
+    }),
+    cursorField: "license_creation_date",
+    cursorValue: null,
+    signal: "new_license",
+  },
+  nyc_b2b_and_specialty_dealers: {
+    id: "preset_nyc_b2b",
+    name: "NYC DCWP Active B2B, Medical Equipment, Appliance Service, Staffing & Storage",
+    kind: "socrata",
+    config: JSON.stringify({
+      domain: "data.cityofnewyork.us",
+      dataset: "w7w3-xahh",
+      name_field: "business_name",
+      id_field: "license_nbr",
+      vertical_field: "business_category",
+      phone_field: "contact_phone",
+      borough_field: "address_borough",
+      where:
+        "license_status='Active' AND contact_phone IS NOT NULL AND address_street_name IS NOT NULL AND business_category IN ('Electronic & Home Appliance Service Dealer', 'Dealer In Products For The Disabled', 'Employment Agency', 'Self-Storage Facility', 'Secondhand Dealer - General')",
+    }),
+    cursorField: "license_creation_date",
+    cursorValue: null,
+    signal: "new_license",
+  },
+  nyc_bookkeepers_and_cpas: {
+    id: "preset_nyc_cpas",
+    name: "NY DOS Active CPA, Bookkeeping, Accounting & Tax Service Partners",
+    kind: "socrata",
+    config: JSON.stringify({
+      domain: "data.ny.gov",
+      dataset: "n9v6-gdp6",
+      name_field: "current_entity_name",
+      id_field: "dos_id",
+      vertical_field: "entity_type",
+      borough_field: "county",
+      where:
+        "(upper(current_entity_name) like '%BOOKKEEPING%' OR upper(current_entity_name) like '%ACCOUNTING%' OR upper(current_entity_name) like '% CPA %' OR upper(current_entity_name) like '%CPA P%' OR upper(current_entity_name) like '%TAX SERVICE%') AND county IN ('New York','Kings','Queens','Bronx','Nassau','Westchester','Suffolk')",
+    }),
+    cursorField: "initial_dos_filing_date",
+    cursorValue: null,
+    signal: "corp_filing",
+  },
+  nyc_vc_and_accelerators: {
+    id: "preset_nyc_vcs",
+    name: "NY DOS Active Venture Capital, Seed Funds & Investment Partners",
+    kind: "socrata",
+    config: JSON.stringify({
+      domain: "data.ny.gov",
+      dataset: "n9v6-gdp6",
+      name_field: "current_entity_name",
+      id_field: "dos_id",
+      vertical_field: "entity_type",
+      borough_field: "county",
+      where:
+        "(upper(current_entity_name) like '%VENTURES%' OR upper(current_entity_name) like '%CAPITAL PARTNERS%' OR upper(current_entity_name) like '%VENTURE PARTNERS%' OR upper(current_entity_name) like '%SEED FUND%') AND county IN ('New York','Kings')",
+    }),
+    cursorField: "initial_dos_filing_date",
+    cursorValue: null,
+    signal: "corp_filing",
+  },
+  nyc_tech_and_software_startups: {
+    id: "preset_nyc_tech_startups",
+    name: "NY DOS Newly Formed Tech, Software & AI Startups",
+    kind: "socrata",
+    config: JSON.stringify({
+      domain: "data.ny.gov",
+      dataset: "n9v6-gdp6",
+      name_field: "current_entity_name",
+      id_field: "dos_id",
+      vertical_field: "entity_type",
+      borough_field: "county",
+      where:
+        "(upper(current_entity_name) like '%TECHNOLOGIES%' OR upper(current_entity_name) like '%SOFTWARE%' OR upper(current_entity_name) like '%AI LABS%' OR upper(current_entity_name) like '%SYSTEMS%') AND county IN ('New York','Kings','Queens')",
+    }),
+    cursorField: "initial_dos_filing_date",
+    cursorValue: null,
+    signal: "corp_filing",
+  },
+  us_nppes_medical_and_dental: {
+    id: "preset_us_nppes",
+    name: "US NPPES Active Dental, Medical, PT & Specialty Health Practices",
+    kind: "nppes",
+    config: JSON.stringify({
+      state: "NY",
+      city: "BROOKLYN",
+    }),
+    cursorField: null,
+    cursorValue: null,
+    signal: "new_license",
+  },
+  us_sec_form_d_tech_startups: {
+    id: "preset_us_sec_form_d",
+    name: "SEC EDGAR Form D Newly Funded Tech Startups & Venture Offerings",
+    kind: "sec_form_d",
+    config: JSON.stringify({
+      startdt: "2026-09-01",
+    }),
+    cursorField: null,
+    cursorValue: null,
+    signal: "corp_filing",
+  },
+};
 
 const SIGNAL_WEIGHT: Record<string, number> = {
   license_pending: 1.0,
@@ -54,21 +500,36 @@ function str(v: unknown): string | null {
 }
 
 async function pullSocrata(
-  source: MerchantSourceRow
+  source: MerchantSourceRow,
+  options?: { limit?: number; offset?: number; extraWhere?: string }
 ): Promise<{ candidates: MerchantCandidate[]; newCursor: string | null }> {
   const c = cfg(source);
   const domain = str(c.domain) ?? "data.ny.gov";
   const dataset = str(c.dataset);
   if (!dataset) throw new Error("socrata source missing dataset");
-  const params = new URLSearchParams({ $limit: "500" });
+  const rawLimit = options?.limit ?? Number(c.limit ?? 500);
+  const limit = Math.max(
+    1,
+    Math.min(500, Number.isFinite(rawLimit) ? rawLimit : 500)
+  );
+  const offset = Math.max(0, options?.offset ?? 0);
+  const params = new URLSearchParams({
+    $limit: String(limit),
+    ...(offset > 0 ? { $offset: String(offset) } : {}),
+  });
+  const whereClauses: string[] = [];
+  if (str(c.where)) whereClauses.push(`(${str(c.where)})`);
+  if (options?.extraWhere) whereClauses.push(`(${options.extraWhere})`);
   if (source.cursorField) {
-    params.set(
-      "$where",
+    whereClauses.push(
       source.cursorValue
         ? `${source.cursorField} > '${source.cursorValue}'`
         : `${source.cursorField} IS NOT NULL`
     );
     params.set("$order", `${source.cursorField} DESC`);
+  }
+  if (whereClauses.length > 0) {
+    params.set("$where", whereClauses.join(" AND "));
   }
   const res = await fetch(
     `https://${domain}/resource/${dataset}.json?${params}`
@@ -77,26 +538,96 @@ async function pullSocrata(
   const rows = (await res.json()) as Record<string, unknown>[];
   const nameField = str(c.name_field) ?? "name";
   const idField = str(c.id_field) ?? nameField;
+  const phoneField = str(c.phone_field) ?? "contact_phone";
+  const emailField = str(c.email_field) ?? "business_email";
+  const boroughField = str(c.borough_field) ?? "address_borough";
   let maxDate: string | null = null;
   const candidates = rows.map((r) => {
     const name = str(r[nameField]);
     const id = str(r[idField]) ?? name;
     const date = source.cursorField ? str(r[source.cursorField]) : null;
     if (date && (!maxDate || date > maxDate)) maxDate = date;
+    const streetLine = [
+      str(r.address_building) ??
+        str(r.business_house_number) ??
+        str(Reflect.get(r, "house__") as unknown) ??
+        str(r.building_number) ??
+        str(r.dos_process_address_1),
+      str(r.address_street_name) ??
+        str(r.business_street_name) ??
+        str(r.street_name) ??
+        str(r.street) ??
+        str(r.dos_process_address_2),
+    ]
+      .filter(Boolean)
+      .join(" ");
+    const composedAddress = [
+      streetLine || str(r.actual_address_of_premises) || str(r.address),
+      str(r.address_city) ??
+        str(r.license_business_city) ??
+        str(r.dos_process_city) ??
+        str(r.city),
+      str(r.address_state) ??
+        str(r.business_state) ??
+        str(r.dos_process_state) ??
+        str(r.state) ??
+        str(r.state_name),
+      str(r.address_zip) ??
+        str(r.business_zip_code) ??
+        str(r.dos_process_zip) ??
+        str(r.zip_code) ??
+        str(r.postcode),
+    ]
+      .filter(Boolean)
+      .join(", ");
+    const rawEmail = (
+      str(r[emailField]) ??
+      str(r.business_email) ??
+      str(r.email)
+    )?.toLowerCase();
+    const ownerFirst = str(r.first_name) ?? str(r.permittee_s_first_name);
+    const ownerLast = str(r.last_name) ?? str(r.permittee_s_last_name);
+    const processPerson =
+      str(r.dos_process_name) ?? str(r.registered_agent_name);
+    const validProcessPerson =
+      processPerson &&
+      name &&
+      processPerson.toUpperCase() !== name.toUpperCase() &&
+      !/\b(LLC|INC|CORP|PLLC|PC|C\/O|REGISTERED AGENT|CORPORATION SERVICE)\b/i.test(
+        processPerson
+      )
+        ? processPerson
+        : null;
+    const ownerName =
+      [ownerFirst, ownerLast].filter(Boolean).join(" ") ||
+      validProcessPerson ||
+      null;
     return {
       name: name ?? "unknown",
       externalId: `socrata:${dataset}:${id}`,
-      domain: str(r[str(c.domain_field) ?? "website"]),
+      domain:
+        str(r[str(c.domain_field) ?? "website"]) ??
+        deriveDomainFromEmail(rawEmail),
       address:
-        str(r[str(c.address_field) ?? "address"]) ??
-        ([str(r.actual_address_of_premises), str(r.city), str(r.state_name)]
-          .filter(Boolean)
-          .join(", ") ||
-          null),
+        (composedAddress || str(r[str(c.address_field) ?? "address"])) ?? null,
+      phone:
+        str(r[phoneField]) ??
+        str(r.business_phone_number) ??
+        str(Reflect.get(r, "permittee_s_phone__") as unknown) ??
+        str(r.phone),
+      email: rawEmail ?? null,
+      ownerName,
+      neighborhood:
+        str(r[boroughField]) ??
+        str(r.borough) ??
+        str(r.county) ??
+        str(r.license_business_city) ??
+        str(r.dos_process_city) ??
+        str(r.city),
       vertical: str(r[str(c.vertical_field) ?? "description"]),
       signal: source.signal,
       signalDate: date,
-      evidenceUri: `https://${domain}/resource/${dataset}.json?${idField}=${id}`,
+      evidenceUri: `https://${domain}/resource/${dataset}.json?${idField}=${encodeURIComponent(String(id ?? ""))}`,
     };
   });
   return { candidates, newCursor: maxDate };
@@ -222,13 +753,232 @@ async function pullSam(
   return { candidates, newCursor: null };
 }
 
+function xmlTag(xml: string, tag: string): string | null {
+  const re = new RegExp(`<${tag}>([^<]+)</${tag}>`, "i");
+  const m = re.exec(xml);
+  return m?.[1]?.trim() || null;
+}
+
+async function pullNppes(
+  source: MerchantSourceRow,
+  options?: { limit?: number; offset?: number; extraWhere?: string }
+): Promise<{ candidates: MerchantCandidate[]; newCursor: string | null }> {
+  const c = cfg(source);
+  const state = str(c.state) ?? "NY";
+  const city = options?.extraWhere
+    ? options.extraWhere.replace(/^.*='([^']+)'.*$/, "$1")
+    : (str(c.city) ?? "BROOKLYN");
+  const limit = Math.max(1, Math.min(200, options?.limit ?? 15));
+  const skip = Math.max(0, options?.offset ?? 0);
+  const params = new URLSearchParams({
+    version: "2.1",
+    enumeration_type: "NPI-2",
+    state,
+    city,
+    limit: String(limit),
+    skip: String(skip),
+  });
+  const res = await fetch(`https://npiregistry.cms.hhs.gov/api/?${params}`);
+  if (!res.ok) throw new Error(`nppes ${res.status}`);
+  const body = (await res.json()) as {
+    results?: Array<{
+      number?: string;
+      basic?: {
+        organization_name?: string;
+        authorized_official_first_name?: string;
+        authorized_official_last_name?: string;
+        authorized_official_telephone_number?: string;
+        authorized_official_title_or_position?: string;
+        enumeration_date?: string;
+      };
+      addresses?: Array<{
+        address_purpose?: string;
+        address_1?: string;
+        city?: string;
+        state?: string;
+        postal_code?: string;
+        telephone_number?: string;
+      }>;
+      taxonomies?: Array<{ desc?: string; primary?: boolean }>;
+    }>;
+  };
+  const candidates: MerchantCandidate[] = (body.results ?? []).map((r) => {
+    const npi = r.number ?? "unknown";
+    const basic = r.basic ?? {};
+    const loc =
+      (r.addresses ?? []).find((a) => a.address_purpose === "LOCATION") ??
+      r.addresses?.[0];
+    const tax =
+      (r.taxonomies ?? []).find((t) => t.primary) ?? r.taxonomies?.[0];
+    const ownerName =
+      [
+        basic.authorized_official_first_name,
+        basic.authorized_official_last_name,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .trim() || null;
+    const phone =
+      str(basic.authorized_official_telephone_number) ??
+      str(loc?.telephone_number);
+    const address = [
+      loc?.address_1,
+      loc?.city,
+      loc?.state,
+      loc?.postal_code?.slice(0, 5),
+    ]
+      .filter(Boolean)
+      .join(", ");
+    return {
+      name: (basic.organization_name ?? "unknown").replace(/^\.+/, "").trim(),
+      externalId: `nppes:${npi}`,
+      domain: null,
+      address: address || null,
+      phone,
+      email: null,
+      ownerName,
+      neighborhood: loc?.city ?? city,
+      vertical: tax?.desc ?? "Medical, Dental & DME (20% Explore)",
+      signal: source.signal,
+      signalDate: basic.enumeration_date ?? null,
+      evidenceUri: `https://npiregistry.cms.hhs.gov/api/?version=2.1&number=${encodeURIComponent(npi)}`,
+    };
+  });
+  return { candidates, newCursor: null };
+}
+
+async function pullSecFormD(
+  source: MerchantSourceRow,
+  options?: { limit?: number; offset?: number }
+): Promise<{ candidates: MerchantCandidate[]; newCursor: string | null }> {
+  const c = cfg(source);
+  const startdt = str(c.startdt) ?? "2026-09-01";
+  const limit = Math.max(1, Math.min(25, options?.limit ?? 10));
+  const from = Math.max(0, options?.offset ?? 0);
+  const params = new URLSearchParams({
+    forms: "D",
+    startdt,
+    from: String(from),
+  });
+  const headers = { "User-Agent": "VortexNYC Ops@vortex.nyc" };
+  const res = await fetch(
+    `https://efts.sec.gov/LATEST/search-index?${params}`,
+    { headers }
+  );
+  if (!res.ok) throw new Error(`sec_form_d ${res.status}`);
+  const body = (await res.json()) as {
+    hits?: {
+      hits?: Array<{
+        _id?: string;
+        _source?: {
+          ciks?: string[];
+          adsh?: string;
+          display_names?: string[];
+          biz_locations?: string[];
+          file_date?: string;
+        };
+      }>;
+    };
+  };
+  const hits = (body.hits?.hits ?? []).slice(0, limit);
+  const candidates: MerchantCandidate[] = await Promise.all(
+    hits.map(async (h) => {
+      const src =
+        (Reflect.get(h, "_source") as
+          | {
+              ciks?: string[];
+              adsh?: string;
+              display_names?: string[];
+              biz_locations?: string[];
+              file_date?: string;
+            }
+          | undefined) ?? {};
+      const hitId = Reflect.get(h, "_id") as string | undefined;
+      const adsh = src.adsh ?? hitId?.split(":")[0] ?? "unknown";
+      const cikRaw = src.ciks?.[0] ?? "";
+      const cikInt = cikRaw.replace(/^0+/, "");
+      const adshClean = adsh.replace(/-/g, "");
+      const xmlUrl =
+        cikInt && adshClean
+          ? `https://www.sec.gov/Archives/edgar/data/${cikInt}/${adshClean}/primary_doc.xml`
+          : null;
+
+      let entityName =
+        (src.display_names?.[0] ?? "unknown")
+          .replace(/\s*\(CIK\s*\d+\)\s*$/i, "")
+          .trim() || "unknown";
+      let phone: string | null = null;
+      let address: string | null = src.biz_locations?.[0] ?? null;
+      let ownerName: string | null = null;
+      let industryGroup: string | null = null;
+
+      if (xmlUrl) {
+        try {
+          const xmlRes = await fetch(xmlUrl, {
+            headers,
+            signal: AbortSignal.timeout(2500),
+          });
+          if (xmlRes.ok) {
+            const xml = (await xmlRes.text()).slice(0, 32_768);
+            entityName = xmlTag(xml, "entityName") ?? entityName;
+            phone = xmlTag(xml, "issuerPhoneNumber");
+            const street1 = xmlTag(xml, "street1");
+            const city = xmlTag(xml, "city");
+            const state = xmlTag(xml, "stateOrCountry");
+            const zip = xmlTag(xml, "zipCode");
+            if (street1 || city) {
+              address = [street1, city, state, zip].filter(Boolean).join(", ");
+            }
+            const first = xmlTag(xml, "firstName");
+            const last = xmlTag(xml, "lastName");
+            if (first || last) {
+              ownerName = [first, last].filter(Boolean).join(" ");
+            }
+            industryGroup = xmlTag(xml, "industryGroupType");
+          }
+        } catch {
+          /* fallback to index metadata */
+        }
+      }
+
+      const isFund =
+        /pooled investment|venture capital|private equity/i.test(
+          industryGroup ?? ""
+        ) || /\b(fund|ventures|capital partners|lp)\b/i.test(entityName);
+
+      return {
+        name: entityName,
+        externalId: `sec_form_d:${adsh}`,
+        domain: null,
+        address,
+        phone,
+        email: null,
+        ownerName,
+        neighborhood: src.biz_locations?.[0] ?? null,
+        vertical: isFund ? "VC / Fund Partner" : "Tech / AI / SaaS Startup",
+        signal: source.signal,
+        signalDate: src.file_date ?? null,
+        evidenceUri:
+          xmlUrl ??
+          `https://efts.sec.gov/LATEST/search-index?q=${encodeURIComponent(adsh)}`,
+      };
+    })
+  );
+  return { candidates, newCursor: null };
+}
+
 export async function pullSource(
   source: MerchantSourceRow,
-  env?: Record<string, string | undefined>
+  env?: Record<string, string | undefined>,
+  options?: { limit?: number; offset?: number; extraWhere?: string }
 ): Promise<{ candidates: MerchantCandidate[]; newCursor: string | null }> {
   switch (source.kind) {
     case "socrata":
-      return pullSocrata(source);
+      return pullSocrata(source, options);
+    case "nppes":
+      return pullNppes(source, options);
+    case "sec_form_d":
+      return pullSecFormD(source, options);
     case "usaspending":
       return pullUsaspending(source);
     case "opencorporates":

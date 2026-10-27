@@ -1,16 +1,28 @@
-import { createD1 } from "../global/db.js";
+import { and, isNotNull, lte, or, sql } from "drizzle-orm";
+
+import { createD1, type D1Client } from "../global/db.js";
 import { getInstallationTokenForRepo } from "../global/github-auth.js";
 import type { PileRepoConfig } from "../global/pile-repo-config.js";
-import { organization } from "../global/schema.js";
+import { apikey, organization } from "../global/schema.js";
 import { replyLaneResultToTicket } from "../global/support-escalation.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkerEnv } from "../platform/middleware.js";
+import {
+  capturePosthogEvent,
+  reportWorkerException,
+} from "../platform/posthog.js";
 import type {
   AgentSession,
   AgentSessionStatus,
   Issue,
 } from "../types/workspace.js";
+import {
+  CONCURRENT_LANES_PAUSE_PREFIX,
+  RATE_LIMIT_PAUSE_PREFIX,
+} from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
+import { extractFactsFromMarkdown } from "../workspace/memory-extractor.js";
+import { computeBackend, sweepOrphanSandboxes } from "./compute.js";
 import type { ComputeBackend } from "./compute.js";
 import { resolveGeneratedConflict } from "./conflict-fix.js";
 import { loadProviderConfig } from "./credentials.js";
@@ -33,6 +45,7 @@ import {
   getAgentProvider,
   inheritTeamDefaultRepo,
   providerKeepsTerminalSandbox,
+  reviewConcurrencyCap,
 } from "./index.js";
 import { getLaneDbProvider, type LaneDbRef } from "./lane-db.js";
 import { reapLaneGithubTokens } from "./lane-github-token.js";
@@ -580,6 +593,10 @@ async function markStaleAndAlert(
 }
 
 const MAX_AUTO_RETRIES = 1;
+// VTX-621 — cap on rate-limit re-parks: a stuck account parks, drains,
+// dies on the limit again, and re-parks — bound the loop so a lane
+// eventually terminates instead of cycling holds forever.
+const MAX_RATE_LIMIT_PARKS = 6;
 // PILE-240 — consecutive infra-class deaths across a provider's lanes mean
 // the provider/substrate is unhealthy (devin's fleet repeatedly wedged with
 // "runner never started"). Past the streak, retries stop churning lanes
@@ -598,7 +615,20 @@ async function retryDeadLane(
   cause: string,
   ctx?: { waitUntil: (promise: Promise<unknown>) => void }
 ): Promise<void> {
-  if ((session.retryCount ?? 0) >= MAX_AUTO_RETRIES) return;
+  // VTX-621 — a rate-limit window parks retries instead of consuming the
+  // budget or tripping the breakers: the pause row is the capacity signal,
+  // and a provider capacity death is not a substrate failure.
+  const pause = await stub.getAgentPause(session.agentId).catch(() => null);
+  const rateLimitPaused = Boolean(
+    pause?.reason?.startsWith(RATE_LIMIT_PAUSE_PREFIX)
+  );
+  // A stuck account must not park-and-redispatch forever: the rate-limit
+  // budget exemption is capped at MAX_RATE_LIMIT_PARKS holds, after which
+  // the lane is terminal for good.
+  const rateLimitRetryable =
+    rateLimitPaused && (session.retryCount ?? 0) < MAX_RATE_LIMIT_PARKS;
+  if ((session.retryCount ?? 0) >= MAX_AUTO_RETRIES && !rateLimitRetryable)
+    return;
   // PILE-476 — per-issue breaker: cap failed starts for the same issue per
   // hour so a doomed lane stops burning spawn attempts. Distinct from the
   // fleet/agent breakers — those catch substrate outages, this catches a
@@ -613,7 +643,7 @@ async function retryDeadLane(
       TERMINAL_STATUSES.has(s.status) &&
       new Date(s.createdAt).getTime() > hourAgo
   ).length;
-  if (failedStarts >= 3) {
+  if (failedStarts >= 3 && !rateLimitPaused) {
     await stub
       .addAgentActivity({
         sessionId: session.id,
@@ -628,7 +658,10 @@ async function retryDeadLane(
   // Fleet-wide breaker: during a substrate outage every retry spends a spawn
   // attempt on the thing that's failing. Per-agent streaks miss a partial
   // outage (successes interleave), so this looks across all agents.
-  if ((await fleetInfraStreak(stub)) >= FLEET_UNHEALTHY_STREAK) {
+  if (
+    (await fleetInfraStreak(stub)) >= FLEET_UNHEALTHY_STREAK &&
+    !rateLimitPaused
+  ) {
     await stub.addAgentActivity({
       sessionId: session.id,
       actorId: session.actorId,
@@ -642,7 +675,7 @@ async function retryDeadLane(
   // orphaned is retried/resolved through requestPrReview instead (PILE-445).
   if (session.purpose === REVIEW_PURPOSE) return;
   const streak = await providerInfraStreak(stub, session.agentId);
-  if (streak >= PROVIDER_UNHEALTHY_STREAK) {
+  if (streak >= PROVIDER_UNHEALTHY_STREAK && !rateLimitPaused) {
     await stub.addAgentActivity({
       sessionId: session.id,
       actorId: session.actorId,
@@ -654,17 +687,17 @@ async function retryDeadLane(
   try {
     const issue = await stub.getIssue(session.issueId);
     if (!issue) return;
-    // PILE-452 — a paused agent type takes no auto-retry: the dispatch
-    // below also runs onPaused:"fail" so nothing can park mid-flight.
-    const pause = await stub.getAgentPause(session.agentId).catch(() => null);
+    // PILE-452/VTX-621 — a paused agent type parks its retry as a paused
+    // hold (waiting + paused) instead of skipping outright: a rate-limit
+    // or operator pause must not strand the lane permanently — the hold
+    // drains on resume through releasePausedSessions.
     if (pause) {
       await stub.addAgentActivity({
         sessionId: session.id,
         actorId: session.actorId,
-        type: "error",
-        message: `auto-retry skipped — agent type "${session.agentId}" is paused${pause.reason ? `: ${pause.reason}` : ""}`,
+        type: "thought",
+        message: `auto-retry parked — agent type "${session.agentId}" is paused${pause.reason ? `: ${pause.reason}` : ""}; will resume on lift`,
       });
-      return;
     }
     // PILE-321 — same as a manual retry: a lane dispatched before the issue
     // had a repo inherits the team's defaultRepo on redispatch.
@@ -700,7 +733,7 @@ async function retryDeadLane(
         secondaryRepos: parseStoredSecondaryRepos(session.secondaryRepos),
         effort: session.effort ?? undefined,
         maxDurationMinutes: session.maxDurationMinutes ?? undefined,
-        onPaused: "fail",
+        onPaused: pause ? "hold" : "fail",
       }
     );
     await stub.updateAgentSession(retried.id, {
@@ -785,6 +818,7 @@ async function promoteQueuedSessions(
   // write was lost mid-flight (PILE-260).
   const retriesCache = new Map<string, AgentSession[]>();
   const pauseCache = new Map<string, boolean>();
+  const orphanDrainTried = new Set<string>();
   const retriesFor = async (deadId: string): Promise<AgentSession[]> => {
     const cached = retriesCache.get(deadId);
     if (cached) return cached;
@@ -804,10 +838,6 @@ async function promoteQueuedSessions(
     // human answer, not queued: no promote, no orphan rescue. The respond
     // route resumes it (or keeps it waiting when queuedAfter is also set).
     if (session.awaitingActivityId) continue;
-    // PILE-420 — operator pause holds (`paused`): not queue-parked, so the
-    // orphan-flip and edge promotion must leave them alone. Only the
-    // resume drain (releasePausedSessions) releases them.
-    if (session.paused === 1) continue;
     // PILE-452 — promotion is a dispatch: while the agent type is paused a
     // queued lane stays parked instead of going live. The resume drain
     // calls promoteQueuedSession directly after deleting the pause row.
@@ -816,6 +846,31 @@ async function promoteQueuedSessions(
       paused =
         (await stub.getAgentPause(session.agentId).catch(() => null)) != null;
       pauseCache.set(session.agentId, paused);
+    }
+    // PILE-420 — operator pause holds (`paused`): not queue-parked, so the
+    // orphan-flip and edge promotion must leave them alone while the pause
+    // row lives. A hold whose row is already gone is orphaned — resume's
+    // drain is bounded per call, so a backlog bigger than one call never
+    // finishes without a driver. This pass is the driver: drain a bounded
+    // slice per agentId per pass (VTX-612).
+    if (session.paused === 1) {
+      if (paused) continue;
+      if (!orphanDrainTried.has(session.agentId)) {
+        orphanDrainTried.add(session.agentId);
+        await releasePausedSessions(
+          env,
+          stub,
+          organizationId,
+          session.agentId,
+          ctx
+        ).catch((err: unknown) => {
+          console.error("orphaned pause-hold drain failed", {
+            agentId: session.agentId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+      }
+      continue;
     }
     if (paused) continue;
     if (!session.queuedAfter) {
@@ -963,6 +1018,11 @@ async function promoteQueuedSession(
     ctx,
     {
       promoteSessionId: session.id,
+      // Review lanes dispatch concurrent with the issue's work lane
+      // (PILE-273); the parked row keeps `purpose` but the conflict gate is
+      // option-driven, so re-declare it on promote or a live work lane
+      // bounces the release with CONFLICT.
+      concurrent: session.purpose === "review",
       secondaryRepos: parseStoredSecondaryRepos(session.secondaryRepos),
     }
   );
@@ -976,8 +1036,8 @@ async function promoteQueuedSession(
  *  write" layer (Supermemory-style). Always records the lane's outcome
  *  as an entity fact; when env.AI is bound, runs an extraction pass
  *  over the result for structured facts the lane forgot to record. */
-async function extractSettledMemory(
-  env: WorkerEnv,
+export async function extractSettledMemory(
+  _env: WorkerEnv,
   stub: {
     memoryRemember(input: {
       entityType: string;
@@ -997,21 +1057,87 @@ async function extractSettledMemory(
   result: unknown
 ): Promise<void> {
   try {
-    const tail =
+    const summary =
       typeof result === "string"
-        ? result.slice(-800)
-        : JSON.stringify(result ?? "").slice(-800);
-    await stub.memoryRemember({
-      entityType: "issue",
-      entityId: session.issueId ?? session.id,
-      kind: "outcome",
-      fact: `lane completed: ${tail}`,
-      sourceSessionId: session.id,
-      sourceAgentSlug: session.agentId ?? null,
+        ? result
+        : typeof result === "object" &&
+            result !== null &&
+            typeof (result as { result?: unknown }).result === "string"
+          ? (result as { result: string }).result
+          : JSON.stringify(result ?? "");
+    // PILE-627 — structured distillation: labeled/sectioned statements
+    // become typed facts (root_cause, decision, lesson, verification,
+    // outcome); an unstructured summary falls back to a single outcome.
+    const candidates = extractFactsFromMarkdown({
+      text: summary,
+      defaultEntityType: "issue",
+      defaultEntityId: session.issueId ?? session.id,
+      maxFacts: 5,
     });
+    if (candidates.length === 0) {
+      candidates.push({
+        entityType: "issue",
+        entityId: session.issueId ?? session.id,
+        kind: "outcome",
+        fact: `lane completed: ${summary.slice(-800)}`,
+      });
+    }
+    // Sequential — same-key candidates must supersede in order.
+    const writeNext = async (at: number): Promise<void> => {
+      if (at >= candidates.length) return;
+      await stub.memoryRemember({
+        ...candidates[at],
+        sourceSessionId: session.id,
+        sourceAgentSlug: session.agentId ?? null,
+      });
+      return writeNext(at + 1);
+    };
+    await writeNext(0);
   } catch {
     // Memory extraction is best-effort — never break the settle path.
   }
+}
+
+/** PILE-623 — janitor for ephemeral lane tokens. Dispatch mints
+ *  `agent-<8hex>-<4hex>` api keys with a 24h `expiresIn`; this deletes
+ *  any that are older than a day or already past `expiresAt` so the
+ *  apikey table doesn't accumulate dead credentials. Returns the number
+ *  of rows removed. */
+export async function pruneStaleEphemeralAgentKeys(
+  db: D1Client,
+  nowMs = Date.now(),
+  options?: { organizationId?: string; maxAgeMs?: number }
+): Promise<number> {
+  const maxAgeMs = options?.maxAgeMs ?? 24 * 60 * 60 * 1000;
+  const conditions = [
+    // agent-<8hex>-<4hex> — `?` single-char GLOBs because a 12-class
+    // bracket pattern trips SQLite's pattern complexity limit.
+    sql`${apikey.name} GLOB 'agent-????????-????'`,
+    or(
+      lte(apikey.createdAt, new Date(nowMs - maxAgeMs)),
+      and(isNotNull(apikey.expiresAt), lte(apikey.expiresAt, new Date(nowMs)))
+    ),
+  ];
+  // PILE-623 — when an organizationId scope is given, keep only keys whose
+  // Better Auth metadata pins them to that workspace.
+  if (options?.organizationId) {
+    // instr() — D1 rejects even simple %...% LIKE patterns as "too complex"
+    // on this table, so substring containment must not use LIKE/GLOB.
+    conditions.push(
+      sql`instr(${apikey.metadata}, ${`"organizationId":"${options.organizationId}"`}) > 0`
+    );
+  }
+  // PILE-623 — the delete runs as a single SQL statement: fetching ids and
+  // deleting via IN() exceeds D1's bound-parameter cap on workspaces with
+  // ~1.4k stale lane keys.
+  const stale = await db
+    .select({ id: apikey.id })
+    .from(apikey)
+    .where(and(...conditions))
+    .all();
+  if (stale.length === 0) return 0;
+  await db.delete(apikey).where(and(...conditions));
+  return stale.length;
 }
 
 export async function releasePausedSessions(
@@ -1023,12 +1149,49 @@ export async function releasePausedSessions(
 ): Promise<string[]> {
   const held = await stub.listPauseHeldSessions(agentId);
   const released: string[] = [];
-  // PILE-476 — stagger post-pause releases: bounded drain per call so a big
-  // held backlog doesn't stampede the provider on resume. Remaining holds
-  // release on subsequent passes; stored instructions ride each session
-  // unchanged (promoteQueuedSession reuses the row).
+  // PILE-476 / VTX-643 / VTX-648 — stagger post-pause releases: bounded drain
+  // per call, bounded by remaining maxConcurrentLanes headroom, and bounded by
+  // reviewConcurrencyCap(cap) for review holds so held implementation lanes
+  // always promote ahead of cap-saturated review holds.
   const RELEASE_PER_PASS = 3;
-  for (const session of held.slice(0, RELEASE_PER_PASS)) {
+  let cap: number | undefined;
+  try {
+    cap = getAgentProvider(agentId, env).maxConcurrentLanes;
+  } catch {
+    cap = undefined;
+  }
+  let liveForAgent = 0;
+  let liveReviewForAgent = 0;
+  if (cap != null) {
+    const liveRows = (
+      await stub.listAgentSessions({ limit: 200 }).catch(() => [])
+    ).filter(
+      (s) =>
+        s.agentId === agentId &&
+        !TERMINAL_STATUSES.has(s.status) &&
+        s.paused !== 1 &&
+        !(s.status === "waiting" && s.providerSessionId == null)
+    );
+    liveForAgent = liveRows.length;
+    liveReviewForAgent = liveRows.filter((s) => s.purpose === "review").length;
+  }
+  const reviewCap = cap != null ? reviewConcurrencyCap(cap) : undefined;
+  for (const session of held) {
+    if (released.length >= RELEASE_PER_PASS) break;
+    // A pure hold requires a free live-lane slot (and for review lanes, a free
+    // review sub-cap slot); a queue-chained hold (`session.queuedAfter`) stays
+    // `waiting` on its blocker and only drops `paused`, so `continue` prevents
+    // a cap-blocked hold from starving later eligible holds.
+    if (!session.queuedAfter && cap != null) {
+      if (liveForAgent >= cap) continue;
+      if (
+        session.purpose === "review" &&
+        reviewCap != null &&
+        liveReviewForAgent >= reviewCap
+      ) {
+        continue;
+      }
+    }
     await stub
       .updateAgentSession(session.id, { paused: 0 })
       .catch((err: unknown) => {
@@ -1037,10 +1200,17 @@ export async function releasePausedSessions(
           error: err instanceof Error ? err.message : String(err),
         });
       });
-    released.push(session.id);
-    if (session.queuedAfter) continue;
+    if (session.queuedAfter) {
+      released.push(session.id);
+      continue;
+    }
     try {
       await promoteQueuedSession(env, stub, organizationId, session, ctx);
+      const after = await stub.getAgentSession(session.id).catch(() => null);
+      if (after?.paused === 1) continue;
+      released.push(session.id);
+      liveForAgent++;
+      if (session.purpose === "review") liveReviewForAgent++;
     } catch (err) {
       console.error("pause-held session promote failed", {
         session: session.id,
@@ -1048,6 +1218,21 @@ export async function releasePausedSessions(
         error: err instanceof Error ? err.message : String(err),
       });
     }
+  }
+  // If we hit maxConcurrentLanes while pure holds remain parked, re-arm the
+  // concurrency-cap pause so the sweep doesn't treat remaining holds as
+  // orphaned on the very next pass.
+  const remainingPureHolds = held.some(
+    (s) => !released.includes(s.id) && !s.queuedAfter
+  );
+  if (cap != null && liveForAgent >= cap && remainingPureHolds) {
+    await stub
+      .pauseAgentType(agentId, {
+        reason: `${CONCURRENT_LANES_PAUSE_PREFIX}${agentId} at ${cap} live lanes`,
+        actorId: "system",
+        actorType: "system",
+      })
+      .catch(() => {});
   }
   return released;
 }
@@ -1062,7 +1247,7 @@ async function teardownLaneDbForSession(
   if (!session.laneDbRef) return;
   try {
     const ref = JSON.parse(session.laneDbRef) as LaneDbRef;
-    const provider = getLaneDbProvider(env);
+    const provider = getLaneDbProvider(env, undefined, ref.provider);
     if (provider && ref.provider === provider.name) {
       await provider.teardown(ref);
     }
@@ -1206,6 +1391,32 @@ async function reapTerminalArtifacts(
     } catch (err) {
       console.error("terminal sandbox reap failed", {
         session: session.id,
+        organizationId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // PILE-471 — Daytona-side orphan sweep: vortex-labeled sandboxes whose
+  // session row is terminal or missing get deleted, scoped to this org by
+  // the vortex.org label. Session teardown above can miss (provider probes
+  // that never land, skipped reap windows); ttlMinutes on create is the
+  // hard backstop when this pass misses too. Terminal sessions inside the
+  // resume window keep their parked sandbox for follow-ups.
+  if (
+    (env.COMPUTE_PROVIDER ?? "daytona") === "daytona" &&
+    env.DAYTONA_API_KEY
+  ) {
+    try {
+      const out = await sweepOrphanSandboxes(computeBackend(env), stub, {
+        organizationId,
+        keepTerminalMs: SANDBOX_RESUME_WINDOW_MS,
+      });
+      if (out.reaped > 0) {
+        console.log("orphan sandboxes reaped", { organizationId, ...out });
+      }
+    } catch (err) {
+      console.error("orphan sandbox sweep failed", {
         organizationId,
         error: err instanceof Error ? err.message : String(err),
       });
@@ -1418,12 +1629,62 @@ export async function sweepAgentSessions(
     .from(organization)
     .all();
   const now = Date.now();
+  // PILE-623 — janitor pass: reap expired/stale `agent-<8hex>-<4hex>`
+  // api keys minted at dispatch (1.4k stale rows existed before the TTL).
+  await pruneStaleEphemeralAgentKeys(d1, now).catch(() => 0);
   for (const { id } of orgs) {
     try {
       const stub = env.WORKSPACE_DURABLE_OBJECT.get(
         env.WORKSPACE_DURABLE_OBJECT.idFromName(id)
       );
       await stub.setOrganizationId(id);
+      // VTX-621 — lift auto-managed pauses whose condition cleared:
+      // rate-limit holds once the reset instant passes, concurrency-cap
+      // holds once live lanes fall under the cap. Operator/spend-cap
+      // pauses (other reasons) never lift here.
+      for (const pause of await stub.listAgentPauses().catch(() => [])) {
+        let lift = false;
+        if (pause.reason?.startsWith(RATE_LIMIT_PAUSE_PREFIX)) {
+          const until = Date.parse(
+            pause.reason.slice(RATE_LIMIT_PAUSE_PREFIX.length)
+          );
+          lift = Number.isFinite(until) && until <= now;
+        } else if (pause.reason?.startsWith(CONCURRENT_LANES_PAUSE_PREFIX)) {
+          let cap: number | undefined;
+          try {
+            cap = getAgentProvider(pause.agentId, env).maxConcurrentLanes;
+          } catch {
+            cap = undefined;
+          }
+          if (cap != null) {
+            const liveForAgent = (
+              await stub.listAgentSessions({ limit: 200 }).catch(() => [])
+            ).filter(
+              (s) =>
+                s.agentId === pause.agentId &&
+                !TERMINAL_STATUSES.has(s.status) &&
+                s.paused !== 1 &&
+                // Same counter as dispatchAgent: provider-less waiting rows
+                // are queue artifacts, not live lanes.
+                !(s.status === "waiting" && s.providerSessionId == null)
+            ).length;
+            lift = liveForAgent < cap;
+          }
+        }
+        if (!lift) continue;
+        // Drain only when this pass won the delete — overlapping passes
+        // must not both release the same holds.
+        const resumed = await stub
+          .resumeAgentType(pause.agentId, {
+            actorId: "pile-sweep",
+            actorType: "system",
+          })
+          .catch(() => false);
+        if (resumed)
+          await releasePausedSessions(env, stub, id, pause.agentId, ctx).catch(
+            () => []
+          );
+      }
       const sessions = [
         ...(await stub.listAgentSessions({ status: "running" })),
         ...(await stub.listAgentSessions({ status: "created" })),
@@ -1694,6 +1955,10 @@ export async function sweepAgentSessions(
                 const createdMs = session.createdAt
                   ? Date.parse(session.createdAt)
                   : Date.parse(settledAt);
+                const durationMs = Math.max(
+                  0,
+                  Date.parse(settledAt) - createdMs
+                );
                 await stub.recordLaneCost({
                   sessionId: session.id,
                   agentSlug:
@@ -1708,10 +1973,26 @@ export async function sweepAgentSessions(
                   status: polled.status,
                   createdAt: session.createdAt ?? settledAt,
                   settledAt,
-                  durationMs: Math.max(0, Date.parse(settledAt) - createdMs),
+                  durationMs,
                   attempts:
                     (session as { attempts?: number | null }).attempts ?? 1,
                 });
+                capturePosthogEvent(
+                  "pile_lane_settled",
+                  {
+                    distinct_id: `org-${id}`,
+                    organizationId: id,
+                    sessionId: session.id,
+                    agentId: session.agentId,
+                    purpose: session.purpose ?? "work",
+                    status: polled.status,
+                    infraFailure: Boolean(polled.infraFailure),
+                    rateLimited: Boolean(polled.rateLimited),
+                    durationMs,
+                  },
+                  ctx,
+                  { env }
+                );
               } catch {
                 // Cost recording is best-effort.
               }
@@ -1826,13 +2107,18 @@ export async function sweepAgentSessions(
                   ctx
                 );
               }
-              if (polled.infraFailure) {
+              // VTX-621 — polled.rateLimited drives the retry too: the
+              // runner flags capacity deaths without infraFailure, and the
+              // DO's pause row is what parks the retry as a hold.
+              if (polled.infraFailure || polled.rateLimited) {
                 await retryDeadLane(
                   env,
                   stub,
                   id,
                   session,
-                  "Infrastructure failure",
+                  polled.rateLimited
+                    ? "Provider rate limit"
+                    : "Infrastructure failure",
                   ctx
                 );
               }
@@ -1988,8 +2274,18 @@ export async function sweepAgentSessions(
         organizationId: id,
         error: err instanceof Error ? err.message : String(err),
       });
+      reportWorkerException("sweep", err, ctx, { organizationId: id }, { env });
     }
   }
+  capturePosthogEvent(
+    "pile_sweep_heartbeat",
+    {
+      distinct_id: "pile-sweep",
+      orgCount: orgs.length,
+    },
+    ctx,
+    { env }
+  );
 }
 
 const GITHUB_PR_URL_RE =
@@ -2087,6 +2383,41 @@ export function shouldUpdatePrBranch(input: {
     input.headRef !== null &&
     input.managedRefs.includes(input.headRef)
   );
+}
+
+/** VTX-557 — native queue driver on the 5-minute cron: a completed work lane
+ *  whose open, non-draft PR has mergeable===true, mergeable_state==="clean",
+ *  passing CI checks, and no failing pile-review check is squash-merged by
+ *  the sweep so green lane PRs land and unblock downstream queued issues
+ *  without human intervention. */
+export function shouldAutoMergePr(input: {
+  sessionStatus: string;
+  purpose: string | null | undefined;
+  state: string;
+  draft: boolean;
+  mergeable: unknown;
+  mergeableState: unknown;
+  checkState: string | null;
+  reviewConclusion: string | null | undefined;
+  headRef: string | null;
+  managedRefs: readonly (string | null | undefined)[];
+}): boolean {
+  if (input.sessionStatus !== "completed") return false;
+  if (input.purpose && MERGE_SURVIVOR_PURPOSES.has(input.purpose)) return false;
+  if (input.state !== "open" || input.draft) return false;
+  if (input.mergeable !== true || input.mergeableState !== "clean")
+    return false;
+  if (input.checkState !== "passing") return false;
+  if (
+    input.reviewConclusion !== undefined &&
+    input.reviewConclusion !== null &&
+    input.reviewConclusion !== "success" &&
+    input.reviewConclusion !== "neutral" &&
+    input.reviewConclusion !== "skipped"
+  ) {
+    return false;
+  }
+  return input.headRef !== null && input.managedRefs.includes(input.headRef);
 }
 
 interface PrSyncDeps {
@@ -2502,6 +2833,77 @@ export async function syncOpenPrSessions(
               .catch(() => {});
           } catch (err) {
             console.error("pr update-branch failed", {
+              session: session.id,
+              prUrl,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
+      }
+      // VTX-557 — native queue driver: when a completed work lane's PR is
+      // clean, passing CI, and passing review, squash-merge it automatically
+      // so the issue closes and downstream queued issues promote on the next
+      // sweep pass.
+      if (
+        laneActionable &&
+        headSha &&
+        shouldAutoMergePr({
+          sessionStatus: session.status,
+          purpose: session.purpose,
+          state,
+          draft: pr.draft === true,
+          mergeable: pr.mergeable,
+          mergeableState: pr.mergeable_state,
+          checkState,
+          reviewConclusion: reviewRun
+            ? reviewRun.status === "completed"
+              ? (reviewRun.conclusion ?? "pending")
+              : "pending"
+            : null,
+          headRef: typeof head?.ref === "string" ? head.ref : null,
+          managedRefs: [`issue-${issue.id}`, issue.branch],
+        })
+      ) {
+        const seen = await stub
+          .listAgentSessionEvents(session.id, { limit: 100, order: "desc" })
+          .catch(() => []);
+        const alreadyMerged = seen.some(
+          (e) =>
+            e.type === "pr.auto_merge" &&
+            typeof e.payload === "string" &&
+            e.payload.includes(headSha)
+        );
+        if (!alreadyMerged) {
+          try {
+            await withTimeout(
+              githubApiPut(
+                ghFetch,
+                token,
+                `/repos/${owner}/${repo}/pulls/${num}/merge`,
+                { sha: headSha, merge_method: "squash" }
+              ),
+              probeTimeoutMs,
+              "github-merge-pr"
+            );
+            await stub
+              .addAgentSessionEvent({
+                sessionId: session.id,
+                type: "pr.auto_merge",
+                message: `Auto-merged ${prUrl} — all checks green`,
+                payload: { prUrl, headSha },
+              })
+              .catch(() => {});
+            await stub.updateAgentSession(session.id, { prState: "merged" });
+            await stub.reconcileIssuePr(
+              session.issueId,
+              prUrl,
+              "merged",
+              checkState ?? issue.prCheckState,
+              "agent-sweep"
+            );
+            continue;
+          } catch (err) {
+            console.error("pr auto-merge failed", {
               session: session.id,
               prUrl,
               error: err instanceof Error ? err.message : String(err),

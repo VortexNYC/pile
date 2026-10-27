@@ -124,6 +124,8 @@ export interface AppEnv {
   PSCALE_SERVICE_TOKEN?: string;
   // Cloudflare Queue for async webhook processing.
   WEBHOOK_QUEUE?: Queue;
+  /** Workers AI binding — Whisper capture transcripts, memory embeddings. Optional: features degrade silently when unbound. */
+  AI?: Ai;
 
   // Additional Worker secrets / bindings referenced by name (e.g. per-channel webhook secrets).
   [key: string]: unknown;

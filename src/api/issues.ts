@@ -34,7 +34,7 @@ import {
   createRepoBranch,
   suggestBranchName,
 } from "../global/repo-branches.js";
-import { repoBranches } from "../global/schema.js";
+import { member, repoBranches } from "../global/schema.js";
 import {
   canAccessTeam,
   getDefaultTeam,
@@ -201,6 +201,73 @@ export async function assertTeamAccess(
 
 const TERMINAL_STATUSES: ReadonlyArray<IssueStatus> = ["done", "canceled"];
 
+// VTX-769 — every reference an issue accepts must resolve inside the
+// workspace; unknown ids used to persist as dangling FKs that break filters
+// and boards. One helper, one error shape (400 + details.field).
+function unknownRef(field: string, value: string): never {
+  throw new VortexError({
+    code: "BAD_REQUEST",
+    status: 400,
+    message: `Unknown ${field}: ${value}`,
+    details: { field },
+  });
+}
+
+export async function assertIssueRefs(
+  env: WorkerEnv,
+  db: ReturnType<typeof createD1>,
+  organizationId: string,
+  refs: {
+    projectId?: string | null;
+    cycleId?: string | null;
+    assigneeId?: string | null;
+    labelIds?: string | string[] | null;
+  }
+): Promise<void> {
+  if (typeof refs.projectId === "string" && refs.projectId) {
+    if (!(await getProject(db, organizationId, refs.projectId))) {
+      unknownRef("projectId", refs.projectId);
+    }
+  }
+  if (typeof refs.cycleId === "string" && refs.cycleId) {
+    if (!(await getCycle(db, organizationId, refs.cycleId))) {
+      unknownRef("cycleId", refs.cycleId);
+    }
+  }
+  const labelIds = Array.isArray(refs.labelIds)
+    ? refs.labelIds
+    : (refs.labelIds?.split(",").filter(Boolean) ?? []);
+  for (const labelId of labelIds) {
+    if (!(await getLabel(db, organizationId, labelId))) {
+      unknownRef("labelIds", labelId);
+    }
+  }
+  if (typeof refs.assigneeId === "string" && refs.assigneeId) {
+    // Assignees are org members or a registered agent (delegation); the
+    // internal `lane:<id>` writers never come through the public API.
+    const isMember = await db
+      .select({ id: member.id })
+      .from(member)
+      .where(
+        and(
+          eq(member.organizationId, organizationId),
+          eq(member.userId, refs.assigneeId)
+        )
+      )
+      .get();
+    if (!isMember) {
+      let isAgent = false;
+      try {
+        getAgentProvider(refs.assigneeId, env);
+        isAgent = true;
+      } catch {
+        isAgent = false;
+      }
+      if (!isAgent) unknownRef("assigneeId", refs.assigneeId);
+    }
+  }
+}
+
 export function validateIssueState(
   status: IssueStatus,
   resolution: IssueResolution | null | undefined
@@ -308,6 +375,13 @@ export async function resolveIssuePatch(
   if (input.delegateId) {
     assertDelegateIsAgent(input.delegateId, env);
   }
+  // VTX-769 — PATCH faces the same reference checks as create.
+  await assertIssueRefs(env, db, organizationId, {
+    projectId: input.projectId,
+    cycleId: input.cycleId,
+    assigneeId: input.assigneeId,
+    labelIds: input.labelIds,
+  });
   return { ...input, teamId };
 }
 
@@ -356,12 +430,23 @@ export async function syncIssueWriteEffects(
   }
 }
 
+// VTX-770 — embedded NUL bytes survive the store but corrupt downstream
+// consumers; refuse them on text fields.
+const noNul = (v: string) => !v.includes("\u0000");
+
 const createIssueSchema = z.object({
-  title: z.string().min(1),
+  title: z
+    .string()
+    .min(1)
+    .refine(noNul, "title must not contain NUL characters"),
   externalRef: z.string().min(1).max(255).nullable().optional(),
   teamId: z.string().optional(),
   teamKey: z.string().optional(),
-  description: z.string().nullable().optional(),
+  description: z
+    .string()
+    .refine(noNul, "description must not contain NUL characters")
+    .nullable()
+    .optional(),
   status: z.enum(ISSUE_STATUSES).optional(),
   priority: z.enum(ISSUE_PRIORITIES).optional(),
   resolution: z.enum(ISSUE_RESOLUTIONS).nullable().optional(),
@@ -492,7 +577,8 @@ const issueApiSchema = z
     claimEpoch: z.number(),
     projectId: z.string().nullable(),
     cycleId: z.string().nullable(),
-    labelIds: z.string().nullable(),
+    // VTX-769 — the column is comma-joined; the API shape is always an array.
+    labelIds: z.array(z.string()),
     number: z.number().nullable(),
     identifier: z.string().nullable(),
     repo: z.string().nullable(),
@@ -515,7 +601,21 @@ const issueApiSchema = z
       .nullable()
       .optional(),
   })
-  .openapi("Issue") satisfies z.ZodType<Issue>;
+  .openapi("Issue");
+
+// VTX-769 — stored labelIds are a comma-joined column (or null); the wire
+// shape is a string array. Serialize at the boundary so responses never
+// leak the storage form.
+export function serializeIssue<T extends Issue>(issue: T) {
+  return {
+    ...issue,
+    labelIds: issue.labelIds?.split(",").filter(Boolean) ?? [],
+  };
+}
+
+function serializeIssues<T extends Issue>(issues: T[]) {
+  return issues.map(serializeIssue);
+}
 
 const listIssuesRoute = createRoute({
   method: "get",
@@ -868,6 +968,7 @@ const deleteIssueShareRoute = createRoute({
 
 // Public share read — the token is the capability; no workspace auth.
 const readSharedIssueRoute = createRoute({
+  security: [],
   method: "get",
   path: "/shared-issues/{organizationId}/{token}",
   tags: ["issues"],
@@ -943,6 +1044,8 @@ const batchUpdateIssuesSchema = z.object({
 const batchUpdateIssuesRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/issues/batch",
+  summary:
+    "Apply one patch to up to 100 existing issues (updates, not creates)",
   tags: ["issues"],
   middleware: [rls("issue:create")],
   request: {
@@ -1305,18 +1408,19 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     const query = c.req.valid("query");
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
-    const stub = await getStub(c.env, organizationId);
-    const visibleTeamIds = await loadVisibleTeamIds(
-      db,
-      organizationId,
-      identity
-    );
+    // PILE-645 — stub binding, team visibility, and the RLS viewer are
+    // independent; fetch them in parallel.
+    const [stub, visibleTeamIds, viewer] = await Promise.all([
+      getStub(c.env, organizationId),
+      loadVisibleTeamIds(db, organizationId, identity),
+      issueViewer(db, identity),
+    ]);
     if (query.identifier) {
       const issue = await stub.getIssueByIdentifier(query.identifier);
       if (issue) {
         await assertIssueAccess(db, stub, issue, identity);
       }
-      return c.json({ issues: issue ? [issue] : [] });
+      return c.json({ issues: issue ? [serializeIssue(issue)] : [] });
     }
     const args = toListArgs(query);
     if (query.teamId && !visibleTeamIds.includes(query.teamId)) {
@@ -1327,9 +1431,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     if (query.view) {
-      const view = await (
-        await getStub(c.env, organizationId)
-      ).getSavedView(query.view);
+      const view = await stub.getSavedView(query.view);
       if (
         !view ||
         (view.ownerId !== identity.id &&
@@ -1363,13 +1465,15 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       args.parentId = (await stub.getIssue(args.parentId))?.id ?? args.parentId;
     }
     args.teamIds = visibleTeamIds;
-    args.viewer = await issueViewer(db, identity);
+    args.viewer = viewer;
     const issues = await stub.listIssues(args);
     // PILE-414 — attach sub-step progress for the board chip in one batch
-    // call instead of per-issue children fetches.
-    const progress = await stub.subStepProgressFor(
-      issues.map((issue) => issue.id)
-    );
+    // call instead of per-issue children fetches (skip the DO RPC on empty
+    // pages — PILE-645).
+    const progress: Record<string, unknown> =
+      issues.length === 0
+        ? {}
+        : await stub.subStepProgressFor(issues.map((issue) => issue.id));
     const nextCursor =
       issues.length === query.limit && issues.length > 0
         ? encodeCursor({
@@ -1381,7 +1485,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       (issue as Issue & { subStepProgress?: unknown }).subStepProgress =
         progress[issue.id] ?? null;
     }
-    return c.json({ issues, nextCursor });
+    return c.json({ issues: serializeIssues(issues), nextCursor });
   });
 
   app.openapi(listTriageIssuesRoute, async (c) => {
@@ -1399,7 +1503,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       teamIds: visibleTeamIds,
       viewer: await issueViewer(db, identity),
     });
-    return c.json({ issues });
+    return c.json({ issues: serializeIssues(issues) });
   });
 
   app.openapi(getIssueBranchNameRoute, async (c) => {
@@ -1474,13 +1578,13 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     const query = c.req.valid("query");
     const identity = c.get("workspaceIdentity");
     const db = createD1(c.env.D1);
-    const stub = await getStub(c.env, organizationId);
-    const visibleTeamIds = await loadVisibleTeamIds(
-      db,
-      organizationId,
-      identity
-    );
     const args = toListArgs(query);
+    // PILE-645 — same parallelization as the primary list route.
+    const [stub, visibleTeamIds, viewer] = await Promise.all([
+      getStub(c.env, organizationId),
+      loadVisibleTeamIds(db, organizationId, identity),
+      issueViewer(db, identity),
+    ]);
     args.status = "triage";
     args.isDraft = false;
     args.hideSnoozed =
@@ -1489,13 +1593,14 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       args.parentId = (await stub.getIssue(args.parentId))?.id ?? args.parentId;
     }
     args.teamIds = visibleTeamIds;
-    args.viewer = await issueViewer(db, identity);
+    args.viewer = viewer;
     const issues = await stub.listIssues(args);
     // PILE-414 — attach sub-step progress for the board chip in one batch
-    // call instead of per-issue children fetches.
-    const progress = await stub.subStepProgressFor(
-      issues.map((issue) => issue.id)
-    );
+    // call instead of per-issue children fetches (skip on empty pages).
+    const progress: Record<string, unknown> =
+      issues.length === 0
+        ? {}
+        : await stub.subStepProgressFor(issues.map((issue) => issue.id));
     const nextCursor =
       issues.length === query.limit && issues.length > 0
         ? encodeCursor({
@@ -1507,7 +1612,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       (issue as Issue & { subStepProgress?: unknown }).subStepProgress =
         progress[issue.id] ?? null;
     }
-    return c.json({ issues, nextCursor });
+    return c.json({ issues: serializeIssues(issues), nextCursor });
   });
 
   app.openapi(createIssueRoute, async (c) => {
@@ -1566,7 +1671,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       const existing = await stub.getIssueByExternalRef(input.externalRef);
       if (existing) {
         await assertIssueAccess(db, stub, existing, identity);
-        return c.json(existing, 200);
+        return c.json(serializeIssue(existing), 200);
       }
     }
     const resolvedTeamId = await assertTeamAccess(
@@ -1591,6 +1696,24 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       input.status ?? templateDefaults.status ?? "backlog",
       input.resolution
     );
+    // VTX-769 — validate the refs actually being written, including any the
+    // template supplied as defaults.
+    await assertIssueRefs(c.env, db, organizationId, {
+      projectId:
+        input.projectId === undefined
+          ? templateDefaults.projectId
+          : input.projectId,
+      cycleId:
+        input.cycleId === undefined ? templateDefaults.cycleId : input.cycleId,
+      assigneeId:
+        input.assigneeId === undefined
+          ? templateDefaults.assigneeId
+          : input.assigneeId,
+      labelIds:
+        input.labelIds === undefined
+          ? templateDefaults.labelIds
+          : input.labelIds,
+    });
     const effectiveDelegateId =
       input.delegateId === undefined
         ? templateDefaults.delegateId
@@ -1735,7 +1858,15 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       triage?.outcome === "matched"
         ? ((await stub.getIssue(issue.id)) ?? issue)
         : issue;
-    return c.json({ ...responseIssue, possibleDuplicates }, 201);
+    if (responseIssue.ownerAgent) {
+      getExecutionCtx(c)?.waitUntil(
+        drainDomainEvents(c.env, stub, organizationId, getExecutionCtx(c))
+      );
+    }
+    return c.json(
+      { ...serializeIssue(responseIssue), possibleDuplicates },
+      201
+    );
   });
 
   app.openapi(captureIssueRoute, async (c) => {
@@ -1884,7 +2015,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         r2Key: screenshotKey,
       });
     }
-    return c.json(issue, 201);
+    return c.json(serializeIssue(issue), 201);
   });
 
   app.openapi(getIssueRoute, async (c) => {
@@ -1901,7 +2032,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
     await assertIssueAccess(db, stub, issue, identity);
-    return c.json(issue);
+    return c.json(serializeIssue(issue));
   });
 
   app.openapi(listIssuePermissionsRoute, async (c) => {
@@ -2006,7 +2137,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     const visibleChildren = children.filter((child) =>
       visibleTeamIds.includes(child.teamId)
     );
-    return c.json({ issues: visibleChildren });
+    return c.json({ issues: serializeIssues(visibleChildren) });
   });
 
   app.openapi(similarIssuesRoute, async (c) => {
@@ -2036,9 +2167,9 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
       await issueViewer(db, identity)
     );
     return c.json({
-      similar: similar.filter((hit) =>
-        visibleTeamIds.includes(hit.issue.teamId)
-      ),
+      similar: similar
+        .filter((hit) => visibleTeamIds.includes(hit.issue.teamId))
+        .map((hit) => ({ ...hit, issue: serializeIssue(hit.issue) })),
     });
   });
 
@@ -2178,7 +2309,7 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     getExecutionCtx(c)?.waitUntil(
       drainDomainEvents(c.env, stub, organizationId, getExecutionCtx(c))
     );
-    return c.json(issue, 200);
+    return c.json(serializeIssue(issue), 200);
   });
 
   app.openapi(batchUpdateIssuesRoute, async (c) => {
@@ -2199,6 +2330,13 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     if (patch.teamId !== undefined) {
       await assertTeamAccess(db, organizationId, patch.teamId, identity);
     }
+    // VTX-769 — batch patches face the same reference checks as single updates.
+    await assertIssueRefs(c.env, db, organizationId, {
+      projectId: patch.projectId,
+      cycleId: patch.cycleId,
+      assigneeId: patch.assigneeId,
+      labelIds: patch.labelIds,
+    });
 
     let parent: Issue | undefined;
     if (patch.parentId !== undefined && patch.parentId !== null) {
@@ -2280,7 +2418,10 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         })
       )
     );
-    return c.json({ issues, drafts: drafts.map(serializeDraft) });
+    return c.json({
+      issues: serializeIssues(issues),
+      drafts: drafts.map(serializeDraft),
+    });
   });
 
   app.openapi(deleteIssueRoute, async (c) => {
@@ -2639,7 +2780,10 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
     }
 
     return c.json(
-      { issue, session: session ? toSessionResponse(session) : undefined },
+      {
+        issue: serializeIssue(issue),
+        session: session ? toSessionResponse(session) : undefined,
+      },
       200
     );
   });

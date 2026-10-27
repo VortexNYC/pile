@@ -8,7 +8,12 @@ import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
-import { buildIntakeMarkdown } from "./intake.js";
+import {
+  buildIntakeMarkdown,
+  intakePricingCustomFields,
+  parseMoneyToCents,
+  parseMonthlyTxCount,
+} from "./intake.js";
 
 async function seedWorkspace() {
   const db = createD1(env.D1);
@@ -271,6 +276,162 @@ describe("intake API", () => {
       token
     );
     expect(res.status).toBe(400);
+  });
+
+  it("promotes pricing answers to custom fields and a revenue_estimate signal (PILE-654)", async () => {
+    const res = await post(
+      `/workspaces/${organizationId}/intake`,
+      {
+        intakeId: "visit-volume",
+        businessName: "Volume Grocer",
+        address: "9 Bedford Ave",
+        pricing: {
+          currentProcessor: "Square",
+          underContract: true,
+          contractEnd: "2027-03-01",
+          earlyTerminationFee: "$300",
+          monthlyCardVolume: "40k",
+          averageTicket: "$28.50",
+          transactionsPerDay: "60",
+          cardMix: "mostly debit",
+          channelMix: "mostly in-person tap/insert",
+        },
+      },
+      token
+    );
+    expect(res.status).toBe(201);
+    const result = z.object({ customerId: z.string() }).parse(await res.json());
+
+    const customerRes = await api(
+      `/workspaces/${organizationId}/customers/${result.customerId}`,
+      {},
+      token
+    );
+    const customer = z
+      .object({
+        customFields: z.record(z.string(), z.string()),
+        priorityScore: z.number().nullable(),
+      })
+      .parse(await customerRes.json());
+    expect(customer.customFields.monthly_card_volume_cents).toBe("4000000");
+    expect(customer.customFields.avg_ticket_cents).toBe("2850");
+    expect(customer.customFields.monthly_tx_count).toBe("1800");
+    expect(customer.customFields.current_processor).toBe("Square");
+    expect(customer.customFields.card_mix).toBe("mostly debit");
+    expect(customer.customFields.channel_mix).toBe(
+      "mostly in-person tap/insert"
+    );
+    expect(customer.customFields.contract_end).toBe("2027-03-01");
+    expect(customer.customFields.etf_cents).toBe("30000");
+
+    // The revenue_estimate signal persisted → the ranker picked up both
+    // the signal and the ICP volume predicate, and the scores landed on
+    // the customer row so the priorityScore list sort sees them.
+    const sigRes = await api(
+      `/workspaces/${organizationId}/customers/${result.customerId}/signals`,
+      {},
+      token
+    );
+    const sigBody = z
+      .object({
+        signals: z.array(
+          z.object({
+            type: z.string(),
+            summary: z.string().nullable().optional(),
+          })
+        ),
+        breakdown: z.object({
+          priorityScore: z.number(),
+          matchedIcpRules: z.array(z.string()),
+          signalContributions: z.array(z.object({ type: z.string() })),
+        }),
+      })
+      .parse(await sigRes.json());
+    const revenue = sigBody.signals.find((s) => s.type === "revenue_estimate");
+    expect(revenue?.summary).toContain("$40,000");
+    expect(sigBody.breakdown.signalContributions.map((c) => c.type)).toContain(
+      "revenue_estimate"
+    );
+    expect(sigBody.breakdown.matchedIcpRules).toContain(
+      "icp-est-monthly-card-volume"
+    );
+    expect(customer.priorityScore).not.toBeNull();
+    expect(customer.priorityScore).toBeGreaterThan(0);
+  });
+
+  it("keeps unparseable volume answers as raw fields without breaking submit (PILE-654)", async () => {
+    const res = await post(
+      `/workspaces/${organizationId}/intake`,
+      {
+        intakeId: "visit-fuzzy",
+        businessName: "Fuzzy Numbers Co",
+        pricing: {
+          monthlyCardVolume: "40-50k seasonal",
+          transactionsPerDay: "depends on weather",
+        },
+      },
+      token
+    );
+    expect(res.status).toBe(201);
+    const result = z.object({ customerId: z.string() }).parse(await res.json());
+
+    const customerRes = await api(
+      `/workspaces/${organizationId}/customers/${result.customerId}`,
+      {},
+      token
+    );
+    const customer = z
+      .object({ customFields: z.record(z.string(), z.string()) })
+      .parse(await customerRes.json());
+    expect(customer.customFields.monthly_card_volume).toBe("40-50k seasonal");
+    expect(customer.customFields.transactions_per_day).toBe(
+      "depends on weather"
+    );
+    expect("monthly_card_volume_cents" in customer.customFields).toBe(false);
+
+    const sigRes = await api(
+      `/workspaces/${organizationId}/customers/${result.customerId}/signals`,
+      {},
+      token
+    );
+    const sigBody = z
+      .object({ signals: z.array(z.object({ type: z.string() })) })
+      .parse(await sigRes.json());
+    expect(sigBody.signals.map((s) => s.type)).not.toContain(
+      "revenue_estimate"
+    );
+  });
+});
+
+describe("intake pricing field parsing (PILE-654)", () => {
+  it("parses clean money/count answers and keeps lossy values raw", () => {
+    expect(parseMoneyToCents("40000")).toBe(4_000_000);
+    expect(parseMoneyToCents("$40k")).toBe(4_000_000);
+    expect(parseMoneyToCents("$1,234.56")).toBe(123_456);
+    expect(parseMoneyToCents("40-50k seasonal")).toBeNull();
+    expect(parseMoneyToCents("depends")).toBeNull();
+    expect(parseMoneyToCents(undefined)).toBeNull();
+
+    expect(parseMonthlyTxCount("60")).toBe(1800);
+    expect(parseMonthlyTxCount("12.5")).toBe(375);
+    expect(parseMonthlyTxCount("varies")).toBeNull();
+    expect(parseMonthlyTxCount(undefined)).toBeNull();
+
+    const fields = intakePricingCustomFields({
+      businessName: "X",
+      pricing: {
+        monthlyCardVolume: "40-50k",
+        averageTicket: "$28.50",
+        transactionsPerDay: "60",
+        currentProcessor: " Square ",
+      },
+    });
+    expect(fields.monthly_card_volume).toBe("40-50k");
+    expect(fields.monthly_card_volume_cents).toBeUndefined();
+    expect(fields.avg_ticket_cents).toBe("2850");
+    expect(fields.monthly_tx_count).toBe("1800");
+    expect(fields.current_processor).toBe("Square");
+    expect(intakePricingCustomFields({ businessName: "Y" })).toEqual({});
   });
 });
 

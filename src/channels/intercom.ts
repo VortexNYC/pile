@@ -63,6 +63,7 @@ const intercomNotificationSchema = z.object({
 });
 
 export const intercomSupportWebhookRoute = createRoute({
+  security: [],
   method: "post",
   path: "/support/webhooks/intercom/{organizationId}",
   tags: ["support-channels"],

@@ -787,6 +787,7 @@ const publicBoardItemSchema = z.object({
 });
 
 const publicBoardRoute = createRoute({
+  security: [],
   method: "get",
   path: "/workspaces/{organizationId}/board",
   tags: ["support-tickets"],

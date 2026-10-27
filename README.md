@@ -11,13 +11,15 @@ issue linked to a support ticket linked to a capture linked to a
 customer linked to a doc. Pile holds them as one connected workspace
 instead of five products joined by integrations.
 
-| Dumps            | For                                                    |
-| ---------------- | ------------------------------------------------------ |
-| Linear / Jira    | Issues, projects, cycles, triage, PR + CI state        |
-| Notion           | Documents — nested pages, backlinks, share links, ToC  |
-| Jam              | Screen/context captures — video, console, network, env |
-| Intercom / Plain | Support tickets, customers, reply/note threads         |
-| LaunchNotes      | The changelog as a first-class surface                 |
+| Dumps            | For                                                               |
+| ---------------- | ----------------------------------------------------------------- |
+| Linear / Jira    | Issues, projects, cycles, triage, PR + CI state, stage sub-steps  |
+| Notion           | Documents — nested pages, spaces, backlinks, share links, ToC     |
+| Supermemory      | Workspace memory (`workspace_memory`) + scoped guidance playbooks |
+| Attio / HubSpot  | Customers, contacts, deals, signal intake, stage-gated pipelines  |
+| Jam              | Screen/context captures — video, console, network, env            |
+| Intercom / Plain | Support tickets, customers, reply/note threads, email intake      |
+| LaunchNotes      | The changelog as a first-class surface                            |
 
 ### The philosophy
 
@@ -36,22 +38,34 @@ not a window onto a channel.
 
 ## Stack
 
-- Cloudflare Workers
-- Hono + Zod
-- Cloudflare D1 (global metadata and auth)
-- Durable Objects (per-workspace state)
-- better-auth (human auth)
-- Drizzle ORM
+- **Runtime & HTTP:** Cloudflare Workers, Hono + `@hono/zod-openapi` (typed routes, `/openapi.json`, generated CLI/SDK/MCP)
+- **Data:** Cloudflare D1 (global metadata, RBAC, auth) + Durable Objects SQLite (per-workspace issues, docs, CRM, memory, and agent state) with Drizzle ORM
+- **Search:** compact SMI-packed in-DO BM25 index across issues, comments, `workspace_memory` facts, and BlockNote/Markdown documents
+- **Auth:** Better Auth (human sessions + dynamic org RBAC) and workspace/lane-scoped bearer tokens for agents
+- **Web Console (`apps/web`):** React + Vite SPA served under `/app` (Kumo components + Phosphor icons)
 
 ## Features
 
-- Workspace-scoped issue tracking
-- Generic agent provider interface with Devin, Cursor, and Cloudflare-Agents adapters (hosted cloud + self-hosted workers/pools, per-workspace BYO credentials, AI-SDK session streams — see docs/agent-providers.md)
-- `POST /workspaces/:org/issues/:id/dispatch` to start an agent session (Devin, Cursor, cf-agent, …)
-- `GET/POST/PATCH /workspaces/:workspaceId/issues` for issue CRUD
-- `POST /github` to sync PR state from GitHub `pull_request` webhooks
-- Workspace-scoped API tokens
-- Rate limiting on `/api/auth/*` via Better Auth (D1-backed, per-IP by `cf-connecting-ip`; defaults: 100 req/60s global, 3 req/10s on sign-in/sign-up). Behind a non-Cloudflare edge, either overwrite `cf-connecting-ip` at your proxy or change `advanced.ipAddress.ipAddressHeaders` in `src/platform/auth.ts` — otherwise clients can spoof the header and rotate limits.
+- **Connected Workspace Graph:** Issues, documents (with restricted spaces and per-doc grants), projects, cycles, customers, contacts, deals, support tickets, screen captures, and changelogs in one per-workspace Durable Object.
+- **Agent Orchestration & Fleet Control:**
+  - `POST /workspaces/:org/issues/:id/dispatch` and `POST /workspaces/:org/agent/dispatch-batch` (with `queuedAfter` dependency chains) across `devin-cli`, `codex-cli`, `cursor-cli`, `claude-cli`, `devin`, `cursor`, and `cf-agent`.
+  - Compute backends on Cloudflare Sandbox SDK 1.0 container pools (`LaneSandbox`, `LaneDevinSandbox`, `LaneCursorSandbox`, `LaneCodexSandbox`) and Daytona with automatic compute failover, orphan sandbox sweeping, and mid-provision cancel abort.
+  - Per-agent concurrency ceilings (`maxConcurrentLanes`) with reserved implementation capacity (`reviewConcurrencyCap`), provider-advertised rate-limit parking with exponential backoff, and window/per-run spend & token caps (`GET /workspaces/:org/agent/costs`).
+- **Workspace Memory & Guidance Packs:**
+  - `GET/POST /workspaces/:org/memory` (MCP `memory_recall` / `memory_remember`): entity-keyed facts (`issue`, `repo`, `agent`, `workspace`, `customer`) with automatic superseding, `validUntil` TTL, and automatic recall injection into dispatched lanes.
+  - Memory Engine: `GET /workspaces/:org/memory/profile` per-entity rollups, `POST /memory/batch` batch ingestion, `POST /memory/extract` auto-extraction, `PATCH`/`DELETE /memory/{id}` update/forget, and hybrid semantic recall (LIKE → BM25 → optional Workers AI Vectorize with concept expansion).
+  - Hierarchical guidance packs (`workspace → team → status → step`) resolved and version-stamped onto every agent session.
+- **Review Quality & Engineering Observability:**
+  - Task-contextual repo+workspace memory briefs injected at dispatch; blocking `request-changes` findings are recorded back as `review_lesson:<file>` repo facts and re-injected as "Repository Invariants & Past Review Lessons" on later reviews.
+  - Multi-axis Trail HUD scores on every posted PR review (`security`, `slop`, `invariants` 0–100 + `humanGate`), finding fingerprints, and last-5 convergence tracking (clean / converging / stalled / oscillating) with oscillation alerts nudged to the work lane.
+  - `GET /workspaces/:org/provenance` (MCP `explain_provenance`) resolves a sha, file, PR, branch, repo, or issue to the lanes, touched files, commit shas, and memory facts that produced it, with a markdown `whySummary`.
+  - `GET /workspaces/:org/agent/recap` (MCP `agent_recap`) — founder-ready fleet recap: shipped / in-flight with trail convergence / blocked (failed, oscillating, human-gate, paused) / compute, plus a rendered markdown brief.
+- **First-Class Agent Surfaces (MCP, CLI, SDK):**
+  - Workspace MCP (`/mcp`) and per-session Lane MCP (`/workspaces/:org/agent/sessions/:id/mcp`) exposing the full OpenAPI surface plus lane-scoped git/PR/memory/CRM tools.
+  - OAuth 2.0 + PKCE connector registration: `/.well-known/oauth-authorization-server`, `/.well-known/oauth-protected-resource`, `/.well-known/mcp.json`, and `server.json` so hosted MCP clients can discover and connect.
+  - Generated TypeScript CLI (`@vortex-api/pile`) and SDK.
+- **GitHub & GitLab Sync:** `POST /github` and `POST /gitlab` webhooks sync PR/MR state, check runs, review verdicts, and branch lifecycle back onto issues.
+- **Rate Limiting:** `/api/auth/*` via Better Auth (D1-backed, per-IP by `cf-connecting-ip`; defaults: 100 req/60s global, 3 req/10s on sign-in/sign-up). Behind a non-Cloudflare edge, either overwrite `cf-connecting-ip` at your proxy or change `advanced.ipAddress.ipAddressHeaders` in `src/platform/auth.ts`.
 
 ## Setup
 
@@ -113,12 +127,17 @@ Provider secrets can also be set per workspace via
 `PUT /workspaces/:id/agent/providers/:agentId`, including a per-workspace
 `config.computeProvider` override.
 
-## Tests
+## Proof & Tests
+
+Run the full proof wall from the repo root before committing:
 
 ```bash
 pnpm install
-pnpm test
-pnpm typecheck
+vp run check            # format, lint, and typecheck (Vite+)
+pnpm run contract:check # verify OpenAPI, MCP, CLI, docs, and runner bundles are in sync
+pnpm test               # workerd + node Vitest suites
+pnpm run diff-coverage  # verify changed src/ files have co-located *.test.ts updates
+pnpm run knip
 ```
 
 ## License

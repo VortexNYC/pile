@@ -150,7 +150,8 @@ def drain_followups(devin_bin):
         os.rename(path, path[:-7] + '.drained')
         print('running queued follow-up prompt:', name)
         output = run_turn(devin_bin, prompt=text)
-        commit_and_push(agent_env())
+        if REPO:
+            commit_and_push(agent_env())
     return output
 
 

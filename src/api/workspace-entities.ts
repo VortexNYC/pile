@@ -15,6 +15,7 @@ import {
   deleteCycle,
   deleteInitiative,
   deleteLabel,
+  deleteMembership,
   deleteProject,
   findProjectByName,
   deleteRoadmap,
@@ -34,6 +35,7 @@ import {
   updateCycle,
   updateInitiative,
   updateLabel,
+  updateMembershipRole,
   updateProject,
   updateRoadmap,
 } from "../global/workspace-entities.js";
@@ -56,6 +58,27 @@ const projectSchema = z.object({
   updatedAt: z.string(),
 });
 
+// VTX-770 — date fields accept a real ISO date or datetime only; a bare
+// string like "not-a-date" used to persist verbatim.
+const dateField = z.union([z.iso.date(), z.iso.datetime()]);
+
+/** Reject end-before-start once both dates are known (merged against the
+ *  stored record on update). */
+function assertDateOrder(
+  fields: { startDate?: string | null; endDate?: string | null },
+  label = "project"
+): void {
+  const { startDate, endDate } = fields;
+  if (startDate && endDate && endDate < startDate) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: `${label} endDate must not be before startDate`,
+      details: { field: "endDate" },
+    });
+  }
+}
+
 const projectBodySchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
@@ -63,8 +86,8 @@ const projectBodySchema = z.object({
   health: z.enum(["on_track", "at_risk", "off_track", "paused"]).optional(),
   leadId: z.string().optional(),
   archivedAt: z.string().optional(),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
+  startDate: dateField.optional(),
+  endDate: dateField.optional(),
 });
 
 const cycleSchema = z.object({
@@ -89,8 +112,8 @@ const cycleBodySchema = z.object({
   status: z.enum(["upcoming", "active", "completed"]).optional(),
   autoRollover: z.boolean().optional(),
   archivedAt: z.string().optional(),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
+  startDate: dateField.optional(),
+  endDate: dateField.optional(),
 });
 
 const labelSchema = z.object({
@@ -151,8 +174,8 @@ const initiativeBodySchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
   status: z.string().optional(),
-  startDate: z.string().optional(),
-  targetDate: z.string().optional(),
+  startDate: dateField.optional(),
+  targetDate: dateField.optional(),
 });
 
 const listProjectsRoute = createRoute({
@@ -220,7 +243,7 @@ const updateProjectRoute = createRoute({
   method: "patch",
   path: "/workspaces/{organizationId}/projects/{id}",
   tags: ["projects"],
-  middleware: [rls("project:lead")],
+  middleware: [rls("project:lead", "project:edit")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
@@ -243,7 +266,7 @@ const archiveProjectRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/projects/{id}/archive",
   tags: ["projects"],
-  middleware: [rls("project:lead")],
+  middleware: [rls("project:lead", "project:edit")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -259,7 +282,7 @@ const unarchiveProjectRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/projects/{id}/unarchive",
   tags: ["projects"],
-  middleware: [rls("project:lead")],
+  middleware: [rls("project:lead", "project:edit")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -275,7 +298,7 @@ const deleteProjectRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/projects/{id}",
   tags: ["projects"],
-  middleware: [rls("project:lead")],
+  middleware: [rls("project:lead", "project:delete")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
@@ -653,6 +676,55 @@ const createMembershipRoute = createRoute({
   },
 });
 
+const updateMembershipRoute = createRoute({
+  method: "patch",
+  path: "/workspaces/{organizationId}/memberships/{id}",
+  tags: ["memberships"],
+  middleware: [rls("admin")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({ role: z.string().min(1) }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Membership updated",
+      content: {
+        "application/json": { schema: membershipSchema },
+      },
+    },
+  },
+});
+
+const deleteMembershipRoute = createRoute({
+  method: "delete",
+  path: "/workspaces/{organizationId}/memberships/{id}",
+  tags: ["memberships"],
+  middleware: [rls("admin")],
+  request: {
+    params: z.object({ organizationId: z.string(), id: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Membership deleted",
+      content: {
+        "application/json": {
+          schema: z.object({
+            deleted: z.boolean(),
+            id: z.string(),
+            userId: z.string(),
+          }),
+        },
+      },
+    },
+  },
+});
+
 const listRoadmapsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/roadmaps",
@@ -891,7 +963,12 @@ export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
         hint: `Existing project id: ${existing.id}`,
       });
     }
-    const item = await createProject(db, organizationId, input);
+    assertDateOrder(input);
+    const identity = c.var.workspaceIdentity;
+    const item = await createProject(db, organizationId, {
+      ...input,
+      leadId: input.leadId ?? identity.id,
+    });
     return c.json(item, 201);
   });
 
@@ -929,6 +1006,18 @@ export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
         });
       }
     }
+    const existing = await getProject(db, organizationId, id);
+    if (!existing) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Project not found",
+      });
+    }
+    assertDateOrder({
+      startDate: input.startDate ?? existing.startDate,
+      endDate: input.endDate ?? existing.endDate,
+    });
     const item = await updateProject(db, organizationId, id, input);
     if (!item) {
       throw new VortexError({
@@ -986,6 +1075,7 @@ export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId } = c.req.valid("param");
     const input = c.req.valid("json");
     const db = createD1(c.env.D1);
+    assertDateOrder(input, "cycle");
     const item = await createCycle(db, organizationId, input);
     return c.json(item, 201);
   });
@@ -1008,6 +1098,21 @@ export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId, id } = c.req.valid("param");
     const input = c.req.valid("json");
     const db = createD1(c.env.D1);
+    const existing = await getCycle(db, organizationId, id);
+    if (!existing) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Cycle not found",
+      });
+    }
+    assertDateOrder(
+      {
+        startDate: input.startDate ?? existing.startDate,
+        endDate: input.endDate ?? existing.endDate,
+      },
+      "cycle"
+    );
     const item = await updateCycle(db, organizationId, id, input);
     if (!item) {
       throw new VortexError({
@@ -1246,6 +1351,35 @@ export function registerWorkspaceEntityRoutes(app: OpenAPIHono<AppContext>) {
       input.role
     );
     return c.json(item, 201);
+  });
+
+  app.openapi(updateMembershipRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const db = createD1(c.env.D1);
+    const item = await updateMembershipRole(db, organizationId, id, input.role);
+    if (!item) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Membership not found",
+      });
+    }
+    return c.json(item);
+  });
+
+  app.openapi(deleteMembershipRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+    const result = await deleteMembership(db, organizationId, id);
+    if (!result.deleted) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Membership not found",
+      });
+    }
+    return c.json({ deleted: true, id, userId: result.userId! });
   });
 
   app.openapi(listRoadmapsRoute, async (c) => {

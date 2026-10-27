@@ -109,6 +109,7 @@ const createEntryRoute = createRoute({
 });
 
 const listEntriesRoute = createRoute({
+  security: [],
   method: "get",
   path: "/workspaces/{organizationId}/changelog",
   tags: ["changelog"],

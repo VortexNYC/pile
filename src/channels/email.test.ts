@@ -512,3 +512,130 @@ describe("triage rules on email intake (PILE-427)", () => {
     expect(["matched", "error"]).toContain(evals[0]?.outcome);
   });
 });
+
+async function seedReplyWorkspace() {
+  const db = createD1(env.D1);
+  const now = new Date();
+  const uid = `user-${crypto.randomUUID()}`;
+  await db
+    .insert(userTable)
+    .values({
+      id: uid,
+      name: "Reply Test",
+      email: `${uid}@example.com`,
+      emailVerified: false,
+      image: null,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoNothing({ target: [userTable.email] });
+  const headers = await createAdminHeaders(env, uid);
+  const workspace = await createWorkspace(db, env, headers, {
+    name: "Reply funnel",
+    slug: `reply-${crypto.randomUUID()}`,
+    ownerId: uid,
+  });
+  const channelNow = new Date();
+  await db.insert(supportChannels).values({
+    id: crypto.randomUUID(),
+    organizationId: workspace!.id,
+    type: "email",
+    name: "support@x.com",
+    isActive: true,
+    config: "{}",
+    createdAt: channelNow.toISOString(),
+    updatedAt: channelNow.toISOString(),
+  });
+  return { db, orgId: workspace!.id };
+}
+
+describe("inbound reply classification (PILE-611)", () => {
+  it("suppresses the sender email and customer on an opt-out reply", async () => {
+    const { db, orgId } = await seedReplyWorkspace();
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(orgId)
+    );
+    await stub.setOrganizationId(orgId);
+
+    const { processEmailIntakePayload } = await import("./email.js");
+    const result = await processEmailIntakePayload(db, env, {
+      organizationId: orgId,
+      inboxId: null,
+      customerId: null,
+      to: "outbound@x.com",
+      from: "stopme@optout.example",
+      fromName: "Stop Me",
+      subject: "Re: intro",
+      text: "Please unsubscribe me and do not contact me again.",
+      html: null,
+      messageId: "<opt-1@x>",
+      externalId: `ext-${crypto.randomUUID()}`,
+      receivedAt: new Date().toISOString(),
+      attachments: [],
+    });
+    expect(result.isNew).toBe(true);
+    expect(
+      await stub.isSuppressed("email", "stopme@optout.example")
+    ).toBeTruthy();
+    // The sender domain was auto-filed as a customer; it must also be
+    // suppressed by customerId.
+    const customers = await stub.listCustomers();
+    const sender = customers.find((c) =>
+      (c.url ?? "").includes("optout.example")
+    );
+    expect(sender).toBeDefined();
+    expect(await stub.isSuppressed("customerId", sender!.id)).toBeTruthy();
+  });
+
+  it("suppresses the sender email on a hard-bounce reply", async () => {
+    const { db, orgId } = await seedReplyWorkspace();
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(orgId)
+    );
+    await stub.setOrganizationId(orgId);
+
+    const { processEmailIntakePayload } = await import("./email.js");
+    await processEmailIntakePayload(db, env, {
+      organizationId: orgId,
+      inboxId: null,
+      customerId: null,
+      to: "outbound@x.com",
+      from: "MAILER-DAEMON@bounce.example",
+      fromName: "Mailer Daemon",
+      subject: "Delivery Status Notification (Failure)",
+      text: "550 5.1.1 user unknown — address not found",
+      html: null,
+      messageId: "<bounce-1@x>",
+      externalId: `ext-${crypto.randomUUID()}`,
+      receivedAt: new Date().toISOString(),
+      attachments: [],
+    });
+    expect(
+      await stub.isSuppressed("email", "mailer-daemon@bounce.example")
+    ).toBeTruthy();
+  });
+
+  it("classifies opt-outs through processEmailWebhookPayload too", async () => {
+    const { db, orgId } = await seedReplyWorkspace();
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(orgId)
+    );
+    await stub.setOrganizationId(orgId);
+
+    const { processEmailWebhookPayload } = await import("./email.js");
+    await processEmailWebhookPayload(db, env, {
+      organizationId: orgId,
+      from: "leaveme@webhook.example",
+      fromName: "Leave Me",
+      to: "outbound@x.com",
+      subject: "stop",
+      text: "stop emailing me, remove me from your list",
+      html: null,
+      messageId: `<wh-${crypto.randomUUID()}@x>`,
+      inReplyTo: null,
+    });
+    expect(
+      await stub.isSuppressed("email", "leaveme@webhook.example")
+    ).toBeTruthy();
+  });
+});

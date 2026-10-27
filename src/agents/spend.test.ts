@@ -209,4 +209,16 @@ describe("computeCostMicros", () => {
     expect(computeCostMicros("claude-sonnet-4-5", null, null)).toBeNull();
     expect(computeCostMicros(null, 100, 100)).toBeNull();
   });
+
+  it("parses a strict spend-cap body without unknown keys", () => {
+    expect(
+      spendCapBodySchema.safeParse({
+        maxRunsPerDay: 10,
+        maxCostMicrosPerMonth: 1_000_000,
+      }).success
+    ).toBe(true);
+    expect(
+      spendCapBodySchema.safeParse({ maxRunsPerDay: 10, bogus: 1 }).success
+    ).toBe(false);
+  });
 });

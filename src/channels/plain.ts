@@ -110,6 +110,7 @@ const plainWebhookSchema = z.object({
 });
 
 export const plainSupportWebhookRoute = createRoute({
+  security: [],
   method: "post",
   path: "/support/webhooks/plain/{organizationId}",
   tags: ["support-channels"],

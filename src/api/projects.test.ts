@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { createD1 } from "../global/db.js";
 import { user as userTable } from "../global/schema.js";
+import { createMembership } from "../global/workspace-entities.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
@@ -241,5 +242,97 @@ describe("projects API", () => {
       token
     );
     expect(res.status).toBe(404);
+  });
+});
+
+describe("project member permissions and date validation (VTX-771, VTX-770)", () => {
+  it("a member can create, update, and archive their own project", async () => {
+    const db = createD1(env.D1);
+    const now = new Date();
+    await db
+      .insert(userTable)
+      .values({
+        id: "user-projects-member",
+        name: "Member",
+        email: "projects-member@example.com",
+        emailVerified: false,
+        image: null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({ target: [userTable.email] });
+    const { organizationId } = await seedWorkspace();
+    await createMembership(
+      db,
+      env,
+      organizationId,
+      "user-projects-member",
+      "member"
+    );
+    const auth = await createAuth(env);
+    const memberKey = z.object({ key: z.string() }).parse(
+      await auth.api.createApiKey({
+        body: {
+          userId: "user-projects-member",
+          name: "member",
+          rateLimitEnabled: false,
+          metadata: { organizationId, permissions: "member" },
+          permissions: { workspace: ["member"] },
+        },
+      })
+    ).key;
+
+    const created = await fetch(
+      `/workspaces/${organizationId}/projects`,
+      { method: "POST", body: JSON.stringify({ name: "mine" }) },
+      memberKey
+    );
+    expect(created.status).toBe(201);
+    const project = z
+      .object({ id: z.string(), leadId: z.string().nullable() })
+      .parse(await created.json());
+    // Creator becomes lead.
+    expect(project.leadId).toBe("user-projects-member");
+
+    const updated = await fetch(
+      `/workspaces/${organizationId}/projects/${project.id}`,
+      { method: "PATCH", body: JSON.stringify({ name: "mine v2" }) },
+      memberKey
+    );
+    expect(updated.status).toBe(200);
+
+    const archived = await fetch(
+      `/workspaces/${organizationId}/projects/${project.id}/archive`,
+      { method: "POST" },
+      memberKey
+    );
+    expect(archived.status).toBe(200);
+  });
+
+  it("rejects non-ISO dates and end-before-start", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const bad = await fetch(
+      `/workspaces/${organizationId}/projects`,
+      {
+        method: "POST",
+        body: JSON.stringify({ name: "bad", startDate: "not-a-date" }),
+      },
+      token
+    );
+    expect(bad.status).toBe(400);
+
+    const inverted = await fetch(
+      `/workspaces/${organizationId}/projects`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "inv",
+          startDate: "2026-06-01",
+          endDate: "2026-01-01",
+        }),
+      },
+      token
+    );
+    expect(inverted.status).toBe(400);
   });
 });

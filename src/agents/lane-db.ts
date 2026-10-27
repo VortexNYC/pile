@@ -7,20 +7,38 @@ import type { WorkerEnv } from "../platform/middleware.js";
 // org metadata (organization.metadata.laneDb["owner/name"]). pgrun (Layer 3)
 // plugs into the same interface later if prod-shaped rehearsal is ever needed.
 
-export interface LaneDbConfig {
+export interface PlanetScaleLaneDbConfig {
   provider: "planetscale";
   org: string;
   database: string;
   baseBranch: string;
 }
 
-export interface LaneDbRef {
+export interface PgxLaneDbConfig {
+  provider: "pgx";
+  template: string;
+  ttl?: string;
+  port?: number;
+}
+
+export type LaneDbConfig = PlanetScaleLaneDbConfig | PgxLaneDbConfig;
+
+export interface PlanetScaleLaneDbRef {
   provider: "planetscale";
   org: string;
   database: string;
   branch: string;
   roleId: string;
 }
+
+export interface PgxLaneDbRef {
+  provider: "pgx";
+  template: string;
+  branch: string;
+  ttl: string;
+}
+
+export type LaneDbRef = PlanetScaleLaneDbRef | PgxLaneDbRef;
 
 export interface LaneDbProvision {
   /** Serialized into agent_sessions.lane_db_ref for the teardown/reaper. */
@@ -48,6 +66,18 @@ export function laneDbConfigForRepo(
   const entry = (table as Record<string, unknown>)[repo];
   if (typeof entry !== "object" || entry === null) return null;
   const cfg = entry as Record<string, unknown>;
+  if (
+    cfg.provider === "pgx" &&
+    typeof cfg.template === "string" &&
+    cfg.template.trim().length > 0
+  ) {
+    return {
+      provider: "pgx",
+      template: cfg.template.trim(),
+      ...(typeof cfg.ttl === "string" ? { ttl: cfg.ttl } : {}),
+      ...(typeof cfg.port === "number" ? { port: cfg.port } : {}),
+    };
+  }
   if (
     cfg.provider !== "planetscale" ||
     typeof cfg.org !== "string" ||
@@ -99,6 +129,9 @@ export class PlanetScaleLaneDb implements LaneDbProvider {
     config: LaneDbConfig,
     sessionId: string
   ): Promise<LaneDbProvision> {
+    if (config.provider !== "planetscale") {
+      throw new Error(`PlanetScaleLaneDb cannot provision ${config.provider}`);
+    }
     const branch = `lane-${sessionId.replaceAll(/[^a-z0-9-]/g, "").slice(0, 20)}`;
     const dbPath = `/organizations/${config.org}/databases/${config.database}`;
     await this.api(`${dbPath}/branches`, {
@@ -131,6 +164,7 @@ export class PlanetScaleLaneDb implements LaneDbProvider {
   }
 
   async teardown(ref: LaneDbRef): Promise<void> {
+    if (ref.provider !== "planetscale") return;
     const dbPath = `/organizations/${ref.org}/databases/${ref.database}`;
     await this.api(`${dbPath}/branches/${ref.branch}/roles/${ref.roleId}`, {
       method: "DELETE",
@@ -141,12 +175,58 @@ export class PlanetScaleLaneDb implements LaneDbProvider {
   }
 }
 
-/** Provider selection: PlanetScale when the worker carries the secret, else
- *  null (Layer 1 local pg — the in-image default). */
+/** VTX-651 — pgrundev/pgx copy-on-write Postgres branching (~6ms warm clone).
+ *  Injects PILE_PGX_TEMPLATE / PILE_PGX_BRANCH / PILE_PGX_TTL into the lane
+ *  environment so `ensure_postgres()` in `core.py` runs
+ *  `pgx clone <template> <branch> --ttl <ttl>` inside the sandbox. */
+export class PgxLaneDb implements LaneDbProvider {
+  name = "pgx";
+
+  async provision(
+    config: LaneDbConfig,
+    sessionId: string
+  ): Promise<LaneDbProvision> {
+    if (config.provider !== "pgx") {
+      throw new Error(`PgxLaneDb cannot provision ${config.provider}`);
+    }
+    const branch = `lane_${sessionId
+      .toLowerCase()
+      .replaceAll(/[^a-z0-9_]/g, "_")
+      .slice(0, 24)}`;
+    const ttl = config.ttl ?? "3h";
+    const port = config.port ?? 5432;
+    const url = `postgresql://postgres:postgres@127.0.0.1:${port}/${branch}`;
+    return {
+      ref: {
+        provider: "pgx",
+        template: config.template,
+        branch,
+        ttl,
+      },
+      env: {
+        PILE_PGX_TEMPLATE: config.template,
+        PILE_PGX_BRANCH: branch,
+        PILE_PGX_TTL: ttl,
+        TEST_DATABASE_URL: url,
+        DATABASE_URL: url,
+      },
+    };
+  }
+
+  async teardown(_ref: LaneDbRef): Promise<void> {
+    // pgx clones auto-expire on `--ttl` and are torn down with the sandbox.
+  }
+}
+
+/** Provider selection: PgxLaneDb when the repo/ref specifies `pgx`, else
+ *  PlanetScale when the worker carries `PSCALE_SERVICE_TOKEN`, else null
+ *  (Layer 1 local pg — the in-image default). */
 export function getLaneDbProvider(
   env: WorkerEnv,
-  ghFetch?: typeof fetch
+  ghFetch?: typeof fetch,
+  providerHint?: "planetscale" | "pgx"
 ): LaneDbProvider | null {
+  if (providerHint === "pgx") return new PgxLaneDb();
   const token = env.PSCALE_SERVICE_TOKEN;
   if (typeof token !== "string" || token.length === 0) return null;
   return new PlanetScaleLaneDb(token, ghFetch);

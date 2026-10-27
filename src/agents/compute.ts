@@ -404,13 +404,22 @@ export class DaytonaBackend implements ComputeBackend {
   async listSandboxes(
     labelPrefix: string
   ): Promise<Array<ComputeSandbox & { labels?: Record<string, string> }>> {
-    const res = await this.request("/sandbox");
-    if (!res.ok) {
-      const text = await res.text();
-      throw computeError(`Daytona sandbox list failed: ${res.status} ${text}`);
+    // The list paginates (see findSandbox): orphans past page one would
+    // never be swept otherwise. Same 10-page bound as findSandbox.
+    const items: z.infer<typeof daytonaSandboxSchema>[] = [];
+    for (let page = 1; page <= 10; page += 1) {
+      const res = await this.request(`/sandbox?page=${page}`);
+      if (!res.ok) {
+        const text = await res.text();
+        throw computeError(
+          `Daytona sandbox list failed: ${res.status} ${text}`
+        );
+      }
+      const list = daytonaSandboxListSchema.parse(await res.json());
+      items.push(...list.items);
+      if (list.items.length === 0) break;
     }
-    const list = daytonaSandboxListSchema.parse(await res.json());
-    return list.items
+    return items
       .filter((s) =>
         Object.keys(s.labels ?? {}).some((k) => k.startsWith(labelPrefix))
       )
@@ -1337,12 +1346,44 @@ export class FailoverBackend implements ComputeBackend {
     }
   }
 
-  findSandbox(
+  async findSandbox(
     ...a: Parameters<ComputeBackend["findSandbox"]>[0] extends never
       ? never
       : [string, string, string?]
-  ) {
-    return this.pick().findSandbox(...a);
+  ): Promise<ComputeSandbox | null> {
+    if (this.switched) {
+      try {
+        return await this.fallback.findSandbox(...a);
+      } catch (err) {
+        console.warn(
+          "[pile] compute failover: fallback findSandbox failed",
+          err
+        );
+        return null;
+      }
+    }
+    let primaryErr: unknown;
+    try {
+      const found = await this.primary.findSandbox(...a);
+      if (found) return found;
+    } catch (err) {
+      primaryErr = err;
+    }
+    try {
+      const fallbackFound = await this.fallback.findSandbox(...a);
+      if (fallbackFound) {
+        this.switched = true;
+        return fallbackFound;
+      }
+      return null;
+    } catch (fallbackErr) {
+      console.warn(
+        "[pile] compute failover: fallback findSandbox probe failed",
+        fallbackErr
+      );
+      if (primaryErr !== undefined) throw primaryErr;
+      return null;
+    }
   }
   startRunner(...a: [ComputeSandbox, string, string, Record<string, string>?]) {
     return this.pick().startRunner(...a);
@@ -1408,6 +1449,21 @@ export function toComputePin(
   return value === "daytona" || value === "cloudflare" ? value : undefined;
 }
 
+function resolveLaneV1Binding(env: AppEnv, agentId?: string) {
+  const specific = agentId
+    ? (
+        LANE_V1_BINDING_BY_AGENT as Record<
+          string,
+          | "SANDBOX_LANE_CURSOR"
+          | "SANDBOX_LANE_DEVIN"
+          | "SANDBOX_LANE_CODEX"
+          | undefined
+        >
+      )[agentId]
+    : undefined;
+  return (specific ? env[specific] : undefined) ?? env.SANDBOX_LANE;
+}
+
 export function computeBackend(
   env: AppEnv,
   agentId?: string,
@@ -1417,22 +1473,12 @@ export function computeBackend(
 ): ComputeBackend {
   const provider = pinned ?? env.COMPUTE_PROVIDER ?? "daytona";
   if (provider === "cloudflare") {
-    // sandbox-sdk 1.0 lanes (PILE-473/474): LANE_SDK=v1 routes through the
-    // LaneSandbox DOs on SANDBOX_LANE* bindings. Missing binding is a config
-    // error — silently falling back to 0.12 would canary nothing.
+    // sandbox-sdk 1.0 lanes (PILE-473/474 / VTX-602): LANE_SDK=v1 routes
+    // through the LaneSandbox DOs on SANDBOX_LANE* bindings, with optional
+    // bidirectional failover to Daytona when LANE_FAILOVER=v1 and
+    // DAYTONA_API_KEY is configured.
     if (env.LANE_SDK === "v1") {
-      const specific = agentId
-        ? (
-            LANE_V1_BINDING_BY_AGENT as Record<
-              string,
-              | "SANDBOX_LANE_CURSOR"
-              | "SANDBOX_LANE_DEVIN"
-              | "SANDBOX_LANE_CODEX"
-              | undefined
-            >
-          )[agentId]
-        : undefined;
-      const ns = (specific ? env[specific] : undefined) ?? env.SANDBOX_LANE;
+      const ns = resolveLaneV1Binding(env, agentId);
       if (!ns) {
         throw new VortexError({
           code: "CONFIG_ERROR",
@@ -1441,7 +1487,14 @@ export function computeBackend(
             "LANE_SDK=v1 requires a SANDBOX_LANE binding (or a per-provider SANDBOX_LANE_* binding)",
         });
       }
-      return new LaneSandboxBackend(ns, env);
+      const laneV1 = new LaneSandboxBackend(ns, env);
+      if (env.LANE_FAILOVER === "v1") {
+        const dConfig = daytonaConfig(env);
+        if (dConfig) {
+          return new FailoverBackend(laneV1, new DaytonaBackend(env, dConfig));
+        }
+      }
+      return laneV1;
     }
     // Per-provider image/binding first; fall back to the shared SANDBOX
     // binding so single-image self-host setups keep working.
@@ -1504,31 +1557,78 @@ export function computeBackend(
   return daytona;
 }
 
-/** PILE-471 — label-based orphan sweep: any `vortex.*`-labeled sandbox
- *  whose owning session is terminal (or unknown) gets deleted. The labels
- *  minted at createSandbox are the source of truth — no session-row
- *  bookkeeping needed on the Daytona side. */
+/** PILE-471 — label-based orphan sweep: `vortex.*`-labeled sandboxes owned
+ *  by `opts.organizationId` whose session row is terminal or missing get
+ *  deleted. The sweep runs per workspace DO while the Daytona account is
+ *  shared, so candidates are scoped by the `vortex.org` label — a foreign
+ *  org's sandbox would read as a missing session here and get deleted
+ *  mid-run otherwise. Sandboxes carrying no org label only reap when the
+ *  session row itself resolves in this DO (UUIDs are unforgeable
+ *  attribution); `ttlMinutes` on create is the backstop for the rest.
+ *
+ *  `opts.keepTerminalMs` mirrors the kept-sandbox resume window: terminal
+ *  sessions younger than it keep their parked sandbox for follow-up
+ *  resumes, so the sweep leaves those to the kept-cap reaper. */
 export async function sweepOrphanSandboxes(
   backend: ComputeBackend,
   stub: {
-    getAgentSession(id: string): Promise<{ status: string } | null | undefined>;
+    getAgentSession(id: string): Promise<
+      | {
+          status: string;
+          endedAt?: string | null;
+          updatedAt?: string | null;
+        }
+      | null
+      | undefined
+    >;
   },
-  opts: { limit?: number } = {}
+  opts: { organizationId: string; limit?: number; keepTerminalMs?: number }
 ): Promise<{ reaped: number; checked: number }> {
   if (!backend.listSandboxes) return { reaped: 0, checked: 0 };
   const sandboxes = await backend.listSandboxes("vortex.");
   const TERMINAL = new Set(["completed", "failed", "canceled"]);
+  // Filter before the limit so unlabeled or foreign-org sandboxes don't
+  // consume the check budget.
+  const candidates = sandboxes.filter(
+    (s) =>
+      s.labels?.["vortex.session"] &&
+      (!s.organizationId || s.organizationId === opts.organizationId)
+  );
   let reaped = 0;
   let checked = 0;
-  for (const s of sandboxes.slice(0, opts.limit ?? 50)) {
+  for (const s of candidates.slice(0, opts.limit ?? 50)) {
     const sessionId = s.labels?.["vortex.session"];
     if (!sessionId) continue;
     checked += 1;
-    const session = await stub.getAgentSession(sessionId).catch(() => null);
-    const orphaned = !session || TERMINAL.has(session.status);
-    if (orphaned && backend.deleteSandbox) {
-      await backend.deleteSandbox(s).catch(() => {});
+    let session:
+      | { status: string; endedAt?: string | null; updatedAt?: string | null }
+      | null
+      | undefined;
+    try {
+      session = await stub.getAgentSession(sessionId);
+    } catch {
+      // Lookup failure ≠ missing session — a transient DO error must not
+      // read as an orphan and delete a live sandbox.
+      continue;
+    }
+    if (session && !TERMINAL.has(session.status)) continue;
+    if (session && opts.keepTerminalMs) {
+      const anchor = Date.parse(session.endedAt ?? session.updatedAt ?? "");
+      if (
+        !Number.isFinite(anchor) ||
+        Date.now() - anchor < opts.keepTerminalMs
+      ) {
+        continue;
+      }
+    }
+    // A missing row is an orphan only when the org label already scoped the
+    // sandbox to this workspace; unlabeled sandboxes could belong anywhere.
+    if (!session && !s.organizationId) continue;
+    try {
+      await backend.deleteSandbox(s);
       reaped += 1;
+    } catch (err) {
+      console.warn("orphan sandbox delete failed", s.id, err);
     }
   }
   return { reaped, checked };

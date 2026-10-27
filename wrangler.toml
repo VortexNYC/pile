@@ -44,6 +44,10 @@ binding = "D1"
 database_name = "pile-global"
 migrations_dir = "migrations"
 
+# Workers AI — capture-recording transcription (Whisper) + memory embeddings.
+[ai]
+binding = "AI"
+
 [[send_email]]
 name = "EMAIL"
 
@@ -171,7 +175,12 @@ new_sqlite_classes = ["CursorSandbox", "DevinSandbox", "CodexSandbox"]
 
 [[migrations]]
 tag = "v4"
-new_sqlite_classes = ["LaneSandbox", "LaneCursorSandbox", "LaneDevinSandbox", "LaneCodexSandbox"]
+new_sqlite_classes = [
+  "LaneSandbox",
+  "LaneCursorSandbox",
+  "LaneDevinSandbox",
+  "LaneCodexSandbox",
+]
 
 [env.production]
 name = "pile"
@@ -187,6 +196,12 @@ routes = [
 workers_dev = true
 
 [env.production.vars]
+FIRECRAWL_BASE_URL = "https://firecrawl.vortex.nyc"
+SCRAPLING_BASE_URL = "https://scrapling.vortex.nyc"
+BROWSERLESS_BASE_URL = "https://browserless.vortex.nyc"
+WAPPALYZER_BASE_URL = "https://fingerprint.vortex.nyc"
+LIGHTPANDA_BASE_URL = "https://lightpanda.vortex.nyc"
+OBSCURA_BASE_URL = "https://obscura.vortex.nyc"
 BETTER_AUTH_URL = "https://pile.nyc"
 ALLOWED_ORIGINS = "https://pile.nyc,https://app.pile.nyc"
 SLACK_REDIRECT_URI = "https://pile.nyc/slack/oauth"
@@ -195,6 +210,8 @@ DAYTONA_VOLUME_ID = "0f79e741-e373-496b-a83f-7252cd5b9f12"
 DEVIN_MODEL = "swe-2"
 EMAIL_FROM = "notifications@pile.nyc"
 COMPUTE_PROVIDER = "cloudflare"
+LANE_SDK = "v1"
+LANE_FAILOVER = "v1"
 PUBLIC_API_URL = "https://pile.nyc"
 FEEDBACK_CHANNEL_ID = "cc2f808d-007e-48a1-870f-bd4c68ae0cd6"
 # Shared container admission ledger (PILE-302) — lanes reserve a slot before
@@ -214,6 +231,10 @@ binding = "D1"
 database_name = "pile-global"
 database_id = "222e823e-3594-457d-add1-1827064d4bc8"
 migrations_dir = "migrations"
+
+# Workers AI — capture-recording transcription (Whisper) + memory embeddings.
+[env.production.ai]
+binding = "AI"
 
 [[env.production.r2_buckets]]
 binding = "ATTACHMENTS_BUCKET"
@@ -329,7 +350,12 @@ new_sqlite_classes = ["CursorSandbox", "DevinSandbox", "CodexSandbox"]
 
 [[env.production.migrations]]
 tag = "v4"
-new_sqlite_classes = ["LaneSandbox", "LaneCursorSandbox", "LaneDevinSandbox", "LaneCodexSandbox"]
+new_sqlite_classes = [
+  "LaneSandbox",
+  "LaneCursorSandbox",
+  "LaneDevinSandbox",
+  "LaneCodexSandbox",
+]
 
 [[env.production.queues.producers]]
 binding = "WEBHOOK_QUEUE"
@@ -372,6 +398,10 @@ binding = "D1"
 database_name = "pile-global-staging"
 database_id = "b40f2922-2c63-4b3e-9c56-b37512ea1ffe"
 migrations_dir = "migrations"
+
+# Workers AI — capture-recording transcription (Whisper) + memory embeddings.
+[env.staging.ai]
+binding = "AI"
 
 [[env.staging.r2_buckets]]
 binding = "ATTACHMENTS_BUCKET"

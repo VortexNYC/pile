@@ -20,13 +20,19 @@ const booleanQueryParam = z
     return undefined;
   });
 
-export const listIssuesQuerySchema = z.object({
-  limit: z.preprocess((val) => {
-    if (val === undefined) return DEFAULT_LIMIT;
+/** Bounded `limit` query param shared by the list endpoints — absent or
+ *  invalid input falls back to the default, valid input is hard-capped. */
+export function limitQueryParam(defaultLimit: number, maxLimit: number) {
+  return z.preprocess((val) => {
+    if (val === undefined) return defaultLimit;
     const n = Number(val);
-    if (Number.isNaN(n) || n < 1) return DEFAULT_LIMIT;
-    return Math.min(n, MAX_LIMIT);
-  }, z.number().int().min(1).max(MAX_LIMIT)),
+    if (Number.isNaN(n) || n < 1) return defaultLimit;
+    return Math.min(n, maxLimit);
+  }, z.number().int().min(1).max(maxLimit));
+}
+
+export const listIssuesQuerySchema = z.object({
+  limit: limitQueryParam(DEFAULT_LIMIT, MAX_LIMIT),
   cursor: z.string().optional(),
   teamId: z.string().optional(),
   status: z.enum(ISSUE_STATUSES).optional(),
@@ -82,6 +88,50 @@ export function decodeCursor(cursor: string): IssueCursor {
     status: 400,
     message: "Invalid cursor",
   });
+}
+
+/** Case-insensitive substring match for the bounded `q` params — true when
+ *  any haystack contains the trimmed needle; an empty/absent q matches all. */
+export function matchesSearchQuery(
+  haystacks: readonly (string | null | undefined)[],
+  q: string | undefined
+): boolean {
+  const needle = q?.trim().toLowerCase();
+  if (!needle) return true;
+  return haystacks.some((h) => h?.toLowerCase().includes(needle));
+}
+
+/** Keyset-page an in-memory list the way `listIssues` pages in SQL:
+ *  (createdAt, id) descending, then everything strictly after the cursor.
+ *  Emits `nextCursor` whenever the page fills — one more fetch confirms the
+ *  end, the same contract as /issues. */
+export function pageByCreatedCursor<
+  T extends { createdAt: string; id: string },
+>(
+  rows: readonly T[],
+  args: { limit: number; cursor?: IssueCursor }
+): { page: T[]; nextCursor: string | undefined } {
+  const sorted = [...rows].toSorted(
+    (a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id)
+  );
+  const cursor = args.cursor;
+  const start = cursor
+    ? sorted.findIndex(
+        (row) =>
+          row.createdAt < cursor.createdAt ||
+          (row.createdAt === cursor.createdAt && row.id < cursor.id)
+      )
+    : 0;
+  const page = sorted.slice(
+    start === -1 ? sorted.length : start,
+    (start === -1 ? sorted.length : start) + args.limit
+  );
+  const last = page.at(-1);
+  const nextCursor =
+    page.length === args.limit && last !== undefined
+      ? encodeCursor({ createdAt: last.createdAt, id: last.id })
+      : undefined;
+  return { page, nextCursor };
 }
 
 export function toListArgs(query: ListIssuesQuery): ListIssuesArgs {

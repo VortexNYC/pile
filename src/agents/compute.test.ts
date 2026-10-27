@@ -247,6 +247,41 @@ describe("DaytonaBackend warm-pool eligibility (PILE-475)", () => {
   });
 });
 
+describe("DaytonaBackend lifecycle ceilings (PILE-471)", () => {
+  it("caps every created sandbox: 3h TTL, 24h stopped corpse, 4h idle", async () => {
+    const calls = fetchStub((url, init) => {
+      if (url === "https://daytona.test/sandbox" && init?.method === "POST") {
+        return new Response(JSON.stringify(daytonaRecord), { status: 200 });
+      }
+      return new Response(JSON.stringify(daytonaRecord), { status: 200 });
+    });
+
+    const backend = computeBackend(daytonaTestEnv());
+    await backend.createSandbox({
+      name: "vortex-devin-x",
+      sessionId: "sess-1",
+      organizationId: "org-1",
+      agentLabel: "devin-cli",
+      env: {},
+    });
+
+    const create = calls.find(
+      (c) =>
+        c.url === "https://daytona.test/sandbox" && c.init?.method === "POST"
+    );
+    const body = JSON.parse(String(create?.init?.body)) as Record<
+      string,
+      unknown
+    >;
+    expect(body).toMatchObject({
+      ttlMinutes: 180,
+      autoDeleteInterval: 1440,
+      autoStopInterval: 240,
+    });
+    vi.unstubAllGlobals();
+  });
+});
+
 const sessionCreateUrl = `${daytonaToolbox}/sb-1/process/session`;
 const ipFailure = () =>
   new Response(
@@ -1027,35 +1062,43 @@ describe("DaytonaBackend infra classification + quota surfacing (PILE-452)", () 
   });
 });
 
+const orphanSandbox = (
+  id: string,
+  sessionId: string | null,
+  organizationId?: string
+) => ({
+  id,
+  name: `name-${id}`,
+  state: "started",
+  organizationId,
+  labels: {
+    ...(sessionId ? { "vortex.session": sessionId } : {}),
+    ...(organizationId ? { "vortex.org": organizationId } : {}),
+  },
+});
+
+const orphanBackend = (
+  sandboxes: ReturnType<typeof orphanSandbox>[],
+  onDelete?: (id: string) => void
+) => ({
+  kind: "daytona" as const,
+  listSandboxes: async () => sandboxes,
+  deleteSandbox: async (s: { id: string }) => {
+    onDelete?.(s.id);
+  },
+});
+
 describe("sweepOrphanSandboxes (PILE-471)", () => {
   it("reaps label-matched sandboxes whose session is terminal or gone", async () => {
     const deleted: string[] = [];
-    const backend = {
-      kind: "daytona" as const,
-      listSandboxes: async () => [
-        {
-          id: "s1",
-          name: "a",
-          state: "started",
-          labels: { "vortex.session": "sess-dead" },
-        },
-        {
-          id: "s2",
-          name: "b",
-          state: "started",
-          labels: { "vortex.session": "sess-live" },
-        },
-        {
-          id: "s3",
-          name: "c",
-          state: "started",
-          labels: { "vortex.session": "sess-missing" },
-        },
+    const backend = orphanBackend(
+      [
+        orphanSandbox("s1", "sess-dead", "org-1"),
+        orphanSandbox("s2", "sess-live", "org-1"),
+        orphanSandbox("s3", "sess-missing", "org-1"),
       ],
-      deleteSandbox: async (s: { id: string }) => {
-        deleted.push(s.id);
-      },
-    };
+      (id) => deleted.push(id)
+    );
     const stub = {
       getAgentSession: async (id: string) =>
         id === "sess-dead"
@@ -1065,8 +1108,240 @@ describe("sweepOrphanSandboxes (PILE-471)", () => {
             : { status: "running" },
     };
     const { sweepOrphanSandboxes } = await import("./compute.js");
-    const out = await sweepOrphanSandboxes(backend as never, stub);
-    expect(out.reaped).toBe(2);
+    const out = await sweepOrphanSandboxes(backend as never, stub, {
+      organizationId: "org-1",
+    });
+    expect(out).toEqual({ reaped: 2, checked: 3 });
     expect(deleted.toSorted()).toEqual(["s1", "s3"]);
+  });
+
+  it("skips a sandbox when the session lookup fails instead of reaping it", async () => {
+    const deleted: string[] = [];
+    const backend = orphanBackend(
+      [
+        orphanSandbox("s1", "sess-flaky", "org-1"),
+        orphanSandbox("s2", "sess-dead", "org-1"),
+      ],
+      (id) => deleted.push(id)
+    );
+    const stub = {
+      getAgentSession: async (id: string) => {
+        if (id === "sess-flaky") throw new Error("DO timeout");
+        return { status: "completed" };
+      },
+    };
+    const { sweepOrphanSandboxes } = await import("./compute.js");
+    const out = await sweepOrphanSandboxes(backend as never, stub, {
+      organizationId: "org-1",
+    });
+    expect(out).toEqual({ reaped: 1, checked: 2 });
+    expect(deleted).toEqual(["s2"]);
+  });
+
+  it("counts reaped only after a successful delete and logs failures", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const backend = orphanBackend(
+      [
+        orphanSandbox("s1", "sess-dead", "org-1"),
+        orphanSandbox("s2", "sess-dead", "org-1"),
+      ],
+      (id) => {
+        if (id === "s1") throw new Error("delete 500");
+      }
+    );
+    const stub = {
+      getAgentSession: async () => ({ status: "completed" }),
+    };
+    const { sweepOrphanSandboxes } = await import("./compute.js");
+    const out = await sweepOrphanSandboxes(backend as never, stub, {
+      organizationId: "org-1",
+    });
+    expect(out).toEqual({ reaped: 1, checked: 2 });
+    expect(warn).toHaveBeenCalledOnce();
+    warn.mockRestore();
+  });
+
+  it("scopes candidates to the sweeping org — foreign-org sandboxes are untouched", async () => {
+    const deleted: string[] = [];
+    const backend = orphanBackend(
+      [
+        orphanSandbox("s1", "sess-missing", "org-1"),
+        orphanSandbox("s2", "sess-missing", "org-2"),
+        // No org label: a session row in this DO still proves ownership.
+        orphanSandbox("s3", "sess-dead"),
+        // No org label and no session row: ownership is unattributable.
+        orphanSandbox("s4", "sess-missing"),
+      ],
+      (id) => deleted.push(id)
+    );
+    const stub = {
+      getAgentSession: async (id: string) =>
+        id === "sess-dead" ? { status: "completed" } : null,
+    };
+    const { sweepOrphanSandboxes } = await import("./compute.js");
+    const out = await sweepOrphanSandboxes(backend as never, stub, {
+      organizationId: "org-1",
+    });
+    expect(out).toEqual({ reaped: 2, checked: 3 });
+    expect(deleted.toSorted()).toEqual(["s1", "s3"]);
+  });
+
+  it("keeps terminal-session sandboxes inside the resume window", async () => {
+    const deleted: string[] = [];
+    const backend = orphanBackend(
+      [
+        orphanSandbox("s1", "sess-fresh", "org-1"),
+        orphanSandbox("s2", "sess-old", "org-1"),
+      ],
+      (id) => deleted.push(id)
+    );
+    const stub = {
+      getAgentSession: async (id: string) =>
+        id === "sess-fresh"
+          ? { status: "completed", endedAt: new Date().toISOString() }
+          : {
+              status: "completed",
+              endedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+            },
+    };
+    const { sweepOrphanSandboxes } = await import("./compute.js");
+    const out = await sweepOrphanSandboxes(backend as never, stub, {
+      organizationId: "org-1",
+      keepTerminalMs: 45 * 60 * 1000,
+    });
+    expect(out).toEqual({ reaped: 1, checked: 2 });
+    expect(deleted).toEqual(["s2"]);
+  });
+
+  it("applies the limit after filtering out unlabeled and foreign-org sandboxes", async () => {
+    const checkedIds: string[] = [];
+    const deleted: string[] = [];
+    const backend = orphanBackend(
+      [
+        orphanSandbox("unlabeled", null),
+        orphanSandbox("foreign", "sess-a", "org-2"),
+        orphanSandbox("s1", "sess-a", "org-1"),
+        orphanSandbox("s2", "sess-b", "org-1"),
+      ],
+      (id) => deleted.push(id)
+    );
+    const stub = {
+      getAgentSession: async (id: string) => {
+        checkedIds.push(id);
+        return { status: "completed" };
+      },
+    };
+    const { sweepOrphanSandboxes } = await import("./compute.js");
+    const out = await sweepOrphanSandboxes(backend as never, stub, {
+      organizationId: "org-1",
+      limit: 1,
+    });
+    expect(out).toEqual({ reaped: 1, checked: 1 });
+    expect(checkedIds).toEqual(["sess-a"]);
+    expect(deleted).toEqual(["s1"]);
+  });
+});
+
+describe("DaytonaBackend.listSandboxes (PILE-471)", () => {
+  it("walks every /sandbox page and keeps only label-prefixed entries", async () => {
+    const calls = fetchStub((url) => {
+      if (url.endsWith("/sandbox?page=1")) {
+        return new Response(
+          JSON.stringify({
+            items: [
+              {
+                id: "a",
+                name: "a",
+                state: "stopped",
+                labels: { "vortex.session": "s1", "vortex.org": "org-1" },
+              },
+              { id: "skip", name: "x", state: "started" },
+            ],
+          }),
+          { status: 200 }
+        );
+      }
+      if (url.endsWith("/sandbox?page=2")) {
+        return new Response(
+          JSON.stringify({
+            items: [
+              {
+                id: "b",
+                name: "b",
+                state: "started",
+                labels: { "vortex.session": "s2" },
+              },
+            ],
+          }),
+          { status: 200 }
+        );
+      }
+      return new Response(JSON.stringify({ items: [] }), { status: 200 });
+    });
+    const backend = computeBackend(daytonaTestEnv());
+    const out = (await backend.listSandboxes?.("vortex.")) ?? [];
+    expect(out.map((s) => s.id)).toEqual(["a", "b"]);
+    expect(out[0]?.organizationId).toBe("org-1");
+    expect(calls.map((c) => c.url.replace("https://daytona.test", ""))).toEqual(
+      ["/sandbox?page=1", "/sandbox?page=2", "/sandbox?page=3"]
+    );
+    vi.unstubAllGlobals();
+  });
+
+  it("FailoverBackend.findSandbox switches to fallback when primary returns null (VTX-602/VTX-596)", async () => {
+    const { ns, stub } = fakeLaneNs();
+    const env = {
+      ...daytonaTestEnv(),
+      COMPUTE_PROVIDER: "cloudflare",
+      LANE_SDK: "v1",
+      LANE_FAILOVER: "v1",
+      SANDBOX_LANE: ns,
+    } as AppEnv;
+    stub.hasProcess.mockResolvedValueOnce(false);
+    fetchStub((url) => {
+      if (url.endsWith("/sandbox?page=1")) {
+        return new Response(
+          JSON.stringify({
+            items: [
+              {
+                id: "daytona-sb-1",
+                name: "vortex-lane-1",
+                state: "started",
+                labels: { "vortex.session": "sess-failover-1" },
+              },
+            ],
+          }),
+          { status: 200 }
+        );
+      }
+      return new Response(JSON.stringify({ items: [] }), { status: 200 });
+    });
+    const backend = computeBackend(env, "devin-cli");
+    expect(backend.kind).toBe("cloudflare");
+    const found = await backend.findSandbox("sess-failover-1", "vortex-lane-1");
+    expect(found?.id).toBe("daytona-sb-1");
+    expect(backend.kind).toBe("daytona");
+    vi.unstubAllGlobals();
+  });
+
+  it("FailoverBackend.findSandbox returns null when primary returns null and fallback probe throws", async () => {
+    const { ns, stub } = fakeLaneNs();
+    const env = {
+      ...daytonaTestEnv(),
+      COMPUTE_PROVIDER: "daytona",
+      LANE_FAILOVER: "v1",
+      SANDBOX_LANE: ns,
+    } as AppEnv;
+    fetchStub(
+      () => new Response(JSON.stringify({ items: [] }), { status: 200 })
+    );
+    stub.hasProcess.mockRejectedValueOnce(
+      new Error("exec() cannot be called on a container that is not running.")
+    );
+    const backend = computeBackend(env, "devin-cli");
+    expect(
+      await backend.findSandbox("sess-new-1", "vortex-lane-new")
+    ).toBeNull();
+    vi.unstubAllGlobals();
   });
 });

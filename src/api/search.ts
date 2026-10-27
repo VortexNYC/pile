@@ -12,6 +12,19 @@ import { issueViewer } from "./issue-access.js";
 const searchResultSchema = z.object({
   issueIds: z.array(z.string()),
   documentIds: z.array(z.string()),
+  memoryIds: z.array(z.string()),
+  // VTX-758 — hydrated hits so a client can render results without a
+  // follow-up fetch per id. Ordered by score, capped at `limit`.
+  results: z.array(
+    z.object({
+      type: z.enum(["issue", "document", "memory"]),
+      id: z.string(),
+      identifier: z.string().nullable(),
+      title: z.string(),
+      snippet: z.string(),
+      score: z.number(),
+    })
+  ),
 });
 
 const searchBodySchema = z.object({
@@ -23,6 +36,7 @@ const searchBodySchema = z.object({
 const searchRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/search",
+  summary: "Search issues, documents, and memory",
   tags: ["search"],
   middleware: [rls("settings:view")],
   request: {

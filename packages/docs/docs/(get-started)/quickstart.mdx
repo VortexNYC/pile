@@ -9,10 +9,10 @@ This walks the hosted path. Self-hosting on your own Cloudflare account is in [S
 
 <Steps>
   <Step title="Create an account and workspace">
-    Sign up at `https://<your-pile-host>`. The onboarding flow creates your first workspace; grab its ID from **Settings**, or list workspaces:
+    Sign up at `https://pile.nyc`. The onboarding flow creates your first workspace; grab its ID from **Settings**, or list workspaces:
 
     ```bash
-    curl -s https://<host>/workspaces \
+    curl -s https://pile.nyc/workspaces \
       -H "Authorization: Bearer $PILE_API_KEY"
     ```
 
@@ -22,7 +22,7 @@ This walks the hosted path. Self-hosting on your own Cloudflare account is in [S
     Create one in **Settings → Developer**, or:
 
     ```bash
-    curl -s -X POST https://<host>/api/auth/api-keys \
+    curl -s -X POST https://pile.nyc/api/auth/api-keys \
       -H "Cookie: <session>" \
       -H "Content-Type: application/json" \
       -d '{"name":"ci-agent","metadata":{"organizationId":"org_..."}}'
@@ -33,7 +33,7 @@ This walks the hosted path. Self-hosting on your own Cloudflare account is in [S
   </Step>
   <Step title="File your first issue">
     ```bash
-    curl -s -X POST "https://<host>/workspaces/org_.../issues" \
+    curl -s -X POST "https://pile.nyc/workspaces/org_.../issues" \
       -H "Authorization: Bearer $PILE_API_KEY" \
       -H "Content-Type: application/json" \
       -d '{"title":"Hello Pile","description":"filed by the API"}'
@@ -44,7 +44,7 @@ This walks the hosted path. Self-hosting on your own Cloudflare account is in [S
 
     ```bash
     curl -s -X POST \
-      "https://<host>/workspaces/org_.../entities/document/<doc-id>/links" \
+      "https://pile.nyc/workspaces/org_.../entities/document/<doc-id>/links" \
       -H "Authorization: Bearer $PILE_API_KEY" \
       -H "Content-Type: application/json" \
       -d '{"toType":"issue","toId":"<issue-id>"}'

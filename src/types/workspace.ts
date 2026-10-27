@@ -5,8 +5,6 @@ import type { FilterCondition } from "../workspace/filter.js";
 import {
   workspaceAgentSessions,
   workspaceDraftOutputs,
-  workspaceExternalEventDeliveries,
-  workspaceExternalEventMappings,
   workspaceStageTemplates,
 } from "../workspace/schema.js";
 import type { Id, Timestamp } from "./index.js";
@@ -39,6 +37,13 @@ export interface AgentSessionResult {
   // runner died without a result, or a sweep stall-cancel — rather than the
   // agent reporting a task outcome. Drives auto-retry + the unhealthy streak.
   infraFailure?: boolean;
+  // The lane died on the provider's own capacity ceiling (free-model rate
+  // limit, account 429) — retryable after the provider's reset, not a task
+  // or substrate failure. Sweep-side hold/backoff honors this.
+  rateLimited?: boolean;
+  // Provider-advertised reset instant (ISO) — when present the rate-limit
+  // park ends here instead of the fixed RATE_LIMIT_HOLD_MS window.
+  rateLimitUntil?: string | null;
   // PILE-425 — cumulative usage snapshot the lane/provider reports with this
   // result; lands on the session's run receipt (agent_run_receipts).
   usage?: AgentRunUsage | null;
@@ -78,6 +83,15 @@ export const ISSUE_STATUSES = [
 export type IssueStatus = (typeof ISSUE_STATUSES)[number];
 
 export const ISSUE_PRIORITIES = ["low", "medium", "high", "urgent"] as const;
+
+// VTX-621 — provider rate-limit pause marker: the pause row's reason carries
+// the reset instant as an ISO suffix so the sweep can lift it on expiry.
+export const RATE_LIMIT_PAUSE_PREFIX = "rate-limit until ";
+export const RATE_LIMIT_HOLD_MS = 20 * 60 * 1000;
+// A concurrency-cap pause (VTX-621): written when live lanes for an agent
+// type reach its cap; the sweep lifts it once a slot frees. The reason
+// suffix carries the cap so it can't be mistaken for an operator freeze.
+export const CONCURRENT_LANES_PAUSE_PREFIX = "concurrency cap — ";
 export type IssuePriority = (typeof ISSUE_PRIORITIES)[number];
 
 export const ISSUE_RESOLUTIONS = [
@@ -179,6 +193,18 @@ export interface IssueViewer {
   grantedOnly?: boolean;
 }
 
+/** VTX-758 — one hydrated hit in POST /search's `results` array. */
+export interface SearchResultItem {
+  type: "issue" | "document" | "memory";
+  id: string;
+  /** Issue identifier (e.g. ISS-42); null for documents and memories. */
+  identifier: string | null;
+  title: string;
+  /** ~200-char excerpt centered on the first query-term match. */
+  snippet: string;
+  score: number;
+}
+
 export interface ListIssuesArgs {
   limit?: number;
   cursor?: IssueCursor;
@@ -264,36 +290,11 @@ export type StageEntityType = StageTemplate["entityType"];
  *  needed", "hardware_needed", and a custom field of either spelling all
  *  resolve to the same key). Without `equals` the step is created only when
  *  the field resolves truthy; with `equals` the stored value must match. */
-export interface StepCondition {
-  field: string;
-  equals?: string | number | boolean;
-}
-
-export interface StageTemplateInput {
-  entityType?: StageEntityType;
-  status: string;
-  stepKey: string;
-  title: string;
-  required?: boolean;
-  ownerAgent?: string | null;
-  condition?: StepCondition | null;
-  position?: number;
-  teamId?: string | null;
-}
-
 // PILE-422 — external events complete sub-steps. A mapping binds
 // (source, eventType) to a stepKey; the matcher resolves the payload to a
 // record (entityType + matchPath → externalId/externalRef). `secret` is the
 // HMAC-SHA256 credential the source's deliveries are verified against —
 // never returned by the API.
-export type ExternalEventMapping = InferSelectModel<
-  typeof workspaceExternalEventMappings
->;
-export type ExternalEventDelivery = InferSelectModel<
-  typeof workspaceExternalEventDeliveries
->;
-export type ExternalEventEntityType = ExternalEventMapping["entityType"];
-
 /** Delivery outcomes. "replay" is returned for a dedupe hit — the stored
  *  row keeps the original outcome; everything else is written once. */
 export const EXTERNAL_EVENT_DELIVERY_STATUSES = [
@@ -307,23 +308,6 @@ export const EXTERNAL_EVENT_DELIVERY_STATUSES = [
 ] as const;
 export type ExternalEventDeliveryStatus =
   (typeof EXTERNAL_EVENT_DELIVERY_STATUSES)[number];
-
-export interface ExternalEventMappingInput {
-  source: string;
-  eventType: string;
-  entityType: ExternalEventEntityType;
-  /** Dotted path into the payload resolving to the record's external id —
-   *  e.g. "data.merchant_id". Array indexes are numeric segments. */
-  matchPath: string;
-  stepKey: string;
-  secret: string;
-  enabled?: boolean;
-  createdBy?: string | null;
-}
-
-export type ExternalEventMappingPatch = Partial<
-  Omit<ExternalEventMappingInput, "createdBy">
->;
 
 export interface ExternalEventIngestInput {
   source: string;
@@ -371,7 +355,6 @@ export const DRAFT_OUTPUT_KINDS = [
   // piece, email): markdown + rendered payload gated on human approval.
   "artifact",
 ] as const;
-export type DraftOutputKind = (typeof DRAFT_OUTPUT_KINDS)[number];
 
 export const DRAFT_OUTPUT_STATUSES = [
   "pending",

@@ -1653,4 +1653,574 @@ describe("support-capture API", () => {
     const storedBin = await env.ATTACHMENTS_BUCKET.get(binKey);
     expect(new Uint8Array(await storedBin!.arrayBuffer())).toEqual(png);
   });
+
+  it("transcribes a video artifact on finalize and exposes it through the capture viewers", async () => {
+    const aiCalls: { model: string }[] = [];
+    const originalAi = env.AI;
+    env.AI = {
+      run: async (model: string, _inputs: unknown) => {
+        aiCalls.push({ model });
+        if (model === "@cf/openai/whisper-large-v3-turbo") {
+          return {
+            text: "I click save and nothing happens at all",
+            word_count: 8,
+            vtt: "WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nI click save and nothing happens at all\n",
+            transcription_info: { language: "en", duration: 2 },
+            segments: [
+              { start: 0, end: 2, text: "I click save and nothing happens" },
+            ],
+          };
+        }
+        return { response: "Save click does nothing" };
+      },
+    };
+
+    try {
+      const publicKey = await createPublicKey();
+      const { token: sessionToken } = await issueCaptureToken(publicKey);
+
+      const sessionRes = await captureFetch("/support/capture/upload-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-pile-capture-token": sessionToken,
+        },
+        body: JSON.stringify({
+          title: "Bug report",
+          attachmentType: "video",
+          fileName: "recording.webm",
+          contentType: "video/webm",
+          metadata: { email: "video-reporter@example.com" },
+        }),
+      });
+      expect(sessionRes.status).toBe(200);
+      const session = (await sessionRes.json()) as {
+        uploads: { uploadUrl: string; r2Key: string }[];
+      };
+
+      const uploadRes = await captureFetch(session.uploads[0]!.uploadUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "video/webm",
+          "x-pile-capture-token": sessionToken,
+        },
+        body: new Uint8Array([9, 8, 7, 6, 5]),
+      });
+      expect(uploadRes.status).toBe(200);
+
+      const finalizeRes = await captureFetch("/support/capture/finalize", {
+        method: "POST",
+        headers: { "x-pile-capture-token": sessionToken },
+      });
+      expect(finalizeRes.status).toBe(200);
+      const final = (await finalizeRes.json()) as { ticketId: string };
+
+      const db = createD1(env.D1);
+      const attachments = await db
+        .select()
+        .from(supportTicketAttachments)
+        .where(eq(supportTicketAttachments.ticketId, final.ticketId))
+        .all();
+      const fileNames = attachments.map((a) => a.fileName).toSorted();
+      expect(fileNames).toEqual([
+        "postprocessing.json",
+        "recording.webm",
+        "transcript.json",
+        "transcript.vtt",
+      ]);
+      const byName = new Map(attachments.map((a) => [a.fileName, a]));
+      expect(byName.get("transcript.json")!.type).toBe("transcript");
+      expect(byName.get("transcript.vtt")!.type).toBe("transcript");
+      expect(byName.get("postprocessing.json")!.type).toBe("debugger_json");
+      expect(byName.get("transcript.json")!.r2Key).toContain(
+        "/transcript/transcript.json"
+      );
+
+      // The transcript text is on the ticket thread for triage.
+      const ticket = await getTicketById(db, organizationId, final.ticketId);
+      expect(
+        ticket!.events.some(
+          (e) =>
+            e.subType === "capture_transcript" &&
+            e.message?.textContent?.includes(
+              "I click save and nothing happens at all"
+            )
+        )
+      ).toBe(true);
+
+      // The placeholder title was replaced by the summary model.
+      expect(ticket!.title).toBe("Save click does nothing");
+
+      // The captures metadata viewer surfaces the transcript under
+      // `postprocessing` — no new endpoint needed.
+      const metaRes = await captureFetch(
+        `/workspaces/${organizationId}/support/captures/${final.ticketId}/metadata`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      expect(metaRes.status).toBe(200);
+      const meta = (await metaRes.json()) as {
+        postprocessing: { transcript?: { text?: string } } | null;
+      };
+      expect(meta.postprocessing?.transcript?.text).toBe(
+        "I click save and nothing happens at all"
+      );
+
+      // The artifact endpoint serves the transcript JSON itself.
+      const artifactRes = await captureFetch(
+        new URL(byName.get("transcript.json")!.url!).pathname,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      expect(artifactRes.status).toBe(200);
+      const transcriptJson = (await artifactRes.json()) as { text: string };
+      expect(transcriptJson.text).toBe(
+        "I click save and nothing happens at all"
+      );
+    } finally {
+      env.AI = originalAi;
+    }
+  });
+
+  it("still lands the ticket when transcription fails on finalize", async () => {
+    const originalAi = env.AI;
+    env.AI = {
+      run: async () => {
+        throw new Error("whisper unavailable");
+      },
+    };
+
+    try {
+      const publicKey = await createPublicKey();
+      const { token: sessionToken } = await issueCaptureToken(publicKey);
+
+      const sessionRes = await captureFetch("/support/capture/upload-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-pile-capture-token": sessionToken,
+        },
+        body: JSON.stringify({
+          title: "Broken export",
+          attachmentType: "video",
+          fileName: "recording.webm",
+          contentType: "video/webm",
+          metadata: { email: "fail-safe@example.com" },
+        }),
+      });
+      const session = (await sessionRes.json()) as {
+        uploads: { uploadUrl: string }[];
+      };
+      await captureFetch(session.uploads[0]!.uploadUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "video/webm",
+          "x-pile-capture-token": sessionToken,
+        },
+        body: new Uint8Array([1, 2, 3]),
+      });
+
+      const finalizeRes = await captureFetch("/support/capture/finalize", {
+        method: "POST",
+        headers: { "x-pile-capture-token": sessionToken },
+      });
+      expect(finalizeRes.status).toBe(200);
+      const final = (await finalizeRes.json()) as { ticketId: string };
+
+      const db = createD1(env.D1);
+      const ticket = await getTicketById(db, organizationId, final.ticketId);
+      expect(ticket).not.toBeNull();
+      expect(ticket!.title).toBe("Broken export");
+
+      const attachments = await db
+        .select()
+        .from(supportTicketAttachments)
+        .where(eq(supportTicketAttachments.ticketId, final.ticketId))
+        .all();
+      expect(attachments.map((a) => a.fileName)).toEqual(["recording.webm"]);
+    } finally {
+      env.AI = originalAi;
+    }
+  });
+});
+
+describe("member feedback", () => {
+  let organizationId: string;
+  let token: string;
+  let sessionHeaders: Headers;
+
+  beforeAll(async () => {
+    const seeded = await seedWorkspace();
+    organizationId = seeded.organizationId;
+    token = seeded.token;
+    sessionHeaders = await createAdminHeaders(env, "user-capture");
+  });
+
+  function feedbackFetch(
+    body: Record<string, unknown>,
+    headers?: Headers
+  ): Promise<Response> {
+    const merged = new Headers(headers ?? sessionHeaders);
+    merged.set("Content-Type", "application/json");
+    return captureFetch(`/workspaces/${organizationId}/support/feedback`, {
+      method: "POST",
+      headers: merged,
+      body: JSON.stringify(body),
+    });
+  }
+
+  it("files a member feedback ticket with captured context artifacts", async () => {
+    const res = await feedbackFetch({
+      kind: "bug",
+      title: "Cannot open tickets",
+      description: "Clicking a ticket row does nothing",
+      url: "https://app.example.com/app/acme/tickets",
+      userAgent: "vitest-agent/1.0",
+      viewport: { width: 1440, height: 900 },
+      deviceInfo: { platform: "TestOS" },
+      consoleErrors: [
+        { level: "error", message: "TypeError: cannot read properties" },
+        { level: "warn", message: "slow query" },
+      ],
+      screenshotDataUrl: `data:image/png;base64,${btoa("fakepng")}`,
+    });
+    expect(res.status).toBe(201);
+    const { ticketId, ticketNumber } = (await res.json()) as {
+      ticketId: string;
+      ticketNumber: number;
+    };
+    expect(ticketId).toBeTruthy();
+    expect(ticketNumber).toBeGreaterThan(0);
+
+    const db = createD1(env.D1);
+    const ticket = await getTicketById(db, organizationId, ticketId);
+    expect(ticket).not.toBeNull();
+    expect(ticket!.title).toBe("[feedback:bug] Cannot open tickets");
+    expect(ticket!.sourceChannel).toBe("capture");
+
+    // The reporter resolves server-side to the session user's email —
+    // the client cannot spoof a different reporter.
+    const customer = await db
+      .select()
+      .from(supportCustomers)
+      .where(eq(supportCustomers.id, ticket!.customerId))
+      .get();
+    expect(customer!.email).toBe("capture-user@example.com");
+
+    const feedbackEvent = ticket!.events.find(
+      (e) => e.subType === "member-feedback"
+    );
+    expect(feedbackEvent).toBeDefined();
+    expect(feedbackEvent!.message?.textContent).toContain(
+      "Clicking a ticket row does nothing"
+    );
+    expect(feedbackEvent!.message?.textContent).toContain(
+      "https://app.example.com/app/acme/tickets"
+    );
+
+    // Standard capture artifacts — readable by the workspace capture
+    // viewers (/support/captures/{ticketId}/metadata, /console, /frames).
+    const attachments = await db
+      .select()
+      .from(supportTicketAttachments)
+      .where(eq(supportTicketAttachments.ticketId, ticketId))
+      .all();
+    const fileNames = attachments.map((a) => a.fileName).toSorted();
+    expect(fileNames).toEqual([
+      "console-logs.json",
+      "debugger.json",
+      "device-info.json",
+      "events-summary.json",
+      "metadata.json",
+      "screenshot.png",
+    ]);
+    for (const attachment of attachments) {
+      expect(attachment.r2Key).toContain(
+        `${organizationId}/capture/feedback-${ticketId}/`
+      );
+      const stored = await env.ATTACHMENTS_BUCKET.get(attachment.r2Key!);
+      expect(stored).not.toBeNull();
+    }
+
+    // The console viewer reads console-logs.json back with level/error
+    // filters intact.
+    const consoleRes = await captureFetch(
+      `/workspaces/${organizationId}/support/captures/${ticketId}/console?isError=true`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    expect(consoleRes.status).toBe(200);
+    const consoleBody = (await consoleRes.json()) as {
+      events: { console_level: string; is_error: boolean }[];
+    };
+    expect(consoleBody.events).toHaveLength(1);
+    expect(consoleBody.events[0].console_level).toBe("error");
+
+    const metaRes = await captureFetch(
+      `/workspaces/${organizationId}/support/captures/${ticketId}/metadata`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    expect(metaRes.status).toBe(200);
+    const meta = (await metaRes.json()) as {
+      deviceInfo: Record<string, unknown> | null;
+      metadata: Record<string, unknown> | null;
+    };
+    expect(meta.deviceInfo).toMatchObject({
+      platform: "TestOS",
+      userAgent: "vitest-agent/1.0",
+    });
+    expect(meta.metadata).toMatchObject({
+      source: "member-feedback",
+      kind: "bug",
+    });
+  });
+
+  it("files feedback without a screenshot or console errors", async () => {
+    const res = await feedbackFetch({
+      kind: "feature",
+      title: "Dark mode for tickets",
+      description: "Please add a dark theme option",
+    });
+    expect(res.status).toBe(201);
+    const { ticketId } = (await res.json()) as { ticketId: string };
+    const db = createD1(env.D1);
+    const ticket = await getTicketById(db, organizationId, ticketId);
+    expect(ticket!.title).toBe("[feedback:feature] Dark mode for tickets");
+
+    const attachments = await db
+      .select()
+      .from(supportTicketAttachments)
+      .where(eq(supportTicketAttachments.ticketId, ticketId))
+      .all();
+    expect(attachments.map((a) => a.fileName).toSorted()).toEqual([
+      "events-summary.json",
+      "metadata.json",
+    ]);
+  });
+
+  it("files the full Jam-parity bundle — network, events, errors, recording", async () => {
+    const res = await feedbackFetch({
+      kind: "bug",
+      title: "Checkout hangs",
+      description: "Submit spins forever after the last deploy",
+      url: "https://app.example.com/app/acme",
+      consoleLogs: [
+        { level: "info", message: "render start" },
+        { level: "error", message: "checkout failed" },
+      ],
+      networkRequests: [
+        {
+          method: "POST",
+          url: "https://api.example.com/checkout",
+          status: 500,
+          duration: 312,
+        },
+        { method: "GET", url: "https://api.example.com/health", status: 200 },
+      ],
+      userEvents: [
+        { type: "click", target: "button.submit" },
+        { type: "navigation", target: "window" },
+      ],
+      errors: [
+        {
+          message: "TypeError: undefined is not a function",
+          stack: "TypeError: undefined...\n  at submit",
+          source: "exception",
+        },
+      ],
+      recordingDataUrl: `data:video/webm;base64,${btoa("fakewebm")}`,
+    });
+    expect(res.status).toBe(201);
+    const { ticketId } = (await res.json()) as { ticketId: string };
+
+    const db = createD1(env.D1);
+    const attachments = await db
+      .select()
+      .from(supportTicketAttachments)
+      .where(eq(supportTicketAttachments.ticketId, ticketId))
+      .all();
+    expect(attachments.map((a) => a.fileName).toSorted()).toEqual([
+      "console-logs.json",
+      "debugger.json",
+      "events-summary.json",
+      "metadata.json",
+      "network-requests.json",
+      "recording.webm",
+      "user-events.json",
+    ]);
+    const types = new Map(attachments.map((a) => [a.fileName, a.type]));
+    expect(types.get("network-requests.json")).toBe("network");
+    expect(types.get("recording.webm")).toBe("video");
+
+    const bearer = { headers: { Authorization: `Bearer ${token}` } };
+
+    // The network viewer filters on network_url / is_error.
+    const netRes = await captureFetch(
+      `/workspaces/${organizationId}/support/captures/${ticketId}/network?isError=true`,
+      bearer
+    );
+    expect(netRes.status).toBe(200);
+    const netBody = (await netRes.json()) as {
+      events: { network_url: string; network_status: number }[];
+    };
+    expect(netBody.events).toHaveLength(1);
+    expect(netBody.events[0].network_url).toContain("checkout");
+    expect(netBody.events[0].network_status).toBe(500);
+
+    // The events viewer filters on event_type / interactivity_action.
+    const evRes = await captureFetch(
+      `/workspaces/${organizationId}/support/captures/${ticketId}/events?action=click`,
+      bearer
+    );
+    expect(evRes.status).toBe(200);
+    const evBody = (await evRes.json()) as { events: unknown[] };
+    expect(evBody.events).toHaveLength(1);
+
+    // Console viewer sees logs plus the folded-in exception.
+    const conRes = await captureFetch(
+      `/workspaces/${organizationId}/support/captures/${ticketId}/console?isError=true`,
+      bearer
+    );
+    const conBody = (await conRes.json()) as {
+      events: { console_value: string }[];
+    };
+    expect(conRes.status).toBe(200);
+    expect(conBody.events).toHaveLength(2);
+    expect(
+      conBody.events.some((e) =>
+        e.console_value.includes("TypeError: undefined")
+      )
+    ).toBe(true);
+
+    // Frames exposes the recording as a video frame.
+    const framesRes = await captureFetch(
+      `/workspaces/${organizationId}/support/captures/${ticketId}/frames`,
+      bearer
+    );
+    const frames = (await framesRes.json()) as {
+      frames: { type: string; fileName: string }[];
+    };
+    expect(framesRes.status).toBe(200);
+    expect(frames.frames).toEqual([
+      { type: "video", fileName: "recording.webm", url: expect.any(String) },
+    ]);
+
+    // Metadata surfaces the events summary.
+    const metaRes = await captureFetch(
+      `/workspaces/${organizationId}/support/captures/${ticketId}/metadata`,
+      bearer
+    );
+    const meta = (await metaRes.json()) as {
+      eventsSummary: Record<string, unknown> | null;
+    };
+    expect(meta.eventsSummary).toMatchObject({
+      consoleLogs: 3,
+      networkRequests: 2,
+      userEvents: 2,
+      errors: 1,
+      recording: true,
+    });
+  });
+
+  it("attaches a transcript when a feedback recording is transcribed", async () => {
+    const originalAi = env.AI;
+    env.AI = {
+      run: async (model: string, _inputs: unknown) => {
+        if (model === "@cf/openai/whisper-large-v3-turbo") {
+          return {
+            text: "the export button silently fails",
+            vtt: "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nthe export button silently fails\n",
+            segments: [{ start: 0, end: 1, text: "the export button" }],
+          };
+        }
+        return { response: "unused" };
+      },
+    };
+
+    try {
+      const res = await feedbackFetch({
+        kind: "bug",
+        title: "Export broken",
+        description: "Pressing export does nothing",
+        recordingDataUrl: `data:video/webm;base64,${btoa("fakewebm")}`,
+      });
+      expect(res.status).toBe(201);
+      const { ticketId } = (await res.json()) as { ticketId: string };
+
+      const db = createD1(env.D1);
+      const attachments = await db
+        .select()
+        .from(supportTicketAttachments)
+        .where(eq(supportTicketAttachments.ticketId, ticketId))
+        .all();
+      expect(attachments.map((a) => a.fileName).toSorted()).toEqual([
+        "events-summary.json",
+        "metadata.json",
+        "postprocessing.json",
+        "recording.webm",
+        "transcript.json",
+        "transcript.vtt",
+      ]);
+      const transcriptRow = attachments.find(
+        (a) => a.fileName === "transcript.json"
+      );
+      expect(transcriptRow!.type).toBe("transcript");
+      expect(transcriptRow!.r2Key).toContain(
+        `${organizationId}/capture/feedback-${ticketId}/transcript/`
+      );
+
+      const ticket = await getTicketById(db, organizationId, ticketId);
+      expect(
+        ticket!.events.some(
+          (e) =>
+            e.subType === "capture_transcript" &&
+            e.message?.textContent?.includes("the export button silently fails")
+        )
+      ).toBe(true);
+      // Member-authored title is untouched.
+      expect(ticket!.title).toBe("[feedback:bug] Export broken");
+    } finally {
+      env.AI = originalAi;
+    }
+  });
+
+  it("rejects a malformed recording data URL", async () => {
+    const res = await feedbackFetch({
+      kind: "bug",
+      title: "x",
+      description: "y",
+      recordingDataUrl: "data:text/plain;base64,AAAA",
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects unauthenticated feedback", async () => {
+    const res = await feedbackFetch(
+      { kind: "bug", title: "x", description: "y" },
+      new Headers()
+    );
+    // 401/403 depending on which middleware rejects first — either way,
+    // no ticket is created.
+    expect([401, 403]).toContain(res.status);
+  });
+
+  it("rejects a malformed screenshot data URL", async () => {
+    const res = await feedbackFetch({
+      kind: "other",
+      title: "Something",
+      description: "Details here",
+      screenshotDataUrl: "not-a-data-url",
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("derives a deterministic fallback email for non-user identities", async () => {
+    const { feedbackReporterEmail } = await import("../api/support-capture.js");
+    expect(
+      feedbackReporterEmail(
+        { id: "user-capture", type: "user" },
+        "Capture-User@Example.com"
+      )
+    ).toBe("capture-user@example.com");
+    expect(
+      feedbackReporterEmail({ id: "lane:foo/bar", type: "agent" }, null)
+    ).toBe("agent-lane-foo-bar@feedback.pile.internal");
+  });
 });

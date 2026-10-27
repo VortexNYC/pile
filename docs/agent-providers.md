@@ -287,8 +287,9 @@ cancel`, Devin `DELETE /sessions/{id}`), then the local session is marked
 `canceled` either way.
 
 `POST /workspaces/{org}/agent/sessions/{id}/poll` writes provider status back
-and, when a new `prUrl` appears, records it as a session **artifact** (same
-path as `POST …/artifacts`).
+(including `usage`, which lands on the session's run receipt) and, when a new
+`prUrl` appears, records it as a session **artifact** (same path as
+`POST …/artifacts`).
 
 ### Issue progress comment (PILE-290)
 

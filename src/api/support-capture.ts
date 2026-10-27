@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import type { Context } from "hono";
 
 import captureSdkBundle from "../assets/capture.iife.js";
+import { transcribeCaptureRecording } from "../global/capture-transcript.js";
 import { createD1, type D1Client } from "../global/db.js";
 import { storeJamCaptureArtifacts } from "../global/jam-capture.js";
 import {
@@ -14,6 +15,7 @@ import {
   supportCaptureSessions,
   supportTicketAttachments,
   supportTickets,
+  user,
 } from "../global/schema.js";
 import {
   countCaptureLinkSessions,
@@ -48,6 +50,7 @@ import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import { publicRateLimit } from "../platform/rate-limit.js";
 import { rls } from "../platform/rls.js";
 import { renderCaptureLinkPage } from "./capture-link-page.js";
+import { getExecutionCtx } from "./execution-ctx.js";
 import { getWorkspaceStub } from "./stub.js";
 
 const capturePublicKeySchema = z.object({
@@ -83,7 +86,10 @@ const captureArtifactKindSchema = z.enum([
   "log",
   "network",
   "replay",
+  "transcript",
 ]);
+
+type CaptureArtifactKind = z.infer<typeof captureArtifactKindSchema>;
 
 const uploadSessionBodySchema = z.object({
   title: z.string().min(1),
@@ -295,7 +301,113 @@ const revokeCaptureLinkRoute = createRoute({
   },
 });
 
+const feedbackTimestampSchema = z.string().max(60).optional();
+
+const memberFeedbackBodySchema = z.object({
+  kind: z.enum(["bug", "feature", "other"]),
+  title: z.string().min(1).max(200),
+  description: z.string().min(1).max(8000),
+  url: z.string().max(2048).optional(),
+  userAgent: z.string().max(500).optional(),
+  viewport: z
+    .object({
+      width: z.number().int().nonnegative(),
+      height: z.number().int().nonnegative(),
+    })
+    .optional(),
+  deviceInfo: z.record(z.string(), z.unknown()).optional(),
+  // Legacy error-only buffer from the first bubble iteration — still
+  // accepted so older sessions can file. New clients send consoleLogs
+  // (all levels) plus a separate errors array.
+  consoleErrors: z
+    .array(
+      z.object({
+        level: z.string().min(1).max(20),
+        message: z.string().min(1).max(4000),
+        timestamp: feedbackTimestampSchema,
+      })
+    )
+    .max(100)
+    .optional(),
+  consoleLogs: z
+    .array(
+      z.object({
+        level: z.string().min(1).max(20),
+        message: z.string().min(1).max(4000),
+        timestamp: feedbackTimestampSchema,
+      })
+    )
+    .max(500)
+    .optional(),
+  networkRequests: z
+    .array(
+      z.object({
+        method: z.string().min(1).max(16),
+        url: z.string().min(1).max(2048),
+        status: z.number().int().min(0).max(999).optional(),
+        duration: z.number().nonnegative().max(3_600_000).optional(),
+        timestamp: feedbackTimestampSchema,
+      })
+    )
+    .max(400)
+    .optional(),
+  userEvents: z
+    .array(
+      z.object({
+        type: z.string().min(1).max(40),
+        target: z.string().max(500).optional(),
+        timestamp: feedbackTimestampSchema,
+        metadata: z.record(z.string(), z.unknown()).optional(),
+      })
+    )
+    .max(100)
+    .optional(),
+  errors: z
+    .array(
+      z.object({
+        message: z.string().min(1).max(4000),
+        stack: z.string().max(8000).optional(),
+        source: z.string().max(60).optional(),
+        timestamp: feedbackTimestampSchema,
+      })
+    )
+    .max(100)
+    .optional(),
+  screenshotDataUrl: z.string().max(10_000_000).optional(),
+  recordingDataUrl: z.string().max(40_000_000).optional(),
+});
+
+const memberFeedbackRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/support/feedback",
+  tags: ["support-capture"],
+  middleware: [rls("ticket:create")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    body: {
+      content: {
+        "application/json": { schema: memberFeedbackBodySchema },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Member feedback filed as a support ticket",
+      content: {
+        "application/json": {
+          schema: z.object({
+            ticketId: z.string(),
+            ticketNumber: z.number(),
+          }),
+        },
+      },
+    },
+    400: { description: "Invalid screenshot payload" },
+  },
+});
+
 const tokenRoute = createRoute({
+  security: [],
   method: "post",
   path: "/support/capture/token",
   tags: ["support-capture"],
@@ -354,6 +466,7 @@ async function verifyTurnstile(
 }
 
 const uploadSessionRoute = createRoute({
+  security: [],
   method: "post",
   path: "/support/capture/upload-session",
   tags: ["support-capture"],
@@ -382,6 +495,7 @@ const uploadSessionRoute = createRoute({
 });
 
 const uploadRoute = createRoute({
+  security: [],
   method: "post",
   path: "/support/capture/upload/{sessionId}/{attachmentType}/{fileName}",
   tags: ["support-capture"],
@@ -389,14 +503,7 @@ const uploadRoute = createRoute({
   request: {
     params: z.object({
       sessionId: z.string(),
-      attachmentType: z.enum([
-        "screenshot",
-        "video",
-        "debugger_json",
-        "log",
-        "network",
-        "replay",
-      ]),
+      attachmentType: captureArtifactKindSchema,
       fileName: z.string(),
     }),
     headers: z.object({
@@ -417,6 +524,7 @@ const uploadRoute = createRoute({
 });
 
 const finalizeRoute = createRoute({
+  security: [],
   method: "post",
   path: "/support/capture/finalize",
   tags: ["support-capture"],
@@ -440,6 +548,7 @@ const finalizeRoute = createRoute({
 });
 
 const metadataRoute = createRoute({
+  security: [],
   method: "post",
   path: "/support/capture/metadata",
   tags: ["support-capture"],
@@ -465,6 +574,7 @@ const metadataRoute = createRoute({
 });
 
 const viewArtifactRoute = createRoute({
+  security: [],
   method: "get",
   path: "/support/capture/artifacts/{attachmentId}",
   tags: ["support-capture"],
@@ -484,6 +594,7 @@ const viewArtifactRoute = createRoute({
 });
 
 const captureSessionRoute = createRoute({
+  security: [],
   method: "get",
   path: "/support/capture/sessions/{sessionId}",
   tags: ["support-capture"],
@@ -522,6 +633,7 @@ const captureSessionRoute = createRoute({
 });
 
 const shareTicketRoute = createRoute({
+  security: [],
   method: "get",
   path: "/support/capture/public/{ticketId}",
   tags: ["support-capture"],
@@ -732,6 +844,7 @@ const jamIntercomOptedOutSchema = z
   .passthrough();
 
 const jamIntercomRecordedRoute = createRoute({
+  security: [],
   method: "post",
   path: "/support/webhooks/jam/{publicKeyId}/intercom/recorded",
   tags: ["support-capture"],
@@ -770,6 +883,7 @@ const jamIntercomRecordedRoute = createRoute({
 });
 
 const jamIntercomOptedOutRoute = createRoute({
+  security: [],
   method: "post",
   path: "/support/webhooks/jam/{publicKeyId}/intercom/opted-out",
   tags: ["support-capture"],
@@ -808,6 +922,7 @@ const jamIntercomOptedOutRoute = createRoute({
 });
 
 const jamRecordingLinkCreatedRoute = createRoute({
+  security: [],
   method: "post",
   path: "/support/webhooks/jam/{publicKeyId}/recording-links",
   tags: ["support-capture"],
@@ -846,6 +961,7 @@ const jamRecordingLinkCreatedRoute = createRoute({
 });
 
 const jamWebhookRoute = createRoute({
+  security: [],
   method: "post",
   path: "/support/webhooks/jam/{publicKeyId}",
   tags: ["support-capture"],
@@ -969,6 +1085,50 @@ function uploadsFromSession(session: {
   ) as CaptureUploadRecord[];
 }
 
+const SCREENSHOT_DATA_URL =
+  /^data:(image\/(?:png|jpe?g|webp));base64,([A-Za-z0-9+/=\s]+)$/;
+const RECORDING_DATA_URL =
+  /^data:(video\/(?:webm|mp4));base64,([A-Za-z0-9+/=\s]+)$/;
+
+function decodeMediaDataUrl(
+  dataUrl: string,
+  pattern: RegExp,
+  field: string
+): { contentType: string; body: Uint8Array } {
+  const match = pattern.exec(dataUrl);
+  if (!match) {
+    throw new VortexError({
+      status: 400,
+      code: "BAD_REQUEST",
+      message: `${field} must be a base64 media data URL`,
+    });
+  }
+  return {
+    contentType: match[1]!,
+    body: base64ToBytes(match[2]!.replace(/\s/g, "")),
+  };
+}
+
+/** Reporter address for the ticket customer — the member's real email
+ *  when their identity resolves to a user row, else a deterministic
+ *  non-routable local part so agent-key actors still land on a stable
+ *  customer record. */
+export function feedbackReporterEmail(
+  identity: { id: string; type: string },
+  userEmail: string | null | undefined
+): string {
+  if (userEmail) return userEmail.toLowerCase().trim();
+  const local = `${identity.type}-${identity.id}`
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `${local || "unknown"}@feedback.pile.internal`;
+}
+
+function jsonArtifactBytes(data: unknown): Uint8Array {
+  return new TextEncoder().encode(scrubCaptureText(JSON.stringify(data)));
+}
+
 function base64ToBytes(value: string): Uint8Array<ArrayBuffer> {
   const binary = atob(value);
   const bytes = new Uint8Array(binary.length);
@@ -1062,6 +1222,22 @@ async function fetchArtifactJson(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+/** Transcription is post-landing enrichment — it must never block or fail
+ *  the request that created the ticket. Deferred with `waitUntil` when an
+ *  ExecutionContext exists; awaited inline otherwise (direct app.fetch in
+ *  tests). `transcribeCaptureRecording` itself never rejects. */
+async function kickCaptureTranscription(
+  c: Context<AppContext>,
+  work: Promise<unknown>
+): Promise<void> {
+  const execCtx = getExecutionCtx(c);
+  if (execCtx) {
+    execCtx.waitUntil(work);
+    return;
+  }
+  await work;
 }
 
 async function findAttachmentFileName(
@@ -1259,6 +1435,349 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
     const link = await revokeCaptureLink(db, organizationId, linkId);
     const origin = new URL(c.req.url).origin;
     return c.json(captureLinkSchema.parse(linkToResponse(link, origin)));
+  });
+
+  // Jam-style in-app feedback: an authenticated member files a bug /
+  // feature request straight into the workspace's tickets. One shot —
+  // no public key, token, or upload session — but the context (device
+  // info, console errors, screenshot) still lands as standard capture
+  // artifacts so the captures viewers read it like any other capture.
+  app.openapi(memberFeedbackRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const identity = c.var.workspaceIdentity;
+    const db = createD1(c.env.D1);
+
+    let screenshot: {
+      contentType: string;
+      fileName: string;
+      body: Uint8Array;
+    } | null = null;
+    if (input.screenshotDataUrl) {
+      const decoded = decodeMediaDataUrl(
+        input.screenshotDataUrl,
+        SCREENSHOT_DATA_URL,
+        "screenshotDataUrl"
+      );
+      const extension =
+        decoded.contentType === "image/png"
+          ? "png"
+          : decoded.contentType === "image/webp"
+            ? "webp"
+            : "jpg";
+      screenshot = { ...decoded, fileName: `screenshot.${extension}` };
+    }
+
+    let recording: {
+      contentType: string;
+      fileName: string;
+      body: Uint8Array;
+    } | null = null;
+    if (input.recordingDataUrl) {
+      const decoded = decodeMediaDataUrl(
+        input.recordingDataUrl,
+        RECORDING_DATA_URL,
+        "recordingDataUrl"
+      );
+      const extension = decoded.contentType === "video/mp4" ? "mp4" : "webm";
+      recording = { ...decoded, fileName: `recording.${extension}` };
+    }
+
+    const reporter = await db
+      .select({ email: user.email, name: user.name })
+      .from(user)
+      .where(eq(user.id, identity.id))
+      .get();
+    const email = feedbackReporterEmail(identity, reporter?.email);
+    const fullName = reporter?.name ?? null;
+
+    const customer = await findOrCreateCustomerByEmail(
+      db,
+      organizationId,
+      email,
+      fullName,
+      "capture"
+    );
+
+    const ticket = await createTicket(
+      db,
+      {
+        organizationId,
+        customerId: customer.id,
+        title: `[feedback:${input.kind}] ${input.title}`,
+        priority: "medium",
+        sourceChannel: "capture",
+        externalSource: "api",
+      },
+      c.env
+    );
+
+    const submittedAt = new Date().toISOString();
+    const contextLines = [
+      `kind: ${input.kind}`,
+      `url: ${input.url ?? "unknown"}`,
+      `user-agent: ${input.userAgent ?? "unknown"}`,
+      input.viewport
+        ? `viewport: ${input.viewport.width}x${input.viewport.height}`
+        : null,
+      `reporter: ${fullName ?? "member"} <${email}> (${identity.id})`,
+      `console-logs: ${(input.consoleLogs?.length ?? 0) + (input.consoleErrors?.length ?? 0)}`,
+      `network-requests: ${input.networkRequests?.length ?? 0}`,
+      `user-events: ${input.userEvents?.length ?? 0}`,
+      `errors: ${input.errors?.length ?? 0}`,
+      `recording: ${recording ? "attached" : "none"}`,
+    ].filter((line): line is string => line !== null);
+
+    const event = await addTicketMessage(
+      db,
+      organizationId,
+      ticket.id,
+      {
+        direction: "inbound",
+        textContent: `${input.description}\n\n--- context ---\n${contextLines.join("\n")}`,
+        markdownContent: input.description,
+        channel: "capture",
+        userId: identity.type === "user" ? identity.id : null,
+        actorType: identity.type === "user" ? "user" : "agent",
+        actorId: identity.id,
+        subType: "member-feedback",
+        metadata: {
+          kind: input.kind,
+          reportedByUserId: identity.id,
+          reportedByEmail: email,
+          url: input.url ?? null,
+        },
+      },
+      c.env
+    );
+
+    const bucket = c.env.ATTACHMENTS_BUCKET;
+    if (bucket) {
+      // Jam-parity artifact bundle — the same file names and field
+      // shapes the capture viewers (/console, /network, /events,
+      // /frames, /metadata) and agent tooling read off every other
+      // capture ticket.
+      const consoleLogs = [
+        ...(input.consoleErrors ?? []),
+        ...(input.consoleLogs ?? []),
+      ].map((entry) => ({
+        console_level: entry.level,
+        console_value: entry.message,
+        is_error: entry.level === "error",
+        timestamp: entry.timestamp ?? submittedAt,
+      }));
+      for (const error of input.errors ?? []) {
+        consoleLogs.push({
+          console_level: "error",
+          console_value: error.stack
+            ? `${error.message}\n${error.stack}`
+            : error.message,
+          is_error: true,
+          timestamp: error.timestamp ?? submittedAt,
+        });
+      }
+
+      const networkRequests = (input.networkRequests ?? []).map((request) => ({
+        network_url: request.url,
+        network_method: request.method,
+        network_status: request.status ?? null,
+        duration_ms: request.duration ?? null,
+        is_error:
+          request.status === undefined
+            ? false
+            : request.status === 0 || request.status >= 400,
+        timestamp: request.timestamp ?? submittedAt,
+      }));
+
+      const userEvents = (input.userEvents ?? []).map((userEvent) => ({
+        event_type: "interactivity",
+        interactivity_action: userEvent.type,
+        target: userEvent.target ?? null,
+        timestamp: userEvent.timestamp ?? submittedAt,
+        ...(userEvent.metadata ? { metadata: userEvent.metadata } : {}),
+      }));
+
+      const artifacts: {
+        type: CaptureArtifactKind;
+        fileName: string;
+        contentType: string;
+        body: Uint8Array;
+      }[] = [
+        {
+          type: "debugger_json",
+          fileName: "metadata.json",
+          contentType: "application/json",
+          body: jsonArtifactBytes({
+            source: "member-feedback",
+            kind: input.kind,
+            title: input.title,
+            url: input.url ?? null,
+            reporter: { userId: identity.id, email, name: fullName },
+            workspace: organizationId,
+            consoleLogs: consoleLogs.length,
+            networkRequests: networkRequests.length,
+            userEvents: userEvents.length,
+            errors: input.errors?.length ?? 0,
+            submittedAt,
+          }),
+        },
+        {
+          type: "debugger_json",
+          fileName: "events-summary.json",
+          contentType: "application/json",
+          body: jsonArtifactBytes({
+            consoleLogs: consoleLogs.length,
+            networkRequests: networkRequests.length,
+            userEvents: userEvents.length,
+            errors: input.errors?.length ?? 0,
+            screenshot: screenshot !== null,
+            recording: recording !== null,
+          }),
+        },
+      ];
+
+      const deviceInfo = {
+        ...input.deviceInfo,
+        ...(input.userAgent ? { userAgent: input.userAgent } : {}),
+        ...(input.viewport ? { viewport: input.viewport } : {}),
+      };
+      if (Object.keys(deviceInfo).length > 0) {
+        artifacts.push({
+          type: "debugger_json",
+          fileName: "device-info.json",
+          contentType: "application/json",
+          body: jsonArtifactBytes(deviceInfo),
+        });
+      }
+
+      if (consoleLogs.length > 0) {
+        artifacts.push({
+          type: "log",
+          fileName: "console-logs.json",
+          contentType: "application/json",
+          body: jsonArtifactBytes(consoleLogs),
+        });
+      }
+
+      if (networkRequests.length > 0) {
+        artifacts.push({
+          type: "network",
+          fileName: "network-requests.json",
+          contentType: "application/json",
+          body: jsonArtifactBytes(networkRequests),
+        });
+      }
+
+      if (userEvents.length > 0) {
+        artifacts.push({
+          type: "log",
+          fileName: "user-events.json",
+          contentType: "application/json",
+          body: jsonArtifactBytes(userEvents),
+        });
+      }
+
+      // Agent-facing bundle — the debugger.json agents are pointed at
+      // first when triaging a capture ticket.
+      if (
+        consoleLogs.length > 0 ||
+        networkRequests.length > 0 ||
+        userEvents.length > 0 ||
+        (input.errors?.length ?? 0) > 0
+      ) {
+        artifacts.push({
+          type: "debugger_json",
+          fileName: "debugger.json",
+          contentType: "application/json",
+          body: jsonArtifactBytes({
+            actions: (input.userEvents ?? []).map((userEvent) => ({
+              type: userEvent.type,
+              target: userEvent.target ?? null,
+              timestamp: userEvent.timestamp ?? submittedAt,
+              metadata: userEvent.metadata ?? null,
+            })),
+            logs: consoleLogs,
+            networkRequests: (input.networkRequests ?? []).map((request) => ({
+              method: request.method,
+              url: request.url,
+              status: request.status ?? null,
+              duration: request.duration ?? null,
+              timestamp: request.timestamp ?? submittedAt,
+            })),
+            errors: (input.errors ?? []).map((error) => ({
+              message: error.message,
+              stack: error.stack ?? null,
+              source: error.source ?? null,
+              timestamp: error.timestamp ?? submittedAt,
+            })),
+          }),
+        });
+      }
+
+      if (screenshot) {
+        artifacts.push({
+          type: "screenshot",
+          fileName: screenshot.fileName,
+          contentType: screenshot.contentType,
+          body: screenshot.body,
+        });
+      }
+
+      if (recording) {
+        artifacts.push({
+          type: "video",
+          fileName: recording.fileName,
+          contentType: recording.contentType,
+          body: recording.body,
+        });
+      }
+
+      const origin = new URL(c.req.url).origin;
+      await Promise.all(
+        artifacts.map(async (artifact) => {
+          const r2Key = `${organizationId}/capture/feedback-${ticket.id}/${artifact.type}/${artifact.fileName}`;
+          await bucket.put(
+            r2Key,
+            new Blob([artifact.body as BlobPart], {
+              type: artifact.contentType,
+            }),
+            { httpMetadata: { contentType: artifact.contentType } }
+          );
+          const attachmentId = crypto.randomUUID();
+          await db.insert(supportTicketAttachments).values({
+            id: attachmentId,
+            organizationId,
+            ticketId: ticket.id,
+            eventId: event.id,
+            type: artifact.type,
+            contentType: artifact.contentType,
+            r2Key,
+            size: artifact.body.byteLength,
+            url: `${origin}/support/capture/artifacts/${attachmentId}`,
+            fileName: artifact.fileName,
+            createdAt: submittedAt,
+          });
+        })
+      );
+    }
+
+    // PILE-664 — feedback recordings get the same transcript treatment as
+    // capture sessions. Member-authored titles stay as filed.
+    if (bucket && recording) {
+      await kickCaptureTranscription(
+        c,
+        transcribeCaptureRecording(db, c.env, {
+          organizationId,
+          ticketId: ticket.id,
+          eventId: event.id,
+          recordingR2Key: `${organizationId}/capture/feedback-${ticket.id}/video/${recording.fileName}`,
+          artifactPrefix: `${organizationId}/capture/feedback-${ticket.id}`,
+          origin,
+        })
+      );
+    }
+
+    return c.json({ ticketId: ticket.id, ticketNumber: ticket.number }, 201);
   });
 
   app.openapi(tokenRoute, async (c) => {
@@ -1491,13 +2010,7 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
         ({ uploadUrl, r2Key, attachmentType, fileName }) => ({
           uploadUrl,
           r2Key,
-          attachmentType: attachmentType as
-            | "screenshot"
-            | "video"
-            | "debugger_json"
-            | "log"
-            | "network"
-            | "replay",
+          attachmentType: attachmentType as CaptureArtifactKind,
           fileName,
         })
       ),
@@ -1720,13 +2233,7 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
           organizationId: session.organizationId,
           ticketId: ticket.id,
           eventId: event.id,
-          type: upload.attachmentType as
-            | "screenshot"
-            | "video"
-            | "debugger_json"
-            | "log"
-            | "network"
-            | "replay",
+          type: upload.attachmentType as CaptureArtifactKind,
           contentType,
           r2Key,
           size,
@@ -1743,6 +2250,30 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
       ticketId: ticket.id,
       status: "finalized",
     });
+
+    // PILE-664 — every recording gets a Whisper transcript so agents and
+    // triage can read what the reporter said. Deferred past the response;
+    // a missing AI binding or a model failure leaves the ticket untouched.
+    const transcriptions = uploads
+      .filter(
+        (upload) =>
+          upload.attachmentType === "video" && typeof upload.r2Key === "string"
+      )
+      .map((upload) =>
+        transcribeCaptureRecording(db, c.env, {
+          organizationId: session.organizationId,
+          ticketId: ticket.id,
+          eventId: event.id,
+          recordingR2Key: upload.r2Key,
+          artifactPrefix: `${session.organizationId}/capture/${session.id}`,
+          origin,
+          regenerateTitle:
+            typeof meta.title !== "string" || meta.title === "Bug report",
+        })
+      );
+    if (transcriptions.length > 0) {
+      await kickCaptureTranscription(c, Promise.all(transcriptions));
+    }
 
     const shareUrl =
       meta.visibility === "public"
@@ -2825,6 +3356,25 @@ export async function processJamCreatedWebhookPayload(
     parsed.jamId,
     remoteAttachments,
     inlineArtifacts
+  );
+
+  // PILE-664 — video jams get the same transcript pass once the media is
+  // mirrored into R2. The processor runs inside the queue handler so this
+  // await is bounded by the queue's execution budget; the call never throws.
+  await Promise.all(
+    remoteAttachments
+      .filter((attachment) => attachment.type === "video")
+      .map(() =>
+        transcribeCaptureRecording(db, env, {
+          organizationId,
+          ticketId: ticket.id,
+          eventId: event.id,
+          recordingR2Key: `${organizationId}/jam/${parsed.jamId}/video`,
+          artifactPrefix: `${organizationId}/jam/${parsed.jamId}`,
+          origin,
+          regenerateTitle: !parsed.title,
+        })
+      )
   );
 
   return { ticketId: ticket.id };

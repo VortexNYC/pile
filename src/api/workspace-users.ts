@@ -209,6 +209,7 @@ async function findInvitation(
 const myPermissionsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/me/permissions",
+  summary: "Get the caller's workspace permissions",
   tags: ["memberships"],
   request: {
     params: z.object({ organizationId: z.string() }),

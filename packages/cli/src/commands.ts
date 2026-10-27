@@ -112,7 +112,23 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "key",
         flag: "key",
       },
+      {
+        name: "seedStarterIssues",
+        flag: "seed-starter-issues",
+      },
     ],
+  },
+  "onboarding checklist list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/onboarding-checklist",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
   },
   "scim connections list": {
     method: "GET",
@@ -207,6 +223,23 @@ export const COMMANDS: Record<string, CommandDef> = {
     ],
     query: [],
     body: [],
+  },
+  "tokens prune create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/tokens/prune",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "maxAgeHours",
+        flag: "max-age-hours",
+      },
+    ],
   },
   "oauth clients list": {
     method: "GET",
@@ -1299,6 +1332,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "issue",
       },
       {
+        name: "agentSlug",
+        flag: "agent-slug",
+      },
+      {
         name: "limit",
         flag: "limit",
       },
@@ -1331,6 +1368,68 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
     query: [],
+    body: [],
+  },
+  "provenance list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/provenance",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "repo",
+        flag: "repo",
+      },
+      {
+        name: "sha",
+        flag: "sha",
+      },
+      {
+        name: "file",
+        flag: "file",
+      },
+      {
+        name: "branch",
+        flag: "branch",
+      },
+      {
+        name: "prUrl",
+        flag: "pr-url",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+      {
+        name: "limit",
+        flag: "limit",
+      },
+    ],
+    body: [],
+  },
+  "agent recap list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/agent/recap",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "since",
+        flag: "since",
+      },
+      {
+        name: "repo",
+        flag: "repo",
+      },
+    ],
     body: [],
   },
   "issues live": {
@@ -1412,6 +1511,10 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "plan",
         flag: "plan",
+      },
+      {
+        name: "usage",
+        flag: "usage",
       },
     ],
   },
@@ -3128,6 +3231,43 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "memberships update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/memberships/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "role",
+        flag: "role",
+      },
+    ],
+  },
+  "memberships delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/memberships/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "roadmaps list": {
     method: "GET",
     path: "/workspaces/{organizationId}/roadmaps",
@@ -4810,6 +4950,34 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "support feedback create": {
+    method: "POST",
+    path: "/support/feedback",
+    params: [],
+    query: [],
+    body: [
+      {
+        name: "subject",
+        flag: "subject",
+      },
+      {
+        name: "text",
+        flag: "text",
+      },
+      {
+        name: "fromEmail",
+        flag: "from-email",
+      },
+      {
+        name: "fromName",
+        flag: "from-name",
+      },
+      {
+        name: "context",
+        flag: "context",
+      },
+    ],
+  },
   "support capture token create": {
     method: "POST",
     path: "/support/capture/token",
@@ -5613,34 +5781,6 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "createdAt",
         flag: "created-at",
-      },
-    ],
-  },
-  "support feedback create": {
-    method: "POST",
-    path: "/support/feedback",
-    params: [],
-    query: [],
-    body: [
-      {
-        name: "subject",
-        flag: "subject",
-      },
-      {
-        name: "text",
-        flag: "text",
-      },
-      {
-        name: "fromEmail",
-        flag: "from-email",
-      },
-      {
-        name: "fromName",
-        flag: "from-name",
-      },
-      {
-        name: "context",
-        flag: "context",
       },
     ],
   },
@@ -6694,6 +6834,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "includeTrashed",
         flag: "include-trashed",
       },
+      {
+        name: "summary",
+        flag: "summary",
+      },
     ],
     body: [],
   },
@@ -6753,6 +6897,27 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "is-template",
       },
     ],
+  },
+  "documents search list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/documents/search",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "q",
+        flag: "q",
+      },
+      {
+        name: "limit",
+        flag: "limit",
+      },
+    ],
+    body: [],
   },
   "documents get": {
     method: "GET",
@@ -6874,6 +7039,71 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "id",
         flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "document spaces permissions list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/document-spaces/{id}/permissions",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "document spaces permissions create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/document-spaces/{id}/permissions",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "actorId",
+        flag: "actor",
+      },
+      {
+        name: "actorType",
+        flag: "actor-type",
+      },
+      {
+        name: "level",
+        flag: "level",
+      },
+    ],
+  },
+  "document spaces permissions delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/document-spaces/{id}/permissions/{actorId}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+      {
+        name: "actorId",
+        flag: "actor",
       },
     ],
     query: [],
@@ -7139,23 +7369,6 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
-  "documents search list": {
-    method: "GET",
-    path: "/workspaces/{organizationId}/documents/search",
-    params: [
-      {
-        name: "organizationId",
-        flag: "workspace",
-      },
-    ],
-    query: [
-      {
-        name: "q",
-        flag: "q",
-      },
-    ],
-    body: [],
-  },
   "documents permissions list": {
     method: "GET",
     path: "/workspaces/{organizationId}/documents/{id}/permissions",
@@ -7358,6 +7571,142 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "source-agent-slug",
       },
     ],
+  },
+  "memory profile list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/memory/profile",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [
+      {
+        name: "entityType",
+        flag: "entity-type",
+      },
+      {
+        name: "entityId",
+        flag: "entity-id",
+      },
+      {
+        name: "limit",
+        flag: "limit",
+      },
+    ],
+    body: [],
+  },
+  "memory batch": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/memory/batch",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "memories",
+        flag: "memories",
+      },
+      {
+        name: "documentIds",
+        flag: "document-ids",
+      },
+      {
+        name: "sourceAgentSlug",
+        flag: "source-agent-slug",
+      },
+    ],
+  },
+  "memory extract create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/memory/extract",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "sessionId",
+        flag: "session",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+      {
+        name: "documentId",
+        flag: "document-id",
+      },
+      {
+        name: "text",
+        flag: "text",
+      },
+      {
+        name: "entityType",
+        flag: "entity-type",
+      },
+      {
+        name: "entityId",
+        flag: "entity-id",
+      },
+      {
+        name: "sourceAgentSlug",
+        flag: "source-agent-slug",
+      },
+    ],
+  },
+  "memory update": {
+    method: "PATCH",
+    path: "/workspaces/{organizationId}/memory/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "fact",
+        flag: "fact",
+      },
+      {
+        name: "kind",
+        flag: "kind",
+      },
+      {
+        name: "validUntil",
+        flag: "valid-until",
+      },
+    ],
+  },
+  "memory delete": {
+    method: "DELETE",
+    path: "/workspaces/{organizationId}/memory/{id}",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
   },
   "agent costs list": {
     method: "GET",
@@ -7688,6 +8037,30 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "needsHuman",
         flag: "needs-human",
       },
+      {
+        name: "externalId",
+        flag: "external-id",
+      },
+      {
+        name: "domain",
+        flag: "domain",
+      },
+      {
+        name: "limit",
+        flag: "limit",
+      },
+      {
+        name: "cursor",
+        flag: "cursor",
+      },
+      {
+        name: "q",
+        flag: "q",
+      },
+      {
+        name: "summary",
+        flag: "summary",
+      },
     ],
     body: [],
   },
@@ -7716,6 +8089,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "url",
       },
       {
+        name: "domain",
+        flag: "domain",
+      },
+      {
         name: "bookingUrl",
         flag: "booking-url",
       },
@@ -7730,6 +8107,54 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "externalId",
         flag: "external-id",
+      },
+      {
+        name: "phone",
+        flag: "phone",
+      },
+      {
+        name: "address",
+        flag: "address",
+      },
+      {
+        name: "vertical",
+        flag: "vertical",
+      },
+      {
+        name: "neighborhood",
+        flag: "neighborhood",
+      },
+      {
+        name: "source",
+        flag: "source",
+      },
+      {
+        name: "readiness",
+        flag: "readiness",
+      },
+      {
+        name: "nextAction",
+        flag: "next-action",
+      },
+      {
+        name: "fit",
+        flag: "fit",
+      },
+      {
+        name: "fitScore",
+        flag: "fit-score",
+      },
+      {
+        name: "fitStatus",
+        flag: "fit-status",
+      },
+      {
+        name: "processor",
+        flag: "processor",
+      },
+      {
+        name: "evidenceUri",
+        flag: "evidence-uri",
       },
       {
         name: "tierId",
@@ -7862,6 +8287,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "url",
       },
       {
+        name: "domain",
+        flag: "domain",
+      },
+      {
         name: "bookingUrl",
         flag: "booking-url",
       },
@@ -7876,6 +8305,54 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "externalId",
         flag: "external-id",
+      },
+      {
+        name: "phone",
+        flag: "phone",
+      },
+      {
+        name: "address",
+        flag: "address",
+      },
+      {
+        name: "vertical",
+        flag: "vertical",
+      },
+      {
+        name: "neighborhood",
+        flag: "neighborhood",
+      },
+      {
+        name: "source",
+        flag: "source",
+      },
+      {
+        name: "readiness",
+        flag: "readiness",
+      },
+      {
+        name: "nextAction",
+        flag: "next-action",
+      },
+      {
+        name: "fit",
+        flag: "fit",
+      },
+      {
+        name: "fitScore",
+        flag: "fit-score",
+      },
+      {
+        name: "fitStatus",
+        flag: "fit-status",
+      },
+      {
+        name: "processor",
+        flag: "processor",
+      },
+      {
+        name: "evidenceUri",
+        flag: "evidence-uri",
       },
       {
         name: "tierId",
@@ -7934,6 +8411,55 @@ export const COMMANDS: Record<string, CommandDef> = {
     ],
     query: [],
     body: [],
+  },
+  "customers contacts list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/customers/{id}/contacts",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "customers interactions create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/{id}/interactions",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "outcome",
+        flag: "outcome",
+      },
+      {
+        name: "note",
+        flag: "note",
+      },
+      {
+        name: "nextStepText",
+        flag: "next-step-text",
+      },
+      {
+        name: "nextStepDueAt",
+        flag: "next-step-due-at",
+      },
+    ],
   },
   "customers purge create": {
     method: "POST",
@@ -8420,6 +8946,413 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "customers signals list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/customers/{id}/signals",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "customers signals create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/{id}/signals",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "type",
+        flag: "type",
+      },
+      {
+        name: "source",
+        flag: "source",
+      },
+      {
+        name: "evidenceUrl",
+        flag: "evidence-url",
+      },
+      {
+        name: "strength",
+        flag: "strength",
+      },
+      {
+        name: "summary",
+        flag: "summary",
+      },
+      {
+        name: "observedAt",
+        flag: "observed-at",
+      },
+      {
+        name: "html",
+        flag: "html",
+      },
+    ],
+  },
+  "customers send gate create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/{id}/send-gate",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "touchId",
+        flag: "touch-id",
+      },
+      {
+        name: "channel",
+        flag: "channel",
+      },
+      {
+        name: "action",
+        flag: "action",
+      },
+      {
+        name: "contactId",
+        flag: "contact-id",
+      },
+      {
+        name: "contactEmail",
+        flag: "contact-email",
+      },
+      {
+        name: "emailStatus",
+        flag: "email-status",
+      },
+      {
+        name: "emailVerifiedAt",
+        flag: "email-verified-at",
+      },
+      {
+        name: "doNotContact",
+        flag: "do-not-contact",
+      },
+      {
+        name: "doNotEmail",
+        flag: "do-not-email",
+      },
+      {
+        name: "doNotCall",
+        flag: "do-not-call",
+      },
+      {
+        name: "euResident",
+        flag: "eu-resident",
+      },
+      {
+        name: "hasExplicitConsent",
+        flag: "has-explicit-consent",
+      },
+      {
+        name: "allowCatchAll",
+        flag: "allow-catch-all",
+      },
+      {
+        name: "allowRole",
+        flag: "allow-role",
+      },
+      {
+        name: "allowUnverified",
+        flag: "allow-unverified",
+      },
+    ],
+  },
+  "customers dedup key create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/dedup-key",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "address",
+        flag: "address",
+      },
+      {
+        name: "phone",
+        flag: "phone",
+      },
+      {
+        name: "domain",
+        flag: "domain",
+      },
+    ],
+  },
+  "customers reply ingest create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/{id}/reply-ingest",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "subject",
+        flag: "subject",
+      },
+      {
+        name: "body",
+        flag: "body",
+      },
+      {
+        name: "fromEmail",
+        flag: "from-email",
+      },
+      {
+        name: "statementFileId",
+        flag: "statement-file-id",
+      },
+    ],
+  },
+  "customers audience query create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/audience-query",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "logic",
+        flag: "logic",
+      },
+      {
+        name: "predicates",
+        flag: "predicates",
+      },
+      {
+        name: "limit",
+        flag: "limit",
+      },
+    ],
+  },
+  "customers run play create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/{id}/run-play",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "playName",
+        flag: "play-name",
+      },
+      {
+        name: "html",
+        flag: "html",
+      },
+      {
+        name: "pageUrl",
+        flag: "page-url",
+      },
+      {
+        name: "contactEmail",
+        flag: "contact-email",
+      },
+      {
+        name: "minDraftRankScore",
+        flag: "min-draft-rank-score",
+      },
+      {
+        name: "paidRankThreshold",
+        flag: "paid-rank-threshold",
+      },
+    ],
+  },
+  "customers morning brief create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/morning-brief",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "ownerId",
+        flag: "owner-id",
+      },
+      {
+        name: "limit",
+        flag: "limit",
+      },
+    ],
+  },
+  "customers pull leads create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/pull-leads",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "preset",
+        flag: "preset",
+      },
+      {
+        name: "borough",
+        flag: "borough",
+      },
+      {
+        name: "limit",
+        flag: "limit",
+      },
+      {
+        name: "offset",
+        flag: "offset",
+      },
+      {
+        name: "ownerId",
+        flag: "owner-id",
+      },
+      {
+        name: "enrichWebsites",
+        flag: "enrich-websites",
+      },
+      {
+        name: "dispatchDetectiveBatch",
+        flag: "dispatch-detective-batch",
+      },
+    ],
+  },
+  "customers approve batch create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/approve-batch",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "customerIds",
+        flag: "customer-ids",
+      },
+      {
+        name: "channel",
+        flag: "channel",
+      },
+      {
+        name: "limit",
+        flag: "limit",
+      },
+      {
+        name: "mailboxId",
+        flag: "mailbox-id",
+      },
+      {
+        name: "dailyCap",
+        flag: "daily-cap",
+      },
+      {
+        name: "domainHealth",
+        flag: "domain-health",
+      },
+      {
+        name: "unsubscribeBaseUrl",
+        flag: "unsubscribe-base-url",
+      },
+      {
+        name: "physicalAddress",
+        flag: "physical-address",
+      },
+    ],
+  },
+  "customers partner residuals create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/partner-residuals",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "merchants",
+        flag: "merchants",
+      },
+    ],
+  },
+  "customers auto replenish create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/auto-replenish",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "totalLeads",
+        flag: "total-leads",
+      },
+    ],
+  },
   "deals list": {
     method: "GET",
     path: "/workspaces/{organizationId}/deals",
@@ -8457,6 +9390,22 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "needsHuman",
         flag: "needs-human",
+      },
+      {
+        name: "limit",
+        flag: "limit",
+      },
+      {
+        name: "cursor",
+        flag: "cursor",
+      },
+      {
+        name: "q",
+        flag: "q",
+      },
+      {
+        name: "summary",
+        flag: "summary",
       },
     ],
     body: [],
@@ -12308,6 +13257,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "favorites",
         flag: "favorites",
       },
+      {
+        name: "display",
+        flag: "display",
+      },
     ],
   },
   "saved views get": {
@@ -12857,6 +13810,18 @@ export const COMMANDS: Record<string, CommandDef> = {
   readiness: {
     method: "GET",
     path: "/workspaces/{organizationId}/readiness",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "dedupe create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/dedupe",
     params: [
       {
         name: "organizationId",

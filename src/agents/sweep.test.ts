@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { createD1 } from "../global/db.js";
@@ -22,6 +22,7 @@ import {
   progressIsStale,
   prStateFromPull,
   releasePausedSessions,
+  shouldAutoMergePr,
   shouldUpdatePrBranch,
   summarizeCheckRuns,
   sweepAgentSessions,
@@ -3871,6 +3872,326 @@ describe("PILE-420 stale marking + pause holds", () => {
     expect(dispatches).toEqual([s1.id, s2.id]);
     expect((await stub.getAgentSession(s1.id))?.paused).toBe(0);
   });
+
+  it("drains orphaned pause holds a bounded slice per sweep pass (VTX-612)", async () => {
+    const agentId = `mock-orphan-${crypto.randomUUID().slice(0, 8)}`;
+    const dispatches: string[] = [];
+    registerMock(agentId, {
+      dispatch: (_org, _issue, _model, ctx) => {
+        dispatches.push(ctx?.sessionId ?? "");
+        return { id: `prov-${ctx?.sessionId}`, agentId, status: "running" };
+      },
+      poll: (id) => ({ id, agentId, status: "running" }),
+    });
+    await stub.pauseAgentType(agentId, {
+      reason: "fleet maintenance",
+      actorId: userId,
+      actorType: "user",
+    });
+    const actor = {
+      id: userId,
+      organizationId,
+      type: "user" as const,
+      permissions: [] as string[],
+    };
+    const sessions = [];
+    for (let i = 0; i < 5; i++) {
+      const issue = await stub.createIssue({ title: `Held ${i}` });
+      sessions.push(
+        await dispatchAgent(env, agentId, organizationId, issue, actor)
+      );
+    }
+    // A review hold on an issue with a live work lane must still promote —
+    // purpose=review lanes are concurrent by definition (PILE-273).
+    const laneIssue = await stub.createIssue({ title: "Issue with live lane" });
+    await stub.createAgentSession({
+      issueId: laneIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+    });
+    sessions.push(
+      await dispatchAgent(
+        env,
+        agentId,
+        organizationId,
+        laneIssue,
+        actor,
+        undefined,
+        undefined,
+        { purpose: "review", concurrent: true }
+      )
+    );
+    expect(sessions.every((s) => s.paused === 1)).toBe(true);
+
+    // The pause row goes away without a drain — the state resume leaves
+    // behind when the held backlog outlives one staggered release call.
+    await stub.resumeAgentType(agentId, {
+      actorId: userId,
+      actorType: "user",
+    });
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+    const first = await Promise.all(
+      sessions.map((s) => stub.getAgentSession(s.id))
+    );
+    const releasedFirst = first.filter((s) => s?.paused === 0).length;
+    expect(releasedFirst).toBeGreaterThan(0);
+    expect(releasedFirst).toBeLessThanOrEqual(3);
+    expect(dispatches.length).toBeLessThanOrEqual(3);
+
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+    const second = await Promise.all(
+      sessions.map((s) => stub.getAgentSession(s.id))
+    );
+    expect(second.every((s) => s?.paused === 0)).toBe(true);
+    expect(dispatches).toHaveLength(6);
+  });
+
+  it("parks dispatches past maxConcurrentLanes and drains when a slot frees (VTX-621)", async () => {
+    const agentId = `mock-cap-${crypto.randomUUID().slice(0, 8)}`;
+    const dispatches: string[] = [];
+    registerMock(agentId, {
+      maxConcurrentLanes: 2,
+      dispatch: (_org, _issue, _model, ctx) => {
+        dispatches.push(ctx?.sessionId ?? "");
+        return { id: `prov-${ctx?.sessionId}`, agentId, status: "running" };
+      },
+      poll: (id) => ({ id, agentId, status: "running" }),
+    });
+    const actor = {
+      id: userId,
+      organizationId,
+      type: "user" as const,
+      permissions: [] as string[],
+    };
+    // Two live lanes fill the cap.
+    const live1 = await stub.createIssue({ title: "Live one" });
+    const live2 = await stub.createIssue({ title: "Live two" });
+    for (const issue of [live1, live2]) {
+      await stub.createAgentSession({
+        issueId: issue.id,
+        agentId,
+        provider: agentId,
+        actorId: userId,
+        actorType: "user",
+        status: "running",
+      });
+    }
+
+    const third = await stub.createIssue({ title: "Overflow" });
+    const held = await dispatchAgent(
+      env,
+      agentId,
+      organizationId,
+      third,
+      actor
+    );
+    expect(held.status).toBe("waiting");
+    expect(held.paused).toBe(1);
+    expect(dispatches).toHaveLength(0);
+    const pause = await stub.getAgentPause(agentId);
+    expect(pause?.reason).toContain("concurrency cap");
+
+    // Still at cap — the sweep must not lift the hold.
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+    expect((await stub.getAgentSession(held.id))?.paused).toBe(1);
+    expect(await stub.getAgentPause(agentId)).not.toBeNull();
+
+    // A lane goes terminal → the cap frees → the sweep lifts and drains.
+    const liveSessions = await stub.listAgentSessions({ limit: 200 });
+    const toEnd = liveSessions.find(
+      (s) => s.agentId === agentId && s.status === "running"
+    );
+    expect(toEnd).toBeDefined();
+    await stub.updateAgentSession(toEnd!.id, { status: "completed" });
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+    expect(await stub.getAgentPause(agentId)).toBeUndefined();
+    const drained = await stub.getAgentSession(held.id);
+    expect(drained?.paused).toBe(0);
+    expect(dispatches).toEqual([held.id]);
+  });
+
+  it("bounds pause drain by maxConcurrentLanes headroom and re-arms the cap pause (VTX-643)", async () => {
+    const agentId = `mock-cap-drain-${crypto.randomUUID().slice(0, 8)}`;
+    const dispatches: string[] = [];
+    registerMock(agentId, {
+      maxConcurrentLanes: 2,
+      dispatch: (_org, _issue, _model, ctx) => {
+        dispatches.push(ctx?.sessionId ?? "");
+        return { id: `prov-${ctx?.sessionId}`, agentId, status: "running" };
+      },
+      poll: (id) => ({ id, agentId, status: "running" }),
+    });
+    const actor = {
+      id: userId,
+      organizationId,
+      type: "user" as const,
+      permissions: [] as string[],
+    };
+    const live1 = await stub.createIssue({ title: "Cap live 1" });
+    const live2 = await stub.createIssue({ title: "Cap live 2" });
+    for (const issue of [live1, live2]) {
+      await stub.createAgentSession({
+        issueId: issue.id,
+        agentId,
+        provider: agentId,
+        actorId: userId,
+        actorType: "user",
+        status: "running",
+      });
+    }
+    const h1Issue = await stub.createIssue({ title: "Held 1" });
+    const h2Issue = await stub.createIssue({ title: "Held 2" });
+    const h3Issue = await stub.createIssue({ title: "Held 3 (queued)" });
+    const h1 = await dispatchAgent(
+      env,
+      agentId,
+      organizationId,
+      h1Issue,
+      actor
+    );
+    const h2 = await dispatchAgent(
+      env,
+      agentId,
+      organizationId,
+      h2Issue,
+      actor
+    );
+    const h3 = await dispatchAgent(
+      env,
+      agentId,
+      organizationId,
+      h3Issue,
+      actor,
+      undefined,
+      undefined,
+      { queueAfter: h1.id, skipQueue: true }
+    );
+    expect([h1.paused, h2.paused, h3.paused]).toEqual([1, 1, 1]);
+    expect(h3.queuedAfter).toBe(h1.id);
+
+    // One live lane finishes -> 1 slot opens (cap=2, live=1). Drain must promote
+    // only h1, keep pure hold h2 parked (paused=1), still unpause queue-chained
+    // hold h3 (paused=0, waiting on h1), and re-arm the concurrency-cap pause.
+    const liveSessions = await stub.listAgentSessions({ limit: 200 });
+    const toEnd = liveSessions.find(
+      (s) => s.agentId === agentId && s.status === "running"
+    );
+    await stub.updateAgentSession(toEnd!.id, { status: "completed" });
+    await sweepAgentSessions(env, undefined, { probeTimeoutMs: 10 });
+
+    expect(dispatches).toEqual([h1.id]);
+    expect((await stub.getAgentSession(h1.id))?.paused).toBe(0);
+    expect((await stub.getAgentSession(h2.id))?.paused).toBe(1);
+    const h3After = await stub.getAgentSession(h3.id);
+    expect(h3After?.paused).toBe(0);
+    expect(h3After?.status).toBe("waiting");
+    expect((await stub.getAgentPause(agentId))?.reason).toContain(
+      "concurrency cap"
+    );
+  });
+
+  it("promotes held implementation lanes ahead of review-cap-saturated review holds (VTX-648)", async () => {
+    const agentId = `mock-rev-drain-${crypto.randomUUID().slice(0, 8)}`;
+    const dispatches: string[] = [];
+    registerMock(agentId, {
+      maxConcurrentLanes: 2,
+      dispatch: (_org, _issue, _model, ctx) => {
+        dispatches.push(ctx?.sessionId ?? "");
+        return { id: `prov-${ctx?.sessionId}`, agentId, status: "running" };
+      },
+      poll: (id) => ({ id, agentId, status: "running" }),
+    });
+    const actor = {
+      id: userId,
+      organizationId,
+      type: "user" as const,
+      permissions: [] as string[],
+    };
+    // 1 running review lane fills reviewCap=1 (for cap=2).
+    const revLiveIssue = await stub.createIssue({ title: "Rev live" });
+    await stub.createAgentSession({
+      issueId: revLiveIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      purpose: "review",
+    });
+    // 2nd review lane hits reviewCap=1 and holds locally.
+    const revHeldIssue = await stub.createIssue({ title: "Rev held" });
+    const revHeld = await dispatchAgent(
+      env,
+      agentId,
+      organizationId,
+      revHeldIssue,
+      actor,
+      undefined,
+      undefined,
+      { purpose: "review" }
+    );
+    expect(revHeld.paused).toBe(1);
+    // An implementation hold parked behind revHeld must still promote into the 2nd slot!
+    const implIssue = await stub.createIssue({ title: "Impl held" });
+    const implHeld = await stub.createAgentSession({
+      issueId: implIssue.id,
+      agentId,
+      provider: agentId,
+      actorId: userId,
+      actorType: "user",
+      status: "waiting",
+      paused: 1,
+    });
+    const released = await releasePausedSessions(
+      env,
+      stub,
+      organizationId,
+      agentId
+    );
+    expect(released).toEqual([implHeld.id]);
+    expect((await stub.getAgentSession(revHeld.id))?.paused).toBe(1);
+    expect((await stub.getAgentSession(implHeld.id))?.paused).toBe(0);
+    // Running the sweep in test env skips orphan sandbox reap and gates off prod PostHog telemetry (PILE-471 / PILE-597).
+    const tasks: Promise<unknown>[] = [];
+    await sweepAgentSessions(
+      env,
+      { waitUntil: (p) => tasks.push(p) },
+      { probeTimeoutMs: 10 }
+    );
+    expect(tasks).toEqual([]);
+    expect(
+      shouldAutoMergePr({
+        sessionStatus: "completed",
+        purpose: null,
+        state: "open",
+        draft: false,
+        mergeable: true,
+        mergeableState: "clean",
+        checkState: "passing",
+        reviewConclusion: "success",
+        headRef: "issue-123",
+        managedRefs: ["issue-123"],
+      })
+    ).toBe(true);
+    expect(
+      shouldAutoMergePr({
+        sessionStatus: "running",
+        purpose: null,
+        state: "open",
+        draft: false,
+        mergeable: true,
+        mergeableState: "clean",
+        checkState: "passing",
+        reviewConclusion: "success",
+        headRef: "issue-123",
+        managedRefs: ["issue-123"],
+      })
+    ).toBe(false);
+  });
 });
 
 describe("spend caps (PILE-425)", () => {
@@ -4113,5 +4434,179 @@ describe("syncOpenPrSessions terminal-work gating (PILE-452)", () => {
     expect(dispatches).toBe(0);
     const sessions = await stub.listAgentSessions({ issueId: issue.id });
     expect(sessions).toHaveLength(1);
+  });
+});
+
+describe("ephemeral lane token janitor (PILE-623)", () => {
+  it("prunes agent-* keys older than 24h or past expiresAt, keeps fresh and non-agent keys", async () => {
+    const db = createD1(env.D1);
+    const { apikey } = await import("../global/schema.js");
+    const { pruneStaleEphemeralAgentKeys } = await import("./sweep.js");
+    const now = Date.now();
+    const day = 24 * 60 * 60 * 1000;
+    const rows = [
+      // Stale — created >24h ago, no expiry recorded.
+      {
+        id: `k-${crypto.randomUUID()}`,
+        name: "agent-51d22c5f-bdfe",
+        key: `key-${crypto.randomUUID()}`,
+        referenceId: "user-1",
+        createdAt: new Date(now - 2 * day),
+        updatedAt: new Date(now - 2 * day),
+      },
+      // Expired — fresh creation but expiresAt already passed.
+      {
+        id: `k-${crypto.randomUUID()}`,
+        name: "agent-9f81c3ab-12cd",
+        key: `key-${crypto.randomUUID()}`,
+        referenceId: "user-1",
+        expiresAt: new Date(now - 1000),
+        createdAt: new Date(now - 1000),
+        updatedAt: new Date(now - 1000),
+      },
+      // Fresh lane key — under 24h, expires in the future.
+      {
+        id: `k-${crypto.randomUUID()}`,
+        name: "agent-a1b2c3d4-e5f6",
+        key: `key-${crypto.randomUUID()}`,
+        referenceId: "user-1",
+        expiresAt: new Date(now + day),
+        createdAt: new Date(now),
+        updatedAt: new Date(now),
+      },
+      // Old but not an agent-* key — user token must survive.
+      {
+        id: `k-${crypto.randomUUID()}`,
+        name: "test-user-search-admin",
+        key: `key-${crypto.randomUUID()}`,
+        referenceId: "user-1",
+        createdAt: new Date(now - 30 * day),
+        updatedAt: new Date(now - 30 * day),
+      },
+    ];
+    for (const row of rows) {
+      await db.insert(apikey).values(row).onConflictDoNothing();
+    }
+    const pruned = await pruneStaleEphemeralAgentKeys(db, now);
+    expect(pruned).toBe(2);
+    const remaining = await db
+      .select({ id: apikey.id, name: apikey.name })
+      .from(apikey)
+      .where(
+        inArray(
+          apikey.id,
+          rows.map((r) => r.id)
+        )
+      )
+      .all();
+    expect(remaining.map((r) => r.name).toSorted()).toEqual([
+      "agent-a1b2c3d4-e5f6",
+      "test-user-search-admin",
+    ]);
+  });
+
+  it("scopes pruning by organizationId metadata and maxAgeMs override", async () => {
+    const db = createD1(env.D1);
+    const { apikey } = await import("../global/schema.js");
+    const { pruneStaleEphemeralAgentKeys } = await import("./sweep.js");
+    const now = Date.now();
+    const rows = [
+      // Fresh key in the target workspace — only a maxAgeMs=0 sweep takes it.
+      {
+        id: `k-${crypto.randomUUID()}`,
+        name: "agent-00aa11bb-22cc",
+        key: `key-${crypto.randomUUID()}`,
+        referenceId: "user-1",
+        metadata: JSON.stringify({ organizationId: "org_target" }),
+        createdAt: new Date(now),
+        updatedAt: new Date(now),
+      },
+      // Fresh key in a different workspace — must survive org-scoped runs.
+      {
+        id: `k-${crypto.randomUUID()}`,
+        name: "agent-33dd44ee-55ff",
+        key: `key-${crypto.randomUUID()}`,
+        referenceId: "user-1",
+        metadata: JSON.stringify({ organizationId: "org_other" }),
+        createdAt: new Date(now),
+        updatedAt: new Date(now),
+      },
+    ];
+    for (const row of rows) {
+      await db.insert(apikey).values(row).onConflictDoNothing();
+    }
+    // Default 24h window leaves both fresh keys alone.
+    expect(
+      await pruneStaleEphemeralAgentKeys(db, now, {
+        organizationId: "org_target",
+      })
+    ).toBe(0);
+    // maxAgeMs: 0 prunes every matching key — but only in the scoped org.
+    expect(
+      await pruneStaleEphemeralAgentKeys(db, now, {
+        organizationId: "org_target",
+        maxAgeMs: 0,
+      })
+    ).toBe(1);
+    const remaining = await db
+      .select({ name: apikey.name })
+      .from(apikey)
+      .where(
+        inArray(
+          apikey.id,
+          rows.map((r) => r.id)
+        )
+      )
+      .all();
+    expect(remaining.map((r) => r.name)).toEqual(["agent-33dd44ee-55ff"]);
+  });
+});
+
+describe("extractSettledMemory structured dreaming (PILE-627)", () => {
+  it("records typed facts extracted from the lane result", async () => {
+    const { extractSettledMemory } = await import("./sweep.js");
+    const writes: Array<Record<string, unknown>> = [];
+    const stub = {
+      memoryRemember: async (input: Record<string, unknown>) => {
+        writes.push(input);
+        return crypto.randomUUID();
+      },
+    };
+    await extractSettledMemory(
+      env,
+      stub,
+      { id: "sess-1", issueId: "VTX-1", agentId: "mock" },
+      "Done.\n**Root cause:** the queue lacked idempotency keys\n**Lesson:** verify against prod after deploys"
+    );
+    expect(writes.map((w) => w.kind).toSorted()).toEqual([
+      "lesson",
+      "root_cause",
+    ]);
+    expect(writes[0].entityType).toBe("issue");
+    expect(writes[0].entityId).toBe("VTX-1");
+    expect(writes[0].sourceSessionId).toBe("sess-1");
+  });
+
+  it("falls back to a single outcome fact for unstructured results", async () => {
+    const { extractSettledMemory } = await import("./sweep.js");
+    const writes: Array<Record<string, unknown>> = [];
+    const stub = {
+      memoryRemember: async (input: Record<string, unknown>) => {
+        writes.push(input);
+        return crypto.randomUUID();
+      },
+    };
+    // A bare string under 20 chars fails the extractor's fallback floor,
+    // so the wrapper still writes the outcome fact.
+    await extractSettledMemory(
+      env,
+      stub,
+      { id: "sess-2", issueId: null, agentId: "mock" },
+      { result: "shipped it" }
+    );
+    expect(writes).toHaveLength(1);
+    expect(writes[0].kind).toBe("outcome");
+    expect(writes[0].entityId).toBe("sess-2");
+    expect(String(writes[0].fact)).toContain("lane completed");
   });
 });

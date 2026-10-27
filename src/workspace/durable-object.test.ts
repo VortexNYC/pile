@@ -2154,7 +2154,7 @@ describe("WorkspaceDO", () => {
     );
   });
 
-  it("skips a cold index build for warn dedupe and warms it in the background", async () => {
+  it("answers warn dedupe on a cold DO without ever building the index (PILE-612)", async () => {
     const stub = getStub();
     const title = `Cold index probe ${crypto.randomUUID().slice(0, 8)} deploy receipts`;
     // Seed, then evict — the next RPC lands on a fresh DO with no search
@@ -2164,26 +2164,42 @@ describe("WorkspaceDO", () => {
     );
     await evictDurableObject(stub);
 
-    const cold = await withWorkspace(stub, (instance) =>
-      instance.createIssueWithDuplicates({ title: `${title} v2` }, undefined, {
-        teamIds: [seeded.teamId],
-        block: false,
-      })
-    );
-    // Cold index → warn dedupe skipped, but the create itself succeeds —
-    // the 42s cold build used to sit on this path and 500 the request.
-    expect(cold.issue).not.toBeNull();
-    expect(cold.possibleDuplicates).toEqual([]);
+    const cold = await withWorkspace(stub, async (instance) => {
+      const created = await instance.createIssueWithDuplicates(
+        { title: `${title} v2` },
+        undefined,
+        { teamIds: [seeded.teamId], block: false }
+      );
+      return {
+        created,
+        builtByWrite: Reflect.get(instance, "searchIndex") !== null,
+      };
+    });
+    // Cold DO → warn dedupe falls back to a direct SQLite title scan and
+    // still reports the seeded near-duplicate — without paying the cold
+    // index build that used to sit on this path and 500 the request.
+    expect(cold.created.issue).not.toBeNull();
+    expect(
+      cold.created.possibleDuplicates.map((hit) => hit.issue.id)
+    ).toContain(seeded.id);
+    expect(cold.builtByWrite).toBe(false);
 
-    // The skip kicks an off-path build — once it lands, dedupe works again.
-    await withWorkspace(stub, (instance) => instance.flushSearchIndex());
-    const warm = await withWorkspace(stub, (instance) =>
-      instance.createIssueWithDuplicates({ title: `${title} v3` }, undefined, {
-        teamIds: [seeded.teamId],
-        block: false,
-      })
-    );
-    expect(warm.possibleDuplicates.length).toBeGreaterThan(0);
+    // Block mode uses the same fallback on a cold DO — no index build.
+    await evictDurableObject(stub);
+    const blocked = await withWorkspace(stub, async (instance) => {
+      const created = await instance.createIssueWithDuplicates(
+        { title },
+        undefined,
+        { teamIds: [seeded.teamId], block: true }
+      );
+      return {
+        created,
+        builtByWrite: Reflect.get(instance, "searchIndex") !== null,
+      };
+    });
+    expect(blocked.created.issue).toBeNull();
+    expect(blocked.created.possibleDuplicates.length).toBeGreaterThan(0);
+    expect(blocked.builtByWrite).toBe(false);
   });
 
   it("re-anchors waiting dependents of a dead session onto its retry", async () => {
@@ -2808,6 +2824,38 @@ describe("pipeline hygiene via DO RPC", () => {
       // Nothing landed — the invalid field rejected the whole patch.
       const after = await instance.getCustomer(customer.id);
       expect(after?.domain).toBeNull();
+    });
+  });
+
+  it("stores and finds customers by canonical domain whatever the input form (PILE-444)", async () => {
+    const stub = getStub();
+    await withWorkspace(stub, async (instance) => {
+      const customer = await instance.createCustomer({
+        name: "Canonical",
+        domain: "https://www.JoesPizza.example.com/menu",
+      });
+      expect(customer.domain).toBe("joespizza.example.com");
+      // The domain-dedup lookup path (customer_upsert, customer_lookup)
+      // normalizes its key, so re-running with the domain spelled any other
+      // way still hits the record instead of minting a duplicate.
+      for (const probe of [
+        "joespizza.example.com",
+        "www.joespizza.example.com",
+        "https://joespizza.example.com/",
+        "HTTPS://WWW.JOESPIZZA.EXAMPLE.COM/path",
+      ]) {
+        expect((await instance.getCustomerByDomain(probe))?.id).toBe(
+          customer.id
+        );
+      }
+      // Updates normalize on write the same way creates do.
+      const updated = await instance.updateCustomer(customer.id, {
+        domain: "WWW.NewSite.example.com/",
+      });
+      expect(updated?.domain).toBe("newsite.example.com");
+      expect(
+        (await instance.getCustomerByDomain("newsite.example.com"))?.id
+      ).toBe(customer.id);
     });
   });
 
@@ -3490,6 +3538,428 @@ describe("spend caps + run receipts (PILE-425)", () => {
     expect(receipt?.totalTokens).toBeNull();
     expect(receipt?.costMicros).toBeNull();
   });
+  it("escalates the rate-limit park by the dying lane's retryCount (VTX-638)", async () => {
+    const stub = getStub();
+    const mk = async (retryCount: number) => {
+      const issue = await withWorkspace(stub, (i) =>
+        i.createIssue({ title: `rl-${retryCount}` })
+      );
+      const session = await withWorkspace(stub, (i) =>
+        i.createAgentSession({
+          issueId: issue.id,
+          agentId: `rl-agent-${retryCount}`,
+          provider: "mock",
+          actorId: "user-1",
+          actorType: "user",
+          status: "running",
+        })
+      );
+      await withWorkspace(stub, (i) =>
+        i.updateAgentSession(session.id, { retryCount })
+      );
+      const before = Date.now();
+      await withWorkspace(stub, (i) =>
+        i.applyAgentSessionResult(session.id, {
+          status: "failed",
+          rateLimited: true,
+        })
+      );
+      const pause = await withWorkspace(stub, (i) =>
+        i.getAgentPause(`rl-agent-${retryCount}`)
+      );
+      const until = Date.parse(
+        pause!.reason!.slice("rate-limit until ".length)
+      );
+      return until - before;
+    };
+    const first = await mk(0);
+    const second = await mk(1);
+    const third = await mk(4);
+    expect(first).toBeGreaterThan(19 * 60_000);
+    expect(first).toBeLessThanOrEqual(21 * 60_000);
+    expect(second).toBeGreaterThan(39 * 60_000);
+    expect(third).toBeLessThanOrEqual(61 * 60_000);
+  });
+
+  it("never shortens an in-flight rate-limit park (VTX-638)", async () => {
+    const stub = getStub();
+    const die = async (agentId: string, retryCount: number) => {
+      const issue = await withWorkspace(stub, (i) =>
+        i.createIssue({ title: `rl-shorten-${agentId}-${retryCount}` })
+      );
+      const session = await withWorkspace(stub, (i) =>
+        i.createAgentSession({
+          issueId: issue.id,
+          agentId,
+          provider: "mock",
+          actorId: "user-1",
+          actorType: "user",
+          status: "running",
+        })
+      );
+      await withWorkspace(stub, (i) =>
+        i.updateAgentSession(session.id, { retryCount })
+      );
+      await withWorkspace(stub, (i) =>
+        i.applyAgentSessionResult(session.id, {
+          status: "failed",
+          rateLimited: true,
+        })
+      );
+      const pause = await withWorkspace(stub, (i) => i.getAgentPause(agentId));
+      return Date.parse(pause!.reason!.slice("rate-limit until ".length));
+    };
+    const agent = "rl-agent-parked";
+    // A retry-4 death parks ~60m; a fresh lane's retry-0 death must not
+    // pull the park back to ~20m.
+    const parkedUntil = await die(agent, 4);
+    const after = await die(agent, 0);
+    expect(after).toBe(parkedUntil);
+  });
+
+  it("supersedes prior workspace_memory facts and filters expired validUntil (VTX-645)", async () => {
+    const stub = getStub();
+    await withWorkspace(stub, (i) =>
+      i.memoryRemember({
+        entityType: "issue",
+        entityId: "vtx-645",
+        kind: "status",
+        fact: "stale v1",
+      })
+    );
+    await withWorkspace(stub, (i) =>
+      i.memoryRemember({
+        entityType: "issue",
+        entityId: "VTX-645",
+        kind: "status",
+        fact: "stale v2",
+      })
+    );
+    await withWorkspace(stub, (i) =>
+      i.memoryRemember({
+        entityType: "issue",
+        entityId: "VTX-645",
+        kind: "status",
+        fact: "current v3",
+      })
+    );
+    await withWorkspace(stub, (i) =>
+      i.memoryRemember({
+        entityType: "issue",
+        entityId: "VTX-645",
+        kind: "ephemeral",
+        fact: "already expired",
+        validUntil: "2020-01-01T00:00:00.000Z",
+      })
+    );
+    const recalled = await withWorkspace(stub, (i) =>
+      i.memoryRecall({
+        entityType: "issue",
+        entityId: "vtx-645",
+      })
+    );
+    expect(recalled.map((m) => m.fact)).toEqual(["current v3"]);
+  });
+
+  it("indexes workspace_memory into unified search and BM25 recall (PILE-618/629)", async () => {
+    const stub = getStub();
+    const marker = crypto.randomUUID().slice(0, 8);
+    const issue = await withWorkspace(stub, (i) =>
+      // Title deliberately shares no tokens with the query — the issue hit
+      // can only arrive through the attached memory's issueId.
+      i.createIssue({ title: "Memory host" })
+    );
+    const memId = await withWorkspace(stub, (i) =>
+      i.memoryRemember({
+        entityType: "issue",
+        entityId: issue.identifier ?? issue.id,
+        kind: "corridor",
+        fact: `zebroid-${marker} corridor sweep returned seventeen active licenses`,
+      })
+    );
+
+    const result = await withWorkspace(stub, async (i) => {
+      // First search warms the index — the memory's issue attachment is
+      // resolved from its ISSUE-KEY entityId during the build.
+      const all = await i.searchAll(`zebroid-${marker}`, [issue.teamId], 10);
+      // LIKE recall can't match "zebroid-<marker> licenses" — it is not a
+      // verbatim substring of the fact — so the BM25 index fills it in.
+      const recalled = await i.memoryRecall({
+        search: `zebroid-${marker} licenses`,
+      });
+      return { all, recalled };
+    });
+    expect(result.all.memoryIds).toContain(memId);
+    // The issue-attached memory contributes its issue to issue search.
+    expect(result.all.issueIds).toContain(issue.id);
+    expect(result.recalled.map((r) => r.id)).toContain(memId);
+  });
+
+  it("memoryRecall fills LIKE/BM25 misses with hybrid semantic expansion (PILE-613)", async () => {
+    const stub = getStub();
+    const marker = crypto.randomUUID().slice(0, 8);
+    const memId = await withWorkspace(stub, (i) =>
+      i.memoryRemember({
+        entityType: "corridor",
+        entityId: `smith-st-${marker}`,
+        kind: "coverage",
+        fact: `corridor:smith-st-${marker} swept yesterday`,
+      })
+    );
+    const oomId = await withWorkspace(stub, (i) =>
+      i.memoryRemember({
+        entityType: "workspace",
+        entityId: `oom-${marker}`,
+        kind: "lesson",
+        fact: `OOM reset on large workspace ${marker}`,
+      })
+    );
+
+    // "did we sweep" — the fact says "swept", so verbatim LIKE and BM25
+    // both miss; the concept+stem expansion and similarity scan fill it in.
+    const sweep = await withWorkspace(stub, (i) =>
+      i.memoryRecall({ search: `did we sweep smith-st-${marker}` })
+    );
+    expect(sweep.map((r) => r.id)).toContain(memId);
+
+    // "isolate heap crash" — the fact says "OOM reset"; only the OOM/crash
+    // concept group connects them.
+    const crash = await withWorkspace(stub, (i) =>
+      i.memoryRecall({ search: "isolate heap crash" })
+    );
+    expect(crash.map((r) => r.id)).toContain(oomId);
+  });
+
+  it("memoryUpdate patches in place and memoryForget erases head + superseded history (PILE-628)", async () => {
+    const stub = getStub();
+    const entityId = `forget-${crypto.randomUUID().slice(0, 8)}`;
+    const v1 = await withWorkspace(stub, (i) =>
+      i.memoryRemember({
+        entityType: "customer",
+        entityId,
+        kind: "coverage",
+        fact: "stale corridor fact",
+      })
+    );
+    const head = await withWorkspace(stub, (i) =>
+      i.memoryRemember({
+        entityType: "customer",
+        entityId,
+        kind: "coverage",
+        fact: "current corridor fact",
+      })
+    );
+
+    const updated = await withWorkspace(stub, (i) =>
+      i.memoryUpdate(head, { fact: "corrected corridor fact" })
+    );
+    expect(updated?.fact).toBe("corrected corridor fact");
+    expect(
+      await withWorkspace(stub, (i) =>
+        i.memoryUpdate(crypto.randomUUID(), { fact: "ghost" })
+      )
+    ).toBeNull();
+
+    const res = await withWorkspace(stub, (i) => i.memoryForget(head));
+    expect(res.deleted).toBe(true);
+    expect(res.deletedIds.toSorted()).toEqual([v1, head].toSorted());
+    const recalled = await withWorkspace(stub, (i) =>
+      i.memoryRecall({ entityType: "customer", entityId })
+    );
+    expect(recalled).toEqual([]);
+    expect(
+      await withWorkspace(stub, (i) => i.memoryForget(crypto.randomUUID()))
+    ).toEqual({ deleted: false, deletedIds: [] });
+  });
+
+  it("memoryProfile splits static and dynamic facts with a markdown summary (PILE-616)", async () => {
+    const stub = getStub();
+    const entityId = `prof-${crypto.randomUUID().slice(0, 8)}`;
+    await withWorkspace(stub, (i) =>
+      i.memoryRemember({
+        entityType: "repo",
+        entityId,
+        kind: "convention",
+        fact: "migrations always run through wrangler deploy -e production",
+      })
+    );
+    await withWorkspace(stub, (i) =>
+      i.memoryRemember({
+        entityType: "repo",
+        entityId,
+        kind: "outcome",
+        fact: "lane completed the rollout",
+      })
+    );
+    const profile = await withWorkspace(stub, (i) =>
+      i.memoryProfile({ entityType: "repo", entityId })
+    );
+    expect(profile.staticFacts.map((f) => f.kind)).toEqual(["convention"]);
+    expect(profile.dynamicFacts.map((f) => f.kind)).toEqual(["outcome"]);
+    expect(profile.byKind.convention).toHaveLength(1);
+    expect(profile.summary).toContain(`### Static Profile (repo:${entityId})`);
+    expect(profile.summary).toContain("### Recent / Dynamic Context");
+  });
+
+  it("memoryRememberBatch writes explicit memories and extracts facts from documents (PILE-617)", async () => {
+    const stub = getStub();
+    const doc = await withWorkspace(stub, (i) =>
+      i.createDocument({
+        title: "Incident notes",
+        contentFormat: "markdown",
+        content: [
+          "## Lessons",
+          "- retries must be idempotent because the queue can redeliver",
+          "- always pin the worker account id on wrangler deploys",
+        ].join("\n"),
+        createdById: "user-1",
+      })
+    );
+    const res = await withWorkspace(stub, (i) =>
+      i.memoryRememberBatch({
+        memories: [
+          {
+            entityType: "workspace",
+            entityId: "batch-ws",
+            kind: "lesson",
+            fact: "explicit batch fact",
+          },
+        ],
+        documentIds: [doc.id],
+        sourceAgentSlug: "dreamer",
+      })
+    );
+    expect(res.count).toBe(3);
+    expect(res.extractedFromDocuments).toBe(2);
+    const recalled = await withWorkspace(stub, (i) =>
+      i.memoryRecall({ entityType: "document", entityId: doc.id })
+    );
+    // Same-key extraction supersedes in order — recall surfaces only the
+    // latest lesson head.
+    expect(recalled.map((r) => r.kind)).toEqual(["lesson"]);
+    expect(recalled[0].fact).toContain(
+      "always pin the worker account id on wrangler deploys"
+    );
+    const ws = await withWorkspace(stub, (i) =>
+      i.memoryRecall({ entityType: "workspace", entityId: "batch-ws" })
+    );
+    expect(ws.map((r) => r.fact)).toEqual(["explicit batch fact"]);
+  });
+
+  it("memoryExtract distills labeled facts from text and an issue's comments (PILE-627)", async () => {
+    const stub = getStub();
+    const res = await withWorkspace(stub, (i) =>
+      i.memoryExtract({
+        text: [
+          "Wrap-up for the lane.",
+          "**Root cause:** ORM query loaded full bodies into the isolate",
+          "**Fix:** SUBSTR-bounded paged build keeps peak heap under the cap",
+        ].join("\n"),
+        entityType: "workspace",
+        entityId: "extract-ws",
+      })
+    );
+    expect(res.ids).toHaveLength(2);
+    expect(res.facts.map((f) => f.kind).toSorted()).toEqual([
+      "fix",
+      "root_cause",
+    ]);
+    const recalled = await withWorkspace(stub, (i) =>
+      i.memoryRecall({ entityType: "workspace", entityId: "extract-ws" })
+    );
+    expect(recalled).toHaveLength(2);
+
+    const issue = await withWorkspace(stub, (i) =>
+      i.createIssue({
+        title: "Extraction host",
+        description:
+          "**Decision:** use tombstone deletes for the posting lists",
+      })
+    );
+    await withWorkspace(stub, (i) =>
+      i.createComment({
+        entityType: "issue",
+        entityId: issue.id,
+        authorId: "user-1",
+        body: "**Lesson:** the comment lesson fact for extraction coverage",
+      })
+    );
+    const issueRes = await withWorkspace(stub, (i) =>
+      i.memoryExtract({ issueId: issue.id })
+    );
+    expect(issueRes.facts.length).toBeGreaterThanOrEqual(1);
+    expect(issueRes.facts[0].entityType).toBe("issue");
+    expect(issueRes.facts[0].entityId).toBe(issue.identifier ?? issue.id);
+  });
+
+  it("exposes storage and search index metrics via getStorageMetrics (PILE-633)", async () => {
+    const id = env.WORKSPACE_DURABLE_OBJECT.idFromName("pile-633-metrics");
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(id);
+    const result = await withWorkspace(stub, async (instance) => {
+      await instance.createIssue({ title: "Metrics probe issue" });
+      const cold = await instance.getStorageMetrics();
+      await instance.searchAll("anything", [], 5);
+      const warm = await instance.getStorageMetrics();
+      return { cold, warm };
+    });
+    expect(result.cold.databaseSizeBytes).toBeGreaterThan(0);
+    expect(result.cold.searchIndexWarm).toBe(false);
+    expect(result.warm.searchIndexWarm).toBe(true);
+    expect(result.warm.activeDocs).toBeGreaterThan(0);
+    expect(result.warm.vocabSize).toBeGreaterThan(0);
+  });
+
+  it("reports and clears a stale in-flight telemetry breadcrumb on init (PILE-633)", async () => {
+    const id = env.WORKSPACE_DURABLE_OBJECT.idFromName("pile-633-reset");
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(id);
+    // Plant the breadcrumb as if the isolate died mid-build, then evict so
+    // the next access re-runs initialize().
+    await runInDurableObject(stub, async (_instance, ctx) => {
+      await ctx.storage.put("__telemetry_inflight_op", {
+        op: "buildSearchIndex",
+        startedAt: 1234567890,
+      });
+    });
+    await evictDurableObject(stub);
+
+    const bodies: Array<Record<string, unknown>> = [];
+    const prevFetch = globalThis.fetch;
+    const prevKey = env.POSTHOG_PROJECT_KEY;
+    env.POSTHOG_PROJECT_KEY = "phc_test_key";
+    globalThis.fetch = (async (
+      input: RequestInfo | URL,
+      init?: RequestInit
+    ): Promise<Response> => {
+      if (String(input).includes("posthog.com")) {
+        bodies.push(
+          JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>
+        );
+        return new Response("ok", { status: 200 });
+      }
+      return prevFetch(input, init);
+    }) as typeof fetch;
+    try {
+      const leftover = await runInDurableObject(stub, async (instance, ctx) => {
+        await instance.setOrganizationId("pile-633-reset");
+        await instance.getStorageMetrics(); // forces `ready` to settle
+        return ctx.storage.get("__telemetry_inflight_op");
+      });
+      expect(leftover).toBeUndefined();
+    } finally {
+      globalThis.fetch = prevFetch;
+      env.POSTHOG_PROJECT_KEY = prevKey;
+    }
+    const exception = bodies.find(
+      (body) =>
+        body.event === "$exception" &&
+        (body.properties as Record<string, unknown>).surface ===
+          "workspace-do.isolate-reset"
+    );
+    expect(exception).toBeDefined();
+    const props = exception?.properties as Record<string, unknown>;
+    expect(props.op).toBe("buildSearchIndex");
+    expect(props.startedAt).toBe(1234567890);
+  });
 
   it("carries usage on the result into the finalized receipt", async () => {
     const stub = getStub();
@@ -3922,6 +4392,35 @@ describe("session terminal guard (PILE-467)", () => {
     expect(out.revived?.status).toBe("running");
     expect(out.revived?.endedAt).toBeNull();
   });
+
+  it("updateAgentSession cannot promote a canceled session back to created", async () => {
+    const stub = getStub();
+    const out = await withWorkspace(stub, async (instance) => {
+      const issue = await instance.createIssue({
+        title: "promote race",
+        status: "in_progress",
+      });
+      const session = await instance.createAgentSession({
+        agentId: "devin-cli",
+        issueId: issue.id,
+        status: "waiting",
+        provider: "devin-cli",
+        actorId: "u1",
+        actorType: "user",
+      });
+      // operator cancels the queued lane
+      await instance.applyAgentSessionResult(session.id, {
+        status: "canceled",
+      });
+      // a promote that raced the cancel must not resurrect it
+      const promoted = await instance.updateAgentSession(session.id, {
+        status: "created",
+      });
+      return { session, promoted };
+    });
+    expect(out.promoted?.status).toBe("canceled");
+    expect(out.promoted?.endedAt).not.toBeNull();
+  });
 });
 
 describe("session scoping options (PILE-453)", () => {
@@ -3931,5 +4430,277 @@ describe("session scoping options (PILE-453)", () => {
       instance.listAgentSessions({ agentSlug: "scout" })
     );
     expect(Array.isArray(rows)).toBe(true);
+  });
+});
+
+describe("provenance + fleet recap (PILE-643/644)", () => {
+  it("explainProvenance matches file, sha, and issueId to lanes and memory", async () => {
+    const stub = getStub();
+    const out = await withWorkspace(stub, async (instance) => {
+      const issue = await instance.createIssue({
+        title: "Fix durable-object.ts provenance",
+        repo: "acme/web",
+      });
+      await instance.updateIssue(issue.id, {
+        prUrl: "https://github.com/acme/web/pull/9",
+      });
+      const session = await instance.createAgentSession({
+        agentId: "devin-cli",
+        issueId: issue.id,
+        status: "completed",
+        provider: "devin-cli",
+        actorId: "u1",
+        actorType: "user",
+      });
+      await instance.addAgentSessionEvent({
+        sessionId: session.id,
+        type: "review.requested",
+        message: "review requested",
+        payload: {
+          files: ["src/workspace/durable-object.ts"],
+          repo: "acme/web",
+          headSha: "abc1234def5678",
+        },
+      });
+      await instance.memoryRemember({
+        entityType: "issue",
+        entityId: issue.id,
+        kind: "lesson",
+        fact: "durable-object.ts needs sqlite migrations for new tables",
+      });
+      const byFile = await instance.explainProvenance({
+        file: "durable-object.ts",
+      });
+      const bySha = await instance.explainProvenance({ sha: "abc1234" });
+      const byIssue = await instance.explainProvenance({
+        issueId: issue.id,
+      });
+      return { byFile, bySha, byIssue };
+    });
+    expect(out.byFile.entries.length).toBeGreaterThan(0);
+    expect(out.byFile.entries[0]?.touchedFiles).toContain(
+      "src/workspace/durable-object.ts"
+    );
+    expect(out.byFile.whySummary).toContain("durable-object.ts");
+    expect(out.bySha.entries.length).toBeGreaterThan(0);
+    expect(
+      out.bySha.entries.flatMap((e) => e.sessions)[0]?.convergence.status
+    ).toBeDefined();
+    expect(out.byIssue.entries[0]?.memories.length).toBeGreaterThan(0);
+  });
+
+  it("getEngineeringFleetRecap buckets shipped, in-flight, blocked, compute", async () => {
+    const stub = getStub();
+    const out = await withWorkspace(stub, async (instance) => {
+      const doneIssue = await instance.createIssue({
+        title: "Recap shipped",
+        status: "done",
+      });
+      const done = await instance.createAgentSession({
+        agentId: "devin-cli",
+        issueId: doneIssue.id,
+        status: "completed",
+        provider: "devin-cli",
+        actorId: "u1",
+        actorType: "user",
+      });
+      await instance.updateAgentSession(done.id, {
+        endedAt: new Date().toISOString(),
+      });
+      const wip = await instance.createIssue({ title: "Recap wip" });
+      await instance.createAgentSession({
+        agentId: "devin-cli",
+        issueId: wip.id,
+        status: "running",
+        provider: "devin-cli",
+        actorId: "u1",
+        actorType: "user",
+      });
+      await instance.recordLaneCost({
+        sessionId: done.id,
+        agentSlug: "devin-cli",
+        issueId: doneIssue.id,
+        provider: "devin-cli",
+        status: "completed",
+        durationMs: 1200,
+        settledAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+      });
+      return instance.getEngineeringFleetRecap({ since: "24h" });
+    });
+    expect(out.shipped.closedIssues.length).toBeGreaterThan(0);
+    expect(out.inFlight.activeLanes.length).toBeGreaterThan(0);
+    expect(out.compute.totalSessions).toBeGreaterThan(0);
+    expect(out.markdownBrief).toContain("# Engineering Fleet Recap");
+    expect(out.markdownBrief).toContain("In Flight & Trail Convergence");
+    expect(out.markdownBrief).toContain("Blocked / Needs Decision");
+  });
+});
+
+describe("setOrganizationId memoization (PILE-645)", () => {
+  it("skips the storage write when the id is already persisted", async () => {
+    const stub = getStub();
+    await withWorkspace(stub, async (instance) => {
+      const org = crypto.randomUUID();
+      await instance.setOrganizationId(org);
+      expect(Reflect.get(instance, "persistedOrganizationId")).toBe(org);
+      // second call with the same id must not write again
+      await instance.setOrganizationId(org);
+      expect(Reflect.get(instance, "persistedOrganizationId")).toBe(org);
+      const next = crypto.randomUUID();
+      await instance.setOrganizationId(next);
+      expect(Reflect.get(instance, "persistedOrganizationId")).toBe(next);
+      expect(instance.organizationId).toBe(next);
+    });
+  });
+});
+
+describe("user view preferences display", () => {
+  it("stores and returns the per-surface display blob via the DO", async () => {
+    const stub = getStub();
+    await withWorkspace(stub, async (instance) => {
+      const userId = `display-${crypto.randomUUID()}`;
+      const display = {
+        customers: {
+          sheetColors: { trades: "#3b82f6" },
+          density: "compact" as const,
+          hiddenColumns: ["phone", "location"],
+        },
+      };
+      const prefs = await instance.setDisplay(userId, display);
+      expect(prefs?.display).toBe(JSON.stringify(display));
+
+      const read = await instance.getUserViewPreferences(userId);
+      expect(JSON.parse(read!.display!)).toEqual(display);
+
+      const cleared = await instance.setDisplay(userId, null);
+      expect(cleared?.display).toBeNull();
+    });
+  });
+});
+
+describe("customer touch logging (PILE-651)", () => {
+  it("logCustomerInteraction writes outcome memory, defaults the next step, and auto-advances stage by key", async () => {
+    const stub = getStub();
+    await withWorkspace(stub, async (instance) => {
+      const outreach = await instance.createCustomerStatus({
+        name: `Outreach ${crypto.randomUUID().slice(0, 8)}`,
+        key: "outreach",
+        position: 1,
+      });
+      const discovery = await instance.createCustomerStatus({
+        name: `Discovery ${crypto.randomUUID().slice(0, 8)}`,
+        key: "discovery",
+        position: 2,
+      });
+      const customer = await instance.createCustomer({
+        name: "Knock target",
+        statusId: outreach.id,
+      });
+
+      const result = await instance.logCustomerInteraction(
+        customer.id,
+        { outcome: "talked", note: "Met the owner" },
+        "user-1"
+      );
+      expect(result).toBeDefined();
+      expect(result!.stageAdvanced).toBe(true);
+      expect(result!.stageBlocked).toBe(false);
+      expect(result!.customer.statusId).toBe(discovery.id);
+      expect(result!.customer.nextStepText).toBe(
+        "Follow up after conversation"
+      );
+      expect(result!.customer.needsHuman).toBe(false);
+
+      const facts = await instance.memoryRecall({
+        entityType: "customer",
+        entityId: customer.id,
+        kind: "outcome",
+      });
+      expect(facts.map((f) => f.id)).toContain(result!.interactionId);
+      const fact = JSON.parse(
+        facts.find((f) => f.id === result!.interactionId)!.fact
+      ) as { outcome: string; note: string | null; actorId: string };
+      expect(fact.outcome).toBe("talked");
+      expect(fact.note).toBe("Met the owner");
+      expect(fact.actorId).toBe("user-1");
+    });
+  });
+
+  it("no_answer keeps the stage; not_interested goes terminal and clears the step", async () => {
+    const stub = getStub();
+    await withWorkspace(stub, async (instance) => {
+      const lost = await instance.createCustomerStatus({
+        name: `Lost ${crypto.randomUUID().slice(0, 8)}`,
+        key: "lost",
+        position: 9,
+        type: "terminal",
+      });
+      const customer = await instance.createCustomer({
+        name: "Cold door",
+        statusId: (
+          await instance.createCustomerStatus({
+            name: `Prospect ${crypto.randomUUID().slice(0, 8)}`,
+            key: "prospect",
+          })
+        ).id,
+      });
+      const prospectStatusId = customer.statusId;
+
+      const miss = await instance.logCustomerInteraction(
+        customer.id,
+        { outcome: "no_answer" },
+        "user-1"
+      );
+      expect(miss!.stageAdvanced).toBe(false);
+      expect(miss!.customer.statusId).toBe(prospectStatusId);
+      expect(miss!.customer.nextStepText).toBe("Retry visit / call");
+      expect(miss!.customer.nextStepDueAt).toBeTruthy();
+
+      const dead = await instance.logCustomerInteraction(
+        customer.id,
+        { outcome: "spam" },
+        "user-1"
+      );
+      expect(dead!.stageAdvanced).toBe(true);
+      expect(dead!.customer.statusId).toBe(lost.id);
+      expect(dead!.customer.nextStepText).toBeNull();
+      expect(dead!.customer.nextStepDueAt).toBeNull();
+    });
+  });
+
+  it("returns undefined for a missing customer", async () => {
+    const stub = getStub();
+    const result = await withWorkspace(stub, (instance) =>
+      instance.logCustomerInteraction(
+        crypto.randomUUID(),
+        { outcome: "talked" },
+        "user-1"
+      )
+    );
+    expect(result).toBeUndefined();
+  });
+});
+
+describe("searchAll hydrated results (VTX-758)", () => {
+  it("returns title, snippet, and score alongside the id arrays", async () => {
+    const id = env.WORKSPACE_DURABLE_OBJECT.idFromName(
+      `vtx-758-${crypto.randomUUID()}`
+    );
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(id);
+    const result = await withWorkspace(stub, async (instance) => {
+      const issue = await instance.createIssue({
+        title: "Numbat hydrated search result",
+        description: "numbat hydration body text",
+      });
+      return instance.searchAll("numbat", [issue.teamId]);
+    });
+    expect(result.issueIds.length).toBeGreaterThan(0);
+    const hit = result.results.find((r) => r.type === "issue");
+    expect(hit).toBeDefined();
+    expect(hit?.title).toContain("Numbat");
+    expect(hit?.snippet.length).toBeGreaterThan(0);
+    expect(hit?.score).toBeGreaterThan(0);
+    expect(hit?.identifier).toBeTruthy();
   });
 });

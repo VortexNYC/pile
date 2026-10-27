@@ -645,4 +645,67 @@ describe("workspace lane tools", () => {
     expect(customers).toHaveLength(1);
     expect(customers[0].domain).toBeNull();
   });
+
+  it("customer_update compares domain in canonical form and reports alreadySet (PILE-444)", async () => {
+    const existing: FakeCustomer = {
+      id: "cust-dom-1",
+      name: "Joe's Pizza",
+      domain: "joespizza.example.com",
+      externalId: "gplace:dom1",
+      url: null,
+      notes: null,
+      priorityScore: null,
+      customFields: {},
+    };
+    const { ws, calls } = fakeWorkspace([existing]);
+    const out = (await wsTool("customer_update").run(wsCtx(ws), {
+      id: "cust-dom-1",
+      domain: "https://www.JoesPizza.example.com/menu",
+    })) as { alreadySet: string[]; applied: string[] };
+    expect(out.alreadySet).toContain("domain");
+    expect(out.applied).not.toContain("domain");
+    expect(calls.updateCustomer).toHaveLength(0);
+  });
+
+  it("exposes customer_dedup_key lane tool for SMB match keys and matches existing customers (PILE-518)", async () => {
+    const existing: FakeCustomer = {
+      id: "cust-bleecker",
+      name: "Bleecker St Cafe",
+      domain: "bleecker.example.com",
+      externalId: null,
+      url: null,
+      notes: null,
+      priorityScore: null,
+      customFields: {},
+    };
+    const { ws } = fakeWorkspace([existing]);
+    const out = (await wsTool("customer_dedup_key").run(wsCtx(ws), {
+      name: "The Bleecker Street Cafe LLC",
+      address: "123 Bleecker Street",
+      phone: "(212) 555-0199",
+      domain: "https://www.bleecker.example.com",
+    })) as {
+      matchKey: string;
+      phoneE164: string;
+      matchedCustomerId: string | null;
+    };
+    expect(out.matchKey).toBe("bleecker|123 bleecker");
+    expect(out.phoneE164).toBe("+12125550199");
+    expect(out.matchedCustomerId).toBe("cust-bleecker");
+    expect(wsTool("customer_reply_ingest").name).toBe("customer_reply_ingest");
+    expect(wsTool("customer_signals_list").name).toBe("customer_signals_list");
+    expect(wsTool("customer_audience_query").name).toBe(
+      "customer_audience_query"
+    );
+    expect(wsTool("customer_run_play").name).toBe("customer_run_play");
+    expect(wsTool("customer_morning_brief").name).toBe(
+      "customer_morning_brief"
+    );
+    expect(wsTool("customer_pull_leads").name).toBe("customer_pull_leads");
+  });
+
+  it("exposes the send-gate and dedup tools by name", () => {
+    expect(wsTool("customer_send_gate").name).toBe("customer_send_gate");
+    expect(wsTool("customer_dedup_key").name).toBe("customer_dedup_key");
+  });
 });

@@ -10,6 +10,13 @@ import { MockAgentProvider } from "./harness.js";
 import { registerAgentProvider } from "./index.js";
 import {
   buildReviewDiff,
+  buildReviewInstructions,
+  classifyReviewRiskTier,
+  computeFindingFingerprint,
+  computeReviewTrailScores,
+  DEFAULT_REVIEW_AGENT,
+  evaluateReviewCase,
+  filterDiffGroundedFindings,
   parseReviewVerdict,
   publishReviewVerdicts,
   REVIEW_CHECK_NAME,
@@ -18,6 +25,8 @@ import {
   requestPrReview,
   reviewableFiles,
   reviewCheckTitle,
+  runStaticSecurityPass,
+  SEED_REVIEW_EVAL_CASES,
   verdictConclusion,
 } from "./review.js";
 
@@ -48,6 +57,8 @@ describe("parseReviewVerdict", () => {
         { severity: "minor", title: "Rename x", file: "a.ts", line: 3 },
       ],
       unstructured: false,
+      fingerprints: ["a.ts:minor:rename-x"],
+      scores: { security: 100, slop: 100, invariants: 95, humanGate: false },
     });
   });
 
@@ -79,22 +90,25 @@ describe("parseReviewVerdict", () => {
 
 describe("renderReviewBody", () => {
   it("renders the callout ladder in severity order", () => {
+    const findings = [
+      { severity: "minor" as const, title: "Nit" },
+      { severity: "must" as const, title: "Add a test", file: "b.ts" },
+      {
+        severity: "breaking" as const,
+        title: "Crashes on null",
+        file: "a.ts",
+        line: 9,
+        detail: "line one\nline two",
+      },
+    ];
     const body = renderReviewBody(
       {
         verdict: "request-changes",
         summary: "Two blockers.",
-        findings: [
-          { severity: "minor", title: "Nit" },
-          { severity: "must", title: "Add a test", file: "b.ts" },
-          {
-            severity: "breaking",
-            title: "Crashes on null",
-            file: "a.ts",
-            line: 9,
-            detail: "line one\nline two",
-          },
-        ],
+        findings,
         unstructured: false,
+        fingerprints: findings.map(computeFindingFingerprint),
+        scores: computeReviewTrailScores(findings),
       },
       "0123456789abcdef"
     );
@@ -116,6 +130,8 @@ describe("renderReviewBody", () => {
       summary: "",
       findings: [],
       unstructured: false,
+      fingerprints: [],
+      scores: computeReviewTrailScores([]),
     };
     expect(renderReviewBody(review, "abc")).toContain("✅ **Clean**");
     expect(reviewCheckTitle(review)).toBe("Approve");
@@ -1110,5 +1126,264 @@ describe("requestPrReview / publishReviewVerdicts", () => {
       c.url.includes("check-runs")
     );
     expect(checkPosts).toHaveLength(0);
+  });
+
+  it("supersedes a live review lane pinned to an older headSha (VTX-621)", async () => {
+    const issue = await laneIssue();
+    const t = target("sha-new-head");
+    // A review lane still running the previous head — reviews dead code.
+    const stale = await stub.createAgentSession({
+      issueId: issue.id,
+      agentId: "review-mock",
+      provider: "review-mock",
+      actorId: userId,
+      actorType: "user",
+      status: "running",
+      purpose: REVIEW_PURPOSE,
+    });
+    await stub.addAgentSessionEvent({
+      sessionId: stale.id,
+      type: "review.requested",
+      message: "review requested",
+      payload: {
+        prUrl: t.prUrl,
+        repo: REPO,
+        pullNumber: t.pullNumber,
+        headSha: "sha-old-head",
+        checkRunId: 777,
+      },
+    });
+
+    const gh = fakeGithub({
+      config: REVIEW_CONFIG,
+      files: [{ filename: "src/a.ts", patch: "@@" }],
+      // GET /pulls/{n} confirms the request targets the current head —
+      // the supersede ordering guard.
+      prHead: "sha-new-head",
+    });
+    const outcome = await requestPrReview(
+      workerEnv,
+      stub,
+      organizationId,
+      issue,
+      t,
+      "tok",
+      { fetch: gh.fetch }
+    );
+    expect(outcome).toBe("dispatched");
+
+    // The stale lane's check run resolved superseded, and the session went
+    // terminal without an infraFailure mark.
+    const resolve = gh.calls.find(
+      (c) => c.method === "PATCH" && c.url.endsWith("/check-runs/777")
+    );
+    expect(resolve?.body).toMatchObject({ status: "completed" });
+    const staleAfter = await stub.getAgentSession(stale.id);
+    expect(staleAfter?.status).toBe("canceled");
+    expect(staleAfter?.infraFailure).toBe(0);
+    const evts = await stub.listAgentSessionEvents(stale.id);
+    expect(evts.some((e) => e.type === "review.superseded")).toBe(true);
+  });
+
+  it("enforces maxRounds cap, classifies risk tiers, runs static security pass, and evaluates seed cases (PILE-455)", async () => {
+    expect(
+      classifyReviewRiskTier([
+        { filename: "README.md", additions: 10, deletions: 2 },
+      ])
+    ).toBe("low");
+    expect(
+      classifyReviewRiskTier([
+        { filename: "src/platform/auth.ts", additions: 10, deletions: 2 },
+      ])
+    ).toBe("high");
+    const secFindings = runStaticSecurityPass([
+      {
+        filename: "src/config.ts",
+        patch: "+const key = '-----BEGIN RSA PRIVATE KEY-----';",
+      },
+    ]);
+    expect(secFindings).toHaveLength(1);
+    expect(secFindings[0].severity).toBe("breaking");
+
+    const evalFindings = [
+      {
+        severity: "breaking" as const,
+        title: "Inverted supersedes returns stale prior row",
+      },
+    ];
+    const evalRes = evaluateReviewCase(SEED_REVIEW_EVAL_CASES[0], {
+      verdict: "request-changes",
+      summary:
+        "memoryRecall hides updates because supersedes is set on the new row.",
+      findings: evalFindings,
+      unstructured: false,
+      fingerprints: evalFindings.map(computeFindingFingerprint),
+      scores: computeReviewTrailScores(evalFindings),
+    });
+    expect(evalRes.passed).toBe(true);
+
+    // Round cap: when maxRounds=1 and 1 round is already published for this PR,
+    // a new headSha completes the check run immediately with round_capped.
+    const issue = await laneIssue();
+    const { t } = await finishReviewLane(
+      issue,
+      "sha-round-1",
+      "```json\n" +
+        JSON.stringify({ verdict: "approve", summary: "Round 1 clean." }) +
+        "\n```"
+    );
+    const publishGh = fakeGithub({ config: REVIEW_CONFIG, files: [] });
+    await publishReviewVerdicts(stub, publishDeps(publishGh));
+
+    const cappedConfig = {
+      ...REVIEW_CONFIG,
+      review: { agent: "review-mock", maxRounds: 1 },
+    };
+    const round2Gh = fakeGithub({
+      config: cappedConfig,
+      files: [{ filename: "src/a.ts", patch: "@@" }],
+    });
+    const outcome = await requestPrReview(
+      workerEnv,
+      stub,
+      organizationId,
+      issue,
+      { ...t, headSha: "sha-round-2" },
+      "tok",
+      { fetch: round2Gh.fetch }
+    );
+    expect(outcome).toBe("round_capped");
+
+    // Deterministic diff-grounding filter (Michael Thiessen / Pullfrog rule):
+    // drops hallucinated findings on untouched files and recomputes verdict.
+    const ungroundedFindings = [
+      {
+        severity: "breaking" as const,
+        title: "Hallucinated bug in untouched file",
+        file: "src/untouched.ts",
+      },
+      {
+        severity: "minor" as const,
+        title: "Nit in touched file",
+        file: "src/a.ts",
+      },
+    ];
+    const grounded = filterDiffGroundedFindings(
+      {
+        verdict: "request-changes",
+        summary: "Found a bug.",
+        findings: ungroundedFindings,
+        unstructured: false,
+        fingerprints: ungroundedFindings.map(computeFindingFingerprint),
+        scores: computeReviewTrailScores(ungroundedFindings),
+      },
+      ["src/a.ts"]
+    );
+    expect(grounded.findings).toHaveLength(1);
+    expect(grounded.verdict).toBe("comment");
+  });
+
+  it("keeps the review check name and purpose constants stable", () => {
+    // GitHub check-run names are a public contract — the check-name prefix
+    // pins dashboards and branch-protection rules.
+    expect(REVIEW_CHECK_NAME).toBe("pile-review");
+    expect(REVIEW_PURPOSE).toBe("review");
+    expect(DEFAULT_REVIEW_AGENT).toBe("devin-cli");
+  });
+});
+
+describe("trail HUD + repo lessons (PILE-641/642)", () => {
+  it("computes fingerprints stable across rounds and per-axis scores", () => {
+    const sec = {
+      severity: "breaking" as const,
+      title: "RLS bypass leaks token",
+      file: "src/api.ts",
+    };
+    expect(computeFindingFingerprint(sec)).toBe(
+      "src/api.ts:breaking:rls-bypass-leaks-token"
+    );
+    expect(
+      computeFindingFingerprint({ severity: "must", title: "Add Test!!" })
+    ).toBe("global:must:add-test");
+    const scores = computeReviewTrailScores([
+      sec,
+      { severity: "minor", title: "unused import slop", file: "b.ts" },
+      { severity: "must", title: "contract mismatch", file: "c.ts" },
+    ]);
+    expect(scores).toEqual({
+      security: 65,
+      slop: 95,
+      invariants: 80,
+      humanGate: true, // breaking finding forces the gate
+    });
+    expect(
+      computeReviewTrailScores([{ severity: "minor", title: "rename" }])
+        .humanGate
+    ).toBe(false);
+  });
+
+  it("renders the Trail HUD line and convergence trajectory in the body", () => {
+    const findings = [
+      { severity: "must" as const, title: "Missing auth", file: "a.ts" },
+    ];
+    const review = {
+      verdict: "request-changes" as const,
+      summary: "One must.",
+      findings,
+      unstructured: false,
+      fingerprints: findings.map(computeFindingFingerprint),
+      scores: computeReviewTrailScores(findings),
+    };
+    const body = renderReviewBody(review, "0123456789abcdef");
+    expect(body).toContain(
+      "**Trail HUD:** Security `80/100` · Invariants `100/100` · Slop `100/100` · Human gate `clear`"
+    );
+    const withArc = renderReviewBody(review, "0123456789abcdef", {
+      rounds: 3,
+      findingsTrajectory: [4, 2, 1],
+      resolvedFingerprints: ["x"],
+      persistingFingerprints: [],
+      oscillating: false,
+      status: "converging",
+      trajectory: "4 → 2 → 1 findings (converging)",
+    });
+    expect(withArc).toContain(
+      "**Trail convergence (round 3):** 4 → 2 → 1 findings (converging)"
+    );
+  });
+
+  it("injects repo invariants into the review prompt before the rubric", () => {
+    const withMemory = buildReviewInstructions(
+      {
+        repoFull: "acme/web",
+        pullNumber: 7,
+        prUrl: "https://github.com/acme/web/pull/7",
+        headSha: "sha",
+        baseRef: "main",
+        title: "Fix rounding",
+      },
+      "@@ diff",
+      [],
+      [
+        { kind: "invariant", fact: "integer cents only, never floats" },
+        { kind: "review_lesson:api.ts", fact: "[breaking] leaked key" },
+      ]
+    );
+    expect(withMemory).toContain(
+      "## Repository Invariants & Past Review Lessons (Enforce on this diff)"
+    );
+    expect(withMemory).toContain("- [invariant] integer cents only");
+    const without = buildReviewInstructions(
+      {
+        repoFull: "acme/web",
+        pullNumber: 7,
+        prUrl: "u",
+        headSha: "sha",
+        baseRef: "main",
+      },
+      "@@ diff",
+      []
+    );
+    expect(without).not.toContain("Repository Invariants");
   });
 });

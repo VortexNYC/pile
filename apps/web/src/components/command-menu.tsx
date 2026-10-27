@@ -1,5 +1,6 @@
 import { CommandPalette } from "@cloudflare/kumo/components/command-palette";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
@@ -23,8 +24,29 @@ interface CommandItem {
 
 /** ⌘K jump-bar — Linear's command palette. Searches open issues and
  * jumps to any surface in the workspace. */
+/** PILE-645 — heavy palette feeds (documents, customers) only fetch once
+ * the operator has typed a search term. */
+export function paletteDeepQueryEnabled(open: boolean, query: string) {
+  return open && query.trim().length > 0;
+}
+
+/** ⌘K items carry workspace-relative hrefs (`/issues/ISS-4`). Joining them
+ * under the slug produces a router path — `navigate` resolves it
+ * client-side and applies the /app basepath, so selection never falls back
+ * to a full-page load. */
+/** PILE-653 — the palette's customer feed rides the bounded contract:
+ *  server-side `q`, summary rows, capped page. */
+export function paletteCustomersQuery(query: string) {
+  return { q: query || undefined, limit: 8, summary: "1" } as const;
+}
+
+export function paletteRoute(slug: string, href: string): string {
+  return `/${slug}${href.startsWith("/") ? href : `/${href}`}`;
+}
+
 export function CommandMenu() {
   const workspace = useWorkspace();
+  const navigate = useNavigate();
 
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -60,6 +82,7 @@ export function CommandMenu() {
       ).issues,
     enabled: open,
     placeholderData: keepPreviousData,
+    staleTime: 60_000,
   });
   const documents = useQuery({
     queryKey: wsKey(workspace.id, "palette-documents", { search: query }),
@@ -69,12 +92,14 @@ export function CommandMenu() {
           api.GET("/workspaces/{organizationId}/documents", {
             params: {
               path: { organizationId: workspace.id },
+              query: { summary: "1" },
             },
           })
         )
       ).documents,
-    enabled: open,
+    enabled: paletteDeepQueryEnabled(open, query),
     placeholderData: keepPreviousData,
+    staleTime: 60_000,
   });
   const tickets = useQuery({
     queryKey: wsKey(workspace.id, "palette-tickets", { search: query }),
@@ -91,6 +116,7 @@ export function CommandMenu() {
       ).tickets,
     enabled: open,
     placeholderData: keepPreviousData,
+    staleTime: 60_000,
   });
   const customers = useQuery({
     queryKey: wsKey(workspace.id, "palette-customers", { search: query }),
@@ -98,12 +124,16 @@ export function CommandMenu() {
       (
         await unwrap(
           api.GET("/workspaces/{organizationId}/customers", {
-            params: { path: { organizationId: workspace.id } },
+            params: {
+              path: { organizationId: workspace.id },
+              query: paletteCustomersQuery(query),
+            },
           })
         )
       ).customers,
-    enabled: open,
+    enabled: paletteDeepQueryEnabled(open, query),
     placeholderData: keepPreviousData,
+    staleTime: 60_000,
   });
 
   const staticItems: CommandItem[] = useMemo(
@@ -181,7 +211,7 @@ export function CommandMenu() {
   ]);
 
   const go = (item: CommandItem) => {
-    window.location.assign(`/app/${workspace.slug}${item.href}`);
+    void navigate({ to: paletteRoute(workspace.slug, item.href) });
     setOpen(false);
   };
 

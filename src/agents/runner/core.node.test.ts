@@ -97,6 +97,29 @@ elif mode == "browser":
     out = {"env": mod.__dict__["with_browser_env"]({}), "prompt": mod.__dict__["lane_prompt"]()}
 elif mode == "push":
     out = {"pushed": mod.__dict__["commit_and_push"](dict(os.environ))}
+elif mode == "usage":
+    evt = json.loads(os.environ.get("TEST_EVENT") or "null")
+    burned_acc = {"inputTokens": 0, "outputTokens": 0}
+    for e in json.loads(os.environ.get("TEST_STEPS") or "[]"):
+        s = mod.__dict__["cli_step_usage"](e)
+        if s:
+            burned_acc["inputTokens"] += s["inputTokens"]
+            burned_acc["outputTokens"] += s["outputTokens"]
+    out = {
+        "cliResult": mod.__dict__["cli_result_usage"](evt),
+        "cliStep": mod.__dict__["cli_step_usage"](evt),
+        "burned": mod.__dict__["burned_usage"](burned_acc),
+    }
+elif mode == "fail":
+    if os.environ.get("TEST_PLAIN"):
+        err = RuntimeError("plain boom")
+    else:
+        err = mod.__dict__["AgentRunError"](
+            "boom", usage=json.loads(os.environ.get("TEST_USAGE") or "null")
+        )
+    mod.__dict__["fail_result"](err)
+    with open("/tmp/agent-result.json") as f:
+        out = {"resultFile": json.load(f)}
 else:
     raise AssertionError("unknown mode " + mode)
 
@@ -115,6 +138,10 @@ interface HarnessResult {
   env?: Record<string, string>;
   prompt?: string;
   pushed?: boolean;
+  cliResult?: Record<string, unknown> | null;
+  cliStep?: Record<string, unknown> | null;
+  burned?: Record<string, unknown> | null;
+  resultFile?: Record<string, unknown>;
 }
 
 function runnerEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
@@ -144,7 +171,7 @@ const describePy = describe.skipIf(PYTHON === null);
 
 function runHarness(
   pulls: Array<Record<string, unknown>>,
-  mode: "find" | "finalize" | "browser" | "push",
+  mode: "find" | "finalize" | "browser" | "push" | "usage" | "fail",
   extraEnv: Record<string, string> = {}
 ): HarnessResult {
   if (!PYTHON) throw new Error("unreachable: suite skipped without CPython");
@@ -278,6 +305,135 @@ describePy("runner plan mode (PILE-283)", () => {
     // A real push would need git + a remote; the guard returns first.
     const res = runHarness([], "push", { PILE_LANE_MODE: "plan" });
     expect(res.pushed).toBe(false);
+  });
+});
+
+const usageMode = (
+  event: unknown,
+  steps: unknown[] = [],
+  env: Record<string, string> = {}
+) =>
+  runHarness([], "usage", {
+    TEST_EVENT: JSON.stringify(event),
+    TEST_STEPS: JSON.stringify(steps),
+    ...env,
+  });
+
+describePy("runner usage extraction (PILE-450)", () => {
+  it("normalizes a result event into the receipt shape", () => {
+    const res = usageMode({
+      type: "result",
+      total_cost_usd: 0.5,
+      model: "claude-sonnet-4-5",
+      usage: {
+        input_tokens: 1000,
+        output_tokens: 200,
+        total_tokens: 1200,
+      },
+    });
+    expect(res.cliResult).toEqual({
+      inputTokens: 1000,
+      outputTokens: 200,
+      totalTokens: 1200,
+      costMicros: 500_000,
+      model: "claude-sonnet-4-5",
+    });
+  });
+
+  it("folds cache tokens into inputTokens", () => {
+    const res = usageMode({
+      type: "result",
+      usage: {
+        input_tokens: 100,
+        cache_read_input_tokens: 900,
+        cache_creation_input_tokens: 500,
+        output_tokens: 50,
+      },
+    });
+    expect(res.cliResult).toMatchObject({
+      inputTokens: 1500,
+      outputTokens: 50,
+    });
+  });
+
+  it("treats a present-but-null cost the same as absent", () => {
+    // dict.get's default only fires on a missing key — a null
+    // total_cost_usd must not shadow the nested fallbacks.
+    const res = usageMode({
+      type: "result",
+      total_cost_usd: null,
+      usage: { input_tokens: 10, total_cost_usd: null, cost_usd: 0.003 },
+    });
+    expect(res.cliResult?.costMicros).toBe(3000);
+  });
+
+  it("returns null for non-result events and non-dicts", () => {
+    expect(
+      usageMode({ type: "assistant", usage: { input_tokens: 1 } }).cliResult
+    ).toBeNull();
+    expect(usageMode(null).cliResult).toBeNull();
+  });
+
+  it("extracts per-call usage from an assistant event", () => {
+    const res = usageMode({
+      type: "assistant",
+      message: {
+        usage: {
+          input_tokens: 800,
+          cache_read_input_tokens: 200,
+          output_tokens: 100,
+        },
+      },
+    });
+    expect(res.cliStep).toEqual({ inputTokens: 1000, outputTokens: 100 });
+  });
+
+  it("accumulates burned usage for a run that dies before its result event", () => {
+    const res = usageMode(
+      null,
+      [
+        {
+          type: "assistant",
+          message: { usage: { input_tokens: 500, output_tokens: 60 } },
+        },
+        {
+          type: "assistant",
+          message: { usage: { input_tokens: 700, output_tokens: 40 } },
+        },
+        { type: "assistant", message: { content: [] } },
+      ],
+      { MODEL: "claude-sonnet-4-5" }
+    );
+    expect(res.burned).toEqual({
+      inputTokens: 1200,
+      outputTokens: 100,
+      totalTokens: 1300,
+      model: "claude-sonnet-4-5",
+    });
+  });
+
+  it("writes the carried usage onto a failed run's result file", () => {
+    const res = runHarness([], "fail", {
+      TEST_USAGE: JSON.stringify({
+        inputTokens: 1200,
+        outputTokens: 100,
+        totalTokens: 1300,
+        model: "claude-sonnet-4-5",
+      }),
+    });
+    expect(res.resultFile?.status).toBe("failed");
+    expect(res.resultFile?.usage).toEqual({
+      inputTokens: 1200,
+      outputTokens: 100,
+      totalTokens: 1300,
+      model: "claude-sonnet-4-5",
+    });
+  });
+
+  it("writes a clean failure for errors that carry no usage", () => {
+    const res = runHarness([], "fail", { TEST_PLAIN: "1" });
+    expect(res.resultFile?.status).toBe("failed");
+    expect(res.resultFile?.usage).toBeUndefined();
   });
 });
 
@@ -649,5 +805,95 @@ describe("runner push state (PILE-322)", () => {
     // _reset_git_config refuses a non-plain-directory .git — a loud stop,
     // not a silent re-clone that would rmtree the worktree's working tree.
     expect(res.error).toContain("refusing to push");
+  });
+});
+
+const parseRateLimitReset = (text: string, now: string): string => {
+  if (!PYTHON) throw new Error("unreachable: suite skipped without CPython");
+  return execFileSync(
+    PYTHON,
+    [
+      "-c",
+      `import sys, json, datetime; sys.path.insert(0, ${JSON.stringify(join(import.meta.dirname))});
+import core;
+now = datetime.datetime.fromisoformat(${JSON.stringify(now)});
+print(json.dumps(core.rate_limit_reset_iso(${JSON.stringify(text)}, now)))`,
+    ],
+    { encoding: "utf8", timeout: 30_000 }
+  )
+    .trim()
+    .replace(/^"|"$/g, "");
+};
+
+describePy("rate-limit reset parsing (VTX-638)", () => {
+  const parse = parseRateLimitReset;
+  const NOW = "2026-10-22T15:33:11+00:00";
+
+  it("parses 'reset in N seconds' as a relative offset", () => {
+    expect(
+      parse(
+        "Reached free model rate limit. Your limit will reset in 10 seconds (at 15:44 UTC)",
+        NOW
+      )
+    ).toBe("2026-10-22T15:33:21+00:00");
+  });
+
+  it("parses 'try again in 30s' / '2 minutes' abbreviations", () => {
+    expect(parse("try again in 30s", NOW)).toBe("2026-10-22T15:33:41+00:00");
+    expect(parse("retry in 2 minutes", NOW)).toBe("2026-10-22T15:35:11+00:00");
+  });
+
+  it("accepts 'resets in' phrasing", () => {
+    expect(
+      parse("Rate limit reached. Your limit resets in 30 seconds", NOW)
+    ).toBe("2026-10-22T15:33:41+00:00");
+  });
+
+  it("honors an explicit UTC/GMT clock time", () => {
+    expect(parse("resets at 15:44 UTC", NOW)).toBe("2026-10-22T15:44:00+00:00");
+    // Same-day-past clock rolls to tomorrow.
+    expect(parse("resets at 15:00 UTC", NOW)).toBe("2026-10-23T15:00:00+00:00");
+  });
+
+  it("rejects a bare 'at 6:05 PM' — no timezone marker, cannot guess", () => {
+    expect(parse("resets at 6:05 PM", NOW)).toBe("null");
+  });
+
+  it("ignores unrelated 'at HH:MM' text in a noisy error tail", () => {
+    expect(parse("build failed at 14:02 while cloning", NOW)).toBe("null");
+  });
+});
+
+describePy("pgx copy-on-write Postgres warmup (VTX-651)", () => {
+  it("invokes pgx clone <template> <branch> --ttl <ttl> when PILE_PGX_TEMPLATE is set", () => {
+    const out = execFileSync(
+      PYTHON!,
+      [
+        "-c",
+        `import os, json, types;
+os.environ["PILE_PGX_TEMPLATE"] = "vortex_seeded";
+os.environ["PILE_PGX_BRANCH"] = "lane_abc";
+os.environ["PILE_PGX_TTL"] = "4h";
+src = open(${JSON.stringify(CORE_PATH)}).read();
+fn_start = src.index("def ensure_postgres():");
+fn_end = src.index("\\n# Optional headless browser", fn_start);
+calls = [];
+ns = {
+  "os": os,
+  "time": __import__("time"),
+  "shutil": types.SimpleNamespace(which=lambda name: "/usr/local/bin/pgx" if name == "pgx" else None),
+  "run": lambda cmd, **kw: (calls.append(cmd), types.SimpleNamespace(returncode=0, stdout="", stderr=""))[1],
+};
+exec(src[fn_start:fn_end], ns);
+ns["ensure_postgres"]();
+print(json.dumps(calls))`,
+      ],
+      { encoding: "utf8", timeout: 30_000 }
+    ).trim();
+    const lines = out.split("\n");
+    const calls = JSON.parse(lines[lines.length - 1] ?? "[]") as string[][];
+    expect(calls).toEqual([
+      ["pgx", "clone", "vortex_seeded", "lane_abc", "--ttl", "4h"],
+    ]);
   });
 });

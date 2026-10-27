@@ -4,12 +4,14 @@ import { eq } from "drizzle-orm";
 
 import { createD1 } from "../global/db.js";
 import { teamMember } from "../global/schema.js";
+import { getInitiative, getProject } from "../global/workspace-entities.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import { canAccess } from "../platform/permissions.js";
 import { isAdminIdentity } from "../platform/permissions.js";
 import { rls } from "../platform/rls.js";
+import { blockNoteToPlainText, searchSnippet } from "../workspace/search.js";
 import { assertIssueAccess } from "./issue-access.js";
 import { resolveMentions } from "./mentions.js";
 import { getWorkspaceStub } from "./stub.js";
@@ -103,8 +105,19 @@ function toResponse(row: {
     content:
       row.contentFormat === "markdown"
         ? row.content
-        : (JSON.parse(row.content) as Record<string, unknown>[]),
+        : parseStoredContent(row.content),
   };
+}
+
+// VTX-767 — one corrupted row (a stored body that does not parse under its
+// contentFormat) used to 500 every list/get that touched it. Surface the raw
+// body as a string instead so the document stays visible and repairable.
+function parseStoredContent(content: string) {
+  try {
+    return JSON.parse(content) as Record<string, unknown>[];
+  } catch {
+    return content;
+  }
 }
 
 function notFound(): never {
@@ -183,6 +196,125 @@ async function assertDocAccess(
   }
 }
 
+async function identityTeamIds(
+  c: {
+    env: WorkerEnv;
+    get: (key: "workspaceIdentity") => WorkspaceIdentity;
+  },
+  identity: WorkspaceIdentity
+): Promise<string[]> {
+  if (identity.type !== "user") return [];
+  return (
+    await createD1(c.env.D1)
+      .select({ teamId: teamMember.teamId })
+      .from(teamMember)
+      .where(eq(teamMember.userId, identity.id))
+      .all()
+  ).map((row) => row.teamId);
+}
+
+// VTX-768 — the write path must face the same space ACL reads do: a
+// restricted space admits only actors holding an edit-level space grant
+// (or a workspace admin). Reads of the space deny by default; writes now
+// match. Unknown space ids are a 400, not a dangling reference (VTX-769).
+async function assertSpaceWriteAccess(
+  c: {
+    env: WorkerEnv;
+    get: (key: "workspaceIdentity") => WorkspaceIdentity;
+  },
+  stub: {
+    getDocumentSpace(
+      id: string
+    ): Promise<{ id: string; restricted: boolean } | undefined>;
+    listSpacePermissions(
+      spaceId: string
+    ): Promise<Array<{ actorId: string; actorType: string; level: string }>>;
+  },
+  spaceId: string
+) {
+  const space = await stub.getDocumentSpace(spaceId);
+  if (!space) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: `Unknown spaceId: ${spaceId}`,
+      details: { field: "spaceId" },
+    });
+  }
+  if (!space.restricted) return;
+  const identity = c.get("workspaceIdentity");
+  if (isAdminIdentity(identity)) return;
+  const teamIds = await identityTeamIds(c, identity);
+  const granted = (await stub.listSpacePermissions(spaceId)).some(
+    (grant) =>
+      grant.level === "edit" &&
+      (grant.actorId === identity.id ||
+        (grant.actorType === "team" && teamIds.includes(grant.actorId)))
+  );
+  if (!granted) {
+    throw new VortexError({
+      code: "FORBIDDEN",
+      status: 403,
+      message: "This document space is restricted",
+      details: { field: "spaceId" },
+    });
+  }
+}
+
+// VTX-769 — every document-side foreign key resolves or the write 400s
+// with the offending field, matching the existing issueId handling.
+function missingRef(field: string, value: string): never {
+  throw new VortexError({
+    code: "BAD_REQUEST",
+    status: 400,
+    message: `Unknown ${field}: ${value}`,
+    details: { field },
+  });
+}
+
+async function assertDocumentRefs(
+  c: {
+    env: WorkerEnv;
+    get: (key: "workspaceIdentity") => WorkspaceIdentity;
+  },
+  stub: {
+    getDocumentSpace(
+      id: string
+    ): Promise<{ id: string; restricted: boolean } | undefined>;
+    listSpacePermissions(
+      spaceId: string
+    ): Promise<Array<{ actorId: string; actorType: string; level: string }>>;
+    getDocument(id: string): Promise<{ id: string } | undefined>;
+  },
+  organizationId: string,
+  refs: {
+    projectId?: string | null;
+    initiativeId?: string | null;
+    parentDocumentId?: string | null;
+    spaceId?: string | null;
+  }
+) {
+  const db = createD1(c.env.D1);
+  if (typeof refs.projectId === "string") {
+    if (!(await getProject(db, organizationId, refs.projectId))) {
+      missingRef("projectId", refs.projectId);
+    }
+  }
+  if (typeof refs.initiativeId === "string") {
+    if (!(await getInitiative(db, organizationId, refs.initiativeId))) {
+      missingRef("initiativeId", refs.initiativeId);
+    }
+  }
+  if (typeof refs.parentDocumentId === "string") {
+    if (!(await stub.getDocument(refs.parentDocumentId))) {
+      missingRef("parentDocumentId", refs.parentDocumentId);
+    }
+  }
+  if (typeof refs.spaceId === "string") {
+    await assertSpaceWriteAccess(c, stub, refs.spaceId);
+  }
+}
+
 const listRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/documents",
@@ -204,6 +336,9 @@ const listRoute = createRoute({
         .string()
         .transform((v) => v === "true")
         .optional(),
+      // PILE-645 — `summary=1` returns every field but strips `content`
+      // (BlockNote JSON / markdown bodies are the bulk of list payloads).
+      summary: z.string().optional(),
     }),
   },
   responses: {
@@ -445,7 +580,22 @@ const listSpacePermsRoute = createRoute({
   responses: {
     200: {
       description: "Space permissions",
-      content: { "application/json": { schema: z.object({ permissions: z.array(z.object({ id: z.string(), spaceId: z.string(), actorId: z.string(), actorType: z.string(), level: z.string(), createdAt: z.string() })) } ) } },
+      content: {
+        "application/json": {
+          schema: z.object({
+            permissions: z.array(
+              z.object({
+                id: z.string(),
+                spaceId: z.string(),
+                actorId: z.string(),
+                actorType: z.string(),
+                level: z.string(),
+                createdAt: z.string(),
+              })
+            ),
+          }),
+        },
+      },
     },
   },
 });
@@ -470,7 +620,10 @@ const grantSpacePermRoute = createRoute({
     },
   },
   responses: {
-    201: { description: "Space permission granted", content: { "application/json": { schema: z.object({ id: z.string() }) } } },
+    201: {
+      description: "Space permission granted",
+      content: { "application/json": { schema: z.object({ id: z.string() }) } },
+    },
   },
 });
 
@@ -479,12 +632,22 @@ const revokeSpacePermRoute = createRoute({
   path: "/workspaces/{organizationId}/document-spaces/{id}/permissions/{actorId}",
   tags: ["documents"],
   middleware: [rls("document:edit")],
-  request: { params: z.object({ organizationId: z.string(), id: z.string(), actorId: z.string() }) },
+  request: {
+    params: z.object({
+      organizationId: z.string(),
+      id: z.string(),
+      actorId: z.string(),
+    }),
+  },
   responses: {
-    200: { description: "Space permission revoked", content: { "application/json": { schema: z.object({ ok: z.boolean() }) } } },
+    200: {
+      description: "Space permission revoked",
+      content: {
+        "application/json": { schema: z.object({ ok: z.boolean() }) },
+      },
+    },
   },
 });
-
 
 const deleteSpaceRoute = createRoute({
   method: "delete",
@@ -530,7 +693,10 @@ const createDocumentCommentRoute = createRoute({
     params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
       content: {
-        "application/json": { schema: z.object({ body: z.string().min(1) }) },
+        "application/json": {
+          // VTX-770 — trim first so a whitespace-only body 400s.
+          schema: z.object({ body: z.string().trim().min(1) }),
+        },
       },
     },
   },
@@ -642,6 +808,7 @@ const deleteShareRoute = createRoute({
 
 // Public share read — the token is the capability; no workspace auth.
 const readSharedRoute = createRoute({
+  security: [],
   method: "get",
   path: "/shared-documents/{organizationId}/{token}",
   tags: ["documents"],
@@ -691,21 +858,32 @@ const unwatchRoute = createRoute({
   },
 });
 
+// VTX-758 — search hits carry metadata + a body excerpt, never the full
+// `content` (a 50-doc page used to ship ~150 KB of BlockNote JSON). Fetch
+// the body via GET /documents/{id} when needed.
+const documentSearchHitSchema = documentSchema
+  .omit({ content: true })
+  .extend({ score: z.number(), snippet: z.string() });
+
 const searchRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/documents/search",
+  summary: "Search documents by title and body",
   tags: ["documents"],
   middleware: [rls("document:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
-    query: z.object({ q: z.string().min(1) }),
+    query: z.object({
+      q: z.string().min(1),
+      limit: z.coerce.number().int().min(1).max(100).optional(),
+    }),
   },
   responses: {
     200: {
       description: "Matching documents",
       content: {
         "application/json": {
-          schema: z.object({ documents: z.array(documentSchema) }),
+          schema: z.object({ documents: z.array(documentSearchHitSchema) }),
         },
       },
     },
@@ -902,7 +1080,13 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
       : !canAccess(identity.permissions, "read")
         ? await stub.listDocumentsForActor(identity.id, args)
         : await stub.listDocumentsVisibleTo(identity.id, teamIds, args);
-    return c.json({ documents: rows.map(toResponse) });
+    const stripContent = query.summary === "1" || query.summary === "true";
+    return c.json({
+      documents: rows.map((row) => {
+        const doc = toResponse(row);
+        return stripContent ? { ...doc, content: "" } : doc;
+      }),
+    });
   });
 
   app.openapi(createRouteDef, async (c) => {
@@ -925,6 +1109,7 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
       await assertIssueAccess(createD1(c.env.D1), stub, issue, identity);
       issueId = issue.id;
     }
+    await assertDocumentRefs(c, stub, organizationId, input);
     const doc = await stub.createDocument({
       ...input,
       issueId,
@@ -936,6 +1121,31 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
       await stub.setDocumentPermission(doc.id, identity.id, "user", "edit");
     }
     return c.json(toResponse(doc), 201);
+  });
+
+  app.openapi(searchRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const { q, limit } = c.req.valid("query");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const hits = await stub.searchDocuments(q, limit ?? 20);
+    const docs = (
+      await Promise.all(hits.map((hit) => stub.getDocument(hit.id)))
+    ).filter((d) => d !== undefined);
+    const scoreById = new Map(hits.map((hit) => [hit.id, hit.score]));
+    return c.json({
+      documents: docs.map((doc) => {
+        const { content: _content, ...rest } = toResponse(doc);
+        const body =
+          doc.contentFormat === "markdown"
+            ? doc.content
+            : blockNoteToPlainText(doc.content);
+        return {
+          ...rest,
+          score: scoreById.get(doc.id) ?? 0,
+          snippet: searchSnippet(body || doc.title, q),
+        };
+      }),
+    });
   });
 
   app.openapi(getRoute, async (c) => {
@@ -967,6 +1177,7 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
       await assertIssueAccess(createD1(c.env.D1), stub, issue, identity);
       issueIdPatch = { ...input, issueId: issue.id };
     }
+    await assertDocumentRefs(c, stub, organizationId, input);
     const doc = await stub.updateDocument(id, issueIdPatch, identity.id);
     if (!doc) return notFound();
     return c.json(toResponse(doc));
@@ -1203,17 +1414,6 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
     const stub = getWorkspaceStub(c.env, organizationId);
     await stub.unwatchDocument(id, identity.id);
     return c.body(null, 204);
-  });
-
-  app.openapi(searchRoute, async (c) => {
-    const { organizationId } = c.req.valid("param");
-    const { q } = c.req.valid("query");
-    const stub = getWorkspaceStub(c.env, organizationId);
-    const ids = await stub.searchDocuments(q);
-    const docs = (
-      await Promise.all(ids.map((id) => stub.getDocument(id)))
-    ).filter((d) => d !== undefined);
-    return c.json({ documents: docs.map(toResponse) });
   });
 
   app.openapi(listPermissionsRoute, async (c) => {

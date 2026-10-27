@@ -47,6 +47,7 @@ const readinessSchema = z.object({
 const readinessRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/readiness",
+  summary: "Get workspace readiness checks",
   tags: ["hardening"],
   middleware: [rls("admin")],
   request: {
@@ -57,6 +58,37 @@ const readinessRoute = createRoute({
       description: "Workspace readiness",
       content: {
         "application/json": { schema: readinessSchema },
+      },
+    },
+  },
+});
+
+// VTX-752 — admin cleanup path: collapse same-name label/state duplicates
+// to the canonical (oldest) row and re-point every reference — D1
+// support-ticket joins inside the merge, DO-side issue label_ids CSVs and
+// git_automation_states via the returned id maps — before deleting dups.
+const dedupeWorkspaceRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/dedupe",
+  tags: ["hardening"],
+  middleware: [rls("admin")],
+  description:
+    "Merge duplicate labels (per name+kind) and states (per name) onto the oldest row and re-point every reference. Idempotent — a second run merges nothing.",
+  request: {
+    params: z.object({ organizationId: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Dedupe counts",
+      content: {
+        "application/json": {
+          schema: z.object({
+            labelsMerged: z.number().int(),
+            statesMerged: z.number().int(),
+            issuesRepointed: z.number().int(),
+            gitAutomationsRepointed: z.number().int(),
+          }),
+        },
       },
     },
   },
@@ -171,5 +203,16 @@ export function registerHardeningRoutes(app: OpenAPIHono<AppContext>) {
     const ready = required.every((check) => check.ok);
 
     return c.json({ ready, checks });
+  });
+
+  app.openapi(dedupeWorkspaceRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const identity = c.get("workspaceIdentity");
+    const doId = c.env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId);
+    const stub = c.env.WORKSPACE_DURABLE_OBJECT.get(doId);
+    const result = await stub.dedupeWorkspaceEntities({
+      actorId: identity.id,
+    });
+    return c.json(result, 200);
   });
 }

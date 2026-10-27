@@ -383,12 +383,24 @@ async function handleSubstepActionable(
     issue.status !== "in_progress"
   )
     return;
+  // Don't stack a second live lane on a step that's already running.
+  const existingSessions = await stub.listAgentSessions({ issueId: issue.id });
+  if (
+    existingSessions.some(
+      (s) => !["completed", "failed", "canceled"].includes(s.status)
+    )
+  ) {
+    return;
+  }
   const keySuffix = payload.nonce ? `-${payload.nonce}` : "";
   const owner = await resolveOwner(stub, issue.ownerAgent);
   if (owner?.kind === "human") return;
   if (owner?.kind === "external") {
     if (!owner.endpointUrl) return;
-    const parentIssue = await stub.getIssue(payload.parentId);
+    const parentIssue =
+      payload.parentId && payload.parentId !== issue.id
+        ? await stub.getIssue(payload.parentId)
+        : null;
     await dispatchExternal(
       env,
       stub,
@@ -418,7 +430,10 @@ async function handleSubstepActionable(
     // if none exists, fall back to a comment a human can triage.
     const chief = await resolveOwner(stub, "chief_of_staff");
     if (chief && chief.kind === "external" && chief.endpointUrl) {
-      const parent = await stub.getIssue(payload.parentId);
+      const parent =
+        payload.parentId && payload.parentId !== issue.id
+          ? await stub.getIssue(payload.parentId)
+          : null;
       await dispatchExternal(
         env,
         stub,
@@ -451,7 +466,10 @@ async function handleSubstepActionable(
       return;
     }
     if (chief && chief.kind !== "human" && chief.kind !== "external") {
-      const parent = await stub.getIssue(payload.parentId);
+      const parent =
+        payload.parentId && payload.parentId !== issue.id
+          ? await stub.getIssue(payload.parentId)
+          : null;
       await dispatchAgent(
         env,
         chief.agentId,
@@ -492,12 +510,18 @@ async function handleSubstepActionable(
     });
     return;
   }
-  const parent = await stub.getIssue(payload.parentId);
+  const parent =
+    payload.parentId && payload.parentId !== issue.id
+      ? await stub.getIssue(payload.parentId)
+      : null;
   const instructions = [
     owner.jobSpec ??
-      `Complete pipeline sub-step "${issue.stepKey ?? issue.title}".`,
+      `Complete assigned task "${issue.stepKey ?? issue.title}".`,
     "",
-    `Sub-step: ${issue.title} (${issue.stepKey ?? "unkeyed"})`,
+    issue.parentId
+      ? `Sub-step: ${issue.title} (${issue.stepKey ?? "unkeyed"})`
+      : `Assigned task: ${issue.identifier ?? issue.id} — ${issue.title}`,
+    issue.description ? `Description: ${issue.description}` : "",
     parent
       ? `Parent deal issue: ${parent.identifier ?? parent.id} — ${parent.title}`
       : "",

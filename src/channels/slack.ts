@@ -36,6 +36,7 @@ const slackEventSchema = z.object({
 });
 
 export const slackSupportWebhookRoute = createRoute({
+  security: [],
   method: "post",
   path: "/support/webhooks/slack/{organizationId}",
   tags: ["support-channels"],

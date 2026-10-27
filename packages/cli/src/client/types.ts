@@ -297,6 +297,7 @@ export interface paths {
                         name: string;
                         slug: string;
                         key?: string;
+                        seedStarterIssues?: boolean;
                     };
                 };
             };
@@ -334,11 +335,61 @@ export interface paths {
                                 updatedAt: string;
                             };
                             token: string;
+                            quickstart?: {
+                                mcpUrl: string;
+                                cliSetupCommand: string;
+                                seededIssueIds: string[];
+                            };
                         };
                     };
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/onboarding-checklist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List onboarding checklist */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Guided onboarding checklist state */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            organizationId: string;
+                            hasApiKey: boolean;
+                            hasAgentProvider: boolean;
+                            hasFirstIssue: boolean;
+                            mcpUrl: string;
+                            pluginManifestUrl: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -562,6 +613,53 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/tokens/prune": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create token prune */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @default 24 */
+                        maxAgeHours?: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Stale ephemeral agent keys pruned */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            pruned: number;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1770,7 +1868,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create issue batch */
+        /** Apply one patch to up to 100 existing issues (updates, not creates) */
         post: {
             parameters: {
                 query?: never;
@@ -2630,6 +2728,7 @@ export interface paths {
             parameters: {
                 query?: {
                     issueId?: string;
+                    agentSlug?: string;
                     limit?: string;
                     summary?: string;
                 };
@@ -2871,6 +2970,117 @@ export interface paths {
                                 startFailureRate: number | null;
                                 unhealthy: boolean;
                             }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/provenance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List provenance */
+        get: {
+            parameters: {
+                query?: {
+                    repo?: string;
+                    sha?: string;
+                    file?: string;
+                    branch?: string;
+                    prUrl?: string;
+                    issueId?: string;
+                    limit?: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Provenance: issues, lane sessions (with review convergence), touched files, commit shas, and memory facts explaining the queried artifact */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            query: {
+                                [key: string]: unknown;
+                            };
+                            entries: {
+                                [key: string]: unknown;
+                            }[];
+                            whySummary: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/agent/recap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List agent recap */
+        get: {
+            parameters: {
+                query?: {
+                    since?: string;
+                    repo?: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Engineering fleet recap: shipped, in-flight with trail convergence, blocked/decision-needed, compute totals, markdown brief */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            since: string;
+                            repo: string | null;
+                            shipped: {
+                                [key: string]: unknown;
+                            };
+                            inFlight: {
+                                [key: string]: unknown;
+                            };
+                            blocked: {
+                                [key: string]: unknown;
+                            };
+                            compute: {
+                                [key: string]: unknown;
+                            };
+                            markdownBrief: string;
                         };
                     };
                 };
@@ -3222,6 +3432,15 @@ export interface paths {
                             /** @enum {string} */
                             status: "pending" | "inProgress" | "completed" | "canceled";
                         }[];
+                        usage?: {
+                            model?: string;
+                            inputTokens?: number;
+                            outputTokens?: number;
+                            totalTokens?: number;
+                            toolCalls?: number;
+                            costMicros?: number;
+                            externalSpendMicros?: number;
+                        };
                     };
                 };
             };
@@ -8023,6 +8242,84 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/memberships/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete membership */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Membership deleted */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            deleted: boolean;
+                            id: string;
+                            userId: string;
+                        };
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** Update membership */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        role: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Membership updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            organizationId: string;
+                            userId: string;
+                            role: string;
+                            createdAt: string;
+                        };
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
     "/workspaces/{organizationId}/roadmaps": {
         parameters: {
             query?: never;
@@ -8728,6 +9025,7 @@ export interface paths {
                         "application/json": {
                             templates: components["schemas"]["StageTemplate"][];
                             skipped: number;
+                            agentTypesSeeded: number;
                         };
                     };
                 };
@@ -11572,6 +11870,105 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/support/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create support feedback */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        kind: "bug" | "feature" | "other";
+                        title: string;
+                        description: string;
+                        url?: string;
+                        userAgent?: string;
+                        viewport?: {
+                            width: number;
+                            height: number;
+                        };
+                        deviceInfo?: {
+                            [key: string]: unknown;
+                        };
+                        consoleErrors?: {
+                            level: string;
+                            message: string;
+                            timestamp?: string;
+                        }[];
+                        consoleLogs?: {
+                            level: string;
+                            message: string;
+                            timestamp?: string;
+                        }[];
+                        networkRequests?: {
+                            method: string;
+                            url: string;
+                            status?: number;
+                            duration?: number;
+                            timestamp?: string;
+                        }[];
+                        userEvents?: {
+                            type: string;
+                            target?: string;
+                            timestamp?: string;
+                            metadata?: {
+                                [key: string]: unknown;
+                            };
+                        }[];
+                        errors?: {
+                            message: string;
+                            stack?: string;
+                            source?: string;
+                            timestamp?: string;
+                        }[];
+                        screenshotDataUrl?: string;
+                        recordingDataUrl?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Member feedback filed as a support ticket */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ticketId: string;
+                            ticketNumber: number;
+                        };
+                    };
+                };
+                /** @description Invalid screenshot payload */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/support/capture/token": {
         parameters: {
             query?: never;
@@ -11668,12 +12065,12 @@ export interface paths {
                          * @default screenshot
                          * @enum {string}
                          */
-                        attachmentType?: "screenshot" | "video" | "debugger_json" | "log" | "network" | "replay";
+                        attachmentType?: "screenshot" | "video" | "debugger_json" | "log" | "network" | "replay" | "transcript";
                         contentType?: string;
                         fileName?: string;
                         artifacts?: {
                             /** @enum {string} */
-                            attachmentType: "screenshot" | "video" | "debugger_json" | "log" | "network" | "replay";
+                            attachmentType: "screenshot" | "video" | "debugger_json" | "log" | "network" | "replay" | "transcript";
                             fileName?: string;
                             contentType?: string;
                         }[];
@@ -11704,7 +12101,7 @@ export interface paths {
                                 uploadUrl: string;
                                 r2Key: string;
                                 /** @enum {string} */
-                                attachmentType: "screenshot" | "video" | "debugger_json" | "log" | "network" | "replay";
+                                attachmentType: "screenshot" | "video" | "debugger_json" | "log" | "network" | "replay" | "transcript";
                                 fileName: string;
                             }[];
                         };
@@ -11743,7 +12140,7 @@ export interface paths {
                 };
                 path: {
                     sessionId: string;
-                    attachmentType: "screenshot" | "video" | "debugger_json" | "log" | "network" | "replay";
+                    attachmentType: "screenshot" | "video" | "debugger_json" | "log" | "network" | "replay" | "transcript";
                     fileName: string;
                 };
                 cookie?: never;
@@ -14041,7 +14438,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List me permissions */
+        /** Get the caller's workspace permissions */
         get: {
             parameters: {
                 query?: never;
@@ -16833,6 +17230,7 @@ export interface paths {
                     spaceId?: string;
                     isTemplate?: string;
                     includeTrashed?: string;
+                    summary?: string;
                 };
                 header?: never;
                 path: {
@@ -16942,6 +17340,70 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/documents/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search documents by title and body */
+        get: {
+            parameters: {
+                query: {
+                    q: string;
+                    limit?: number;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Matching documents */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            documents: {
+                                id: string;
+                                organizationId: string;
+                                title: string;
+                                icon: string | null;
+                                /** @enum {string} */
+                                contentFormat: "blocks" | "markdown" | "canvas";
+                                slug: string | null;
+                                projectId: string | null;
+                                issueId: string | null;
+                                initiativeId: string | null;
+                                parentDocumentId: string | null;
+                                spaceId: string | null;
+                                isTemplate: boolean;
+                                createdById: string;
+                                updatedById: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                trashedAt: string | null;
+                                score: number;
+                                snippet: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -17234,6 +17696,131 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/document-spaces/{id}/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List document space permissions */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Space permissions */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            permissions: {
+                                id: string;
+                                spaceId: string;
+                                actorId: string;
+                                actorType: string;
+                                level: string;
+                                createdAt: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Create document space permission */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        actorId: string;
+                        /** @enum {string} */
+                        actorType?: "user" | "team";
+                        /** @enum {string} */
+                        level?: "view" | "edit";
+                    };
+                };
+            };
+            responses: {
+                /** @description Space permission granted */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/document-spaces/{id}/permissions/{actorId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete document space permission */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                    actorId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Space permission revoked */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                        };
+                    };
+                };
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;
@@ -17936,70 +18523,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/workspaces/{organizationId}/documents/search": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List document search */
-        get: {
-            parameters: {
-                query: {
-                    q: string;
-                };
-                header?: never;
-                path: {
-                    organizationId: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Matching documents */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": {
-                            documents: {
-                                id: string;
-                                organizationId: string;
-                                title: string;
-                                icon: string | null;
-                                content: {
-                                    [key: string]: unknown;
-                                }[] | string;
-                                /** @enum {string} */
-                                contentFormat: "blocks" | "markdown" | "canvas";
-                                slug: string | null;
-                                projectId: string | null;
-                                issueId: string | null;
-                                initiativeId: string | null;
-                                parentDocumentId: string | null;
-                                spaceId: string | null;
-                                isTemplate: boolean;
-                                createdById: string;
-                                updatedById: string | null;
-                                createdAt: string;
-                                updatedAt: string;
-                                trashedAt: string | null;
-                            }[];
-                        };
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/workspaces/{organizationId}/documents/{id}/permissions": {
         parameters: {
             query?: never;
@@ -18426,6 +18949,304 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/memory/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List memory profile */
+        get: {
+            parameters: {
+                query: {
+                    entityType: string;
+                    entityId: string;
+                    limit?: string;
+                };
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Entity memory profile — static vs dynamic facts */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            entityType: string;
+                            entityId: string;
+                            staticFacts: {
+                                id: string;
+                                entityType: string;
+                                entityId: string;
+                                kind: string;
+                                fact: string;
+                                sourceSessionId: string | null;
+                                sourceAgentSlug: string | null;
+                                validUntil: string | null;
+                                createdAt: string;
+                            }[];
+                            dynamicFacts: {
+                                id: string;
+                                entityType: string;
+                                entityId: string;
+                                kind: string;
+                                fact: string;
+                                sourceSessionId: string | null;
+                                sourceAgentSlug: string | null;
+                                validUntil: string | null;
+                                createdAt: string;
+                            }[];
+                            byKind: {
+                                [key: string]: {
+                                    id: string;
+                                    entityType: string;
+                                    entityId: string;
+                                    kind: string;
+                                    fact: string;
+                                    sourceSessionId: string | null;
+                                    sourceAgentSlug: string | null;
+                                    validUntil: string | null;
+                                    createdAt: string;
+                                }[];
+                            };
+                            summary: string;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/memory/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create memory batch */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        memories?: {
+                            entityType: string;
+                            entityId: string;
+                            kind: string;
+                            fact: string;
+                            validUntil?: string | null;
+                            sourceAgentSlug?: string | null;
+                            sourceSessionId?: string | null;
+                        }[];
+                        documentIds?: string[];
+                        sourceAgentSlug?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Memories written */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ids: string[];
+                            count: number;
+                            extractedFromDocuments: number;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/memory/extract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create memory extract */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        sessionId?: string;
+                        issueId?: string;
+                        documentId?: string;
+                        text?: string;
+                        entityType?: string;
+                        entityId?: string;
+                        sourceAgentSlug?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Facts extracted and persisted */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ids: string[];
+                            facts: {
+                                id: string;
+                                entityType: string;
+                                entityId: string;
+                                kind: string;
+                                fact: string;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/memory/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete memory */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Memory fact forgotten */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            deleted: boolean;
+                            id: string;
+                            deletedCount: number;
+                        };
+                    };
+                };
+                /** @description Memory fact not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** Update memory */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        fact?: string;
+                        kind?: string;
+                        validUntil?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Memory fact updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            memory: {
+                                id: string;
+                                entityType: string;
+                                entityId: string;
+                                kind: string;
+                                fact: string;
+                                sourceSessionId: string | null;
+                                sourceAgentSlug: string | null;
+                                validUntil: string | null;
+                                createdAt: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Memory fact not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
         trace?: never;
     };
     "/workspaces/{organizationId}/agent/costs": {
@@ -19121,6 +19942,18 @@ export interface paths {
                     /** @description cold=true → customers with no nextStepText and no nextStepDueAt */
                     cold?: string;
                     needsHuman?: string;
+                    /** @description Exact-match lookup by externalId */
+                    externalId?: string;
+                    /** @description Exact-match lookup by canonical domain (input is normalized first) */
+                    domain?: string;
+                    /** @description Page size, default 500, max 1000 */
+                    limit?: number | null;
+                    /** @description Opaque page cursor from a previous nextCursor */
+                    cursor?: string;
+                    /** @description Case-insensitive substring match on name, domain, or url */
+                    q?: string;
+                    /** @description summary=1 → light picker rows (id, name, domain, statusId, ownerId, nextStepText, nextStepDueAt, needsHuman, timestamps) */
+                    summary?: string;
                 };
                 header?: never;
                 path: {
@@ -19137,15 +19970,30 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            customers: {
+                            customers: ({
                                 id: string;
                                 organizationId: string;
                                 name: string;
                                 url: string | null;
+                                domain: string | null;
                                 bookingUrl: string | null;
                                 notes: string | null;
                                 logoUrl: string | null;
                                 externalId: string | null;
+                                phone: string | null;
+                                address: string | null;
+                                vertical: string | null;
+                                neighborhood: string | null;
+                                source: string | null;
+                                sourceSessionId: string | null;
+                                sourceAgentSlug: string | null;
+                                readiness: string | null;
+                                nextAction: string | null;
+                                fit: string | null;
+                                fitScore: number | null;
+                                fitStatus: string | null;
+                                processor: string | null;
+                                evidenceUri: string | null;
                                 tierId: string | null;
                                 statusId: string | null;
                                 ownerId: string | null;
@@ -19159,7 +20007,19 @@ export interface paths {
                                 };
                                 createdAt: string;
                                 updatedAt: string;
-                            }[];
+                            } | {
+                                id: string;
+                                name: string;
+                                domain: string | null;
+                                statusId: string | null;
+                                ownerId: string | null;
+                                nextStepText: string | null;
+                                nextStepDueAt: string | null;
+                                needsHuman: boolean | null;
+                                createdAt: string;
+                                updatedAt: string;
+                            })[];
+                            nextCursor?: string;
                         };
                     };
                 };
@@ -19186,10 +20046,23 @@ export interface paths {
                     "application/json": {
                         name: string;
                         url?: string;
+                        domain?: string;
                         bookingUrl?: string | null;
                         notes?: string | null;
                         logoUrl?: string;
                         externalId?: string;
+                        phone?: string;
+                        address?: string;
+                        vertical?: string;
+                        neighborhood?: string;
+                        source?: string;
+                        readiness?: string;
+                        nextAction?: string;
+                        fit?: string;
+                        fitScore?: number;
+                        fitStatus?: string;
+                        processor?: string;
+                        evidenceUri?: string;
                         tierId?: string;
                         statusId?: string;
                         ownerId?: string;
@@ -19216,10 +20089,25 @@ export interface paths {
                             organizationId: string;
                             name: string;
                             url: string | null;
+                            domain: string | null;
                             bookingUrl: string | null;
                             notes: string | null;
                             logoUrl: string | null;
                             externalId: string | null;
+                            phone: string | null;
+                            address: string | null;
+                            vertical: string | null;
+                            neighborhood: string | null;
+                            source: string | null;
+                            sourceSessionId: string | null;
+                            sourceAgentSlug: string | null;
+                            readiness: string | null;
+                            nextAction: string | null;
+                            fit: string | null;
+                            fitScore: number | null;
+                            fitStatus: string | null;
+                            processor: string | null;
+                            evidenceUri: string | null;
                             tierId: string | null;
                             statusId: string | null;
                             ownerId: string | null;
@@ -19247,10 +20135,25 @@ export interface paths {
                             organizationId: string;
                             name: string;
                             url: string | null;
+                            domain: string | null;
                             bookingUrl: string | null;
                             notes: string | null;
                             logoUrl: string | null;
                             externalId: string | null;
+                            phone: string | null;
+                            address: string | null;
+                            vertical: string | null;
+                            neighborhood: string | null;
+                            source: string | null;
+                            sourceSessionId: string | null;
+                            sourceAgentSlug: string | null;
+                            readiness: string | null;
+                            nextAction: string | null;
+                            fit: string | null;
+                            fitScore: number | null;
+                            fitStatus: string | null;
+                            processor: string | null;
+                            evidenceUri: string | null;
                             tierId: string | null;
                             statusId: string | null;
                             ownerId: string | null;
@@ -19527,10 +20430,25 @@ export interface paths {
                             organizationId: string;
                             name: string;
                             url: string | null;
+                            domain: string | null;
                             bookingUrl: string | null;
                             notes: string | null;
                             logoUrl: string | null;
                             externalId: string | null;
+                            phone: string | null;
+                            address: string | null;
+                            vertical: string | null;
+                            neighborhood: string | null;
+                            source: string | null;
+                            sourceSessionId: string | null;
+                            sourceAgentSlug: string | null;
+                            readiness: string | null;
+                            nextAction: string | null;
+                            fit: string | null;
+                            fitScore: number | null;
+                            fitStatus: string | null;
+                            processor: string | null;
+                            evidenceUri: string | null;
                             tierId: string | null;
                             statusId: string | null;
                             ownerId: string | null;
@@ -19605,12 +20523,25 @@ export interface paths {
                     "application/json": {
                         name?: string;
                         url?: string | null;
+                        domain?: string | null;
                         bookingUrl?: string | null;
                         notes?: string | null;
                         logoUrl?: string;
                         externalId?: string;
+                        phone?: string;
+                        address?: string;
+                        vertical?: string;
+                        neighborhood?: string;
+                        source?: string;
+                        readiness?: string;
+                        nextAction?: string;
+                        fit?: string;
+                        fitScore?: number;
+                        fitStatus?: string;
+                        processor?: string;
+                        evidenceUri?: string;
                         tierId?: string;
-                        statusId?: string;
+                        statusId?: string | null;
                         ownerId?: string;
                         nextStepText?: string | null;
                         nextStepDueAt?: string | null;
@@ -19638,10 +20569,25 @@ export interface paths {
                             organizationId: string;
                             name: string;
                             url: string | null;
+                            domain: string | null;
                             bookingUrl: string | null;
                             notes: string | null;
                             logoUrl: string | null;
                             externalId: string | null;
+                            phone: string | null;
+                            address: string | null;
+                            vertical: string | null;
+                            neighborhood: string | null;
+                            source: string | null;
+                            sourceSessionId: string | null;
+                            sourceAgentSlug: string | null;
+                            readiness: string | null;
+                            nextAction: string | null;
+                            fit: string | null;
+                            fitScore: number | null;
+                            fitStatus: string | null;
+                            processor: string | null;
+                            evidenceUri: string | null;
                             tierId: string | null;
                             statusId: string | null;
                             ownerId: string | null;
@@ -19667,6 +20613,170 @@ export interface paths {
                 };
             };
         };
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/customers/{id}/contacts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List customer contacts */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Verified customer contacts (owners, emails, phones) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            contacts: {
+                                id: string;
+                                customerId: string;
+                                type: string;
+                                role: string | null;
+                                channel: string;
+                                value: string;
+                                label: string | null;
+                                status: string;
+                                confidence: string | null;
+                                source: string | null;
+                                evidenceUri: string | null;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/customers/{id}/interactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create customer interaction
+         * @description Log a field-sales touch (door knock / call outcome). Writes the interaction to customer memory, applies the outcome's default nextStepText/nextStepDueAt/needsHuman unless the body overrides them, and auto-advances statusId per the outcome→status-key map resolved against this workspace's customer_statuses. When the PILE-412 stage gate refuses the advance, the touch still lands and the response flags stageBlocked.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /**
+                         * @description Canonical knock outcome — drives the next-step defaults and stage auto-advance
+                         * @enum {string}
+                         */
+                        outcome: "talked" | "sent_info" | "needs_email" | "quoted" | "callback" | "no_answer" | "not_interested" | "spam";
+                        note?: string;
+                        nextStepText?: string | null;
+                        nextStepDueAt?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Interaction logged */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            interaction: {
+                                id: string;
+                                customerId: string;
+                                /** @enum {string} */
+                                outcome: "talked" | "sent_info" | "needs_email" | "quoted" | "callback" | "no_answer" | "not_interested" | "spam";
+                                note: string | null;
+                                createdAt: string;
+                            };
+                            customer: {
+                                id: string;
+                                organizationId: string;
+                                name: string;
+                                url: string | null;
+                                domain: string | null;
+                                bookingUrl: string | null;
+                                notes: string | null;
+                                logoUrl: string | null;
+                                externalId: string | null;
+                                phone: string | null;
+                                address: string | null;
+                                vertical: string | null;
+                                neighborhood: string | null;
+                                source: string | null;
+                                sourceSessionId: string | null;
+                                sourceAgentSlug: string | null;
+                                readiness: string | null;
+                                nextAction: string | null;
+                                fit: string | null;
+                                fitScore: number | null;
+                                fitStatus: string | null;
+                                processor: string | null;
+                                evidenceUri: string | null;
+                                tierId: string | null;
+                                statusId: string | null;
+                                ownerId: string | null;
+                                nextStepText: string | null;
+                                nextStepDueAt: string | null;
+                                needsHuman: boolean | null;
+                                needsHumanReason: string | null;
+                                priorityScore: number | null;
+                                customFields: {
+                                    [key: string]: string;
+                                };
+                                createdAt: string;
+                                updatedAt: string;
+                            };
+                            stageAdvanced: boolean;
+                            stageBlocked: boolean;
+                        };
+                    };
+                };
+                /** @description Customer not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/workspaces/{organizationId}/customers/purge": {
@@ -20723,6 +21833,757 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/customers/{id}/signals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List customer signals */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Customer signals, rank breakdown, and detective waterfall */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            customerId: string;
+                            signals: {
+                                [key: string]: unknown;
+                            }[];
+                            breakdown: {
+                                [key: string]: unknown;
+                            };
+                            waterfall: string[];
+                        };
+                    };
+                };
+                /** @description Customer not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        /** Create customer signal */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        type?: string;
+                        /** @default agent */
+                        source?: string;
+                        /** Format: uri */
+                        evidenceUrl: string;
+                        /** @default 80 */
+                        strength?: number;
+                        summary?: string;
+                        observedAt?: string;
+                        html?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Recorded signal and recomputed merchant rank */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            signal: {
+                                [key: string]: unknown;
+                            };
+                            breakdown: {
+                                [key: string]: unknown;
+                            };
+                            waterfall: string[];
+                        };
+                    };
+                };
+                /** @description Customer not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/customers/{id}/send-gate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create customer send gate */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @default touch-preview */
+                        touchId?: string;
+                        /** @enum {string} */
+                        channel: "email" | "call" | "visit" | "linkedin";
+                        /**
+                         * @default engage
+                         * @enum {string}
+                         */
+                        action?: "engage" | "claim";
+                        /** @default default-contact */
+                        contactId?: string;
+                        contactEmail?: string;
+                        /** @enum {string} */
+                        emailStatus?: "valid" | "invalid" | "catch_all" | "role" | "unknown";
+                        emailVerifiedAt?: string;
+                        doNotContact?: boolean;
+                        doNotEmail?: boolean;
+                        doNotCall?: boolean;
+                        euResident?: boolean;
+                        hasExplicitConsent?: boolean;
+                        allowCatchAll?: boolean;
+                        allowRole?: boolean;
+                        allowUnverified?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Deterministic send/claim GateDecision */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            touchId: string;
+                            channel: string;
+                            /** @enum {string} */
+                            result: "pass" | "warn" | "block";
+                            reasons: string[];
+                            matchedExclusions: string[];
+                            evaluatedAt: string;
+                        };
+                    };
+                };
+                /** @description Customer not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/customers/dedup-key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create customer dedup key */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        name: string;
+                        address?: string | null;
+                        phone?: string | null;
+                        domain?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Normalized SMB match key and any matching existing customer */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            matchKey: string;
+                            normalizedName: string;
+                            normalizedAddress: string;
+                            phoneE164: string;
+                            normalizedDomain: string;
+                            matchedCustomerId: string | null;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/customers/{id}/reply-ingest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create customer reply ingest */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @default  */
+                        subject?: string;
+                        body: string;
+                        fromEmail?: string;
+                        statementFileId?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Classified 16-category Unify reply, applied opt-out/bounce suppression, and created statement checklist if applicable */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            classified: {
+                                [key: string]: unknown;
+                            };
+                            suppressed: boolean;
+                            enrollment: {
+                                [key: string]: unknown;
+                            };
+                            tasks: {
+                                [key: string]: unknown;
+                            }[];
+                            statementChecklist: {
+                                [key: string]: unknown;
+                            } | null;
+                        };
+                    };
+                };
+                /** @description Customer not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/customers/audience-query": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create customer audience query */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /**
+                         * @default and
+                         * @enum {string}
+                         */
+                        logic?: "and" | "or";
+                        /** @default [] */
+                        predicates?: {
+                            field: string;
+                            /** @enum {string} */
+                            op: "eq" | "neq" | "in" | "gte" | "lte" | "contains" | "has_signal";
+                            value: string | number | boolean | (string | number)[];
+                        }[];
+                        limit?: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Matched customers for dynamic audience filter */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            totalMatched: number;
+                            merchants: {
+                                [key: string]: unknown;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/customers/{id}/run-play": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create customer run play */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        playName?: string;
+                        html?: string;
+                        pageUrl?: string;
+                        contactEmail?: string;
+                        minDraftRankScore?: number;
+                        paidRankThreshold?: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Executed lead play and queued awaiting_approval draft */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+                /** @description Customer not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/customers/morning-brief": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create customer morning brief */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        ownerId?: string;
+                        limit?: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Ranked daily rep morning brief with why-now and next action */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            generatedAt: string;
+                            totalCandidates: number;
+                            items: {
+                                [key: string]: unknown;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/customers/pull-leads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create customer pull lead */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /**
+                         * @default nyc_dob_contractors_and_trades
+                         * @enum {string}
+                         */
+                        preset?: "nyc_dob_contractors_and_trades" | "nyc_bic_commercial_haulers" | "nyc_dob_permit_issuances" | "nyc_home_improvement_contractors" | "nyc_auto_and_garages" | "nyc_b2b_and_specialty_dealers" | "nyc_bookkeepers_and_cpas" | "nyc_vc_and_accelerators" | "nyc_tech_and_software_startups" | "us_nppes_medical_and_dental" | "us_sec_form_d_tech_startups";
+                        borough?: string;
+                        /** @default 15 */
+                        limit?: number;
+                        offset?: number;
+                        ownerId?: string;
+                        /** @default true */
+                        enrichWebsites?: boolean;
+                        /** @default false */
+                        dispatchDetectiveBatch?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Pulled non-POS SMB leads from public registries, deduplicated via SMB match key, created owner contacts, recorded signals, and executed lead play */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            sourceName: string;
+                            pulledCount: number;
+                            createdCount: number;
+                            updatedCount: number;
+                            nextOffset: number;
+                            detectiveBatchIssueId?: string | null;
+                            leads: {
+                                [key: string]: unknown;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/customers/approve-batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create customer approve batch */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        customerIds?: string[];
+                        /**
+                         * @default call
+                         * @enum {string}
+                         */
+                        channel?: "email" | "call" | "visit" | "sms";
+                        /** @default 25 */
+                        limit?: number;
+                        mailboxId?: string;
+                        dailyCap?: number;
+                        domainHealth?: {
+                            domain: string;
+                            spfOk: boolean;
+                            dkimOk: boolean;
+                            dmarcOk: boolean;
+                            mxOk: boolean;
+                            checkedAt?: string;
+                        };
+                        unsubscribeBaseUrl?: string;
+                        physicalAddress?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Evaluated Send Gate across the batch using Effect.partition and separated approved vs blocked leads */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            approvedCount: number;
+                            blockedCount: number;
+                            approved: {
+                                customerId: string;
+                                name: string;
+                                channel: string;
+                                recipient: string | null;
+                                optOutFooter?: string | null;
+                                enrollmentStatus?: string;
+                                mailboxSentToday?: number;
+                            }[];
+                            blocked: {
+                                customerId: string;
+                                name: string;
+                                reasons: string[];
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/customers/partner-residuals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create customer partner residual */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        merchants: {
+                            customerId: string;
+                            merchantName: string;
+                            partnerId: string;
+                            partnerName: string;
+                            monthlyCardVolumeCents: number;
+                            monthlyAchCount: number;
+                            netCardMarginBps?: number;
+                            netAchMarginCentsPerTx?: number;
+                            partnerRevSharePct?: number;
+                        }[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Computed monthly partner residual revenue-share payouts across referred merchants using Effect */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            totalMerchants: number;
+                            totalVortexNetProfitCents: number;
+                            totalPartnerResidualPayoutCents: number;
+                            rows: {
+                                [key: string]: unknown;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/customers/auto-replenish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create customer auto replenish */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @default 20 */
+                        totalLeads?: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Executed 80/20 Core Wedge vs Exploration auto-replenish across presets using Effect and bulk DO ingest */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            totalPulled: number;
+                            totalCreated: number;
+                            totalUpdated: number;
+                            batches: {
+                                preset: string;
+                                bucket: string;
+                                ownerId: string;
+                                pulledCount: number;
+                                createdCount: number;
+                                updatedCount: number;
+                                nextOffset: number;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/deals": {
         parameters: {
             query?: never;
@@ -20743,6 +22604,14 @@ export interface paths {
                     /** @description cold=true → open deals with no nextStepText and no nextStepDueAt */
                     cold?: string;
                     needsHuman?: string;
+                    /** @description Page size, default 500, max 1000 */
+                    limit?: number | null;
+                    /** @description Opaque page cursor from a previous nextCursor */
+                    cursor?: string;
+                    /** @description Case-insensitive substring match on deal name */
+                    q?: string;
+                    /** @description summary=1 → pipeline/picker rows without description, contactIds, or customFields */
+                    summary?: string;
                 };
                 header?: never;
                 path: {
@@ -20759,7 +22628,7 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            deals: {
+                            deals: ({
                                 id: string;
                                 organizationId: string;
                                 customerId: string;
@@ -20784,7 +22653,23 @@ export interface paths {
                                 };
                                 createdAt: string;
                                 updatedAt: string;
-                            }[];
+                            } | {
+                                id: string;
+                                customerId: string;
+                                name: string;
+                                /** @enum {string} */
+                                stage: "lead" | "qualified" | "proposal" | "negotiation" | "won" | "lost";
+                                amountCents: number | null;
+                                currency: string | null;
+                                expectedCloseAt: string | null;
+                                closedAt: string | null;
+                                archivedAt: string | null;
+                                nextStepDueAt: string | null;
+                                needsHuman: boolean | null;
+                                createdAt: string;
+                                updatedAt: string;
+                            })[];
+                            nextCursor?: string;
                         };
                     };
                 };
@@ -30787,6 +32672,16 @@ export interface paths {
                                 identifier?: string | null;
                                 addedAt: string;
                             }[] | null;
+                            display: {
+                                [key: string]: {
+                                    sheetColors?: {
+                                        [key: string]: string;
+                                    };
+                                    /** @enum {string} */
+                                    density?: "comfortable" | "compact";
+                                    hiddenColumns?: string[];
+                                };
+                            } | null;
                         };
                     };
                 };
@@ -30815,6 +32710,16 @@ export interface paths {
                             identifier?: string | null;
                             addedAt: string;
                         }[] | null;
+                        display?: {
+                            [key: string]: {
+                                sheetColors?: {
+                                    [key: string]: string;
+                                };
+                                /** @enum {string} */
+                                density?: "comfortable" | "compact";
+                                hiddenColumns?: string[];
+                            };
+                        } | null;
                     };
                 };
             };
@@ -30828,6 +32733,24 @@ export interface paths {
                         "application/json": {
                             defaultViewId: string | null;
                             hiddenSurfaces: string[] | null;
+                            favorites: {
+                                /** @enum {string} */
+                                type: "issue" | "document";
+                                id: string;
+                                title: string;
+                                identifier?: string | null;
+                                addedAt: string;
+                            }[] | null;
+                            display: {
+                                [key: string]: {
+                                    sheetColors?: {
+                                        [key: string]: string;
+                                    };
+                                    /** @enum {string} */
+                                    density?: "comfortable" | "compact";
+                                    hiddenColumns?: string[];
+                                };
+                            } | null;
                         };
                     };
                 };
@@ -31002,7 +32925,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create search */
+        /** Search issues, documents, and memory */
         post: {
             parameters: {
                 query?: never;
@@ -31033,6 +32956,16 @@ export interface paths {
                         "application/json": {
                             issueIds: string[];
                             documentIds: string[];
+                            memoryIds: string[];
+                            results: {
+                                /** @enum {string} */
+                                type: "issue" | "document" | "memory";
+                                id: string;
+                                identifier: string | null;
+                                title: string;
+                                snippet: string;
+                                score: number;
+                            }[];
                         };
                     };
                 };
@@ -32121,7 +34054,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List readiness */
+        /** Get workspace readiness checks */
         get: {
             parameters: {
                 query?: never;
@@ -32153,6 +34086,52 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/dedupe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create dedupe
+         * @description Merge duplicate labels (per name+kind) and states (per name) onto the oldest row and re-point every reference. Idempotent — a second run merges nothing.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Dedupe counts */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            labelsMerged: number;
+                            statesMerged: number;
+                            issuesRepointed: number;
+                            gitAutomationsRepointed: number;
+                        };
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -33248,7 +35227,7 @@ export interface components {
             claimEpoch: number;
             projectId: string | null;
             cycleId: string | null;
-            labelIds: string | null;
+            labelIds: string[];
             number: number | null;
             identifier: string | null;
             repo: string | null;

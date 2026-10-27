@@ -585,3 +585,87 @@ describe("triage rules on deal create (PILE-427)", () => {
     expect(evals[0]?.ruleId).toBe(rule.id);
   });
 });
+
+describe("deals list bounded contract (PILE-653)", () => {
+  let organizationId = "";
+  let token = "";
+  let customerId = "";
+
+  beforeAll(async () => {
+    ({ organizationId, token } = await seedWorkspace());
+    const c = await fetch(
+      `/workspaces/${organizationId}/customers`,
+      { method: "POST", body: JSON.stringify({ name: "Bound Co" }) },
+      token
+    );
+    customerId = ((await c.json()) as { id: string }).id;
+    for (const name of ["Deal A", "Deal B", "Deal C"]) {
+      const res = await fetch(
+        `/workspaces/${organizationId}/deals`,
+        {
+          method: "POST",
+          body: JSON.stringify({ customerId, name, description: "blob" }),
+        },
+        token
+      );
+      expect(res.status).toBe(201);
+    }
+  });
+
+  const listRaw = async (query: string) => {
+    const res = await fetch(
+      `/workspaces/${organizationId}/deals?${query}`,
+      {},
+      token
+    );
+    expect(res.status).toBe(200);
+    return (await res.json()) as {
+      deals: Record<string, unknown>[];
+      nextCursor?: string;
+    };
+  };
+
+  it("pages with limit + nextCursor", async () => {
+    const first = await listRaw("limit=2");
+    expect(first.deals).toHaveLength(2);
+    expect(first.nextCursor).toBeDefined();
+    const second = await listRaw(
+      `limit=2&cursor=${encodeURIComponent(first.nextCursor!)}`
+    );
+    expect(second.deals).toHaveLength(1);
+    expect(second.nextCursor).toBeUndefined();
+  });
+
+  it("filters by q on the deal name and contactId on links", async () => {
+    const byName = await listRaw("q=deal%20a");
+    expect(byName.deals).toHaveLength(1);
+    expect(byName.deals[0]?.name).toBe("Deal A");
+    const linked = await fetch(
+      `/workspaces/${organizationId}/deals`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          customerId,
+          name: "Contacted",
+          contactIds: ["ct-x"],
+        }),
+      },
+      token
+    );
+    expect(linked.status).toBe(201);
+    const byContact = await listRaw("contactId=ct-x");
+    expect(byContact.deals).toHaveLength(1);
+    expect(byContact.deals[0]?.name).toBe("Contacted");
+  });
+
+  it("summary=1 keeps pipeline fields and drops blobs", async () => {
+    const res = await listRaw("summary=1&limit=1");
+    const row = res.deals[0]!;
+    expect(row).toHaveProperty("id");
+    expect(row).toHaveProperty("stage");
+    expect(row).toHaveProperty("amountCents");
+    expect(row).not.toHaveProperty("description");
+    expect(row).not.toHaveProperty("contactIds");
+    expect(row).not.toHaveProperty("customFields");
+  });
+});

@@ -19,6 +19,7 @@ import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
 import type { WorkerEnv } from "../platform/middleware.js";
+import { routePermissionsFor } from "../platform/rls.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
 
 declare module "cloudflare:test" {
@@ -147,7 +148,7 @@ describe("API integration", () => {
         token,
         body: JSON.stringify({
           linearId: "linear-state-1",
-          name: "Todo",
+          name: "Blocked",
           type: "backlog",
         }),
       }),
@@ -155,7 +156,7 @@ describe("API integration", () => {
     );
     expect(create.status).toBe(201);
     const state = await create.json<{ id: string; name: string }>();
-    expect(state.name).toBe("Todo");
+    expect(state.name).toBe("Blocked");
 
     const list = await app.fetch(
       request("/workspaces/" + organizationId + "/states", { token }),
@@ -179,13 +180,13 @@ describe("API integration", () => {
       request("/workspaces/" + organizationId + "/states/" + state.id, {
         method: "PATCH",
         token,
-        body: JSON.stringify({ name: "In Progress", type: "started" }),
+        body: JSON.stringify({ name: "Icebox", type: "started" }),
       }),
       env
     );
     expect(patch.status).toBe(200);
     const updated = await patch.json<{ name: string }>();
-    expect(updated.name).toBe("In Progress");
+    expect(updated.name).toBe("Icebox");
 
     const del = await app.fetch(
       request("/workspaces/" + organizationId + "/states/" + state.id, {
@@ -2165,13 +2166,13 @@ describe("API integration", () => {
     const issuesBody = await issuesRes.json<{
       issues: Array<{
         id: string;
-        labelIds: string | null;
+        labelIds: string[];
         cycleId: string | null;
         assigneeId: string | null;
       }>;
     }>();
     expect(issuesBody.issues).toHaveLength(1);
-    expect(issuesBody.issues[0]?.labelIds).toBe(label.id);
+    expect(issuesBody.issues[0]?.labelIds).toEqual([label.id]);
     expect(issuesBody.issues[0]?.cycleId).toBe(cycle.id);
     expect(issuesBody.issues[0]?.assigneeId).toBe("user-1");
 
@@ -2199,11 +2200,11 @@ describe("API integration", () => {
     );
     expect(issueAfterUpdateRes.status).toBe(200);
     const issueAfterUpdate = await issueAfterUpdateRes.json<{
-      labelIds: string | null;
+      labelIds: string[];
       cycleId: string | null;
       assigneeId: string | null;
     }>();
-    expect(issueAfterUpdate.labelIds).toBeNull();
+    expect(issueAfterUpdate.labelIds).toEqual([]);
     expect(issueAfterUpdate.cycleId).toBeNull();
     expect(issueAfterUpdate.assigneeId).toBeNull();
   });
@@ -3838,5 +3839,48 @@ describe("lane-token auth bypass (PILE-457)", () => {
       env
     );
     expect(ghost.status).toBe(404);
+  });
+
+  it("returns 200 on /health and keeps 4xx off the 5xx exception reporter (PILE-597)", async () => {
+    const res = await app.fetch(new Request("http://localhost/health"), env);
+    expect(res.status).toBe(200);
+  });
+});
+
+describe("agent kit discovery manifest (PILE-619)", () => {
+  it("serves /.well-known/mcp.json", async () => {
+    const res = await app.fetch(
+      new Request("http://localhost/.well-known/mcp.json"),
+      env
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      name: string;
+      mcpEndpoint: string;
+      prompts: string[];
+      resources: string[];
+    };
+    expect(body.name).toBe("pile");
+    expect(body.mcpEndpoint).toBe("http://localhost/mcp");
+    expect(body.prompts).toContain("triage-issue");
+    expect(body.resources).toContain(
+      "pile://workspaces/{organizationId}/memory/profile/{entityType}/{entityId}"
+    );
+  });
+});
+
+describe("route permission registry (VTX-753)", () => {
+  it("exposes each route's rls grants for the MCP tool filter", () => {
+    // Registration wrapped app.openapi harvests declared rls() specs.
+    expect(
+      routePermissionsFor("GET", "/workspaces/{organizationId}/issues")
+    ).toEqual(["issue:view"]);
+    expect(
+      routePermissionsFor("GET", "/workspaces/{organizationId}/readiness")
+    ).toEqual(["admin"]);
+    // Routes without rls declare no required grants.
+    expect(
+      routePermissionsFor("GET", "/workspaces/{organizationId}/me/permissions")
+    ).toBeUndefined();
   });
 });

@@ -241,6 +241,26 @@ const entityFavoriteSchema = z.object({
   addedAt: z.string(),
 });
 
+// Per-surface look-and-feel prefs (CRM sheet-tab colors, row density,
+// hidden columns) keyed by surface name — e.g. display.customers.
+const surfaceDisplaySchema = z.object({
+  sheetColors: z.record(z.string(), z.string()).optional(),
+  density: z.enum(["comfortable", "compact"]).optional(),
+  hiddenColumns: z.array(z.string()).optional(),
+});
+
+const displayPrefsSchema = z.record(z.string(), surfaceDisplaySchema);
+
+function parseDisplayPrefs(value: string | null | undefined) {
+  if (!value) return null;
+  try {
+    const parsed = displayPrefsSchema.safeParse(JSON.parse(value));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
 const viewPreferencesRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/me/view-preferences",
@@ -258,6 +278,7 @@ const viewPreferencesRoute = createRoute({
             defaultViewId: z.string().nullable(),
             hiddenSurfaces: z.array(z.string()).nullable(),
             favorites: z.array(entityFavoriteSchema).nullable(),
+            display: displayPrefsSchema.nullable(),
           }),
         },
       },
@@ -279,6 +300,7 @@ const updateViewPreferencesRoute = createRoute({
             defaultViewId: z.string().nullable().optional(),
             hiddenSurfaces: z.array(z.string()).nullable().optional(),
             favorites: z.array(entityFavoriteSchema).nullable().optional(),
+            display: displayPrefsSchema.nullable().optional(),
           }),
         },
       },
@@ -292,6 +314,8 @@ const updateViewPreferencesRoute = createRoute({
           schema: z.object({
             defaultViewId: z.string().nullable(),
             hiddenSurfaces: z.array(z.string()).nullable(),
+            favorites: z.array(entityFavoriteSchema).nullable(),
+            display: displayPrefsSchema.nullable(),
           }),
         },
       },
@@ -430,12 +454,14 @@ export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
       defaultViewId: prefs?.defaultViewId ?? null,
       hiddenSurfaces,
       favorites,
+      display: parseDisplayPrefs(prefs?.display),
     });
   });
 
   app.openapi(updateViewPreferencesRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
-    const { defaultViewId, hiddenSurfaces, favorites } = c.req.valid("json");
+    const { defaultViewId, hiddenSurfaces, favorites, display } =
+      c.req.valid("json");
     const identity = getIdentity(c);
     const stub = getWorkspaceStub(c.env, organizationId);
     if (defaultViewId !== undefined && defaultViewId !== null) {
@@ -459,6 +485,9 @@ export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
     if (favorites !== undefined) {
       prefs = await stub.setFavorites(identity.id, favorites);
     }
+    if (display !== undefined) {
+      prefs = await stub.setDisplay(identity.id, display);
+    }
     let parsed: string[] | null = null;
     try {
       parsed = prefs?.hiddenSurfaces
@@ -481,6 +510,7 @@ export function registerSavedViewRoutes(app: OpenAPIHono<AppContext>) {
       defaultViewId: prefs?.defaultViewId ?? null,
       hiddenSurfaces: parsed,
       favorites: parsedFavs,
+      display: parseDisplayPrefs(prefs?.display),
     });
   });
 

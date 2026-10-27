@@ -14,6 +14,7 @@ import { EntityPage, RailSection } from "@/components/entity-page";
 import { Feed } from "@/components/feed";
 import { Page } from "@/components/page";
 import { ErrorState, LoadingState } from "@/components/states";
+import { TicketCaptures } from "@/components/ticket-captures";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap } from "@/lib/api";
 import { betterAuthClient } from "@/lib/better-auth";
@@ -475,6 +476,7 @@ function TicketDetail() {
               </Feed>
             )}
           </section>
+          <TicketCaptures ticketId={data.id} />
           <ConfirmDialog
             open={deletingNote !== null}
             onOpenChange={(o) => !o && setDeletingNote(null)}

@@ -6,12 +6,28 @@ const repoRoot = resolve(import.meta.dirname, "..");
 const specPath = resolve(repoRoot, "src/mcp/openapi.json");
 const outputPath = resolve(repoRoot, "src/mcp/mcp-tools.ts");
 
+// VTX-753 — the MCP surface only carries operations a caller's own
+// credentials can drive. Auth/session internals, third-party webhooks,
+// inbound ingest, public token-in-path endpoints, and widget/capture
+// surfaces never authenticate as a workspace identity, so listing them
+// only hands agents footguns.
 const EXCLUDED_PATH_PREFIXES = [
+  "/api/auth",
+  "/billing",
+  "/dispatch",
+  "/docs",
   "/github",
+  "/gitlab",
   "/health",
-  "/workspaces/{organizationId}/ws",
+  "/intercom",
+  "/notion",
   "/openapi",
-  "/webhooks/agent",
+  "/public",
+  "/shared-documents",
+  "/shared-issues",
+  "/support",
+  "/webhooks",
+  "/workspaces/{organizationId}/ws",
 ] as const;
 const HTTP_METHODS = ["get", "post", "put", "patch", "delete"] as const;
 
@@ -79,6 +95,22 @@ function rewriteRefs(node: Json): Json {
       key === "$ref" && typeof value === "string"
         ? value.replace("#/components/schemas/", "#/$defs/")
         : rewriteRefs(value);
+  }
+  // VTX-749 — the spec is OpenAPI 3.0, which writes exclusiveMinimum/
+  // exclusiveMaximum as booleans paired with minimum/maximum. Tool input
+  // schemas are consumed as JSON Schema 2020-12, where the keyword itself
+  // carries the bound as a number. Convert true → the bound's value
+  // (dropping the inclusive keyword) and drop false outright.
+  for (const [flag, bound] of [
+    ["exclusiveMinimum", "minimum"],
+    ["exclusiveMaximum", "maximum"],
+  ] as const) {
+    if (out[flag] === true && typeof out[bound] === "number") {
+      out[flag] = out[bound];
+      delete out[bound];
+    } else if (out[flag] === false) {
+      delete out[flag];
+    }
   }
   return out;
 }

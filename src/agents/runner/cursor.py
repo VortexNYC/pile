@@ -73,6 +73,7 @@ def run_agent(agent_bin, prompt=None):
     tail = []
     last_text = ''
     usage = None
+    burned = {'inputTokens': 0, 'outputTokens': 0}
     events = open('/tmp/agent-events.ndjson', 'a', buffering=1)
     try:
         for line in proc.stdout:
@@ -90,20 +91,25 @@ def run_agent(agent_bin, prompt=None):
                     last_text = _t
             elif evt.get('type') == 'result':
                 usage = cli_result_usage(evt) or usage
+            step = cli_step_usage(evt)
+            if step:
+                burned['inputTokens'] += step['inputTokens']
+                burned['outputTokens'] += step['outputTokens']
             rendered = _render_event(evt)
             if rendered:
                 print(_redact(rendered))
         proc.wait(timeout=7200)
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as e:
         proc.kill()
-        raise
+        raise AgentRunError('cursor-agent -p timed out', usage=usage or burned_usage(burned)) from e
     finally:
         events.close()
     output = ''.join(tail)[-4000:]
     print('cursor-agent exit:', proc.returncode)
     if proc.returncode != 0:
-        raise RuntimeError(f'cursor-agent -p failed ({proc.returncode}): {_redact(output[-500:])}')
-    return output, last_text, usage
+        raise AgentRunError(f'cursor-agent -p failed ({proc.returncode}): {_redact(output[-500:])}',
+                            usage=usage or burned_usage(burned))
+    return output, last_text, usage or burned_usage(burned)
 
 
 def main():

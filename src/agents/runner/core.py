@@ -632,6 +632,15 @@ class TransportError(RuntimeError):
     pass
 
 
+class AgentRunError(RuntimeError):
+    # The agent process itself died (nonzero exit, error result, timeout).
+    # Carries whatever usage the driver extracted before the failure so a
+    # crashed lane still lands a real receipt instead of a zero (PILE-450).
+    def __init__(self, message, usage=None):
+        super().__init__(message)
+        self.usage = usage
+
+
 _TRANSPORT_NOTES = []
 
 
@@ -1444,6 +1453,19 @@ def local_patch():
 
 
 def ensure_postgres():
+    # VTX-651 — when PILE_PGX_TEMPLATE is set and pgx (pgrundev/pgx) is
+    # installed in the image, clone an isolated copy-on-write Postgres branch
+    # in ~6ms instead of booting a full pg_ctlcluster instance.
+    pgx_template = os.environ.get('PILE_PGX_TEMPLATE', '').strip()
+    if pgx_template and shutil.which('pgx'):
+        t0 = time.time()
+        branch = os.environ.get('PILE_PGX_BRANCH', 'vortex_dev').strip() or 'vortex_dev'
+        ttl = os.environ.get('PILE_PGX_TTL', '3h').strip() or '3h'
+        clone = run(['pgx', 'clone', pgx_template, branch, '--ttl', ttl], check=False, capture_output=True, text=True)
+        if clone.returncode == 0:
+            print(f'[timing] pgx clone {pgx_template} -> {branch}: {(time.time() - t0) * 1000:.0f}ms')
+            return
+        print('pgx clone failed, falling back to pg_ctlcluster:', (clone.stdout or '') + (clone.stderr or ''))
     # Images with a baked Postgres get a running cluster + the vortex_dev
     # test database. Best-effort: images without it skip silently and suites
     # that need PG fail with their own error.
@@ -1471,6 +1493,9 @@ def ensure_postgres():
         print('WARNING: postgres not accepting connections:', (ready.stdout or '') + (ready.stderr or ''))
     run(['su', 'postgres', '-c', "psql -c \"ALTER USER postgres PASSWORD 'postgres'\""], check=False)
     run(['su', 'postgres', '-c', 'createdb vortex_dev'], check=False)
+    pgx_branch = re.sub(r'[^a-z0-9_]', '_', os.environ.get('PILE_PGX_BRANCH', '').strip().lower())
+    if pgx_branch and pgx_branch != 'vortex_dev':
+        run(['su', 'postgres', '-c', f'createdb {pgx_branch}'], check=False)
     print(f'[timing] postgres up: {time.time() - t0:.0f}s')
 
 
@@ -1736,12 +1761,16 @@ def read_transcript(fallback=''):
         return fallback
 
 
-def write_result(status, pr_url='', result='', report=None, infra=False, usage=None):
+def write_result(status, pr_url='', result='', report=None, infra=False, usage=None, rate_limited=False, rate_limit_until=None):
     payload = {'status': status, 'prUrl': pr_url, 'branch': BRANCH, 'result': _redact(result)}
     if report:
         payload['report'] = _redact(report)
     if infra:
         payload['infraFailure'] = True
+    if rate_limited:
+        payload['rateLimited'] = True
+        if rate_limit_until:
+            payload['rateLimitUntil'] = rate_limit_until
     # PILE-450 — cumulative run usage (tokens/cost) extracted by the driver;
     # lands on the session's run receipt so spend caps have real numbers.
     if usage:
@@ -1750,43 +1779,99 @@ def write_result(status, pr_url='', result='', report=None, infra=False, usage=N
         json.dump(payload, f)
 
 
+def _usage_num(u, *keys):
+    for k in keys:
+        v = u.get(k)
+        if isinstance(v, (int, float)) and v >= 0:
+            return int(v)
+    return None
+
+
+def _usage_tokens(u):
+    # Shared token normalization for stream-json usage dicts. Cache tokens
+    # fold into inputTokens: they are billed input, and the rate map has no
+    # cache tier.
+    inp = _usage_num(u, 'input_tokens', 'inputTokens') or 0
+    inp += _usage_num(u, 'cache_read_input_tokens', 'cacheRead') or 0
+    inp += _usage_num(u, 'cache_creation_input_tokens', 'cacheCreation',
+                    'cacheWrite') or 0
+    out = _usage_num(u, 'output_tokens', 'outputTokens')
+    usage = {}
+    if inp:
+        usage['inputTokens'] = inp
+    if out is not None:
+        usage['outputTokens'] = out
+    return usage
+
+
 def cli_result_usage(evt):
     # Normalize a stream-json `result` event's usage into the receipt shape
     # (AgentRunUsage). Absent fields are omitted — the receipt merge treats
-    # missing as "not reported", never zero. Cache tokens fold into
-    # inputTokens: they are billed input, and the rate map has no cache tier.
+    # missing as "not reported", never zero.
     if not isinstance(evt, dict) or evt.get('type') != 'result':
         return None
     u = evt.get('usage')
     if not isinstance(u, dict):
         return None
 
-    def num(*keys):
-        for k in keys:
-            v = u.get(k)
-            if isinstance(v, (int, float)) and v >= 0:
-                return int(v)
-        return None
-
-    usage = {}
-    inp = num('input_tokens', 'inputTokens') or 0
-    inp += num('cache_read_input_tokens', 'cacheRead') or 0
-    inp += num('cache_creation_input_tokens', 'cacheCreation', 'cacheWrite') or 0
-    out = num('output_tokens', 'outputTokens')
-    if inp:
-        usage['inputTokens'] = inp
-    if out is not None:
-        usage['outputTokens'] = out
-    total = num('total_tokens', 'totalTokens')
+    usage = _usage_tokens(u)
+    total = _usage_num(u, 'total_tokens', 'totalTokens')
     if total is not None:
         usage['totalTokens'] = total
-    cost = evt.get('total_cost_usd', u.get('total_cost_usd', u.get('cost_usd')))
+    # Cost walks event → usage dict, treating present-but-null the same as
+    # absent at each level (dict.get's default only fires on a missing key).
+    cost = evt.get('total_cost_usd')
+    if not isinstance(cost, (int, float)):
+        cost = u.get('total_cost_usd')
+    if not isinstance(cost, (int, float)):
+        cost = u.get('cost_usd')
     if isinstance(cost, (int, float)) and cost >= 0:
         usage['costMicros'] = round(cost * 1_000_000)
     model = evt.get('model') or os.environ.get('MODEL')
     if isinstance(model, str) and model:
         usage['model'] = model
     return usage or None
+
+
+def cli_step_usage(evt):
+    # Per-call usage on a mid-run stream-json event (an assistant message's
+    # `message.usage`, or a top-level `usage` on non-result events). The
+    # driver accumulates these so a lane that dies before its result event
+    # still reports what it burned — runaway/erroring lanes are exactly the
+    # runs spend caps exist to catch.
+    if not isinstance(evt, dict) or evt.get('type') == 'result':
+        return None
+    u = evt.get('usage')
+    if not isinstance(u, dict):
+        msg = evt.get('message')
+        u = msg.get('usage') if isinstance(msg, dict) else None
+    if not isinstance(u, dict):
+        return None
+    step = _usage_tokens(u)
+    if not step:
+        return None
+    # Both keys always present — the driver accumulates them sight unseen.
+    return {
+        'inputTokens': step.get('inputTokens', 0),
+        'outputTokens': step.get('outputTokens', 0),
+    }
+
+
+def burned_usage(burned):
+    # Per-event totals for a run that died before its result event — attach
+    # MODEL so the receipt's rate-map fallback can price it.
+    if not burned:
+        return None
+    inp = burned.get('inputTokens') or 0
+    out = burned.get('outputTokens') or 0
+    if not inp and not out:
+        return None
+    usage = dict(burned)
+    usage['totalTokens'] = inp + out
+    model = os.environ.get('MODEL')
+    if model:
+        usage.setdefault('model', model)
+    return usage
 
 
 def finalize(output, pushed, report=None, usage=None):
@@ -1804,5 +1889,57 @@ def finalize(output, pushed, report=None, usage=None):
     return 0
 
 
-def fail_result(error):
-    write_result('failed', '', str(error), infra=isinstance(error, TransportError))
+def fail_result(error, usage=None):
+    if usage is None:
+        usage = getattr(error, 'usage', None)
+    write_result('failed', '', str(error), infra=isinstance(error, TransportError),
+                 rate_limited=is_rate_limited(error),
+                 rate_limit_until=rate_limit_reset_iso(error) if is_rate_limited(error) else None,
+                 usage=usage)
+
+
+# Agent-CLI capacity deaths (devin's "Reached free model rate limit … resets
+# at 6:05 PM", codex/claude 429s) are retryable-after-reset, not task or
+# infra failures — the flag lets the poll/sweep path hold the lane instead
+# of instantly burning the retry budget against a hard provider limit.
+# Strong phrases only — a bare '429' or 'resets at N' fires on task output
+# about a rate limiter, not on a provider capacity death.
+RATE_LIMIT_RE = re.compile(
+    r'rate.?limits?|too many requests|usage limit|quota exceeded|reached .{0,40}limit',
+    re.I,
+)
+
+
+def is_rate_limited(error):
+    return bool(RATE_LIMIT_RE.search(str(error)))
+
+
+# VTX-637 — providers tell us the reset instant: devin's "Your limit will
+# reset in 49 seconds (at 15:44 UTC)", codex/claude "try again in 30s",
+# Retry-After-style counts. Prefer the provider's number over the fixed
+# hold so lanes re-enter as soon as capacity frees, not on a guess.
+_RESET_IN_RE = re.compile(r'\bresets? in (\d+)\s*(seconds?|minutes?|s|m)\b', re.I)
+# Only honor a clock instant when it carries an explicit UTC/GMT marker —
+# a bare "at 6:05 PM" gives no timezone and guessing one parks the whole
+# agent type on a confidently wrong instant.
+_RESET_AT_UTC_RE = re.compile(r'at (\d{1,2}):(\d{2})\s*(UTC|GMT)', re.I)
+_RETRY_IN_RE = re.compile(r'(?:try again|retry) in (\d+)\s*(seconds?|minutes?|s|m)\b', re.I)
+
+
+def rate_limit_reset_iso(error, now=None):
+    """ISO instant the provider gave for capacity reset, or None."""
+    import datetime
+    text = str(error)
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    m = _RESET_IN_RE.search(text) or _RETRY_IN_RE.search(text)
+    if m:
+        secs = int(m.group(1)) * (60 if m.group(2).lower().startswith('m') else 1)
+        return (now + datetime.timedelta(seconds=secs)).isoformat()
+    m = _RESET_AT_UTC_RE.search(text)
+    if m:
+        at = now.replace(hour=int(m.group(1)), minute=int(m.group(2)),
+                         second=0, microsecond=0)
+        if at <= now:
+            at += datetime.timedelta(days=1)
+        return at.isoformat()
+    return None

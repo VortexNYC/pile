@@ -19,7 +19,11 @@ export default defineConfig({
   base: "/app/",
   plugins: [
     tailwindcss(),
-    tanstackRouter({ autoCodeSplitting: true }),
+    tanstackRouter({
+      autoCodeSplitting: true,
+      // Co-located *.test.ts files are not routes.
+      routeFileIgnorePattern: "\\.test\\.",
+    }),
     react(),
   ],
   resolve: {
@@ -51,7 +55,9 @@ export default defineConfig({
     chunkSizeWarningLimit: 1600,
   },
   test: {
-    include: ["src/**/*.test.ts"],
+    // Component tests live in co-located *.test.tsx files — including
+    // them here matches the root vitest config, which already runs them.
+    include: ["src/**/*.test.{ts,tsx}"],
     environment: "node",
   },
 });

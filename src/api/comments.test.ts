@@ -407,3 +407,21 @@ describe("sensitive records (PILE-428)", () => {
     expect(dispatched).toContain(issue.id);
   });
 });
+
+describe("comment body validation (VTX-770)", () => {
+  it("rejects a whitespace-only comment body with 400", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const issue = await fetch(
+      `/workspaces/${organizationId}/issues`,
+      { method: "POST", body: JSON.stringify({ title: "c" }) },
+      token
+    );
+    const issueId = z.object({ id: z.string() }).parse(await issue.json()).id;
+    const res = await fetch(
+      `/workspaces/${organizationId}/issues/${issueId}/comments`,
+      { method: "POST", body: JSON.stringify({ body: "   " }) },
+      token
+    );
+    expect(res.status).toBe(400);
+  });
+});

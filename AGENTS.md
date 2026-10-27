@@ -14,6 +14,30 @@ vp run knip
 
 `vp run check` is Vite+ (`vp check`: format, lint, types). `contract:check` diffs generated artifacts and needs git — GitHub `ci.yml` owns it; do not put it on the CI path. Tests gate locally via the `vp` pre-push hook; CI is `deps → build (typecheck) → migrate+deploy` on `main`, owned by `cloudflare-ci` (`~/Projects/cloudflare-ci`). If CI behavior is wrong, fix it there — not here.
 
+## Repository & Package Map
+
+- `src/api/` — Hono + `@hono/zod-openapi` route modules. `index.ts` composes the app and serves `/openapi.json`, `/mcp`, `/.well-known/*`, and the OAuth 2.0 endpoints (`/oauth/*`).
+- `src/workspace/` — the `WorkspaceDO` durable object, its SQLite schema/migrations, the SMI-packed BM25 search index (`search.ts`), hybrid semantic recall (`semantic-memory.ts`), and domain engines (lead plays, reply funnel, send gate, cadence, memory extractor).
+- `src/global/` — D1 global metadata: Drizzle schema, workspaces, teams, memberships, tokens, GitHub/GitLab installations.
+- `src/agents/` — agent dispatch, session lifecycle, collectors (Effect pipelines), provider adapters, sandbox/runner code, and the cron `sweep.ts` janitor.
+- `src/mcp/` — the MCP streamable-HTTP server: generated tools from OpenAPI, aliases, resource templates, and prompts.
+- `src/platform/` — auth, sessions, RLS middleware, security/CSRF, PostHog telemetry (`captureProductEvent`), errors.
+- `apps/web/` — the TanStack/React console (human collaboration surface only).
+- `packages/cli/` — the `pile` CLI (`bin/pile.js`), generated from the OpenAPI client.
+- `packages/capture/` + `packages/widget/` — the customer-support capture snippet and embeddable widget.
+- `packages/docs/` — the Blume docs site (OpenAPI reference, `llms.txt`).
+
+## Local Quickstart
+
+```bash
+vp install            # install deps + git hooks
+pnpm run dev          # wrangler dev — worker + D1 + DOs on localhost
+pnpm run seed:local   # seed a demo workspace (org, team, issues, API key)
+```
+
+Docs for onboarding humans and agents end-to-end live in
+`docs/user-onboarding.md` (served at `/docs/user-onboarding.md` in prod).
+
 ## Stack
 
 - HTTP: Hono + `@hono/zod-openapi` for typed routes and OpenAPI docs.
@@ -95,3 +119,13 @@ Repo-committed notes are acceptable only when the note _is_ project documentatio
 - `src/workspace/durable-object.test.ts` — DO tests using `runInDurableObject` from `cloudflare:test`.
 - `src/global/schema.ts` — D1 Drizzle schema.
 - `drizzle.config.ts` — Drizzle Kit config.
+
+# Learning more about Effect
+
+This repository uses the Effect Typescript library.
+
+Before writing any Effect code, first read `node_modules/effect/AGENTS.md`
+**completely**, and follow the links in the file when required.
+
+If you need to learn more about particular Effect apis and concepts that the
+guide doesn't cover, search through the source code in `node_modules/effect/src`.

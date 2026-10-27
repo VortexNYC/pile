@@ -55,6 +55,27 @@ interface IssuesSearch {
   tab?: "issues" | "projects" | "sessions";
 }
 
+/** Display name per issue id for the Sessions panel — "ISS-1 — Title"
+ * when the issue has an identifier, bare title otherwise (PILE-453). */
+export function sessionGroupLabels(
+  issues: readonly {
+    id: string;
+    title: string;
+    identifier?: string | null;
+  }[]
+): Record<string, string> {
+  return Object.fromEntries(
+    issues.map((issue) => [
+      issue.id,
+      issue.identifier ? `${issue.identifier} — ${issue.title}` : issue.title,
+    ])
+  );
+}
+
+/** PILE-653 — the sessions panel embedded on /issues is ambient, not the
+ *  operator's focus — 15s polling instead of the dedicated page's 3s. */
+export const ISSUES_PAGE_SESSION_POLL_MS = 15_000;
+
 export const Route = createFileRoute("/_authenticated/$slug/issues/")({
   component: IssuesList,
   validateSearch: (search: Record<string, unknown>): IssuesSearch => ({
@@ -70,10 +91,31 @@ export const Route = createFileRoute("/_authenticated/$slug/issues/")({
   }),
 });
 
+/** URL drill-down params (`/issues?status=&team=` — overview badges link
+ * here) map onto the API's server-side filters. `team` is the URL spelling
+ * of the wire contract's `teamId`. */
+export function issuesListQuery(args: {
+  search?: string;
+  status?: IssueStatus;
+  team?: string;
+}): {
+  limit: number;
+  search?: string;
+  status?: IssueStatus;
+  teamId?: string;
+} {
+  return {
+    limit: 50,
+    search: args.search,
+    status: args.status,
+    teamId: args.team,
+  };
+}
+
 function IssuesList() {
   const workspace = useWorkspace();
   const permissions = usePermissions(workspace.id);
-  const { status, q } = Route.useSearch();
+  const { status, team, q } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const search = useDeferredValue(q);
 
@@ -128,13 +170,16 @@ function IssuesList() {
     });
 
   const issues = useInfiniteQuery({
-    queryKey: wsKey(workspace.id, "issues", { search }),
+    queryKey: wsKey(workspace.id, "issues", { search, status, team }),
     queryFn: ({ pageParam }) =>
       unwrap(
         api.GET("/workspaces/{organizationId}/issues", {
           params: {
             path: { organizationId: workspace.id },
-            query: { limit: 50, search, cursor: pageParam },
+            query: {
+              ...issuesListQuery({ search, status, team }),
+              cursor: pageParam,
+            },
           },
         })
       ),
@@ -207,10 +252,10 @@ function IssuesList() {
         ) : allIssues.length === 0 ? (
           <EmptyState
             icon={<ListChecks size={40} />}
-            title={status || q ? "No matching issues" : "No issues yet"}
+            title={status || team || q ? "No matching issues" : "No issues yet"}
             description={
-              status || q
-                ? "Try a different search or status."
+              status || team || q
+                ? "Try a different search or filter."
                 : "Create the first issue to start tracking work."
             }
           />
@@ -447,7 +492,11 @@ function IssuesList() {
           <h2 className="text-sm font-medium text-kumo-subtle px-1">
             Sessions
           </h2>
-          <SessionsList />
+          <SessionsList
+            groupBy="issue"
+            groupLabels={sessionGroupLabels(allIssues)}
+            pollMs={ISSUES_PAGE_SESSION_POLL_MS}
+          />
         </div>
       ) : null}
     </Page>

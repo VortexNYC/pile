@@ -11,135 +11,6 @@ export interface McpToolDefinition {
 
 export const MCP_TOOLS: readonly McpToolDefinition[] = [
   {
-    "name": "adminUpdateUser",
-    "description": "Create api auth admin update user (POST /api/auth/admin/update-user) Request body goes in the \"body\" object.",
-    "method": "POST",
-    "path": "/api/auth/admin/update-user",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          },
-          "description": "Better Auth request body"
-        }
-      }
-    }
-  },
-  {
-    "name": "banUser",
-    "description": "Create api auth admin ban user (POST /api/auth/admin/ban-user) Request body goes in the \"body\" object.",
-    "method": "POST",
-    "path": "/api/auth/admin/ban-user",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          },
-          "description": "Better Auth request body"
-        }
-      }
-    }
-  },
-  {
-    "name": "changeEmail",
-    "description": "Create api auth change email (POST /api/auth/change-email) Request body goes in the \"body\" object.",
-    "method": "POST",
-    "path": "/api/auth/change-email",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          },
-          "description": "Better Auth request body"
-        }
-      }
-    }
-  },
-  {
-    "name": "changePassword",
-    "description": "Create api auth change password (POST /api/auth/change-password) Request body goes in the \"body\" object.",
-    "method": "POST",
-    "path": "/api/auth/change-password",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          },
-          "description": "Better Auth request body"
-        }
-      }
-    }
-  },
-  {
-    "name": "createUser",
-    "description": "Create api auth admin create user (POST /api/auth/admin/create-user) Request body goes in the \"body\" object.",
-    "method": "POST",
-    "path": "/api/auth/admin/create-user",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          },
-          "description": "Better Auth request body"
-        }
-      }
-    }
-  },
-  {
-    "name": "deleteSupportWidgetKeyVotesTicketId",
-    "description": "Delete support widget vote (DELETE /support/widget/{key}/votes/{ticketId}) Path params (top-level, required): key, ticketId.",
-    "method": "DELETE",
-    "path": "/support/widget/{key}/votes/{ticketId}",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "key": {
-          "type": "string"
-        },
-        "ticketId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "key",
-        "ticketId"
-      ]
-    }
-  },
-  {
-    "name": "deleteUser",
-    "description": "Create api auth delete user (POST /api/auth/delete-user) Request body goes in the \"body\" object.",
-    "method": "POST",
-    "path": "/api/auth/delete-user",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          },
-          "description": "Better Auth request body"
-        }
-      }
-    }
-  },
-  {
     "name": "deleteWorkspacesId",
     "description": "Delete workspace (DELETE /workspaces/{id}) Path params (top-level, required): id.",
     "method": "DELETE",
@@ -609,6 +480,31 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "deleteWorkspacesOrganizationIdDocumentspacesIdPermissionsActorId",
+    "description": "Delete document space permission (DELETE /workspaces/{organizationId}/document-spaces/{id}/permissions/{actorId}) Path params (top-level, required): organizationId, id, actorId.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/document-spaces/{id}/permissions/{actorId}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "actorId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "actorId",
         "id",
         "organizationId"
       ]
@@ -1111,6 +1007,48 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "Delete mcp server (DELETE /workspaces/{organizationId}/mcp/servers/{id}) Path params (top-level, required): organizationId, id.",
     "method": "DELETE",
     "path": "/workspaces/{organizationId}/mcp/servers/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "deleteWorkspacesOrganizationIdMembershipsId",
+    "description": "Delete membership (DELETE /workspaces/{organizationId}/memberships/{id}) Path params (top-level, required): organizationId, id.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/memberships/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "deleteWorkspacesOrganizationIdMemoryId",
+    "description": "Delete memory (DELETE /workspaces/{organizationId}/memory/{id}) Path params (top-level, required): organizationId, id.",
+    "method": "DELETE",
+    "path": "/workspaces/{organizationId}/memory/{id}",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1834,219 +1772,6 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
-    "name": "getDocsOrganizationIdSpaceIdLlmstxt",
-    "description": "List doc {organizationId} llms.txt (GET /docs/{organizationId}/{spaceId}/llms.txt) Path params (top-level, required): organizationId, spaceId.",
-    "method": "GET",
-    "path": "/docs/{organizationId}/{spaceId}/llms.txt",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "organizationId": {
-          "type": "string"
-        },
-        "spaceId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "organizationId",
-        "spaceId"
-      ]
-    }
-  },
-  {
-    "name": "getDocsOrganizationIdSpaceIdSlug",
-    "description": "GET /docs/{organizationId}/{spaceId}/{slug} (GET /docs/{organizationId}/{spaceId}/{slug}) Path params (top-level, required): organizationId, spaceId, slug.",
-    "method": "GET",
-    "path": "/docs/{organizationId}/{spaceId}/{slug}",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "organizationId": {
-          "type": "string"
-        },
-        "spaceId": {
-          "type": "string"
-        },
-        "slug": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "organizationId",
-        "slug",
-        "spaceId"
-      ]
-    }
-  },
-  {
-    "name": "getSession",
-    "description": "List api auth get session (GET /api/auth/get-session)",
-    "method": "GET",
-    "path": "/api/auth/get-session",
-    "inputSchema": {
-      "type": "object",
-      "properties": {}
-    }
-  },
-  {
-    "name": "getShareddocumentsOrganizationIdToken",
-    "description": "GET /shared-documents/{organizationId}/{token} (GET /shared-documents/{organizationId}/{token}) Path params (top-level, required): organizationId, token.",
-    "method": "GET",
-    "path": "/shared-documents/{organizationId}/{token}",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "organizationId": {
-          "type": "string"
-        },
-        "token": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "organizationId",
-        "token"
-      ]
-    }
-  },
-  {
-    "name": "getSharedissuesOrganizationIdToken",
-    "description": "GET /shared-issues/{organizationId}/{token} (GET /shared-issues/{organizationId}/{token}) Path params (top-level, required): organizationId, token.",
-    "method": "GET",
-    "path": "/shared-issues/{organizationId}/{token}",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "organizationId": {
-          "type": "string"
-        },
-        "token": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "organizationId",
-        "token"
-      ]
-    }
-  },
-  {
-    "name": "getSupportCaptureArtifactsAttachmentId",
-    "description": "Get support capture artifact (GET /support/capture/artifacts/{attachmentId}) Path params (top-level, required): attachmentId.",
-    "method": "GET",
-    "path": "/support/capture/artifacts/{attachmentId}",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "attachmentId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "attachmentId"
-      ]
-    }
-  },
-  {
-    "name": "getSupportCapturePublicTicketId",
-    "description": "Get support capture public (GET /support/capture/public/{ticketId}) Path params (top-level, required): ticketId.",
-    "method": "GET",
-    "path": "/support/capture/public/{ticketId}",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "ticketId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "ticketId"
-      ]
-    }
-  },
-  {
-    "name": "getSupportCaptureSessionsSessionId",
-    "description": "Get support capture session (GET /support/capture/sessions/{sessionId}) Path params (top-level, required): sessionId.",
-    "method": "GET",
-    "path": "/support/capture/sessions/{sessionId}",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "sessionId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "sessionId"
-      ]
-    }
-  },
-  {
-    "name": "getSupportWidgetKeyBoard",
-    "description": "List support widget board (GET /support/widget/{key}/board) Path params (top-level, required): key.",
-    "method": "GET",
-    "path": "/support/widget/{key}/board",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "key": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "key"
-      ]
-    }
-  },
-  {
-    "name": "getSupportWidgetKeyChangelog",
-    "description": "List support widget changelog (GET /support/widget/{key}/changelog) Path params (top-level, required): key.",
-    "method": "GET",
-    "path": "/support/widget/{key}/changelog",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "key": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "key"
-      ]
-    }
-  },
-  {
-    "name": "getSupportWidgetKeyMessages",
-    "description": "List support widget messages (GET /support/widget/{key}/messages) Path params (top-level, required): key. Query params (top-level, optional): after.",
-    "method": "GET",
-    "path": "/support/widget/{key}/messages",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "key": {
-          "type": "string"
-        },
-        "after": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "key"
-      ]
-    }
-  },
-  {
-    "name": "getUser",
-    "description": "List api auth admin get user (GET /api/auth/admin/get-user)",
-    "method": "GET",
-    "path": "/api/auth/admin/get-user",
-    "inputSchema": {
-      "type": "object",
-      "properties": {}
-    }
-  },
-  {
     "name": "getWorkspaces",
     "description": "List workspaces (GET /workspaces)",
     "method": "GET",
@@ -2371,6 +2096,29 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdAgentRecap",
+    "description": "List agent recap (GET /workspaces/{organizationId}/agent/recap) Path params (top-level, required): organizationId. Query params (top-level, optional): since, repo.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/agent/recap",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "since": {
+          "type": "string"
+        },
+        "repo": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdAgentReceipts",
     "description": "List agent receipts (GET /workspaces/{organizationId}/agent/receipts) Path params (top-level, required): organizationId. Query params (top-level, optional): sessionId, agentId, issueId, stepKey, dealId, since, until, limit.",
     "method": "GET",
@@ -2464,7 +2212,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdAgentSessions",
-    "description": "List agent sessions (GET /workspaces/{organizationId}/agent/sessions) Path params (top-level, required): organizationId. Query params (top-level, optional): issueId, limit, summary.",
+    "description": "List agent sessions (GET /workspaces/{organizationId}/agent/sessions) Path params (top-level, required): organizationId. Query params (top-level, optional): issueId, agentSlug, limit, summary.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/agent/sessions",
     "inputSchema": {
@@ -2474,6 +2222,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "type": "string"
         },
         "issueId": {
+          "type": "string"
+        },
+        "agentSlug": {
           "type": "string"
         },
         "limit": {
@@ -2967,7 +2718,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdCustomers",
-    "description": "List customers (GET /workspaces/{organizationId}/customers) Path params (top-level, required): organizationId. Query params (top-level, optional): dueBefore, cold, needsHuman.",
+    "description": "List customers (GET /workspaces/{organizationId}/customers) Path params (top-level, required): organizationId. Query params (top-level, optional): dueBefore, cold, needsHuman, externalId, domain, limit, cursor, q, summary.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/customers",
     "inputSchema": {
@@ -2986,6 +2737,33 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         },
         "needsHuman": {
           "type": "string"
+        },
+        "externalId": {
+          "type": "string",
+          "description": "Exact-match lookup by externalId"
+        },
+        "domain": {
+          "type": "string",
+          "description": "Exact-match lookup by canonical domain (input is normalized first)"
+        },
+        "limit": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 1,
+          "maximum": 1000,
+          "description": "Page size, default 500, max 1000"
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque page cursor from a previous nextCursor"
+        },
+        "q": {
+          "type": "string",
+          "description": "Case-insensitive substring match on name, domain, or url"
+        },
+        "summary": {
+          "type": "string",
+          "description": "summary=1 → light picker rows (id, name, domain, statusId, ownerId, nextStepText, nextStepDueAt, needsHuman, timestamps)"
         }
       },
       "required": [
@@ -3107,10 +2885,52 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdCustomersIdContacts",
+    "description": "List customer contacts (GET /workspaces/{organizationId}/customers/{id}/contacts) Path params (top-level, required): organizationId, id.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/customers/{id}/contacts",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdCustomersIdIntake",
     "description": "List customer intake (GET /workspaces/{organizationId}/customers/{id}/intake) Path params (top-level, required): organizationId, id.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/customers/{id}/intake",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdCustomersIdSignals",
+    "description": "List customer signals (GET /workspaces/{organizationId}/customers/{id}/signals) Path params (top-level, required): organizationId, id.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/customers/{id}/signals",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -3264,7 +3084,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdDeals",
-    "description": "List deals (GET /workspaces/{organizationId}/deals) Path params (top-level, required): organizationId. Query params (top-level, optional): customerId, contactId, includeArchived, stage, dueBefore, cold, needsHuman.",
+    "description": "List deals (GET /workspaces/{organizationId}/deals) Path params (top-level, required): organizationId. Query params (top-level, optional): customerId, contactId, includeArchived, stage, dueBefore, cold, needsHuman, limit, cursor, q, summary.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/deals",
     "inputSchema": {
@@ -3303,6 +3123,25 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         },
         "needsHuman": {
           "type": "string"
+        },
+        "limit": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 1,
+          "maximum": 1000,
+          "description": "Page size, default 500, max 1000"
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque page cursor from a previous nextCursor"
+        },
+        "q": {
+          "type": "string",
+          "description": "Case-insensitive substring match on deal name"
+        },
+        "summary": {
+          "type": "string",
+          "description": "summary=1 → pipeline/picker rows without description, contactIds, or customFields"
         }
       },
       "required": [
@@ -3375,7 +3214,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdDocuments",
-    "description": "List documents (GET /workspaces/{organizationId}/documents) Path params (top-level, required): organizationId. Query params (top-level, optional): projectId, issueId, initiativeId, parentDocumentId, spaceId, isTemplate, includeTrashed.",
+    "description": "List documents (GET /workspaces/{organizationId}/documents) Path params (top-level, required): organizationId. Query params (top-level, optional): projectId, issueId, initiativeId, parentDocumentId, spaceId, isTemplate, includeTrashed, summary.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/documents",
     "inputSchema": {
@@ -3403,6 +3242,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "type": "string"
         },
         "includeTrashed": {
+          "type": "string"
+        },
+        "summary": {
           "type": "string"
         }
       },
@@ -3576,8 +3418,29 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdDocumentspacesIdPermissions",
+    "description": "List document space permissions (GET /workspaces/{organizationId}/document-spaces/{id}/permissions) Path params (top-level, required): organizationId, id.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/document-spaces/{id}/permissions",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdDocumentsSearch",
-    "description": "List document search (GET /workspaces/{organizationId}/documents/search) Path params (top-level, required): organizationId. Query params (top-level, optional): q.",
+    "description": "Search documents by title and body (GET /workspaces/{organizationId}/documents/search) Path params (top-level, required): organizationId. Query params (top-level, optional): q, limit.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/documents/search",
     "inputSchema": {
@@ -3589,6 +3452,11 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         "q": {
           "type": "string",
           "minLength": 1
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
         }
       },
       "required": [
@@ -5000,8 +4868,38 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdMemoryProfile",
+    "description": "List memory profile (GET /workspaces/{organizationId}/memory/profile) Path params (top-level, required): organizationId. Query params (top-level, optional): entityType, entityId, limit.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/memory/profile",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "entityType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "entityId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "limit": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "entityId",
+        "entityType",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdMePermissions",
-    "description": "List me permissions (GET /workspaces/{organizationId}/me/permissions) Path params (top-level, required): organizationId.",
+    "description": "Get the caller's workspace permissions (GET /workspaces/{organizationId}/me/permissions) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/me/permissions",
     "inputSchema": {
@@ -5160,6 +5058,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     "description": "List observability metrics (GET /workspaces/{organizationId}/observability/metrics) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/observability/metrics",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "getWorkspacesOrganizationIdOnboardingchecklist",
+    "description": "List onboarding checklist (GET /workspaces/{organizationId}/onboarding-checklist) Path params (top-level, required): organizationId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/onboarding-checklist",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -5383,6 +5298,44 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdProvenance",
+    "description": "List provenance (GET /workspaces/{organizationId}/provenance) Path params (top-level, required): organizationId. Query params (top-level, optional): repo, sha, file, branch, prUrl, issueId, limit.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/provenance",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "repo": {
+          "type": "string"
+        },
+        "sha": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        },
+        "branch": {
+          "type": "string"
+        },
+        "prUrl": {
+          "type": "string"
+        },
+        "issueId": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdPushtokens",
     "description": "List push tokens (GET /workspaces/{organizationId}/push-tokens) Path params (top-level, required): organizationId.",
     "method": "GET",
@@ -5401,7 +5354,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdReadiness",
-    "description": "List readiness (GET /workspaces/{organizationId}/readiness) Path params (top-level, required): organizationId.",
+    "description": "Get workspace readiness checks (GET /workspaces/{organizationId}/readiness) Path params (top-level, required): organizationId.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/readiness",
     "inputSchema": {
@@ -7243,62 +7196,6 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
-    "name": "impersonateUser",
-    "description": "Create api auth admin impersonate user (POST /api/auth/admin/impersonate-user) Request body goes in the \"body\" object.",
-    "method": "POST",
-    "path": "/api/auth/admin/impersonate-user",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          },
-          "description": "Better Auth request body"
-        }
-      }
-    }
-  },
-  {
-    "name": "listSessions",
-    "description": "List api auth list sessions (GET /api/auth/list-sessions)",
-    "method": "GET",
-    "path": "/api/auth/list-sessions",
-    "inputSchema": {
-      "type": "object",
-      "properties": {}
-    }
-  },
-  {
-    "name": "listUsers",
-    "description": "List api auth admin list users (GET /api/auth/admin/list-users)",
-    "method": "GET",
-    "path": "/api/auth/admin/list-users",
-    "inputSchema": {
-      "type": "object",
-      "properties": {}
-    }
-  },
-  {
-    "name": "listUserSessions",
-    "description": "Create api auth admin list user session (POST /api/auth/admin/list-user-sessions) Request body goes in the \"body\" object.",
-    "method": "POST",
-    "path": "/api/auth/admin/list-user-sessions",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          },
-          "description": "Better Auth request body"
-        }
-      }
-    }
-  },
-  {
     "name": "patchWorkspacesId",
     "description": "Update workspace (PATCH /workspaces/{id}) Path params (top-level, required): id. Request body goes in the \"body\" object; fields: ssoEnforced, defaultTeamId.",
     "method": "PATCH",
@@ -7397,7 +7294,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdAgentSessionsSessionId",
-    "description": "Update agent session (PATCH /workspaces/{organizationId}/agent/sessions/{sessionId}) Path params (top-level, required): organizationId, sessionId. Request body goes in the \"body\" object; fields: status, result, url, prUrl, prState, branch, plan.",
+    "description": "Update agent session (PATCH /workspaces/{organizationId}/agent/sessions/{sessionId}) Path params (top-level, required): organizationId, sessionId. Request body goes in the \"body\" object; fields: status, result, url, prUrl, prState, branch, plan, usage.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/agent/sessions/{sessionId}",
     "inputSchema": {
@@ -7465,6 +7362,40 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 ]
               },
               "maxItems": 50
+            },
+            "usage": {
+              "type": "object",
+              "properties": {
+                "model": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "inputTokens": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "outputTokens": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "totalTokens": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "toolCalls": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "costMicros": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "externalSpendMicros": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false
             }
           }
         }
@@ -7661,7 +7592,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "patchWorkspacesOrganizationIdCustomersId",
-    "description": "Update customer (PATCH /workspaces/{organizationId}/customers/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, url, bookingUrl, notes, logoUrl, externalId, phone, address, vertical, neighborhood, source, tierId, statusId, ownerId, nextStepText, nextStepDueAt, needsHuman, needsHumanReason, priorityScore, customFields, stageGateOverride.",
+    "description": "Update customer (PATCH /workspaces/{organizationId}/customers/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: name, url, domain, bookingUrl, notes, logoUrl, externalId, phone, address, vertical, neighborhood, source, readiness, nextAction, fit, fitScore, fitStatus, processor, evidenceUri, tierId, statusId, ownerId, nextStepText, nextStepDueAt, needsHuman, needsHumanReason, priorityScore, customFields, stageGateOverride.",
     "method": "PATCH",
     "path": "/workspaces/{organizationId}/customers/{id}",
     "inputSchema": {
@@ -7681,6 +7612,10 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "minLength": 1
             },
             "url": {
+              "type": "string",
+              "nullable": true
+            },
+            "domain": {
               "type": "string",
               "nullable": true
             },
@@ -7715,11 +7650,33 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "source": {
               "type": "string"
             },
+            "readiness": {
+              "type": "string"
+            },
+            "nextAction": {
+              "type": "string"
+            },
+            "fit": {
+              "type": "string"
+            },
+            "fitScore": {
+              "type": "number"
+            },
+            "fitStatus": {
+              "type": "string"
+            },
+            "processor": {
+              "type": "string"
+            },
+            "evidenceUri": {
+              "type": "string"
+            },
             "tierId": {
               "type": "string"
             },
             "statusId": {
-              "type": "string"
+              "type": "string",
+              "nullable": true
             },
             "ownerId": {
               "type": "string"
@@ -7909,10 +7866,28 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "startDate": {
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              ]
             },
             "endDate": {
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              ]
             }
           }
         }
@@ -8479,10 +8454,28 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "startDate": {
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              ]
             },
             "targetDate": {
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              ]
             }
           }
         }
@@ -8783,6 +8776,77 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "patchWorkspacesOrganizationIdMembershipsId",
+    "description": "Update membership (PATCH /workspaces/{organizationId}/memberships/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: role* (* = required).",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/memberships/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "role": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "role"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "patchWorkspacesOrganizationIdMemoryId",
+    "description": "Update memory (PATCH /workspaces/{organizationId}/memory/{id}) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: fact, kind, validUntil.",
+    "method": "PATCH",
+    "path": "/workspaces/{organizationId}/memory/{id}",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "fact": {
+              "type": "string",
+              "minLength": 1
+            },
+            "kind": {
+              "type": "string",
+              "minLength": 1
+            },
+            "validUntil": {
+              "type": "string",
+              "nullable": true
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "patchWorkspacesOrganizationIdNotificationsIdRead",
     "description": "Mark notification as read (PATCH /workspaces/{organizationId}/notifications/{id}/read) Path params (top-level, required): organizationId, id.",
     "method": "PATCH",
@@ -8948,10 +9012,28 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "startDate": {
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              ]
             },
             "endDate": {
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              ]
             }
           }
         }
@@ -10272,1410 +10354,6 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
-    "name": "postBillingWebhook",
-    "description": "Create billing webhook (POST /billing/webhook) Request body goes in the \"body\" object; fields: type*, data* (* = required).",
-    "method": "POST",
-    "path": "/billing/webhook",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "properties": {
-            "type": {
-              "type": "string"
-            },
-            "data": {
-              "type": "object",
-              "properties": {
-                "externalCustomerRef": {
-                  "type": "string"
-                },
-                "status": {
-                  "type": "string"
-                },
-                "currentPeriodEnd": {
-                  "type": "string"
-                }
-              },
-              "additionalProperties": {
-                "nullable": true
-              }
-            }
-          },
-          "required": [
-            "type",
-            "data"
-          ]
-        }
-      }
-    }
-  },
-  {
-    "name": "postDispatchPile",
-    "description": "Create dispatch pile (POST /dispatch/pile) Request body goes in the \"body\" object; fields: sessionId, agent, organizationId*, issue*, profile, conversationKey (* = required).",
-    "method": "POST",
-    "path": "/dispatch/pile",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "properties": {
-            "sessionId": {
-              "type": "string"
-            },
-            "agent": {
-              "type": "string"
-            },
-            "organizationId": {
-              "type": "string"
-            },
-            "issue": {
-              "type": "object",
-              "properties": {
-                "id": {
-                  "type": "string"
-                },
-                "identifier": {
-                  "type": "string",
-                  "nullable": true
-                },
-                "title": {
-                  "type": "string"
-                },
-                "description": {
-                  "type": "string",
-                  "nullable": true
-                },
-                "repo": {
-                  "type": "string",
-                  "nullable": true
-                },
-                "branch": {
-                  "type": "string",
-                  "nullable": true
-                },
-                "status": {
-                  "type": "string"
-                },
-                "priority": {
-                  "anyOf": [
-                    {
-                      "type": "number"
-                    },
-                    {
-                      "type": "string"
-                    }
-                  ]
-                },
-                "labelIds": {
-                  "type": "array",
-                  "nullable": true,
-                  "items": {
-                    "type": "string"
-                  }
-                }
-              },
-              "required": [
-                "id",
-                "title"
-              ],
-              "additionalProperties": {
-                "nullable": true
-              }
-            },
-            "profile": {
-              "type": "object",
-              "nullable": true,
-              "properties": {
-                "slug": {
-                  "type": "string"
-                },
-                "name": {
-                  "type": "string"
-                },
-                "jobSpec": {
-                  "type": "string",
-                  "nullable": true
-                },
-                "toolScope": {
-                  "type": "string",
-                  "nullable": true
-                },
-                "providerAgentId": {
-                  "type": "string",
-                  "nullable": true
-                },
-                "model": {
-                  "type": "string",
-                  "nullable": true
-                },
-                "prompt": {
-                  "type": "string",
-                  "nullable": true
-                }
-              },
-              "required": [
-                "slug",
-                "name"
-              ],
-              "additionalProperties": {
-                "nullable": true
-              }
-            },
-            "conversationKey": {
-              "type": "string",
-              "nullable": true
-            }
-          },
-          "required": [
-            "organizationId",
-            "issue"
-          ]
-        }
-      }
-    }
-  },
-  {
-    "name": "postGitlab",
-    "description": "Create gitlab (POST /gitlab)",
-    "method": "POST",
-    "path": "/gitlab",
-    "inputSchema": {
-      "type": "object",
-      "properties": {}
-    }
-  },
-  {
-    "name": "postIntercomOrganizationId",
-    "description": "Receive Intercom webhook notifications (POST /intercom/{organizationId}) Path params (top-level, required): organizationId. Request body goes in the \"body\" object (required).",
-    "method": "POST",
-    "path": "/intercom/{organizationId}",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "organizationId": {
-          "type": "string"
-        },
-        "body": {
-          "nullable": true
-        }
-      },
-      "required": [
-        "body",
-        "organizationId"
-      ]
-    }
-  },
-  {
-    "name": "postNotionOrganizationIdWorkspaceId",
-    "description": "POST /notion/{organizationId}/{workspaceId} (POST /notion/{organizationId}/{workspaceId}) Path params (top-level, required): organizationId, workspaceId.",
-    "method": "POST",
-    "path": "/notion/{organizationId}/{workspaceId}",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "organizationId": {
-          "type": "string"
-        },
-        "workspaceId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "organizationId",
-        "workspaceId"
-      ]
-    }
-  },
-  {
-    "name": "postPublicLeadsOrganizationId",
-    "description": "Create public lead (POST /public/leads/{organizationId}) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: email*, fullName, company, dealName, amountCents, currency, message, source (* = required).",
-    "method": "POST",
-    "path": "/public/leads/{organizationId}",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "organizationId": {
-          "type": "string"
-        },
-        "body": {
-          "type": "object",
-          "properties": {
-            "email": {
-              "type": "string",
-              "format": "email"
-            },
-            "fullName": {
-              "type": "string"
-            },
-            "company": {
-              "type": "string"
-            },
-            "dealName": {
-              "type": "string"
-            },
-            "amountCents": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "currency": {
-              "type": "string",
-              "minLength": 3,
-              "maxLength": 3
-            },
-            "message": {
-              "type": "string"
-            },
-            "source": {
-              "type": "string",
-              "default": "form"
-            }
-          },
-          "required": [
-            "email"
-          ]
-        }
-      },
-      "required": [
-        "organizationId"
-      ]
-    }
-  },
-  {
-    "name": "postSupportCaptureFinalize",
-    "description": "Create support capture finalize (POST /support/capture/finalize)",
-    "method": "POST",
-    "path": "/support/capture/finalize",
-    "inputSchema": {
-      "type": "object",
-      "properties": {}
-    }
-  },
-  {
-    "name": "postSupportCaptureMetadata",
-    "description": "Create support capture metadata (POST /support/capture/metadata) Request body goes in the \"body\" object; fields: metadata* (* = required).",
-    "method": "POST",
-    "path": "/support/capture/metadata",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "properties": {
-            "metadata": {
-              "type": "object",
-              "additionalProperties": {
-                "nullable": true
-              }
-            }
-          },
-          "required": [
-            "metadata"
-          ]
-        }
-      }
-    }
-  },
-  {
-    "name": "postSupportCaptureToken",
-    "description": "Create support capture token (POST /support/capture/token) Request body goes in the \"body\" object; fields: turnstileToken.",
-    "method": "POST",
-    "path": "/support/capture/token",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "properties": {
-            "turnstileToken": {
-              "type": "string"
-            }
-          }
-        }
-      }
-    }
-  },
-  {
-    "name": "postSupportCaptureUploadsession",
-    "description": "Create support capture upload session (POST /support/capture/upload-session) Request body goes in the \"body\" object; fields: title*, description, priority, tags, url, attachmentType, contentType, fileName, artifacts, visibility, metadata, deviceInfo (* = required).",
-    "method": "POST",
-    "path": "/support/capture/upload-session",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "properties": {
-            "title": {
-              "type": "string",
-              "minLength": 1
-            },
-            "description": {
-              "type": "string"
-            },
-            "priority": {
-              "type": "string",
-              "enum": [
-                "low",
-                "medium",
-                "high",
-                "urgent"
-              ]
-            },
-            "tags": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "url": {
-              "type": "string"
-            },
-            "attachmentType": {
-              "type": "string",
-              "enum": [
-                "screenshot",
-                "video",
-                "debugger_json",
-                "log",
-                "network",
-                "replay"
-              ],
-              "default": "screenshot"
-            },
-            "contentType": {
-              "type": "string"
-            },
-            "fileName": {
-              "type": "string"
-            },
-            "artifacts": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "attachmentType": {
-                    "type": "string",
-                    "enum": [
-                      "screenshot",
-                      "video",
-                      "debugger_json",
-                      "log",
-                      "network",
-                      "replay"
-                    ]
-                  },
-                  "fileName": {
-                    "type": "string"
-                  },
-                  "contentType": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "attachmentType"
-                ]
-              }
-            },
-            "visibility": {
-              "type": "string",
-              "enum": [
-                "public",
-                "private"
-              ]
-            },
-            "metadata": {
-              "type": "object",
-              "additionalProperties": {
-                "nullable": true
-              },
-              "default": {}
-            },
-            "deviceInfo": {
-              "type": "object",
-              "additionalProperties": {
-                "nullable": true
-              }
-            }
-          },
-          "required": [
-            "title"
-          ]
-        }
-      }
-    }
-  },
-  {
-    "name": "postSupportCaptureUploadSessionIdAttachmentTypeFileName",
-    "description": "POST /support/capture/upload/{sessionId}/{attachmentType}/{fileName} (POST /support/capture/upload/{sessionId}/{attachmentType}/{fileName}) Path params (top-level, required): sessionId, attachmentType, fileName.",
-    "method": "POST",
-    "path": "/support/capture/upload/{sessionId}/{attachmentType}/{fileName}",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "sessionId": {
-          "type": "string"
-        },
-        "attachmentType": {
-          "type": "string",
-          "enum": [
-            "screenshot",
-            "video",
-            "debugger_json",
-            "log",
-            "network",
-            "replay"
-          ]
-        },
-        "fileName": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "attachmentType",
-        "fileName",
-        "sessionId"
-      ]
-    }
-  },
-  {
-    "name": "postSupportFeedback",
-    "description": "File product feedback into the configured feedback channel (POST /support/feedback) Request body goes in the \"body\" object; fields: subject*, text*, fromEmail*, fromName*, context* (* = required).",
-    "method": "POST",
-    "path": "/support/feedback",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "properties": {
-            "subject": {
-              "type": "string",
-              "minLength": 5,
-              "maxLength": 200
-            },
-            "text": {
-              "type": "string",
-              "minLength": 20,
-              "maxLength": 4000
-            },
-            "fromEmail": {
-              "type": "string",
-              "format": "email"
-            },
-            "fromName": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 200
-            },
-            "context": {
-              "type": "object",
-              "properties": {
-                "client": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 100
-                },
-                "version": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 50
-                },
-                "os": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 100
-                },
-                "workspace": {
-                  "type": "string",
-                  "maxLength": 100
-                }
-              },
-              "required": [
-                "client",
-                "version",
-                "os"
-              ]
-            }
-          },
-          "required": [
-            "subject",
-            "text",
-            "fromEmail",
-            "fromName",
-            "context"
-          ]
-        }
-      }
-    }
-  },
-  {
-    "name": "postSupportIncomingChannelId",
-    "description": "Receive a generic incoming support message (POST /support/incoming/{channelId}) Path params (top-level, required): channelId. Request body goes in the \"body\" object; fields: fromEmail*, fromName, subject, text*, html, externalTicketId, externalMessageId, subType, createdAt (* = required).",
-    "method": "POST",
-    "path": "/support/incoming/{channelId}",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "channelId": {
-          "type": "string"
-        },
-        "body": {
-          "type": "object",
-          "properties": {
-            "fromEmail": {
-              "type": "string",
-              "format": "email"
-            },
-            "fromName": {
-              "type": "string"
-            },
-            "subject": {
-              "type": "string",
-              "default": ""
-            },
-            "text": {
-              "type": "string"
-            },
-            "html": {
-              "type": "string"
-            },
-            "externalTicketId": {
-              "type": "string"
-            },
-            "externalMessageId": {
-              "type": "string"
-            },
-            "subType": {
-              "type": "string"
-            },
-            "createdAt": {
-              "type": "string",
-              "format": "date-time"
-            }
-          },
-          "required": [
-            "fromEmail",
-            "text"
-          ]
-        }
-      },
-      "required": [
-        "channelId"
-      ]
-    }
-  },
-  {
-    "name": "postSupportSmsInbound",
-    "description": "Create support sm inbound (POST /support/sms/inbound) Request body goes in the \"body\" object; fields: from_number*, to_number, content, media_url, service, date_sent, group_id, participants (* = required).",
-    "method": "POST",
-    "path": "/support/sms/inbound",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "properties": {
-            "from_number": {
-              "type": "string",
-              "minLength": 4
-            },
-            "to_number": {
-              "type": "string"
-            },
-            "content": {
-              "type": "string",
-              "maxLength": 10000
-            },
-            "media_url": {
-              "type": "string"
-            },
-            "service": {
-              "type": "string"
-            },
-            "date_sent": {
-              "type": "string"
-            },
-            "group_id": {
-              "type": "string"
-            },
-            "participants": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
-          },
-          "required": [
-            "from_number"
-          ]
-        }
-      }
-    }
-  },
-  {
-    "name": "postSupportUnsubscribe",
-    "description": "Opt a customer email out of outbound notifications (POST /support/unsubscribe) Request body goes in the \"body\" object; fields: organizationId*, email* (* = required).",
-    "method": "POST",
-    "path": "/support/unsubscribe",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "properties": {
-            "organizationId": {
-              "type": "string"
-            },
-            "email": {
-              "type": "string",
-              "format": "email"
-            }
-          },
-          "required": [
-            "organizationId",
-            "email"
-          ]
-        }
-      }
-    }
-  },
-  {
-    "name": "postSupportWebhooksIntercomOrganizationId",
-    "description": "Receive Intercom support webhook notifications (POST /support/webhooks/intercom/{organizationId}) Path params (top-level, required): organizationId. Request body goes in the \"body\" object (required).",
-    "method": "POST",
-    "path": "/support/webhooks/intercom/{organizationId}",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "organizationId": {
-          "type": "string"
-        },
-        "body": {
-          "nullable": true
-        }
-      },
-      "required": [
-        "body",
-        "organizationId"
-      ]
-    }
-  },
-  {
-    "name": "postSupportWebhooksJamPublicKeyId",
-    "description": "Create support webhook jam (POST /support/webhooks/jam/{publicKeyId}) Path params (top-level, required): publicKeyId. Request body goes in the \"body\" object; fields: jamId*, jamUrl*, teamId*, type*, createdAt*, title, description, originalUrl, origin, isIncognito, author, media, systemInfo, consoleLogs, networkRequests, userEvents, recordingLink, intercom, linear (* = required).",
-    "method": "POST",
-    "path": "/support/webhooks/jam/{publicKeyId}",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "publicKeyId": {
-          "type": "string"
-        },
-        "body": {
-          "type": "object",
-          "properties": {
-            "jamId": {
-              "type": "string"
-            },
-            "jamUrl": {
-              "type": "string"
-            },
-            "teamId": {
-              "type": "string"
-            },
-            "type": {
-              "type": "string",
-              "enum": [
-                "video",
-                "screenshot",
-                "sessionReplay"
-              ]
-            },
-            "createdAt": {
-              "type": "string"
-            },
-            "title": {
-              "type": "string"
-            },
-            "description": {
-              "type": "string"
-            },
-            "originalUrl": {
-              "type": "string"
-            },
-            "origin": {
-              "type": "string"
-            },
-            "isIncognito": {
-              "type": "boolean"
-            },
-            "author": {
-              "type": "object",
-              "properties": {
-                "email": {
-                  "type": "string"
-                },
-                "name": {
-                  "type": "string"
-                }
-              },
-              "default": {},
-              "additionalProperties": {
-                "nullable": true
-              }
-            },
-            "media": {
-              "type": "object",
-              "properties": {
-                "videoUrl": {
-                  "type": "string"
-                },
-                "screenshotUrl": {
-                  "type": "string"
-                },
-                "thumbnailUrl": {
-                  "type": "string"
-                }
-              },
-              "default": {},
-              "additionalProperties": {
-                "nullable": true
-              }
-            },
-            "systemInfo": {
-              "type": "object",
-              "properties": {
-                "browser": {
-                  "type": "object",
-                  "properties": {
-                    "name": {
-                      "type": "string"
-                    },
-                    "version": {
-                      "type": "string"
-                    }
-                  },
-                  "additionalProperties": {
-                    "nullable": true
-                  }
-                },
-                "os": {
-                  "type": "object",
-                  "properties": {
-                    "name": {
-                      "type": "string"
-                    },
-                    "version": {
-                      "type": "string"
-                    }
-                  },
-                  "additionalProperties": {
-                    "nullable": true
-                  }
-                },
-                "screen": {
-                  "type": "object",
-                  "properties": {
-                    "width": {
-                      "type": "number"
-                    },
-                    "height": {
-                      "type": "number"
-                    }
-                  },
-                  "additionalProperties": {
-                    "nullable": true
-                  }
-                },
-                "battery": {
-                  "type": "object",
-                  "properties": {
-                    "charging": {
-                      "type": "boolean"
-                    },
-                    "level": {
-                      "type": "number"
-                    }
-                  },
-                  "additionalProperties": {
-                    "nullable": true
-                  }
-                },
-                "connection": {
-                  "type": "object",
-                  "properties": {
-                    "effectiveType": {
-                      "type": "string"
-                    },
-                    "downlinkMbps": {
-                      "type": "number"
-                    },
-                    "rttMs": {
-                      "type": "number"
-                    }
-                  },
-                  "additionalProperties": {
-                    "nullable": true
-                  }
-                }
-              },
-              "additionalProperties": {
-                "nullable": true
-              }
-            },
-            "consoleLogs": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "level": {
-                    "type": "string"
-                  },
-                  "message": {
-                    "type": "string"
-                  },
-                  "timestamp": {
-                    "type": "string"
-                  }
-                },
-                "additionalProperties": {
-                  "nullable": true
-                }
-              }
-            },
-            "networkRequests": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "url": {
-                    "type": "string"
-                  },
-                  "method": {
-                    "type": "string"
-                  },
-                  "status": {
-                    "type": "number"
-                  },
-                  "duration": {
-                    "type": "number"
-                  },
-                  "requestHeaders": {
-                    "type": "object",
-                    "additionalProperties": {
-                      "type": "string"
-                    }
-                  },
-                  "responseHeaders": {
-                    "type": "object",
-                    "additionalProperties": {
-                      "type": "string"
-                    }
-                  }
-                },
-                "additionalProperties": {
-                  "nullable": true
-                }
-              }
-            },
-            "userEvents": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "type": {
-                    "type": "string"
-                  },
-                  "timestamp": {
-                    "type": "string"
-                  },
-                  "selector": {
-                    "type": "string"
-                  },
-                  "target": {
-                    "type": "string"
-                  },
-                  "value": {
-                    "type": "string"
-                  }
-                },
-                "additionalProperties": {
-                  "nullable": true
-                }
-              }
-            },
-            "recordingLink": {
-              "type": "object",
-              "properties": {
-                "publicId": {
-                  "type": "string"
-                },
-                "type": {
-                  "type": "string",
-                  "enum": [
-                    "one_time",
-                    "reusable"
-                  ]
-                },
-                "recordingUrl": {
-                  "type": "string"
-                },
-                "description": {
-                  "type": "string"
-                },
-                "reference": {
-                  "type": "string"
-                },
-                "submitterComment": {
-                  "type": "string"
-                }
-              },
-              "additionalProperties": {
-                "nullable": true
-              }
-            },
-            "intercom": {
-              "type": "object",
-              "properties": {
-                "conversationId": {
-                  "type": "string"
-                },
-                "issueId": {
-                  "type": "string"
-                }
-              },
-              "additionalProperties": {
-                "nullable": true
-              }
-            },
-            "linear": {
-              "type": "object",
-              "properties": {
-                "conversationId": {
-                  "type": "string"
-                },
-                "issueId": {
-                  "type": "string"
-                }
-              },
-              "additionalProperties": {
-                "nullable": true
-              }
-            }
-          },
-          "required": [
-            "jamId",
-            "jamUrl",
-            "teamId",
-            "type",
-            "createdAt"
-          ],
-          "additionalProperties": {
-            "nullable": true
-          }
-        }
-      },
-      "required": [
-        "publicKeyId"
-      ]
-    }
-  },
-  {
-    "name": "postSupportWebhooksJamPublicKeyIdIntercomOptedout",
-    "description": "Create support webhook jam intercom opted out (POST /support/webhooks/jam/{publicKeyId}/intercom/opted-out) Path params (top-level, required): publicKeyId. Request body goes in the \"body\" object; fields: conversationId* (* = required).",
-    "method": "POST",
-    "path": "/support/webhooks/jam/{publicKeyId}/intercom/opted-out",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "publicKeyId": {
-          "type": "string"
-        },
-        "body": {
-          "type": "object",
-          "properties": {
-            "conversationId": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "conversationId"
-          ],
-          "additionalProperties": {
-            "nullable": true
-          }
-        }
-      },
-      "required": [
-        "publicKeyId"
-      ]
-    }
-  },
-  {
-    "name": "postSupportWebhooksJamPublicKeyIdIntercomRecorded",
-    "description": "Create support webhook jam intercom recorded (POST /support/webhooks/jam/{publicKeyId}/intercom/recorded) Path params (top-level, required): publicKeyId. Request body goes in the \"body\" object; fields: conversationId*, jamId*, jamUrl* (* = required).",
-    "method": "POST",
-    "path": "/support/webhooks/jam/{publicKeyId}/intercom/recorded",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "publicKeyId": {
-          "type": "string"
-        },
-        "body": {
-          "type": "object",
-          "properties": {
-            "conversationId": {
-              "type": "string"
-            },
-            "jamId": {
-              "type": "string"
-            },
-            "jamUrl": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "conversationId",
-            "jamId",
-            "jamUrl"
-          ],
-          "additionalProperties": {
-            "nullable": true
-          }
-        }
-      },
-      "required": [
-        "publicKeyId"
-      ]
-    }
-  },
-  {
-    "name": "postSupportWebhooksJamPublicKeyIdRecordinglinks",
-    "description": "Create support webhook jam recording link (POST /support/webhooks/jam/{publicKeyId}/recording-links) Path params (top-level, required): publicKeyId. Request body goes in the \"body\" object; fields: recordingLinkId*, publicId*, url*, teamId*, type*, createdAt*, origin, description, reference, recordingUrl, createdBy (* = required).",
-    "method": "POST",
-    "path": "/support/webhooks/jam/{publicKeyId}/recording-links",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "publicKeyId": {
-          "type": "string"
-        },
-        "body": {
-          "type": "object",
-          "properties": {
-            "recordingLinkId": {
-              "type": "string"
-            },
-            "publicId": {
-              "type": "string"
-            },
-            "url": {
-              "type": "string"
-            },
-            "teamId": {
-              "type": "string"
-            },
-            "type": {
-              "type": "string",
-              "enum": [
-                "one_time",
-                "reusable"
-              ]
-            },
-            "createdAt": {
-              "type": "string"
-            },
-            "origin": {
-              "type": "string"
-            },
-            "description": {
-              "type": "string"
-            },
-            "reference": {
-              "type": "string"
-            },
-            "recordingUrl": {
-              "type": "string"
-            },
-            "createdBy": {
-              "type": "object",
-              "properties": {
-                "email": {
-                  "type": "string"
-                },
-                "name": {
-                  "type": "string"
-                }
-              },
-              "additionalProperties": {
-                "nullable": true
-              }
-            }
-          },
-          "required": [
-            "recordingLinkId",
-            "publicId",
-            "url",
-            "teamId",
-            "type",
-            "createdAt"
-          ],
-          "additionalProperties": {
-            "nullable": true
-          }
-        }
-      },
-      "required": [
-        "publicKeyId"
-      ]
-    }
-  },
-  {
-    "name": "postSupportWebhooksPlainOrganizationId",
-    "description": "Receive Plain support webhook notifications (POST /support/webhooks/plain/{organizationId}) Path params (top-level, required): organizationId. Request body goes in the \"body\" object (required).",
-    "method": "POST",
-    "path": "/support/webhooks/plain/{organizationId}",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "organizationId": {
-          "type": "string"
-        },
-        "body": {
-          "nullable": true
-        }
-      },
-      "required": [
-        "body",
-        "organizationId"
-      ]
-    }
-  },
-  {
-    "name": "postSupportWebhooksSlackOrganizationId",
-    "description": "Receive Slack support events (POST /support/webhooks/slack/{organizationId}) Path params (top-level, required): organizationId. Request body goes in the \"body\" object (required).",
-    "method": "POST",
-    "path": "/support/webhooks/slack/{organizationId}",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "organizationId": {
-          "type": "string"
-        },
-        "body": {
-          "nullable": true
-        }
-      },
-      "required": [
-        "body",
-        "organizationId"
-      ]
-    }
-  },
-  {
-    "name": "postSupportWebhooksZendeskOrganizationId",
-    "description": "Receive Zendesk support webhook notifications (POST /support/webhooks/zendesk/{organizationId}) Path params (top-level, required): organizationId. Request body goes in the \"body\" object (required).",
-    "method": "POST",
-    "path": "/support/webhooks/zendesk/{organizationId}",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "organizationId": {
-          "type": "string"
-        },
-        "body": {
-          "nullable": true
-        }
-      },
-      "required": [
-        "body",
-        "organizationId"
-      ]
-    }
-  },
-  {
-    "name": "postSupportWidgetKeyIdeas",
-    "description": "Create support widget idea (POST /support/widget/{key}/ideas) Path params (top-level, required): key. Request body goes in the \"body\" object; fields: title*, text (* = required).",
-    "method": "POST",
-    "path": "/support/widget/{key}/ideas",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "key": {
-          "type": "string"
-        },
-        "body": {
-          "type": "object",
-          "properties": {
-            "title": {
-              "type": "string",
-              "minLength": 3,
-              "maxLength": 200
-            },
-            "text": {
-              "type": "string",
-              "maxLength": 5000
-            }
-          },
-          "required": [
-            "title"
-          ]
-        }
-      },
-      "required": [
-        "key"
-      ]
-    }
-  },
-  {
-    "name": "postSupportWidgetKeyMessages",
-    "description": "Create support widget message (POST /support/widget/{key}/messages) Path params (top-level, required): key. Request body goes in the \"body\" object; fields: text*, externalId, email, name (* = required).",
-    "method": "POST",
-    "path": "/support/widget/{key}/messages",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "key": {
-          "type": "string"
-        },
-        "body": {
-          "type": "object",
-          "properties": {
-            "text": {
-              "type": "string",
-              "minLength": 1
-            },
-            "externalId": {
-              "type": "string"
-            },
-            "email": {
-              "type": "string",
-              "format": "email"
-            },
-            "name": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "text"
-          ]
-        }
-      },
-      "required": [
-        "key"
-      ]
-    }
-  },
-  {
-    "name": "postSupportWidgetKeySession",
-    "description": "Create support widget session (POST /support/widget/{key}/session) Path params (top-level, required): key. Request body goes in the \"body\" object; fields: sessionToken, externalId, email, name, identifierHash, turnstileToken.",
-    "method": "POST",
-    "path": "/support/widget/{key}/session",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "key": {
-          "type": "string"
-        },
-        "body": {
-          "type": "object",
-          "properties": {
-            "sessionToken": {
-              "type": "string"
-            },
-            "externalId": {
-              "type": "string"
-            },
-            "email": {
-              "type": "string",
-              "format": "email"
-            },
-            "name": {
-              "type": "string"
-            },
-            "identifierHash": {
-              "type": "string"
-            },
-            "turnstileToken": {
-              "type": "string"
-            }
-          }
-        }
-      },
-      "required": [
-        "key"
-      ]
-    }
-  },
-  {
-    "name": "postSupportWidgetKeyVotes",
-    "description": "Create support widget vote (POST /support/widget/{key}/votes) Path params (top-level, required): key. Request body goes in the \"body\" object; fields: ticketId*, priority (* = required).",
-    "method": "POST",
-    "path": "/support/widget/{key}/votes",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "key": {
-          "type": "string"
-        },
-        "body": {
-          "type": "object",
-          "properties": {
-            "ticketId": {
-              "type": "string",
-              "minLength": 1
-            },
-            "priority": {
-              "type": "string",
-              "enum": [
-                "nice_to_have",
-                "important",
-                "must_have"
-              ]
-            }
-          },
-          "required": [
-            "ticketId"
-          ]
-        }
-      },
-      "required": [
-        "key"
-      ]
-    }
-  },
-  {
-    "name": "postWebhooksCommsOrganizationIdSource",
-    "description": "POST /webhooks/comms/{organizationId}/{source} (POST /webhooks/comms/{organizationId}/{source}) Path params (top-level, required): organizationId, source. Request body goes in the \"body\" object.",
-    "method": "POST",
-    "path": "/webhooks/comms/{organizationId}/{source}",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "organizationId": {
-          "type": "string"
-        },
-        "source": {
-          "type": "string"
-        },
-        "body": {
-          "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          }
-        }
-      },
-      "required": [
-        "organizationId",
-        "source"
-      ]
-    }
-  },
-  {
     "name": "postWorkspaces",
     "description": "Create workspace (POST /workspaces) Request body goes in the \"body\" object; fields: name*, slug*, key (* = required).",
     "method": "POST",
@@ -11708,7 +10386,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOnboard",
-    "description": "Create workspace onboard (POST /workspaces/onboard) Request body goes in the \"body\" object; fields: name*, slug*, key (* = required).",
+    "description": "Create workspace onboard (POST /workspaces/onboard) Request body goes in the \"body\" object; fields: name*, slug*, key, seedStarterIssues (* = required).",
     "method": "POST",
     "path": "/workspaces/onboard",
     "inputSchema": {
@@ -11727,6 +10405,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "key": {
               "type": "string"
+            },
+            "seedStarterIssues": {
+              "type": "boolean"
             }
           },
           "required": [
@@ -13032,7 +11713,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdCustomers",
-    "description": "Create customer — externalId is a hard dedupe key (same contract as issues' externalRef): when a customer with the same externalId exists the call returns that customer with 200 instead of creating a duplicate. Pass dedupe=block to get 409 with the existing record in details.customer instead — the hard guarantee importers need. (POST /workspaces/{organizationId}/customers) Path params (top-level, required): organizationId. Query params (top-level, optional): dedupe. Request body goes in the \"body\" object; fields: name*, url, bookingUrl, notes, logoUrl, externalId, phone, address, vertical, neighborhood, source, tierId, statusId, ownerId, nextStepText, nextStepDueAt, needsHuman, needsHumanReason, priorityScore, customFields (* = required).",
+    "description": "Create customer — externalId is a hard dedupe key (same contract as issues' externalRef): when a customer with the same externalId exists the call returns that customer with 200 instead of creating a duplicate. Pass dedupe=block to get 409 with the existing record in details.customer instead — the hard guarantee importers need. (POST /workspaces/{organizationId}/customers) Path params (top-level, required): organizationId. Query params (top-level, optional): dedupe. Request body goes in the \"body\" object; fields: name*, url, domain, bookingUrl, notes, logoUrl, externalId, phone, address, vertical, neighborhood, source, readiness, nextAction, fit, fitScore, fitStatus, processor, evidenceUri, tierId, statusId, ownerId, nextStepText, nextStepDueAt, needsHuman, needsHumanReason, priorityScore, customFields (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/customers",
     "inputSchema": {
@@ -13056,6 +11737,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "minLength": 1
             },
             "url": {
+              "type": "string"
+            },
+            "domain": {
               "type": "string"
             },
             "bookingUrl": {
@@ -13087,6 +11771,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "source": {
+              "type": "string"
+            },
+            "readiness": {
+              "type": "string"
+            },
+            "nextAction": {
+              "type": "string"
+            },
+            "fit": {
+              "type": "string"
+            },
+            "fitScore": {
+              "type": "number"
+            },
+            "fitStatus": {
+              "type": "string"
+            },
+            "processor": {
+              "type": "string"
+            },
+            "evidenceUri": {
               "type": "string"
             },
             "tierId": {
@@ -13124,6 +11829,254 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "type": "string",
                 "nullable": true
               }
+            }
+          },
+          "required": [
+            "name"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdCustomersApprovebatch",
+    "description": "Create customer approve batch (POST /workspaces/{organizationId}/customers/approve-batch) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: customerIds, channel, limit, mailboxId, dailyCap, domainHealth, unsubscribeBaseUrl, physicalAddress.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers/approve-batch",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "customerIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "channel": {
+              "type": "string",
+              "enum": [
+                "email",
+                "call",
+                "visit",
+                "sms"
+              ],
+              "default": "call"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25
+            },
+            "mailboxId": {
+              "type": "string"
+            },
+            "dailyCap": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            },
+            "domainHealth": {
+              "type": "object",
+              "properties": {
+                "domain": {
+                  "type": "string"
+                },
+                "spfOk": {
+                  "type": "boolean"
+                },
+                "dkimOk": {
+                  "type": "boolean"
+                },
+                "dmarcOk": {
+                  "type": "boolean"
+                },
+                "mxOk": {
+                  "type": "boolean"
+                },
+                "checkedAt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "domain",
+                "spfOk",
+                "dkimOk",
+                "dmarcOk",
+                "mxOk"
+              ]
+            },
+            "unsubscribeBaseUrl": {
+              "type": "string"
+            },
+            "physicalAddress": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdCustomersAudiencequery",
+    "description": "Create customer audience query (POST /workspaces/{organizationId}/customers/audience-query) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: logic, predicates, limit.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers/audience-query",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "logic": {
+              "type": "string",
+              "enum": [
+                "and",
+                "or"
+              ],
+              "default": "and"
+            },
+            "predicates": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "field": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "op": {
+                    "type": "string",
+                    "enum": [
+                      "eq",
+                      "neq",
+                      "in",
+                      "gte",
+                      "lte",
+                      "contains",
+                      "has_signal"
+                    ]
+                  },
+                  "value": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "field",
+                  "op",
+                  "value"
+                ]
+              },
+              "default": []
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200
+            }
+          }
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdCustomersAutoreplenish",
+    "description": "Create customer auto replenish (POST /workspaces/{organizationId}/customers/auto-replenish) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: totalLeads.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers/auto-replenish",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "totalLeads": {
+              "type": "integer",
+              "minimum": 5,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdCustomersDedupkey",
+    "description": "Create customer dedup key (POST /workspaces/{organizationId}/customers/dedup-key) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, address, phone, domain (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers/dedup-key",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "address": {
+              "type": "string",
+              "nullable": true
+            },
+            "phone": {
+              "type": "string",
+              "nullable": true
+            },
+            "domain": {
+              "type": "string",
+              "nullable": true
             }
           },
           "required": [
@@ -13201,6 +12154,299 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           },
           "required": [
             "body"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdCustomersIdInteractions",
+    "description": "Create customer interaction — Log a field-sales touch (door knock / call outcome). Writes the interaction to customer memory, applies the outcome's default nextStepText/nextStepDueAt/needsHuman unless the body overrides them, and auto-advances statusId per the outcome→status-key map resolved against this workspace's customer_statuses. When the PILE-412 stage gate refuses the advance, the touch still lands and the response flags stageBlocked. (POST /workspaces/{organizationId}/customers/{id}/interactions) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: outcome*, note, nextStepText, nextStepDueAt (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers/{id}/interactions",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "outcome": {
+              "type": "string",
+              "enum": [
+                "talked",
+                "sent_info",
+                "needs_email",
+                "quoted",
+                "callback",
+                "no_answer",
+                "not_interested",
+                "spam"
+              ],
+              "description": "Canonical knock outcome — drives the next-step defaults and stage auto-advance"
+            },
+            "note": {
+              "type": "string",
+              "maxLength": 4000
+            },
+            "nextStepText": {
+              "type": "string",
+              "nullable": true
+            },
+            "nextStepDueAt": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          "required": [
+            "outcome"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdCustomersIdReplyingest",
+    "description": "Create customer reply ingest (POST /workspaces/{organizationId}/customers/{id}/reply-ingest) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: subject, body*, fromEmail, statementFileId (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers/{id}/reply-ingest",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "subject": {
+              "type": "string",
+              "default": ""
+            },
+            "body": {
+              "type": "string",
+              "minLength": 1
+            },
+            "fromEmail": {
+              "type": "string"
+            },
+            "statementFileId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "body"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdCustomersIdRunplay",
+    "description": "Create customer run play (POST /workspaces/{organizationId}/customers/{id}/run-play) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: playName, html, pageUrl, contactEmail, minDraftRankScore, paidRankThreshold.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers/{id}/run-play",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "playName": {
+              "type": "string"
+            },
+            "html": {
+              "type": "string"
+            },
+            "pageUrl": {
+              "type": "string"
+            },
+            "contactEmail": {
+              "type": "string"
+            },
+            "minDraftRankScore": {
+              "type": "number"
+            },
+            "paidRankThreshold": {
+              "type": "number"
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdCustomersIdSendgate",
+    "description": "Create customer send gate (POST /workspaces/{organizationId}/customers/{id}/send-gate) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: touchId, channel*, action, contactId, contactEmail, emailStatus, emailVerifiedAt, doNotContact, doNotEmail, doNotCall, euResident, hasExplicitConsent, allowCatchAll, allowRole, allowUnverified (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers/{id}/send-gate",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "touchId": {
+              "type": "string",
+              "default": "touch-preview"
+            },
+            "channel": {
+              "type": "string",
+              "enum": [
+                "email",
+                "call",
+                "visit",
+                "linkedin"
+              ]
+            },
+            "action": {
+              "type": "string",
+              "enum": [
+                "engage",
+                "claim"
+              ],
+              "default": "engage"
+            },
+            "contactId": {
+              "type": "string",
+              "default": "default-contact"
+            },
+            "contactEmail": {
+              "type": "string"
+            },
+            "emailStatus": {
+              "type": "string",
+              "enum": [
+                "valid",
+                "invalid",
+                "catch_all",
+                "role",
+                "unknown"
+              ]
+            },
+            "emailVerifiedAt": {
+              "type": "string"
+            },
+            "doNotContact": {
+              "type": "boolean"
+            },
+            "doNotEmail": {
+              "type": "boolean"
+            },
+            "doNotCall": {
+              "type": "boolean"
+            },
+            "euResident": {
+              "type": "boolean"
+            },
+            "hasExplicitConsent": {
+              "type": "boolean"
+            },
+            "allowCatchAll": {
+              "type": "boolean"
+            },
+            "allowRole": {
+              "type": "boolean"
+            },
+            "allowUnverified": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "channel"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdCustomersIdSignals",
+    "description": "Create customer signal (POST /workspaces/{organizationId}/customers/{id}/signals) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: type, source, evidenceUrl*, strength, summary, observedAt, html (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers/{id}/signals",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "minLength": 1
+            },
+            "source": {
+              "type": "string",
+              "minLength": 1,
+              "default": "agent"
+            },
+            "evidenceUrl": {
+              "type": "string",
+              "format": "uri"
+            },
+            "strength": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100,
+              "default": 80
+            },
+            "summary": {
+              "type": "string"
+            },
+            "observedAt": {
+              "type": "string"
+            },
+            "html": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "evidenceUrl"
           ]
         }
       },
@@ -13350,6 +12596,171 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "required": [
             "rows"
           ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdCustomersMorningbrief",
+    "description": "Create customer morning brief (POST /workspaces/{organizationId}/customers/morning-brief) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: ownerId, limit.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers/morning-brief",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "ownerId": {
+              "type": "string"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdCustomersPartnerresiduals",
+    "description": "Create customer partner residual (POST /workspaces/{organizationId}/customers/partner-residuals) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: merchants* (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers/partner-residuals",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "merchants": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "customerId": {
+                    "type": "string"
+                  },
+                  "merchantName": {
+                    "type": "string"
+                  },
+                  "partnerId": {
+                    "type": "string"
+                  },
+                  "partnerName": {
+                    "type": "string"
+                  },
+                  "monthlyCardVolumeCents": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "monthlyAchCount": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "netCardMarginBps": {
+                    "type": "number"
+                  },
+                  "netAchMarginCentsPerTx": {
+                    "type": "number"
+                  },
+                  "partnerRevSharePct": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 80
+                  }
+                },
+                "required": [
+                  "customerId",
+                  "merchantName",
+                  "partnerId",
+                  "partnerName",
+                  "monthlyCardVolumeCents",
+                  "monthlyAchCount"
+                ]
+              }
+            }
+          },
+          "required": [
+            "merchants"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdCustomersPullleads",
+    "description": "Create customer pull lead (POST /workspaces/{organizationId}/customers/pull-leads) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: preset, borough, limit, offset, ownerId, enrichWebsites, dispatchDetectiveBatch.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers/pull-leads",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "preset": {
+              "type": "string",
+              "enum": [
+                "nyc_dob_contractors_and_trades",
+                "nyc_bic_commercial_haulers",
+                "nyc_dob_permit_issuances",
+                "nyc_home_improvement_contractors",
+                "nyc_auto_and_garages",
+                "nyc_b2b_and_specialty_dealers",
+                "nyc_bookkeepers_and_cpas",
+                "nyc_vc_and_accelerators",
+                "nyc_tech_and_software_startups",
+                "us_nppes_medical_and_dental",
+                "us_sec_form_d_tech_startups"
+              ],
+              "default": "nyc_dob_contractors_and_trades"
+            },
+            "borough": {
+              "type": "string"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 15
+            },
+            "offset": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "ownerId": {
+              "type": "string"
+            },
+            "enrichWebsites": {
+              "type": "boolean",
+              "default": true
+            },
+            "dispatchDetectiveBatch": {
+              "type": "boolean",
+              "default": false
+            }
+          }
         }
       },
       "required": [
@@ -13519,10 +12930,28 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "startDate": {
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              ]
             },
             "endDate": {
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              ]
             }
           },
           "required": [
@@ -13787,6 +13216,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdDedupe",
+    "description": "Create dedupe — Merge duplicate labels (per name+kind) and states (per name) onto the oldest row and re-point every reference. Idempotent — a second run merges nothing. (POST /workspaces/{organizationId}/dedupe) Path params (top-level, required): organizationId.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/dedupe",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdDocuments",
     "description": "Create document (POST /workspaces/{organizationId}/documents) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: title*, icon, content, contentFormat, slug, projectId, issueId, initiativeId, parentDocumentId, spaceId, isTemplate (* = required).",
     "method": "POST",
@@ -14032,6 +13478,53 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdDocumentspacesIdPermissions",
+    "description": "Create document space permission (POST /workspaces/{organizationId}/document-spaces/{id}/permissions) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: actorId*, actorType, level (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/document-spaces/{id}/permissions",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "actorId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "actorType": {
+              "type": "string",
+              "enum": [
+                "user",
+                "team"
+              ]
+            },
+            "level": {
+              "type": "string",
+              "enum": [
+                "view",
+                "edit"
+              ]
+            }
+          },
+          "required": [
+            "actorId"
+          ]
+        }
+      },
+      "required": [
+        "id",
         "organizationId"
       ]
     }
@@ -14937,10 +14430,28 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "startDate": {
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              ]
             },
             "targetDate": {
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              ]
             }
           },
           "required": [
@@ -15392,7 +14903,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIssuesBatch",
-    "description": "Create issue batch (POST /workspaces/{organizationId}/issues/batch) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: ids*, patch* (* = required).",
+    "description": "Apply one patch to up to 100 existing issues (updates, not creates) (POST /workspaces/{organizationId}/issues/batch) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: ids*, patch* (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/issues/batch",
     "inputSchema": {
@@ -16342,6 +15853,122 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdMemoryBatch",
+    "description": "Create memory batch (POST /workspaces/{organizationId}/memory/batch) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: memories, documentIds, sourceAgentSlug.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/memory/batch",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "memories": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "entityType": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "entityId": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "kind": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "fact": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "validUntil": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "sourceAgentSlug": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "sourceSessionId": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "entityType",
+                  "entityId",
+                  "kind",
+                  "fact"
+                ]
+              }
+            },
+            "documentIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "sourceAgentSlug": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdMemoryExtract",
+    "description": "Create memory extract (POST /workspaces/{organizationId}/memory/extract) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: sessionId, issueId, documentId, text, entityType, entityId, sourceAgentSlug.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/memory/extract",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string"
+            },
+            "issueId": {
+              "type": "string"
+            },
+            "documentId": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "entityType": {
+              "type": "string"
+            },
+            "entityId": {
+              "type": "string"
+            },
+            "sourceAgentSlug": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdNotificationsMarkallread",
     "description": "Mark all notifications as read (POST /workspaces/{organizationId}/notifications/mark-all-read) Path params (top-level, required): organizationId.",
     "method": "POST",
@@ -16478,10 +16105,28 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "string"
             },
             "startDate": {
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              ]
             },
             "endDate": {
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              ]
             }
           },
           "required": [
@@ -17050,8 +16695,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             },
             "expiresInDays": {
               "type": "integer",
-              "minimum": 0,
-              "exclusiveMinimum": true,
+              "exclusiveMinimum": 0,
               "maximum": 365
             }
           }
@@ -17064,7 +16708,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSearch",
-    "description": "Create search (POST /workspaces/{organizationId}/search) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: query*, teamIds, limit (* = required).",
+    "description": "Search issues, documents, and memory (POST /workspaces/{organizationId}/search) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: query*, teamIds, limit (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/search",
     "inputSchema": {
@@ -17441,8 +17085,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "maxSessions": {
               "type": "integer",
               "nullable": true,
-              "minimum": 0,
-              "exclusiveMinimum": true
+              "exclusiveMinimum": 0
             },
             "requireChallenge": {
               "type": "boolean"
@@ -17998,6 +17641,241 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "name",
             "conditions",
             "action"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSupportFeedback",
+    "description": "Create support feedback (POST /workspaces/{organizationId}/support/feedback) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: kind*, title*, description*, url, userAgent, viewport, deviceInfo, consoleErrors, consoleLogs, networkRequests, userEvents, errors, screenshotDataUrl, recordingDataUrl (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/support/feedback",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "bug",
+                "feature",
+                "other"
+              ]
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 8000
+            },
+            "url": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "userAgent": {
+              "type": "string",
+              "maxLength": 500
+            },
+            "viewport": {
+              "type": "object",
+              "properties": {
+                "width": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "height": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "width",
+                "height"
+              ]
+            },
+            "deviceInfo": {
+              "type": "object",
+              "additionalProperties": {
+                "nullable": true
+              }
+            },
+            "consoleErrors": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "level": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20
+                  },
+                  "message": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  "timestamp": {
+                    "type": "string",
+                    "maxLength": 60
+                  }
+                },
+                "required": [
+                  "level",
+                  "message"
+                ]
+              },
+              "maxItems": 100
+            },
+            "consoleLogs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "level": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20
+                  },
+                  "message": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  "timestamp": {
+                    "type": "string",
+                    "maxLength": 60
+                  }
+                },
+                "required": [
+                  "level",
+                  "message"
+                ]
+              },
+              "maxItems": 500
+            },
+            "networkRequests": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "method": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 16
+                  },
+                  "url": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2048
+                  },
+                  "status": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 999
+                  },
+                  "duration": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 3600000
+                  },
+                  "timestamp": {
+                    "type": "string",
+                    "maxLength": 60
+                  }
+                },
+                "required": [
+                  "method",
+                  "url"
+                ]
+              },
+              "maxItems": 400
+            },
+            "userEvents": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40
+                  },
+                  "target": {
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "timestamp": {
+                    "type": "string",
+                    "maxLength": 60
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "nullable": true
+                    }
+                  }
+                },
+                "required": [
+                  "type"
+                ]
+              },
+              "maxItems": 100
+            },
+            "errors": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "message": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  "stack": {
+                    "type": "string",
+                    "maxLength": 8000
+                  },
+                  "source": {
+                    "type": "string",
+                    "maxLength": 60
+                  },
+                  "timestamp": {
+                    "type": "string",
+                    "maxLength": 60
+                  }
+                },
+                "required": [
+                  "message"
+                ]
+              },
+              "maxItems": 100
+            },
+            "screenshotDataUrl": {
+              "type": "string",
+              "maxLength": 10000000
+            },
+            "recordingDataUrl": {
+              "type": "string",
+              "maxLength": 40000000
+            }
+          },
+          "required": [
+            "kind",
+            "title",
+            "description"
           ]
         }
       },
@@ -19777,6 +19655,34 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdTokensPrune",
+    "description": "Create token prune (POST /workspaces/{organizationId}/tokens/prune) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: maxAgeHours.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/tokens/prune",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "maxAgeHours": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 8760,
+              "default": 24
+            }
+          }
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdTriageRules",
     "description": "Create triage rule — Ordered auto-delegate rules evaluated on inbound records (lead, intake_item, customer, deal, issue, support_ticket). Rules run in sortOrder then createdAt order; the first match wins and the evaluation is logged to /triage/evaluations. (POST /workspaces/{organizationId}/triage/rules) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, recordType*, isActive, sortOrder, conditions*, action* (* = required).",
     "method": "POST",
@@ -20549,7 +20455,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "putWorkspacesOrganizationIdMeViewpreferences",
-    "description": "Update me view preferences (PUT /workspaces/{organizationId}/me/view-preferences) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: defaultViewId, hiddenSurfaces, favorites.",
+    "description": "Update me view preferences (PUT /workspaces/{organizationId}/me/view-preferences) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: defaultViewId, hiddenSurfaces, favorites, display.",
     "method": "PUT",
     "path": "/workspaces/{organizationId}/me/view-preferences",
     "inputSchema": {
@@ -20605,6 +20511,34 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                   "title",
                   "addedAt"
                 ]
+              }
+            },
+            "display": {
+              "type": "object",
+              "nullable": true,
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "sheetColors": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  },
+                  "density": {
+                    "type": "string",
+                    "enum": [
+                      "comfortable",
+                      "compact"
+                    ]
+                  },
+                  "hiddenColumns": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
               }
             }
           }
@@ -20935,357 +20869,6 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       "required": [
         "organizationId"
       ]
-    }
-  },
-  {
-    "name": "removeUser",
-    "description": "Create api auth admin remove user (POST /api/auth/admin/remove-user) Request body goes in the \"body\" object.",
-    "method": "POST",
-    "path": "/api/auth/admin/remove-user",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          },
-          "description": "Better Auth request body"
-        }
-      }
-    }
-  },
-  {
-    "name": "requestPasswordReset",
-    "description": "Create api auth request password reset (POST /api/auth/request-password-reset) Request body goes in the \"body\" object.",
-    "method": "POST",
-    "path": "/api/auth/request-password-reset",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          },
-          "description": "Better Auth request body"
-        }
-      }
-    }
-  },
-  {
-    "name": "requestPasswordResetCallback",
-    "description": "Get api auth reset password (GET /api/auth/reset-password/{token}) Path params (top-level, required): token.",
-    "method": "GET",
-    "path": "/api/auth/reset-password/{token}",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "token": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "token"
-      ]
-    }
-  },
-  {
-    "name": "resetPassword",
-    "description": "Create api auth reset password (POST /api/auth/reset-password) Request body goes in the \"body\" object.",
-    "method": "POST",
-    "path": "/api/auth/reset-password",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          },
-          "description": "Better Auth request body"
-        }
-      }
-    }
-  },
-  {
-    "name": "revokeSession",
-    "description": "Revoke session (POST /api/auth/revoke-session) Request body goes in the \"body\" object.",
-    "method": "POST",
-    "path": "/api/auth/revoke-session",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          },
-          "description": "Better Auth request body"
-        }
-      }
-    }
-  },
-  {
-    "name": "revokeSessions",
-    "description": "Revoke all sessions (POST /api/auth/revoke-sessions) Request body goes in the \"body\" object.",
-    "method": "POST",
-    "path": "/api/auth/revoke-sessions",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          },
-          "description": "Better Auth request body"
-        }
-      }
-    }
-  },
-  {
-    "name": "revokeUserSession",
-    "description": "Revoke user session (POST /api/auth/admin/revoke-user-session) Request body goes in the \"body\" object.",
-    "method": "POST",
-    "path": "/api/auth/admin/revoke-user-session",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          },
-          "description": "Better Auth request body"
-        }
-      }
-    }
-  },
-  {
-    "name": "revokeUserSessions",
-    "description": "Revoke all user sessions (POST /api/auth/admin/revoke-user-sessions) Request body goes in the \"body\" object.",
-    "method": "POST",
-    "path": "/api/auth/admin/revoke-user-sessions",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          },
-          "description": "Better Auth request body"
-        }
-      }
-    }
-  },
-  {
-    "name": "sendVerificationEmail",
-    "description": "Create api auth send verification email (POST /api/auth/send-verification-email) Request body goes in the \"body\" object.",
-    "method": "POST",
-    "path": "/api/auth/send-verification-email",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          },
-          "description": "Better Auth request body"
-        }
-      }
-    }
-  },
-  {
-    "name": "setRole",
-    "description": "Create api auth admin set role (POST /api/auth/admin/set-role) Request body goes in the \"body\" object.",
-    "method": "POST",
-    "path": "/api/auth/admin/set-role",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          },
-          "description": "Better Auth request body"
-        }
-      }
-    }
-  },
-  {
-    "name": "setUserPassword",
-    "description": "Create api auth admin set user password (POST /api/auth/admin/set-user-password) Request body goes in the \"body\" object.",
-    "method": "POST",
-    "path": "/api/auth/admin/set-user-password",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          },
-          "description": "Better Auth request body"
-        }
-      }
-    }
-  },
-  {
-    "name": "signInEmail",
-    "description": "Create api auth sign in email (POST /api/auth/sign-in/email) Request body goes in the \"body\" object.",
-    "method": "POST",
-    "path": "/api/auth/sign-in/email",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          },
-          "description": "Better Auth request body"
-        }
-      }
-    }
-  },
-  {
-    "name": "signOut",
-    "description": "Create api auth sign out (POST /api/auth/sign-out) Request body goes in the \"body\" object.",
-    "method": "POST",
-    "path": "/api/auth/sign-out",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          },
-          "description": "Better Auth request body"
-        }
-      }
-    }
-  },
-  {
-    "name": "signUpEmail",
-    "description": "Create api auth sign up email (POST /api/auth/sign-up/email) Request body goes in the \"body\" object.",
-    "method": "POST",
-    "path": "/api/auth/sign-up/email",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          },
-          "description": "Better Auth request body"
-        }
-      }
-    }
-  },
-  {
-    "name": "stopImpersonating",
-    "description": "Create api auth admin stop impersonating (POST /api/auth/admin/stop-impersonating) Request body goes in the \"body\" object.",
-    "method": "POST",
-    "path": "/api/auth/admin/stop-impersonating",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          },
-          "description": "Better Auth request body"
-        }
-      }
-    }
-  },
-  {
-    "name": "unbanUser",
-    "description": "Create api auth admin unban user (POST /api/auth/admin/unban-user) Request body goes in the \"body\" object.",
-    "method": "POST",
-    "path": "/api/auth/admin/unban-user",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          },
-          "description": "Better Auth request body"
-        }
-      }
-    }
-  },
-  {
-    "name": "updateUser",
-    "description": "Create api auth update user (POST /api/auth/update-user) Request body goes in the \"body\" object.",
-    "method": "POST",
-    "path": "/api/auth/update-user",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          },
-          "description": "Better Auth request body"
-        }
-      }
-    }
-  },
-  {
-    "name": "userHasPermission",
-    "description": "Create api auth admin has permission (POST /api/auth/admin/has-permission) Request body goes in the \"body\" object.",
-    "method": "POST",
-    "path": "/api/auth/admin/has-permission",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          },
-          "description": "Better Auth request body"
-        }
-      }
-    }
-  },
-  {
-    "name": "verifyEmail",
-    "description": "List api auth verify email (GET /api/auth/verify-email)",
-    "method": "GET",
-    "path": "/api/auth/verify-email",
-    "inputSchema": {
-      "type": "object",
-      "properties": {}
-    }
-  },
-  {
-    "name": "verifyPassword",
-    "description": "Create api auth verify password (POST /api/auth/verify-password) Request body goes in the \"body\" object.",
-    "method": "POST",
-    "path": "/api/auth/verify-password",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "body": {
-          "type": "object",
-          "additionalProperties": {
-            "nullable": true
-          },
-          "description": "Better Auth request body"
-        }
-      }
     }
   }
 ] as const;

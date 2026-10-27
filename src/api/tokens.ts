@@ -16,8 +16,10 @@ import { createAuth } from "../platform/auth.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { canAccess, parsePermissionSet } from "../platform/permissions.js";
+import { captureProductEvent } from "../platform/posthog.js";
 import { rls } from "../platform/rls.js";
 import { emitWorkspaceAudit } from "./audit-emit.js";
+import { getExecutionCtx } from "./execution-ctx.js";
 
 const tokenSchema = z.object({
   id: z.string(),
@@ -67,7 +69,10 @@ const listTokensRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/tokens",
   tags: ["tokens"],
-  middleware: [rls("admin")],
+  // Members self-serve their own keys (e.g. `pile auth login`, MCP setup);
+  // the handler scopes the list to the caller's referenceId. Admins see
+  // every key including agent installs.
+  middleware: [rls("read")],
   request: {
     params: z.object({ organizationId: z.string() }),
   },
@@ -89,7 +94,7 @@ const createTokenRoute = createRoute({
   tags: ["tokens"],
   // Members self-serve keys (e.g. `pile auth login`); the handler clamps the
   // requested permissions to the caller's own set so nobody mints past their
-  // role. Listing and deleting stay admin-only.
+  // role.
   middleware: [rls("write")],
   request: {
     params: z.object({ organizationId: z.string() }),
@@ -113,12 +118,48 @@ const deleteTokenRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/tokens/{id}",
   tags: ["tokens"],
-  middleware: [rls("admin")],
+  // Admins revoke any key; members revoke only keys they own (the handler
+  // 404s on rows with a different referenceId so existence never leaks).
+  middleware: [rls("write")],
   request: {
     params: z.object({ organizationId: z.string(), id: z.string() }),
   },
   responses: {
     204: { description: "Token deleted" },
+  },
+});
+
+// PILE-623 — manual janitor: prune stale ephemeral `agent-*` lane keys on
+// demand. `maxAgeHours: 0` drops every lane key regardless of age. Registered
+// before `/tokens/{id}` so the literal path wins route resolution.
+const pruneTokensRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/tokens/prune",
+  tags: ["tokens"],
+  middleware: [rls("admin")],
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z
+            .object({
+              maxAgeHours: z.number().min(0).max(8760).default(24),
+            })
+            .optional(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Stale ephemeral agent keys pruned",
+      content: {
+        "application/json": {
+          schema: z.object({ pruned: z.number() }),
+        },
+      },
+    },
   },
 });
 
@@ -146,14 +187,20 @@ function parseApiKeyMetadata(metadata: string | null | undefined): {
 export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listTokensRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
+    const identity = c.var.workspaceIdentity;
     const db = createD1(c.env.D1);
     const rows = await db.select().from(apikey).all();
+    const isAdmin = canAccess(identity.permissions, "admin");
     const filtered = rows
       .map((row) => ({
         row,
         parsed: parseApiKeyMetadata(row.metadata),
       }))
-      .filter(({ parsed }) => parsed?.organizationId === organizationId);
+      .filter(
+        ({ row, parsed }) =>
+          parsed?.organizationId === organizationId &&
+          (isAdmin || row.referenceId === identity.id)
+      );
     // Agent keys' team installs live on teamMember keyed by the apikey's
     // referenceId (the agent's synthetic user).
     // Lane sessions mint one key per run; all share the dispatching
@@ -337,6 +384,17 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
       }
     );
 
+    captureProductEvent(
+      "workspace.token_minted",
+      {
+        organizationId,
+        actorId: identity.id,
+        name: parsed.name ?? input.name,
+        actorType,
+      },
+      getExecutionCtx(c),
+      { env: c.env }
+    );
     return c.json(
       {
         id: parsed.id,
@@ -357,20 +415,52 @@ export function registerTokenRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(deleteTokenRoute, async (c) => {
     const { organizationId, id } = c.req.valid("param");
+    const identity = c.var.workspaceIdentity;
     const db = createD1(c.env.D1);
     const row = await db.select().from(apikey).where(eq(apikey.id, id)).get();
     const parsed = parseApiKeyMetadata(row?.metadata);
-    if (!row || parsed?.organizationId !== organizationId) {
+    const ownsKey =
+      canAccess(identity.permissions, "admin") ||
+      (row !== undefined && row.referenceId === identity.id);
+    if (!row || parsed?.organizationId !== organizationId || !ownsKey) {
       throw new VortexError({
         code: "NOT_FOUND",
         status: 404,
         message: "Token not found",
       });
     }
+    // PILE-623 — agent installs record team access on team_member keyed by
+    // the resolved agent user (the key's referenceId); cascade on both ids
+    // so deleting a token never leaves orphaned team_member rows.
+    await db
+      .delete(teamMember)
+      .where(inArray(teamMember.userId, [id, row.referenceId]));
     await db.delete(apikey).where(eq(apikey.id, id));
     await emitWorkspaceAudit(c, organizationId, "token.deleted", "token", id, {
       name: { from: row.name ?? null, to: null },
     });
     return c.body(null, 204);
+  });
+
+  app.openapi(pruneTokensRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const db = createD1(c.env.D1);
+    const { pruneStaleEphemeralAgentKeys } = await import("../agents/sweep.js");
+    const pruned = await pruneStaleEphemeralAgentKeys(db, Date.now(), {
+      organizationId,
+      maxAgeMs: (input?.maxAgeHours ?? 24) * 3600_000,
+    });
+    await emitWorkspaceAudit(
+      c,
+      organizationId,
+      "token.pruned",
+      "token",
+      organizationId,
+      {
+        count: { from: null, to: pruned },
+      }
+    );
+    return c.json({ pruned });
   });
 }

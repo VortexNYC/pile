@@ -20,14 +20,23 @@ import {
 import type { WorkerEnv } from "../platform/middleware.js";
 import type { AgentSession, Issue } from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
+import {
+  evaluateReviewConvergence,
+  parseReviewSummary,
+  rollReviewSummary,
+  type ReviewConvergenceSummary,
+  type TrailScores,
+} from "../workspace/review-summary.js";
 import { loadProviderConfig } from "./credentials.js";
 import { resolveAgentEnv } from "./daytona.js";
-import { dispatchAgent } from "./index.js";
+import { dispatchAgent, getAgentProvider } from "./index.js";
 import { nudgeLane, resolveLaneForIssue } from "./nudge.js";
 
 export const REVIEW_CHECK_NAME = "pile-review";
 export const REVIEW_PURPOSE = "review";
 export const DEFAULT_REVIEW_AGENT = "devin-cli";
+
+export type ReviewRiskTier = "low" | "medium" | "high";
 
 // The prompt travels as a base64 env var into the sandbox; a single env
 // string is capped at 128 KiB on Linux, so the inlined diff stays well under.
@@ -70,6 +79,11 @@ export interface ParsedReview {
   findings: ReviewFinding[];
   /** The lane's report carried no machine-readable verdict block. */
   unstructured: boolean;
+  /** PILE-642 — stable per-finding ids so a follow-up round can tell "same
+   *  finding still open" from "newly introduced finding". */
+  fingerprints: string[];
+  /** PILE-642 — multi-axis health read for the review HUD. */
+  scores: TrailScores;
 }
 
 export interface ReviewTarget {
@@ -91,6 +105,7 @@ export type ReviewRequestOutcome =
   | "deduped"
   | "disabled"
   | "skipped_generated"
+  | "round_capped"
   | "dispatched"
   | "failed";
 
@@ -136,6 +151,7 @@ const requestedPayloadSchema = z.object({
   pullNumber: z.number(),
   headSha: z.string(),
   checkRunId: z.number().nullable().optional(),
+  files: z.array(z.string()).optional(),
 });
 
 const publishedPayloadSchema = z.object({
@@ -143,6 +159,92 @@ const publishedPayloadSchema = z.object({
 });
 
 type RequestedPayload = z.infer<typeof requestedPayloadSchema>;
+
+// PILE-642 — a finding's identity across review rounds: file + severity +
+// normalized title. Rounds that raise the same fingerprint are the same
+// unresolved problem; a new fingerprint under request-changes is regression.
+export function computeFindingFingerprint(
+  f: Pick<ReviewFinding, "severity" | "title" | "file">
+): string {
+  return `${f.file ?? "global"}:${f.severity}:${f.title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 48)}`;
+}
+
+const clampScore = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
+
+const SECURITY_FINDING_RE =
+  /\b(sec|auth|token|secret|xss|sql|ssrf|csrf|permission|rls|leak|key|inject)\b/i;
+const SLOP_FINDING_RE =
+  /\b(unused|dead|comment|todo|console|any|cast|duplicate|redundant|slop)\b/i;
+
+/** Deduct per severity inside each axis — security findings hit the security
+ *  score, slop hits slop, everything else (contracts, bugs, regressions,
+ *  migrations, tests) hits invariants. `humanGate` trips on any breaking
+ *  finding or a security score under 70. */
+export function computeReviewTrailScores(
+  findings: ReadonlyArray<ReviewFinding>
+): TrailScores {
+  const deduct: Record<FindingSeverity, number> = {
+    breaking: 35,
+    must: 20,
+    minor: 5,
+  };
+  let security = 100;
+  let slop = 100;
+  let invariants = 100;
+  for (const f of findings) {
+    const text = `${f.title} ${f.detail ?? ""} ${f.file ?? ""}`;
+    const hit = deduct[f.severity];
+    if (SECURITY_FINDING_RE.test(text)) security -= hit;
+    else if (SLOP_FINDING_RE.test(text)) slop -= hit;
+    else invariants -= hit;
+  }
+  const scores = {
+    security: clampScore(security),
+    slop: clampScore(slop),
+    invariants: clampScore(invariants),
+    humanGate: false,
+  };
+  return {
+    ...scores,
+    humanGate:
+      findings.some((f) => f.severity === "breaking") || scores.security < 70,
+  };
+}
+
+/** Deterministically filter out hallucinated findings whose `file` is not in
+ *  the PR's reviewable changed files (Michael Thiessen / Pullfrog rule), and
+ *  recompute `verdict` from the surviving grounded findings. */
+export function filterDiffGroundedFindings(
+  review: ParsedReview,
+  changedFiles?: Iterable<string> | null
+): ParsedReview {
+  if (!changedFiles) return review;
+  const allowed = new Set(
+    [...changedFiles].map((f) => f.trim().replace(/^\.\//, ""))
+  );
+  if (allowed.size === 0) return review;
+  const grounded = review.findings.filter((f) => {
+    if (!f.file) return true;
+    const clean = f.file.trim().replace(/^\.\//, "");
+    return allowed.has(clean);
+  });
+  if (grounded.length === review.findings.length) return review;
+  return {
+    ...review,
+    findings: grounded,
+    verdict: review.unstructured
+      ? review.verdict
+      : verdictFromFindings(grounded),
+    // Recomputed — a dropped hallucinated finding must not keep its
+    // fingerprint or its score hit alive.
+    fingerprints: grounded.map(computeFindingFingerprint),
+    scores: computeReviewTrailScores(grounded),
+  };
+}
 
 function normalizeVerdict(raw: string): ReviewVerdict | null {
   const v = raw
@@ -217,6 +319,8 @@ export function parseReviewVerdict(report: string | null): ParsedReview {
       summary: (block.data.summary ?? "").trim(),
       findings,
       unstructured: false,
+      fingerprints: findings.map(computeFindingFingerprint),
+      scores: computeReviewTrailScores(findings),
     };
   }
   const tagged =
@@ -227,6 +331,8 @@ export function parseReviewVerdict(report: string | null): ParsedReview {
     summary: text || "The review lane produced no report.",
     findings: [],
     unstructured: true,
+    fingerprints: [],
+    scores: computeReviewTrailScores([]),
   };
 }
 
@@ -263,7 +369,8 @@ export function reviewCommentMarker(headSha: string): string {
  *  address → ℹ️ minor → ✅ clean. */
 export function renderReviewBody(
   review: ParsedReview,
-  headSha: string
+  headSha: string,
+  convergence?: ReviewConvergenceSummary
 ): string {
   const by = (s: FindingSeverity) =>
     review.findings.filter((f) => f.severity === s);
@@ -272,6 +379,12 @@ export function renderReviewBody(
     `### Pile review: ${VERDICT_HEADLINE[review.verdict]}`,
     "",
     `Reviewed \`${headSha.slice(0, 12)}\`.`,
+    `**Trail HUD:** Security \`${review.scores.security}/100\` · Invariants \`${review.scores.invariants}/100\` · Slop \`${review.scores.slop}/100\` · Human gate \`${review.scores.humanGate ? "required" : "clear"}\``,
+    ...(convergence && convergence.rounds >= 2
+      ? [
+          `**Trail convergence (round ${convergence.rounds}):** ${convergence.trajectory}`,
+        ]
+      : []),
     "",
   ];
   if (review.summary) lines.push(review.summary, "");
@@ -320,13 +433,139 @@ export interface PrFile {
   previous_filename?: string;
 }
 
-/** Changed files minus the repo's declared generated artifacts. */
+const LOCKFILE_NAMES = new Set([
+  "pnpm-lock.yaml",
+  "package-lock.json",
+  "yarn.lock",
+  "Cargo.lock",
+  "go.sum",
+]);
+
+export function isDocOrLockfile(filename: string): boolean {
+  const lower = filename.toLowerCase();
+  const base = lower.split("/").pop() ?? lower;
+  if (LOCKFILE_NAMES.has(base) || LOCKFILE_NAMES.has(filename)) return true;
+  if (lower.endsWith(".md") || lower.endsWith(".mdx")) return true;
+  if (lower.startsWith("docs/")) return true;
+  return false;
+}
+
+const DEFAULT_HIGH_RISK_PATTERNS = [
+  /(?:^|\/)(?:auth|security|crypto|payment|payments|billing|payout|refund|webhook|secret|secrets|token|tokens|permissions|migrations|schema|access|rls)(?:\/|\.|-|_|$)/i,
+];
+
+const STATIC_SECURITY_RULES: Array<{
+  id: string;
+  title: string;
+  detail: string;
+  re: RegExp;
+}> = [
+  {
+    id: "private-key",
+    title: "Private key material in diff",
+    detail: "Remove private key material from source control immediately.",
+    re: /-----BEGIN (?:RSA |EC |OPENSSH |)PRIVATE KEY-----/,
+  },
+  {
+    id: "live-api-key",
+    title: "Live credential token in diff",
+    detail: "Live provider key detected (`sk_live_`, `rk_live_`, or `AKIA`).",
+    re: /\b(?:sk_live_[0-9a-zA-Z]{16,}|rk_live_[0-9a-zA-Z]{16,}|AKIA[0-9A-Z]{16})\b/,
+  },
+  {
+    id: "javascript-url-sink",
+    title: "Unvalidated javascript: URL scheme sink",
+    detail: "Ensure URLs passed to navigation sinks enforce https: allowlists.",
+    re: /location\.(?:href|replace|assign)\s*\([^)]*javascript:/i,
+  },
+];
+
+/** PILE-455 Layer 3 — deterministic static security scan over added diff lines. */
+export function runStaticSecurityPass(files: PrFile[]): ReviewFinding[] {
+  const findings: ReviewFinding[] = [];
+  for (const file of files) {
+    if (!file.patch || file.filename.includes(".test.")) continue;
+    const lines = file.patch.split("\n");
+    for (let idx = 0; idx < lines.length; idx++) {
+      const line = lines[idx] ?? "";
+      if (!line.startsWith("+") || line.startsWith("+++")) continue;
+      for (const rule of STATIC_SECURITY_RULES) {
+        if (rule.re.test(line)) {
+          findings.push({
+            severity: "breaking",
+            title: rule.title,
+            file: file.filename,
+            line: idx + 1,
+            detail: rule.detail,
+          });
+        }
+      }
+    }
+  }
+  return findings;
+}
+
+/** PILE-455 Layer 6 — classify PR risk tier (`low` | `medium` | `high`). */
+export function classifyReviewRiskTier(
+  files: PrFile[],
+  config?: PileRepoConfig | null
+): ReviewRiskTier {
+  if (files.length === 0) return "low";
+  if (runStaticSecurityPass(files).length > 0) return "high";
+  const customHigh = config?.review?.highRiskPaths ?? [];
+  for (const f of files) {
+    if (
+      customHigh.some(
+        (pattern) =>
+          f.filename === pattern ||
+          f.filename.startsWith(pattern.endsWith("/") ? pattern : `${pattern}/`)
+      )
+    ) {
+      return "high";
+    }
+    if (DEFAULT_HIGH_RISK_PATTERNS.some((re) => re.test(f.filename))) {
+      return "high";
+    }
+  }
+  const allLowFiles = files.every(
+    (f) =>
+      isDocOrLockfile(f.filename) ||
+      f.filename.endsWith(".test.ts") ||
+      f.filename.endsWith(".spec.ts")
+  );
+  if (allLowFiles) return "low";
+  const totalLines = files.reduce(
+    (sum, f) => sum + (f.additions ?? 0) + (f.deletions ?? 0),
+    0
+  );
+  if (files.length <= 3 && totalLines > 0 && totalLines <= 60) return "low";
+  return "medium";
+}
+
+/** PILE-455 Layer 10 — cost-aware model selection by risk tier. */
+export function resolveReviewModel(
+  config: PileRepoConfig | null | undefined,
+  tier: ReviewRiskTier
+): string | undefined {
+  return config?.review?.tierModels?.[tier] ?? config?.review?.model;
+}
+
+/** Changed files minus the repo's declared generated artifacts (and docs/lockfiles
+ *  when `skipDocsAndLockfiles` is enabled). */
 export function reviewableFiles(
   files: PrFile[],
   config: PileRepoConfig | null
 ): PrFile[] {
   const generated = new Set(config?.conflict?.generated ?? []);
-  return files.filter((f) => !generated.has(f.filename));
+  const nonGenerated = files.filter((f) => !generated.has(f.filename));
+  if (
+    config?.review?.skipDocsAndLockfiles &&
+    nonGenerated.length > 0 &&
+    nonGenerated.every((f) => isDocOrLockfile(f.filename))
+  ) {
+    return [];
+  }
+  return nonGenerated;
 }
 
 /** Inline unified diff for the prompt, bounded by DIFF_CHAR_BUDGET. Files
@@ -367,7 +606,8 @@ export function buildReviewDiff(
 export function buildReviewInstructions(
   target: ReviewTarget,
   diff: string,
-  skippedGenerated: string[]
+  skippedGenerated: string[],
+  repoMemoryFacts?: ReadonlyArray<{ kind: string; fact: string }>
 ): string {
   const body = (target.body ?? "").trim();
   return [
@@ -388,6 +628,13 @@ export function buildReviewInstructions(
       ? [
           "",
           `Generated artifacts excluded from the diff (regenerated from source, do not review): ${skippedGenerated.join(", ")}`,
+        ]
+      : []),
+    ...(repoMemoryFacts && repoMemoryFacts.length > 0
+      ? [
+          "",
+          "## Repository Invariants & Past Review Lessons (Enforce on this diff)",
+          ...repoMemoryFacts.map((f) => `- [${f.kind}] ${f.fact}`),
         ]
       : []),
     "",
@@ -595,38 +842,126 @@ function parsePayload(payload: string | null): unknown {
 
 const REVIEW_TERMINAL_STATUSES = new Set(["completed", "failed", "canceled"]);
 
-/** Review sessions Pile already started for this headSha. `live` = one is
- *  still non-terminal (it owns the sha's check run — dedupe outright);
- *  `attempts` counts every lane that recorded `review.requested`, so the
- *  stale-run takeover stays bounded. */
+/** Review sessions Pile already started for this headSha, plus completed
+ *  published rounds across the whole PR (`prUrl`) for PILE-455's round cap. */
 async function reviewSessionsFor(
   stub: WorkspaceStub,
   issueId: string,
   target: Pick<ReviewTarget, "prUrl" | "headSha">
-): Promise<{ live: boolean; attempts: number }> {
+): Promise<{ live: boolean; attempts: number; completedRoundsForPr: number }> {
   const sessions = await stub.listAgentSessions({ issueId, limit: 50 });
   let live = false;
   let attempts = 0;
+  let completedRoundsForPr = 0;
   for (const s of sessions) {
     if (s.purpose !== REVIEW_PURPOSE) continue;
     const events = await stub.listAgentSessionEvents(s.id, {
       limit: 20,
       order: "asc",
     });
+    let matchesPr = false;
     const hit = events.some((e) => {
       if (e.type !== "review.requested") return false;
       const p = requestedPayloadSchema.safeParse(parsePayload(e.payload));
+      if (p.success && p.data.prUrl === target.prUrl) {
+        matchesPr = true;
+      }
       return (
         p.success &&
         p.data.headSha === target.headSha &&
         p.data.prUrl === target.prUrl
       );
     });
+    if (
+      matchesPr &&
+      s.status === "completed" &&
+      events.some((e) => e.type === "review.published")
+    ) {
+      completedRoundsForPr += 1;
+    }
     if (!hit) continue;
     attempts += 1;
     if (!REVIEW_TERMINAL_STATUSES.has(s.status)) live = true;
   }
-  return { live, attempts };
+  return { live, attempts, completedRoundsForPr };
+}
+
+/** VTX-621 — cancel live review sessions pinned to a different headSha on
+ *  the same PR. Every push mints a new sha, and per-sha dedupe means rapid
+ *  pushes stack parallel review lanes that all burn provider quota on diffs
+ *  already obsolete (the VOR-740 pileup). A review of a superseded head is
+ *  dead code — cancel the lane and resolve its check run so the PR never
+ *  carries two pending pile-review runs at once. */
+async function supersedeStaleShaReviews(
+  env: WorkerEnv,
+  stub: WorkspaceStub,
+  issueId: string,
+  target: Pick<ReviewTarget, "prUrl" | "headSha" | "repoFull">,
+  ghFetch: typeof fetch,
+  token: string
+): Promise<void> {
+  const sessions = await stub
+    .listAgentSessions({ issueId, limit: 50 })
+    .catch(() => [] as AgentSession[]);
+  for (const s of sessions) {
+    if (s.purpose !== REVIEW_PURPOSE) continue;
+    if (REVIEW_TERMINAL_STATUSES.has(s.status)) continue;
+    const events = await stub
+      .listAgentSessionEvents(s.id, { limit: 20, order: "asc" })
+      .catch(() => []);
+    const req = events
+      .map((e) =>
+        e.type === "review.requested"
+          ? requestedPayloadSchema.safeParse(parsePayload(e.payload))
+          : null
+      )
+      .find(
+        (p) =>
+          p?.success &&
+          p.data.prUrl === target.prUrl &&
+          p.data.headSha !== target.headSha
+      );
+    if (!req?.success) continue;
+    if (typeof req.data.checkRunId === "number") {
+      await resolveReviewCheck(
+        ghFetch,
+        token,
+        target.repoFull,
+        req.data.checkRunId,
+        {
+          title: "Superseded by a newer head",
+          summary: `This run covered a superseded head; a fresh pile-review is running for \`${target.headSha.slice(0, 12)}\`.`,
+        }
+      );
+    }
+    try {
+      const provider = getAgentProvider(s.agentId, env);
+      await provider.cancel?.(s.providerSessionId ?? s.id);
+    } catch {
+      // Provider cancel is best-effort — the terminal write below is the
+      // authoritative record regardless.
+    }
+    // An intentional supersede, not a failure: no infraFailure, so it does
+    // not feed the provider-unhealthy streak or trip the auto-retry path
+    // (review lanes never retry through retryDeadLane anyway).
+    await stub
+      .applyAgentSessionResult(s.id, {
+        status: "canceled",
+        result: `Superseded — PR head moved to ${target.headSha.slice(0, 12)}`,
+        url: s.url ?? null,
+        prUrl: s.prUrl ?? null,
+        prState: s.prState ?? null,
+      })
+      .catch(() => {});
+    await stub
+      .addAgentSessionEvent({
+        sessionId: s.id,
+        type: "review.superseded",
+        message: `Superseded by head ${target.headSha.slice(0, 12)}`,
+        payload: { supersededSha: req.data.headSha, newSha: target.headSha },
+      })
+      .catch(() => {});
+  }
 }
 
 /** Start the review lane for a PR head, at most once per headSha. Opt-in per
@@ -660,6 +995,28 @@ export async function requestPrReview(
     if (!config?.review) return "disabled";
     const agentId = config.review.agent ?? DEFAULT_REVIEW_AGENT;
     if (config.agents && !config.agents.includes(agentId)) return "disabled";
+
+    // PILE-455 Layer 8 — review round cap: when `config.review.maxRounds` is
+    // configured and the PR has already completed `maxRounds` published review
+    // rounds on earlier heads, complete the new head's check run without
+    // spawning another review lane so PRs never ping-pong in a review loop.
+    if (
+      config.review.maxRounds != null &&
+      prior.completedRoundsForPr >= config.review.maxRounds
+    ) {
+      await gh(ghFetch, token, "POST", `/repos/${target.repoFull}/check-runs`, {
+        name: REVIEW_CHECK_NAME,
+        head_sha: target.headSha,
+        status: "completed",
+        conclusion: "success",
+        completed_at: new Date(now).toISOString(),
+        output: {
+          title: `Review round cap reached (${prior.completedRoundsForPr}/${config.review.maxRounds})`,
+          summary: `This PR already completed ${prior.completedRoundsForPr} review round(s); skipping re-review per \`.pile/config.json\` \`review.maxRounds\`.`,
+        },
+      }).catch(() => null);
+      return "round_capped";
+    }
 
     // The check run is the cross-path marker: it exists before the session
     // event does, and survives a lost Pile record. A fresh pending run
@@ -712,6 +1069,29 @@ export async function requestPrReview(
       });
     }
 
+    // VTX-621 — we've committed to dispatching for this sha: kill any live
+    // review lane still working an older head of the same PR. Ordering
+    // guard first: a delayed/redelivered webhook can carry an older sha —
+    // verify the target is still the PR head, or the supersede would
+    // cancel the NEWER review and dispatch stale work. A failed read
+    // skips the supersede rather than canceling blind.
+    const pull = (await gh(
+      ghFetch,
+      token,
+      "GET",
+      `/repos/${target.repoFull}/pulls/${target.pullNumber}`
+    ).catch(() => null)) as { head?: { sha?: string } } | null;
+    if (pull?.head?.sha && pull.head.sha !== target.headSha) return "deduped";
+    if (pull?.head?.sha === target.headSha)
+      await supersedeStaleShaReviews(
+        env,
+        stub,
+        issue.id,
+        target,
+        ghFetch,
+        token
+      );
+
     const files = await listPrFiles(ghFetch, token, target);
     const reviewable = reviewableFiles(files, config);
     if (reviewable.length === 0) {
@@ -759,10 +1139,51 @@ export async function requestPrReview(
     const skipped = files
       .filter((f) => !reviewable.includes(f))
       .map((f) => f.filename);
+    const riskTier = classifyReviewRiskTier(reviewable, config);
+    const selectedModel = resolveReviewModel(config, riskTier);
+    // PILE-641 — the review lane is repo-less on purpose (diff inlined), but
+    // that meant dispatchAgent's repo-memory recall never ran. Recall the
+    // repo's stored invariants + past review lessons directly, newest-10
+    // plus a contextual pass matched on the PR title + changed filenames.
+    let repoFacts: ReadonlyArray<{ kind: string; fact: string }> = [];
+    try {
+      const searchText = [target.title, ...reviewable.map((f) => f.filename)]
+        .filter(Boolean)
+        .join(" ")
+        .slice(0, 200);
+      const [recent, contextual] = await Promise.all([
+        stub.memoryRecall({
+          entityType: "repo",
+          entityId: target.repoFull,
+          limit: 10,
+        }),
+        searchText
+          ? stub.memoryRecall({
+              entityType: "repo",
+              entityId: target.repoFull,
+              search: searchText,
+              limit: 8,
+            })
+          : Promise.resolve([]),
+      ]);
+      const seen = new Set<string>();
+      repoFacts = [...(recent ?? []), ...(contextual ?? [])]
+        .filter((f) => {
+          if (f.kind === "outcome") return false; // raw lane tails, not lessons
+          if (seen.has(f.id)) return false;
+          seen.add(f.id);
+          return true;
+        })
+        .slice(0, 12);
+    } catch {
+      // Memory recall is best-effort — never block a review dispatch on it.
+      repoFacts = [];
+    }
     const instructions = buildReviewInstructions(
       target,
       buildReviewDiff(reviewable),
-      skipped
+      skipped,
+      repoFacts
     );
     const providerConfig = await loadProviderConfig(env, stub, agentId);
     try {
@@ -778,11 +1199,12 @@ export async function requestPrReview(
           type: "agent",
           permissions: [],
         },
-        config.review.model,
+        selectedModel,
         undefined,
         {
           instructions,
           purpose: REVIEW_PURPOSE,
+          effort: riskTier,
           skipQueue: true,
           concurrent: true,
         }
@@ -798,6 +1220,9 @@ export async function requestPrReview(
         pullNumber: target.pullNumber,
         headSha: target.headSha,
         checkRunId: openedCheckRunId,
+        files: reviewable.flatMap((f) =>
+          f.previous_filename ? [f.filename, f.previous_filename] : [f.filename]
+        ),
       };
       try {
         await stub.addAgentSessionEvent({
@@ -953,11 +1378,40 @@ async function nudgeWorkLaneWithVerdict(
     });
     if (!workLane) return;
     const issue = await stub.getIssue(session.issueId).catch(() => undefined);
+    // PILE-642 — roll this verdict into the work lane's review summary so
+    // the convergence window sees every round, then evaluate it: an
+    // oscillating arc means the lane keeps re-breaking (or re-flagging) the
+    // same fingerprints — name them so the lane changes strategy.
+    const rolled = rollReviewSummary(workLane.reviewSummary, {
+      reviewId: reviewId ?? Date.now(),
+      reviewer: "pile-review",
+      state: review.verdict,
+      sha: req.headSha,
+      excerpt: review.summary,
+      findingsCount: review.findings.length,
+      fingerprints: review.fingerprints,
+      scores: review.scores,
+    });
+    await stub
+      .updateAgentSession(workLane.id, {
+        reviewSummary: rolled.reviewSummary,
+      })
+      .catch(() => undefined);
+    const convergence = evaluateReviewConvergence(
+      parseReviewSummary(rolled.reviewSummary)
+    );
+    const oscillationAlert =
+      convergence.oscillating && convergence.persistingFingerprints.length > 0
+        ? `\n\n⚠️ Trail oscillation detected (round ${convergence.rounds}) — these findings keep coming back:\n` +
+          convergence.persistingFingerprints.map((fp) => `- ${fp}`).join("\n") +
+          "\nDo not repeat the same patch shape — change strategy."
+        : "";
     await nudgeLane(env, stub, organizationId, workLane, issue, req.prUrl, {
       prompt:
         `Pile's review lane ${review.verdict === "request-changes" ? "requested changes" : "left review feedback"} ` +
         `on ${req.prUrl} (sha ${req.headSha.slice(0, 12)}).\n\n${body}\n\n` +
-        "Address the review feedback on the PR and push.",
+        "Address the review feedback on the PR and push." +
+        oscillationAlert,
       reason: "review feedback",
       dedupeKey:
         reviewId !== null ? `review-${reviewId}` : `pile-review-${req.headSha}`,
@@ -1010,7 +1464,10 @@ export async function publishReviewVerdicts(
       const req = requested.data;
       const review =
         session.status === "completed"
-          ? parseReviewVerdict(session.result)
+          ? filterDiffGroundedFindings(
+              parseReviewVerdict(session.result),
+              req.files
+            )
           : null;
       const body = review ? renderReviewBody(review, req.headSha) : null;
 
@@ -1148,6 +1605,27 @@ export async function publishReviewVerdicts(
       });
       published++;
 
+      // PILE-641 — a request-changes verdict with a blocking finding becomes
+      // a repo review lesson so the next review lane (and dispatch brief)
+      // enforces it. Best-effort: memory is never on the publish hot path.
+      if (review && review.verdict === "request-changes") {
+        const blocking = review.findings.filter(
+          (f) => f.severity === "breaking" || f.severity === "must"
+        );
+        const top = blocking[0];
+        if (top) {
+          await stub
+            .memoryRemember({
+              entityType: "repo",
+              entityId: req.repo,
+              kind: `review_lesson:${top.file ?? "general"}`,
+              fact: `[${top.severity}] ${top.title}${top.file ? ` (${top.file})` : ""}${top.detail ? ` — ${top.detail.slice(0, 200)}` : ""}`,
+              sourceSessionId: session.id,
+            })
+            .catch(() => {});
+        }
+      }
+
       if (review && review.verdict !== "approve" && body !== null) {
         await nudgeWorkLaneWithVerdict(
           deps.env,
@@ -1168,4 +1646,83 @@ export async function publishReviewVerdicts(
     }
   }
   return published;
+}
+
+// ---- PILE-455 Layer 9: Reviewer Eval Harness & Metrics ----
+
+export interface ReviewEvalCase {
+  id: string;
+  description: string;
+  files: PrFile[];
+  expectedMinVerdict: ReviewVerdict;
+  expectedFindingKeywords: string[];
+  expectedRiskTier: ReviewRiskTier;
+}
+
+export const SEED_REVIEW_EVAL_CASES: ReviewEvalCase[] = [
+  {
+    id: "vtx-645-inverted-supersedes",
+    description:
+      "memoryRecall filters WHERE supersedes IS NULL while memoryRemember sets supersedes=prior.id on the NEW row, hiding updates",
+    files: [
+      {
+        filename: "src/workspace/data/index.ts",
+        additions: 80,
+        deletions: 4,
+        patch:
+          "@@ -4450,6 +4450,8 @@\n+  const prior = db.select().where(isNull(workspaceMemory.supersedes)).get();\n+  db.insert(workspaceMemory).values({ supersedes: prior?.id ?? null });\n+  return db.select().where(isNull(workspaceMemory.supersedes)).all();",
+      },
+    ],
+    expectedMinVerdict: "request-changes",
+    expectedFindingKeywords: ["supersedes", "stale", "prior"],
+    expectedRiskTier: "medium",
+  },
+  {
+    id: "vtx-522-javascript-url-sink",
+    description: "Unvalidated javascript: URL passed to location.replace",
+    files: [
+      {
+        filename: "src/auth/redirect.ts",
+        additions: 5,
+        deletions: 1,
+        patch:
+          "@@ -10,2 +10,3 @@\n+  window.location.replace('javascript:alert(1)');",
+      },
+    ],
+    expectedMinVerdict: "request-changes",
+    expectedFindingKeywords: ["javascript:", "url", "scheme"],
+    expectedRiskTier: "high",
+  },
+];
+
+export function evaluateReviewCase(
+  evalCase: ReviewEvalCase,
+  review: ParsedReview,
+  config?: PileRepoConfig | null
+): {
+  passed: boolean;
+  tierMatched: boolean;
+  verdictMatched: boolean;
+  keywordMatched: boolean;
+} {
+  const tierMatched =
+    classifyReviewRiskTier(evalCase.files, config) ===
+    evalCase.expectedRiskTier;
+  const verdictMatched =
+    VERDICT_RANK[review.verdict] >= VERDICT_RANK[evalCase.expectedMinVerdict];
+  const combinedText = [
+    review.summary,
+    ...review.findings.map((f) => `${f.title} ${f.detail ?? ""}`),
+  ]
+    .join(" ")
+    .toLowerCase();
+  const keywordMatched = evalCase.expectedFindingKeywords.some((kw) =>
+    combinedText.includes(kw.toLowerCase())
+  );
+  return {
+    passed: tierMatched && verdictMatched && keywordMatched,
+    tierMatched,
+    verdictMatched,
+    keywordMatched,
+  };
 }

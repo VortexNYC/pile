@@ -20,6 +20,7 @@ import {
   toApiKeyWorkspaceIdentity,
   type WorkspaceIdentity,
 } from "./identity.js";
+import { parsePermissionSet } from "./permissions.js";
 import { getSessionUserId } from "./session.js";
 
 export interface WorkerEnv extends AppEnv {
@@ -50,51 +51,7 @@ export const workspaceAuthMiddleware = createMiddleware<{
   }
 
   if (token) {
-    const auth = await createAuth(c.env);
-    let result: unknown;
-    try {
-      result = await auth.api.verifyApiKey({
-        body: { key: token },
-      });
-    } catch {
-      throw new VortexError({
-        code: "UNAUTHORIZED",
-        status: 401,
-        message: "Invalid or expired token",
-      });
-    }
-
-    if (
-      !result ||
-      typeof result !== "object" ||
-      !("valid" in result) ||
-      !result.valid ||
-      !("key" in result) ||
-      !result.key
-    ) {
-      const errObj =
-        result && typeof result === "object" && "error" in result
-          ? (result as { error?: unknown }).error
-          : undefined;
-      const code =
-        errObj && typeof errObj === "object" && "code" in errObj
-          ? (errObj as { code?: string }).code
-          : undefined;
-      if (code === "RATE_LIMITED" || code === "RATE_LIMIT_EXCEEDED") {
-        throw new VortexError({
-          code: "TOO_MANY_REQUESTS",
-          status: 429,
-          message: "API key rate limit exceeded",
-        });
-      }
-      throw new VortexError({
-        code: "UNAUTHORIZED",
-        status: 401,
-        message: "Invalid or expired token",
-      });
-    }
-
-    let identity = toApiKeyWorkspaceIdentity(result.key);
+    const identity = await resolveApiKeyIdentity(c.env, token);
     if (organizationId && identity.organizationId !== organizationId) {
       throw new VortexError({
         code: "FORBIDDEN",
@@ -102,43 +59,6 @@ export const workspaceAuthMiddleware = createMiddleware<{
         message: "Token does not belong to this workspace",
       });
     }
-    // Keys live and die with the referenceId's membership, and their
-    // permissions clamp to the member's CURRENT role on every request — a
-    // demotion takes effect without re-minting. Agent-typed keys are held
-    // to the same clamp: synthetic lane actors (e.g. "automation") have no
-    // member row, so they clamp to the member-role ceiling rather than
-    // bypassing it; a key claiming actorType "agent" can never exceed what
-    // a workspace member may do.
-    const membership = await getWorkspaceMembership(
-      db,
-      identity.organizationId,
-      identity.id
-    );
-    if (!membership && identity.type !== "agent") {
-      throw new VortexError({
-        code: "FORBIDDEN",
-        status: 403,
-        message: "Token owner is no longer a member of this workspace",
-      });
-    }
-    const rolePerms = new Set(
-      membership
-        ? await resolveRolePermissions(
-            db,
-            identity.organizationId,
-            membership.role
-          )
-        : rolePermissionsFor("member")
-    );
-    // Keys may carry bare legacy verbs (read/write/admin) or
-    // resource:action grants — a bare verb counts when the role's
-    // flattened statements include its workspace:-prefixed form.
-    identity = {
-      ...identity,
-      permissions: identity.permissions.filter(
-        (p) => rolePerms.has(p) || rolePerms.has(`workspace:${p}`)
-      ),
-    };
     c.set("workspaceIdentity", identity);
     await next();
     return;
@@ -216,6 +136,120 @@ export const requireHumanSession = createMiddleware<{
   c.set("userId", userId);
   await next();
 });
+
+/** Verifies a Bearer API key and returns the Better Auth key record.
+ * Throws VortexError on invalid/expired/rate-limited keys. */
+export async function verifyApiKeyToken(
+  env: AppEnv,
+  token: string
+): Promise<unknown> {
+  const auth = await createAuth(env);
+  let result: unknown;
+  try {
+    result = await auth.api.verifyApiKey({
+      body: { key: token },
+    });
+  } catch {
+    throw new VortexError({
+      code: "UNAUTHORIZED",
+      status: 401,
+      message: "Invalid or expired token",
+    });
+  }
+
+  if (
+    !result ||
+    typeof result !== "object" ||
+    !("valid" in result) ||
+    !result.valid ||
+    !("key" in result) ||
+    !result.key
+  ) {
+    const errObj =
+      result && typeof result === "object" && "error" in result
+        ? (result as { error?: unknown }).error
+        : undefined;
+    const code =
+      errObj && typeof errObj === "object" && "code" in errObj
+        ? (errObj as { code?: string }).code
+        : undefined;
+    if (code === "RATE_LIMITED" || code === "RATE_LIMIT_EXCEEDED") {
+      throw new VortexError({
+        code: "TOO_MANY_REQUESTS",
+        status: 429,
+        message: "API key rate limit exceeded",
+      });
+    }
+    throw new VortexError({
+      code: "UNAUTHORIZED",
+      status: 401,
+      message: "Invalid or expired token",
+    });
+  }
+  return result.key;
+}
+
+/** Turns a verified Better Auth key record into a workspace identity with
+ * the membership clamp applied. */
+export async function clampApiKeyIdentity(
+  env: AppEnv,
+  key: unknown
+): Promise<WorkspaceIdentity> {
+  const db = createD1(env.D1);
+  let identity = toApiKeyWorkspaceIdentity(key);
+  // Keys live and die with the referenceId's membership, and their
+  // permissions clamp to the member's CURRENT role on every request — a
+  // demotion takes effect without re-minting. Agent-typed keys are held
+  // to the same clamp: synthetic lane actors (e.g. "automation") have no
+  // member row, so they clamp to the member-role ceiling rather than
+  // bypassing it; a key claiming actorType "agent" can never exceed what
+  // a workspace member may do.
+  const membership = await getWorkspaceMembership(
+    db,
+    identity.organizationId,
+    identity.id
+  );
+  if (!membership && identity.type !== "agent") {
+    throw new VortexError({
+      code: "FORBIDDEN",
+      status: 403,
+      message: "Token owner is no longer a member of this workspace",
+    });
+  }
+  const rolePerms = new Set(
+    membership
+      ? await resolveRolePermissions(
+          db,
+          identity.organizationId,
+          membership.role
+        )
+      : rolePermissionsFor("member")
+  );
+  // Keys may carry bare legacy verbs (read/write/admin), resource:action
+  // grants, or a BA role name ("member") — expand the shorthand first so
+  // the clamp sees the real statements, then intersect with the owner's
+  // actual role (a bare verb counts when the role's flattened statements
+  // include its workspace:-prefixed form).
+  const expanded = parsePermissionSet(identity.permissions);
+  identity = {
+    ...identity,
+    permissions: [...expanded].filter(
+      (p) => rolePerms.has(p) || rolePerms.has(`workspace:${p}`)
+    ),
+  };
+  return identity;
+}
+
+/** Verifies a Bearer API key and resolves its workspace identity with the
+ * same membership clamp the workspace auth middleware applies. Throws
+ * VortexError on invalid/expired keys. Shared by the workspace middleware
+ * and the MCP server's per-caller tool filtering (VTX-753). */
+export async function resolveApiKeyIdentity(
+  env: AppEnv,
+  token: string
+): Promise<WorkspaceIdentity> {
+  return clampApiKeyIdentity(env, await verifyApiKeyToken(env, token));
+}
 
 /** Builtin roles flatten via roleMap; anything else is a dynamic
  * organizationRole row (BA dynamicAccessControl) — its `permission`

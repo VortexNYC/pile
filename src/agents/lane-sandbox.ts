@@ -7,11 +7,7 @@
 // run finish" already lives in the result file the runner writes — the
 // sentinel only needs to answer "is the wrapper still alive".
 import { DurableObject } from "cloudflare:workers";
-import {
-  DirectoryBackup,
-  Files,
-  type DirectoryBackupRecord,
-} from "sandbox-1";
+import { DirectoryBackup, Files, type DirectoryBackupRecord } from "sandbox-1";
 
 import type { AppEnv } from "../types/env.js";
 import type { SandboxFile } from "./compute.js";
@@ -124,6 +120,9 @@ export class LaneSandboxBase extends DurableObject<AppEnv> {
 
   /** running flag, or the exit code recorded by the spawn wrapper. */
   async processState(processId: string): Promise<LaneProcessState> {
+    if (!this.container.running) {
+      return { running: false, exitCode: 1 };
+    }
     const id = processId.replace(/[^A-Za-z0-9._-]/g, "_");
     const exit = await this.files
       .readFile(`${PROC_DIR}/${id}.exit`)
@@ -152,6 +151,7 @@ export class LaneSandboxBase extends DurableObject<AppEnv> {
 
   /** Whether a spawn for this id left a pid file — existence, not liveness. */
   async hasProcess(processId: string): Promise<boolean> {
+    if (!this.container.running) return false;
     const id = processId.replace(/[^A-Za-z0-9._-]/g, "_");
     const res = await this.container.exec(
       ["sh", "-c", `test -f ${PROC_DIR}/${id}.pid`],
@@ -162,6 +162,7 @@ export class LaneSandboxBase extends DurableObject<AppEnv> {
 
   /** HTTP readiness probe inside the container — runner health on :port. */
   async probe(port: number): Promise<boolean> {
+    if (!this.container.running) return false;
     const res = await this.container.exec(
       ["sh", "-c", `curl -sf -o /dev/null http://127.0.0.1:${port}/`],
       { env: BASE_ENV }
@@ -171,6 +172,7 @@ export class LaneSandboxBase extends DurableObject<AppEnv> {
 
   /** Any live process under a session prefix (follow-ups share it). */
   async sessionBusy(sessionId: string): Promise<boolean> {
+    if (!this.container.running) return false;
     const res = await this.container.exec(
       ["sh", "-c", `ls ${PROC_DIR}/${sessionId}*.pid 2>/dev/null`],
       { env: BASE_ENV }
@@ -189,6 +191,7 @@ export class LaneSandboxBase extends DurableObject<AppEnv> {
   }
 
   async readFile(path: string): Promise<string | null> {
+    if (!this.container.running) return null;
     try {
       const f = await this.files.readFile(path);
       return (await f?.text()) ?? null;
@@ -211,6 +214,7 @@ export class LaneSandboxBase extends DurableObject<AppEnv> {
 
   /** Last `bytes` of a file — transcript/log tails without a full read. */
   async tail(path: string, bytes = 4000): Promise<string | null> {
+    if (!this.container.running) return null;
     const res = await this.container.exec(
       ["sh", "-c", `tail -c ${bytes} ${path} 2>/dev/null`],
       { env: BASE_ENV }

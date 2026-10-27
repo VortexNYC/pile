@@ -18,6 +18,15 @@ interface IssueRow {
   status: string;
 }
 
+/** Absolute console URL for an issue — copy-link target. */
+export function issuePermalink(
+  origin: string,
+  slug: string,
+  issueId: string
+): string {
+  return `${origin}/app/${slug}/issues/${issueId}`;
+}
+
 /** Right-click row menu — Circle's issue context actions:
  * change status, copy identifier/link, delete. */
 export function IssueContextMenu({
@@ -60,9 +69,14 @@ export function IssueContextMenu({
         })
       ),
     onSuccess: invalidate,
+    onError: (error) => toastError(error),
   });
 
-  const issueUrl = `${window.location.origin}/app/${workspace.slug}/issues/${issue.id}`;
+  const issueUrl = issuePermalink(
+    window.location.origin,
+    workspace.slug,
+    issue.id
+  );
 
   return (
     <ContextMenu.Root>

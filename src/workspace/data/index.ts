@@ -772,6 +772,47 @@ export interface EntityFavorite {
   addedAt: string;
 }
 
+/** Per-surface display prefs keyed by surface name ("customers", …). Each
+ * surface holds sheet-tab colors, row density, and hidden columns — the
+ * Sheets-style look controls the CRM list persists per user. */
+export interface SurfaceDisplayPrefs {
+  sheetColors?: Record<string, string>;
+  density?: "comfortable" | "compact";
+  hiddenColumns?: string[];
+}
+
+export type DisplayPrefsMap = Record<string, SurfaceDisplayPrefs>;
+
+export async function setDisplay(
+  db: WorkspaceDb,
+  organizationId: string,
+  userId: string,
+  display: DisplayPrefsMap | null
+) {
+  const value = display ? JSON.stringify(display) : null;
+  const existing = await getUserViewPreferences(db, organizationId, userId);
+  const ts = new Date().toISOString();
+  if (existing) {
+    await db
+      .update(workspaceUserPreferences)
+      .set({ display: value, updatedAt: ts })
+      .where(
+        and(
+          eq(workspaceUserPreferences.organizationId, organizationId),
+          eq(workspaceUserPreferences.userId, userId)
+        )
+      );
+  } else {
+    await db.insert(workspaceUserPreferences).values({
+      organizationId,
+      userId,
+      display: value,
+      updatedAt: ts,
+    });
+  }
+  return getUserViewPreferences(db, organizationId, userId);
+}
+
 export async function setFavorites(
   db: WorkspaceDb,
   organizationId: string,
@@ -1215,6 +1256,9 @@ export function getAgentSessionByProviderSessionId(
 type ListAgentSessionsOptions = {
   issueId?: string;
   agentId?: string;
+  /** session.agentId candidates resolved from agentSlug (see
+   *  resolveAgentScope). Internal — callers pass agentSlug. */
+  agentIds?: string[];
   agentSlug?: string;
   status?: AgentSessionStatus;
   openPr?: boolean;
@@ -1237,6 +1281,9 @@ function agentSessionListConditions(
   }
   if (options.agentId) {
     conditions.push(eq(workspaceAgentSessions.agentId, options.agentId));
+  }
+  if (options.agentIds?.length) {
+    conditions.push(inArray(workspaceAgentSessions.agentId, options.agentIds));
   }
   if (options.excludeIssueCondition) {
     conditions.push(options.excludeIssueCondition);
@@ -1277,31 +1324,54 @@ export function getAgentSessionByConversationKey(
     .get();
 }
 
+// agentSlug isn't a session column — lanes record the dispatch agent in
+// session.agentId: the type's providerAgentId on registered-type
+// dispatches, the profile slug itself on flue-dispatch lanes. A slug
+// therefore scopes to {raw, normalized, providerAgentId}; an explicit
+// agentId still wins when both are passed.
+function resolveAgentScope(
+  db: WorkspaceDb,
+  organizationId: string,
+  options: ListAgentSessionsOptions
+): ListAgentSessionsOptions {
+  if (!options.agentSlug || options.agentId) return options;
+  const normalized = stageKey(options.agentSlug);
+  const type = db
+    .select({ providerAgentId: workspaceAgentTypes.providerAgentId })
+    .from(workspaceAgentTypes)
+    .where(
+      and(
+        eq(workspaceAgentTypes.organizationId, organizationId),
+        eq(workspaceAgentTypes.slug, normalized)
+      )
+    )
+    .get();
+  const agentIds = [
+    ...new Set(
+      [options.agentSlug, normalized, type?.providerAgentId].filter(
+        (value): value is string =>
+          typeof value === "string" && value.length > 0
+      )
+    ),
+  ];
+  return { ...options, agentIds };
+}
+
 export function listAgentSessions(
   db: WorkspaceDb,
   organizationId: string,
   options: ListAgentSessionsOptions = {}
 ) {
-  // agentSlug isn't a session column — resolve it to the agent type's id.
-  let resolved = options;
-  if (options.agentSlug && !options.agentId) {
-    const type = db
-      .select({ id: workspaceAgentTypes.id })
-      .from(workspaceAgentTypes)
-      .where(
-        and(
-          eq(workspaceAgentTypes.organizationId, organizationId),
-          eq(workspaceAgentTypes.slug, options.agentSlug)
-        )
-      )
-      .get();
-    resolved = { ...options, agentId: type?.id ?? "__none__" };
-  }
   return db
     .select()
     .from(workspaceAgentSessions)
     .where(
-      and(...agentSessionListConditions(organizationId, resolved))
+      and(
+        ...agentSessionListConditions(
+          organizationId,
+          resolveAgentScope(db, organizationId, options)
+        )
+      )
     )
     .orderBy(
       desc(workspaceAgentSessions.createdAt),
@@ -1383,7 +1453,14 @@ export function listAgentSessionSummaries(
   return db
     .select(agentSessionSummaryColumns)
     .from(workspaceAgentSessions)
-    .where(and(...agentSessionListConditions(organizationId, options)))
+    .where(
+      and(
+        ...agentSessionListConditions(
+          organizationId,
+          resolveAgentScope(db, organizationId, options)
+        )
+      )
+    )
     .orderBy(
       desc(workspaceAgentSessions.createdAt),
       desc(workspaceAgentSessions.id)
@@ -1453,14 +1530,22 @@ export async function updateAgentSession(
     updatedAt: new Date().toISOString(),
   };
   if (input.status !== undefined) {
-    set.status = input.status;
-    // Anchor the first terminal transition — the kept-sandbox reaper keys
-    // its resume window off endedAt, which later writes can't push.
+    // PILE-467 — terminal stays terminal: queue promotion can race a
+    // cancel and flip a dead session back to `created`, resurrecting a
+    // lane that still holds the issue's active-session slot.
+    const terminalStatuses = new Set(["completed", "failed", "canceled"]);
     if (
-      ["completed", "failed", "canceled"].includes(input.status) &&
-      !existing.endedAt
+      !(
+        terminalStatuses.has(existing.status) &&
+        !terminalStatuses.has(input.status)
+      )
     ) {
-      set.endedAt = set.updatedAt;
+      set.status = input.status;
+      // Anchor the first terminal transition — the kept-sandbox reaper keys
+      // its resume window off endedAt, which later writes can't push.
+      if (terminalStatuses.has(input.status) && !existing.endedAt) {
+        set.endedAt = set.updatedAt;
+      }
     }
     // PILE-419 — an open elicitation only exists while the session is
     // parked in `waiting`; any other status (resumed, terminal, re-queued
@@ -2696,11 +2781,6 @@ export function listLinkedIssueIds(
 // both the dedupe ledger and the audit log — every inbound event lands one
 // row recording why it did or didn't move state.
 
-export type ExternalEventMapping =
-  typeof workspaceExternalEventMappings.$inferSelect;
-export type ExternalEventDelivery =
-  typeof workspaceExternalEventDeliveries.$inferSelect;
-
 export interface ExternalEventMappingInput {
   organizationId: string;
   source: string;
@@ -2997,6 +3077,96 @@ export function extractEventField(
  *  `hardware_needed` field. The stages hang on the customer record: the
  *  merchant's stage is its customer status, and the deal is the parent
  *  issue linked to that customer. */
+// VTX-755 — canonical registry of the pipeline owner slugs referenced by
+// DEFAULT_STAGE_TEMPLATES. The templates shipped owner slugs that had no
+// agent-type row, so /pipeline/lint reported 17 unresolved owners; seeding
+// installs these alongside the templates so every ownerAgent resolves.
+// "human" kinds own steps without a dispatch lane (field visits, wet
+// signatures, hardware logistics); their providerAgentId still names a
+// real provider so the lint's provider check stays clean.
+export const DEFAULT_AGENT_TYPES: ReadonlyArray<{
+  slug: string;
+  name: string;
+  providerAgentId: string;
+  kind: "agent" | "human";
+}> = [
+  { slug: "scout", name: "Scout", providerAgentId: "flue", kind: "agent" },
+  {
+    slug: "profiler",
+    name: "Profiler",
+    providerAgentId: "flue",
+    kind: "agent",
+  },
+  {
+    slug: "detective",
+    name: "Detective",
+    providerAgentId: "flue",
+    kind: "agent",
+  },
+  {
+    slug: "field_dispatcher",
+    name: "Field dispatcher",
+    providerAgentId: "flue",
+    kind: "human",
+  },
+  { slug: "ranker", name: "Ranker", providerAgentId: "flue", kind: "agent" },
+  {
+    slug: "courier",
+    name: "Courier",
+    providerAgentId: "flue",
+    kind: "agent",
+  },
+  { slug: "chaser", name: "Chaser", providerAgentId: "flue", kind: "agent" },
+  { slug: "booker", name: "Booker", providerAgentId: "flue", kind: "agent" },
+  {
+    slug: "briefer",
+    name: "Briefer",
+    providerAgentId: "flue",
+    kind: "agent",
+  },
+  {
+    slug: "recorder",
+    name: "Recorder",
+    providerAgentId: "flue",
+    kind: "agent",
+  },
+  {
+    slug: "analyst",
+    name: "Analyst",
+    providerAgentId: "flue",
+    kind: "agent",
+  },
+  { slug: "quoter", name: "Quoter", providerAgentId: "flue", kind: "agent" },
+  { slug: "closer", name: "Closer", providerAgentId: "flue", kind: "agent" },
+  { slug: "clerk", name: "Clerk", providerAgentId: "flue", kind: "agent" },
+  {
+    slug: "underwriter",
+    name: "Underwriter",
+    providerAgentId: "flue",
+    kind: "agent",
+  },
+  { slug: "signer", name: "Signer", providerAgentId: "flue", kind: "human" },
+  { slug: "tailor", name: "Tailor", providerAgentId: "flue", kind: "agent" },
+  {
+    slug: "outfitter",
+    name: "Outfitter",
+    providerAgentId: "flue",
+    kind: "human",
+  },
+  {
+    slug: "integrator",
+    name: "Integrator",
+    providerAgentId: "flue",
+    kind: "agent",
+  },
+  {
+    slug: "activator",
+    name: "Activator",
+    providerAgentId: "flue",
+    kind: "agent",
+  },
+];
+
 export const DEFAULT_STAGE_TEMPLATES: ReadonlyArray<{
   entityType: StageEntityType;
   status: string;
@@ -3194,12 +3364,40 @@ export const DEFAULT_STAGE_TEMPLATES: ReadonlyArray<{
 
 /** Installs the default pipeline templates. Idempotent — existing
  *  (entity_type, status, step_key) rows are skipped so re-seeding after an
- *  edit never stomps operator changes; a deleted row is re-created. */
-export function seedStageTemplates(
+ *  edit never stomps operator changes; a deleted row is re-created.
+ *  VTX-755 — seeds the canonical DEFAULT_AGENT_TYPES owners first
+ *  (insert-only) so every template ownerAgent resolves at lint. */
+export async function seedStageTemplates(
   db: WorkspaceDb,
   organizationId: string,
   actorId?: string | null
 ) {
+  // unresolved ownerAgent slugs (VTX-755). Insert-only — an operator's
+  // re-pointed provider or renamed type is never stomped.
+  let agentTypesSeeded = 0;
+  for (const def of DEFAULT_AGENT_TYPES) {
+    const existing = db
+      .select({ id: workspaceAgentTypes.id })
+      .from(workspaceAgentTypes)
+      .where(
+        and(
+          eq(workspaceAgentTypes.organizationId, organizationId),
+          eq(workspaceAgentTypes.slug, def.slug)
+        )
+      )
+      .get();
+    if (existing) {
+      continue;
+    }
+    await upsertAgentType(db, organizationId, {
+      slug: def.slug,
+      name: def.name,
+      providerAgentId: def.providerAgentId,
+      kind: def.kind,
+      createdBy: actorId ?? null,
+    });
+    agentTypesSeeded += 1;
+  }
   const created: StageTemplate[] = [];
   let skipped = 0;
   for (const def of DEFAULT_STAGE_TEMPLATES) {
@@ -3234,7 +3432,7 @@ export function seedStageTemplates(
       })
     );
   }
-  return { created, skipped };
+  return { created, skipped, agentTypesSeeded };
 }
 
 /** Re-point still-waiting dependents of a dead session onto its retry —
@@ -4457,14 +4655,40 @@ export interface MemoryInput {
   validUntil?: string | null;
 }
 
+const ISSUE_IDENTIFIER_RE = /^[a-z]+-\d+$/i;
+
+function normalizeMemoryEntityId(entityType: string, entityId: string): string {
+  return entityType === "issue" && ISSUE_IDENTIFIER_RE.test(entityId)
+    ? entityId.toUpperCase()
+    : entityId;
+}
+
+function memoryEntityIdFilter(
+  entityType: string | undefined,
+  entityId: string
+): SQL {
+  if (entityType === "issue" && ISSUE_IDENTIFIER_RE.test(entityId)) {
+    const upper = entityId.toUpperCase();
+    const lower = entityId.toLowerCase();
+    if (upper !== lower) {
+      return or(
+        eq(workspaceMemory.entityId, upper),
+        eq(workspaceMemory.entityId, lower)
+      )!;
+    }
+  }
+  return eq(workspaceMemory.entityId, entityId);
+}
+
 export async function memoryRemember(
   db: WorkspaceDb,
   organizationId: string,
   input: MemoryInput
 ) {
-  // Supersede: a new fact of the same kind on the same entity marks the
-  // previous row superseded rather than deleting it — contradictions and
-  // temporal updates keep the audit trail.
+  const entityId = normalizeMemoryEntityId(input.entityType, input.entityId);
+  // Supersede: a new fact of the same kind on the same entity points `supersedes`
+  // at the latest prior row rather than deleting it — contradictions and
+  // temporal updates keep the audit trail while recall surfaces only the head.
   const prior = await db
     .select({ id: workspaceMemory.id })
     .from(workspaceMemory)
@@ -4472,18 +4696,20 @@ export async function memoryRemember(
       and(
         eq(workspaceMemory.organizationId, organizationId),
         eq(workspaceMemory.entityType, input.entityType),
-        eq(workspaceMemory.entityId, input.entityId),
+        memoryEntityIdFilter(input.entityType, entityId),
         eq(workspaceMemory.kind, input.kind),
-        isNull(workspaceMemory.supersedes)
+        sql`${workspaceMemory.id} NOT IN (SELECT ${workspaceMemory.supersedes} FROM ${workspaceMemory} WHERE ${workspaceMemory.organizationId} = ${organizationId} AND ${workspaceMemory.supersedes} IS NOT NULL)`
       )
     )
+    .orderBy(desc(workspaceMemory.createdAt), desc(workspaceMemory.id))
+    .limit(1)
     .get();
   const id = crypto.randomUUID();
   await db.insert(workspaceMemory).values({
     id,
     organizationId,
     entityType: input.entityType,
-    entityId: input.entityId,
+    entityId,
     kind: input.kind,
     fact: input.fact,
     sourceSessionId: input.sourceSessionId ?? null,
@@ -4506,24 +4732,251 @@ export async function memoryRecall(
     limit?: number;
   }
 ) {
-  const conds = [
+  const now = new Date().toISOString();
+  const conds: SQL[] = [
     eq(workspaceMemory.organizationId, organizationId),
-    isNull(workspaceMemory.supersedes),
+    sql`${workspaceMemory.id} NOT IN (SELECT ${workspaceMemory.supersedes} FROM ${workspaceMemory} WHERE ${workspaceMemory.organizationId} = ${organizationId} AND ${workspaceMemory.supersedes} IS NOT NULL)`,
+    or(
+      isNull(workspaceMemory.validUntil),
+      gt(workspaceMemory.validUntil, now)
+    )!,
   ];
   if (query.entityType)
     conds.push(eq(workspaceMemory.entityType, query.entityType));
-  if (query.entityId) conds.push(eq(workspaceMemory.entityId, query.entityId));
+  if (query.entityId)
+    conds.push(memoryEntityIdFilter(query.entityType, query.entityId));
   if (query.kind) conds.push(eq(workspaceMemory.kind, query.kind));
   // Fuzzy fact search — LIKE over the fact text so "did we sweep
   // Smith?" finds corridor:smith-st without the exact entity key.
   if (query.search) conds.push(like(workspaceMemory.fact, `%${query.search}%`));
-  return db
+  const rows = await db
     .select()
     .from(workspaceMemory)
     .where(and(...conds))
-    .orderBy(desc(workspaceMemory.createdAt))
-    .limit(query.limit ?? 25)
+    .orderBy(desc(workspaceMemory.createdAt), desc(workspaceMemory.id))
+    .limit((query.limit ?? 25) * 2)
     .all();
+  // Deduplicate by (entityType, normalizedEntityId, kind) keeping the newest row
+  // so legacy multi-head chains before VTX-645 collapse to the current fact.
+  const seen = new Set<string>();
+  const deduped: typeof rows = [];
+  const cap = query.limit ?? 25;
+  for (const row of rows) {
+    const key = `${row.entityType}\0${normalizeMemoryEntityId(row.entityType, row.entityId)}\0${row.kind}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(row);
+    if (deduped.length >= cap) break;
+  }
+  return deduped;
+}
+
+// ---- PILE-628 — memory forget + update ----
+
+export interface MemoryPatch {
+  fact?: string;
+  kind?: string;
+  validUntil?: string | null;
+}
+
+export async function memoryUpdate(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string,
+  patch: MemoryPatch
+) {
+  const row = await db
+    .select()
+    .from(workspaceMemory)
+    .where(
+      and(
+        eq(workspaceMemory.id, id),
+        eq(workspaceMemory.organizationId, organizationId)
+      )
+    )
+    .get();
+  if (!row) return null;
+  const set: { fact?: string; kind?: string; validUntil?: string | null } = {};
+  if (patch.fact !== undefined) set.fact = patch.fact;
+  if (patch.kind !== undefined) set.kind = patch.kind;
+  if (patch.validUntil !== undefined) set.validUntil = patch.validUntil;
+  if (Object.keys(set).length > 0) {
+    await db.update(workspaceMemory).set(set).where(eq(workspaceMemory.id, id));
+  }
+  return { ...row, ...set };
+}
+
+/** PILE-628 — GDPR-grade forget: deleting a historical (non-head) row
+ *  splices the supersede chain around it; deleting the active head also
+ *  erases its superseded ancestors so the previous version cannot
+ *  resurrect as the new head. */
+export async function memoryForget(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+): Promise<{ deleted: boolean; deletedIds: string[] }> {
+  const target = await db
+    .select()
+    .from(workspaceMemory)
+    .where(
+      and(
+        eq(workspaceMemory.id, id),
+        eq(workspaceMemory.organizationId, organizationId)
+      )
+    )
+    .get();
+  if (!target) return { deleted: false, deletedIds: [] };
+
+  const children = await db
+    .select({ id: workspaceMemory.id })
+    .from(workspaceMemory)
+    .where(
+      and(
+        eq(workspaceMemory.organizationId, organizationId),
+        eq(workspaceMemory.supersedes, target.id)
+      )
+    )
+    .all();
+
+  let deletedIds: string[];
+  if (children.length > 0) {
+    // Historical row mid-chain — splice the chain so the child points at
+    // the deleted row's predecessor instead of dangling.
+    await db
+      .update(workspaceMemory)
+      .set({ supersedes: target.supersedes })
+      .where(
+        and(
+          eq(workspaceMemory.organizationId, organizationId),
+          eq(workspaceMemory.supersedes, target.id)
+        )
+      );
+    deletedIds = [target.id];
+  } else {
+    // Active head — erase the fact and its entire superseded history.
+    // The same-key sweep already covers every chain link (the bounded
+    // ancestor walk below is the explicit audit trail for it).
+    const chain = new Set<string>([target.id]);
+    let cursor = target.supersedes;
+    for (let hops = 0; cursor && hops < 50; hops++) {
+      if (chain.has(cursor)) break;
+      chain.add(cursor);
+      const parent = await db
+        .select({ supersedes: workspaceMemory.supersedes })
+        .from(workspaceMemory)
+        .where(
+          and(
+            eq(workspaceMemory.id, cursor),
+            eq(workspaceMemory.organizationId, organizationId)
+          )
+        )
+        .get();
+      cursor = parent?.supersedes ?? null;
+    }
+    const sameKey = await db
+      .select({ id: workspaceMemory.id })
+      .from(workspaceMemory)
+      .where(
+        and(
+          eq(workspaceMemory.organizationId, organizationId),
+          eq(workspaceMemory.entityType, target.entityType),
+          memoryEntityIdFilter(target.entityType, target.entityId),
+          eq(workspaceMemory.kind, target.kind)
+        )
+      )
+      .all();
+    for (const row of sameKey) chain.add(row.id);
+    deletedIds = [...chain];
+  }
+
+  await db
+    .delete(workspaceMemory)
+    .where(
+      and(
+        eq(workspaceMemory.organizationId, organizationId),
+        inArray(workspaceMemory.id, deletedIds)
+      )
+    );
+  return { deleted: true, deletedIds };
+}
+
+// ---- PILE-616 — entity profiles: static vs dynamic facts ----
+
+// Kinds that describe transient state rather than durable truth — lane
+// outcomes, cursors, heartbeats, temporary/session-scoped notes, and
+// signal receipts. Any fact with an expiry is dynamic regardless.
+export const TRANSIENT_MEMORY_KIND_PREFIXES = [
+  "outcome",
+  "cursor",
+  "heartbeat",
+  "temp",
+  "session",
+  "signal:",
+];
+
+export function isDynamicMemoryFact(row: {
+  kind: string;
+  validUntil: string | null;
+}): boolean {
+  return (
+    row.validUntil !== null ||
+    TRANSIENT_MEMORY_KIND_PREFIXES.some(
+      (p) =>
+        row.kind === p || row.kind.startsWith(`${p}:`) || row.kind.startsWith(p)
+    )
+  );
+}
+
+export async function memoryProfile(
+  db: WorkspaceDb,
+  organizationId: string,
+  query: { entityType: string; entityId: string; limit?: number }
+) {
+  const facts = await memoryRecall(db, organizationId, {
+    entityType: query.entityType,
+    entityId: query.entityId,
+    limit: query.limit ?? 50,
+  });
+  const staticFacts = facts.filter((f) => !isDynamicMemoryFact(f));
+  const dynamicFacts = facts.filter((f) => isDynamicMemoryFact(f));
+  const byKind: Record<string, typeof facts> = {};
+  for (const f of facts) {
+    (byKind[f.kind] ??= []).push(f);
+  }
+  const normalizedId = normalizeMemoryEntityId(
+    query.entityType,
+    query.entityId
+  );
+  let summary = "";
+  if (staticFacts.length > 0 || dynamicFacts.length > 0) {
+    const parts: string[] = [];
+    if (staticFacts.length > 0) {
+      parts.push(
+        `### Static Profile (${query.entityType}:${normalizedId})\n` +
+          staticFacts.map((f) => `- [${f.kind}] ${f.fact}`).join("\n")
+      );
+    }
+    if (dynamicFacts.length > 0) {
+      parts.push(
+        "### Recent / Dynamic Context\n" +
+          dynamicFacts
+            .map(
+              (f) =>
+                `- [${f.kind}] ${f.fact}${f.validUntil ? ` (valid until ${f.validUntil})` : ""}`
+            )
+            .join("\n")
+      );
+    }
+    summary = parts.join("\n\n");
+  }
+  return {
+    entityType: query.entityType,
+    entityId: normalizedId,
+    staticFacts,
+    dynamicFacts,
+    byKind,
+    summary,
+  };
 }
 
 export async function upsertAgentProviderConfig(
@@ -4708,6 +5161,105 @@ export async function deleteAgentEnvironmentFile(
 
 // ---- documents ----
 
+/** Raised when a document write fails validation (content/format mismatch,
+ *  slug collisions). The DO layer maps it to a 400/409 at the RPC boundary —
+ *  never leave a row the readers cannot serialize (VTX-767, VTX-770). */
+export class DocumentValidationError extends Error {
+  readonly conflict: boolean;
+  constructor(message: string, opts?: { conflict?: boolean }) {
+    super(message);
+    this.conflict = opts?.conflict === true;
+  }
+}
+
+type DocumentContentFormat = "blocks" | "markdown" | "canvas";
+
+function parseDocumentJson(raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+}
+
+/** `content` must match `contentFormat`: markdown is a plain string, blocks
+ *  is a block array (or JSON encoding one — history restores hand back the
+ *  stored string), canvas is any JSON value (scene objects like "{}").
+ *  Anything else would persist a row that list/get cannot serialize. */
+export function assertDocumentContent(
+  content: unknown,
+  format: DocumentContentFormat
+): void {
+  if (content === undefined) return;
+  if (format === "markdown") {
+    if (typeof content !== "string") {
+      throw new DocumentValidationError(
+        "markdown content must be a string, got structured content"
+      );
+    }
+    return;
+  }
+  const parsed =
+    typeof content === "string" ? parseDocumentJson(content) : content;
+  if (format === "blocks") {
+    if (!Array.isArray(parsed)) {
+      throw new DocumentValidationError(
+        "blocks content must be an array of blocks"
+      );
+    }
+    return;
+  }
+  // canvas — any JSON value (scene JSON). A non-JSON string would crash
+  // serialization on read.
+  if (parsed === undefined) {
+    throw new DocumentValidationError("canvas content must be valid JSON");
+  }
+}
+
+/** URL-safe slug: lowercase, alnum/letters + dashes only. Dropping
+ *  punctuation keeps `/docs/{org}/{space}/{slug}` routing unambiguous
+ *  (VTX-770). Returns null when nothing survives normalization. */
+export function normalizeDocumentSlug(raw: string): string | null {
+  const slug = raw
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug.length > 0 ? slug : null;
+}
+
+function assertSlugFree(
+  db: WorkspaceDb,
+  organizationId: string,
+  slug: string | null,
+  spaceId: string | null | undefined,
+  excludeId?: string
+): void {
+  if (slug === null) return;
+  const conditions = [
+    eq(workspaceDocuments.organizationId, organizationId),
+    eq(workspaceDocuments.slug, slug),
+    isNull(workspaceDocuments.trashedAt),
+    spaceId == null
+      ? isNull(workspaceDocuments.spaceId)
+      : eq(workspaceDocuments.spaceId, spaceId),
+  ];
+  if (excludeId !== undefined) {
+    conditions.push(ne(workspaceDocuments.id, excludeId));
+  }
+  const clash = db
+    .select({ id: workspaceDocuments.id })
+    .from(workspaceDocuments)
+    .where(and(...conditions))
+    .get();
+  if (clash) {
+    throw new DocumentValidationError(
+      `Slug "${slug}" is already used in this space`,
+      { conflict: true }
+    );
+  }
+}
+
 export interface DocumentInput {
   organizationId: string;
   title: string;
@@ -4727,13 +5279,19 @@ export interface DocumentInput {
 export function createDocument(db: WorkspaceDb, input: DocumentInput) {
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
+  const contentFormat =
+    input.contentFormat ??
+    (typeof input.content === "string" ? "markdown" : "blocks");
+  assertDocumentContent(input.content, contentFormat);
   const content =
     typeof input.content === "string"
       ? input.content
       : JSON.stringify(input.content ?? []);
-  const contentFormat =
-    input.contentFormat ??
-    (typeof input.content === "string" ? "markdown" : "blocks");
+  const slug =
+    input.slug === undefined || input.slug === null
+      ? null
+      : normalizeDocumentSlug(input.slug);
+  assertSlugFree(db, input.organizationId, slug, input.spaceId);
   const doc = db
     .insert(workspaceDocuments)
     .values({
@@ -4743,7 +5301,7 @@ export function createDocument(db: WorkspaceDb, input: DocumentInput) {
       icon: input.icon ?? null,
       contentFormat,
       content,
-      slug: input.slug ?? null,
+      slug,
       projectId: input.projectId ?? null,
       issueId: input.issueId ?? null,
       initiativeId: input.initiativeId ?? null,
@@ -4864,7 +5422,10 @@ export function listDocumentsVisibleTo(
   // closed ACL the space grant cannot widen.
   const spaceGranted = new Set<string>();
   for (const row of db
-    .select({ spaceId: workspaceSpacePermissions.spaceId, actorId: workspaceSpacePermissions.actorId })
+    .select({
+      spaceId: workspaceSpacePermissions.spaceId,
+      actorId: workspaceSpacePermissions.actorId,
+    })
     .from(workspaceSpacePermissions)
     .where(eq(workspaceSpacePermissions.organizationId, organizationId))
     .all()) {
@@ -4877,7 +5438,9 @@ export function listDocumentsVisibleTo(
         (d.spaceId && restrictedSpaces.has(d.spaceId))
       ) ||
       granted.has(d.id) ||
-      (!restricted.has(d.id) && d.spaceId != null && spaceGranted.has(d.spaceId))
+      (!restricted.has(d.id) &&
+        d.spaceId != null &&
+        spaceGranted.has(d.spaceId))
   );
 }
 
@@ -4903,12 +5466,13 @@ export function listDocumentsForActor(
     grants.filter((g) => g.actorId === actorId).map((g) => g.documentId)
   );
   // Space grants widen guests the same way — only docs with no doc ACL.
-  const granted = new Set(
-    grants.map((g) => g.documentId)
-  );
+  const granted = new Set(grants.map((g) => g.documentId));
   const spaceGranted = new Set<string>();
   for (const row of db
-    .select({ spaceId: workspaceSpacePermissions.spaceId, actorId: workspaceSpacePermissions.actorId })
+    .select({
+      spaceId: workspaceSpacePermissions.spaceId,
+      actorId: workspaceSpacePermissions.actorId,
+    })
     .from(workspaceSpacePermissions)
     .where(eq(workspaceSpacePermissions.organizationId, organizationId))
     .all()) {
@@ -4918,9 +5482,7 @@ export function listDocumentsForActor(
   return all.filter(
     (d) =>
       visible.has(d.id) ||
-      (!granted.has(d.id) &&
-        d.spaceId != null &&
-        spaceGranted.has(d.spaceId))
+      (!granted.has(d.id) && d.spaceId != null && spaceGranted.has(d.spaceId))
   );
 }
 
@@ -4963,6 +5525,16 @@ export function updateDocument(
   update: DocumentUpdate,
   actorId: string
 ) {
+  // A format-only flip or a slug/space move has to see the stored row —
+  // validating after the write is how unreadable rows got persisted (VTX-767).
+  const needsExisting =
+    (update.contentFormat !== undefined && update.content === undefined) ||
+    update.slug !== undefined ||
+    update.spaceId !== undefined;
+  const existing = needsExisting
+    ? getDocument(db, organizationId, id)
+    : undefined;
+
   const patch: Record<string, unknown> = {
     updatedAt: new Date().toISOString(),
     updatedById: actorId,
@@ -4977,9 +5549,28 @@ export function updateDocument(
     patch.parentDocumentId = update.parentDocumentId;
   if (update.spaceId !== undefined) patch.spaceId = update.spaceId;
   if (update.isTemplate !== undefined) patch.isTemplate = update.isTemplate;
-  if (update.slug !== undefined) patch.slug = update.slug;
-  if (update.contentFormat !== undefined)
+  if (update.slug !== undefined || update.spaceId !== undefined) {
+    const slug =
+      update.slug === undefined
+        ? (existing?.slug ?? null)
+        : update.slug === null
+          ? null
+          : normalizeDocumentSlug(update.slug);
+    const spaceId =
+      update.spaceId === undefined
+        ? (existing?.spaceId ?? null)
+        : update.spaceId;
+    assertSlugFree(db, organizationId, slug, spaceId, id);
+    if (update.slug !== undefined) patch.slug = slug;
+  }
+  if (update.contentFormat !== undefined) {
+    // Format flip without a rewrite — the stored body must already parse
+    // under the new format, else reads of this doc start 500ing (VTX-767).
+    if (update.content === undefined && existing) {
+      assertDocumentContent(existing.content, update.contentFormat);
+    }
     patch.contentFormat = update.contentFormat;
+  }
   if (update.trashedAt !== undefined) patch.trashedAt = update.trashedAt;
   if (update.content !== undefined) {
     const content =
@@ -4989,6 +5580,7 @@ export function updateDocument(
     const resolvedFormat: "blocks" | "markdown" | "canvas" =
       update.contentFormat ??
       (typeof update.content === "string" ? "markdown" : "blocks");
+    assertDocumentContent(content, resolvedFormat);
     patch.contentFormat = resolvedFormat;
     patch.content = content;
     db.insert(workspaceDocumentHistory)
@@ -5610,14 +6202,33 @@ export function listMarketRuns(
 export function listCustomers(
   db: WorkspaceDb,
   organizationId: string,
-  opts: { cold?: boolean; dueBefore?: string; needsHuman?: boolean } = {}
+  opts: {
+    cold?: boolean;
+    dueBefore?: string;
+    needsHuman?: boolean;
+    externalId?: string;
+    domain?: string;
+  } = {}
 ) {
   const rows = db
     .select()
     .from(workspaceCustomers)
     .where(eq(workspaceCustomers.organizationId, organizationId))
     .all();
+  const domainFilter = opts.domain
+    ? (normalizeDomain(opts.domain) ?? opts.domain)
+    : null;
   return rows.filter((c) => {
+    if (opts.externalId !== undefined && c.externalId !== opts.externalId)
+      return false;
+    // Normalized-to-normalized: rows written before updates canonicalized
+    // (verbatim "www.x.com") still match a "x.com" filter.
+    if (
+      domainFilter !== null &&
+      c.domain !== opts.domain &&
+      normalizeDomain(c.domain) !== domainFilter
+    )
+      return false;
     if (opts.cold && (c.nextStepText !== null || c.nextStepDueAt !== null))
       return false;
     if (
@@ -5674,6 +6285,7 @@ export function updateCustomer(
     "fit",
     "fitScore",
     "fitStatus",
+    "processor",
     "evidenceUri",
     "tierId",
     "statusId",
@@ -5682,9 +6294,16 @@ export function updateCustomer(
     "nextStepDueAt",
     "needsHuman",
     "needsHumanReason",
+    "signal",
+    "signalDate",
     "priorityScore",
   ] as const) {
     if (patch[key] !== undefined) updates[key] = patch[key];
+  }
+  if (patch.domain !== undefined) {
+    // Domain is a dedup key — writes land in canonical host form, same
+    // normalization createCustomer applies.
+    updates.domain = normalizeDomain(patch.domain);
   }
   return db
     .update(workspaceCustomers)
@@ -6548,6 +7167,23 @@ export function linkEntities(db: WorkspaceDb, input: EntityLinkInput) {
     .get();
 }
 
+export function getEntityLink(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return db
+    .select()
+    .from(workspaceEntityLinks)
+    .where(
+      and(
+        eq(workspaceEntityLinks.id, id),
+        eq(workspaceEntityLinks.organizationId, organizationId)
+      )
+    )
+    .get();
+}
+
 export function unlinkEntities(
   db: WorkspaceDb,
   organizationId: string,
@@ -7332,6 +7968,76 @@ export async function deleteGitAutomationState(
       )
     );
   return true;
+}
+
+// VTX-752 — after the D1 label dedupe, rewrite every issue's `label_ids`
+// CSV: dup ids map to their canonical id, dead ids are dropped, and the
+// surviving order is preserved. Returns the number of issues rewritten.
+export async function repointIssueLabelIds(
+  db: WorkspaceDb,
+  organizationId: string,
+  idMap: Record<string, string>,
+  validIds?: ReadonlySet<string>
+): Promise<number> {
+  const rows = await db
+    .select({ id: workspaceIssues.id, labelIds: workspaceIssues.labelIds })
+    .from(workspaceIssues)
+    .where(eq(workspaceIssues.organizationId, organizationId))
+    .all();
+  let updated = 0;
+  for (const row of rows) {
+    const ids = (row.labelIds ?? "").split(",").filter(Boolean);
+    if (ids.length === 0) {
+      continue;
+    }
+    const seen = new Set<string>();
+    const next = ids
+      .map((id) => idMap[id] ?? id)
+      .filter((id) => {
+        // Post-migration dead refs — ids the dedupe deleted outright —
+        // are dropped rather than left dangling in the CSV.
+        if (validIds && !validIds.has(id)) {
+          return false;
+        }
+        if (seen.has(id)) {
+          return false;
+        }
+        seen.add(id);
+        return true;
+      });
+    const csv = next.join(",");
+    if (csv !== (row.labelIds ?? "")) {
+      await db
+        .update(workspaceIssues)
+        .set({ labelIds: csv })
+        .where(eq(workspaceIssues.id, row.id));
+      updated += 1;
+    }
+  }
+  return updated;
+}
+
+// VTX-752 — after the D1 state dedupe, re-point git automation rows whose
+// state_id named a duplicate row at its canonical survivor.
+export async function repointGitAutomationStates(
+  db: WorkspaceDb,
+  organizationId: string,
+  idMap: Record<string, string>
+): Promise<number> {
+  const rows = await listGitAutomationStates(db, organizationId);
+  let updated = 0;
+  for (const row of rows) {
+    const canonical = idMap[row.stateId];
+    if (!canonical) {
+      continue;
+    }
+    await db
+      .update(gitAutomationStates)
+      .set({ stateId: canonical })
+      .where(eq(gitAutomationStates.id, row.id));
+    updated += 1;
+  }
+  return updated;
 }
 
 export interface GitAutomationTargetBranchInput {
@@ -8680,33 +9386,6 @@ export function revokeSpacePermission(
   );
 }
 
-// Space ids the actor (or their teams) holds any grant on — the list-path
-// helper so listDocumentsVisibleTo pays one query, not one per doc.
-export function grantedSpaceIds(
-  db: WorkspaceDb,
-  organizationId: string,
-  actorIds: string[]
-) {
-  if (actorIds.length === 0) return new Set<string>();
-  const rows = db
-    .select({ spaceId: workspaceSpacePermissions.spaceId })
-    .from(workspaceSpacePermissions)
-    .where(eq(workspaceSpacePermissions.organizationId, organizationId))
-    .all()
-    .filter((r) => actorIds.includes(r.spaceId) === false);
-  // filter by actor — the where above selects org; match actors in JS for
-  // the team-ids expansion (small grant sets, same as documents).
-  const granted = new Set<string>();
-  for (const row of db
-    .select()
-    .from(workspaceSpacePermissions)
-    .where(eq(workspaceSpacePermissions.organizationId, organizationId))
-    .all()) {
-    if (actorIds.includes(row.actorId)) granted.add(row.spaceId);
-  }
-  return granted;
-}
-
 // Returns the effective level for an actor, or null when the doc is
 // restricted and the actor is unlisted. Team grants (Better Auth
 // organization teams) cover every member of the team.
@@ -9000,16 +9679,17 @@ export function getCustomerByDomain(
   organizationId: string,
   domain: string
 ) {
+  // Compare normalized-to-normalized so "https://www.x.com/" and "x.com"
+  // hit the same record — including rows written before updates stored
+  // canonical domains (verbatim "www.x.com"). The domain column has no
+  // index, so the org scan costs the same as the old eq.
+  const key = normalizeDomain(domain) ?? domain;
   return db
     .select()
     .from(workspaceCustomers)
-    .where(
-      and(
-        eq(workspaceCustomers.organizationId, organizationId),
-        eq(workspaceCustomers.domain, domain)
-      )
-    )
-    .get();
+    .where(eq(workspaceCustomers.organizationId, organizationId))
+    .all()
+    .find((c) => c.domain === domain || normalizeDomain(c.domain) === key);
 }
 
 // ---- triage auto-delegate rules (PILE-427) ----
@@ -9018,10 +9698,6 @@ export function getCustomerByDomain(
 // rule applies its action (delegate an agent, set a status) and the outcome
 // is recorded in triage_rule_evaluations. conditions/action are opaque JSON
 // here — the zod contract lives in src/global/triage-rules.ts.
-
-export type TriageRule = typeof workspaceTriageRules.$inferSelect;
-export type TriageRuleEvaluation =
-  typeof workspaceTriageRuleEvaluations.$inferSelect;
 
 export interface TriageRuleInput {
   organizationId: string;

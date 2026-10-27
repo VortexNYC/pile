@@ -35,7 +35,7 @@
     "build:bin": "bun build --compile --minify src/index.ts --outfile dist/pile && tmpdir=$(mktemp -d) && cp dist/pile \"$tmpdir/pile\" && (cd \"$tmpdir\" && ./pile tui-check >/dev/null) && rm -rf \"$tmpdir\" && echo \"build:bin ok — OpenTUI embedded\""
   },
   "dependencies": {
-    "@opentui/core": "0.6.6",
+    "@opentui/core": "0.6.8",
     "openapi-fetch": "0.17.0"
   },
   "devDependencies": {

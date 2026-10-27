@@ -19,6 +19,7 @@ import { FieldMenu } from "@/components/field-menu";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap } from "@/lib/api";
+import { fetchAllCustomers, fetchAllDeals } from "@/lib/crm-lists";
 import { formatRelative } from "@/lib/labels";
 
 const STAGES = [
@@ -38,7 +39,10 @@ const STAGE_LABELS: Record<string, string> = {
   lost: "Lost",
 };
 
-function money(cents: number | null, currency: string | null): string {
+export function formatDealAmount(
+  cents: number | null,
+  currency: string | null
+): string {
   if (cents === null) return "—";
   return new Intl.NumberFormat("en", {
     style: "currency",
@@ -50,29 +54,19 @@ function money(cents: number | null, currency: string | null): string {
 export function DealsList() {
   const workspace = useWorkspace();
   const queryClient = useQueryClient();
+  // PILE-653 — the pipeline only reads picker fields, so fetch summary
+  // rows and follow nextCursor until the bounded endpoints run dry.
   const customers = useQuery({
-    queryKey: wsKey(workspace.id, "customers"),
-    queryFn: async () =>
-      (
-        await unwrap(
-          api.GET("/workspaces/{organizationId}/customers", {
-            params: { path: { organizationId: workspace.id } },
-          })
-        )
-      ).customers,
+    queryKey: wsKey(workspace.id, "customers", "summary"),
+    queryFn: () =>
+      fetchAllCustomers({ organizationId: workspace.id, summary: true }),
   });
   const customerName = (id: string) =>
     customers.data?.find((c) => c.id === id)?.name ?? id.slice(0, 8);
   const deals = useQuery({
     queryKey: wsKey(workspace.id, "deals"),
-    queryFn: async () =>
-      (
-        await unwrap(
-          api.GET("/workspaces/{organizationId}/deals", {
-            params: { path: { organizationId: workspace.id } },
-          })
-        )
-      ).deals,
+    queryFn: () =>
+      fetchAllDeals({ organizationId: workspace.id, summary: true }),
   });
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } })
@@ -204,7 +198,7 @@ export function DealsList() {
                     {rows.some((d) => d.amountCents !== null) ? (
                       <span className="text-xs text-kumo-subtle">
                         ·{" "}
-                        {money(
+                        {formatDealAmount(
                           rows.reduce((s, d) => s + (d.amountCents ?? 0), 0),
                           rows[0]?.currency ?? "USD"
                         )}
@@ -245,7 +239,10 @@ export function DealsList() {
                                 {customerName(deal.customerId)}
                               </span>
                               <span className="w-20 text-right text-sm text-kumo-default">
-                                {money(deal.amountCents, deal.currency)}
+                                {formatDealAmount(
+                                  deal.amountCents,
+                                  deal.currency
+                                )}
                               </span>
                               <FieldMenu
                                 title="Stage"

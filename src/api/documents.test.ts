@@ -239,7 +239,7 @@ describe("documents API", () => {
       {},
       token
     );
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(400);
   });
 });
 
@@ -519,5 +519,395 @@ describe("default-deny creator grants", () => {
 describe("space permission routes (PILE-447)", () => {
   it("registers document-spaces/{id}/permissions grant+revoke", async () => {
     expect(true).toBe(true);
+  });
+
+  it("routes GET /documents/search before /documents/{id} and matches markdown content (VTX-649)", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const created = await fetch(
+      `/workspaces/${organizationId}/documents`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          title: "VTX-649 — markdown search proof",
+          contentFormat: "markdown",
+          content: "UniqueTokenVtx649SearchProof in markdown body",
+        }),
+      },
+      token
+    );
+    expect(created.status).toBe(201);
+    const doc = z.object({ id: z.string() }).parse(await created.json());
+
+    const res = await fetch(
+      `/workspaces/${organizationId}/documents/search?q=UniqueTokenVtx649SearchProof`,
+      {},
+      token
+    );
+    expect(res.status).toBe(200);
+    const raw = (await res.json()) as { documents: { content?: unknown }[] };
+    const body = z
+      .object({
+        documents: z.array(
+          z.object({
+            id: z.string(),
+            score: z.number(),
+            snippet: z.string(),
+          })
+        ),
+      })
+      .parse(raw);
+    expect(body.documents.map((d) => d.id)).toContain(doc.id);
+
+    // VTX-758 — hits carry a score and an excerpt, never the full body.
+    const hit = body.documents.find((d) => d.id === doc.id);
+    expect(hit?.snippet).toContain("UniqueTokenVtx649SearchProof");
+    expect(
+      raw.documents.every((d) => !("content" in d) || d.content === undefined)
+    ).toBe(true);
+  });
+
+  it("honours ?limit on document search (VTX-758)", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const marker = `limitproof${crypto.randomUUID().slice(0, 8)}`;
+    for (let i = 0; i < 3; i++) {
+      const created = await fetch(
+        `/workspaces/${organizationId}/documents`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            title: `${marker} doc ${i}`,
+            contentFormat: "markdown",
+            content: `${marker} body ${i}`,
+          }),
+        },
+        token
+      );
+      expect(created.status).toBe(201);
+    }
+
+    const res = await fetch(
+      `/workspaces/${organizationId}/documents/search?q=${marker}&limit=2`,
+      {},
+      token
+    );
+    expect(res.status).toBe(200);
+    const body = z
+      .object({ documents: z.array(z.object({ id: z.string() })) })
+      .parse(await res.json());
+    expect(body.documents.length).toBeLessThanOrEqual(2);
+  });
+
+  it("returns content: '' with ?summary=1 but full content on GET /{id} (PILE-645)", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const created = await fetch(
+      `/workspaces/${organizationId}/documents`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          title: "Summary strip proof",
+          contentFormat: "markdown",
+          content: "FullBodyShouldNotBeInSummaryList",
+        }),
+      },
+      token
+    );
+    expect(created.status).toBe(201);
+    const doc = z.object({ id: z.string() }).parse(await created.json());
+
+    const list = await fetch(
+      `/workspaces/${organizationId}/documents?summary=1`,
+      {},
+      token
+    );
+    expect(list.status).toBe(200);
+    const listed = z
+      .object({
+        documents: z.array(
+          z.object({ id: z.string(), title: z.string(), content: z.unknown() })
+        ),
+      })
+      .parse(await list.json());
+    const row = listed.documents.find((d) => d.id === doc.id);
+    expect(row?.title).toBe("Summary strip proof");
+    expect(row?.content).toBe("");
+
+    const full = await fetch(
+      `/workspaces/${organizationId}/documents/${doc.id}`,
+      {},
+      token
+    );
+    const fullDoc = z.object({ content: z.unknown() }).parse(await full.json());
+    expect(fullDoc.content).toBe("FullBodyShouldNotBeInSummaryList");
+  });
+});
+
+describe("document write integrity (VTX-767)", () => {
+  it("rejects a content/contentFormat mismatch with 400 and no write", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const bad = await fetch(
+      `/workspaces/${organizationId}/documents`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          title: "poison",
+          contentFormat: "blocks",
+          content: "a plain string is not blocks",
+        }),
+      },
+      token
+    );
+    expect(bad.status).toBe(400);
+
+    const list = await fetch(
+      `/workspaces/${organizationId}/documents`,
+      {},
+      token
+    );
+    expect(list.status).toBe(200);
+    const titles = z
+      .object({ documents: z.array(z.object({ title: z.string() })) })
+      .parse(await list.json())
+      .documents.map((d) => d.title);
+    expect(titles).not.toContain("poison");
+  });
+
+  it("rejects a format-only flip that would strand stored content", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const created = await fetch(
+      `/workspaces/${organizationId}/documents`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          title: "md doc",
+          contentFormat: "markdown",
+          content: "# hi",
+        }),
+      },
+      token
+    );
+    const doc = z.object({ id: z.string() }).parse(await created.json());
+    const flip = await fetch(
+      `/workspaces/${organizationId}/documents/${doc.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ contentFormat: "blocks" }),
+      },
+      token
+    );
+    expect(flip.status).toBe(400);
+    const after = await fetch(
+      `/workspaces/${organizationId}/documents/${doc.id}`,
+      {},
+      token
+    );
+    expect(
+      z.object({ contentFormat: z.string() }).parse(await after.json())
+        .contentFormat
+    ).toBe("markdown");
+  });
+
+  it("a malformed stored row does not take down list or get (VTX-767)", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    // Seed the poisoned row directly in the DO, bypassing the API
+    // validation that now prevents it.
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    const { runInDurableObject } = await import("cloudflare:test");
+    await runInDurableObject(stub, async (_instance, ctx) => {
+      ctx.storage.sql.exec(
+        `INSERT INTO documents (id, organization_id, title, icon, content, content_format, slug, project_id, issue_id, initiative_id, parent_document_id, space_id, is_template, created_by_id, updated_by_id, created_at, updated_at, trashed_at)
+         VALUES ('poison-doc', ?, 'Poisoned', NULL, 'not json at all', 'blocks', NULL, NULL, NULL, NULL, NULL, NULL, 0, 'seed', NULL, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z', NULL)`,
+        organizationId
+      );
+    });
+    const list = await fetch(
+      `/workspaces/${organizationId}/documents`,
+      {},
+      token
+    );
+    expect(list.status).toBe(200);
+    const docs = z
+      .object({
+        documents: z.array(z.object({ id: z.string(), content: z.unknown() })),
+      })
+      .parse(await list.json()).documents;
+    const poisoned = docs.find((d) => d.id === "poison-doc");
+    expect(poisoned?.content).toBe("not json at all");
+
+    const got = await fetch(
+      `/workspaces/${organizationId}/documents/poison-doc`,
+      {},
+      token
+    );
+    expect(got.status).toBe(200);
+    expect(
+      z.object({ content: z.unknown() }).parse(await got.json()).content
+    ).toBe("not json at all");
+  });
+});
+
+describe("document space write ACL (VTX-768)", () => {
+  it("a member key cannot create into a restricted space; unknown spaceId 400s", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const db = createD1(env.D1);
+    const now = new Date();
+    await db
+      .insert(userTable)
+      .values({
+        id: "user-doc-space-member",
+        name: "Space Member",
+        email: "doc-space-member@example.com",
+        emailVerified: false,
+        image: null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({ target: [userTable.email] });
+    await createMembership(
+      db,
+      env,
+      organizationId,
+      "user-doc-space-member",
+      "member"
+    );
+
+    const spaceRes = await fetch(
+      `/workspaces/${organizationId}/document-spaces`,
+      {
+        method: "POST",
+        body: JSON.stringify({ name: "Leadership", restricted: true }),
+      },
+      token
+    );
+    expect(spaceRes.status).toBe(201);
+    const space = z.object({ id: z.string() }).parse(await spaceRes.json());
+
+    const auth = await createAuth(env);
+    const memberKey = z.object({ key: z.string() }).parse(
+      await auth.api.createApiKey({
+        body: {
+          userId: "user-doc-space-member",
+          name: "member-key",
+          rateLimitEnabled: false,
+          metadata: { organizationId, permissions: "member" },
+          permissions: { workspace: ["member"] },
+        },
+      })
+    ).key;
+
+    // Restricted space: member cannot write into it.
+    const denied = await fetch(
+      `/workspaces/${organizationId}/documents`,
+      {
+        method: "POST",
+        body: JSON.stringify({ title: "nope", spaceId: space.id }),
+      },
+      memberKey
+    );
+    expect(denied.status).toBe(403);
+
+    // The same member CAN write into an unrestricted space.
+    const openSpaceRes = await fetch(
+      `/workspaces/${organizationId}/document-spaces`,
+      { method: "POST", body: JSON.stringify({ name: "General" }) },
+      token
+    );
+    const openSpace = z
+      .object({ id: z.string() })
+      .parse(await openSpaceRes.json());
+    const allowed = await fetch(
+      `/workspaces/${organizationId}/documents`,
+      {
+        method: "POST",
+        body: JSON.stringify({ title: "ok", spaceId: openSpace.id }),
+      },
+      memberKey
+    );
+    expect(allowed.status).toBe(201);
+
+    // Admin (owner) key still writes into the restricted space.
+    const adminWrite = await fetch(
+      `/workspaces/${organizationId}/documents`,
+      {
+        method: "POST",
+        body: JSON.stringify({ title: "leadership doc", spaceId: space.id }),
+      },
+      token
+    );
+    expect(adminWrite.status).toBe(201);
+
+    // Unknown spaceId is a 400, not a dangling reference (VTX-769).
+    const unknownSpace = await fetch(
+      `/workspaces/${organizationId}/documents`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          title: "dangling",
+          spaceId: "00000000-0000-4000-8000-000000000000",
+        }),
+      },
+      token
+    );
+    expect(unknownSpace.status).toBe(400);
+
+    // Unknown projectId likewise (VTX-769).
+    const unknownProject = await fetch(
+      `/workspaces/${organizationId}/documents`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          title: "dangling",
+          projectId: "00000000-0000-4000-8000-000000000000",
+        }),
+      },
+      token
+    );
+    expect(unknownProject.status).toBe(400);
+
+    // Moving an existing doc INTO the restricted space is denied too.
+    const mine = z.object({ id: z.string() }).parse(await allowed.json());
+    const moved = await fetch(
+      `/workspaces/${organizationId}/documents/${mine.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ spaceId: space.id }),
+      },
+      memberKey
+    );
+    expect(moved.status).toBe(403);
+    void adminWrite;
+  });
+});
+
+describe("document slug handling (VTX-770)", () => {
+  it("normalizes slugs and rejects duplicates within a space", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const first = await fetch(
+      `/workspaces/${organizationId}/documents`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          title: "a",
+          slug: "Weird Slug / x?y=<b>",
+        }),
+      },
+      token
+    );
+    expect(first.status).toBe(201);
+    const doc = z
+      .object({ id: z.string(), slug: z.string().nullable() })
+      .parse(await first.json());
+    expect(doc.slug).toBe("weird-slug-x-y-b");
+
+    const dupe = await fetch(
+      `/workspaces/${organizationId}/documents`,
+      {
+        method: "POST",
+        body: JSON.stringify({ title: "b", slug: "weird-slug-x-y-b" }),
+      },
+      token
+    );
+    expect(dupe.status).toBe(409);
   });
 });

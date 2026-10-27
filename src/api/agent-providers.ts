@@ -369,6 +369,7 @@ const webhookRoute = createRoute({
 });
 
 const inboundWebhookRoute = createRoute({
+  security: [],
   method: "post",
   path: "/webhooks/agent/{organizationId}/{agentId}",
   tags: ["agent-providers"],

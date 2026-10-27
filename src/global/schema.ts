@@ -501,6 +501,14 @@ export const labels = sqliteTable(
   },
   (table) => [
     index("labels_organization_idx" as string).on(table.organizationId),
+    // VTX-752 — a label is unique per (workspace, name, kind): the dup
+    // "daytona" rows came from unguarded creates, and this index plus the
+    // dedupe migration make them un-representable.
+    uniqueIndex("labels_unique_name_kind_idx" as string).on(
+      table.organizationId,
+      table.name,
+      table.kind
+    ),
   ]
 );
 
@@ -611,6 +619,12 @@ export const states = sqliteTable(
     index("states_linear_idx" as string).on(
       table.organizationId,
       table.linearId
+    ),
+    // VTX-752 — duplicated standard states ("Backlog" twice) made column
+    // rendering ambiguous; one canonical state per (workspace, name).
+    uniqueIndex("states_unique_name_idx" as string).on(
+      table.organizationId,
+      table.name
     ),
   ]
 );
@@ -2339,6 +2353,7 @@ export const supportTicketAttachments = sqliteTable(
         "log",
         "network",
         "replay",
+        "transcript",
       ] as const,
     })
       .notNull()

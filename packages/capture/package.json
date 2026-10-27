@@ -28,7 +28,7 @@
   "devDependencies": {
     "@pile/tsconfig": "workspace:*",
     "@playwright/test": "1.64.1",
-    "vite": "8.3.4",
+    "vite": "8.3.5",
     "vitest": "4.1.11"
   }
 }

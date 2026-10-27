@@ -1,8 +1,9 @@
 import { env } from "cloudflare:test";
+import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { createD1 } from "../global/db.js";
-import { user as userTable } from "../global/schema.js";
+import { organization, user as userTable } from "../global/schema.js";
 import { createTeam } from "../global/teams.js";
 import { createWorkspace } from "../global/workspaces.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
@@ -1317,5 +1318,354 @@ describe("infra classification of dispatch failures (PILE-452)", () => {
       actorId: actor.id,
       actorType: "user",
     });
+  });
+
+  it("refuses a stale dispatch on a finished issue whose lane PR merged (VTX-621)", async () => {
+    const s = stub();
+    const agentId = `mock-merged-${crypto.randomUUID().slice(0, 8)}`;
+    registerAgentProvider(agentId, () => new MockAgentProvider(agentId));
+    const issue = await s.createIssue({
+      title: "already shipped",
+      repo: "acme/widgets",
+    });
+    await s.updateIssue(issue.id, { status: "done" }, actor.id);
+    const mergedPr = {
+      number: 900,
+      html_url: "https://github.com/acme/widgets/pull/900",
+      title: `${issue.identifier} shipped work`,
+      body: null,
+      head: { ref: "merged-branch" },
+      merged_at: "2026-10-20T12:00:00Z",
+    };
+    const dedupeDeps = {
+      tokenForRepo: async () => "gh-token",
+      fetch: async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/pulls?state=closed")) {
+          return new Response(JSON.stringify([mergedPr]), { status: 200 });
+        }
+        return new Response("[]", { status: 200 });
+      },
+    };
+    const done = await s.getIssue(issue.id);
+    await expect(
+      dispatchAgent(
+        env,
+        agentId,
+        actor.organizationId,
+        done!,
+        actor,
+        undefined,
+        undefined,
+        {
+          dedupeDeps,
+        }
+      )
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+
+    // A reopened issue with the same merged PR dispatches normally — the
+    // merged PR is history; the lane opens a fresh one (PILE-257).
+    await s.updateIssue(issue.id, { status: "todo" }, actor.id);
+    const reopened = await s.getIssue(issue.id);
+    const session = await dispatchAgent(
+      env,
+      agentId,
+      actor.organizationId,
+      reopened!,
+      actor,
+      undefined,
+      undefined,
+      { dedupeDeps }
+    );
+    expect(session.status).toBe("created");
+  });
+
+  it("recalls issue.identifier and issue.repo facts into dispatch instructions (VTX-645)", async () => {
+    const s = stub();
+    let capturedInstructions: string | null | undefined;
+    const agentId = `mock-mem-${crypto.randomUUID().slice(0, 8)}`;
+    registerAgentProvider(
+      agentId,
+      () =>
+        new MockAgentProvider(agentId, {
+          dispatch: (_org, _issue, _model, ctx) => {
+            capturedInstructions = ctx?.instructions;
+            return { id: "prov-mem", agentId, status: "running" };
+          },
+        })
+    );
+    const issue = await s.createIssue({
+      title: "memory recall test",
+      repo: "VortexNYC/pile",
+    });
+    await s.memoryRemember({
+      entityType: "issue",
+      entityId: issue.identifier!,
+      kind: "lesson",
+      fact: "identifier-keyed lesson for lane",
+    });
+    await s.memoryRemember({
+      entityType: "repo",
+      entityId: "VortexNYC/pile",
+      kind: "toolchain",
+      fact: "use pnpm only, never npm",
+    });
+    await dispatchAgent(env, agentId, actor.organizationId, issue, actor);
+    expect(capturedInstructions).toContain("identifier-keyed lesson for lane");
+    expect(capturedInstructions).toContain("use pnpm only, never npm");
+  });
+
+  it("caps review lanes at reviewConcurrencyCap without pausing implementation dispatches (VTX-648)", async () => {
+    const s = stub();
+    const agentId = `mock-revcap-${crypto.randomUUID().slice(0, 8)}`;
+    const dispatchedIds: string[] = [];
+    registerAgentProvider(
+      agentId,
+      () =>
+        new MockAgentProvider(agentId, {
+          maxConcurrentLanes: 4,
+          dispatch: (_org, _issue, _model, ctx) => {
+            dispatchedIds.push(ctx?.sessionId ?? "");
+            return { id: `prov-${ctx?.sessionId}`, agentId, status: "running" };
+          },
+        })
+    );
+    // maxConcurrentLanes=4 -> reviewCap=2. First 2 review lanes run; 3rd holds locally.
+    const r1Issue = await s.createIssue({ title: "rev 1" });
+    const r2Issue = await s.createIssue({ title: "rev 2" });
+    const r3Issue = await s.createIssue({ title: "rev 3" });
+    const r1 = await dispatchAgent(
+      env,
+      agentId,
+      actor.organizationId,
+      r1Issue,
+      actor,
+      undefined,
+      undefined,
+      { purpose: "review" }
+    );
+    const r2 = await dispatchAgent(
+      env,
+      agentId,
+      actor.organizationId,
+      r2Issue,
+      actor,
+      undefined,
+      undefined,
+      { purpose: "review" }
+    );
+    const r3 = await dispatchAgent(
+      env,
+      agentId,
+      actor.organizationId,
+      r3Issue,
+      actor,
+      undefined,
+      undefined,
+      { purpose: "review" }
+    );
+    expect(r1.status).toBe("running");
+    expect(r2.status).toBe("running");
+    expect(r3.status).toBe("waiting");
+    expect(r3.paused).toBe(1);
+    // Agent type is NOT paused workspace-wide — an implementation lane still dispatches!
+    expect(await s.getAgentPause(agentId)).toBeUndefined();
+    const implIssue = await s.createIssue({ title: "impl work" });
+    const impl = await dispatchAgent(
+      env,
+      agentId,
+      actor.organizationId,
+      implIssue,
+      actor
+    );
+    expect(impl.status).toBe("running");
+    expect(impl.paused).toBe(0);
+    expect(dispatchedIds).toContain(impl.id);
+  });
+
+  it("provisions PgxLaneDb when org metadata configures provider=pgx for the issue repo (VTX-651)", async () => {
+    const s = stub();
+    let capturedExtraEnv: Record<string, string> | undefined;
+    const agentId = `mock-pgx-${crypto.randomUUID().slice(0, 8)}`;
+    registerAgentProvider(
+      agentId,
+      () =>
+        new MockAgentProvider(agentId, {
+          dispatch: (_org, _issue, _model, ctx) => {
+            capturedExtraEnv = ctx?.extraEnv;
+            return { id: "prov-pgx", agentId, status: "running" };
+          },
+        })
+    );
+    const db = createD1(env.D1);
+    await db
+      .update(organization)
+      .set({
+        metadata: JSON.stringify({
+          key: "IS",
+          laneDb: {
+            "VortexNYC/vortex": {
+              provider: "pgx",
+              template: "vortex_base",
+              ttl: "2h",
+            },
+          },
+        }),
+      })
+      .where(eq(organization.id, actor.organizationId));
+    const issue = await s.createIssue({
+      title: "pgx lane db test",
+      repo: "VortexNYC/vortex",
+    });
+    const session = await dispatchAgent(
+      env,
+      agentId,
+      actor.organizationId,
+      issue,
+      actor
+    );
+    expect(session.laneDbRef).toContain('"provider":"pgx"');
+    expect(capturedExtraEnv?.PILE_PGX_TEMPLATE).toBe("vortex_base");
+    expect(capturedExtraEnv?.PILE_PGX_TTL).toBe("2h");
+    expect(capturedExtraEnv?.DATABASE_URL).toContain("127.0.0.1:5432/lane_");
+  });
+});
+
+describe("dispatch memory profile injection + ephemeral keys (PILE-616/623)", () => {
+  it("injects static and dynamic memory sections into the lane prompt", async () => {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(actor.organizationId)
+    );
+    await stub.setOrganizationId(actor.organizationId);
+    const issue = await stub.createIssue({ title: "Memory prompt test" });
+    await stub.memoryRemember({
+      entityType: "issue",
+      entityId: issue.id,
+      kind: "lesson",
+      fact: "always stage contracts first",
+    });
+    await stub.memoryRemember({
+      entityType: "issue",
+      entityId: issue.id,
+      kind: "outcome",
+      fact: "lane finished the rebuild",
+    });
+
+    let captured: AgentDispatchContext | undefined;
+    const agentId = `mock-mem-${crypto.randomUUID().slice(0, 8)}`;
+    const provider = new MockAgentProvider(agentId, {
+      dispatch: (_1, _2, _3, ctx) => {
+        captured = ctx;
+        return { id: "mem-1", agentId, status: "created" };
+      },
+    });
+    registerAgentProvider(agentId, () => provider);
+
+    await dispatchAgent(env, agentId, actor.organizationId, issue, actor);
+
+    expect(captured?.instructions).toContain("Static facts:");
+    expect(captured?.instructions).toContain(
+      "[lesson] always stage contracts first"
+    );
+    expect(captured?.instructions).toContain("Recent / dynamic context:");
+    expect(captured?.instructions).toContain(
+      "[outcome] lane finished the rebuild"
+    );
+  });
+
+  it("recalls task-contextual repo and workspace memories matching the issue title/description even past the newest-10 cap (PILE-640)", async () => {
+    // A dedicated workspace — the shared one accumulates live sessions
+    // across the file and hits the 25-lane concurrency cap.
+    const db = createD1(env.D1);
+    const headers = await createAdminHeaders(env, "user-1");
+    const ws = await createWorkspace(db, env, headers, {
+      name: "Contextual memory workspace",
+      slug: `ctx-ws-${crypto.randomUUID().slice(0, 8)}`,
+      ownerId: actor.id,
+    });
+    const organizationId = ws!.id;
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    // The zebroid lesson lands first; 12 newer unrelated facts then push it
+    // out of the newest-10 repo window — only the contextual search recall
+    // can rescue it.
+    await stub.memoryRemember({
+      entityType: "repo",
+      entityId: "acme/web",
+      kind: "lesson",
+      fact: "zebroid billing rounding requires half-even integer cents",
+    });
+    for (let i = 0; i < 12; i++) {
+      await stub.memoryRemember({
+        entityType: "repo",
+        entityId: "acme/web",
+        kind: "note",
+        fact: `unrelated deploy cadence note number ${i}`,
+      });
+    }
+    let captured: AgentDispatchContext | undefined;
+    const agentId = `mock-ctx-${crypto.randomUUID().slice(0, 8)}`;
+    const provider = new MockAgentProvider(agentId, {
+      dispatch: (_1, _2, _3, ctx) => {
+        captured = ctx;
+        return { id: "ctx-1", agentId, status: "created" };
+      },
+    });
+    registerAgentProvider(agentId, () => provider);
+    const issue = await stub.createIssue({
+      title: "Fix zebroid billing rounding mismatch",
+      repo: "acme/web",
+    });
+    await dispatchAgent(env, agentId, organizationId, issue, actor);
+    expect(captured?.instructions).toContain(
+      "zebroid billing rounding requires half-even integer cents"
+    );
+  });
+
+  it("mints the lane api key with a 24h expiry (PILE-623)", async () => {
+    const { apikey } = await import("../global/schema.js");
+    // A dedicated workspace — the shared one accumulates live sessions
+    // across the file and hits the 25-lane concurrency cap.
+    const db = createD1(env.D1);
+    const headers = await createAdminHeaders(env, "user-1");
+    const ws = await createWorkspace(db, env, headers, {
+      name: "Ephemeral key workspace",
+      slug: `key-ws-${crypto.randomUUID().slice(0, 8)}`,
+      ownerId: actor.id,
+    });
+    const organizationId = ws!.id;
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    await stub.setOrganizationId(organizationId);
+    const issue = await stub.createIssue({ title: "Ephemeral key test" });
+
+    const agentId = `mock-key-${crypto.randomUUID().slice(0, 8)}`;
+    const provider = new MockAgentProvider(agentId, {
+      dispatch: () => ({ id: "key-1", agentId, status: "created" }),
+    });
+    registerAgentProvider(agentId, () => provider);
+
+    const session = await dispatchAgent(
+      env,
+      agentId,
+      organizationId,
+      issue,
+      actor
+    );
+
+    const rows = await db
+      .select()
+      .from(apikey)
+      .where(eq(apikey.name, `agent-${session.id.slice(0, 13)}`))
+      .all();
+    expect(rows).toHaveLength(1);
+    const { createdAt, expiresAt } = rows[0];
+    expect(expiresAt).not.toBeNull();
+    const ttl = expiresAt!.getTime() - createdAt.getTime();
+    expect(ttl).toBeGreaterThan(23 * 60 * 60 * 1000);
+    expect(ttl).toBeLessThanOrEqual(25 * 60 * 60 * 1000);
   });
 });

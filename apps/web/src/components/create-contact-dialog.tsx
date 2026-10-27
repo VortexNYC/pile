@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap } from "@/lib/api";
+import { fetchAllCustomers } from "@/lib/crm-lists";
 import { toastError, toastSuccess } from "@/lib/toast";
 
 interface EditableContact {
@@ -19,6 +20,23 @@ interface EditableContact {
   email: string;
   fullName: string | null;
   phone: string | null;
+}
+
+/** POST body for a new contact — company link only when one was picked. */
+export function newContactBody(input: {
+  email: string;
+  fullName: string;
+  phone: string;
+  customerId: string;
+}) {
+  return {
+    email: input.email.trim(),
+    fullName: input.fullName.trim() || undefined,
+    phone: input.phone.trim() || undefined,
+    companies: input.customerId
+      ? [{ companyId: input.customerId, isPrimary: true }]
+      : undefined,
+  };
 }
 
 /** New/edit-contact dialog — people behind tickets and deals. Create
@@ -53,15 +71,9 @@ export function ContactDialog({
   const [customerId, setCustomerId] = useState("");
 
   const companies = useQuery({
-    queryKey: wsKey(workspace.id, "customers"),
-    queryFn: async () =>
-      (
-        await unwrap(
-          api.GET("/workspaces/{organizationId}/customers", {
-            params: { path: { organizationId: workspace.id } },
-          })
-        )
-      ).customers,
+    queryKey: wsKey(workspace.id, "customers", "summary"),
+    queryFn: () =>
+      fetchAllCustomers({ organizationId: workspace.id, summary: true }),
     enabled: open && !contact,
   });
 
@@ -98,14 +110,7 @@ export function ContactDialog({
         : unwrap(
             api.POST("/workspaces/{organizationId}/support/customers", {
               params: { path: { organizationId: workspace.id } },
-              body: {
-                email: email.trim(),
-                fullName: fullName.trim() || undefined,
-                phone: phone.trim() || undefined,
-                companies: customerId
-                  ? [{ companyId: customerId, isPrimary: true }]
-                  : undefined,
-              },
+              body: newContactBody({ email, fullName, phone, customerId }),
             })
           ),
     onSuccess: () => {

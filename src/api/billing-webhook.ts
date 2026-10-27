@@ -67,6 +67,7 @@ const webhookEventSchema = z.object({
 });
 
 const billingWebhookRoute = createRoute({
+  security: [],
   method: "post",
   path: "/billing/webhook",
   tags: ["billing"],

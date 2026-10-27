@@ -9,6 +9,13 @@ import { Page } from "@/components/page";
  * skeleton: breadcrumb → title → actions, center column for the
  * story (content, activity, composer), right rail for properties
  * and relations. Entities differ in fields, not in frame. */
+/** PILE-653 — the rail is no longer lg-only: under `lg` it stacks below
+ *  the center column so mobile readers still get properties, relations,
+ *  and field controls; at `lg` it returns to the bordered side rail. */
+export const ENTITY_CENTER_CLASS = "flex-1 min-w-0 flex flex-col gap-6";
+export const ENTITY_RAIL_CLASS =
+  "w-full lg:w-72 shrink-0 border-t border-kumo-line pt-6 lg:border-t-0 lg:border-l lg:pl-6 lg:pt-0";
+
 export function EntityPage({
   title,
   description,
@@ -54,10 +61,10 @@ export function EntityPage({
         )
       }
     >
-      <div className="flex gap-8 min-w-0">
-        <div className="flex-1 min-w-0 flex flex-col gap-6">{center}</div>
+      <div className="flex min-w-0 flex-col gap-8 lg:flex-row">
+        <div className={ENTITY_CENTER_CLASS}>{center}</div>
         {rail ? (
-          <aside className="hidden lg:block w-72 shrink-0 border-l border-kumo-line pl-6">
+          <aside className={ENTITY_RAIL_CLASS}>
             <div className="flex flex-col gap-6">{rail}</div>
           </aside>
         ) : null}

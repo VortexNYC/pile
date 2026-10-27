@@ -291,6 +291,7 @@ const issuePayloadSchema = z.object({
 });
 
 export const githubWebhookRoute = createRoute({
+  security: [],
   method: "post",
   path: "/github",
   tags: ["github"],

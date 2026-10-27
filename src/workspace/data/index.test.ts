@@ -3,10 +3,17 @@ import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/durable-sqlite";
 import { beforeAll, describe, expect, it } from "vitest";
 
+import { hasAgentProvider } from "../../agents/index.js";
 import type { WorkerEnv } from "../../platform/middleware.js";
 import type { WorkspaceDO } from "../durable-object.js";
 import { workspaceSchema } from "../schema-map.js";
-import { workspaceAgentSessions, workspaceAgentTypes, workspaceIssues } from "../schema.js";
+import {
+  workspaceAgentSessions,
+  workspaceAgentTypes,
+  workspaceCustomers,
+  workspaceIssues,
+  workspaceMemory,
+} from "../schema.js";
 import {
   hiddenIssueCondition,
   type AgentSessionInput,
@@ -34,6 +41,12 @@ import {
   getImportReceipt,
   listImportReceipts,
   stageKey,
+  DEFAULT_AGENT_TYPES,
+  DEFAULT_STAGE_TEMPLATES,
+  createGitAutomationState,
+  listGitAutomationStates,
+  repointGitAutomationStates,
+  repointIssueLabelIds,
   updateStageTemplate,
   createTriageRule,
   getTriageRule,
@@ -46,6 +59,7 @@ import {
   createDocumentSpace,
   documentAccessLevel,
   extractEventField,
+  getCustomerByDomain,
   getCustomerByExternalId,
   getDealByExternalId,
   getExternalEventDeliveryByDedupeKey,
@@ -58,7 +72,6 @@ import {
   setDocumentPermission,
   setSpacePermission,
   revokeSpacePermission,
-  listSpacePermissions,
   updateDocument,
   updateDocumentSpace,
   createCustomer,
@@ -72,12 +85,15 @@ import {
   getAgentSession,
   getEntityAttachment,
   getNotificationPreferences,
+  getUserViewPreferences,
+  setDisplay,
   hasIssueAccess,
   hiddenIssueIds,
   listIssuePermissions,
   setIssuePermission,
   revokeIssuePermission,
   listAgentSessions,
+  listAgentSessionSummaries,
   listDocumentLinks,
   listEntityAttachments,
   listCustomerIntakeItems,
@@ -98,6 +114,7 @@ import {
   summarizeRunReceipts,
   sumRunReceipts,
   updateAgentSession,
+  updateCustomer,
   createExternalLink,
   getExternalLink,
   updateExternalLink,
@@ -107,6 +124,12 @@ import {
   upsertAgentSpendCap,
   upsertNotificationPreferences,
   upsertRunReceipt,
+  memoryRemember,
+  memoryRecall,
+  memoryUpdate,
+  memoryForget,
+  memoryProfile,
+  isDynamicMemoryFact,
   type NotificationType,
   type WorkspaceDb,
 } from "./index.js";
@@ -338,6 +361,47 @@ describe("notification preferences", () => {
       expect(updated?.email).toBe(true);
       expect(updated?.emailExplicit).toBe(true);
       expect(updated?.mutedTypes).toBe("issue_updated");
+    });
+  });
+});
+
+describe("user view preferences display", () => {
+  it("round-trips the display JSON blob without touching other pref columns", async () => {
+    await withDb(async (db) => {
+      const userId = `display-${crypto.randomUUID()}`;
+      const display = {
+        customers: {
+          sheetColors: { trades: "#22c55e" },
+          density: "compact" as const,
+          hiddenColumns: ["phone"],
+        },
+      };
+      await setDisplay(db, WORKSPACE_ID, userId, display);
+      const row = getUserViewPreferences(db, WORKSPACE_ID, userId);
+      expect(row?.display).toBe(JSON.stringify(display));
+      expect(row?.hiddenSurfaces).toBeNull();
+      expect(row?.favorites).toBeNull();
+    });
+  });
+
+  it("updates the stored blob in place and clears it with null", async () => {
+    await withDb(async (db) => {
+      const userId = `display-${crypto.randomUUID()}`;
+      await setDisplay(db, WORKSPACE_ID, userId, {
+        customers: { density: "compact" },
+      });
+      await setDisplay(db, WORKSPACE_ID, userId, {
+        customers: { hiddenColumns: ["location"] },
+        issues: { density: "comfortable" },
+      });
+      let row = getUserViewPreferences(db, WORKSPACE_ID, userId);
+      expect(JSON.parse(row!.display!)).toEqual({
+        customers: { hiddenColumns: ["location"] },
+        issues: { density: "comfortable" },
+      });
+      await setDisplay(db, WORKSPACE_ID, userId, null);
+      row = getUserViewPreferences(db, WORKSPACE_ID, userId);
+      expect(row?.display).toBeNull();
     });
   });
 });
@@ -989,6 +1053,59 @@ describe("pipeline record hygiene + externalId dedupe", () => {
       expect(dueDeals).toEqual([working.id]);
     });
   });
+
+  it("domain writes and lookups canonicalize, including legacy verbatim rows (PILE-444)", async () => {
+    await withDb(async (db) => {
+      const org = "domain-org";
+      const customer = await createCustomer(db, {
+        organizationId: org,
+        name: "Canonical",
+        domain: "https://www.JoesPizza.example.com/menu",
+      });
+      expect(customer.domain).toBe("joespizza.example.com");
+
+      // Any spelling of the same host resolves the same record — this is
+      // what keeps customer_upsert's domain dedup from minting duplicates.
+      for (const probe of [
+        "joespizza.example.com",
+        "www.joespizza.example.com",
+        "https://joespizza.example.com/",
+        "HTTPS://WWW.JOESPIZZA.EXAMPLE.COM/path",
+      ]) {
+        expect(getCustomerByDomain(db, org, probe)?.id).toBe(customer.id);
+      }
+
+      // Updates canonicalize on write too.
+      const updated = updateCustomer(db, org, customer.id, {
+        domain: "WWW.NewSite.example.com/",
+      });
+      expect(updated?.domain).toBe("newsite.example.com");
+
+      // A row written before canonicalization (stored verbatim) still
+      // matches a canonical lookup instead of being duplicated past.
+      const legacy = await createCustomer(db, {
+        organizationId: org,
+        name: "Legacy",
+      });
+      db.update(workspaceCustomers)
+        .set({ domain: "WWW.Legacy.example.com" })
+        .where(eq(workspaceCustomers.id, legacy.id))
+        .run();
+      expect(getCustomerByDomain(db, org, "legacy.example.com")?.id).toBe(
+        legacy.id
+      );
+
+      // List filters resolve by externalId and normalized domain.
+      expect(
+        listCustomers(db, org, { externalId: "gplace:none" })
+      ).toHaveLength(0);
+      expect(
+        listCustomers(db, org, { domain: "legacy.example.com" }).map(
+          (c) => c.id
+        )
+      ).toEqual([legacy.id]);
+    });
+  });
 });
 
 describe("guidance packs (PILE-423)", () => {
@@ -1241,8 +1358,12 @@ describe("stage template data layer", () => {
   });
 
   it("seeds the seven pipeline stages idempotently", async () => {
-    await withDb((db) => {
-      const first = seedStageTemplates(db, WORKSPACE_ID);
+    // Seeding also installs DEFAULT_AGENT_TYPES (VTX-755) — a fresh org
+    // keeps the scout→flue registry row from leaking into the agentSlug
+    // scoping tests that resolve scout on WORKSPACE_ID.
+    const org = `org_${crypto.randomUUID()}`;
+    await withDb(async (db) => {
+      const first = await seedStageTemplates(db, org);
       expect(first.created.length).toBe(22);
       expect(first.skipped).toBe(0);
       const statuses = new Set(first.created.map((t) => t.status));
@@ -1264,13 +1385,105 @@ describe("stage template data layer", () => {
       );
 
       // Operator edits survive a re-seed; deleted rows come back.
-      const seeded = seedStageTemplates(db, WORKSPACE_ID);
+      const seeded = await seedStageTemplates(db, org);
       expect(seeded.created.length).toBe(0);
       expect(seeded.skipped).toBe(22);
-      deleteStageTemplate(db, WORKSPACE_ID, first.created[0]!.id);
-      const again = seedStageTemplates(db, WORKSPACE_ID);
+      deleteStageTemplate(db, org, first.created[0]!.id);
+      const again = await seedStageTemplates(db, org);
       expect(again.created.length).toBe(1);
       expect(again.skipped).toBe(21);
+    });
+  });
+
+  // VTX-755 — the seed registry is the contract: every template owner slug
+  // must resolve to a registered agent type (and every type to a known
+  // provider) or /pipeline/lint reports unresolved_owner_template.
+  it("reconciles every template ownerAgent to a registered agent type", async () => {
+    // A fresh organization keeps this seed off WORKSPACE_ID — other tests
+    // resolve `scout` to a provider there and a registry row would leak.
+    const org = `org_${crypto.randomUUID()}`;
+    await withDb(async (db) => {
+      const registry = new Map(DEFAULT_AGENT_TYPES.map((t) => [t.slug, t]));
+      expect(registry.size).toBe(DEFAULT_AGENT_TYPES.length);
+      for (const t of DEFAULT_AGENT_TYPES) {
+        expect(t.slug).toBe(stageKey(t.slug));
+        expect(hasAgentProvider(t.providerAgentId)).toBe(true);
+      }
+      for (const t of DEFAULT_STAGE_TEMPLATES) {
+        if (t.ownerAgent) {
+          expect(
+            registry.has(t.ownerAgent),
+            `template ${t.stepKey} owns to unregistered ${t.ownerAgent}`
+          ).toBe(true);
+        }
+      }
+      const seeded = await seedStageTemplates(db, org);
+      expect(seeded.agentTypesSeeded).toBe(DEFAULT_AGENT_TYPES.length);
+      const types = await db
+        .select()
+        .from(workspaceAgentTypes)
+        .where(eq(workspaceAgentTypes.organizationId, org))
+        .all();
+      const slugs = new Set(types.map((t) => t.slug));
+      for (const t of seeded.created) {
+        if (t.ownerAgent) {
+          expect(slugs.has(t.ownerAgent)).toBe(true);
+        }
+      }
+    });
+  });
+
+  // VTX-752 — DO-side repoints: label dedupe rewrites issue label_ids
+  // CSVs (dup→canonical, dead ids dropped); state dedupe re-points
+  // git_automation_states.state_id.
+  it("repoints issue label CSVs and git automation states after dedupe", async () => {
+    const org = `org_${crypto.randomUUID()}`;
+    await withDb(async (db) => {
+      const now = new Date().toISOString();
+      const issueId = crypto.randomUUID();
+      db.insert(workspaceIssues)
+        .values({
+          id: issueId,
+          organizationId: org,
+          teamId: "team-1",
+          title: "labelled",
+          status: "backlog",
+          priority: "medium",
+          labelIds: "lbl-a,lbl-dup,lbl-gone,lbl-a",
+          createdAt: now,
+          updatedAt: now,
+        })
+        .run();
+      const auto = await createGitAutomationState(db, org, {
+        stateId: "st-dup",
+        prState: "merged",
+      });
+      const untouched = await createGitAutomationState(db, org, {
+        stateId: "st-other",
+        prState: "opened",
+      });
+      const issues = await repointIssueLabelIds(
+        db,
+        org,
+        { "lbl-dup": "lbl-a" },
+        new Set(["lbl-a", "lbl-b"])
+      );
+      expect(issues).toBe(1);
+      const row = db
+        .select({ labelIds: workspaceIssues.labelIds })
+        .from(workspaceIssues)
+        .where(eq(workspaceIssues.id, issueId))
+        .get();
+      expect(row?.labelIds).toBe("lbl-a");
+      const autos = await repointGitAutomationStates(db, org, {
+        "st-dup": "st-keep",
+      });
+      expect(autos).toBe(1);
+      const rows = await listGitAutomationStates(db, org);
+      expect(rows.find((r) => r.id === auto?.id)?.stateId).toBe("st-keep");
+      expect(rows.find((r) => r.id === untouched?.id)?.stateId).toBe(
+        "st-other"
+      );
     });
   });
 
@@ -2057,104 +2270,324 @@ describe("space permissions — closed-ACL precedence (PILE-447)", () => {
       setDocumentPermission(db, org, closedDoc.id, "vip-1", "user", "view");
 
       // before any grant: hidden
-      expect(
-        documentAccessLevel(db, gapDoc.id, "member-1", [])
-      ).toBeNull();
+      expect(documentAccessLevel(db, gapDoc.id, "member-1", [])).toBeNull();
       expect(
         listDocumentsVisibleTo(db, org, "member-1", []).map((d) => d.id)
       ).not.toContain(gapDoc.id);
 
       // space grant opens the gap doc…
       setSpacePermission(db, org, space.id, "member-1", "user", "view");
-      expect(documentAccessLevel(db, gapDoc.id, "member-1", [])).toBe(
-        "view"
-      );
+      expect(documentAccessLevel(db, gapDoc.id, "member-1", [])).toBe("view");
       expect(
         listDocumentsVisibleTo(db, org, "member-1", []).map((d) => d.id)
       ).toContain(gapDoc.id);
 
       // …but does NOT widen the closed doc's ACL — closed-ACL precedence
-      expect(
-        documentAccessLevel(db, closedDoc.id, "member-1", [])
-      ).toBeNull();
+      expect(documentAccessLevel(db, closedDoc.id, "member-1", [])).toBeNull();
       expect(
         listDocumentsVisibleTo(db, org, "member-1", []).map((d) => d.id)
       ).not.toContain(closedDoc.id);
-      expect(documentAccessLevel(db, closedDoc.id, "vip-1", [])).toBe(
-        "view"
-      );
+      expect(documentAccessLevel(db, closedDoc.id, "vip-1", [])).toBe("view");
 
       // revoke → gap doc hidden again
       revokeSpacePermission(db, space.id, "member-1");
-      expect(
-        documentAccessLevel(db, gapDoc.id, "member-1", [])
-      ).toBeNull();
+      expect(documentAccessLevel(db, gapDoc.id, "member-1", [])).toBeNull();
     });
   });
 });
 
+// session.agentId stores the dispatch agent — the type's providerAgentId
+// on registered-type dispatches, the profile slug itself on flue lanes.
+// A slug scopes to {slug, providerAgentId}, never the type's row id.
+function seedScopeRows(db: WorkspaceDb) {
+  db.insert(workspaceAgentTypes)
+    .values({
+      id: "atype-scout",
+      organizationId: WORKSPACE_ID,
+      slug: "scout",
+      name: "Scout",
+      providerAgentId: "devin-cli",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    })
+    // The suite shares one DO database — reseeding must be a no-op.
+    .onConflictDoNothing()
+    .run();
+  const session = (id: string, agentId: string, createdAt: string) => ({
+    id,
+    organizationId: WORKSPACE_ID,
+    issueId: "issue-scope-1",
+    agentId,
+    provider: agentId,
+    actorId: "u1",
+    actorType: "user" as const,
+    status: "completed" as const,
+    createdAt,
+    updatedAt: createdAt,
+  });
+  db.insert(workspaceAgentSessions)
+    .values([
+      session("s-pipe", "devin-cli", "2026-01-01T00:00:01.000Z"),
+      session("s-flue", "scout", "2026-01-01T00:00:02.000Z"),
+      session("s-other", "cursor-cli", "2026-01-01T00:00:03.000Z"),
+    ])
+    .onConflictDoNothing()
+    .run();
+}
+
 describe("agent session scoping (PILE-453)", () => {
-  it("listAgentSessions filters by agentSlug via agent_types", async () => {
+  it("listAgentSessions filters by agentSlug via slug + providerAgentId", async () => {
     await withDb(async (db) => {
-      const { listAgentSessions } = await import("./index.js");
-      db.insert(workspaceAgentTypes)
-        .values([
-          {
-            id: "atype-scout",
-            organizationId: WORKSPACE_ID,
-            slug: "scout",
-            name: "Scout",
-            providerAgentId: "devin-cli",
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-          {
-            id: "atype-profiler",
-            organizationId: WORKSPACE_ID,
-            slug: "profiler",
-            name: "Profiler",
-            providerAgentId: "devin-cli",
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-        ])
-        .run();
-      db.insert(workspaceAgentSessions)
-        .values([
-          {
-            id: "s-scout",
-            organizationId: WORKSPACE_ID,
-            issueId: "issue-scope-1",
-            agentId: "atype-scout",
-            provider: "devin-cli",
-            actorId: "u1",
-            actorType: "user",
-            status: "completed",
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-          {
-            id: "s-profiler",
-            organizationId: WORKSPACE_ID,
-            issueId: "issue-scope-1",
-            agentId: "atype-profiler",
-            provider: "devin-cli",
-            actorId: "u1",
-            actorType: "user",
-            status: "completed",
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-        ])
-        .run();
+      seedScopeRows(db);
       const scoutOnly = listAgentSessions(db, WORKSPACE_ID, {
         agentSlug: "scout",
       });
-      expect(scoutOnly.map((r) => r.id)).toEqual(["s-scout"]);
+      expect(scoutOnly.map((r) => r.id)).toEqual(["s-flue", "s-pipe"]);
       const none = listAgentSessions(db, WORKSPACE_ID, {
         agentSlug: "nope",
       });
       expect(none).toHaveLength(0);
+      // Slugs normalize like registry writes ("Scope Scout" → scope_scout).
+      const normalized = listAgentSessions(db, WORKSPACE_ID, {
+        agentSlug: "Scout",
+      });
+      expect(normalized.map((r) => r.id)).toEqual(["s-flue", "s-pipe"]);
+      // An explicit agentId wins over the slug candidates.
+      const explicit = listAgentSessions(db, WORKSPACE_ID, {
+        agentSlug: "scout",
+        agentId: "cursor-cli",
+      });
+      expect(explicit.map((r) => r.id)).toEqual(["s-other"]);
+    });
+  });
+
+  it("listAgentSessionSummaries applies the same agentSlug scope", async () => {
+    await withDb(async (db) => {
+      seedScopeRows(db);
+      const scoutOnly = listAgentSessionSummaries(db, WORKSPACE_ID, {
+        agentSlug: "scout",
+      });
+      expect(scoutOnly.map((r) => r.id)).toEqual(["s-flue", "s-pipe"]);
+    });
+  });
+
+  it("memoryRemember supersedes prior facts and memoryRecall filters validUntil (VTX-645)", async () => {
+    await withDb(async (db) => {
+      await memoryRemember(db, WORKSPACE_ID, {
+        entityType: "issue",
+        entityId: "vtx-999",
+        kind: "lesson",
+        fact: "first draft",
+      });
+      await memoryRemember(db, WORKSPACE_ID, {
+        entityType: "issue",
+        entityId: "VTX-999",
+        kind: "lesson",
+        fact: "latest lesson",
+      });
+      await memoryRemember(db, WORKSPACE_ID, {
+        entityType: "issue",
+        entityId: "VTX-999",
+        kind: "ephemeral",
+        fact: "expired note",
+        validUntil: "2020-01-01T00:00:00.000Z",
+      });
+      const rows = await memoryRecall(db, WORKSPACE_ID, {
+        entityType: "issue",
+        entityId: "vtx-999",
+      });
+      expect(rows.map((r) => r.fact)).toEqual(["latest lesson"]);
+    });
+  });
+
+  it("memoryUpdate patches fact/kind/validUntil in place and returns null for missing rows (PILE-628)", async () => {
+    await withDb(async (db) => {
+      const id = await memoryRemember(db, WORKSPACE_ID, {
+        entityType: "agent",
+        entityId: "agent-patch",
+        kind: "lesson",
+        fact: "original draft",
+      });
+      expect(
+        await memoryUpdate(db, WORKSPACE_ID, crypto.randomUUID(), {
+          fact: "nope",
+        })
+      ).toBeNull();
+
+      const updated = await memoryUpdate(db, WORKSPACE_ID, id, {
+        fact: "corrected draft",
+        kind: "decision",
+        validUntil: null,
+      });
+      expect(updated?.fact).toBe("corrected draft");
+      expect(updated?.kind).toBe("decision");
+      expect(updated?.validUntil).toBeNull();
+      expect(updated?.id).toBe(id);
+      // Update is in place — no supersession, same id still the head.
+      const rows = await memoryRecall(db, WORKSPACE_ID, {
+        entityType: "agent",
+        entityId: "agent-patch",
+      });
+      expect(rows).toHaveLength(1);
+      expect(rows[0].id).toBe(id);
+      expect(rows[0].fact).toBe("corrected draft");
+    });
+  });
+
+  it("memoryForget on a head erases the whole supersede chain so ancestors never resurrect (PILE-628)", async () => {
+    await withDb(async (db) => {
+      const v1 = await memoryRemember(db, WORKSPACE_ID, {
+        entityType: "customer",
+        entityId: "cust-forget",
+        kind: "coverage",
+        fact: "v1 fact",
+      });
+      const v2 = await memoryRemember(db, WORKSPACE_ID, {
+        entityType: "customer",
+        entityId: "cust-forget",
+        kind: "coverage",
+        fact: "v2 fact",
+      });
+      const v3 = await memoryRemember(db, WORKSPACE_ID, {
+        entityType: "customer",
+        entityId: "cust-forget",
+        kind: "coverage",
+        fact: "v3 fact",
+      });
+      // Unrelated fact on the same entity survives.
+      const other = await memoryRemember(db, WORKSPACE_ID, {
+        entityType: "customer",
+        entityId: "cust-forget",
+        kind: "preference",
+        fact: "keep me",
+      });
+
+      const res = await memoryForget(db, WORKSPACE_ID, v3);
+      expect(res.deleted).toBe(true);
+      expect(res.deletedIds.toSorted()).toEqual([v1, v2, v3].toSorted());
+      // Nothing resurrects — recall sees only the untouched kind.
+      const rows = await memoryRecall(db, WORKSPACE_ID, {
+        entityType: "customer",
+        entityId: "cust-forget",
+      });
+      expect(rows.map((r) => r.id)).toEqual([other]);
+    });
+  });
+
+  it("memoryForget on a mid-chain row splices the supersede pointer (PILE-628)", async () => {
+    await withDb(async (db) => {
+      const v1 = await memoryRemember(db, WORKSPACE_ID, {
+        entityType: "repo",
+        entityId: "repo-forget",
+        kind: "note",
+        fact: "v1",
+      });
+      const v2 = await memoryRemember(db, WORKSPACE_ID, {
+        entityType: "repo",
+        entityId: "repo-forget",
+        kind: "note",
+        fact: "v2",
+      });
+      const v3 = await memoryRemember(db, WORKSPACE_ID, {
+        entityType: "repo",
+        entityId: "repo-forget",
+        kind: "note",
+        fact: "v3",
+      });
+      const res = await memoryForget(db, WORKSPACE_ID, v2);
+      expect(res.deleted).toBe(true);
+      expect(res.deletedIds).toEqual([v2]);
+      // The head now points straight at v1 — chain stays traversable.
+      const head = await db
+        .select({ supersedes: workspaceMemory.supersedes })
+        .from(workspaceMemory)
+        .where(eq(workspaceMemory.id, v3))
+        .get();
+      expect(head?.supersedes).toBe(v1);
+      const rows = await memoryRecall(db, WORKSPACE_ID, {
+        entityType: "repo",
+        entityId: "repo-forget",
+      });
+      expect(rows.map((r) => r.id)).toEqual([v3]);
+    });
+  });
+
+  it("memoryForget returns deleted:false for unknown ids (PILE-628)", async () => {
+    await withDb(async (db) => {
+      const res = await memoryForget(db, WORKSPACE_ID, crypto.randomUUID());
+      expect(res).toEqual({ deleted: false, deletedIds: [] });
+    });
+  });
+
+  it("isDynamicMemoryFact treats expiries and transient kind prefixes as dynamic (PILE-616)", () => {
+    expect(isDynamicMemoryFact({ kind: "lesson", validUntil: null })).toBe(
+      false
+    );
+    expect(
+      isDynamicMemoryFact({ kind: "lesson", validUntil: "2030-01-01" })
+    ).toBe(true);
+    expect(isDynamicMemoryFact({ kind: "outcome", validUntil: null })).toBe(
+      true
+    );
+    expect(isDynamicMemoryFact({ kind: "signal:pos", validUntil: null })).toBe(
+      true
+    );
+    expect(
+      isDynamicMemoryFact({ kind: "cursor:ingest", validUntil: null })
+    ).toBe(true);
+    expect(
+      isDynamicMemoryFact({ kind: "architecture", validUntil: null })
+    ).toBe(false);
+  });
+
+  it("memoryProfile splits static vs dynamic facts and renders a markdown summary (PILE-616)", async () => {
+    await withDb(async (db) => {
+      await memoryRemember(db, WORKSPACE_ID, {
+        entityType: "agent",
+        entityId: "profile-agent",
+        kind: "lesson",
+        fact: "always run contract:check after touching routes",
+      });
+      await memoryRemember(db, WORKSPACE_ID, {
+        entityType: "agent",
+        entityId: "profile-agent",
+        kind: "outcome",
+        fact: "lane finished the migration",
+      });
+      const profile = await memoryProfile(db, WORKSPACE_ID, {
+        entityType: "agent",
+        entityId: "profile-agent",
+      });
+      expect(profile.staticFacts.map((f) => f.kind)).toEqual(["lesson"]);
+      expect(profile.dynamicFacts.map((f) => f.kind)).toEqual(["outcome"]);
+      expect(profile.byKind.lesson).toHaveLength(1);
+      expect(profile.summary).toContain(
+        "### Static Profile (agent:profile-agent)"
+      );
+      expect(profile.summary).toContain("### Recent / Dynamic Context");
+      expect(profile.summary).toContain("[lesson] always run contract:check");
+
+      const empty = await memoryProfile(db, WORKSPACE_ID, {
+        entityType: "agent",
+        entityId: "no-such-agent",
+      });
+      expect(empty.summary).toBe("");
+      expect(empty.staticFacts).toEqual([]);
+    });
+  });
+
+  it("updateCustomer persists processor and signal fields (PILE-532)", async () => {
+    await withDb(async (db) => {
+      const cust = createCustomer(db, {
+        organizationId: WORKSPACE_ID,
+        name: "Bleecker Osteria",
+      });
+      const updated = updateCustomer(db, WORKSPACE_ID, cust.id, {
+        processor: "toast",
+        signal: "Why now: Uses Toast POS [sig_pos_1].",
+      });
+      expect(updated?.processor).toBe("toast");
+      expect(updated?.signal).toContain("Why now:");
     });
   });
 });

@@ -152,7 +152,12 @@ new_sqlite_classes = ["CursorSandbox", "DevinSandbox", "CodexSandbox"]
 
 [[migrations]]
 tag = "v4"
-new_sqlite_classes = ["LaneSandbox", "LaneCursorSandbox", "LaneDevinSandbox", "LaneCodexSandbox"]
+new_sqlite_classes = [
+  "LaneSandbox",
+  "LaneCursorSandbox",
+  "LaneDevinSandbox",
+  "LaneCodexSandbox",
+]
 
 [env.production]
 name = "pile"
@@ -286,7 +291,12 @@ new_sqlite_classes = ["CursorSandbox", "DevinSandbox", "CodexSandbox"]
 
 [[env.production.migrations]]
 tag = "v4"
-new_sqlite_classes = ["LaneSandbox", "LaneCursorSandbox", "LaneDevinSandbox", "LaneCodexSandbox"]
+new_sqlite_classes = [
+  "LaneSandbox",
+  "LaneCursorSandbox",
+  "LaneDevinSandbox",
+  "LaneCodexSandbox",
+]
 
 [[env.production.queues.producers]]
 binding = "WEBHOOK_QUEUE"

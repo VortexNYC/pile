@@ -2,6 +2,7 @@ import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import app from "../src/api/index.js";
+import { openapiDocumentConfig } from "../src/api/openapi-doc.js";
 
 const repoRoot = resolve(import.meta.dirname, "..");
 const outputPath = resolve(repoRoot, "src/mcp/openapi.json");
@@ -178,6 +179,7 @@ const rawDoc: unknown = app.getOpenAPIDocument({
     version: "0.1.0",
     description: "OpenAPI source of truth for REST, CLI, and MCP surfaces.",
   },
+  ...openapiDocumentConfig,
 });
 
 if (!isRecord(rawDoc)) {

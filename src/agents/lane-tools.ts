@@ -1,10 +1,39 @@
 import { z } from "zod";
 
 import { GITHUB_USER_AGENT } from "../global/github-auth.js";
+import { normalizeDomain } from "../workspace/data/index.js";
 import {
+  type AudienceCandidateMerchant,
+  buildRepMorningBrief,
+  queryDynamicAudience,
+  runMerchantLeadPlay,
+} from "../workspace/lead-play-engine.js";
+import {
+  applyInboundReplyOutcome,
+  classifyInboundReply,
+  createStatementReceivedChecklist,
+} from "../workspace/reply-funnel-engine.js";
+import {
+  evaluateSendGate,
+  type EmailVerificationStatus,
+  type TouchChannel,
+} from "../workspace/send-gate.js";
+import {
+  computeSmbMatchKey,
+  DEFAULT_ICP_RULES,
+  DEFAULT_SIGNAL_RULES,
+  detectPosTechnographics,
+  type MerchantSignal,
+  parseCustomerSignalFacts,
+  planDetectiveWaterfall,
+  rankMerchantSignals,
+} from "../workspace/signals-engine.js";
+import {
+  type MerchantSourceRow,
+  type NonPosSmbPresetId,
+  PRESET_NON_POS_SMB_SOURCES,
   pullSource,
   scoreCandidate,
-  type MerchantSourceRow,
 } from "./collectors.js";
 import { sessionPlanSchema, type SessionPlan } from "./session-plan.js";
 import { runUsageSchema, type AgentRunUsage } from "./spend.js";
@@ -917,7 +946,17 @@ export interface LaneWorkspace {
       domain?: string | null;
       url?: string | null;
       notes?: string | null;
+      address?: string | null;
+      phone?: string | null;
+      vertical?: string | null;
+      neighborhood?: string | null;
+      source?: string | null;
+      signal?: string | null;
       priorityScore?: number | null;
+      fitScore?: number | null;
+      fitStatus?: string | null;
+      processor?: string | null;
+      evidenceUri?: string | null;
       customFields?: Record<string, string | null>;
     },
     actorId?: string
@@ -1041,7 +1080,7 @@ function isEmptyValue(value: unknown): boolean {
 }
 
 const BLOCKED_HOSTS =
-  /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|[[f]|[0:]+$)/i;
+  /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|\[f|\[[0:]+\]?$)/i;
 
 export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
   defineWorkspaceTool({
@@ -1387,28 +1426,33 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
       const key = ctx.env?.FIRECRAWL_API_KEY;
       if (!key) throw new LaneToolError("FIRECRAWL_API_KEY not configured");
       const base = ctx.env?.FIRECRAWL_BASE_URL ?? "https://api.firecrawl.dev";
-      const res = await fetch(`${base}/v1/${input.action}`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${key}`,
-        },
-        body: JSON.stringify(
-          input.action === "search"
-            ? { query: input.query, limit: input.limit ?? 5 }
-            : input.action === "scrape"
-              ? { url: input.url, formats: ["markdown"] }
-              : {
-                  urls: input.urls,
-                  prompt: input.prompt,
-                  enableWebSearch: false,
-                }
-        ),
-      });
-      if (!res.ok)
-        throw new LaneToolError(
-          `firecrawl ${input.action} failed: ${res.status}`
-        );
+      const { Effect } = await import("effect");
+      const { runMacMiniFetchWithRetryEffect } =
+        await import("./collectors-effect.js");
+      const res = await Effect.runPromise(
+        runMacMiniFetchWithRetryEffect({
+          tier: `firecrawl ${input.action}`,
+          url: `${base}/v1/${input.action}`,
+          init: {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              authorization: `Bearer ${key}`,
+            },
+            body: JSON.stringify(
+              input.action === "search"
+                ? { query: input.query, limit: input.limit ?? 5 }
+                : input.action === "scrape"
+                  ? { url: input.url, formats: ["markdown"] }
+                  : {
+                      urls: input.urls,
+                      prompt: input.prompt,
+                      enableWebSearch: false,
+                    }
+            ),
+          },
+        }).pipe(Effect.mapError((err) => new LaneToolError(err.message)))
+      );
       return res.json();
     },
   }),
@@ -1421,16 +1465,23 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
     async run(ctx, input) {
       const base = ctx.env?.SCRAPLING_BASE_URL;
       if (!base) throw new LaneToolError("SCRAPLING_BASE_URL not configured");
-      const res = await fetch(`${base}/scrape`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-api-key": ctx.env?.SCRAPLING_API_KEY ?? "",
-        },
-        body: JSON.stringify({ url: input.url, mode: "stealth" }),
-      });
-      if (!res.ok)
-        throw new LaneToolError(`stealth_fetch failed: ${res.status}`);
+      const { Effect } = await import("effect");
+      const { runMacMiniFetchWithRetryEffect } =
+        await import("./collectors-effect.js");
+      const res = await Effect.runPromise(
+        runMacMiniFetchWithRetryEffect({
+          tier: "stealth_fetch",
+          url: `${base}/scrape`,
+          init: {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-api-key": ctx.env?.SCRAPLING_API_KEY ?? "",
+            },
+            body: JSON.stringify({ url: input.url, mode: "stealth" }),
+          },
+        }).pipe(Effect.mapError((err) => new LaneToolError(err.message)))
+      );
       const text = await res.text();
       return { text: text.slice(0, 20000) };
     },
@@ -1454,33 +1505,42 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
       const token = ctx.env?.BROWSERLESS_TOKEN;
       if (!base || !token)
         throw new LaneToolError("BROWSERLESS_* not configured");
+      const { Effect } = await import("effect");
+      const { runMacMiniFetchWithRetryEffect } =
+        await import("./collectors-effect.js");
       if (input.script) {
         const endpoint = new URL(`${base}/function`);
         endpoint.searchParams.set("token", token);
-        const res = await fetch(endpoint.href, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            code: `module.exports = async ({ page, context }) => { ${input.script} }`,
-            context: { url: input.url },
-          }),
-        });
-        if (!res.ok)
-          throw new LaneToolError(
-            `browser_fetch /function failed: ${res.status}`
-          );
+        const res = await Effect.runPromise(
+          runMacMiniFetchWithRetryEffect({
+            tier: "browser_fetch /function",
+            url: endpoint.href,
+            init: {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                code: `module.exports = async ({ page, context }) => { ${input.script} }`,
+                context: { url: input.url },
+              }),
+            },
+          }).pipe(Effect.mapError((err) => new LaneToolError(err.message)))
+        );
         const data: unknown = await res.json().catch(() => null);
         return { data };
       }
       const endpoint = new URL(`${base}/content`);
       endpoint.searchParams.set("token", token);
-      const res = await fetch(endpoint.href, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ url: input.url }),
-      });
-      if (!res.ok)
-        throw new LaneToolError(`browser_fetch failed: ${res.status}`);
+      const res = await Effect.runPromise(
+        runMacMiniFetchWithRetryEffect({
+          tier: "browser_fetch",
+          url: endpoint.href,
+          init: {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: input.url }),
+          },
+        }).pipe(Effect.mapError((err) => new LaneToolError(err.message)))
+      );
       const text = await res.text();
       return { text: text.slice(0, 20000) };
     },
@@ -1494,12 +1554,20 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
     async run(ctx, input) {
       const base = ctx.env?.LIGHTPANDA_BASE_URL;
       if (!base) throw new LaneToolError("LIGHTPANDA_BASE_URL not configured");
-      const res = await fetch(`${base}/fetch`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ url: input.url }),
-      });
-      if (!res.ok) throw new LaneToolError(`light_fetch failed: ${res.status}`);
+      const { Effect } = await import("effect");
+      const { runMacMiniFetchWithRetryEffect } =
+        await import("./collectors-effect.js");
+      const res = await Effect.runPromise(
+        runMacMiniFetchWithRetryEffect({
+          tier: "light_fetch",
+          url: `${base}/fetch`,
+          init: {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: input.url }),
+          },
+        }).pipe(Effect.mapError((err) => new LaneToolError(err.message)))
+      );
       return res.json();
     },
   }),
@@ -1512,13 +1580,20 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
     async run(ctx, input) {
       const base = ctx.env?.OBSCURA_BASE_URL;
       if (!base) throw new LaneToolError("OBSCURA_BASE_URL not configured");
-      const res = await fetch(`${base}/fetch`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ url: input.url }),
-      });
-      if (!res.ok)
-        throw new LaneToolError(`obscura_fetch failed: ${res.status}`);
+      const { Effect } = await import("effect");
+      const { runMacMiniFetchWithRetryEffect } =
+        await import("./collectors-effect.js");
+      const res = await Effect.runPromise(
+        runMacMiniFetchWithRetryEffect({
+          tier: "obscura_fetch",
+          url: `${base}/fetch`,
+          init: {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ url: input.url }),
+          },
+        }).pipe(Effect.mapError((err) => new LaneToolError(err.message)))
+      );
       return res.json();
     },
   }),
@@ -1940,7 +2015,12 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
       id: z.string().optional(),
       externalId: z.string().optional(),
       name: z.string().min(1).optional(),
-      domain: z.string().optional(),
+      domain: z
+        .string()
+        .optional()
+        .describe(
+          "Merchant host — stored normalized (scheme/www./path stripped)"
+        ),
       url: z.string().optional(),
       notes: z.string().optional(),
       priorityScore: z.number().optional(),
@@ -1974,9 +2054,22 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
       const applied: string[] = [];
       const alreadySet: string[] = [];
       const skipped: string[] = [];
+      // Domain compares in canonical form — the store keeps normalized
+      // hosts, so a differently-spelled input reports alreadySet rather
+      // than recording a no-op write.
+      if (input.domain !== undefined) {
+        const domain = normalizeDomain(input.domain);
+        if (customer.domain === domain) {
+          alreadySet.push("domain");
+        } else if (!overwrite && !isEmptyValue(customer.domain)) {
+          skipped.push("domain");
+        } else {
+          patch.domain = domain;
+          applied.push("domain");
+        }
+      }
       const scalars = [
         ["name", input.name],
-        ["domain", input.domain],
         ["url", input.url],
         ["notes", input.notes],
       ] as const;
@@ -2099,6 +2192,813 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
     async run(ctx, input) {
       await ctx.ws.recordSessionUsage(ctx.sessionId, input);
       return { ok: true };
+    },
+  }),
+  defineWorkspaceTool({
+    name: "customer_signal_record",
+    description:
+      "Record a cited merchant signal (new_license, ownership_change, new_location, pos_detected, pricing_view, negative_closure, etc. — or pass html to fingerprint Toast/Square/Clover/SpotOn/Stripe technographics) and recompute the merchant's Ranker v2 priorityScore, fitScore, Why Now, and Detective waterfall.",
+    permission: "ws:write",
+    inputSchema: z.object({
+      customerId: z.string().min(1),
+      type: z.string().min(1).optional(),
+      source: z.string().min(1).default("agent"),
+      evidenceUrl: z.string().url(),
+      strength: z.number().min(0).max(100).default(80),
+      summary: z.string().optional(),
+      observedAt: z.string().optional(),
+      html: z.string().optional(),
+    }),
+    async run(ctx, input) {
+      const customer = (await ctx.ws.getCustomer(input.customerId)) as
+        | {
+            id: string;
+            domain?: string | null;
+            vertical?: string | null;
+            address?: string | null;
+            phone?: string | null;
+            customFields?: Record<string, string | null> | string | null;
+          }
+        | null
+        | undefined;
+      if (!customer) throw new LaneToolError("customer not found");
+      const evaluationNowIso = new Date().toISOString();
+      const observedAt = input.observedAt ?? evaluationNowIso;
+      let signal: MerchantSignal;
+      let posGuess: string | null = null;
+      if (input.html) {
+        const det = detectPosTechnographics({
+          merchantId: customer.id,
+          pageUrl: input.evidenceUrl,
+          html: input.html,
+          observedAt,
+        });
+        posGuess = det.posGuess;
+        signal = det.signal ?? {
+          id: `sig_${crypto.randomUUID().slice(0, 12)}`,
+          merchantId: customer.id,
+          type: input.type ?? "pos_detected",
+          observedAt,
+          source: input.source,
+          evidenceUrl: input.evidenceUrl,
+          strength: input.strength,
+          summary: input.summary ?? null,
+        };
+      } else {
+        signal = {
+          id: `sig_${crypto.randomUUID().slice(0, 12)}`,
+          merchantId: customer.id,
+          type: input.type ?? "new_license",
+          observedAt,
+          source: input.source,
+          evidenceUrl: input.evidenceUrl,
+          strength: input.strength,
+          summary: input.summary ?? null,
+        };
+      }
+      await ctx.ws.memoryRemember({
+        entityType: "customer",
+        entityId: customer.id,
+        kind: `signal:${signal.type}:${signal.id}`,
+        fact: JSON.stringify(signal),
+        sourceSessionId: ctx.sessionId,
+        sourceAgentSlug: ctx.agentSlug,
+      });
+      const recalled = (await ctx.ws.memoryRecall({
+        entityType: "customer",
+        entityId: customer.id,
+        limit: 100,
+      })) as Array<{ kind: string; fact: string }>;
+      const allSignals = parseCustomerSignalFacts(recalled);
+      const signalsForRank = allSignals.length > 0 ? allSignals : [signal];
+      const breakdown = rankMerchantSignals({
+        merchantId: customer.id,
+        merchantAttrs: {
+          vertical: (customer.vertical ?? "").toLowerCase(),
+          hasAddress: Boolean(customer.address),
+          hasPhone: Boolean(customer.phone),
+        },
+        signals: signalsForRank,
+        config: {
+          motion: "smb_default",
+          icpRules: DEFAULT_ICP_RULES,
+          signalRules: DEFAULT_SIGNAL_RULES,
+        },
+        nowIso: evaluationNowIso,
+      });
+      const customFields: Record<string, string | null> =
+        typeof customer.customFields === "string"
+          ? (JSON.parse(customer.customFields) as Record<string, string | null>)
+          : {
+              ...(customer.customFields as Record<
+                string,
+                string | null
+              > | null),
+            };
+      customFields.whyNow = breakdown.whyNow;
+      customFields.whyNowSignalIds = breakdown.whyNowSignalIds.join(",");
+      await ctx.ws.updateCustomer(customer.id, {
+        priorityScore: breakdown.priorityScore,
+        fitScore: breakdown.fitScore,
+        fitStatus: breakdown.fitRating,
+        ...(posGuess ? { processor: posGuess } : {}),
+        evidenceUri: signal.evidenceUrl,
+        customFields,
+      });
+      return {
+        signal,
+        breakdown,
+        waterfall: planDetectiveWaterfall({
+          rankScore: breakdown.priorityScore,
+          paidRankThreshold: 75,
+          monthlyBudgetRemainingCents: 10_000,
+          estimatedPaidLookupCents: 50,
+        }),
+      };
+    },
+  }),
+  defineWorkspaceTool({
+    name: "customer_signals_list",
+    description:
+      "List all persisted signals on a merchant along with its Ranker v2 breakdown (priorityScore, fitScore, timingScore, Why Now) and Detective waterfall.",
+    permission: "ws:read",
+    inputSchema: z.object({
+      customerId: z.string().min(1),
+    }),
+    async run(ctx, input) {
+      const customer = (await ctx.ws.getCustomer(input.customerId)) as
+        | {
+            id: string;
+            vertical?: string | null;
+            address?: string | null;
+            phone?: string | null;
+          }
+        | null
+        | undefined;
+      if (!customer) throw new LaneToolError("customer not found");
+      const recalled = (await ctx.ws.memoryRecall({
+        entityType: "customer",
+        entityId: customer.id,
+        limit: 100,
+      })) as Array<{ kind: string; fact: string }>;
+      const signals = parseCustomerSignalFacts(recalled);
+      const breakdown = rankMerchantSignals({
+        merchantId: customer.id,
+        merchantAttrs: {
+          vertical: (customer.vertical ?? "").toLowerCase(),
+          hasAddress: Boolean(customer.address),
+          hasPhone: Boolean(customer.phone),
+        },
+        signals,
+        config: {
+          motion: "smb_default",
+          icpRules: DEFAULT_ICP_RULES,
+          signalRules: DEFAULT_SIGNAL_RULES,
+        },
+      });
+      return {
+        customerId: customer.id,
+        signals,
+        breakdown,
+        waterfall: planDetectiveWaterfall({
+          rankScore: breakdown.priorityScore,
+          paidRankThreshold: 75,
+          monthlyBudgetRemainingCents: 10_000,
+          estimatedPaidLookupCents: 50,
+        }),
+      };
+    },
+  }),
+  defineWorkspaceTool({
+    name: "customer_send_gate",
+    description:
+      "Run the deterministic Unify-parity Send Gate (U-001..U-009) before drafting, claiming, or contacting a merchant — checks DNC/suppression, Reacher email status, EU consent, and records a GateDecision (pass/warn/block + typed reasons).",
+    permission: "ws:read",
+    inputSchema: z.object({
+      customerId: z.string().min(1),
+      touchId: z.string().default("touch-preview"),
+      channel: z.enum(["email", "call", "visit", "linkedin"]),
+      action: z.enum(["engage", "claim"]).default("engage"),
+      contactId: z.string().default("default-contact"),
+      contactEmail: z.string().optional(),
+      emailStatus: z
+        .enum(["valid", "invalid", "catch_all", "role", "unknown"])
+        .optional(),
+      emailVerifiedAt: z.string().optional(),
+      doNotContact: z.boolean().optional(),
+      doNotEmail: z.boolean().optional(),
+      doNotCall: z.boolean().optional(),
+      euResident: z.boolean().optional(),
+      hasExplicitConsent: z.boolean().optional(),
+      allowCatchAll: z.boolean().optional(),
+      allowRole: z.boolean().optional(),
+      allowUnverified: z.boolean().optional(),
+    }),
+    async run(ctx, input) {
+      const customer = (await ctx.ws.getCustomer(input.customerId)) as
+        | {
+            id: string;
+            domain?: string | null;
+          }
+        | null
+        | undefined;
+      if (!customer) throw new LaneToolError("customer not found");
+      const suppCust = await ctx.ws.isSuppressed("customerId", customer.id);
+      const suppDomain = customer.domain
+        ? await ctx.ws.isSuppressed("domain", customer.domain)
+        : null;
+      const suppEmail = input.contactEmail
+        ? await ctx.ws.isSuppressed("email", input.contactEmail)
+        : null;
+      const decision = evaluateSendGate({
+        touchId: input.touchId || `lane_${ctx.sessionId}`,
+        channel: input.channel as TouchChannel,
+        action: input.action,
+        merchant: {
+          id: customer.id,
+          domain: customer.domain,
+          permissions: {
+            doNotContact:
+              Boolean(input.doNotContact) ||
+              Boolean(suppCust) ||
+              Boolean(suppDomain),
+          },
+        },
+        contact: {
+          id: input.contactId,
+          email: input.contactEmail ?? null,
+          permissions: {
+            doNotEmail: Boolean(input.doNotEmail) || Boolean(suppEmail),
+            doNotCall: Boolean(input.doNotCall),
+            euResident: Boolean(input.euResident),
+            hasExplicitConsent: Boolean(input.hasExplicitConsent),
+            emailStatus: (input.emailStatus ??
+              "valid") as EmailVerificationStatus,
+            emailVerifiedAt: input.emailVerifiedAt ?? null,
+          },
+        },
+        cadence: {
+          allowCatchAll: input.allowCatchAll,
+          allowRole: input.allowRole,
+          allowUnverified: input.allowUnverified ?? true,
+        },
+      });
+      await ctx.ws.memoryRemember({
+        entityType: "customer",
+        entityId: customer.id,
+        kind: `gate_decision:${decision.touchId}`,
+        fact: JSON.stringify(decision),
+        sourceSessionId: ctx.sessionId,
+        sourceAgentSlug: ctx.agentSlug,
+      });
+      return decision;
+    },
+  }),
+  defineWorkspaceTool({
+    name: "customer_dedup_key",
+    description:
+      "Compute the normalized SMB match key (DBA name + street address + E.164 phone + optional domain) and resolve any matching existing customer in the workspace.",
+    permission: "ws:read",
+    inputSchema: z.object({
+      name: z.string().min(1),
+      address: z.string().optional(),
+      phone: z.string().optional(),
+      domain: z.string().optional(),
+    }),
+    async run(ctx, input) {
+      const key = computeSmbMatchKey(input);
+      const allCustomers = ((await ctx.ws.listCustomers?.()) ?? []) as Array<{
+        id: string;
+        name: string;
+        address?: string | null;
+        phone?: string | null;
+        domain?: string | null;
+      }>;
+      const matched = allCustomers.find((row) => {
+        const rowKey = computeSmbMatchKey({
+          name: row.name,
+          address: row.address,
+          phone: row.phone,
+          domain: row.domain,
+        });
+        return (
+          rowKey.matchKey === key.matchKey ||
+          (Boolean(key.normalizedDomain) &&
+            rowKey.normalizedDomain === key.normalizedDomain)
+        );
+      });
+      return {
+        ...key,
+        matchedCustomerId: matched?.id ?? null,
+      };
+    },
+  }),
+  defineWorkspaceTool({
+    name: "customer_reply_ingest",
+    description:
+      "Classify an inbound merchant reply into the 16 Unify categories (U-022..U-028), auto-suppress opt-outs and hard bounces, and optionally create a Statement-Received Checklist.",
+    permission: "ws:write",
+    inputSchema: z.object({
+      customerId: z.string().min(1),
+      subject: z.string().default(""),
+      body: z.string().min(1),
+      fromEmail: z.string().optional(),
+      statementFileId: z.string().optional(),
+    }),
+    async run(ctx, input) {
+      const customer = (await ctx.ws.getCustomer(input.customerId)) as
+        | { id: string }
+        | null
+        | undefined;
+      if (!customer) throw new LaneToolError("customer not found");
+      const classified = classifyInboundReply(input.subject, input.body);
+      let suppressed = false;
+      if (classified.category === "opt_out") {
+        suppressed = true;
+        await ctx.ws.upsertSuppression({
+          kind: "customerId",
+          value: customer.id,
+          customerId: customer.id,
+          reason: "reply:opt_out",
+          source: `agent:${ctx.agentSlug}`,
+        });
+        if (input.fromEmail) {
+          await ctx.ws.upsertSuppression({
+            kind: "email",
+            value: input.fromEmail,
+            customerId: customer.id,
+            reason: "reply:opt_out",
+            source: `agent:${ctx.agentSlug}`,
+          });
+        }
+      } else if (classified.category === "hard_bounce" && input.fromEmail) {
+        suppressed = true;
+        await ctx.ws.upsertSuppression({
+          kind: "email",
+          value: input.fromEmail,
+          customerId: customer.id,
+          reason: "reply:hard_bounce",
+          source: `agent:${ctx.agentSlug}`,
+        });
+      }
+      const outcome = applyInboundReplyOutcome({
+        enrollment: {
+          id: `enr_${customer.id}`,
+          merchantId: customer.id,
+          contactId: input.fromEmail ?? "default-contact",
+          cadenceId: "default",
+          cadenceVersion: 1,
+          mailboxId: "default",
+          status: "active",
+          enrolledBy: ctx.agentSlug,
+          touches: [],
+        },
+        contactPermissions: { emailStatus: "valid" },
+        classified,
+        existingTasks: [],
+      });
+      const statementChecklist = input.statementFileId
+        ? createStatementReceivedChecklist({
+            merchantId: customer.id,
+            statementFileId: input.statementFileId,
+          })
+        : null;
+      await ctx.ws.memoryRemember({
+        entityType: "customer",
+        entityId: customer.id,
+        kind: `reply:${Date.now()}`,
+        fact: JSON.stringify({
+          classified,
+          fromEmail: input.fromEmail ?? null,
+          suppressed,
+          enrollmentStatus: outcome.enrollment.status,
+          pausedUntil: outcome.enrollment.pausedUntil ?? null,
+          tasks: outcome.tasks,
+          statementChecklist,
+        }),
+        sourceSessionId: ctx.sessionId,
+        sourceAgentSlug: ctx.agentSlug,
+      });
+      return {
+        classified,
+        suppressed,
+        enrollment: outcome.enrollment,
+        tasks: outcome.tasks,
+        statementChecklist,
+      };
+    },
+  }),
+
+  defineWorkspaceTool({
+    name: "customer_audience_query",
+    description:
+      "Query a dynamic audience of customers using AND/OR filter predicates over vertical, neighborhood, priorityScore, fitStatus, processor, and signalTypes.",
+    permission: "ws:read",
+    inputSchema: z.object({
+      logic: z.enum(["and", "or"]).default("and"),
+      predicates: z
+        .array(
+          z.object({
+            field: z.string().min(1),
+            op: z.enum([
+              "eq",
+              "neq",
+              "in",
+              "gte",
+              "lte",
+              "contains",
+              "has_signal",
+            ]),
+            value: z.union([
+              z.string(),
+              z.number(),
+              z.boolean(),
+              z.array(z.union([z.string(), z.number()])),
+            ]),
+          })
+        )
+        .default([]),
+      limit: z.number().int().min(1).max(200).optional(),
+    }),
+    async run(ctx, input) {
+      const all = (await ctx.ws.listCustomers()) as Array<{
+        id: string;
+        name: string;
+        domain?: string | null;
+        vertical?: string | null;
+        neighborhood?: string | null;
+        address?: string | null;
+        phone?: string | null;
+        processor?: string | null;
+        ownerId?: string | null;
+        priorityScore?: number | null;
+        fitScore?: number | null;
+        fitStatus?: string | null;
+      }>;
+      const candidates: AudienceCandidateMerchant[] = await Promise.all(
+        all.map(async (cust) => {
+          const suppCust = await ctx.ws.isSuppressed("customerId", cust.id);
+          const suppDomain = cust.domain
+            ? await ctx.ws.isSuppressed("domain", cust.domain)
+            : null;
+          const suppressed = Boolean(suppCust) || Boolean(suppDomain);
+          const facts = (await ctx.ws.memoryRecall({
+            entityType: "customer",
+            entityId: cust.id,
+            limit: 50,
+          })) as ReadonlyArray<{ kind: string; fact: string }>;
+          const signals = parseCustomerSignalFacts(facts);
+          return {
+            id: cust.id,
+            name: cust.name,
+            domain: cust.domain,
+            vertical: cust.vertical,
+            neighborhood: cust.neighborhood,
+            address: cust.address,
+            phone: cust.phone,
+            processor: cust.processor,
+            ownerId: cust.ownerId,
+            priorityScore: cust.priorityScore,
+            fitScore: cust.fitScore,
+            fitStatus: cust.fitStatus,
+            suppressed,
+            signalTypes: [...new Set(signals.map((s) => s.type))],
+          };
+        })
+      );
+      const matched = queryDynamicAudience(
+        candidates,
+        { logic: input.logic, predicates: input.predicates },
+        input.limit ?? 50
+      );
+      return { totalMatched: matched.length, merchants: matched };
+    },
+  }),
+
+  defineWorkspaceTool({
+    name: "customer_run_play",
+    description:
+      "Execute the autonomous lead play (Profiler -> Detective waterfall -> SendGate -> Drafter awaiting_approval) on a customer.",
+    permission: "ws:write",
+    inputSchema: z.object({
+      customerId: z.string().min(1),
+      playName: z.string().optional(),
+      html: z.string().optional(),
+      pageUrl: z.string().optional(),
+      contactEmail: z.string().optional(),
+      minDraftRankScore: z.number().optional(),
+      paidRankThreshold: z.number().optional(),
+    }),
+    async run(ctx, input) {
+      const customer = (await ctx.ws.getCustomer(input.customerId)) as
+        | {
+            id: string;
+            name: string;
+            domain?: string | null;
+            vertical?: string | null;
+            neighborhood?: string | null;
+            address?: string | null;
+            phone?: string | null;
+            processor?: string | null;
+            ownerId?: string | null;
+            priorityScore?: number | null;
+            fitScore?: number | null;
+            fitStatus?: string | null;
+          }
+        | null
+        | undefined;
+      if (!customer) throw new LaneToolError("customer not found");
+      const facts = (await ctx.ws.memoryRecall({
+        entityType: "customer",
+        entityId: customer.id,
+        limit: 100,
+      })) as ReadonlyArray<{ kind: string; fact: string }>;
+      const priorSignals = parseCustomerSignalFacts(facts);
+      const suppCust = await ctx.ws.isSuppressed("customerId", customer.id);
+      const suppDomain = customer.domain
+        ? await ctx.ws.isSuppressed("domain", customer.domain)
+        : null;
+      const suppEmail = input.contactEmail
+        ? await ctx.ws.isSuppressed("email", input.contactEmail)
+        : null;
+      const receipt = runMerchantLeadPlay({
+        merchant: {
+          id: customer.id,
+          name: customer.name,
+          domain: customer.domain,
+          vertical: customer.vertical,
+          neighborhood: customer.neighborhood,
+          address: customer.address,
+          phone: customer.phone,
+          processor: customer.processor,
+          ownerId: customer.ownerId,
+          priorityScore: customer.priorityScore,
+          fitScore: customer.fitScore,
+          fitStatus: customer.fitStatus,
+        },
+        signals: priorSignals,
+        html: input.html,
+        pageUrl: input.pageUrl,
+        playName: input.playName,
+        contactEmail: input.contactEmail,
+        minDraftRankScore: input.minDraftRankScore,
+        paidRankThreshold: input.paidRankThreshold,
+        suppressed: Boolean(suppCust),
+        domainSuppressed: Boolean(suppDomain),
+        emailSuppressed: Boolean(suppEmail),
+      });
+      await ctx.ws.updateCustomer(customer.id, {
+        priorityScore: receipt.breakdown.priorityScore,
+        fitScore: receipt.breakdown.fitScore,
+        fitStatus: receipt.breakdown.fitRating,
+        ...(receipt.posGuess ? { processor: receipt.posGuess } : {}),
+      });
+      if (receipt.newSignal) {
+        await ctx.ws.memoryRemember({
+          entityType: "customer",
+          entityId: customer.id,
+          kind: `signal:${receipt.newSignal.type}:${receipt.newSignal.id}`,
+          fact: JSON.stringify(receipt.newSignal),
+          sourceSessionId: ctx.sessionId,
+          sourceAgentSlug: ctx.agentSlug,
+        });
+      }
+      await ctx.ws.memoryRemember({
+        entityType: "customer",
+        entityId: customer.id,
+        kind: `play_run:${receipt.playName}`,
+        fact: JSON.stringify(receipt),
+        sourceSessionId: ctx.sessionId,
+        sourceAgentSlug: ctx.agentSlug,
+      });
+      return receipt;
+    },
+  }),
+
+  defineWorkspaceTool({
+    name: "customer_morning_brief",
+    description:
+      "Build the daily rep morning brief of top-ranked merchants with Why Now and recommended next action.",
+    permission: "ws:read",
+    inputSchema: z.object({
+      ownerId: z.string().optional(),
+      limit: z.number().int().min(1).max(100).optional(),
+    }),
+    async run(ctx, input) {
+      const all = (await ctx.ws.listCustomers()) as Array<{
+        id: string;
+        name: string;
+        domain?: string | null;
+        vertical?: string | null;
+        neighborhood?: string | null;
+        address?: string | null;
+        phone?: string | null;
+        processor?: string | null;
+        ownerId?: string | null;
+        priorityScore?: number | null;
+        fitScore?: number | null;
+        fitStatus?: string | null;
+        signal?: string | null;
+      }>;
+      const candidates: AudienceCandidateMerchant[] = await Promise.all(
+        all.map(async (cust) => {
+          const suppCust = await ctx.ws.isSuppressed("customerId", cust.id);
+          const suppDomain = cust.domain
+            ? await ctx.ws.isSuppressed("domain", cust.domain)
+            : null;
+          const suppressed = Boolean(suppCust) || Boolean(suppDomain);
+          const whyNow: string | null = cust.signal ?? null;
+          return {
+            id: cust.id,
+            name: cust.name,
+            domain: cust.domain,
+            vertical: cust.vertical,
+            neighborhood: cust.neighborhood,
+            address: cust.address,
+            phone: cust.phone,
+            processor: cust.processor,
+            ownerId: cust.ownerId,
+            priorityScore: cust.priorityScore,
+            fitScore: cust.fitScore,
+            fitStatus: cust.fitStatus,
+            suppressed,
+            whyNow,
+          };
+        })
+      );
+      return buildRepMorningBrief({
+        merchants: candidates,
+        ownerId: input.ownerId,
+        limit: input.limit ?? 15,
+      });
+    },
+  }),
+
+  defineWorkspaceTool({
+    name: "customer_pull_leads",
+    description:
+      "Autonomously pull non-POS SMB leads (NYC Home Improvement Contractors, Auto/Garages/Tow, B2B/Medical Equipment/Appliance Service/Storage) from NYC Open Data, deduplicate via SMB match keys, record license signals, and run the Lead Play Engine.",
+    permission: "ws:write",
+    inputSchema: z.object({
+      preset: z
+        .enum([
+          "nyc_dob_contractors_and_trades",
+          "nyc_bic_commercial_haulers",
+          "nyc_dob_permit_issuances",
+          "nyc_home_improvement_contractors",
+          "nyc_auto_and_garages",
+          "nyc_b2b_and_specialty_dealers",
+          "nyc_bookkeepers_and_cpas",
+          "nyc_vc_and_accelerators",
+          "nyc_tech_and_software_startups",
+        ])
+        .default("nyc_dob_contractors_and_trades"),
+      borough: z.string().optional(),
+      limit: z.number().int().min(1).max(100).default(15),
+      offset: z.number().int().min(0).optional(),
+    }),
+    async run(ctx, input) {
+      const source =
+        PRESET_NON_POS_SMB_SOURCES[input.preset as NonPosSmbPresetId];
+      const sourceCfg = JSON.parse(source.config) as { borough_field?: string };
+      const boroughCol = sourceCfg.borough_field ?? "address_borough";
+      const extraWhere = input.borough
+        ? `upper(${boroughCol})=upper('${input.borough.replace(/'/g, "")}')`
+        : undefined;
+      const pulled = await pullSource(source, undefined, {
+        limit: input.limit,
+        offset: input.offset ?? 0,
+        extraWhere,
+      });
+      const existing = (await ctx.ws.listCustomers()) as Array<{
+        id: string;
+        name: string;
+        externalId?: string | null;
+        domain?: string | null;
+        address?: string | null;
+        phone?: string | null;
+        vertical?: string | null;
+        neighborhood?: string | null;
+        evidenceUri?: string | null;
+        processor?: string | null;
+        ownerId?: string | null;
+      }>;
+      const byMatchKey = new Map<string, (typeof existing)[number]>();
+      const byExternalId = new Map<string, (typeof existing)[number]>();
+      for (const row of existing) {
+        if (row.externalId) byExternalId.set(row.externalId, row);
+        const mk = computeSmbMatchKey({
+          name: row.name,
+          address: row.address,
+          phone: row.phone,
+          domain: row.domain,
+        });
+        if (mk.matchKey) byMatchKey.set(mk.matchKey, row);
+      }
+      let createdCount = 0;
+      let updatedCount = 0;
+      const leads: Array<Record<string, unknown>> = [];
+      for (const cand of pulled.candidates) {
+        const mk = computeSmbMatchKey({
+          name: cand.name,
+          address: cand.address,
+          phone: cand.phone,
+          domain: cand.domain,
+        });
+        const matched =
+          byExternalId.get(cand.externalId) ??
+          (mk.matchKey ? byMatchKey.get(mk.matchKey) : undefined);
+        const customer = (
+          matched
+            ? ((await ctx.ws.updateCustomer(matched.id, {
+                address: cand.address ?? matched.address,
+                phone: mk.phoneE164 ?? cand.phone ?? matched.phone,
+                vertical: cand.vertical ?? matched.vertical,
+                neighborhood: cand.neighborhood ?? matched.neighborhood,
+                evidenceUri: cand.evidenceUri ?? matched.evidenceUri,
+                source: source.name,
+              })) ?? matched)
+            : await ctx.ws.createCustomer({
+                name: cand.name,
+                externalId: cand.externalId,
+                domain: cand.domain ?? null,
+                address: cand.address ?? null,
+                phone: mk.phoneE164 ?? cand.phone ?? null,
+                vertical: cand.vertical ?? null,
+                neighborhood: cand.neighborhood ?? null,
+                evidenceUri: cand.evidenceUri ?? null,
+                source: source.name,
+              })
+        ) as (typeof existing)[number];
+        if (matched) {
+          updatedCount += 1;
+        } else {
+          createdCount += 1;
+          byExternalId.set(cand.externalId, customer);
+          if (mk.matchKey) byMatchKey.set(mk.matchKey, customer);
+        }
+        const signalObj: MerchantSignal = {
+          id: `sig_${cand.externalId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 48)}`,
+          merchantId: customer.id,
+          type: cand.signal || source.signal || "new_license",
+          observedAt: cand.signalDate
+            ? new Date(cand.signalDate).toISOString()
+            : new Date().toISOString(),
+          source: source.name,
+          evidenceUrl:
+            cand.evidenceUri ??
+            "https://data.cityofnewyork.us/resource/w7w3-xahh",
+          strength: 85,
+          summary: `Active NYC ${cand.vertical ?? "SMB"} license (${cand.externalId})`,
+        };
+        await ctx.ws.memoryRemember({
+          entityType: "customer",
+          entityId: customer.id,
+          kind: `signal:${signalObj.type}:${signalObj.id}`,
+          fact: JSON.stringify(signalObj),
+          sourceSessionId: ctx.sessionId,
+          sourceAgentSlug: ctx.agentSlug,
+        });
+        const receipt = runMerchantLeadPlay({
+          merchant: {
+            id: customer.id,
+            name: customer.name,
+            domain: customer.domain,
+            vertical: customer.vertical,
+            neighborhood: customer.neighborhood,
+            address: customer.address,
+            phone: customer.phone,
+            processor: customer.processor,
+            ownerId: customer.ownerId,
+          },
+          signals: [signalObj],
+        });
+        await ctx.ws.updateCustomer(customer.id, {
+          priorityScore: receipt.breakdown.priorityScore,
+          fitScore: receipt.breakdown.fitScore,
+          fitStatus: receipt.breakdown.fitRating,
+          signal: receipt.breakdown.whyNow,
+        });
+        leads.push({
+          customerId: customer.id,
+          name: customer.name,
+          vertical: customer.vertical,
+          neighborhood: customer.neighborhood,
+          address: customer.address,
+          phone: customer.phone,
+          priorityScore: receipt.breakdown.priorityScore,
+          fitScore: receipt.breakdown.fitScore,
+          whyNow: receipt.breakdown.whyNow,
+          playStatus: receipt.status,
+        });
+      }
+      return {
+        sourceName: source.name,
+        pulledCount: pulled.candidates.length,
+        createdCount,
+        updatedCount,
+        leads,
+      };
     },
   }),
 ];

@@ -20,6 +20,9 @@ export const MCP_TOOL_ALIASES: Readonly<Record<string, string>> = {
   list_issues: "getWorkspacesOrganizationIdIssues",
   get_issue: "getWorkspacesOrganizationIdIssuesId",
   create_issue: "postWorkspacesOrganizationIdIssues",
+  update_issues_batch: "postWorkspacesOrganizationIdIssuesBatch",
+  // VTX-772 — the old name misdescribed a batch UPDATE as a create. Kept as
+  // a deprecated alias so existing callers don't hard-break.
   create_issues_batch: "postWorkspacesOrganizationIdIssuesBatch",
   update_issue: "patchWorkspacesOrganizationIdIssuesId",
   delete_issue: "deleteWorkspacesOrganizationIdIssuesId",
@@ -88,6 +91,18 @@ export const MCP_TOOL_ALIASES: Readonly<Record<string, string>> = {
   update_document: "patchWorkspacesOrganizationIdDocumentsId",
   delete_document: "deleteWorkspacesOrganizationIdDocumentsId",
 
+  // Memory
+  memory_recall: "getWorkspacesOrganizationIdMemory",
+  explain_provenance: "getWorkspacesOrganizationIdProvenance",
+  agent_recap: "getWorkspacesOrganizationIdAgentRecap",
+  memory_remember: "postWorkspacesOrganizationIdMemory",
+  memory_update: "patchWorkspacesOrganizationIdMemoryId",
+  memory_delete: "deleteWorkspacesOrganizationIdMemoryId",
+  memory_forget: "deleteWorkspacesOrganizationIdMemoryId",
+  memory_profile: "getWorkspacesOrganizationIdMemoryProfile",
+  memory_remember_batch: "postWorkspacesOrganizationIdMemoryBatch",
+  memory_extract: "postWorkspacesOrganizationIdMemoryExtract",
+
   // Notifications
   list_notifications: "getWorkspacesOrganizationIdNotifications",
 
@@ -96,6 +111,16 @@ export const MCP_TOOL_ALIASES: Readonly<Record<string, string>> = {
   get_customer: "getWorkspacesOrganizationIdCustomersId",
   create_customer: "postWorkspacesOrganizationIdCustomers",
   update_customer: "patchWorkspacesOrganizationIdCustomersId",
+  customer_signals_list: "getWorkspacesOrganizationIdCustomersIdSignals",
+  customer_signal_record: "postWorkspacesOrganizationIdCustomersIdSignals",
+  customer_send_gate: "postWorkspacesOrganizationIdCustomersIdSendgate",
+  customer_dedup_key: "postWorkspacesOrganizationIdCustomersDedupkey",
+  customer_reply_ingest: "postWorkspacesOrganizationIdCustomersIdReplyingest",
+  customer_audience_query: "postWorkspacesOrganizationIdCustomersAudiencequery",
+  customer_run_play: "postWorkspacesOrganizationIdCustomersIdRunplay",
+  customer_morning_brief: "postWorkspacesOrganizationIdCustomersMorningbrief",
+  customer_pull_leads: "postWorkspacesOrganizationIdCustomersPullleads",
+  customer_approve_batch: "postWorkspacesOrganizationIdCustomersApprovebatch",
 
   // Support
   list_support_customers: "getWorkspacesOrganizationIdSupportCustomers",
@@ -122,6 +147,12 @@ export const MCP_TOOL_ALIASES: Readonly<Record<string, string>> = {
   set_support_ticket_labels:
     "putWorkspacesOrganizationIdSupportTicketsTicketIdLabels",
   list_support_inbox: "getWorkspacesOrganizationIdSupportInbox",
+};
+
+/** Aliases kept for compatibility that newer callers should not pick —
+ * mapped to their replacement name for the "Deprecated" hint (VTX-772). */
+export const MCP_TOOL_DEPRECATED_ALIASES: Readonly<Record<string, string>> = {
+  create_issues_batch: "update_issues_batch",
 };
 
 const ALIASES_BY_TARGET = new Map<string, string[]>();

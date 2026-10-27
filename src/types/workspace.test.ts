@@ -4,11 +4,13 @@ import {
   AGENT_SESSION_STATUSES,
   DEFAULT_GIT_IDENTITY_REPO,
   DRAFT_OUTPUT_KINDS,
+  EXTERNAL_EVENT_DELIVERY_STATUSES,
   DRAFT_OUTPUT_STATUSES,
   ISSUE_PRIORITIES,
   ISSUE_PR_STATES,
   ISSUE_RESOLUTIONS,
   ISSUE_STATUSES,
+  type SearchResultItem,
 } from "./workspace.js";
 import type {
   AgentSessionResult,
@@ -185,5 +187,39 @@ describe("draft output types (PILE-428)", () => {
       revive: true,
     } satisfies AgentSessionResult;
     expect(result.revive).toBe(true);
+  });
+
+  it("keeps the external-event delivery status picklist stable", () => {
+    // Delivery outcomes are written to the audit ledger — changing them
+    // silently corrupts the dedupe trail.
+    expect(EXTERNAL_EVENT_DELIVERY_STATUSES).toEqual([
+      "applied",
+      "already_done",
+      "no_step",
+      "no_record",
+      "unmapped",
+      "invalid_payload",
+      "invalid_signature",
+    ]);
+  });
+});
+
+describe("SearchResultItem (VTX-758)", () => {
+  it("carries type, id, identifier, title, snippet, and score", () => {
+    const hit: SearchResultItem = {
+      type: "issue",
+      id: "i-1",
+      identifier: "ISS-1",
+      title: "Example",
+      snippet: "…excerpt…",
+      score: 1.5,
+    };
+    expect(hit.type).toBe("issue");
+    const docHit: SearchResultItem = {
+      ...hit,
+      type: "document",
+      identifier: null,
+    };
+    expect(docHit.identifier).toBeNull();
   });
 });

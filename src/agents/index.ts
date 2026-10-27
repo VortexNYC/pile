@@ -13,10 +13,12 @@ import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { WorkerEnv } from "../platform/middleware.js";
 import {
+  CONCURRENT_LANES_PAUSE_PREFIX,
   DEFAULT_GIT_IDENTITY_REPO,
   type AgentSession,
   type Issue,
 } from "../types/workspace.js";
+import { isDynamicMemoryFact } from "../workspace/data/index.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
 import {
   parseEffortModels,
@@ -57,6 +59,13 @@ import { describeCapBreach, SPEND_CAP_ACTOR } from "./spend.js";
 // Workspace-wide ceiling on live lanes — the container apps are bounded
 // (max_instances) and one lane's provisioning wedge otherwise starves all.
 const MAX_ACTIVE_LANES_PER_WORKSPACE = 25;
+
+/** VTX-648 — review lanes (`purpose === "review"`) get at most half of an
+ *  agent's concurrency ceiling so PR review bursts can never starve
+ *  implementation lanes (`purpose === null`). */
+export function reviewConcurrencyCap(cap: number): number {
+  return Math.max(1, Math.floor(cap / 2));
+}
 
 const providers: Record<string, (env: WorkerEnv) => AgentProvider> = {
   devin: (env) => new DevinAgentProvider(env),
@@ -362,7 +371,76 @@ export async function dispatchAgent(
   let dedupeAdvisory: DedupeResult | null = null;
   let dedupeError: string | null = null;
   let continuation: DedupeContinuation | null = null;
-  if (!options?.promoteSessionId) {
+  if (options?.promoteSessionId) {
+    if (!promoteTarget || promoteTarget.status !== "waiting") {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Queued session not found or no longer waiting",
+      });
+    }
+    // VTX-643 / VTX-648 — a queue/pause promotion must still respect the
+    // provider's maxConcurrentLanes cap (and the review sub-cap for review
+    // lanes): if at cap, hold the promoted row in `waiting` + `paused`.
+    const cap = provider.maxConcurrentLanes;
+    if (cap != null) {
+      const liveRows = (await stub.listAgentSessions({ limit: 200 })).filter(
+        (s) =>
+          s.agentId === agentId &&
+          s.id !== options.promoteSessionId &&
+          !["completed", "failed", "canceled"].includes(s.status) &&
+          s.paused !== 1 &&
+          !(s.status === "waiting" && s.providerSessionId == null)
+      );
+      const liveForAgent = liveRows.length;
+      const promotedPurpose = options.purpose ?? promoteTarget.purpose;
+      const reviewCap = reviewConcurrencyCap(cap);
+      const liveReviewForAgent =
+        promotedPurpose === "review"
+          ? liveRows.filter((s) => s.purpose === "review").length
+          : 0;
+      if (
+        liveForAgent >= cap ||
+        (promotedPurpose === "review" && liveReviewForAgent >= reviewCap)
+      ) {
+        const reason =
+          liveForAgent >= cap
+            ? `${CONCURRENT_LANES_PAUSE_PREFIX}${agentId} at ${cap} live lanes`
+            : `${CONCURRENT_LANES_PAUSE_PREFIX}${agentId} at ${reviewCap} review lanes`;
+        if (liveForAgent >= cap) {
+          await stub.pauseAgentType(agentId, {
+            reason,
+            actorId: "system",
+            actorType: "system",
+          });
+        }
+        const parked = (await stub.updateAgentSession(
+          options.promoteSessionId,
+          {
+            status: "waiting",
+            paused: 1,
+          }
+        )) ?? {
+          ...promoteTarget,
+          status: "waiting" as const,
+          paused: 1,
+        };
+        await stub
+          .addAgentSessionEvent({
+            sessionId: parked.id,
+            type: "agent.paused",
+            message: `Dispatch held — agent type "${agentId}" is paused: ${reason}`,
+            payload: {
+              agentId,
+              reason,
+              pausedBy: "system",
+            },
+          })
+          .catch(() => {});
+        return parked;
+      }
+    }
+  } else {
     const dedupe = await checkDispatchDedupe(
       env,
       stub,
@@ -372,6 +450,21 @@ export async function dispatchAgent(
       dedupeError = err instanceof Error ? err.message : String(err);
       return null;
     });
+    // VTX-621 — a merged lane PR covering a finished issue makes the
+    // dispatch a stray (stale retry, trigger on a closed ticket). Refuse
+    // outright; CONFLICT reads as redundant, not an error. A reopened
+    // issue (back to an active status) dispatches normally — the merged
+    // PR is history and the lane opens a fresh one (PILE-257).
+    if (
+      dedupe?.merged &&
+      (issue.status === "done" || issue.status === "canceled")
+    ) {
+      throw new VortexError({
+        code: "CONFLICT",
+        status: 409,
+        message: `Issue already covered by merged PR ${dedupe.merged.prUrl} — refusing stale dispatch`,
+      });
+    }
     continuation = dedupe?.continuation ?? null;
     if (continuation && issue.branch !== continuation.headRef) {
       // PILE-446 — an open PR covering this issue with no live session makes
@@ -421,7 +514,9 @@ export async function dispatchAgent(
     // accepted but held, parked `waiting` + `paused`. Resume drains holds
     // in order; a dedupe edge rides along so a held lane still joins its
     // queue chain after release.
-    let pause = await stub.getAgentPause(agentId);
+    let pause:
+      | { reason?: string | null; createdBy?: string | null }
+      | undefined = await stub.getAgentPause(agentId);
     if (!pause) {
       // PILE-425 — spend/token window caps: a breached cap pauses the agent
       // type (the sweep fires the CoS alert once per breach-day via
@@ -443,6 +538,44 @@ export async function dispatchAgent(
           actorId: SPEND_CAP_ACTOR,
           actorType: "agent",
         });
+      }
+    }
+    if (!pause) {
+      // VTX-621 / VTX-648 — per-agent concurrency cap + review sub-cap:
+      // review lanes (`purpose === "review"`) cap at reviewConcurrencyCap(cap)
+      // and hold locally without writing a workspace-wide agent_pauses row, so
+      // review bursts never block implementation dispatches.
+      const cap = provider.maxConcurrentLanes;
+      if (cap != null) {
+        const liveRows = (await stub.listAgentSessions({ limit: 200 })).filter(
+          (s) =>
+            s.agentId === agentId &&
+            s.id !== options?.promoteSessionId &&
+            !["completed", "failed", "canceled"].includes(s.status) &&
+            s.paused !== 1 &&
+            !(s.status === "waiting" && s.providerSessionId == null)
+        );
+        const liveForAgent = liveRows.length;
+        const reviewCap = reviewConcurrencyCap(cap);
+        const liveReviewForAgent =
+          options?.purpose === "review"
+            ? liveRows.filter((s) => s.purpose === "review").length
+            : 0;
+        if (liveForAgent >= cap) {
+          pause = await stub.pauseAgentType(agentId, {
+            reason: `${CONCURRENT_LANES_PAUSE_PREFIX}${agentId} at ${cap} live lanes`,
+            actorId: "system",
+            actorType: "system",
+          });
+        } else if (
+          options?.purpose === "review" &&
+          liveReviewForAgent >= reviewCap
+        ) {
+          pause = {
+            reason: `${CONCURRENT_LANES_PAUSE_PREFIX}${agentId} at ${reviewCap} review lanes`,
+            createdBy: "system",
+          };
+        }
       }
     }
     if (pause) {
@@ -580,9 +713,9 @@ export async function dispatchAgent(
     status: issue.status ?? null,
     stepKey,
   });
-  // Workspace memory — recall prior facts for this entity + the agent's
-  // own lessons, injected ahead of the caller's instructions (the
-  // "right context at the right time" layer; facts keyed by entity).
+  // Workspace memory — recall prior facts for this entity (by both UUID and
+  // human identifier), the target repository, the agent's own lessons, and
+  // shared workspace facts, injected ahead of the caller's instructions.
   let memoryText: string | null = null;
   try {
     const entityFacts = await stub.memoryRecall({
@@ -590,6 +723,21 @@ export async function dispatchAgent(
       entityId: issue.id,
       limit: 15,
     });
+    const identifierFacts =
+      issue.identifier && issue.identifier !== issue.id
+        ? await stub.memoryRecall({
+            entityType: "issue",
+            entityId: issue.identifier,
+            limit: 15,
+          })
+        : [];
+    const repoFacts = issue.repo
+      ? await stub.memoryRecall({
+          entityType: "repo",
+          entityId: issue.repo,
+          limit: 10,
+        })
+      : [];
     const agentFacts = await stub.memoryRecall({
       entityType: "agent",
       entityId: options?.agentProfile?.slug ?? agentId,
@@ -600,20 +748,83 @@ export async function dispatchAgent(
       entityId: organizationId,
       limit: 10,
     });
+    // PILE-640 — task-contextual brief: the entity/repo/agent lists above
+    // are newest-N windows, so an older but topically-relevant fact drops
+    // out. Re-run recall with the issue title+description as the search
+    // text and surface semantic/BM25 matches that fell outside the windows.
+    const taskQuery = [issue.title, issue.description]
+      .filter(Boolean)
+      .join(" ")
+      .slice(0, 240)
+      .trim();
+    const contextualRepoFacts =
+      issue.repo && taskQuery
+        ? await stub.memoryRecall({
+            entityType: "repo",
+            entityId: issue.repo,
+            search: taskQuery,
+            limit: 10,
+          })
+        : [];
+    const contextualWorkspaceFacts = taskQuery
+      ? await stub.memoryRecall({ search: taskQuery, limit: 8 })
+      : [];
+    const seenFactIds = new Set<string>();
     const facts = [
       ...(entityFacts ?? []),
+      ...(identifierFacts ?? []),
+      ...(repoFacts ?? []),
       ...(agentFacts ?? []),
       ...(sharedFacts ?? []),
-    ];
-    if (facts.length > 0) {
+    ].filter((f) => {
+      if (seenFactIds.has(f.id)) return false;
+      seenFactIds.add(f.id);
+      return true;
+    });
+    // Contextual hits not already covered by the base windows — these are
+    // the facts semantic recall rescued from beyond the newest-N cap.
+    const contextualFacts = [
+      ...(contextualRepoFacts ?? []),
+      ...(contextualWorkspaceFacts ?? []),
+    ].filter((f) => {
+      if (seenFactIds.has(f.id)) return false;
+      seenFactIds.add(f.id);
+      return true;
+    });
+    if (facts.length > 0 || contextualFacts.length > 0) {
+      // PILE-616 — split the entity profile: durable static facts
+      // (conventions, lessons, architecture) up front, transient dynamic
+      // context (recent outcomes, signals, expiring holds) after, so the
+      // lane reads a structured profile instead of a flat list.
+      const staticFacts = facts.filter((f) => !isDynamicMemoryFact(f));
+      const dynamicFacts = facts.filter((f) => isDynamicMemoryFact(f));
+      const sections: string[] = [];
+      if (staticFacts.length > 0) {
+        sections.push(
+          "Static facts:\n" +
+            staticFacts.map((f) => `- [${f.kind}] ${f.fact}`).join("\n")
+        );
+      }
+      if (dynamicFacts.length > 0) {
+        sections.push(
+          "Recent / dynamic context:\n" +
+            dynamicFacts
+              .map(
+                (f) =>
+                  `- [${f.kind}] ${f.fact}${f.validUntil ? ` (expires ${f.validUntil})` : ""}`
+              )
+              .join("\n")
+        );
+      }
+      if (contextualFacts.length > 0) {
+        sections.push(
+          "Task-relevant recall (matched on this issue's text):\n" +
+            contextualFacts.map((f) => `- [${f.kind}] ${f.fact}`).join("\n")
+        );
+      }
       memoryText =
         "Workspace memory (prior facts for this work — treat as given):\n" +
-        facts
-          .map(
-            (f) =>
-              `- [${f.kind}] ${f.fact}${f.validUntil ? ` (expires ${f.validUntil})` : ""}`
-          )
-          .join("\n") +
+        sections.join("\n\n") +
         "\n\nWhen you finish, call memory_remember for durable facts " +
         "you learned (coverage swept, lessons, entity notes) so the " +
         "next lane starts with them.";
@@ -652,6 +863,7 @@ export async function dispatchAgent(
           )
         )
       : options?.extraEnv;
+  // PILE-290 — lane-env allowlist includes PILE_PGX_* for pgx lane DBs.
   if (issue.repo && !session.laneDbRef) {
     const laneConfig = await laneDbConfigForOrgRepo(
       env,
@@ -659,7 +871,11 @@ export async function dispatchAgent(
       issue.repo
     );
     if (laneConfig) {
-      const laneProvider = getLaneDbProvider(env);
+      const laneProvider = getLaneDbProvider(
+        env,
+        undefined,
+        laneConfig.provider
+      );
       if (laneProvider) {
         try {
           const provisioned = await laneProvider.provision(
@@ -737,6 +953,10 @@ export async function dispatchAgent(
         body: {
           userId: actor.id,
           name: `agent-${session.id.slice(0, 13)}`,
+          // PILE-623 — ephemeral lane tokens live 24h; the sweep's
+          // pruneStaleEphemeralAgentKeys janitor removes any stragglers
+          // past the TTL (or already expired) on each pass.
+          expiresIn: 60 * 60 * 24,
           rateLimitEnabled: false,
           metadata: {
             organizationId,

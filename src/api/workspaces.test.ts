@@ -70,6 +70,62 @@ describe("workspaces API", () => {
     expect(body.workspaces).toHaveLength(0);
   });
 
+  it("scopes GET /workspaces to the API key's own workspace (VTX-751)", async () => {
+    const cookie = await getSessionCookie();
+    const onboard = async () => {
+      const res = await app.fetch(
+        new Request(onboardUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Cookie: cookie,
+            Origin: origin,
+          },
+          body: JSON.stringify({
+            name: "Key Scoped",
+            slug: `key-scoped-${crypto.randomUUID()}`,
+          }),
+        }),
+        env
+      );
+      expect(res.status).toBe(201);
+      return (await res.json()) as {
+        workspace: { id: string };
+        token: string;
+      };
+    };
+    const ws1 = await onboard();
+    const ws2 = await onboard();
+
+    // A session sees every workspace the user belongs to.
+    const sessionRes = await app.fetch(
+      new Request(new URL("/workspaces", origin).toString(), {
+        headers: { Cookie: cookie, Origin: origin },
+      }),
+      env
+    );
+    const sessionBody = (await sessionRes.json()) as {
+      workspaces: { id: string }[];
+    };
+    const sessionIds = sessionBody.workspaces.map((w) => w.id);
+    expect(sessionIds).toContain(ws1.workspace.id);
+    expect(sessionIds).toContain(ws2.workspace.id);
+
+    // The workspace-scoped key only authorizes its own workspace — listing
+    // must not leak the owner's other workspaces.
+    const keyRes = await app.fetch(
+      new Request(new URL("/workspaces", origin).toString(), {
+        headers: { Authorization: `Bearer ${ws1.token}`, Origin: origin },
+      }),
+      env
+    );
+    expect(keyRes.status).toBe(200);
+    const keyBody = (await keyRes.json()) as {
+      workspaces: { id: string }[];
+    };
+    expect(keyBody.workspaces.map((w) => w.id)).toEqual([ws1.workspace.id]);
+  });
+
   it("onboards a workspace with a default team and admin token", async () => {
     const cookie = await getSessionCookie();
     const res = await app.fetch(
@@ -472,5 +528,67 @@ describe("workspaces API", () => {
 describe("workspace create via session headers (PILE-456)", () => {
   it("a workspace create still works when the caller arrives via minted session headers", async () => {
     expect(true).toBe(true);
+  });
+});
+
+describe("guided onboarding (PILE-639)", () => {
+  it("seeds starter issues and returns the quickstart bundle", async () => {
+    const cookie = await getSessionCookie();
+    const res = await app.fetch(
+      new Request(onboardUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: cookie,
+          Origin: origin,
+        },
+        body: JSON.stringify({
+          name: "Seeded",
+          slug: `seeded-${crypto.randomUUID()}`,
+          seedStarterIssues: true,
+        }),
+      }),
+      env
+    );
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as {
+      workspace: { id: string };
+      token: string;
+      quickstart?: {
+        mcpUrl: string;
+        cliSetupCommand: string;
+        seededIssueIds: string[];
+      };
+    };
+    expect(body.quickstart).toBeDefined();
+    expect(body.quickstart?.mcpUrl).toBe(`${origin}/mcp`);
+    expect(body.quickstart?.cliSetupCommand).toContain(body.token);
+    expect(body.quickstart?.seededIssueIds).toHaveLength(2);
+
+    // The checklist reflects what was just provisioned.
+    const checklist = await app.fetch(
+      new Request(
+        new URL(
+          `/workspaces/${body.workspace.id}/onboarding-checklist`,
+          origin
+        ).toString(),
+        { headers: { Authorization: `Bearer ${body.token}` } }
+      ),
+      env
+    );
+    expect(checklist.status).toBe(200);
+    const cl = (await checklist.json()) as {
+      organizationId: string;
+      hasApiKey: boolean;
+      hasAgentProvider: boolean;
+      hasFirstIssue: boolean;
+      mcpUrl: string;
+      pluginManifestUrl: string;
+    };
+    expect(cl.organizationId).toBe(body.workspace.id);
+    expect(cl.hasApiKey).toBe(true);
+    expect(cl.hasFirstIssue).toBe(true);
+    expect(cl.mcpUrl).toBe(`${origin}/mcp`);
+    expect(cl.pluginManifestUrl).toBe(`${origin}/.well-known/mcp.json`);
   });
 });
