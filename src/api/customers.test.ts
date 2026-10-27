@@ -1967,3 +1967,324 @@ describe("follow-up due notifications (PILE-674)", () => {
     ).toBeUndefined();
   });
 });
+
+describe("building scorecard (PILE-662)", () => {
+  let organizationId = "";
+  let token = "";
+
+  const scorecardResponse = z.object({
+    customerId: z.string(),
+    attributes: z.record(z.string(), z.unknown()),
+    breakdown: z.object({
+      score: z.number(),
+      tier: z.enum(["A", "B", "C", "D"]),
+      xrfLeadPaintEligible: z.boolean(),
+      portfolioScale: z.string(),
+      whyNow: z.string(),
+      factors: z.array(
+        z.object({
+          key: z.string(),
+          label: z.string(),
+          points: z.number(),
+          detail: z.string(),
+        })
+      ),
+    }),
+  });
+
+  beforeAll(async () => {
+    ({ organizationId, token } = await seedWorkspace());
+  });
+
+  async function score(customerId: string, body: Record<string, unknown>) {
+    return fetch(
+      `/workspaces/${organizationId}/customers/${customerId}/building-scorecard`,
+      { method: "POST", body: JSON.stringify(body) },
+      token
+    );
+  }
+
+  it("scores building attrs, writes scores + custom fields, and records a memory fact", async () => {
+    const customer = await createCustomer(
+      organizationId,
+      token,
+      "Pre-war Tenement LLC"
+    );
+    const res = await score(customer.id, {
+      fetchFromPluto: false,
+      attrs: {
+        bbl: "3043210021",
+        unitsTotal: 24,
+        unitsRes: 24,
+        yearBuilt: 1935,
+        hpdOwnerName: "Knickerbocker Realty",
+        openViolationsCount: 7,
+      },
+    });
+    expect(res.status).toBe(200);
+    const body = scorecardResponse.parse(await res.json());
+    expect(body.customerId).toBe(customer.id);
+    // 28 units (20–49) + 25 LL31 + 10 HPD + 15 violations = 78.
+    expect(body.breakdown.score).toBe(78);
+    expect(body.breakdown.tier).toBe("B");
+    expect(body.breakdown.xrfLeadPaintEligible).toBe(true);
+    expect(body.breakdown.portfolioScale).toBe("mid_multifamily");
+    expect(body.breakdown.whyNow).toContain("XRF");
+    expect(body.attributes.unitsTotal).toBe(24);
+    expect(body.attributes.bbl).toBe("3043210021");
+
+    const got = await fetch(
+      `/workspaces/${organizationId}/customers/${customer.id}`,
+      {},
+      token
+    );
+    const stored = z
+      .object({
+        priorityScore: z.number().nullable(),
+        fitScore: z.number().nullable(),
+        fitStatus: z.string().nullable(),
+        signal: z.string().nullable(),
+        customFields: z.record(z.string(), z.string()),
+      })
+      .parse(await got.json());
+    expect(stored.priorityScore).toBe(78);
+    expect(stored.fitScore).toBe(78);
+    expect(stored.fitStatus).toBe("fits");
+    expect(stored.signal).toBe(body.breakdown.whyNow);
+    expect(stored.customFields.unitsTotal).toBe("24");
+    expect(stored.customFields.yearBuilt).toBe("1935");
+    expect(stored.customFields.bbl).toBe("3043210021");
+    expect(stored.customFields.buildingTier).toBe("B");
+    expect(stored.customFields.buildingScale).toBe("mid_multifamily");
+    expect(stored.customFields.xrfLeadPaintEligible).toBe("true");
+    expect(stored.customFields.whyNow).toBe(body.breakdown.whyNow);
+
+    // The scorecard lands as a customer memory fact.
+    const mem = await fetch(
+      `/workspaces/${organizationId}/memory?entityType=customer&entityId=${customer.id}&kind=building_scorecard`,
+      {},
+      token
+    );
+    expect(mem.status).toBe(200);
+    const { memories } = z
+      .object({
+        memories: z.array(z.object({ kind: z.string(), fact: z.string() })),
+      })
+      .parse(await mem.json());
+    const fact = memories.find((m) => m.kind === "building_scorecard");
+    expect(fact).toBeDefined();
+    const parsed = z
+      .object({ breakdown: z.object({ score: z.number() }) })
+      .parse(JSON.parse(fact!.fact));
+    expect(parsed.breakdown.score).toBe(78);
+  });
+
+  it("merges previously persisted attrs on re-score", async () => {
+    const customer = await createCustomer(
+      organizationId,
+      token,
+      "Re-score Me Realty"
+    );
+    const first = await score(customer.id, {
+      fetchFromPluto: false,
+      attrs: { unitsTotal: 10, unitsRes: 10, yearBuilt: 1950 },
+    });
+    expect(first.status).toBe(200);
+    // 20 units + 25 LL31 = 45.
+    expect(scorecardResponse.parse(await first.json()).breakdown.score).toBe(
+      45
+    );
+
+    // Second call carries only the new signal — the stored unit count and
+    // year merge back in (and suppress the PLUTO fetch anyway).
+    const second = await score(customer.id, {
+      fetchFromPluto: false,
+      attrs: { openViolationsCount: 3 },
+    });
+    expect(second.status).toBe(200);
+    const body = scorecardResponse.parse(await second.json());
+    // 20 units + 25 LL31 + 15 violations = 60.
+    expect(body.breakdown.score).toBe(60);
+    expect(body.breakdown.xrfLeadPaintEligible).toBe(true);
+    expect(body.attributes.unitsTotal).toBe(10);
+    expect(body.attributes.openViolationsCount).toBe(3);
+  });
+
+  it("scores an attribute-less customer as 0/D without hitting PLUTO", async () => {
+    const customer = await createCustomer(
+      organizationId,
+      token,
+      "Mystery Building"
+    );
+    const res = await score(customer.id, { fetchFromPluto: false });
+    expect(res.status).toBe(200);
+    const body = scorecardResponse.parse(await res.json());
+    expect(body.breakdown.score).toBe(0);
+    expect(body.breakdown.tier).toBe("D");
+    expect(body.breakdown.xrfLeadPaintEligible).toBe(false);
+
+    const got = await fetch(
+      `/workspaces/${organizationId}/customers/${customer.id}`,
+      {},
+      token
+    );
+    const stored = z
+      .object({ fitStatus: z.string().nullable() })
+      .parse(await got.json());
+    expect(stored.fitStatus).toBe("unknown");
+  });
+
+  it("404s for a missing customer", async () => {
+    const res = await score(crypto.randomUUID(), {
+      fetchFromPluto: false,
+    });
+    expect(res.status).toBe(404);
+  });
+});
+
+describe("customer territories (PILE-672)", () => {
+  let organizationId = "";
+  let token = "";
+
+  const territoriesResponse = z.object({
+    territories: z.array(
+      z.object({
+        key: z.string(),
+        label: z.string(),
+        count: z.number().int(),
+        dueCount: z.number().int(),
+        stops: z.array(
+          z.object({
+            id: z.string(),
+            name: z.string(),
+            address: z.string().nullable(),
+            phone: z.string().nullable(),
+            streetName: z.string(),
+            houseNumber: z.number().nullable(),
+            priorityScore: z.number().nullable(),
+            nextStepDueAt: z.string().nullable(),
+          })
+        ),
+      })
+    ),
+  });
+
+  beforeAll(async () => {
+    ({ organizationId, token } = await seedWorkspace());
+  });
+
+  async function mk(body: Record<string, unknown>) {
+    const res = await fetch(
+      `/workspaces/${organizationId}/customers`,
+      { method: "POST", body: JSON.stringify(body) },
+      token
+    );
+    expect(res.status).toBe(201);
+    return z.object({ id: z.string() }).parse(await res.json());
+  }
+
+  it("groups stops by neighborhood / borough / zip and orders them into walk order", async () => {
+    const knickerbocker300 = await mk({
+      name: "Knickerbocker 300",
+      neighborhood: "Bushwick",
+      address: "300 Knickerbocker Ave, Brooklyn, NY 11237",
+    });
+    const knickerbocker120 = await mk({
+      name: "Knickerbocker 120",
+      neighborhood: "Bushwick",
+      address: "120 Knickerbocker Ave, Brooklyn, NY 11237",
+      nextStepDueAt: "2020-01-01T00:00:00.000Z",
+    });
+    const wyckoff55 = await mk({
+      name: "Wyckoff 55",
+      neighborhood: "Bushwick",
+      address: "55 Wyckoff Ave, Brooklyn, NY 11237",
+    });
+    const ridgewood = await mk({
+      name: "Ridgewood spot",
+      address: "10 Catalpa Ave, Ridgewood, NY 11385",
+    });
+    const bronx = await mk({
+      name: "Bronx bldg",
+      address: "500 E 149th St, Bronx, NY 10455",
+      phone: "718-555-0134",
+    });
+    const noAddress = await mk({ name: "No Address Co" });
+
+    const res = await fetch(
+      `/workspaces/${organizationId}/customers/territories`,
+      {},
+      token
+    );
+    expect(res.status).toBe(200);
+    const { territories } = territoriesResponse.parse(await res.json());
+    const allStopIds = territories.flatMap((t) => t.stops.map((s) => s.id));
+
+    const bushwick = territories.find((t) => t.key === "bushwick");
+    expect(bushwick).toBeDefined();
+    expect(bushwick!.label).toBe("Bushwick");
+    expect(bushwick!.count).toBe(3);
+    // Street-name then house-number walk order: Knickerbocker 120 → 300,
+    // then Wyckoff.
+    expect(bushwick!.stops.map((s) => s.id)).toEqual([
+      knickerbocker120.id,
+      knickerbocker300.id,
+      wyckoff55.id,
+    ]);
+    expect(bushwick!.stops[0]!.streetName).toBe("KNICKERBOCKER AVE");
+    expect(bushwick!.stops[0]!.houseNumber).toBe(120);
+    // One overdue follow-up inside the territory.
+    expect(bushwick!.dueCount).toBe(1);
+
+    // Address-only customers group by borough, then ZIP.
+    const bronxTerritory = territories.find((t) => t.key === "bronx");
+    expect(bronxTerritory?.stops[0]?.id).toBe(bronx.id);
+    expect(bronxTerritory?.stops[0]?.phone).toBe("718-555-0134");
+    const zipTerritory = territories.find((t) => t.key === "zip-11385");
+    expect(zipTerritory?.stops[0]?.id).toBe(ridgewood.id);
+
+    // A customer without an address can't be a stop.
+    expect(allStopIds).not.toContain(noAddress.id);
+  });
+
+  it("excludes terminal-stage customers from the walk list", async () => {
+    const statusRes = await fetch(
+      `/workspaces/${organizationId}/customer-statuses`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "Closed Lost",
+          key: "closed_lost",
+          type: "terminal",
+        }),
+      },
+      token
+    );
+    expect(statusRes.status).toBe(201);
+    const closedLost = z
+      .object({ id: z.string() })
+      .parse(await statusRes.json());
+    const dead = await mk({
+      name: "Dead Lead Apartments",
+      statusId: closedLost.id,
+      address: "1 Dead End St, Brooklyn, NY 11201",
+    });
+
+    const res = await fetch(
+      `/workspaces/${organizationId}/customers/territories`,
+      {},
+      token
+    );
+    expect(res.status).toBe(200);
+    const { territories } = territoriesResponse.parse(await res.json());
+    const allStopIds = territories.flatMap((t) => t.stops.map((s) => s.id));
+    expect(allStopIds).not.toContain(dead.id);
+  });
+
+  it("requires auth", async () => {
+    const res = await fetch(
+      `/workspaces/${organizationId}/customers/territories`
+    );
+    expect(res.status).toBe(401);
+  });
+});

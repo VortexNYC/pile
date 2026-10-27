@@ -800,3 +800,449 @@ describe("PILE-609/610 cadence + paid vendor wiring", () => {
     expect(item.optOutFooter).toContain("1 Main St");
   });
 });
+
+describe("revenue-signal collectors (PILE-660/661/663)", () => {
+  it("classifyMerchantLead: storefront exclusion bias fixed by includeStorefronts (PILE-663)", () => {
+    // Default behavior unchanged: POS-bound storefronts stay excluded.
+    expect(
+      classifyMerchantLead({ name: "Joe's Pizzeria", vertical: "restaurant" })
+    ).toMatchObject({
+      sheetKey: "excluded_pos",
+      categoryLabel: "Restaurant / POS (Excluded)",
+    });
+    // Opt-in: POS-bound storefronts land on the storefront sheet.
+    expect(
+      classifyMerchantLead(
+        { name: "Joe's Pizzeria", vertical: "restaurant" },
+        { includeStorefronts: true }
+      )
+    ).toMatchObject({
+      sheetKey: "storefront_smb",
+      categoryLabel: "Storefront SMB — Card-Present Rate Competition",
+    });
+    // excludePosStorefronts === false is the alternate opt-in spelling.
+    expect(
+      classifyMerchantLead(
+        { name: "Main St Cafe", vertical: "cafe" },
+        { excludePosStorefronts: false }
+      ).sheetKey
+    ).toBe("storefront_smb");
+    // Non-POS storefronts classify as target_non_pos_smb when included.
+    expect(
+      classifyMerchantLead(
+        { name: "Bodega Plus", vertical: "retail" },
+        { includeStorefronts: true }
+      )
+    ).toMatchObject({ sheetKey: "target_non_pos_smb" });
+    // Without the flag, a non-POS storefront keeps its old fallthrough.
+    expect(
+      classifyMerchantLead({ name: "Bodega Plus", vertical: "retail" }).sheetKey
+    ).toBe("exploration");
+    // Hard locked-in POS franchises stay excluded even when included.
+    expect(
+      classifyMerchantLead(
+        { name: "Subway #10234", vertical: "restaurant" },
+        { includeStorefronts: true }
+      )
+    ).toMatchObject({
+      sheetKey: "excluded_pos",
+      categoryLabel: "Restaurant / POS Franchise (Excluded)",
+    });
+    // Other sheets are unaffected by the flag.
+    expect(
+      classifyMerchantLead(
+        { name: "Acme Electric", vertical: "electrical" },
+        { includeStorefronts: true }
+      ).sheetKey
+    ).toBe("trades");
+  });
+
+  it("pullSource handles kind=places via Google Places Text Search with X-Goog headers + foot-traffic raw fields (PILE-663)", async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({ url: String(input), init });
+        return new Response(
+          JSON.stringify({
+            places: [
+              {
+                id: "ChIJ123",
+                displayName: { text: "Mile End Delicatessen" },
+                formattedAddress: "97A Hoyt St, Brooklyn, NY 11217",
+                nationalPhoneNumber: "(718) 852-7510",
+                websiteUri: "https://www.mileenddeli.com/",
+                primaryType: "deli",
+                rating: 4.5,
+                userRatingCount: 1834,
+              },
+            ],
+            nextPageToken: "tok-next",
+          }),
+          { status: 200 }
+        );
+      })
+    );
+    const out = await pullSource(
+      {
+        id: "places-1",
+        name: "places",
+        kind: "places",
+        config: JSON.stringify({
+          textQuery: "delis in Brooklyn",
+          includedType: "deli",
+          apiKey: "test-places-key",
+          maxResults: 5,
+        }),
+        cursorField: null,
+        cursorValue: null,
+        signal: "contact_found",
+      },
+      undefined
+    );
+    expect(calls).toHaveLength(1);
+    const call = calls[0]!;
+    expect(call.url).toBe("https://places.googleapis.com/v1/places:searchText");
+    expect(call.init?.method).toBe("POST");
+    const headers = new Headers(call.init?.headers);
+    expect(headers.get("x-goog-api-key")).toBe("test-places-key");
+    expect(headers.get("x-goog-fieldmask")).toContain("places.userRatingCount");
+    expect(
+      JSON.parse(String(call.init?.body)) as Record<string, unknown>
+    ).toMatchObject({
+      textQuery: "delis in Brooklyn",
+      includedType: "deli",
+      maxResultCount: 5,
+    });
+    expect(out.newCursor).toBe("tok-next");
+    expect(out.candidates[0]).toMatchObject({
+      name: "Mile End Delicatessen",
+      externalId: "gplace:ChIJ123",
+      domain: "mileenddeli.com",
+      address: "97A Hoyt St, Brooklyn, NY 11217",
+      phone: "(718) 852-7510",
+      vertical: "deli",
+    });
+    expect(out.candidates[0]?.raw).toMatchObject({
+      rating: 4.5,
+      userRatingCount: 1834,
+    });
+
+    // env fallback for the API key
+    await pullSource(
+      {
+        id: "places-env",
+        name: "places-env",
+        kind: "places",
+        config: JSON.stringify({ textQuery: "bakeries" }),
+        cursorField: null,
+        cursorValue: null,
+        signal: "contact_found",
+      },
+      { GOOGLE_PLACES_API_KEY: "env-key" }
+    );
+    expect(new Headers(calls[1]?.init?.headers).get("x-goog-api-key")).toBe(
+      "env-key"
+    );
+
+    // Missing key + no url → explicit configuration error.
+    await expect(
+      pullSource({
+        id: "places-nokey",
+        name: "places-nokey",
+        kind: "places",
+        config: JSON.stringify({ textQuery: "bakeries" }),
+        cursorField: null,
+        cursorValue: null,
+        signal: "contact_found",
+      })
+    ).rejects.toThrow("GOOGLE_PLACES_API_KEY");
+
+    // Legacy GET path when a prebuilt `url` is provided.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              results: [
+                {
+                  place_id: "legacy-abc",
+                  name: "Court Street Grocers",
+                  formatted_address: "485 Court St, Brooklyn, NY",
+                  formatted_phone_number: "(718) 555-0164",
+                  website: "https://courtstreetgrocers.com",
+                  types: ["grocery_or_supermarket"],
+                  rating: 4.4,
+                  user_ratings_total: 512,
+                },
+              ],
+            }),
+            { status: 200 }
+          )
+      )
+    );
+    const legacy = await pullSource({
+      id: "places-legacy",
+      name: "places-legacy",
+      kind: "places",
+      config: JSON.stringify({
+        url: "https://legacy-places.example/search?query=deli",
+      }),
+      cursorField: null,
+      cursorValue: null,
+      signal: "contact_found",
+    });
+    expect(legacy.candidates[0]).toMatchObject({
+      name: "Court Street Grocers",
+      externalId: "gplace:legacy-abc",
+      domain: "courtstreetgrocers.com",
+      vertical: "grocery_or_supermarket",
+    });
+    expect(legacy.candidates[0]?.raw).toMatchObject({
+      rating: 4.4,
+      userRatingCount: 512,
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it("PILE-661 free-registry presets pull revenue + pain flags: DOB job value, NYS tax warrants, NYS UCC, IRS 990", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("rbx6-tga4.json")) {
+          return new Response(
+            JSON.stringify([
+              {
+                applicant_business_name: "COSTELLO CONSTRUCTION GROUP",
+                job_filing_number: "M1405621",
+                permittee_s_license_type: "GC",
+                borough: "QUEENS",
+                applicant_business_address: "19 ROLLING HILLS ROAD",
+                zip_code: "11355",
+                estimated_job_costs: "1250000",
+                work_type: "General Construction",
+                job_description: "Demolition of 3 story building",
+                permit_status: "Issued",
+              },
+            ]),
+            { status: 200 }
+          );
+        }
+        if (url.includes("v7ua-z23v.json")) {
+          return new Response(
+            JSON.stringify([
+              {
+                warrant_id: "E-936515303-W001-7",
+                status_code: "Added",
+                debtor_name_1: "BODEGA DELI CORP",
+                debtor_address_2: "351 LAKE SHORE DR",
+                city: "MAHOPAC",
+                state: "NY",
+                zip_code: "10541",
+                county_code: "PUTNAM",
+                warrant_filed_amount: "27306.25",
+                warrant_filed_date: "2026-09-16T00:00:00.000",
+              },
+            ]),
+            { status: 200 }
+          );
+        }
+        if (url.includes("nbbg-wtuz.json")) {
+          return new Response(
+            JSON.stringify([
+              {
+                document_id: "202601010001",
+                name: "KINGS EQUIPMENT LEASING LLC",
+                party_type: "1",
+                address_1: "10 GRAND ST",
+                city: "BROOKLYN",
+                state: "NY",
+                zip: "11249",
+                record_type: "UCC",
+              },
+            ]),
+            { status: 200 }
+          );
+        }
+        if (url.includes("projects.propublica.org")) {
+          return new Response(
+            JSON.stringify({
+              organizations: [
+                {
+                  ein: "113344556",
+                  name: "BROOKLYN ARTS FUND INC",
+                  city: "BROOKLYN",
+                  state: "NY",
+                  ntee_code: "A40",
+                  totrevenue: 2_400_000,
+                  updated: "2026-06-01",
+                },
+              ],
+            }),
+            { status: 200 }
+          );
+        }
+        return new Response("[]", { status: 200 });
+      })
+    );
+
+    const dob = await pullSource(
+      PRESET_NON_POS_SMB_SOURCES.nyc_dob_permit_job_value
+    );
+    expect(dob.candidates[0]).toMatchObject({
+      name: "COSTELLO CONSTRUCTION GROUP",
+      externalId: "socrata:rbx6-tga4:M1405621",
+      vertical: "GC",
+      signal: "award",
+    });
+    // $1,250,000 estimated job cost → 125M cents in raw.jobValueCents.
+    expect(dob.candidates[0]?.raw).toMatchObject({
+      estimated_job_costs: "1250000",
+      jobValueCents: 125_000_000,
+      work_type: "General Construction",
+    });
+    expect(dob.candidates[0]?.estMonthlyVolumeCents).toBe(
+      Math.round(125_000_000 / 12)
+    );
+    expect(dob.candidates[0]?.address).toContain("19 ROLLING HILLS ROAD");
+
+    const warrants = await pullSource(
+      PRESET_NON_POS_SMB_SOURCES.nys_tax_warrants
+    );
+    expect(warrants.candidates[0]).toMatchObject({
+      name: "BODEGA DELI CORP",
+      externalId: "socrata:v7ua-z23v:E-936515303-W001-7",
+      signal: "violation",
+      neighborhood: "PUTNAM",
+    });
+    // Active warrant flag + dollar judgment in raw — sales-tax-scale
+    // revenue proof AND distress/pain signal.
+    expect(warrants.candidates[0]?.raw).toMatchObject({
+      status_code: "Added",
+      warrant_filed_amount: "27306.25",
+      warrantAmountCents: 2_730_625,
+    });
+
+    const ucc = await pullSource(PRESET_NON_POS_SMB_SOURCES.nys_ucc_filings);
+    expect(ucc.candidates[0]).toMatchObject({
+      name: "KINGS EQUIPMENT LEASING LLC",
+      externalId: "socrata:nbbg-wtuz:202601010001",
+      signal: "award",
+    });
+    expect(ucc.candidates[0]?.raw).toMatchObject({ party_type: "1" });
+
+    const np = await pullSource(PRESET_NON_POS_SMB_SOURCES.irs_990_nonprofits);
+    expect(np.candidates[0]).toMatchObject({
+      name: "BROOKLYN ARTS FUND INC",
+      externalId: "propublica990:113344556",
+      vertical: "Nonprofit (IRS 990)",
+      signal: "revenue_estimate",
+    });
+    expect(np.candidates[0]?.raw).toMatchObject({
+      ein: "113344556",
+      totalRevenueDollars: 2_400_000,
+    });
+    // $2.4M/yr → $200k/mo card-volume proxy.
+    expect(np.candidates[0]?.estMonthlyVolumeCents).toBe(20_000_000);
+    vi.unstubAllGlobals();
+  });
+
+  it("usaspending maps award dollars + estMonthlyVolumeCents, and nyc_checkbook returns vendor payment cents (PILE-660)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("api.usaspending.gov/api/v2/recipient")) {
+          return new Response(
+            JSON.stringify({
+              results: [
+                {
+                  name: "ACME CONSTRUCTION CORP",
+                  uei: "UEI123",
+                  amount: 4_800_000,
+                },
+              ],
+            }),
+            { status: 200 }
+          );
+        }
+        if (url.includes("spending_by_award")) {
+          return new Response(
+            JSON.stringify({
+              results: [
+                {
+                  "Award ID": "W912-1",
+                  "Recipient Name": "HUDSON BUILDERS LLC",
+                  "Award Amount": 2_400_000,
+                  "Start Date": "2026-03-01",
+                },
+              ],
+            }),
+            { status: 200 }
+          );
+        }
+        if (url.includes("85j2-hzta.json")) {
+          return new Response(
+            JSON.stringify([
+              {
+                vendor: "1220 EXHIBITS INC",
+                fiscalyear: "2025-2026",
+                quarter: "3",
+                paymentamount: "112457.00",
+              },
+            ]),
+            { status: 200 }
+          );
+        }
+        return new Response("{}", { status: 200 });
+      })
+    );
+
+    const recipient = await pullSource({
+      id: "usa-1",
+      name: "usaspending",
+      kind: "usaspending",
+      config: JSON.stringify({ state: "NY" }),
+      cursorField: null,
+      cursorValue: null,
+      signal: "award",
+    });
+    expect(recipient.candidates[0]).toMatchObject({
+      name: "ACME CONSTRUCTION CORP",
+      externalId: "usaspending:UEI123",
+    });
+    // $4.8M award → 480M cents; monthly proxy /12.
+    expect(recipient.candidates[0]?.raw?.awardAmountCents).toBe(480_000_000);
+    expect(recipient.candidates[0]?.estMonthlyVolumeCents).toBe(40_000_000);
+
+    const awards = await pullSource({
+      id: "usa-2",
+      name: "usaspending-awards",
+      kind: "usaspending",
+      config: JSON.stringify({ endpoint: "spending_by_award", state: "NY" }),
+      cursorField: null,
+      cursorValue: null,
+      signal: "award",
+    });
+    expect(awards.candidates[0]).toMatchObject({
+      name: "HUDSON BUILDERS LLC",
+      externalId: "usaspending:W912-1",
+      signalDate: "2026-03-01",
+    });
+    expect(awards.candidates[0]?.raw?.awardAmountCents).toBe(240_000_000);
+    expect(awards.candidates[0]?.estMonthlyVolumeCents).toBe(20_000_000);
+
+    const checkbook = await pullSource(
+      PRESET_NON_POS_SMB_SOURCES.nyc_checkbook
+    );
+    expect(checkbook.candidates[0]).toMatchObject({
+      name: "1220 EXHIBITS INC",
+      signal: "award",
+    });
+    // $112,457.00 check → 11,245,700 cents in raw.paymentAmountCents.
+    expect(checkbook.candidates[0]?.raw?.paymentAmountCents).toBe(11_245_700);
+    vi.unstubAllGlobals();
+  });
+});

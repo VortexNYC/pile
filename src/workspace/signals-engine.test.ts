@@ -369,4 +369,126 @@ describe("Unify-parity Signals, Ranker v2, Provenance & Technographics (PILE-507
     expect(estMonthlyVolumeCentsFromFields(null)).toBeUndefined();
     expect(estMonthlyVolumeCentsFromFields("not json")).toBeUndefined();
   });
+
+  it("lifts the storefront -40 penalty when the merchant has proven revenue (PILE-663)", () => {
+    const config = {
+      motion: "smb_default",
+      icpRules: DEFAULT_ICP_RULES,
+      signalRules: DEFAULT_SIGNAL_RULES,
+    };
+
+    // No revenue proof: storefronts are still buried.
+    const buried = rankMerchantSignals({
+      merchantId: "m-store-noproof",
+      merchantAttrs: {
+        vertical: "restaurant",
+        hasAddress: true,
+        hasPhone: true,
+      },
+      signals: [],
+      config,
+      nowIso: NOW,
+    });
+    expect(buried.matchedIcpRules).toContain(
+      "icp-vertical-pos-bound-restaurant-penalty"
+    );
+    expect(buried.matchedIcpRules).not.toContain("icp-storefront-with-volume");
+    expect(buried.fitScore).toBe(30); // 50 -40 +10 +10
+    expect(buried.priorityScore).toBe(0);
+
+    // A storefront with estMonthlyVolumeCents + a revenue_estimate signal
+    // ranks UP instead of being buried.
+    const lifted = rankMerchantSignals({
+      merchantId: "m-store-vol",
+      merchantAttrs: {
+        vertical: "restaurant",
+        hasAddress: true,
+        hasPhone: true,
+        estMonthlyVolumeCents: 4_000_000,
+      },
+      signals: [
+        {
+          id: "sig_rev_1",
+          merchantId: "m-store-vol",
+          type: "revenue_estimate",
+          observedAt: NOW,
+          source: "google_places",
+          evidenceUrl: "https://places.googleapis.com/v1/places/ChIJ1",
+          strength: 80,
+          summary: "Google Places foot-traffic proxy: 4.6★ (210 reviews)",
+        },
+      ],
+      config,
+      nowIso: NOW,
+    });
+    expect(lifted.matchedIcpRules).not.toContain(
+      "icp-vertical-pos-bound-restaurant-penalty"
+    );
+    expect(lifted.matchedIcpRules).toContain("icp-storefront-with-volume");
+    expect(lifted.matchedIcpRules).toContain("icp-est-monthly-card-volume");
+    expect(lifted.fitScore).toBe(100); // 50 +10 +10 +15 +20
+    expect(lifted.fitScore).toBeGreaterThan(buried.fitScore);
+    expect(lifted.priorityScore).toBeGreaterThan(0);
+
+    // A revenue_estimate signal alone (no collected volume field) also lifts
+    // the exclusion — signal type is a revenue/pain proof.
+    const signalOnly = rankMerchantSignals({
+      merchantId: "m-cafe",
+      merchantAttrs: { vertical: "cafe" },
+      signals: [
+        {
+          id: "sig_rev_2",
+          merchantId: "m-cafe",
+          type: "revenue_estimate",
+          observedAt: NOW,
+          source: "intake",
+          evidenceUrl: "intake:visit-9",
+          strength: 85,
+          summary: "Reported card volume",
+        },
+      ],
+      config,
+      nowIso: NOW,
+    });
+    expect(signalOnly.matchedIcpRules).toContain("icp-storefront-with-volume");
+    expect(signalOnly.matchedIcpRules).not.toContain(
+      "icp-vertical-pos-bound-restaurant-penalty"
+    );
+
+    // Another merchant's revenue signal must NOT lift this storefront.
+    const crossMerchant = rankMerchantSignals({
+      merchantId: "m-store-2",
+      merchantAttrs: { vertical: "cafe" },
+      signals: [
+        {
+          id: "sig_rev_3",
+          merchantId: "m-other-merchant",
+          type: "revenue_estimate",
+          observedAt: NOW,
+          source: "intake",
+          evidenceUrl: "intake:visit-8",
+          strength: 85,
+        },
+      ],
+      config,
+      nowIso: NOW,
+    });
+    expect(crossMerchant.matchedIcpRules).toContain(
+      "icp-vertical-pos-bound-restaurant-penalty"
+    );
+
+    // allowStorefronts opt-in lifts retail/grocery/salon storefronts too.
+    const opted = rankMerchantSignals({
+      merchantId: "m-retail",
+      merchantAttrs: { vertical: "retail", allowStorefronts: true },
+      signals: [],
+      config,
+      nowIso: NOW,
+    });
+    expect(opted.matchedIcpRules).toContain("icp-storefront-with-volume");
+    expect(opted.matchedIcpRules).not.toContain(
+      "icp-vertical-pos-bound-restaurant-penalty"
+    );
+    expect(opted.fitScore).toBeGreaterThanOrEqual(75);
+  });
 });

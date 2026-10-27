@@ -42787,6 +42787,116 @@
         "summary": "Get customer import"
       }
     },
+    "/workspaces/{organizationId}/customers/territories": {
+      "get": {
+        "tags": [
+          "customers"
+        ],
+        "description": "Group active customers with addresses into canvassing territories (neighborhood field, then borough / postal code / city parsed from the address). Stops inside each territory sort by street name then house number so a field rep gets a ready-to-walk route list per neighborhood.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Canvassing territories with ordered stops",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "territories": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "count": {
+                            "type": "integer"
+                          },
+                          "dueCount": {
+                            "type": "integer"
+                          },
+                          "stops": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "address": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "phone": {
+                                  "type": "string",
+                                  "nullable": true
+                                },
+                                "streetName": {
+                                  "type": "string"
+                                },
+                                "houseNumber": {
+                                  "type": "number",
+                                  "nullable": true
+                                },
+                                "priorityScore": {
+                                  "type": "number",
+                                  "nullable": true
+                                },
+                                "nextStepDueAt": {
+                                  "type": "string",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "name",
+                                "address",
+                                "phone",
+                                "streetName",
+                                "houseNumber",
+                                "priorityScore",
+                                "nextStepDueAt"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "label",
+                          "count",
+                          "dueCount",
+                          "stops"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "territories"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List customer territories"
+      }
+    },
     "/workspaces/{organizationId}/customers/{id}": {
       "get": {
         "tags": [
@@ -46769,6 +46879,276 @@
           }
         },
         "summary": "Create customer dedup key"
+      }
+    },
+    "/workspaces/{organizationId}/customers/{id}/building-scorecard": {
+      "post": {
+        "tags": [
+          "customers"
+        ],
+        "description": "Score a building/landlord lead from PLUTO / ACRIS / HPD attributes. Pass `attrs` to score what you have; leave `fetchFromPluto` on (default) to backfill missing attributes from NYC Open Data PLUTO + HPD registrations first. Writes score/tier/XRF eligibility onto the customer and a building_scorecard memory fact.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "attrs": {
+                    "type": "object",
+                    "properties": {
+                      "bbl": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "bin": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "address": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "borough": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "zipcode": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "unitsRes": {
+                        "type": "number",
+                        "nullable": true
+                      },
+                      "unitsTotal": {
+                        "type": "number",
+                        "nullable": true
+                      },
+                      "buildingSqft": {
+                        "type": "number",
+                        "nullable": true
+                      },
+                      "assessedTotalDollars": {
+                        "type": "number",
+                        "nullable": true
+                      },
+                      "yearBuilt": {
+                        "type": "number",
+                        "nullable": true
+                      },
+                      "lastSalePriceDollars": {
+                        "type": "number",
+                        "nullable": true
+                      },
+                      "lastSaleDate": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "hpdRegistrationId": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "hpdManagingAgent": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "hpdOwnerName": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "openViolationsCount": {
+                        "type": "number",
+                        "nullable": true
+                      }
+                    }
+                  },
+                  "fetchFromPluto": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Building scorecard breakdown applied to the customer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "customerId": {
+                      "type": "string"
+                    },
+                    "attributes": {
+                      "type": "object",
+                      "properties": {
+                        "bbl": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "bin": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "address": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "borough": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "zipcode": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "unitsRes": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "unitsTotal": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "buildingSqft": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "assessedTotalDollars": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "yearBuilt": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "lastSalePriceDollars": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "lastSaleDate": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "hpdRegistrationId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "hpdManagingAgent": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "hpdOwnerName": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "openViolationsCount": {
+                          "type": "number",
+                          "nullable": true
+                        }
+                      }
+                    },
+                    "breakdown": {
+                      "type": "object",
+                      "properties": {
+                        "score": {
+                          "type": "number"
+                        },
+                        "tier": {
+                          "type": "string",
+                          "enum": [
+                            "A",
+                            "B",
+                            "C",
+                            "D"
+                          ]
+                        },
+                        "xrfLeadPaintEligible": {
+                          "type": "boolean"
+                        },
+                        "portfolioScale": {
+                          "type": "string",
+                          "enum": [
+                            "large_multifamily",
+                            "mid_multifamily",
+                            "small_multifamily",
+                            "single_or_commercial"
+                          ]
+                        },
+                        "whyNow": {
+                          "type": "string"
+                        },
+                        "factors": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "key": {
+                                "type": "string"
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "points": {
+                                "type": "number"
+                              },
+                              "detail": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "key",
+                              "label",
+                              "points",
+                              "detail"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "score",
+                        "tier",
+                        "xrfLeadPaintEligible",
+                        "portfolioScale",
+                        "whyNow",
+                        "factors"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "customerId",
+                    "attributes",
+                    "breakdown"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Customer not found"
+          }
+        },
+        "summary": "Create customer building scorecard"
       }
     },
     "/workspaces/{organizationId}/customers/{id}/reply-ingest": {
@@ -75545,6 +75925,466 @@
           }
         },
         "summary": "Create intake quote request sync"
+      }
+    },
+    "/workspaces/{organizationId}/intake/vortex-merchants/sync": {
+      "post": {
+        "tags": [
+          "customers"
+        ],
+        "description": "Join Vortex merchant-statement analysis (measured card volume, fees, effective rate — first-party TPV) onto Pile customers. Matches on explicit customerId, customFields.externalMerchantRef, externalId \"vortex-merchant:<ref>\", contact email, or case-insensitive business name; creates a customer when nothing matches. Writes the measured figures to customFields (incl. the canonical monthly_card_volume_cents), stamps the join key on the merchant's intake document when one exists, records a high-confidence revenue_estimate signal, and re-ranks. Pass merchants inline or an operator key to pull /v1/operator/merchant-statements.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "merchants": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "externalMerchantRef": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "customerId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "businessName": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "contactEmail": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "monthlyVolumeCents": {
+                          "type": "number"
+                        },
+                        "totalFeesCents": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "effectiveRateBps": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "transactionCount": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "avgTicketCents": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "statementPeriod": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "processor": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "externalMerchantRef",
+                        "monthlyVolumeCents"
+                      ]
+                    }
+                  },
+                  "vortexOperatorKey": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Vortex merchants synced",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "synced": {
+                      "type": "integer"
+                    },
+                    "created": {
+                      "type": "integer"
+                    },
+                    "updated": {
+                      "type": "integer"
+                    },
+                    "customers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "externalMerchantRef": {
+                            "type": "string"
+                          },
+                          "measuredMonthlyVolumeCents": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "effectiveRateBps": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "score": {
+                            "type": "number",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "externalMerchantRef",
+                          "measuredMonthlyVolumeCents",
+                          "effectiveRateBps",
+                          "score"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "synced",
+                    "created",
+                    "updated",
+                    "customers"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "502": {
+            "description": "Vortex API fetch failed"
+          }
+        },
+        "summary": "Create intake vortex merchant sync"
+      }
+    },
+    "/workspaces/{organizationId}/intake/{customerId}/transcribe-statement": {
+      "post": {
+        "tags": [
+          "customers"
+        ],
+        "description": "Read processing figures off a merchant statement. Explicit figures win; otherwise extractedText is regex-parsed, or imageBase64/an R2 attachmentKey goes through Workers AI vision (when bound). Writes estMonthlyVolumeCents/monthly_card_volume_cents/totalFeesCents/effectiveRateBps to customFields, records a statement_ocr revenue_estimate signal, and re-ranks the merchant.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "customerId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "attachmentKey": {
+                    "type": "string"
+                  },
+                  "imageBase64": {
+                    "type": "string"
+                  },
+                  "extractedText": {
+                    "type": "string"
+                  },
+                  "monthlyVolumeCents": {
+                    "type": "number"
+                  },
+                  "totalFeesCents": {
+                    "type": "number"
+                  },
+                  "effectiveRateBps": {
+                    "type": "number"
+                  },
+                  "avgTicketCents": {
+                    "type": "number"
+                  },
+                  "processor": {
+                    "type": "string"
+                  },
+                  "statementPeriod": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Statement transcribed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "customerId": {
+                      "type": "string"
+                    },
+                    "metrics": {
+                      "type": "object",
+                      "properties": {
+                        "monthlyVolumeCents": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "totalFeesCents": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "effectiveRateBps": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "processor": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "monthlyVolumeCents",
+                        "totalFeesCents",
+                        "effectiveRateBps",
+                        "processor"
+                      ]
+                    },
+                    "score": {
+                      "type": "number",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "customerId",
+                    "metrics",
+                    "score"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "404": {
+            "description": "Customer not found"
+          }
+        },
+        "summary": "Create intake transcribe statement"
+      }
+    },
+    "/workspaces/{organizationId}/intake/ppp-loans/import": {
+      "post": {
+        "tags": [
+          "customers"
+        ],
+        "description": "Import SBA PPP/7(a) loan rows as a free payroll-derived revenue proxy: PPP loans were sized at 2.5x monthly payroll, and payrollToRevenueRatio (default 0.30) turns that into an estimated monthly volume. Matches existing customers on externalId \"sba-ppp:<loanId>\" or case-insensitive business name + street address; writes loan facts and the derived figures to customFields, records a sba_ppp revenue_estimate signal, and re-ranks.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "loans": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "loanId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "businessName": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "address": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "city": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "state": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "zip": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "loanAmountDollars": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "loanAmountCents": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "jobsReported": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "naicsCode": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "approvalDate": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "loanType": {
+                          "type": "string",
+                          "enum": [
+                            "ppp",
+                            "7a"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "businessName"
+                      ]
+                    }
+                  },
+                  "payrollToRevenueRatio": {
+                    "type": "number",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 1
+                  }
+                },
+                "required": [
+                  "loans"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "SBA loans imported",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "imported": {
+                      "type": "integer"
+                    },
+                    "created": {
+                      "type": "integer"
+                    },
+                    "updated": {
+                      "type": "integer"
+                    },
+                    "customers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "loanAmountCents": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "estMonthlyPayrollCents": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "estMonthlyVolumeCents": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "jobsReported": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "score": {
+                            "type": "number",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "loanAmountCents",
+                          "estMonthlyPayrollCents",
+                          "estMonthlyVolumeCents",
+                          "jobsReported",
+                          "score"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "imported",
+                    "created",
+                    "updated",
+                    "customers"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          }
+        },
+        "summary": "Create intake ppp loan import"
       }
     }
   }

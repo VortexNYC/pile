@@ -19,8 +19,12 @@ import {
   type MerchantScheduleGuard,
   type TouchChannel,
 } from "../workspace/send-gate.js";
-import { detectPosTechnographics } from "../workspace/signals-engine.js";
 import {
+  detectPosTechnographics,
+  type MerchantSignal,
+} from "../workspace/signals-engine.js";
+import {
+  deriveDomainFromEmail,
   type MerchantCandidate,
   type MerchantSourceRow,
   type NonPosSmbPresetId,
@@ -82,6 +86,24 @@ export interface EnrichedMerchantCandidate extends MerchantCandidate {
   dosId?: string | null;
   dosFilingDate?: string | null;
   scrapeTier?: "direct" | "scrapling" | "obscura" | "firecrawl" | null;
+  /** PILE-657 — Google Places foot-traffic proxy fields. */
+  placesRating?: number | null;
+  placesUserRatingCount?: number | null;
+  /** PILE-658 — paid-vendor company inference fields (PDL). */
+  inferredRevenue?: string | null;
+  employeeCount?: number | null;
+  /** PILE-657/658 — revenue/intel signals emitted during enrichment
+   *  (foot-traffic proxy, inferred revenue). */
+  signals?: MerchantSignal[];
+}
+
+/** PILE-658 — the contract a paid-vendor enrichment adapter returns. It is a
+ *  superset-shaped partial of EnrichedMerchantCandidate plus the vendor's own
+ *  inference fields, so callers can spread it over the crawled candidate. */
+export interface PaidVendorEnrichmentResult extends Partial<EnrichedMerchantCandidate> {
+  inferredRevenue?: string;
+  estMonthlyVolumeCents?: number;
+  employeeCount?: number;
 }
 
 const SAFE_PUBLIC_DOMAIN_RE =
@@ -516,6 +538,173 @@ export const probeCandidateWebsiteEffect = Effect.fnUntraced(function* (
   };
 });
 
+export interface GooglePlaceDetails {
+  placeId: string;
+  displayName: string | null;
+  rating: number | null;
+  userRatingCount: number | null;
+  priceLevel: string | null;
+  phone: string | null;
+  websiteUri: string | null;
+}
+
+/** PILE-657 — Google Places (New) place-details lookup. Accepts a raw
+ *  place id or a `gplace:<id>` external id; returns null on any failure so
+ *  callers can treat the lookup as best-effort enrichment. */
+export const lookupGooglePlaceDetailsEffect = Effect.fnUntraced(function* (
+  placeIdOrQuery: string,
+  apiKey: string | undefined,
+  options?: { timeoutMs?: number; fetchFn?: typeof fetch }
+): Effect.fn.Return<GooglePlaceDetails | null> {
+  const key = apiKey?.trim();
+  const placeId = placeIdOrQuery.replace(/^gplace:/, "").trim();
+  if (!key || !placeId) return null;
+  return yield* Effect.tryPromise({
+    try: async () => {
+      const fetcher = options?.fetchFn ?? fetch;
+      const res = await fetcher(
+        `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`,
+        {
+          headers: {
+            "X-Goog-Api-Key": key,
+            "X-Goog-FieldMask":
+              "id,displayName,rating,userRatingCount,priceLevel,nationalPhoneNumber,websiteUri",
+          },
+          signal: AbortSignal.timeout(options?.timeoutMs ?? 2500),
+        }
+      );
+      if (!res.ok) return null;
+      const body = (await res.json()) as {
+        id?: string;
+        displayName?: { text?: string };
+        rating?: number;
+        userRatingCount?: number;
+        priceLevel?: string;
+        nationalPhoneNumber?: string;
+        websiteUri?: string;
+      };
+      return {
+        placeId: body.id ?? placeId,
+        displayName: body.displayName?.text ?? null,
+        rating: typeof body.rating === "number" ? body.rating : null,
+        userRatingCount:
+          typeof body.userRatingCount === "number"
+            ? body.userRatingCount
+            : null,
+        priceLevel: body.priceLevel ?? null,
+        phone: body.nationalPhoneNumber ?? null,
+        websiteUri: body.websiteUri ?? null,
+      };
+    },
+    catch: () => null,
+  }).pipe(Effect.catch(() => Effect.succeed(null)));
+});
+
+/** Foot-traffic proxy: each Google review ~ $150/mo of card volume (floor).
+ *  PILE-657 heuristic aligning with the intake monthly-card-volume field. */
+const PLACES_REVIEW_TO_MONTHLY_VOLUME_CENTS = 150_00;
+
+function websiteHost(uri: string | null | undefined): string | null {
+  if (!uri) return null;
+  try {
+    const host = new URL(uri).hostname.replace(/^www\./i, "").toLowerCase();
+    return isSafePublicDomain(host) ? host : null;
+  } catch {
+    return null;
+  }
+}
+
+function pdlMoneyTokenToCents(token: string): number | undefined {
+  const cleaned = token.replace(/[<>=~+]/g, "").trim();
+  const m = /^\$?\s*([\d.]+)\s*([KMB])?$/i.exec(cleaned);
+  if (!m || !m[1]) return undefined;
+  const base = Number(m[1]);
+  if (!Number.isFinite(base)) return undefined;
+  const mult =
+    m[2]?.toUpperCase() === "K"
+      ? 1_000
+      : m[2]?.toUpperCase() === "M"
+        ? 1_000_000
+        : m[2]?.toUpperCase() === "B"
+          ? 1_000_000_000
+          : 1;
+  return Math.round(base * mult * 100);
+}
+
+/** PILE-658 — midpoint of a PDL `inferred_revenue` bucket in integer cents:
+ *  "$1M-$10M" → $5.5M, "$10B+" → $10B floor, "<$1M" → $1M ceiling. */
+export function pdlRevenueBucketMidpointCents(
+  bucket: string
+): number | undefined {
+  const trimmed = bucket.trim();
+  if (!trimmed) return undefined;
+  const vals = trimmed
+    .split(/[-–]/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map(pdlMoneyTokenToCents)
+    .filter((v): v is number => v !== undefined);
+  if (vals.length === 0) return undefined;
+  if (vals.length === 1) return vals[0];
+  return Math.round((vals[0]! + vals[vals.length - 1]!) / 2);
+}
+
+/** PILE-658 — People Data Labs company-enrich adapter. Implements the
+ *  `paidVendorEnrich` callback signature: GET
+ *  `api.peopledatalabs.com/v5/company/enrich` with name/location/website,
+ *  parses `inferred_revenue` + `employee_count`, maps the bucket midpoint to
+ *  `estMonthlyVolumeCents`, and emits a `revenue_estimate` signal. */
+export function pdlCompanyEnrich(
+  apiKey: string,
+  fetchFn?: typeof fetch
+): (cand: EnrichedMerchantCandidate) => Promise<PaidVendorEnrichmentResult> {
+  return async (cand) => {
+    const fetcher = fetchFn ?? fetch;
+    const params = new URLSearchParams();
+    if (cand.name) params.set("name", cand.name);
+    if (cand.address) params.set("location", cand.address);
+    const website = cand.domain ?? deriveDomainFromEmail(cand.email);
+    if (website) params.set("website", website);
+    const res = await fetcher(
+      `https://api.peopledatalabs.com/v5/company/enrich?${params}`,
+      { headers: { "X-Api-Key": apiKey } }
+    );
+    if (!res.ok) throw new Error(`pdl ${res.status}`);
+    const body = (await res.json()) as Record<string, unknown>;
+    const result: PaidVendorEnrichmentResult = {};
+    const inferredRevenue =
+      typeof body.inferred_revenue === "string" && body.inferred_revenue
+        ? body.inferred_revenue
+        : undefined;
+    if (
+      typeof body.employee_count === "number" &&
+      Number.isFinite(body.employee_count)
+    ) {
+      result.employeeCount = body.employee_count;
+    }
+    if (inferredRevenue) {
+      result.inferredRevenue = inferredRevenue;
+      const annualCents = pdlRevenueBucketMidpointCents(inferredRevenue);
+      if (annualCents !== undefined) {
+        result.estMonthlyVolumeCents = Math.round(annualCents / 12);
+        result.signals = [
+          {
+            id: `sig_pdl_${cand.externalId}`,
+            merchantId: cand.externalId,
+            type: "revenue_estimate",
+            observedAt: new Date().toISOString(),
+            source: "pdl_company_enrich",
+            evidenceUrl: "https://api.peopledatalabs.com/v5/company/enrich",
+            strength: 70,
+            summary: `PDL inferred revenue ${inferredRevenue} (est. ~$${Math.round(annualCents / 100).toLocaleString("en-US")}/yr)`,
+          },
+        ];
+      }
+    }
+    return result;
+  };
+}
+
 export const enrichCandidatesWithEffect = Effect.fn(
   "enrichCandidatesWithEffect"
 )(function* (
@@ -527,6 +716,12 @@ export const enrichCandidatesWithEffect = Effect.fn(
     obscuraBaseUrl?: string;
     firecrawlBaseUrl?: string;
     lookupDos?: boolean;
+    /** PILE-657 — enables the Google Places foot-traffic enrichment for
+     *  `gplace:*` candidates (Google Places (New) API key). */
+    googlePlacesApiKey?: string;
+    /** PILE-658 — enables the PDL company-enrich adapter as the default
+     *  `paidVendorEnrich` when no custom vendor fn is supplied. */
+    pdlApiKey?: string;
     paidVendorBudget?: {
       vendor: string;
       monthlyCapCents: number;
@@ -535,7 +730,7 @@ export const enrichCandidatesWithEffect = Effect.fn(
     };
     paidVendorEnrich?: (
       cand: EnrichedMerchantCandidate
-    ) => Promise<Partial<EnrichedMerchantCandidate>>;
+    ) => Promise<PaidVendorEnrichmentResult>;
   }
 ): Effect.fn.Return<EnrichedMerchantCandidate[]> {
   const concurrency = Math.max(1, Math.min(10, options?.concurrency ?? 6));
@@ -547,30 +742,78 @@ export const enrichCandidatesWithEffect = Effect.fn(
     ...cand,
     ownerName: cand.ownerName ?? pairedOwners.get(cand.externalId) ?? null,
   }));
+  // PILE-658 — when only a PDL key is configured, the concrete adapter is the
+  // paid vendor; a custom paidVendorEnrich always wins.
+  const vendorEnrich =
+    options?.paidVendorEnrich ??
+    (options?.pdlApiKey ? pdlCompanyEnrich(options.pdlApiKey) : undefined);
   return yield* Effect.forEach(
     withPairedOwners,
     (cand) =>
       Effect.gen(function* () {
         const probed = yield* probeCandidateWebsiteEffect(cand, options);
+        // PILE-657 — Google Places foot-traffic revenue proxy for
+        // `gplace:*` candidates (rating + userRatingCount →
+        // estMonthlyVolumeCents + a revenue_estimate signal).
+        let merged = probed;
+        if (
+          options?.googlePlacesApiKey &&
+          cand.externalId.startsWith("gplace:")
+        ) {
+          const details = yield* lookupGooglePlaceDetailsEffect(
+            cand.externalId,
+            options.googlePlacesApiKey,
+            { timeoutMs: options.timeoutMs }
+          );
+          if (details) {
+            merged = {
+              ...merged,
+              phone: merged.phone ?? details.phone,
+              domain: merged.domain ?? websiteHost(details.websiteUri),
+              placesRating: details.rating,
+              placesUserRatingCount: details.userRatingCount,
+            };
+            if (
+              details.userRatingCount !== null &&
+              details.userRatingCount > 0
+            ) {
+              const estMonthlyVolumeCents = Math.round(
+                details.userRatingCount * PLACES_REVIEW_TO_MONTHLY_VOLUME_CENTS
+              );
+              const signal: MerchantSignal = {
+                id: `sig_gplaces_${cand.externalId}`,
+                merchantId: cand.externalId,
+                type: "revenue_estimate",
+                observedAt: new Date().toISOString(),
+                source: "google_places",
+                evidenceUrl: `https://places.googleapis.com/v1/places/${details.placeId}`,
+                strength: 65,
+                summary: `Google Places foot-traffic proxy: ${details.rating ?? "n/a"}★ (${details.userRatingCount} reviews)`,
+              };
+              merged = {
+                ...merged,
+                estMonthlyVolumeCents:
+                  merged.estMonthlyVolumeCents ?? estMonthlyVolumeCents,
+                signals: [...(merged.signals ?? []), signal],
+              };
+            }
+          }
+        }
         // PILE-610 — paid vendor is the last waterfall step: it only runs
         // when a vendor fn + budget envelope are configured and the free
         // crawl still didn't surface an email. Budget overruns and vendor
         // errors degrade gracefully to the crawled result.
-        if (
-          probed.email ||
-          !options?.paidVendorBudget ||
-          !options?.paidVendorEnrich
-        ) {
-          return probed;
+        if (merged.email || !options?.paidVendorBudget || !vendorEnrich) {
+          return merged;
         }
         const enriched = yield* withPaidVendorBudgetEffect(
           options.paidVendorBudget,
           Effect.tryPromise({
-            try: () => options.paidVendorEnrich!(probed),
+            try: () => vendorEnrich(merged),
             catch: () => null,
           })
         ).pipe(Effect.catch(() => Effect.succeed(null)));
-        return enriched ? { ...probed, ...enriched } : probed;
+        return enriched ? { ...merged, ...enriched } : merged;
       }),
     { concurrency }
   );
