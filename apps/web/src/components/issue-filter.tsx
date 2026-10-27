@@ -5,6 +5,7 @@ import { Funnel } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 
 import { useTeams } from "@/hooks/use-teams";
+import { wsKey } from "@/hooks/use-workspace";
 import { api, unwrap } from "@/lib/api";
 import { betterAuthClient } from "@/lib/better-auth";
 import {
@@ -20,6 +21,17 @@ export interface IssueFilterState {
   assignees: string[];
   projects: string[];
   teams: string[];
+}
+
+/** Active filter count — the badge on the Filter button. */
+export function filterActiveCount(value: IssueFilterState): number {
+  return (
+    value.statuses.length +
+    value.priorities.length +
+    value.assignees.length +
+    value.projects.length +
+    value.teams.length
+  );
 }
 
 export const EMPTY_FILTER: IssueFilterState = {
@@ -43,7 +55,7 @@ export function IssueFilter({
   onChange: (f: IssueFilterState) => void;
 }) {
   const members = useQuery({
-    queryKey: ["members", organizationId],
+    queryKey: wsKey(organizationId, "members"),
     queryFn: async () => {
       const res = await betterAuthClient.organization.listMembers({
         query: { organizationId },
@@ -52,7 +64,7 @@ export function IssueFilter({
     },
   });
   const projects = useQuery({
-    queryKey: ["projects", organizationId],
+    queryKey: wsKey(organizationId, "projects"),
     queryFn: async () =>
       (
         await unwrap(
@@ -64,12 +76,7 @@ export function IssueFilter({
   });
 
   const teams = useTeams(organizationId);
-  const active =
-    value.statuses.length +
-    value.priorities.length +
-    value.assignees.length +
-    value.projects.length +
-    value.teams.length;
+  const active = filterActiveCount(value);
 
   return (
     <Popover>

@@ -19945,6 +19945,14 @@ export interface paths {
                     externalId?: string;
                     /** @description Exact-match lookup by canonical domain (input is normalized first) */
                     domain?: string;
+                    /** @description Page size, default 500, max 1000 */
+                    limit?: number | null;
+                    /** @description Opaque page cursor from a previous nextCursor */
+                    cursor?: string;
+                    /** @description Case-insensitive substring match on name, domain, or url */
+                    q?: string;
+                    /** @description summary=1 → light picker rows (id, name, domain, statusId, ownerId, nextStepText, nextStepDueAt, needsHuman, timestamps) */
+                    summary?: string;
                 };
                 header?: never;
                 path: {
@@ -19961,7 +19969,7 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            customers: {
+                            customers: ({
                                 id: string;
                                 organizationId: string;
                                 name: string;
@@ -19998,7 +20006,19 @@ export interface paths {
                                 };
                                 createdAt: string;
                                 updatedAt: string;
-                            }[];
+                            } | {
+                                id: string;
+                                name: string;
+                                domain: string | null;
+                                statusId: string | null;
+                                ownerId: string | null;
+                                nextStepText: string | null;
+                                nextStepDueAt: string | null;
+                                needsHuman: boolean | null;
+                                createdAt: string;
+                                updatedAt: string;
+                            })[];
+                            nextCursor?: string;
                         };
                     };
                 };
@@ -22583,6 +22603,14 @@ export interface paths {
                     /** @description cold=true → open deals with no nextStepText and no nextStepDueAt */
                     cold?: string;
                     needsHuman?: string;
+                    /** @description Page size, default 500, max 1000 */
+                    limit?: number | null;
+                    /** @description Opaque page cursor from a previous nextCursor */
+                    cursor?: string;
+                    /** @description Case-insensitive substring match on deal name */
+                    q?: string;
+                    /** @description summary=1 → pipeline/picker rows without description, contactIds, or customFields */
+                    summary?: string;
                 };
                 header?: never;
                 path: {
@@ -22599,7 +22627,7 @@ export interface paths {
                     };
                     content: {
                         "application/json": {
-                            deals: {
+                            deals: ({
                                 id: string;
                                 organizationId: string;
                                 customerId: string;
@@ -22624,7 +22652,23 @@ export interface paths {
                                 };
                                 createdAt: string;
                                 updatedAt: string;
-                            }[];
+                            } | {
+                                id: string;
+                                customerId: string;
+                                name: string;
+                                /** @enum {string} */
+                                stage: "lead" | "qualified" | "proposal" | "negotiation" | "won" | "lost";
+                                amountCents: number | null;
+                                currency: string | null;
+                                expectedCloseAt: string | null;
+                                closedAt: string | null;
+                                archivedAt: string | null;
+                                nextStepDueAt: string | null;
+                                needsHuman: boolean | null;
+                                createdAt: string;
+                                updatedAt: string;
+                            })[];
+                            nextCursor?: string;
                         };
                     };
                 };

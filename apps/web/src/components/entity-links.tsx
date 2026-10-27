@@ -47,11 +47,39 @@ const TYPE_ICONS: Record<string, React.ReactNode> = {
 
 type EntityOption = { id: string; label: string };
 
-/** Title-search per entity type — hits the existing list endpoints. */
-function useEntitySearch(toType: string, q: string) {
+/** PILE-653 — entity types whose list endpoint filters server-side (`q`,
+ *  `search`, or `q`). For these the query key carries the term; for the
+ *  rest the picker fetches one bounded page and filters client-side, so
+ *  typing doesn't refetch the whole list. */
+export const SERVER_SEARCH_TYPES = new Set([
+  "issue",
+  "ticket",
+  "contact",
+  "customer",
+]);
+
+/** Options shown under the search box — server-filtered types return the
+ *  page as-is; the rest filter the bounded page by label client-side. */
+export function filterEntityOptions(
+  toType: string,
+  options: readonly EntityOption[],
+  q: string
+): EntityOption[] {
+  if (SERVER_SEARCH_TYPES.has(toType)) return options.slice(0, 8);
+  const needle = q.trim().toLowerCase();
+  return options
+    .filter((o) => !needle || o.label.toLowerCase().includes(needle))
+    .slice(0, 8);
+}
+
+/** Title-search per entity type — hits the existing list endpoints. Only
+ *  fetches while the picker is open (`enabled`) — the rail mounts queries
+ *  lazily now instead of paying for every list endpoint up front. */
+function useEntitySearch(toType: string, q: string, enabled: boolean) {
   const workspace = useWorkspace();
+  const serverQ = SERVER_SEARCH_TYPES.has(toType) ? q : "";
   return useQuery({
-    queryKey: wsKey(workspace.id, "entity-search", toType, q),
+    queryKey: wsKey(workspace.id, "entity-search", toType, serverQ),
     queryFn: async (): Promise<EntityOption[]> => {
       const org = workspace.id;
       if (toType === "issue") {
@@ -79,24 +107,24 @@ function useEntitySearch(toType: string, q: string) {
       if (toType === "deal") {
         const data = await unwrap(
           api.GET("/workspaces/{organizationId}/deals", {
-            params: { path: { organizationId: org } },
+            params: {
+              path: { organizationId: org },
+              query: { summary: "1", limit: 500 },
+            },
           })
         );
-        return data.deals
-          .filter((d) => !q || d.name.toLowerCase().includes(q.toLowerCase()))
-          .slice(0, 8)
-          .map((d) => ({ id: d.id, label: d.name }));
+        return data.deals.map((d) => ({ id: d.id, label: d.name }));
       }
       if (toType === "customer") {
         const data = await unwrap(
           api.GET("/workspaces/{organizationId}/customers", {
-            params: { path: { organizationId: org } },
+            params: {
+              path: { organizationId: org },
+              query: { q: q || undefined, limit: 20, summary: "1" },
+            },
           })
         );
-        return data.customers
-          .filter((x) => !q || x.name.toLowerCase().includes(q.toLowerCase()))
-          .slice(0, 8)
-          .map((x) => ({ id: x.id, label: x.name }));
+        return data.customers.map((x) => ({ id: x.id, label: x.name }));
       }
       if (toType === "contact") {
         const data = await unwrap(
@@ -112,29 +140,27 @@ function useEntitySearch(toType: string, q: string) {
       if (toType === "document") {
         const data = await unwrap(
           api.GET("/workspaces/{organizationId}/documents", {
-            params: { path: { organizationId: org }, query: {} },
+            params: { path: { organizationId: org }, query: { summary: "1" } },
           })
         );
-        return data.documents
-          .filter((d) => !q || d.title.toLowerCase().includes(q.toLowerCase()))
-          .slice(0, 8)
-          .map((d) => ({
-            id: d.id,
-            label: d.title || "Untitled",
-          }));
+        return data.documents.map((d) => ({
+          id: d.id,
+          label: d.title || "Untitled",
+        }));
       }
       if (toType === "session") {
         const data = await unwrap(
           api.GET("/workspaces/{organizationId}/agent/sessions", {
-            params: { path: { organizationId: org } },
+            params: {
+              path: { organizationId: org },
+              query: { summary: "1", limit: "200" },
+            },
           })
         );
-        return data.sessions
-          .filter(
-            (s) => !q || (s.label ?? "").toLowerCase().includes(q.toLowerCase())
-          )
-          .slice(0, 8)
-          .map((s) => ({ id: s.id, label: s.label ?? s.id.slice(0, 8) }));
+        return data.sessions.map((s) => ({
+          id: s.id,
+          label: s.label ?? s.id.slice(0, 8),
+        }));
       }
       if (toType === "project") {
         const data = await unwrap(
@@ -142,13 +168,11 @@ function useEntitySearch(toType: string, q: string) {
             params: { path: { organizationId: org } },
           })
         );
-        return data.projects
-          .filter((p) => !q || p.name.toLowerCase().includes(q.toLowerCase()))
-          .slice(0, 8)
-          .map((p) => ({ id: p.id, label: p.name }));
+        return data.projects.map((p) => ({ id: p.id, label: p.name }));
       }
       return [];
     },
+    enabled,
     staleTime: 15_000,
   });
 }
@@ -167,7 +191,8 @@ export function EntityLinksRail({
   const [toId, setToId] = useState("");
   const [toLabel, setToLabel] = useState("");
   const [q, setQ] = useState("");
-  const options = useEntitySearch(toType, q);
+  const options = useEntitySearch(toType, q, adding);
+  const shownOptions = filterEntityOptions(toType, options.data ?? [], q);
   const key = wsKey(workspace.id, "links", entityType, entityId);
 
   const links = useQuery({
@@ -286,9 +311,9 @@ export function EntityLinksRail({
               }}
               className="border-kumo-line bg-kumo-canvas h-8 rounded-md border px-2 text-sm text-kumo-default outline-none focus:border-kumo-brand"
             />
-            {!toId && (options.data ?? []).length > 0 ? (
+            {!toId && shownOptions.length > 0 ? (
               <div className="flex max-h-40 flex-col overflow-y-auto rounded-md border border-kumo-line">
-                {(options.data ?? []).map((o) => (
+                {shownOptions.map((o) => (
                   <button
                     key={o.id}
                     type="button"

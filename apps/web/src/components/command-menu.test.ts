@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { paletteDeepQueryEnabled, paletteRoute } from "./command-menu";
+import {
+  paletteCustomersQuery,
+  paletteDeepQueryEnabled,
+  paletteRoute,
+} from "./command-menu";
 
 describe("paletteDeepQueryEnabled (PILE-645)", () => {
   it("only fetches heavy palette feeds once a term is typed", () => {
@@ -19,5 +23,16 @@ describe("paletteRoute (PILE-652)", () => {
 
   it("normalizes hrefs missing the leading slash", () => {
     expect(paletteRoute("acme", "issues")).toBe("/acme/issues");
+  });
+});
+
+describe("paletteCustomersQuery (PILE-653)", () => {
+  it("rides the bounded summary contract with server-side q", () => {
+    expect(paletteCustomersQuery("acme")).toEqual({
+      q: "acme",
+      limit: 8,
+      summary: "1",
+    });
+    expect(paletteCustomersQuery("").q).toBeUndefined();
   });
 });

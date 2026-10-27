@@ -8041,6 +8041,22 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "domain",
         flag: "domain",
       },
+      {
+        name: "limit",
+        flag: "limit",
+      },
+      {
+        name: "cursor",
+        flag: "cursor",
+      },
+      {
+        name: "q",
+        flag: "q",
+      },
+      {
+        name: "summary",
+        flag: "summary",
+      },
     ],
     body: [],
   },
@@ -9370,6 +9386,22 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "needsHuman",
         flag: "needs-human",
+      },
+      {
+        name: "limit",
+        flag: "limit",
+      },
+      {
+        name: "cursor",
+        flag: "cursor",
+      },
+      {
+        name: "q",
+        flag: "q",
+      },
+      {
+        name: "summary",
+        flag: "summary",
       },
     ],
     body: [],

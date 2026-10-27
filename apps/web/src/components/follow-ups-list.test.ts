@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { FOLLOW_UP_SECTIONS } from "./follow-ups-list";
+import { FOLLOW_UP_SECTIONS, followUpsCustomerArgs } from "./follow-ups-list";
 
 describe("FOLLOW_UP_SECTIONS (PILE-651)", () => {
   it("orders sections most-urgent first", () => {
@@ -10,5 +10,15 @@ describe("FOLLOW_UP_SECTIONS (PILE-651)", () => {
       "upcoming",
     ]);
     expect(FOLLOW_UP_SECTIONS.every((s) => s.title.length > 0)).toBe(true);
+  });
+});
+
+describe("followUpsCustomerArgs (PILE-653)", () => {
+  it("requests summary rows inside the due window", () => {
+    expect(followUpsCustomerArgs("org-1", "2026-10-25T00:00:00Z")).toEqual({
+      organizationId: "org-1",
+      summary: true,
+      dueBefore: "2026-10-25T00:00:00Z",
+    });
   });
 });

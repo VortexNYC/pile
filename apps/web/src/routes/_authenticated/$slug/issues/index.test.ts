@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { issuesListQuery, sessionGroupLabels } from "./index";
+import {
+  ISSUES_PAGE_SESSION_POLL_MS,
+  issuesListQuery,
+  sessionGroupLabels,
+} from "./index";
 
 describe("sessionGroupLabels", () => {
   it("labels issues by identifier and title", () => {
@@ -44,5 +48,11 @@ describe("issuesListQuery (PILE-652)", () => {
       status: undefined,
       teamId: undefined,
     });
+  });
+});
+
+describe("ISSUES_PAGE_SESSION_POLL_MS (PILE-653)", () => {
+  it("slows the embedded sessions panel to a 15s ambient cadence", () => {
+    expect(ISSUES_PAGE_SESSION_POLL_MS).toBe(15_000);
   });
 });
