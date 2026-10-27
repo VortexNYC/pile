@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { rolePermissionsFor, toApiKeyWorkspaceIdentity } from "./identity.js";
+import {
+  apiKeyWorkspaceScope,
+  rolePermissionsFor,
+  toApiKeyWorkspaceIdentity,
+} from "./identity.js";
 
 describe("rolePermissionsFor", () => {
   it("flattens role statements to resource:action permissions", () => {
@@ -67,5 +71,32 @@ describe("toApiKeyWorkspaceIdentity", () => {
       type: "agent",
       permissions: ["read", "write"],
     });
+  });
+});
+
+describe("apiKeyWorkspaceScope", () => {
+  it("returns the bound workspace for workspace-scoped keys", () => {
+    expect(
+      apiKeyWorkspaceScope({
+        id: "k1",
+        referenceId: "u1",
+        metadata: JSON.stringify({
+          organizationId: "org_1",
+          permissions: "admin",
+        }),
+      })
+    ).toBe("org_1");
+  });
+
+  it("returns undefined for account-level keys without workspace metadata", () => {
+    expect(
+      apiKeyWorkspaceScope({
+        id: "k1",
+        referenceId: "u1",
+        metadata: null,
+      })
+    ).toBeUndefined();
+    expect(apiKeyWorkspaceScope({ id: "k1" })).toBeUndefined();
+    expect(apiKeyWorkspaceScope("nonsense")).toBeUndefined();
   });
 });

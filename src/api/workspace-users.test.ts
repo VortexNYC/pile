@@ -473,3 +473,18 @@ describe("workspace invitations API", () => {
     expect(row?.status).toBe("canceled");
   });
 });
+
+describe("me/permissions route metadata (VTX-772)", () => {
+  it("exposes a descriptive summary in the OpenAPI document", async () => {
+    const res = await app.fetch(
+      new Request("https://example.com/openapi.json"),
+      env
+    );
+    const doc = (await res.json()) as {
+      paths: Record<string, { get?: { summary?: string } }>;
+    };
+    expect(
+      doc.paths["/workspaces/{organizationId}/me/permissions"]?.get?.summary
+    ).toBe("Get the caller's workspace permissions");
+  });
+});

@@ -2271,3 +2271,18 @@ describe("issue relation validation (VTX-770)", () => {
     expect(reciprocal.status).toBe(400);
   });
 });
+
+describe("batch update route metadata (VTX-772)", () => {
+  it("describes issues/batch as an update, not a create", async () => {
+    const res = await app.fetch(
+      new Request("https://example.com/openapi.json"),
+      env
+    );
+    const doc = (await res.json()) as {
+      paths: Record<string, { post?: { summary?: string } }>;
+    };
+    expect(
+      doc.paths["/workspaces/{organizationId}/issues/batch"]?.post?.summary
+    ).toContain("patch");
+  });
+});

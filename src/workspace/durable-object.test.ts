@@ -4681,3 +4681,26 @@ describe("customer touch logging (PILE-651)", () => {
     expect(result).toBeUndefined();
   });
 });
+
+describe("searchAll hydrated results (VTX-758)", () => {
+  it("returns title, snippet, and score alongside the id arrays", async () => {
+    const id = env.WORKSPACE_DURABLE_OBJECT.idFromName(
+      `vtx-758-${crypto.randomUUID()}`
+    );
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(id);
+    const result = await withWorkspace(stub, async (instance) => {
+      const issue = await instance.createIssue({
+        title: "Numbat hydrated search result",
+        description: "numbat hydration body text",
+      });
+      return instance.searchAll("numbat", [issue.teamId]);
+    });
+    expect(result.issueIds.length).toBeGreaterThan(0);
+    const hit = result.results.find((r) => r.type === "issue");
+    expect(hit).toBeDefined();
+    expect(hit?.title).toContain("Numbat");
+    expect(hit?.snippet.length).toBeGreaterThan(0);
+    expect(hit?.score).toBeGreaterThan(0);
+    expect(hit?.identifier).toBeTruthy();
+  });
+});

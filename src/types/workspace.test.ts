@@ -10,6 +10,7 @@ import {
   ISSUE_PR_STATES,
   ISSUE_RESOLUTIONS,
   ISSUE_STATUSES,
+  type SearchResultItem,
 } from "./workspace.js";
 import type {
   AgentSessionResult,
@@ -200,5 +201,25 @@ describe("draft output types (PILE-428)", () => {
       "invalid_payload",
       "invalid_signature",
     ]);
+  });
+});
+
+describe("SearchResultItem (VTX-758)", () => {
+  it("carries type, id, identifier, title, snippet, and score", () => {
+    const hit: SearchResultItem = {
+      type: "issue",
+      id: "i-1",
+      identifier: "ISS-1",
+      title: "Example",
+      snippet: "…excerpt…",
+      score: 1.5,
+    };
+    expect(hit.type).toBe("issue");
+    const docHit: SearchResultItem = {
+      ...hit,
+      type: "document",
+      identifier: null,
+    };
+    expect(docHit.identifier).toBeNull();
   });
 });
