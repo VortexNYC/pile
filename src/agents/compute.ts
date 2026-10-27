@@ -283,7 +283,11 @@ export class DaytonaBackend implements ComputeBackend {
       body: JSON.stringify({
         name: opts.name,
         snapshot: this.env.DAYTONA_SNAPSHOT ?? "daytona-vm-small",
-        env: opts.env,
+        // PILE-475 — warm pools only claim sandboxes with no custom env,
+        // volumes, or secrets. Lane secrets ride /tmp/pile/lane.env via
+        // putFiles instead, so omit the key entirely when the env is empty;
+        // keeping DAYTONA_VOLUME_ID unset is the other eligibility gate.
+        ...(Object.keys(opts.env).length > 0 ? { env: opts.env } : {}),
         labels: {
           "vortex.session": opts.sessionId,
           "vortex.org": opts.organizationId,
