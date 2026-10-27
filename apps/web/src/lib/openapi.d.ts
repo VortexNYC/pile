@@ -3188,6 +3188,117 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/workspaces/{organizationId}/provenance": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List provenance */
+    get: {
+      parameters: {
+        query?: {
+          repo?: string;
+          sha?: string;
+          file?: string;
+          branch?: string;
+          prUrl?: string;
+          issueId?: string;
+          limit?: string;
+        };
+        header?: never;
+        path: {
+          organizationId: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Provenance: issues, lane sessions (with review convergence), touched files, commit shas, and memory facts explaining the queried artifact */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              query: {
+                [key: string]: unknown;
+              };
+              entries: {
+                [key: string]: unknown;
+              }[];
+              whySummary: string;
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/workspaces/{organizationId}/agent/recap": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List agent recap */
+    get: {
+      parameters: {
+        query?: {
+          since?: string;
+          repo?: string;
+        };
+        header?: never;
+        path: {
+          organizationId: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Engineering fleet recap: shipped, in-flight with trail convergence, blocked/decision-needed, compute totals, markdown brief */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              since: string;
+              repo: string | null;
+              shipped: {
+                [key: string]: unknown;
+              };
+              inFlight: {
+                [key: string]: unknown;
+              };
+              blocked: {
+                [key: string]: unknown;
+              };
+              compute: {
+                [key: string]: unknown;
+              };
+              markdownBrief: string;
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/workspaces/{organizationId}/issues/{issueId}/live": {
     parameters: {
       query?: never;
@@ -12284,6 +12395,105 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/workspaces/{organizationId}/support/feedback": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Create support feedback */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          organizationId: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          "application/json": {
+            /** @enum {string} */
+            kind: "bug" | "feature" | "other";
+            title: string;
+            description: string;
+            url?: string;
+            userAgent?: string;
+            viewport?: {
+              width: number;
+              height: number;
+            };
+            deviceInfo?: {
+              [key: string]: unknown;
+            };
+            consoleErrors?: {
+              level: string;
+              message: string;
+              timestamp?: string;
+            }[];
+            consoleLogs?: {
+              level: string;
+              message: string;
+              timestamp?: string;
+            }[];
+            networkRequests?: {
+              method: string;
+              url: string;
+              status?: number;
+              duration?: number;
+              timestamp?: string;
+            }[];
+            userEvents?: {
+              type: string;
+              target?: string;
+              timestamp?: string;
+              metadata?: {
+                [key: string]: unknown;
+              };
+            }[];
+            errors?: {
+              message: string;
+              stack?: string;
+              source?: string;
+              timestamp?: string;
+            }[];
+            screenshotDataUrl?: string;
+            recordingDataUrl?: string;
+          };
+        };
+      };
+      responses: {
+        /** @description Member feedback filed as a support ticket */
+        201: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              ticketId: string;
+              ticketNumber: number;
+            };
+          };
+        };
+        /** @description Invalid screenshot payload */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/support/capture/token": {
     parameters: {
       query?: never;
@@ -17620,6 +17830,7 @@ export interface paths {
           spaceId?: string;
           isTemplate?: string;
           includeTrashed?: string;
+          summary?: string;
         };
         header?: never;
         path: {
@@ -20361,6 +20572,14 @@ export interface paths {
           externalId?: string;
           /** @description Exact-match lookup by canonical domain (input is normalized first) */
           domain?: string;
+          /** @description Page size, default 500, max 1000 */
+          limit?: number | null;
+          /** @description Opaque page cursor from a previous nextCursor */
+          cursor?: string;
+          /** @description Case-insensitive substring match on name, domain, or url */
+          q?: string;
+          /** @description summary=1 → light picker rows (id, name, domain, statusId, ownerId, nextStepText, nextStepDueAt, needsHuman, timestamps) */
+          summary?: string;
         };
         header?: never;
         path: {
@@ -20377,44 +20596,59 @@ export interface paths {
           };
           content: {
             "application/json": {
-              customers: {
-                id: string;
-                organizationId: string;
-                name: string;
-                url: string | null;
-                domain: string | null;
-                bookingUrl: string | null;
-                notes: string | null;
-                logoUrl: string | null;
-                externalId: string | null;
-                phone: string | null;
-                address: string | null;
-                vertical: string | null;
-                neighborhood: string | null;
-                source: string | null;
-                sourceSessionId: string | null;
-                sourceAgentSlug: string | null;
-                readiness: string | null;
-                nextAction: string | null;
-                fit: string | null;
-                fitScore: number | null;
-                fitStatus: string | null;
-                processor: string | null;
-                evidenceUri: string | null;
-                tierId: string | null;
-                statusId: string | null;
-                ownerId: string | null;
-                nextStepText: string | null;
-                nextStepDueAt: string | null;
-                needsHuman: boolean | null;
-                needsHumanReason: string | null;
-                priorityScore: number | null;
-                customFields: {
-                  [key: string]: string;
-                };
-                createdAt: string;
-                updatedAt: string;
-              }[];
+              customers: (
+                | {
+                    id: string;
+                    organizationId: string;
+                    name: string;
+                    url: string | null;
+                    domain: string | null;
+                    bookingUrl: string | null;
+                    notes: string | null;
+                    logoUrl: string | null;
+                    externalId: string | null;
+                    phone: string | null;
+                    address: string | null;
+                    vertical: string | null;
+                    neighborhood: string | null;
+                    source: string | null;
+                    sourceSessionId: string | null;
+                    sourceAgentSlug: string | null;
+                    readiness: string | null;
+                    nextAction: string | null;
+                    fit: string | null;
+                    fitScore: number | null;
+                    fitStatus: string | null;
+                    processor: string | null;
+                    evidenceUri: string | null;
+                    tierId: string | null;
+                    statusId: string | null;
+                    ownerId: string | null;
+                    nextStepText: string | null;
+                    nextStepDueAt: string | null;
+                    needsHuman: boolean | null;
+                    needsHumanReason: string | null;
+                    priorityScore: number | null;
+                    customFields: {
+                      [key: string]: string;
+                    };
+                    createdAt: string;
+                    updatedAt: string;
+                  }
+                | {
+                    id: string;
+                    name: string;
+                    domain: string | null;
+                    statusId: string | null;
+                    ownerId: string | null;
+                    nextStepText: string | null;
+                    nextStepDueAt: string | null;
+                    needsHuman: boolean | null;
+                    createdAt: string;
+                    updatedAt: string;
+                  }
+              )[];
+              nextCursor?: string;
             };
           };
         };
@@ -20942,7 +21176,7 @@ export interface paths {
             processor?: string;
             evidenceUri?: string;
             tierId?: string;
-            statusId?: string;
+            statusId?: string | null;
             ownerId?: string;
             nextStepText?: string | null;
             nextStepDueAt?: string | null;
@@ -21063,6 +21297,133 @@ export interface paths {
     };
     put?: never;
     post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/workspaces/{organizationId}/customers/{id}/interactions": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Create customer interaction
+     * @description Log a field-sales touch (door knock / call outcome). Writes the interaction to customer memory, applies the outcome's default nextStepText/nextStepDueAt/needsHuman unless the body overrides them, and auto-advances statusId per the outcome→status-key map resolved against this workspace's customer_statuses. When the PILE-412 stage gate refuses the advance, the touch still lands and the response flags stageBlocked.
+     */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          organizationId: string;
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody?: {
+        content: {
+          "application/json": {
+            /**
+             * @description Canonical knock outcome — drives the next-step defaults and stage auto-advance
+             * @enum {string}
+             */
+            outcome:
+              | "talked"
+              | "sent_info"
+              | "needs_email"
+              | "quoted"
+              | "callback"
+              | "no_answer"
+              | "not_interested"
+              | "spam";
+            note?: string;
+            nextStepText?: string | null;
+            nextStepDueAt?: string | null;
+          };
+        };
+      };
+      responses: {
+        /** @description Interaction logged */
+        201: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              interaction: {
+                id: string;
+                customerId: string;
+                /** @enum {string} */
+                outcome:
+                  | "talked"
+                  | "sent_info"
+                  | "needs_email"
+                  | "quoted"
+                  | "callback"
+                  | "no_answer"
+                  | "not_interested"
+                  | "spam";
+                note: string | null;
+                createdAt: string;
+              };
+              customer: {
+                id: string;
+                organizationId: string;
+                name: string;
+                url: string | null;
+                domain: string | null;
+                bookingUrl: string | null;
+                notes: string | null;
+                logoUrl: string | null;
+                externalId: string | null;
+                phone: string | null;
+                address: string | null;
+                vertical: string | null;
+                neighborhood: string | null;
+                source: string | null;
+                sourceSessionId: string | null;
+                sourceAgentSlug: string | null;
+                readiness: string | null;
+                nextAction: string | null;
+                fit: string | null;
+                fitScore: number | null;
+                fitStatus: string | null;
+                processor: string | null;
+                evidenceUri: string | null;
+                tierId: string | null;
+                statusId: string | null;
+                ownerId: string | null;
+                nextStepText: string | null;
+                nextStepDueAt: string | null;
+                needsHuman: boolean | null;
+                needsHumanReason: string | null;
+                priorityScore: number | null;
+                customFields: {
+                  [key: string]: string;
+                };
+                createdAt: string;
+                updatedAt: string;
+              };
+              stageAdvanced: boolean;
+              stageBlocked: boolean;
+            };
+          };
+        };
+        /** @description Customer not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content?: never;
+        };
+      };
+    };
     delete?: never;
     options?: never;
     head?: never;
@@ -22925,6 +23286,14 @@ export interface paths {
           /** @description cold=true → open deals with no nextStepText and no nextStepDueAt */
           cold?: string;
           needsHuman?: string;
+          /** @description Page size, default 500, max 1000 */
+          limit?: number | null;
+          /** @description Opaque page cursor from a previous nextCursor */
+          cursor?: string;
+          /** @description Case-insensitive substring match on deal name */
+          q?: string;
+          /** @description summary=1 → pipeline/picker rows without description, contactIds, or customFields */
+          summary?: string;
         };
         header?: never;
         path: {
@@ -22941,38 +23310,63 @@ export interface paths {
           };
           content: {
             "application/json": {
-              deals: {
-                id: string;
-                organizationId: string;
-                customerId: string;
-                name: string;
-                externalId: string | null;
-                /** @enum {string} */
-                stage:
-                  | "lead"
-                  | "qualified"
-                  | "proposal"
-                  | "negotiation"
-                  | "won"
-                  | "lost";
-                amountCents: number | null;
-                currency: string | null;
-                expectedCloseAt: string | null;
-                description: string | null;
-                closedAt: string | null;
-                archivedAt: string | null;
-                nextStepText: string | null;
-                nextStepDueAt: string | null;
-                needsHuman: boolean | null;
-                needsHumanReason: string | null;
-                priorityScore: number | null;
-                contactIds: string[];
-                customFields: {
-                  [key: string]: string;
-                };
-                createdAt: string;
-                updatedAt: string;
-              }[];
+              deals: (
+                | {
+                    id: string;
+                    organizationId: string;
+                    customerId: string;
+                    name: string;
+                    externalId: string | null;
+                    /** @enum {string} */
+                    stage:
+                      | "lead"
+                      | "qualified"
+                      | "proposal"
+                      | "negotiation"
+                      | "won"
+                      | "lost";
+                    amountCents: number | null;
+                    currency: string | null;
+                    expectedCloseAt: string | null;
+                    description: string | null;
+                    closedAt: string | null;
+                    archivedAt: string | null;
+                    nextStepText: string | null;
+                    nextStepDueAt: string | null;
+                    needsHuman: boolean | null;
+                    needsHumanReason: string | null;
+                    priorityScore: number | null;
+                    contactIds: string[];
+                    customFields: {
+                      [key: string]: string;
+                    };
+                    createdAt: string;
+                    updatedAt: string;
+                  }
+                | {
+                    id: string;
+                    customerId: string;
+                    name: string;
+                    /** @enum {string} */
+                    stage:
+                      | "lead"
+                      | "qualified"
+                      | "proposal"
+                      | "negotiation"
+                      | "won"
+                      | "lost";
+                    amountCents: number | null;
+                    currency: string | null;
+                    expectedCloseAt: string | null;
+                    closedAt: string | null;
+                    archivedAt: string | null;
+                    nextStepDueAt: string | null;
+                    needsHuman: boolean | null;
+                    createdAt: string;
+                    updatedAt: string;
+                  }
+              )[];
+              nextCursor?: string;
             };
           };
         };
@@ -33857,6 +34251,16 @@ export interface paths {
                     addedAt: string;
                   }[]
                 | null;
+              display: {
+                [key: string]: {
+                  sheetColors?: {
+                    [key: string]: string;
+                  };
+                  /** @enum {string} */
+                  density?: "comfortable" | "compact";
+                  hiddenColumns?: string[];
+                };
+              } | null;
             };
           };
         };
@@ -33887,6 +34291,16 @@ export interface paths {
                   addedAt: string;
                 }[]
               | null;
+            display?: {
+              [key: string]: {
+                sheetColors?: {
+                  [key: string]: string;
+                };
+                /** @enum {string} */
+                density?: "comfortable" | "compact";
+                hiddenColumns?: string[];
+              };
+            } | null;
           };
         };
       };
@@ -33900,6 +34314,26 @@ export interface paths {
             "application/json": {
               defaultViewId: string | null;
               hiddenSurfaces: string[] | null;
+              favorites:
+                | {
+                    /** @enum {string} */
+                    type: "issue" | "document";
+                    id: string;
+                    title: string;
+                    identifier?: string | null;
+                    addedAt: string;
+                  }[]
+                | null;
+              display: {
+                [key: string]: {
+                  sheetColors?: {
+                    [key: string]: string;
+                  };
+                  /** @enum {string} */
+                  density?: "comfortable" | "compact";
+                  hiddenColumns?: string[];
+                };
+              } | null;
             };
           };
         };
@@ -36341,7 +36775,7 @@ export interface components {
       claimEpoch: number;
       projectId: string | null;
       cycleId: string | null;
-      labelIds: string | null;
+      labelIds: string[];
       number: number | null;
       identifier: string | null;
       repo: string | null;

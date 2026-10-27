@@ -35171,7 +35171,7 @@ export interface components {
             claimEpoch: number;
             projectId: string | null;
             cycleId: string | null;
-            labelIds: string | null;
+            labelIds: string[];
             number: number | null;
             identifier: string | null;
             repo: string | null;

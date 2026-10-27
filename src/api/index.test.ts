@@ -2165,13 +2165,13 @@ describe("API integration", () => {
     const issuesBody = await issuesRes.json<{
       issues: Array<{
         id: string;
-        labelIds: string | null;
+        labelIds: string[];
         cycleId: string | null;
         assigneeId: string | null;
       }>;
     }>();
     expect(issuesBody.issues).toHaveLength(1);
-    expect(issuesBody.issues[0]?.labelIds).toBe(label.id);
+    expect(issuesBody.issues[0]?.labelIds).toEqual([label.id]);
     expect(issuesBody.issues[0]?.cycleId).toBe(cycle.id);
     expect(issuesBody.issues[0]?.assigneeId).toBe("user-1");
 
@@ -2199,11 +2199,11 @@ describe("API integration", () => {
     );
     expect(issueAfterUpdateRes.status).toBe(200);
     const issueAfterUpdate = await issueAfterUpdateRes.json<{
-      labelIds: string | null;
+      labelIds: string[];
       cycleId: string | null;
       assigneeId: string | null;
     }>();
-    expect(issueAfterUpdate.labelIds).toBeNull();
+    expect(issueAfterUpdate.labelIds).toEqual([]);
     expect(issueAfterUpdate.cycleId).toBeNull();
     expect(issueAfterUpdate.assigneeId).toBeNull();
   });

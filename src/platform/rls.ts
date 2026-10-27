@@ -104,11 +104,18 @@ export function rls(...allowed: string[]) {
         await next();
         return;
       }
-      throw new VortexError({
-        code: "FORBIDDEN",
-        status: 403,
-        message: `Required: ${allowed.join(" or ")}`,
-      });
+      // VTX-771 — a failed project-role check used to hard-403 even when
+      // the caller held an ordinary grant that was also listed (e.g.
+      // `rls("project:lead", "project:edit")` never reached project:edit
+      // for a plain member). Fall through to the resource check; only
+      // short-circuit to 403 when the route is project-role-only.
+      if (projectAllowed.length === allowed.length) {
+        throw new VortexError({
+          code: "FORBIDDEN",
+          status: 403,
+          message: `Required permission: ${allowed.join(" or ")}`,
+        });
+      }
     }
 
     // "resource:action" specs (issue:view, document:edit, …) check the

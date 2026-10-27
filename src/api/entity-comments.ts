@@ -38,7 +38,8 @@ const commentsResponse = {
 const commentResponse = {
   "application/json": { schema: entityCommentSchema },
 } as const;
-const bodySchema = z.object({ body: z.string().min(1) });
+// VTX-770 — trim first so a whitespace-only body 400s.
+const bodySchema = z.object({ body: z.string().trim().min(1) });
 
 function notFound(what: string): never {
   throw new VortexError({ code: "NOT_FOUND", status: 404, message: what });

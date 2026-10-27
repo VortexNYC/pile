@@ -429,3 +429,77 @@ describe("MCP resources and prompts (PILE-630)", () => {
     }
   });
 });
+
+describe("list_documents summary default (VTX-750)", () => {
+  it("returns summaries by default and full content only on summary=0", async () => {
+    const db = createD1(env.D1);
+    const now = new Date();
+    const userId = `mcp-docs-${crypto.randomUUID()}`;
+    await db
+      .insert(userTable)
+      .values({
+        id: userId,
+        name: "MCP Docs User",
+        email: `${userId}@example.com`,
+        emailVerified: true,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({ target: [userTable.email] });
+    const setupAuth = await createAuth(env);
+    const setupKey = await setupAuth.api.createApiKey({
+      body: { userId, name: "setup", rateLimitEnabled: false },
+    });
+    const setupHeaders = new Headers({
+      Authorization: `Bearer ${z.object({ key: z.string() }).parse(setupKey).key}`,
+    });
+    const workspaceRes = await callTool(
+      "postWorkspaces",
+      {
+        body: { name: "MCP docs ws", slug: `mcp-docs-${crypto.randomUUID()}` },
+      },
+      setupHeaders
+    );
+    const workspace = JSON.parse(workspaceRes.content[0].text) as {
+      id: string;
+    };
+    const adminHeaders = await workspaceAdminHeaders(workspace.id, userId);
+
+    await callTool(
+      "create_document",
+      {
+        organizationId: workspace.id,
+        body: {
+          title: "big body doc",
+          contentFormat: "markdown",
+          content: "FULL_BODY_MARKER_VTX750",
+        },
+      },
+      adminHeaders
+    );
+
+    // Default: summary — content stripped.
+    const listRes = await callTool(
+      "list_documents",
+      { organizationId: workspace.id },
+      adminHeaders
+    );
+    const listed = JSON.parse(listRes.content[0].text) as {
+      documents: { id: string; content: unknown }[];
+    };
+    const doc = listed.documents.find((d) => d.id);
+    expect(doc).toBeDefined();
+    expect(listed.documents.every((d) => d.content === "")).toBe(true);
+
+    // Explicit summary=0 restores full content.
+    const fullRes = await callTool(
+      "list_documents",
+      { organizationId: workspace.id, summary: "0" },
+      adminHeaders
+    );
+    const full = JSON.parse(fullRes.content[0].text) as {
+      documents: { content: unknown }[];
+    };
+    expect(full.documents[0]?.content).toBe("FULL_BODY_MARKER_VTX750");
+  });
+});
