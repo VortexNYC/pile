@@ -56,9 +56,48 @@ export type {
 export { captureScreenshot } from "./media.js";
 export type { CaptureMountOptions, CaptureWidgetHandle } from "./widget.js";
 
+/**
+ * PILE-665/675 submission options layered on the base init options.
+ * `streamParts` streams MediaRecorder chunks into an R2 multipart upload
+ * while recording; `includeDomReplay` attaches the raw rrweb event stream
+ * as replay.json; `includeNetworkBodies` pins whether text request and
+ * response bodies are captured.
+ */
+export interface CaptureStreamingOptions {
+  streamParts?: boolean;
+  includeDomReplay?: boolean;
+  includeNetworkBodies?: boolean;
+}
+
+export type PileCaptureInitOptions = CaptureInitOptions &
+  CaptureStreamingOptions;
+
+/** State for a recording streamed through R2 multipart parts. */
+interface StreamedUpload {
+  token: string;
+  sessionId: string;
+  uploadId: string;
+  partUploadUrl: string;
+  /** Normal one-shot upload URL kept as a fallback if a part fails. */
+  videoUploadUrl: string | null;
+  shareUrl?: string;
+  recordingUrl: string;
+  buffered: Blob[];
+  bufferedBytes: number;
+  nextPart: number;
+  failed: boolean;
+  uploads: Promise<void>[];
+}
+
+// R2 requires every non-final multipart part to be at least 5 MiB, so
+// MediaRecorder's 1s chunks are coalesced until they clear the floor.
+const STREAM_PART_MIN_BYTES = 5 * 1024 * 1024;
+const ABSOLUTE_HTTP_URL = /^https?:\/\//;
+
 interface ActiveSession {
   recording: RecordingController | null;
   artifacts: CaptureArtifact[];
+  streamed: StreamedUpload | null;
 }
 
 export interface Capture {
@@ -179,17 +218,21 @@ const collectDeviceInfo = (): Record<string, unknown> => {
   return info;
 };
 
-export function initCapture(options: CaptureInitOptions): Capture {
+export function initCapture(options: PileCaptureInitOptions): Capture {
   if (!options.publicKey && !options.linkToken) {
     throw new Error("initCapture requires publicKey or linkToken");
   }
   const endpoint = (options.endpoint ?? DEFAULT_ENDPOINT).replace(/\/+$/, "");
   const lookbackMs = options.lookbackMs ?? DEFAULT_LOOKBACK_MS;
+  // PILE-675 — `includeNetworkBodies` is the explicit opt-in/out; it falls
+  // back to the legacy `networkBodies` flag and defaults to on.
+  const captureNetworkBodies =
+    options.includeNetworkBodies ?? options.networkBodies ?? true;
   const recorder = new EventRecorder();
   // Instrumentation is always-on from init — this is what lets a later
   // report include the bug that already happened.
   const instrumentation: Instrumentation = installInstrumentation(recorder, {
-    networkBodies: options.networkBodies !== false,
+    networkBodies: captureNetworkBodies !== false,
     excludeUrlPrefixes: [`${endpoint}/support/capture`],
   });
   const pendingArtifacts: CaptureArtifact[] = [];
@@ -212,7 +255,7 @@ export function initCapture(options: CaptureInitOptions): Capture {
     });
     return replayStarting;
   };
-  if (options.replay) {
+  if (options.replay || options.includeDomReplay) {
     // Fire and forget — replay is best-effort and must never block init.
     void ensureReplay().catch(() => {});
   }
@@ -245,20 +288,31 @@ export function initCapture(options: CaptureInitOptions): Capture {
           fileName: "replay.html",
           blob: buildReplayHtml(replayEvents, "Pile session replay"),
         });
+        // PILE-675 — the raw rrweb event stream alongside the self-contained
+        // HTML player, so agents/triage can replay or diff deterministically.
+        if (options.includeDomReplay) {
+          artifacts.push({
+            attachmentType: "replay",
+            fileName: "replay.json",
+            blob: new Blob([JSON.stringify(replayEvents)], {
+              type: "application/json",
+            }),
+          });
+        }
       }
     }
     return artifacts;
   };
 
-  const submit = async (
-    stopOptions: CaptureReportOptions,
-    snapshot: ReturnType<EventRecorder["getRecentSnapshot"]>,
-    extras: CaptureArtifact[]
-  ): Promise<CaptureResult> => {
-    const artifacts = await buildArtifacts(snapshot, extras);
+  const buildSubmissionMetadata = (
+    stopOptions: CaptureReportOptions
+  ): Record<string, unknown> => {
     const metadata: Record<string, unknown> = {
       email: stopOptions.email,
       ...(stopOptions.fullName ? { fullName: stopOptions.fullName } : {}),
+      // PILE-675 — the body-retention intent rides the submission so the
+      // server keeps (or strips) network bodies accordingly.
+      includeNetworkBodies: captureNetworkBodies,
     };
     // Live-metadata callbacks (jam.metadata() parity): evaluated now, at
     // submit time, so the values reflect the current app state.
@@ -276,6 +330,16 @@ export function initCapture(options: CaptureInitOptions): Capture {
       metadata.replayDegraded = true;
     }
     Object.assign(metadata, stopOptions.metadata);
+    return metadata;
+  };
+
+  const submit = async (
+    stopOptions: CaptureReportOptions,
+    snapshot: ReturnType<EventRecorder["getRecentSnapshot"]>,
+    extras: CaptureArtifact[]
+  ): Promise<CaptureResult> => {
+    const artifacts = await buildArtifacts(snapshot, extras);
+    const metadata = buildSubmissionMetadata(stopOptions);
     return submitCaptureReport(
       {
         endpoint,
@@ -299,6 +363,277 @@ export function initCapture(options: CaptureInitOptions): Capture {
     );
   };
 
+  /**
+   * PILE-665 — mint the capture session + R2 multipart upload up front so
+   * MediaRecorder chunks stream in as parts while recording, and the share
+   * link is known before the first frame lands.
+   */
+  const mintStreamedSession = async (): Promise<StreamedUpload> => {
+    const tokenRes = await fetch(`${endpoint}/support/capture/token`, {
+      method: "POST",
+      headers: {
+        ...(options.linkToken
+          ? { "x-pile-capture-link": options.linkToken }
+          : { "x-pile-capture-public-key": options.publicKey ?? "" }),
+        ...(options.reference
+          ? { "x-pile-capture-reference": options.reference }
+          : {}),
+      },
+      credentials: "omit",
+      mode: "cors",
+    });
+    if (!tokenRes.ok) {
+      throw new Error(`capture token failed: ${tokenRes.status}`);
+    }
+    const { token, recordingUrl } = (await tokenRes.json()) as {
+      token: string;
+      recordingUrl: string;
+    };
+
+    const sessionRes = await fetch(
+      `${endpoint}/support/capture/upload-session`,
+      {
+        method: "POST",
+        headers: {
+          "x-pile-capture-token": token,
+          "content-type": "application/json",
+        },
+        credentials: "omit",
+        mode: "cors",
+        body: JSON.stringify({
+          title: "Bug report",
+          multipart: true,
+          artifacts: [
+            {
+              attachmentType: "video",
+              fileName: "recording.webm",
+              contentType: "video/webm",
+            },
+          ],
+        }),
+      }
+    );
+    if (!sessionRes.ok) {
+      throw new Error(`upload-session failed: ${sessionRes.status}`);
+    }
+    const payload = (await sessionRes.json()) as {
+      sessionId: string;
+      uploadId?: string;
+      partUploadUrl?: string;
+      shareUrl?: string;
+      uploads?: { uploadUrl: string; attachmentType: string }[];
+    };
+    if (!payload.uploadId || !payload.partUploadUrl) {
+      throw new Error("multipart upload was not offered by the server");
+    }
+    return {
+      token,
+      sessionId: payload.sessionId,
+      uploadId: payload.uploadId,
+      partUploadUrl: payload.partUploadUrl,
+      videoUploadUrl:
+        payload.uploads?.find((u) => u.attachmentType === "video")?.uploadUrl ??
+        null,
+      shareUrl: payload.shareUrl,
+      recordingUrl,
+      buffered: [],
+      bufferedBytes: 0,
+      nextPart: 1,
+      failed: false,
+      uploads: [],
+    };
+  };
+
+  const flushStreamedPart = (streamed: StreamedUpload): void => {
+    if (streamed.bufferedBytes === 0) return;
+    const body =
+      streamed.buffered.length === 1
+        ? streamed.buffered[0]!
+        : new Blob(streamed.buffered, {
+            type: streamed.buffered[0]!.type || "video/webm",
+          });
+    streamed.buffered = [];
+    streamed.bufferedBytes = 0;
+    const partNumber = streamed.nextPart;
+    streamed.nextPart += 1;
+    const separator = streamed.partUploadUrl.includes("?") ? "&" : "?";
+    const relative = `${streamed.partUploadUrl}${separator}partNumber=${partNumber}&uploadId=${encodeURIComponent(
+      streamed.uploadId
+    )}`;
+    const url = ABSOLUTE_HTTP_URL.test(relative)
+      ? relative
+      : `${endpoint}${relative}`;
+    streamed.uploads.push(
+      fetch(url, {
+        method: "PUT",
+        headers: {
+          "x-pile-capture-token": streamed.token,
+          "content-type": body.type || "video/webm",
+        },
+        credentials: "omit",
+        mode: "cors",
+        body,
+      })
+        .then((res) => {
+          if (!res.ok) streamed.failed = true;
+        })
+        .catch(() => {
+          streamed.failed = true;
+        })
+    );
+  };
+
+  const queueStreamedChunk = (streamed: StreamedUpload, chunk: Blob): void => {
+    streamed.buffered.push(chunk);
+    streamed.bufferedBytes += chunk.size;
+    if (streamed.bufferedBytes >= STREAM_PART_MIN_BYTES) {
+      flushStreamedPart(streamed);
+    }
+  };
+
+  /**
+   * PILE-665 — finalize a streamed session: the video is already in R2 as
+   * multipart parts (or fell back to the one-shot upload when a part
+   * failed); the remaining artifacts go through the standard protocol on
+   * the same session, then finalize completes the upload server-side.
+   */
+  const submitStreamed = async (
+    stopOptions: CaptureReportOptions,
+    snapshot: ReturnType<EventRecorder["getRecentSnapshot"]>,
+    extras: CaptureArtifact[],
+    streamed: StreamedUpload,
+    videoBlob: Blob | null
+  ): Promise<CaptureResult> => {
+    flushStreamedPart(streamed);
+    await Promise.all(streamed.uploads);
+
+    const headers = { "x-pile-capture-token": streamed.token };
+
+    // If any part failed (or nothing streamed), fall back to the normal
+    // one-shot upload for the video and clear the server-side multipart
+    // state so finalize does not complete a partial object.
+    const streamFailed =
+      streamed.failed || (streamed.nextPart === 1 && videoBlob === null);
+    if (streamFailed) {
+      await fetch(`${endpoint}/support/capture/metadata`, {
+        method: "POST",
+        headers: { ...headers, "content-type": "application/json" },
+        credentials: "omit",
+        mode: "cors",
+        body: JSON.stringify({
+          metadata: {
+            multipartUploadId: null,
+            multipartObjectKey: null,
+            multipartParts: [],
+          },
+        }),
+      });
+      if (videoBlob && streamed.videoUploadUrl) {
+        const uploadUrl = ABSOLUTE_HTTP_URL.test(streamed.videoUploadUrl)
+          ? streamed.videoUploadUrl
+          : `${endpoint}${streamed.videoUploadUrl}`;
+        const uploadRes = await fetch(uploadUrl, {
+          method: "POST",
+          headers: {
+            ...headers,
+            "content-type": videoBlob.type || "video/webm",
+          },
+          credentials: "omit",
+          mode: "cors",
+          body: videoBlob,
+        });
+        if (!uploadRes.ok) {
+          throw new Error(`artifact upload failed: ${uploadRes.status}`);
+        }
+      }
+    }
+
+    const artifacts = await buildArtifacts(snapshot, extras);
+    const metadata = buildSubmissionMetadata(stopOptions);
+
+    // Declare the remaining (non-video) artifacts on the same session —
+    // the video record already exists from the streamed upload-session.
+    const sessionRes = await fetch(
+      `${endpoint}/support/capture/upload-session`,
+      {
+        method: "POST",
+        headers: { ...headers, "content-type": "application/json" },
+        credentials: "omit",
+        mode: "cors",
+        body: JSON.stringify({
+          title: stopOptions.title ?? "Bug report",
+          description: stopOptions.description,
+          priority: stopOptions.priority,
+          tags: stopOptions.tags,
+          url: stopOptions.url,
+          visibility: stopOptions.visibility,
+          includeNetworkBodies: captureNetworkBodies,
+          metadata,
+          deviceInfo: collectDeviceInfo(),
+          artifacts: artifacts.map((artifact) => ({
+            attachmentType: artifact.attachmentType,
+            fileName: artifact.fileName,
+            contentType: artifact.blob.type || undefined,
+          })),
+        }),
+      }
+    );
+    if (!sessionRes.ok) {
+      throw new Error(`upload-session failed: ${sessionRes.status}`);
+    }
+    const sessionPayload = (await sessionRes.json()) as {
+      uploads?: { uploadUrl: string }[];
+    };
+    const declaredUploads = sessionPayload.uploads ?? [];
+
+    await Promise.all(
+      artifacts.map(async (artifact, index) => {
+        const target = declaredUploads[index];
+        if (!target) {
+          throw new Error("upload-session did not declare all artifacts");
+        }
+        const uploadUrl = ABSOLUTE_HTTP_URL.test(target.uploadUrl)
+          ? target.uploadUrl
+          : `${endpoint}${target.uploadUrl}`;
+        const uploadResponse = await fetch(uploadUrl, {
+          method: "POST",
+          headers: {
+            ...headers,
+            "content-type": artifact.blob.type || "application/octet-stream",
+            ...(artifact.contentEncoding
+              ? { "content-encoding": artifact.contentEncoding }
+              : {}),
+          },
+          credentials: "omit",
+          mode: "cors",
+          body: artifact.blob,
+        });
+        if (!uploadResponse.ok) {
+          throw new Error(`artifact upload failed: ${uploadResponse.status}`);
+        }
+      })
+    );
+
+    const finalizeRes = await fetch(`${endpoint}/support/capture/finalize`, {
+      method: "POST",
+      headers,
+      credentials: "omit",
+      mode: "cors",
+    });
+    if (!finalizeRes.ok) {
+      throw new Error(`finalize failed: ${finalizeRes.status}`);
+    }
+    const finalized = (await finalizeRes.json()) as {
+      ticketId: string;
+      shareUrl?: string;
+    };
+    return {
+      ticketId: finalized.ticketId,
+      shareUrl: finalized.shareUrl ?? streamed.shareUrl,
+      recordingUrl: streamed.recordingUrl,
+    };
+  };
+
   return {
     async start(startOptions?: CaptureStartOptions) {
       if (active) {
@@ -308,14 +643,32 @@ export function initCapture(options: CaptureInitOptions): Capture {
         startOptions?.lookbackMs ?? lookbackMs
       );
       let recording: RecordingController | null = null;
+      let streamed: StreamedUpload | null = null;
       if (startOptions?.video ?? options.video) {
-        recording = await startDisplayRecording();
+        // PILE-665 — mint the multipart session first so chunks stream as
+        // parts while recording; failure falls back to one-shot upload.
+        if (options.streamParts) {
+          streamed = await mintStreamedSession().catch(() => null);
+        }
+        const activeStream = streamed;
+        recording = await startDisplayRecording(
+          activeStream
+            ? {
+                onChunk: (chunk) => {
+                  queueStreamedChunk(activeStream, chunk);
+                },
+              }
+            : undefined
+        );
         recorder.markRecordingStarted(recording.startedAt);
       }
-      if (startOptions?.replay ?? options.replay) {
+      if (
+        startOptions?.replay ??
+        (options.replay === true || options.includeDomReplay === true)
+      ) {
         await ensureReplay().catch(() => null);
       }
-      active = { recording, artifacts: [] };
+      active = { recording, artifacts: [], streamed };
       void session;
     },
 
@@ -326,14 +679,21 @@ export function initCapture(options: CaptureInitOptions): Capture {
       const session = active;
       active = null;
       const extras = [...session.artifacts];
+      let streamedBlob: Blob | null = null;
       if (session.recording) {
         try {
           const { blob, durationMs } = await session.recording.stop();
-          extras.push({
-            attachmentType: "video",
-            fileName: "recording.webm",
-            blob,
-          });
+          // Streamed recordings are already in R2 as multipart parts —
+          // only the fallback path needs the assembled blob.
+          if (session.streamed) {
+            streamedBlob = blob;
+          } else {
+            extras.push({
+              attachmentType: "video",
+              fileName: "recording.webm",
+              blob,
+            });
+          }
           stopOptions = {
             ...stopOptions,
             metadata: { durationMs, ...stopOptions.metadata },
@@ -346,6 +706,15 @@ export function initCapture(options: CaptureInitOptions): Capture {
       recorder.discardSession();
       if (!snapshot) {
         throw new Error("capture session missing");
+      }
+      if (session.streamed) {
+        return submitStreamed(
+          stopOptions,
+          snapshot,
+          extras,
+          session.streamed,
+          streamedBlob
+        );
       }
       return submit(stopOptions, snapshot, extras);
     },
@@ -428,6 +797,10 @@ function autoInitFromScriptTag(): void {
     linkToken,
     endpoint: script.dataset.pileEndpoint,
     replay: script.dataset.pileReplay === "true",
+    streamParts: script.dataset.pileStreamParts === "true",
+    includeDomReplay: script.dataset.pileDomReplay === "true",
+    includeNetworkBodies:
+      script.dataset.pileNetworkBodies === "false" ? false : undefined,
     lookbackMs:
       Number.isFinite(lookback) && lookback > 0 ? lookback : undefined,
   });

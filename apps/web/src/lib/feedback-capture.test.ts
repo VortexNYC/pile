@@ -124,8 +124,8 @@ describe("feedbackCaptureSnapshot", () => {
 });
 
 describe("media helpers", () => {
-  it("exposes a 15s clip cap", () => {
-    expect(MAX_RECORDING_MS).toBe(15_000);
+  it("exposes a 5m clip cap", () => {
+    expect(MAX_RECORDING_MS).toBe(300_000);
   });
 
   it("reports recording support as a boolean", () => {

@@ -5060,6 +5060,18 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "deviceInfo",
         flag: "device-info",
       },
+      {
+        name: "multipart",
+        flag: "multipart",
+      },
+      {
+        name: "replayEvents",
+        flag: "replay-events",
+      },
+      {
+        name: "includeNetworkBodies",
+        flag: "include-network-bodies",
+      },
     ],
   },
   "support capture upload create": {
@@ -5080,6 +5092,48 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
     query: [],
+    body: [],
+  },
+  "support capture sessions upload part create": {
+    method: "POST",
+    path: "/support/capture/sessions/{sessionId}/upload/part",
+    params: [
+      {
+        name: "sessionId",
+        flag: "session",
+      },
+    ],
+    query: [
+      {
+        name: "partNumber",
+        flag: "part-number",
+      },
+      {
+        name: "uploadId",
+        flag: "upload-id",
+      },
+    ],
+    body: [],
+  },
+  "support capture sessions upload part update": {
+    method: "PUT",
+    path: "/support/capture/sessions/{sessionId}/upload/part",
+    params: [
+      {
+        name: "sessionId",
+        flag: "session",
+      },
+    ],
+    query: [
+      {
+        name: "partNumber",
+        flag: "part-number",
+      },
+      {
+        name: "uploadId",
+        flag: "upload-id",
+      },
+    ],
     body: [],
   },
   "support capture finalize create": {
@@ -5132,6 +5186,18 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "ticketId",
         flag: "ticket-id",
+      },
+    ],
+    query: [],
+    body: [],
+  },
+  "support capture share get": {
+    method: "GET",
+    path: "/support/capture/share/{sessionId}",
+    params: [
+      {
+        name: "sessionId",
+        flag: "session",
       },
     ],
     query: [],
@@ -14471,5 +14537,12 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "payroll-to-revenue-ratio",
       },
     ],
+  },
+  "status list": {
+    method: "GET",
+    path: "/status",
+    params: [],
+    query: [],
+    body: [],
   },
 };

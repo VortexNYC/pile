@@ -38,6 +38,7 @@ export interface FeedbackBody {
   errors?: FeedbackError[];
   screenshotDataUrl?: string;
   recordingDataUrl?: string;
+  includeNetworkBodies?: boolean;
 }
 
 export function collectDeviceInfo(): Record<string, unknown> {
@@ -81,7 +82,21 @@ export function buildFeedbackBody(input: {
     ...(win
       ? { viewport: { width: win.innerWidth, height: win.innerHeight } }
       : {}),
-    deviceInfo: collectDeviceInfo(),
+    deviceInfo: {
+      ...collectDeviceInfo(),
+      ...(snapshot.recordingStartedAtMs !== null
+        ? {
+            recordingStartedAt: new Date(
+              snapshot.recordingStartedAtMs
+            ).toISOString(),
+          }
+        : {}),
+    },
+    ...(snapshot.networkRequests.some(
+      (r) => r.requestBody !== undefined || r.responseBody !== undefined
+    )
+      ? { includeNetworkBodies: true }
+      : {}),
     ...(snapshot.consoleLogs.length > 0
       ? { consoleLogs: snapshot.consoleLogs }
       : {}),

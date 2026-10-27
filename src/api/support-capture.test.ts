@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
@@ -1557,7 +1557,7 @@ describe("support-capture API", () => {
         { headers: { Accept: "text/html" } }
       );
       expect(htmlRes.status).toBe(200);
-      expect(await htmlRes.text()).toContain("<video controls");
+      expect(await htmlRes.text()).toContain('id="capture-video"');
     });
   });
 
@@ -1778,6 +1778,331 @@ describe("support-capture API", () => {
     } finally {
       env.AI = originalAi;
     }
+  });
+
+  it("streams a recording through R2 multipart parts and finalizes (PILE-665)", async () => {
+    const link = await createLink();
+    const tokenRes = await linkToken(link.token);
+    const { token: sessionToken } = (await tokenRes.json()) as {
+      token: string;
+    };
+
+    const sessionRes = await captureFetch("/support/capture/upload-session", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-pile-capture-token": sessionToken,
+      },
+      body: JSON.stringify({
+        title: "Streamed recording",
+        multipart: true,
+        metadata: { email: "stream@example.com" },
+        artifacts: [
+          {
+            attachmentType: "video",
+            fileName: "recording.webm",
+            contentType: "video/webm",
+          },
+        ],
+      }),
+    });
+    expect(sessionRes.status).toBe(200);
+    const session = (await sessionRes.json()) as {
+      sessionId: string;
+      uploadId?: string;
+      partUploadUrl?: string;
+      shareUrl?: string;
+    };
+    // Instant share link — known before the recording finishes.
+    expect(session.uploadId).toBeTruthy();
+    expect(session.partUploadUrl).toContain("/upload/part");
+    expect(session.shareUrl).toBe(
+      `https://example.com/support/capture/share/${sessionToken}`
+    );
+
+    // The session-scoped share link is already live mid-recording.
+    const earlyShare = await captureFetch(
+      `/support/capture/share/${sessionToken}`,
+      { headers: { Accept: "text/html" } }
+    );
+    expect(earlyShare.status).toBe(200);
+    expect(await earlyShare.text()).toContain("still being processed");
+
+    // Non-final parts must clear R2's 5 MiB floor (miniflare enforces it).
+    const part1 = new Uint8Array(5 * 1024 * 1024 + 1).fill(0x1a);
+    const part1Res = await captureFetch(
+      `${session.partUploadUrl}?partNumber=1&uploadId=${session.uploadId}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "video/webm",
+          "x-pile-capture-token": sessionToken,
+        },
+        body: part1,
+      }
+    );
+    expect(part1Res.status).toBe(200);
+    const part1Body = (await part1Res.json()) as {
+      ok: boolean;
+      partNumber: number;
+      etag: string;
+    };
+    expect(part1Body).toMatchObject({ ok: true, partNumber: 1 });
+    expect(part1Body.etag).toBeTruthy();
+
+    // The POST alias takes the same shape.
+    const part2 = new Uint8Array(32).fill(0x2b);
+    const part2Res = await captureFetch(
+      `${session.partUploadUrl}?partNumber=2&uploadId=${session.uploadId}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "video/webm",
+          "x-pile-capture-token": sessionToken,
+        },
+        body: part2,
+      }
+    );
+    expect(part2Res.status).toBe(200);
+
+    const finalizeRes = await captureFetch("/support/capture/finalize", {
+      method: "POST",
+      headers: { "x-pile-capture-token": sessionToken },
+    });
+    expect(finalizeRes.status).toBe(200);
+    const final = (await finalizeRes.json()) as {
+      ticketId: string;
+      shareUrl?: string;
+    };
+    expect(final.shareUrl).toContain(
+      `/support/capture/public/${final.ticketId}`
+    );
+
+    const db = createD1(env.D1);
+    const videoAttachment = await db
+      .select()
+      .from(supportTicketAttachments)
+      .where(
+        and(
+          eq(supportTicketAttachments.ticketId, final.ticketId),
+          eq(supportTicketAttachments.type, "video")
+        )
+      )
+      .get();
+    expect(videoAttachment).not.toBeNull();
+    expect(videoAttachment!.fileName).toBe("recording.webm");
+
+    // The completed multipart object is the concatenation of the parts.
+    const stored = await env.ATTACHMENTS_BUCKET.get(videoAttachment!.r2Key!);
+    expect(stored).not.toBeNull();
+    expect(stored!.size).toBe(part1.byteLength + part2.byteLength);
+
+    // A stale part write against the completed upload is rejected.
+    const latePartRes = await captureFetch(
+      `${session.partUploadUrl}?partNumber=3&uploadId=${session.uploadId}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "video/webm",
+          "x-pile-capture-token": sessionToken,
+        },
+        body: new Uint8Array(64),
+      }
+    );
+    expect(latePartRes.status).toBe(401);
+  });
+
+  it("tracks share-link views and exposes them on the session (PILE-669)", async () => {
+    const { ticketId, sessionToken } = await captureWithArtifacts("public");
+
+    const before = await captureFetch(
+      `/support/capture/sessions/${sessionToken}`
+    );
+    const beforeBody = (await before.json()) as {
+      viewCount: number;
+      lastViewedAt: string | null;
+    };
+    expect(beforeBody.viewCount).toBe(0);
+    expect(beforeBody.lastViewedAt).toBeNull();
+
+    const shareJson = await captureFetch(`/support/capture/public/${ticketId}`);
+    const manifest = (await shareJson.json()) as {
+      viewCount: number;
+      lastViewedAt: string | null;
+    };
+    expect(manifest.viewCount).toBe(1);
+    expect(manifest.lastViewedAt).toBeTruthy();
+
+    await captureFetch(`/support/capture/share/${sessionToken}`, {
+      headers: { Accept: "text/html" },
+    });
+
+    const after = await captureFetch(
+      `/support/capture/sessions/${sessionToken}`
+    );
+    const afterBody = (await after.json()) as {
+      viewCount: number;
+      lastViewedAt: string | null;
+    };
+    expect(afterBody.viewCount).toBe(2);
+    expect(afterBody.lastViewedAt).toBeTruthy();
+  });
+
+  it("renders the Cap-style watch page with captions, transcript, and device info (PILE-668)", async () => {
+    const { ticketId, sessionToken } = await captureWithArtifacts("public");
+    const db = createD1(env.D1);
+
+    const sessionRow = await db
+      .select()
+      .from(supportCaptureSessions)
+      .where(eq(supportCaptureSessions.id, sessionToken))
+      .get();
+    const ticket = await getTicketById(db, organizationId, ticketId);
+    const eventId = ticket!.events[0]!.id;
+
+    // Land transcript artifacts like the PILE-664 pipeline writes.
+    const vttKey = `${organizationId}/capture/${sessionToken}/transcript/transcript.vtt`;
+    const jsonKey = `${organizationId}/capture/${sessionToken}/transcript/transcript.json`;
+    await env.ATTACHMENTS_BUCKET.put(
+      vttKey,
+      "WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nhello watch page\n"
+    );
+    await env.ATTACHMENTS_BUCKET.put(
+      jsonKey,
+      JSON.stringify({
+        text: "hello watch page",
+        segments: [{ start: 0, end: 2, text: "hello watch page" }],
+      })
+    );
+    const now = new Date().toISOString();
+    const vttAttachmentId = crypto.randomUUID();
+    const jsonAttachmentId = crypto.randomUUID();
+    await db.insert(supportTicketAttachments).values([
+      {
+        id: vttAttachmentId,
+        organizationId: sessionRow!.organizationId,
+        ticketId,
+        eventId,
+        type: "transcript",
+        contentType: "text/vtt",
+        r2Key: vttKey,
+        url: `https://example.com/support/capture/artifacts/${vttAttachmentId}`,
+        fileName: "transcript.vtt",
+        createdAt: now,
+      },
+      {
+        id: jsonAttachmentId,
+        organizationId: sessionRow!.organizationId,
+        ticketId,
+        eventId,
+        type: "transcript",
+        contentType: "application/json",
+        r2Key: jsonKey,
+        url: `https://example.com/support/capture/artifacts/${jsonAttachmentId}`,
+        fileName: "transcript.json",
+        createdAt: now,
+      },
+    ]);
+
+    const res = await captureFetch(`/support/capture/public/${ticketId}`, {
+      headers: { Accept: "text/html" },
+    });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+
+    expect(html).toContain('id="capture-video"');
+    expect(html).toContain('kind="captions"');
+    expect(html).toContain(`artifacts/${vttAttachmentId}`);
+    expect(html).toContain('srclang="en"');
+    // Transcript panel with clickable timestamps.
+    expect(html).toContain('data-seek="0"');
+    expect(html).toContain("hello watch page");
+    // Device & session sidebar.
+    expect(html).toContain("Device &amp; Session Info");
+    expect(html).toContain("Views");
+    expect(html).toContain("Recorded");
+
+    // The session-scoped share URL renders the same page.
+    const sessionPage = await captureFetch(
+      `/support/capture/share/${sessionToken}`,
+      { headers: { Accept: "text/html" } }
+    );
+    expect(sessionPage.status).toBe(200);
+    const sessionHtml = await sessionPage.text();
+    expect(sessionHtml).toContain('id="capture-video"');
+    expect(sessionHtml).toContain('kind="captions"');
+  });
+
+  it("stores replayEvents as a replay.json capture artifact (PILE-675)", async () => {
+    const publicKey = await createPublicKey();
+    const { token: sessionToken } = await issueCaptureToken(publicKey);
+
+    const sessionRes = await captureFetch("/support/capture/upload-session", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-pile-capture-token": sessionToken,
+      },
+      body: JSON.stringify({
+        title: "Replay bug",
+        metadata: { email: "replay@example.com" },
+        replayEvents: [
+          { type: 4, data: { href: "https://app.example.com" }, timestamp: 1 },
+          { type: 3, data: { source: 0 }, timestamp: 2 },
+        ],
+        artifacts: [
+          {
+            attachmentType: "screenshot",
+            fileName: "screenshot.png",
+            contentType: "image/png",
+          },
+        ],
+      }),
+    });
+    expect(sessionRes.status).toBe(200);
+
+    const finalizeRes = await captureFetch("/support/capture/finalize", {
+      method: "POST",
+      headers: { "x-pile-capture-token": sessionToken },
+    });
+    expect(finalizeRes.status).toBe(200);
+    const final = (await finalizeRes.json()) as { ticketId: string };
+
+    const db = createD1(env.D1);
+    const replay = await db
+      .select()
+      .from(supportTicketAttachments)
+      .where(
+        and(
+          eq(supportTicketAttachments.ticketId, final.ticketId),
+          eq(supportTicketAttachments.fileName, "replay.json")
+        )
+      )
+      .get();
+    expect(replay).not.toBeNull();
+    expect(replay!.type).toBe("replay");
+    expect(replay!.contentType).toBe("application/json");
+
+    const stored = await env.ATTACHMENTS_BUCKET.get(replay!.r2Key!);
+    const events = JSON.parse(await stored!.text()) as {
+      type: number;
+      data: { href?: string };
+    }[];
+    expect(events).toHaveLength(2);
+    expect(events[0]!.type).toBe(4);
+    expect(events[0]!.data.href).toBe("https://app.example.com");
+
+    // The event array never lands in the D1 metadata column.
+    const sessionRow = await db
+      .select()
+      .from(supportCaptureSessions)
+      .where(eq(supportCaptureSessions.id, sessionToken))
+      .get();
+    const meta = JSON.parse(sessionRow!.metadata ?? "{}") as Record<
+      string,
+      unknown
+    >;
+    expect(meta.replayEvents).toBeUndefined();
   });
 
   it("still lands the ticket when transcription fails on finalize", async () => {
@@ -2179,6 +2504,115 @@ describe("member feedback", () => {
     } finally {
       env.AI = originalAi;
     }
+  });
+
+  it("persists replay.json and bounded redacted network bodies when opted in (PILE-675)", async () => {
+    const res = await feedbackFetch({
+      kind: "bug",
+      title: "Checkout 500 with payload",
+      description: "Need the request body to debug",
+      includeNetworkBodies: true,
+      replayEvents: [
+        { type: 4, data: { href: "https://app.example.com" }, timestamp: 1 },
+      ],
+      networkRequests: [
+        {
+          method: "POST",
+          url: "https://api.example.com/checkout",
+          status: 500,
+          duration: 120,
+          requestBody: '{"item":"book","password":"hunter2secret"}',
+          responseBody: '{"error":"card declined"}',
+        },
+        {
+          method: "GET",
+          url: "https://api.example.com/health",
+          status: 200,
+        },
+      ],
+    });
+    expect(res.status).toBe(201);
+    const { ticketId } = (await res.json()) as { ticketId: string };
+
+    const db = createD1(env.D1);
+    const attachments = await db
+      .select()
+      .from(supportTicketAttachments)
+      .where(eq(supportTicketAttachments.ticketId, ticketId))
+      .all();
+    const byName = new Map(attachments.map((a) => [a.fileName, a]));
+
+    // Raw rrweb events land as a replay artifact.
+    const replay = byName.get("replay.json");
+    expect(replay).toBeTruthy();
+    expect(replay!.type).toBe("replay");
+    const replayObj = await env.ATTACHMENTS_BUCKET.get(replay!.r2Key!);
+    const events = JSON.parse(await replayObj!.text()) as { type: number }[];
+    expect(events[0]!.type).toBe(4);
+
+    // Bodies persist on both the network viewer payload and debugger.json —
+    // bounded and credential-scrubbed on write.
+    const net = byName.get("network-requests.json");
+    const netObj = await env.ATTACHMENTS_BUCKET.get(net!.r2Key!);
+    const netEntries = JSON.parse(await netObj!.text()) as {
+      network_url: string;
+      request_body?: string | null;
+      response_body?: string | null;
+    }[];
+    const checkout = netEntries.find((e) =>
+      e.network_url.includes("checkout")
+    )!;
+    expect(checkout.request_body).toContain('"item":"book"');
+    expect(checkout.request_body).not.toContain("hunter2secret");
+    expect(checkout.request_body).toContain("[REDACTED]");
+    expect(checkout.response_body).toContain("card declined");
+    const health = netEntries.find((e) => e.network_url.includes("health"))!;
+    expect(health.request_body).toBeNull();
+
+    const dbg = byName.get("debugger.json");
+    const dbgObj = await env.ATTACHMENTS_BUCKET.get(dbg!.r2Key!);
+    const dbgData = JSON.parse(await dbgObj!.text()) as {
+      networkRequests: { requestBody?: string | null }[];
+    };
+    expect(dbgData.networkRequests[0]!.requestBody).toContain('"item":"book"');
+    expect(dbgData.networkRequests[0]!.requestBody).not.toContain(
+      "hunter2secret"
+    );
+  });
+
+  it("strips network bodies when includeNetworkBodies is not set (PILE-675)", async () => {
+    const res = await feedbackFetch({
+      kind: "bug",
+      title: "No bodies",
+      description: "bodies should be dropped",
+      networkRequests: [
+        {
+          method: "POST",
+          url: "https://api.example.com/pay",
+          status: 500,
+          requestBody: '{"card":"4111"}',
+          responseBody: '{"error":"x"}',
+        },
+      ],
+    });
+    expect(res.status).toBe(201);
+    const { ticketId } = (await res.json()) as { ticketId: string };
+
+    const db = createD1(env.D1);
+    const attachment = await db
+      .select()
+      .from(supportTicketAttachments)
+      .where(
+        and(
+          eq(supportTicketAttachments.ticketId, ticketId),
+          eq(supportTicketAttachments.fileName, "network-requests.json")
+        )
+      )
+      .get();
+    const stored = await env.ATTACHMENTS_BUCKET.get(attachment!.r2Key!);
+    const text = await stored!.text();
+    expect(text).not.toContain("4111");
+    expect(text).not.toContain("request_body");
   });
 
   it("rejects a malformed recording data URL", async () => {

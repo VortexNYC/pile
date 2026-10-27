@@ -621,7 +621,100 @@ app.get("/.well-known/mcp.json", (c) => {
   });
 });
 
-app.get("/status", (c) => c.redirect("/health", 308));
+// PILE-389 — minimal own-built public status payload: per-component health
+// (a real D1 probe, binding presence for the DO and R2) plus version and
+// deploy sha. No OpenStatus dependency. 503 when anything is degraded so
+// external monitors can alert on the status code alone.
+const statusComponentSchema = z.object({
+  status: z.enum(["operational", "degraded"]),
+  latencyMs: z.number().optional(),
+});
+
+const statusPresence = (bound: boolean): "operational" | "degraded" =>
+  bound ? "operational" : "degraded";
+
+const publicStatusSchema = z.object({
+  status: z.enum(["operational", "degraded"]),
+  version: z.string(),
+  sha: z.string().nullable(),
+  timestamp: z.string(),
+  components: z.object({
+    api: statusComponentSchema,
+    database: statusComponentSchema,
+    durableObjects: statusComponentSchema,
+    storage: statusComponentSchema,
+  }),
+});
+
+app.openapi(
+  createRoute({
+    operationId: "getPublicStatus",
+    security: [],
+    method: "get",
+    path: "/status",
+    tags: ["system"],
+    responses: {
+      200: {
+        description: "All components operational",
+        content: {
+          "application/json": {
+            schema: publicStatusSchema,
+          },
+        },
+      },
+      503: {
+        description: "One or more components degraded",
+        content: {
+          "application/json": {
+            schema: publicStatusSchema,
+          },
+        },
+      },
+    },
+  }),
+  async (c) => {
+    const database: {
+      status: "operational" | "degraded";
+      latencyMs?: number;
+    } = { status: "operational" };
+    const probeStart = Date.now();
+    try {
+      await c.env.D1.prepare("SELECT 1 AS ok").first();
+    } catch {
+      database.status = "degraded";
+    }
+    database.latencyMs = Date.now() - probeStart;
+
+    const components = {
+      api: { status: "operational" as const },
+      database,
+      durableObjects: {
+        status: statusPresence(Boolean(c.env.WORKSPACE_DURABLE_OBJECT)),
+      },
+      storage: { status: statusPresence(Boolean(c.env.ATTACHMENTS_BUCKET)) },
+    };
+    const operational = Object.values(components).every(
+      (component) => component.status === "operational"
+    );
+
+    const envVars = c.env as Record<string, unknown>;
+    const sha =
+      (envVars.CF_PAGES_COMMIT_SHA as string | undefined) ??
+      (envVars.COMMIT_SHA as string | undefined) ??
+      null;
+
+    return c.json(
+      {
+        status: operational ? ("operational" as const) : ("degraded" as const),
+        version: "0.1.1",
+        sha,
+        timestamp: new Date().toISOString(),
+        components,
+      },
+      operational ? 200 : 503
+    );
+  }
+);
 
 app.get("/docs/:name", (c) => {
   const name = c.req.param("name");

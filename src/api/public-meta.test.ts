@@ -16,10 +16,11 @@ function fetch(path: string) {
 }
 
 describe("public meta routes", () => {
-  it("/status redirects to /health", async () => {
+  it("/status returns operational component health", async () => {
     const res = await fetch("/status");
-    expect(res.status).toBe(308);
-    expect(res.headers.get("location")).toBe("/health");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { status: string };
+    expect(body.status).toBe("operational");
   });
 
   it("/.well-known/security.txt serves contact info", async () => {

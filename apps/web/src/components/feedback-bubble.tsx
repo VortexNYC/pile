@@ -7,7 +7,13 @@ import {
 } from "@cloudflare/kumo/components/dialog";
 import { Input, InputArea } from "@cloudflare/kumo/components/input";
 import { Select } from "@cloudflare/kumo/components/select";
-import { ChatCircleDots, VideoCamera } from "@phosphor-icons/react";
+import { Switch } from "@cloudflare/kumo/components/switch";
+import {
+  ChatCircleDots,
+  Microphone,
+  MicrophoneSlash,
+  VideoCamera,
+} from "@phosphor-icons/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
@@ -21,7 +27,9 @@ import {
   canRecordScreenClip,
   installFeedbackCapture,
   MAX_RECORDING_MS,
-  recordScreenClip,
+  setFeedbackCaptureOptions,
+  setRecordingAnchorMs,
+  startTabRecording,
 } from "@/lib/feedback-capture";
 import {
   buildFeedbackBody,
@@ -36,6 +44,14 @@ export const FEEDBACK_KINDS: { value: FeedbackKind; label: string }[] = [
   { value: "feature", label: "Feature request" },
   { value: "other", label: "Other" },
 ];
+
+/** `mm:ss` ceiling for the record button ("5:00"). */
+function formatClipLimit(ms: number): string {
+  const totalSec = Math.round(ms / 1000);
+  const minutes = Math.floor(totalSec / 60);
+  const seconds = totalSec % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
 
 /** Jam-style feedback bubble — floats bottom-right on every workspace
  * screen; files a bug / feature / other note straight into the
@@ -97,6 +113,12 @@ function FeedbackForm({ onDone }: { onDone: () => void }) {
   const [annotating, setAnnotating] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [recordingClip, setRecordingClip] = useState(false);
+  // Cap-style voiceover — on by default; the browser's mic prompt fires
+  // after the tab picker, and a denial still records tab audio only.
+  const [includeMic, setIncludeMic] = useState(true);
+  // PILE-675 opt-in — network bodies are heavier and can carry payloads
+  // the reporter may not expect, so they ride an explicit toggle.
+  const [includeNetworkBodies, setIncludeNetworkBodies] = useState(false);
 
   const submit = useMutation({
     mutationFn: async () =>
@@ -236,13 +258,16 @@ function FeedbackForm({ onDone }: { onDone: () => void }) {
           <Button
             type="button"
             variant="ghost"
-            onClick={() => setRecording(null)}
+            onClick={() => {
+              setRecording(null);
+              setRecordingAnchorMs(null);
+            }}
           >
             Remove
           </Button>
         </div>
       ) : canRecordScreenClip() ? (
-        <div>
+        <div className="flex flex-wrap items-center gap-3">
           <Button
             type="button"
             variant="secondary"
@@ -251,8 +276,9 @@ function FeedbackForm({ onDone }: { onDone: () => void }) {
             onClick={async () => {
               setRecordingClip(true);
               try {
-                const { blob } = await recordScreenClip();
-                setRecording(await blobToDataUrl(blob));
+                const clip = await startTabRecording({ includeMic });
+                setRecordingAnchorMs(clip.recordingStartedAtMs);
+                setRecording(await blobToDataUrl(clip.blob));
               } catch {
                 // Member cancelled the share picker or the browser
                 // refused — nothing to attach.
@@ -261,14 +287,40 @@ function FeedbackForm({ onDone }: { onDone: () => void }) {
               }
             }}
           >
-            Record {Math.round(MAX_RECORDING_MS / 1000)}s clip
+            Record up to {formatClipLimit(MAX_RECORDING_MS)}
           </Button>
+          <span className="flex items-center gap-1.5">
+            {includeMic ? (
+              <Microphone size={14} className="text-kumo-subtle" />
+            ) : (
+              <MicrophoneSlash size={14} className="text-kumo-subtle" />
+            )}
+            <Switch
+              label="Mic audio"
+              checked={includeMic}
+              disabled={recordingClip}
+              onCheckedChange={setIncludeMic}
+            />
+          </span>
         </div>
       ) : null}
-      <p className="text-kumo-subtle text-xs">
-        The current page URL, browser info, console logs, network requests, and
-        recent clicks are attached automatically.
-      </p>
+      <div className="flex flex-col gap-1">
+        <Switch
+          label="Include network request/response bodies"
+          checked={includeNetworkBodies}
+          onCheckedChange={(checked) => {
+            setIncludeNetworkBodies(checked);
+            setFeedbackCaptureOptions({ includeNetworkBodies: checked });
+          }}
+        />
+        <p className="text-kumo-subtle text-xs">
+          The current page URL, browser info, console logs, network requests,
+          and recent clicks are attached automatically.
+          {includeNetworkBodies
+            ? " Network bodies are captured for requests made after you turned this on."
+            : ""}
+        </p>
+      </div>
       <div className="flex gap-2">
         <Button
           type="submit"
