@@ -92,7 +92,8 @@ async function resolveAgentMentions(
 }
 
 const createCommentBodySchema = z.object({
-  body: z.string().min(1),
+  // VTX-770 — trim first so a whitespace-only body 400s.
+  body: z.string().trim().min(1),
 });
 
 const listCommentsRoute = createRoute({

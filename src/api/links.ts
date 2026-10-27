@@ -2,9 +2,50 @@ import { createRoute, z } from "@hono/zod-openapi";
 import type { OpenAPIHono } from "@hono/zod-openapi";
 
 import { VortexError } from "../platform/errors.js";
+import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { AppContext } from "../platform/middleware.js";
+import { canAccess, isAdminIdentity } from "../platform/permissions.js";
 import { rls } from "../platform/rls.js";
 import { getWorkspaceStub } from "./stub.js";
+
+// VTX-748 — a link is a write on the two entities it joins, not a
+// workspace-settings change. Each side maps to its own edit grant; an
+// unmapped entity type falls back to the coarse workspace write grant.
+const LINK_ENTITY_RESOURCES: Record<string, string> = {
+  issue: "issue",
+  document: "document",
+  project: "project",
+  ticket: "ticket",
+  customer: "customer",
+  contact: "contact",
+  deal: "deal",
+  session: "session",
+  comment: "comment",
+  memory: "memory",
+};
+
+const LINK_EDIT_GRANTS = [
+  ...Object.values(LINK_ENTITY_RESOURCES).map((r) => `${r}:edit`),
+  "write",
+];
+
+function assertLinkEditAccess(
+  identity: WorkspaceIdentity,
+  entityType: string
+): void {
+  const resource = LINK_ENTITY_RESOURCES[entityType];
+  const ok =
+    resource === undefined
+      ? canAccess(identity.permissions, "write")
+      : canAccess(identity.permissions, "edit", resource);
+  if (!ok) {
+    throw new VortexError({
+      code: "FORBIDDEN",
+      status: 403,
+      message: `Required permission: ${resource ?? "workspace"}:edit`,
+    });
+  }
+}
 
 const linkSchema = z.object({
   id: z.string(),
@@ -58,7 +99,9 @@ const createLinkRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/entities/{entityType}/{entityId}/links",
   tags: ["links"],
-  middleware: [rls("settings:create")],
+  // Coarse gate first (must be able to edit *something*); the handler
+  // applies the precise per-entity check on both ends of the link.
+  middleware: [rls(...LINK_EDIT_GRANTS)],
   request: {
     params: entityParam,
     body: { content: { "application/json": { schema: createLinkSchema } } },
@@ -77,7 +120,7 @@ const deleteLinkRoute = createRoute({
   method: "delete",
   path: "/workspaces/{organizationId}/links/{linkId}",
   tags: ["links"],
-  middleware: [rls("settings:delete")],
+  middleware: [rls(...LINK_EDIT_GRANTS)],
   request: {
     params: z.object({ organizationId: z.string(), linkId: z.string() }),
   },
@@ -105,6 +148,11 @@ export function registerLinkRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(createLinkRoute, async (c) => {
     const { organizationId, entityType, entityId } = c.req.valid("param");
     const body = c.req.valid("json");
+    const identity = c.get("workspaceIdentity");
+    if (!isAdminIdentity(identity)) {
+      assertLinkEditAccess(identity, entityType);
+      assertLinkEditAccess(identity, body.toType);
+    }
     const stub = getWorkspaceStub(c.env, organizationId);
     const link = await stub.linkEntities({
       fromType: entityType,
@@ -120,6 +168,14 @@ export function registerLinkRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(deleteLinkRoute, async (c) => {
     const { organizationId, linkId } = c.req.valid("param");
     const stub = getWorkspaceStub(c.env, organizationId);
+    const identity = c.get("workspaceIdentity");
+    if (!isAdminIdentity(identity)) {
+      const existing = await stub.getEntityLink(linkId);
+      if (existing) {
+        assertLinkEditAccess(identity, existing.fromType);
+        assertLinkEditAccess(identity, existing.toType);
+      }
+    }
     const ok = await stub.unlinkEntities(linkId);
     if (!ok) {
       throw new VortexError({

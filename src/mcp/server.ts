@@ -54,6 +54,14 @@ const ALIAS_TOOLS = Object.entries(MCP_TOOL_ALIASES).map(([alias, target]) => {
 
 const TOOLS = [...GENERATED_TOOLS, ...ALIAS_TOOLS];
 
+// VTX-750 — a list call over MCP used to return every document with its
+// full body (~700KB for one workspace). List endpoints that offer a light
+// projection get it by default on this surface; callers opt back into full
+// content with summary=0. Keyed by method+path so aliases inherit.
+const DEFAULT_QUERY_PARAMS = new Map<string, Record<string, string>>([
+  ["get /workspaces/{organizationId}/documents", { summary: "1" }],
+]);
+
 function fillPath(path: string, input: Record<string, unknown>): string {
   return path.replace(/\{([^}]+)\}/gu, (_match, name: string) => {
     const value = input[name];
@@ -92,6 +100,14 @@ export async function handleMcpRequest(
         for (const [key, value] of Object.entries(input)) {
           if (key === "body" || pathParamNames.has(key)) continue;
           if (value !== undefined) query.set(key, String(value));
+        }
+        const defaults = DEFAULT_QUERY_PARAMS.get(
+          `${tool.method.toLowerCase()} ${tool.path}`
+        );
+        if (defaults) {
+          for (const [key, value] of Object.entries(defaults)) {
+            if (!query.has(key)) query.set(key, value);
+          }
         }
 
         const url = new URL(request.url);

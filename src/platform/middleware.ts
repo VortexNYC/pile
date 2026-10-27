@@ -20,6 +20,7 @@ import {
   toApiKeyWorkspaceIdentity,
   type WorkspaceIdentity,
 } from "./identity.js";
+import { parsePermissionSet } from "./permissions.js";
 import { getSessionUserId } from "./session.js";
 
 export interface WorkerEnv extends AppEnv {
@@ -130,12 +131,15 @@ export const workspaceAuthMiddleware = createMiddleware<{
           )
         : rolePermissionsFor("member")
     );
-    // Keys may carry bare legacy verbs (read/write/admin) or
-    // resource:action grants — a bare verb counts when the role's
-    // flattened statements include its workspace:-prefixed form.
+    // Keys may carry bare legacy verbs (read/write/admin), resource:action
+    // grants, or a BA role name ("member") — expand the shorthand first so
+    // the clamp sees the real statements, then intersect with the owner's
+    // actual role (a bare verb counts when the role's flattened statements
+    // include its workspace:-prefixed form).
+    const expanded = parsePermissionSet(identity.permissions);
     identity = {
       ...identity,
-      permissions: identity.permissions.filter(
+      permissions: [...expanded].filter(
         (p) => rolePerms.has(p) || rolePerms.has(`workspace:${p}`)
       ),
     };

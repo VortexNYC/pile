@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 
 import { createD1 } from "../global/db.js";
 import { teamMember } from "../global/schema.js";
+import { getInitiative, getProject } from "../global/workspace-entities.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkspaceIdentity } from "../platform/identity.js";
 import type { AppContext, WorkerEnv } from "../platform/middleware.js";
@@ -103,8 +104,19 @@ function toResponse(row: {
     content:
       row.contentFormat === "markdown"
         ? row.content
-        : (JSON.parse(row.content) as Record<string, unknown>[]),
+        : parseStoredContent(row.content),
   };
+}
+
+// VTX-767 — one corrupted row (a stored body that does not parse under its
+// contentFormat) used to 500 every list/get that touched it. Surface the raw
+// body as a string instead so the document stays visible and repairable.
+function parseStoredContent(content: string) {
+  try {
+    return JSON.parse(content) as Record<string, unknown>[];
+  } catch {
+    return content;
+  }
 }
 
 function notFound(): never {
@@ -180,6 +192,125 @@ async function assertDocAccess(
       status: 403,
       message: "View-only access to this document",
     });
+  }
+}
+
+async function identityTeamIds(
+  c: {
+    env: WorkerEnv;
+    get: (key: "workspaceIdentity") => WorkspaceIdentity;
+  },
+  identity: WorkspaceIdentity
+): Promise<string[]> {
+  if (identity.type !== "user") return [];
+  return (
+    await createD1(c.env.D1)
+      .select({ teamId: teamMember.teamId })
+      .from(teamMember)
+      .where(eq(teamMember.userId, identity.id))
+      .all()
+  ).map((row) => row.teamId);
+}
+
+// VTX-768 — the write path must face the same space ACL reads do: a
+// restricted space admits only actors holding an edit-level space grant
+// (or a workspace admin). Reads of the space deny by default; writes now
+// match. Unknown space ids are a 400, not a dangling reference (VTX-769).
+async function assertSpaceWriteAccess(
+  c: {
+    env: WorkerEnv;
+    get: (key: "workspaceIdentity") => WorkspaceIdentity;
+  },
+  stub: {
+    getDocumentSpace(
+      id: string
+    ): Promise<{ id: string; restricted: boolean } | undefined>;
+    listSpacePermissions(
+      spaceId: string
+    ): Promise<Array<{ actorId: string; actorType: string; level: string }>>;
+  },
+  spaceId: string
+) {
+  const space = await stub.getDocumentSpace(spaceId);
+  if (!space) {
+    throw new VortexError({
+      code: "BAD_REQUEST",
+      status: 400,
+      message: `Unknown spaceId: ${spaceId}`,
+      details: { field: "spaceId" },
+    });
+  }
+  if (!space.restricted) return;
+  const identity = c.get("workspaceIdentity");
+  if (isAdminIdentity(identity)) return;
+  const teamIds = await identityTeamIds(c, identity);
+  const granted = (await stub.listSpacePermissions(spaceId)).some(
+    (grant) =>
+      grant.level === "edit" &&
+      (grant.actorId === identity.id ||
+        (grant.actorType === "team" && teamIds.includes(grant.actorId)))
+  );
+  if (!granted) {
+    throw new VortexError({
+      code: "FORBIDDEN",
+      status: 403,
+      message: "This document space is restricted",
+      details: { field: "spaceId" },
+    });
+  }
+}
+
+// VTX-769 — every document-side foreign key resolves or the write 400s
+// with the offending field, matching the existing issueId handling.
+function missingRef(field: string, value: string): never {
+  throw new VortexError({
+    code: "BAD_REQUEST",
+    status: 400,
+    message: `Unknown ${field}: ${value}`,
+    details: { field },
+  });
+}
+
+async function assertDocumentRefs(
+  c: {
+    env: WorkerEnv;
+    get: (key: "workspaceIdentity") => WorkspaceIdentity;
+  },
+  stub: {
+    getDocumentSpace(
+      id: string
+    ): Promise<{ id: string; restricted: boolean } | undefined>;
+    listSpacePermissions(
+      spaceId: string
+    ): Promise<Array<{ actorId: string; actorType: string; level: string }>>;
+    getDocument(id: string): Promise<{ id: string } | undefined>;
+  },
+  organizationId: string,
+  refs: {
+    projectId?: string | null;
+    initiativeId?: string | null;
+    parentDocumentId?: string | null;
+    spaceId?: string | null;
+  }
+) {
+  const db = createD1(c.env.D1);
+  if (typeof refs.projectId === "string") {
+    if (!(await getProject(db, organizationId, refs.projectId))) {
+      missingRef("projectId", refs.projectId);
+    }
+  }
+  if (typeof refs.initiativeId === "string") {
+    if (!(await getInitiative(db, organizationId, refs.initiativeId))) {
+      missingRef("initiativeId", refs.initiativeId);
+    }
+  }
+  if (typeof refs.parentDocumentId === "string") {
+    if (!(await stub.getDocument(refs.parentDocumentId))) {
+      missingRef("parentDocumentId", refs.parentDocumentId);
+    }
+  }
+  if (typeof refs.spaceId === "string") {
+    await assertSpaceWriteAccess(c, stub, refs.spaceId);
   }
 }
 
@@ -561,7 +692,10 @@ const createDocumentCommentRoute = createRoute({
     params: z.object({ organizationId: z.string(), id: z.string() }),
     body: {
       content: {
-        "application/json": { schema: z.object({ body: z.string().min(1) }) },
+        "application/json": {
+          // VTX-770 — trim first so a whitespace-only body 400s.
+          schema: z.object({ body: z.string().trim().min(1) }),
+        },
       },
     },
   },
@@ -673,6 +807,7 @@ const deleteShareRoute = createRoute({
 
 // Public share read — the token is the capability; no workspace auth.
 const readSharedRoute = createRoute({
+  security: [],
   method: "get",
   path: "/shared-documents/{organizationId}/{token}",
   tags: ["documents"],
@@ -962,6 +1097,7 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
       await assertIssueAccess(createD1(c.env.D1), stub, issue, identity);
       issueId = issue.id;
     }
+    await assertDocumentRefs(c, stub, organizationId, input);
     const doc = await stub.createDocument({
       ...input,
       issueId,
@@ -1015,6 +1151,7 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
       await assertIssueAccess(createD1(c.env.D1), stub, issue, identity);
       issueIdPatch = { ...input, issueId: issue.id };
     }
+    await assertDocumentRefs(c, stub, organizationId, input);
     const doc = await stub.updateDocument(id, issueIdPatch, identity.id);
     if (!doc) return notFound();
     return c.json(toResponse(doc));

@@ -129,8 +129,10 @@
             "nullable": true
           },
           "labelIds": {
-            "type": "string",
-            "nullable": true
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "number": {
             "type": "number",
@@ -3934,6 +3936,7 @@
     },
     "/shared-issues/{organizationId}/{token}": {
       "get": {
+        "security": [],
         "tags": [
           "issues"
         ],
@@ -17938,10 +17941,28 @@
                     "type": "string"
                   },
                   "startDate": {
-                    "type": "string"
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    ]
                   },
                   "endDate": {
-                    "type": "string"
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    ]
                   }
                 },
                 "required": [
@@ -18183,10 +18204,28 @@
                     "type": "string"
                   },
                   "startDate": {
-                    "type": "string"
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    ]
                   },
                   "endDate": {
-                    "type": "string"
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    ]
                   }
                 }
               }
@@ -18649,10 +18688,28 @@
                     "type": "string"
                   },
                   "startDate": {
-                    "type": "string"
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    ]
                   },
                   "endDate": {
-                    "type": "string"
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    ]
                   }
                 },
                 "required": [
@@ -18891,10 +18948,28 @@
                     "type": "string"
                   },
                   "startDate": {
-                    "type": "string"
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    ]
                   },
                   "endDate": {
-                    "type": "string"
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    ]
                   }
                 }
               }
@@ -20537,10 +20612,28 @@
                     "type": "string"
                   },
                   "startDate": {
-                    "type": "string"
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    ]
                   },
                   "targetDate": {
-                    "type": "string"
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    ]
                   }
                 },
                 "required": [
@@ -20837,10 +20930,28 @@
                     "type": "string"
                   },
                   "startDate": {
-                    "type": "string"
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    ]
                   },
                   "targetDate": {
-                    "type": "string"
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date"
+                      },
+                      {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    ]
                   }
                 }
               }
@@ -38442,6 +38553,7 @@
     },
     "/shared-documents/{organizationId}/{token}": {
       "get": {
+        "security": [],
         "tags": [
           "documents"
         ],

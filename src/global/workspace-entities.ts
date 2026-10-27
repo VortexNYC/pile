@@ -71,6 +71,7 @@ export async function createProject(
     description?: string | null;
     status?: string | null;
     health?: "on_track" | "at_risk" | "off_track" | "paused" | null;
+    leadId?: string | null;
     archivedAt?: string | null;
     startDate?: string | null;
     endDate?: string | null;
@@ -85,6 +86,7 @@ export async function createProject(
     description: values.description ?? null,
     status: values.status ?? "active",
     health: values.health ?? "on_track",
+    leadId: values.leadId ?? null,
     archivedAt: values.archivedAt ?? null,
     startDate: values.startDate ?? null,
     endDate: values.endDate ?? null,

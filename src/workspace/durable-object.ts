@@ -2110,12 +2110,66 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.getIssueRelation(this.db, this.organizationId, id);
   }
 
-  createIssueRelation(values: {
+  async createIssueRelation(values: {
     fromIssueId: string;
     toIssueId: string;
     type: string;
   }) {
-    return data.createIssueRelation(this.db, this.organizationId, values);
+    // VTX-770 — reject the shapes the unique index or the graph cannot hold,
+    // and map the race to 409 instead of letting SQLite surface a 500.
+    if (values.fromIssueId === values.toIssueId) {
+      throw VortexError.fromCode(
+        "BAD_REQUEST",
+        "An issue cannot be related to itself"
+      );
+    }
+    const duplicate = data
+      .listIssueRelations(this.db, this.organizationId, values.fromIssueId)
+      .find((r) => r.toIssueId === values.toIssueId && r.type === values.type);
+    if (duplicate) {
+      throw new VortexError({
+        code: "CONFLICT",
+        status: 409,
+        message: "Relation already exists",
+        details: { relationId: duplicate.id },
+      });
+    }
+    if (values.type === "blocks") {
+      const reciprocal = data
+        .listIssueRelations(this.db, this.organizationId, values.toIssueId)
+        .find((r) => r.toIssueId === values.fromIssueId && r.type === "blocks");
+      if (reciprocal) {
+        throw VortexError.fromCode(
+          "BAD_REQUEST",
+          "Reciprocal blocks relations form a cycle"
+        );
+      }
+    }
+    try {
+      return await data.createIssueRelation(
+        this.db,
+        this.organizationId,
+        values
+      );
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        /unique constraint failed/i.test(error.message)
+      ) {
+        throw new VortexError({
+          code: "CONFLICT",
+          status: 409,
+          message: "Relation already exists",
+        });
+      }
+      if (
+        error instanceof Error &&
+        error.message.startsWith("Invalid relation type")
+      ) {
+        throw VortexError.fromCode("BAD_REQUEST", error.message);
+      }
+      throw error;
+    }
   }
 
   deleteIssueRelation(id: string) {
@@ -2397,6 +2451,10 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     });
   }
 
+  getEntityLink(id: string) {
+    return data.getEntityLink(this.db, this.organizationId, id);
+  }
+
   unlinkEntities(id: string) {
     return data.unlinkEntities(this.db, this.organizationId, id);
   }
@@ -2534,10 +2592,15 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     // Insert and extracted links commit atomically so a link-sync failure
     // cannot leave an orphaned document that a retry would duplicate.
     const doc = this.ctx.storage.transactionSync(() => {
-      const created = data.createDocument(this.db, {
-        ...input,
-        organizationId: this.organizationId,
-      });
+      let created: ReturnType<typeof data.createDocument>;
+      try {
+        created = data.createDocument(this.db, {
+          ...input,
+          organizationId: this.organizationId,
+        });
+      } catch (error) {
+        throw this.documentWriteError(error);
+      }
       this.syncDocumentLinks(
         created.id,
         created.content,
@@ -2565,19 +2628,41 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.getDocument(this.db, this.organizationId, id);
   }
 
+  private documentWriteError(error: unknown): VortexError {
+    if (error instanceof data.DocumentValidationError) {
+      return new VortexError({
+        code: error.conflict ? "CONFLICT" : "BAD_REQUEST",
+        status: error.conflict ? 409 : 400,
+        message: error.message,
+      });
+    }
+    return error instanceof VortexError
+      ? error
+      : new VortexError({
+          code: "INTERNAL_ERROR",
+          status: 500,
+          message: "Internal error",
+        });
+  }
+
   async updateDocument(
     id: string,
     update: data.DocumentUpdate,
     actorId: string
   ) {
     const doc = this.ctx.storage.transactionSync(() => {
-      const updated = data.updateDocument(
-        this.db,
-        this.organizationId,
-        id,
-        update,
-        actorId
-      );
+      let updated: ReturnType<typeof data.updateDocument>;
+      try {
+        updated = data.updateDocument(
+          this.db,
+          this.organizationId,
+          id,
+          update,
+          actorId
+        );
+      } catch (error) {
+        throw this.documentWriteError(error);
+      }
       if (updated && update.content !== undefined) {
         this.syncDocumentLinks(id, updated.content, updated.contentFormat);
       }

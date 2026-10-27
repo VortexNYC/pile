@@ -162,3 +162,109 @@ describe("entity links API (PILE-429)", () => {
     expect(docFieldNames.status).toBe(400);
   });
 });
+
+describe("entity link permissions (VTX-748)", () => {
+  it("a member key creates and deletes entity links without settings grants", async () => {
+    const db = createD1(env.D1);
+    const now = new Date();
+    await db
+      .insert(userTable)
+      .values({
+        id: "user-links-member",
+        name: "Member",
+        email: "links-member@example.com",
+        emailVerified: false,
+        image: null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({ target: [userTable.email] });
+    const { organizationId } = await seedWorkspace();
+    const { createMembership } =
+      await import("../global/workspace-entities.js");
+    await createMembership(
+      db,
+      env,
+      organizationId,
+      "user-links-member",
+      "member"
+    );
+
+    // Two issues to link, created as admin.
+    const auth = await createAuth(env);
+    const admin = z.object({ key: z.string() }).parse(
+      await auth.api.createApiKey({
+        body: {
+          userId: "user-links",
+          name: "admin",
+          rateLimitEnabled: false,
+          metadata: { organizationId, permissions: "admin" },
+          permissions: { workspace: ["admin"] },
+        },
+      })
+    ).key;
+    const mk = async () => {
+      const res = await fetch(
+        `/workspaces/${organizationId}/issues`,
+        { method: "POST", body: JSON.stringify({ title: "l" }) },
+        admin
+      );
+      return z.object({ id: z.string() }).parse(await res.json()).id;
+    };
+    const [a, b] = await Promise.all([mk(), mk()]);
+
+    const memberKey = z.object({ key: z.string() }).parse(
+      await auth.api.createApiKey({
+        body: {
+          userId: "user-links-member",
+          name: "member",
+          rateLimitEnabled: false,
+          metadata: { organizationId, permissions: "member" },
+          permissions: { workspace: ["member"] },
+        },
+      })
+    ).key;
+
+    const linked = await fetch(
+      `/workspaces/${organizationId}/entities/issue/${a}/links`,
+      {
+        method: "POST",
+        body: JSON.stringify({ toType: "issue", toId: b }),
+      },
+      memberKey
+    );
+    expect(linked.status).toBe(201);
+    const link = z
+      .object({ link: z.object({ id: z.string() }) })
+      .parse(await linked.json());
+
+    const del = await fetch(
+      `/workspaces/${organizationId}/links/${link.link.id}`,
+      { method: "DELETE" },
+      memberKey
+    );
+    expect(del.status).toBe(200);
+
+    // A read-only key still cannot create links.
+    const readKey = z.object({ key: z.string() }).parse(
+      await auth.api.createApiKey({
+        body: {
+          userId: "user-links-member",
+          name: "reader",
+          rateLimitEnabled: false,
+          metadata: { organizationId, permissions: "read" },
+          permissions: { workspace: ["read"] },
+        },
+      })
+    ).key;
+    const denied = await fetch(
+      `/workspaces/${organizationId}/entities/issue/${a}/links`,
+      {
+        method: "POST",
+        body: JSON.stringify({ toType: "issue", toId: b }),
+      },
+      readKey
+    );
+    expect(denied.status).toBe(403);
+  });
+});

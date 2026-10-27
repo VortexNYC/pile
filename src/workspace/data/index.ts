@@ -5036,6 +5036,105 @@ export async function deleteAgentEnvironmentFile(
 
 // ---- documents ----
 
+/** Raised when a document write fails validation (content/format mismatch,
+ *  slug collisions). The DO layer maps it to a 400/409 at the RPC boundary —
+ *  never leave a row the readers cannot serialize (VTX-767, VTX-770). */
+export class DocumentValidationError extends Error {
+  readonly conflict: boolean;
+  constructor(message: string, opts?: { conflict?: boolean }) {
+    super(message);
+    this.conflict = opts?.conflict === true;
+  }
+}
+
+type DocumentContentFormat = "blocks" | "markdown" | "canvas";
+
+function parseDocumentJson(raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+}
+
+/** `content` must match `contentFormat`: markdown is a plain string, blocks
+ *  is a block array (or JSON encoding one — history restores hand back the
+ *  stored string), canvas is any JSON value (scene objects like "{}").
+ *  Anything else would persist a row that list/get cannot serialize. */
+export function assertDocumentContent(
+  content: unknown,
+  format: DocumentContentFormat
+): void {
+  if (content === undefined) return;
+  if (format === "markdown") {
+    if (typeof content !== "string") {
+      throw new DocumentValidationError(
+        "markdown content must be a string, got structured content"
+      );
+    }
+    return;
+  }
+  const parsed =
+    typeof content === "string" ? parseDocumentJson(content) : content;
+  if (format === "blocks") {
+    if (!Array.isArray(parsed)) {
+      throw new DocumentValidationError(
+        "blocks content must be an array of blocks"
+      );
+    }
+    return;
+  }
+  // canvas — any JSON value (scene JSON). A non-JSON string would crash
+  // serialization on read.
+  if (parsed === undefined) {
+    throw new DocumentValidationError("canvas content must be valid JSON");
+  }
+}
+
+/** URL-safe slug: lowercase, alnum/letters + dashes only. Dropping
+ *  punctuation keeps `/docs/{org}/{space}/{slug}` routing unambiguous
+ *  (VTX-770). Returns null when nothing survives normalization. */
+export function normalizeDocumentSlug(raw: string): string | null {
+  const slug = raw
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug.length > 0 ? slug : null;
+}
+
+function assertSlugFree(
+  db: WorkspaceDb,
+  organizationId: string,
+  slug: string | null,
+  spaceId: string | null | undefined,
+  excludeId?: string
+): void {
+  if (slug === null) return;
+  const conditions = [
+    eq(workspaceDocuments.organizationId, organizationId),
+    eq(workspaceDocuments.slug, slug),
+    isNull(workspaceDocuments.trashedAt),
+    spaceId == null
+      ? isNull(workspaceDocuments.spaceId)
+      : eq(workspaceDocuments.spaceId, spaceId),
+  ];
+  if (excludeId !== undefined) {
+    conditions.push(ne(workspaceDocuments.id, excludeId));
+  }
+  const clash = db
+    .select({ id: workspaceDocuments.id })
+    .from(workspaceDocuments)
+    .where(and(...conditions))
+    .get();
+  if (clash) {
+    throw new DocumentValidationError(
+      `Slug "${slug}" is already used in this space`,
+      { conflict: true }
+    );
+  }
+}
+
 export interface DocumentInput {
   organizationId: string;
   title: string;
@@ -5055,13 +5154,19 @@ export interface DocumentInput {
 export function createDocument(db: WorkspaceDb, input: DocumentInput) {
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
+  const contentFormat =
+    input.contentFormat ??
+    (typeof input.content === "string" ? "markdown" : "blocks");
+  assertDocumentContent(input.content, contentFormat);
   const content =
     typeof input.content === "string"
       ? input.content
       : JSON.stringify(input.content ?? []);
-  const contentFormat =
-    input.contentFormat ??
-    (typeof input.content === "string" ? "markdown" : "blocks");
+  const slug =
+    input.slug === undefined || input.slug === null
+      ? null
+      : normalizeDocumentSlug(input.slug);
+  assertSlugFree(db, input.organizationId, slug, input.spaceId);
   const doc = db
     .insert(workspaceDocuments)
     .values({
@@ -5071,7 +5176,7 @@ export function createDocument(db: WorkspaceDb, input: DocumentInput) {
       icon: input.icon ?? null,
       contentFormat,
       content,
-      slug: input.slug ?? null,
+      slug,
       projectId: input.projectId ?? null,
       issueId: input.issueId ?? null,
       initiativeId: input.initiativeId ?? null,
@@ -5295,6 +5400,16 @@ export function updateDocument(
   update: DocumentUpdate,
   actorId: string
 ) {
+  // A format-only flip or a slug/space move has to see the stored row —
+  // validating after the write is how unreadable rows got persisted (VTX-767).
+  const needsExisting =
+    (update.contentFormat !== undefined && update.content === undefined) ||
+    update.slug !== undefined ||
+    update.spaceId !== undefined;
+  const existing = needsExisting
+    ? getDocument(db, organizationId, id)
+    : undefined;
+
   const patch: Record<string, unknown> = {
     updatedAt: new Date().toISOString(),
     updatedById: actorId,
@@ -5309,9 +5424,28 @@ export function updateDocument(
     patch.parentDocumentId = update.parentDocumentId;
   if (update.spaceId !== undefined) patch.spaceId = update.spaceId;
   if (update.isTemplate !== undefined) patch.isTemplate = update.isTemplate;
-  if (update.slug !== undefined) patch.slug = update.slug;
-  if (update.contentFormat !== undefined)
+  if (update.slug !== undefined || update.spaceId !== undefined) {
+    const slug =
+      update.slug === undefined
+        ? (existing?.slug ?? null)
+        : update.slug === null
+          ? null
+          : normalizeDocumentSlug(update.slug);
+    const spaceId =
+      update.spaceId === undefined
+        ? (existing?.spaceId ?? null)
+        : update.spaceId;
+    assertSlugFree(db, organizationId, slug, spaceId, id);
+    if (update.slug !== undefined) patch.slug = slug;
+  }
+  if (update.contentFormat !== undefined) {
+    // Format flip without a rewrite — the stored body must already parse
+    // under the new format, else reads of this doc start 500ing (VTX-767).
+    if (update.content === undefined && existing) {
+      assertDocumentContent(existing.content, update.contentFormat);
+    }
     patch.contentFormat = update.contentFormat;
+  }
   if (update.trashedAt !== undefined) patch.trashedAt = update.trashedAt;
   if (update.content !== undefined) {
     const content =
@@ -5321,6 +5455,7 @@ export function updateDocument(
     const resolvedFormat: "blocks" | "markdown" | "canvas" =
       update.contentFormat ??
       (typeof update.content === "string" ? "markdown" : "blocks");
+    assertDocumentContent(content, resolvedFormat);
     patch.contentFormat = resolvedFormat;
     patch.content = content;
     db.insert(workspaceDocumentHistory)
@@ -6904,6 +7039,23 @@ export function linkEntities(db: WorkspaceDb, input: EntityLinkInput) {
     })
     .onConflictDoNothing()
     .returning()
+    .get();
+}
+
+export function getEntityLink(
+  db: WorkspaceDb,
+  organizationId: string,
+  id: string
+) {
+  return db
+    .select()
+    .from(workspaceEntityLinks)
+    .where(
+      and(
+        eq(workspaceEntityLinks.id, id),
+        eq(workspaceEntityLinks.organizationId, organizationId)
+      )
+    )
     .get();
 }
 

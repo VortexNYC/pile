@@ -378,9 +378,7 @@ function IssueDetail() {
     ...(rels?.inverseRelations ?? []),
   ];
   const watchers = subscribers.data ?? [];
-  const issueLabels = (data.labelIds ?? "")
-    .split(",")
-    .filter((id) => id.length > 0)
+  const issueLabels = (data.labelIds ?? [])
     .map((id) => labels.data?.find((l) => l.id === id))
     .filter((l): l is NonNullable<typeof l> => !!l);
   const project = data.projectId
