@@ -44,6 +44,10 @@ binding = "D1"
 database_name = "pile-global"
 migrations_dir = "migrations"
 
+# Workers AI — capture-recording transcription (Whisper) + memory embeddings.
+[ai]
+binding = "AI"
+
 [[send_email]]
 name = "EMAIL"
 
@@ -228,6 +232,10 @@ database_name = "pile-global"
 database_id = "222e823e-3594-457d-add1-1827064d4bc8"
 migrations_dir = "migrations"
 
+# Workers AI — capture-recording transcription (Whisper) + memory embeddings.
+[env.production.ai]
+binding = "AI"
+
 [[env.production.r2_buckets]]
 binding = "ATTACHMENTS_BUCKET"
 bucket_name = "pile-attachments"
@@ -390,6 +398,10 @@ binding = "D1"
 database_name = "pile-global-staging"
 database_id = "b40f2922-2c63-4b3e-9c56-b37512ea1ffe"
 migrations_dir = "migrations"
+
+# Workers AI — capture-recording transcription (Whisper) + memory embeddings.
+[env.staging.ai]
+binding = "AI"
 
 [[env.staging.r2_buckets]]
 binding = "ATTACHMENTS_BUCKET"

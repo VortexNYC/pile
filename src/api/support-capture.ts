@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import type { Context } from "hono";
 
 import captureSdkBundle from "../assets/capture.iife.js";
+import { transcribeCaptureRecording } from "../global/capture-transcript.js";
 import { createD1, type D1Client } from "../global/db.js";
 import { storeJamCaptureArtifacts } from "../global/jam-capture.js";
 import {
@@ -49,6 +50,7 @@ import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import { publicRateLimit } from "../platform/rate-limit.js";
 import { rls } from "../platform/rls.js";
 import { renderCaptureLinkPage } from "./capture-link-page.js";
+import { getExecutionCtx } from "./execution-ctx.js";
 import { getWorkspaceStub } from "./stub.js";
 
 const capturePublicKeySchema = z.object({
@@ -84,7 +86,10 @@ const captureArtifactKindSchema = z.enum([
   "log",
   "network",
   "replay",
+  "transcript",
 ]);
+
+type CaptureArtifactKind = z.infer<typeof captureArtifactKindSchema>;
 
 const uploadSessionBodySchema = z.object({
   title: z.string().min(1),
@@ -498,14 +503,7 @@ const uploadRoute = createRoute({
   request: {
     params: z.object({
       sessionId: z.string(),
-      attachmentType: z.enum([
-        "screenshot",
-        "video",
-        "debugger_json",
-        "log",
-        "network",
-        "replay",
-      ]),
+      attachmentType: captureArtifactKindSchema,
       fileName: z.string(),
     }),
     headers: z.object({
@@ -1226,6 +1224,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+/** Transcription is post-landing enrichment — it must never block or fail
+ *  the request that created the ticket. Deferred with `waitUntil` when an
+ *  ExecutionContext exists; awaited inline otherwise (direct app.fetch in
+ *  tests). `transcribeCaptureRecording` itself never rejects. */
+async function kickCaptureTranscription(
+  c: Context<AppContext>,
+  work: Promise<unknown>
+): Promise<void> {
+  const execCtx = getExecutionCtx(c);
+  if (execCtx) {
+    execCtx.waitUntil(work);
+    return;
+  }
+  await work;
+}
+
 async function findAttachmentFileName(
   db: D1Client,
   organizationId: string,
@@ -1584,7 +1598,7 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
       }));
 
       const artifacts: {
-        type: "screenshot" | "video" | "debugger_json" | "log" | "network";
+        type: CaptureArtifactKind;
         fileName: string;
         contentType: string;
         body: Uint8Array;
@@ -1743,6 +1757,22 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
             fileName: artifact.fileName,
             createdAt: submittedAt,
           });
+        })
+      );
+    }
+
+    // PILE-664 — feedback recordings get the same transcript treatment as
+    // capture sessions. Member-authored titles stay as filed.
+    if (bucket && recording) {
+      await kickCaptureTranscription(
+        c,
+        transcribeCaptureRecording(db, c.env, {
+          organizationId,
+          ticketId: ticket.id,
+          eventId: event.id,
+          recordingR2Key: `${organizationId}/capture/feedback-${ticket.id}/video/${recording.fileName}`,
+          artifactPrefix: `${organizationId}/capture/feedback-${ticket.id}`,
+          origin,
         })
       );
     }
@@ -1980,13 +2010,7 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
         ({ uploadUrl, r2Key, attachmentType, fileName }) => ({
           uploadUrl,
           r2Key,
-          attachmentType: attachmentType as
-            | "screenshot"
-            | "video"
-            | "debugger_json"
-            | "log"
-            | "network"
-            | "replay",
+          attachmentType: attachmentType as CaptureArtifactKind,
           fileName,
         })
       ),
@@ -2209,13 +2233,7 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
           organizationId: session.organizationId,
           ticketId: ticket.id,
           eventId: event.id,
-          type: upload.attachmentType as
-            | "screenshot"
-            | "video"
-            | "debugger_json"
-            | "log"
-            | "network"
-            | "replay",
+          type: upload.attachmentType as CaptureArtifactKind,
           contentType,
           r2Key,
           size,
@@ -2232,6 +2250,30 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
       ticketId: ticket.id,
       status: "finalized",
     });
+
+    // PILE-664 — every recording gets a Whisper transcript so agents and
+    // triage can read what the reporter said. Deferred past the response;
+    // a missing AI binding or a model failure leaves the ticket untouched.
+    const transcriptions = uploads
+      .filter(
+        (upload) =>
+          upload.attachmentType === "video" && typeof upload.r2Key === "string"
+      )
+      .map((upload) =>
+        transcribeCaptureRecording(db, c.env, {
+          organizationId: session.organizationId,
+          ticketId: ticket.id,
+          eventId: event.id,
+          recordingR2Key: upload.r2Key,
+          artifactPrefix: `${session.organizationId}/capture/${session.id}`,
+          origin,
+          regenerateTitle:
+            typeof meta.title !== "string" || meta.title === "Bug report",
+        })
+      );
+    if (transcriptions.length > 0) {
+      await kickCaptureTranscription(c, Promise.all(transcriptions));
+    }
 
     const shareUrl =
       meta.visibility === "public"
@@ -3314,6 +3356,25 @@ export async function processJamCreatedWebhookPayload(
     parsed.jamId,
     remoteAttachments,
     inlineArtifacts
+  );
+
+  // PILE-664 — video jams get the same transcript pass once the media is
+  // mirrored into R2. The processor runs inside the queue handler so this
+  // await is bounded by the queue's execution budget; the call never throws.
+  await Promise.all(
+    remoteAttachments
+      .filter((attachment) => attachment.type === "video")
+      .map(() =>
+        transcribeCaptureRecording(db, env, {
+          organizationId,
+          ticketId: ticket.id,
+          eventId: event.id,
+          recordingR2Key: `${organizationId}/jam/${parsed.jamId}/video`,
+          artifactPrefix: `${organizationId}/jam/${parsed.jamId}`,
+          origin,
+          regenerateTitle: !parsed.title,
+        })
+      )
   );
 
   return { ticketId: ticket.id };

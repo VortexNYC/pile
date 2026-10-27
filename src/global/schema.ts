@@ -2353,6 +2353,7 @@ export const supportTicketAttachments = sqliteTable(
         "log",
         "network",
         "replay",
+        "transcript",
       ] as const,
     })
       .notNull()
