@@ -15,6 +15,11 @@ import { isAdminIdentity } from "../platform/permissions.js";
 import { captureProductEvent } from "../platform/posthog.js";
 import { rls } from "../platform/rls.js";
 import {
+  type BuildingAttributes,
+  lookupNycBuildingSocrata,
+  scoreBuildingLead,
+} from "../workspace/building-scorecard.js";
+import {
   type AudienceCandidateMerchant,
   type AudienceFilterGroup,
   buildRepMorningBrief,
@@ -1343,6 +1348,175 @@ const FOLLOW_UP_TERMINAL_KEYS = new Set([
   "disqualified",
 ]);
 
+// ---- PILE-662/672: building scorecard + canvassing territories ----
+
+const buildingAttributesSchema = z.object({
+  bbl: z.string().nullable().optional(),
+  bin: z.string().nullable().optional(),
+  address: z.string().nullable().optional(),
+  borough: z.string().nullable().optional(),
+  zipcode: z.string().nullable().optional(),
+  unitsRes: z.number().nullable().optional(),
+  unitsTotal: z.number().nullable().optional(),
+  buildingSqft: z.number().nullable().optional(),
+  assessedTotalDollars: z.number().nullable().optional(),
+  yearBuilt: z.number().nullable().optional(),
+  lastSalePriceDollars: z.number().nullable().optional(),
+  lastSaleDate: z.string().nullable().optional(),
+  hpdRegistrationId: z.string().nullable().optional(),
+  hpdManagingAgent: z.string().nullable().optional(),
+  hpdOwnerName: z.string().nullable().optional(),
+  openViolationsCount: z.number().nullable().optional(),
+});
+
+const BUILDING_ATTR_STRING_KEYS = [
+  "bbl",
+  "bin",
+  "address",
+  "borough",
+  "zipcode",
+  "lastSaleDate",
+  "hpdRegistrationId",
+  "hpdManagingAgent",
+  "hpdOwnerName",
+] as const;
+
+const BUILDING_ATTR_NUMBER_KEYS = [
+  "unitsRes",
+  "unitsTotal",
+  "buildingSqft",
+  "assessedTotalDollars",
+  "yearBuilt",
+  "lastSalePriceDollars",
+  "openViolationsCount",
+] as const;
+
+/** Read previously-persisted building attributes back out of a customer's
+ *  name-keyed custom field map (strings — numbers are reparsed). */
+function buildingAttrsFromCustomFields(
+  fields: Record<string, string>
+): BuildingAttributes {
+  const attrs: BuildingAttributes = {};
+  for (const key of BUILDING_ATTR_STRING_KEYS) {
+    const value = fields[key];
+    if (value !== undefined && value !== "") {
+      (attrs as Record<string, unknown>)[key] = value;
+    }
+  }
+  for (const key of BUILDING_ATTR_NUMBER_KEYS) {
+    const value = fields[key];
+    if (value !== undefined && value !== "") {
+      const n = Number(value);
+      if (Number.isFinite(n)) {
+        (attrs as Record<string, unknown>)[key] = n;
+      }
+    }
+  }
+  return attrs;
+}
+
+/** Overlay `override` onto `base` — explicit values win, `undefined`
+ *  leaves the base value alone (an explicit `null` is a real value: it
+ *  clears). */
+function mergeBuildingAttrs(
+  base: BuildingAttributes,
+  override: BuildingAttributes | undefined
+): BuildingAttributes {
+  const merged: BuildingAttributes = { ...base };
+  if (!override) return merged;
+  const target = merged as Record<string, unknown>;
+  for (const key of BUILDING_ATTR_STRING_KEYS) {
+    if (override[key] !== undefined) target[key] = override[key];
+  }
+  for (const key of BUILDING_ATTR_NUMBER_KEYS) {
+    if (override[key] !== undefined) target[key] = override[key];
+  }
+  return merged;
+}
+
+/** Serialize the non-empty building attributes into name-keyed custom
+ *  field values (text fields — numbers stringify). */
+function buildingAttrsToCustomFields(
+  attrs: BuildingAttributes
+): Record<string, string> {
+  const fields: Record<string, string> = {};
+  for (const key of BUILDING_ATTR_STRING_KEYS) {
+    const value = attrs[key];
+    if (typeof value === "string" && value !== "") fields[key] = value;
+  }
+  for (const key of BUILDING_ATTR_NUMBER_KEYS) {
+    const value = attrs[key];
+    if (typeof value === "number" && Number.isFinite(value)) {
+      fields[key] = String(value);
+    }
+  }
+  return fields;
+}
+
+const NYC_BOROUGHS: ReadonlyArray<{ match: RegExp; label: string }> = [
+  { match: /\b(the bronx|bronx)\b/i, label: "Bronx" },
+  { match: /\bbrooklyn\b/i, label: "Brooklyn" },
+  { match: /\bqueens\b/i, label: "Queens" },
+  { match: /\bmanhattan\b/i, label: "Manhattan" },
+  { match: /\bnew york\b/i, label: "Manhattan" },
+  { match: /\bstaten island\b/i, label: "Staten Island" },
+];
+
+function slugifyTerritory(value: string): string {
+  return (
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "other"
+  );
+}
+
+/** Territory key for a canvassing stop: the explicit neighborhood field
+ *  wins (it carries names like "Bushwick" / "Ridgewood"), then a borough
+ *  name found in the address blob, then the postal code, then the city
+ *  comma-segment. */
+export function customerTerritory(customer: {
+  neighborhood: string | null;
+  address: string | null;
+}): { key: string; label: string } {
+  const neighborhood = customer.neighborhood?.trim();
+  if (neighborhood) {
+    return { key: slugifyTerritory(neighborhood), label: neighborhood };
+  }
+  const address = customer.address ?? "";
+  for (const borough of NYC_BOROUGHS) {
+    if (borough.match.test(address)) {
+      return { key: slugifyTerritory(borough.label), label: borough.label };
+    }
+  }
+  const zip = /\b(\d{5})(?:-\d{4})?\b/.exec(address)?.[1];
+  if (zip) return { key: `zip-${zip}`, label: `ZIP ${zip}` };
+  const city = address
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean)[1];
+  if (city) return { key: slugifyTerritory(city), label: city };
+  return { key: "other", label: "Other" };
+}
+
+/** Street sort key for walk order: "123-45 Main St" → ("MAIN ST", 123) so
+ *  a rep walks one side of a street in house-number order. */
+export function streetSortKey(address: string): {
+  streetName: string;
+  houseNumber: number | null;
+} {
+  const first = (address.split(",")[0] ?? "").trim();
+  const match = /^(\d+[A-Za-z]?(?:-\d+[A-Za-z]?)*)\s+(.+)$/.exec(first);
+  if (!match) {
+    return { streetName: first.toUpperCase(), houseNumber: null };
+  }
+  return {
+    streetName: match[2]!.trim().toUpperCase(),
+    houseNumber: Number.parseInt(match[1]!, 10),
+  };
+}
+
 /**
  * PILE-674 — scan customers whose nextStepDueAt is past due and notify the
  * owner once per (customer, due date). The claim rides customer memory
@@ -1537,6 +1711,143 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     const receipt = await stub.getImportReceipt(id);
     if (!receipt) return notFound("Import receipt not found");
     return c.json(receipt);
+  });
+
+  // PILE-672 — territory canvassing route list: active customers with
+  // addresses grouped by neighborhood / borough / ZIP, stops sorted into
+  // street + house-number walk order. Registered before /customers/{id} —
+  // the param route would otherwise swallow the "territories" segment.
+  const territoriesRoute = createRoute({
+    method: "get",
+    path: "/workspaces/{organizationId}/customers/territories",
+    tags: ["customers"],
+    middleware: [rls("customer:view")],
+    description:
+      "Group active customers with addresses into canvassing territories (neighborhood field, then borough / postal code / city parsed from the address). Stops inside each territory sort by street name then house number so a field rep gets a ready-to-walk route list per neighborhood.",
+    request: { params: orgParam },
+    responses: {
+      200: {
+        description: "Canvassing territories with ordered stops",
+        content: {
+          "application/json": {
+            schema: z.object({
+              territories: z.array(
+                z.object({
+                  key: z.string(),
+                  label: z.string(),
+                  count: z.number().int(),
+                  dueCount: z.number().int(),
+                  stops: z.array(
+                    z.object({
+                      id: z.string(),
+                      name: z.string(),
+                      address: z.string().nullable(),
+                      phone: z.string().nullable(),
+                      streetName: z.string(),
+                      houseNumber: z.number().nullable(),
+                      priorityScore: z.number().nullable(),
+                      nextStepDueAt: z.string().nullable(),
+                    })
+                  ),
+                })
+              ),
+            }),
+          },
+        },
+      },
+    },
+  });
+
+  app.openapi(territoriesRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
+    const [customers, statuses] = await Promise.all([
+      stub.listCustomers(),
+      stub.listCustomerStatuses(),
+    ]);
+    const terminalStatusIds = new Set(
+      statuses
+        .filter(
+          (row) =>
+            row.type === "terminal" ||
+            FOLLOW_UP_TERMINAL_KEYS.has(statusSlugKey(row))
+        )
+        .map((row) => row.id)
+    );
+    // Same visibility rule as the list route: non-admin reps only see
+    // their own book once anyone owns customers.
+    const identity = c.var.workspaceIdentity;
+    const isAdmin = isAdminIdentity(identity);
+    const hasAssignedOwners = customers.some((row) => row.ownerId !== null);
+    const visible =
+      !isAdmin && identity.type === "user" && hasAssignedOwners
+        ? customers.filter((row) => row.ownerId === identity.id)
+        : customers;
+
+    const nowIso = new Date().toISOString();
+    const groups = new Map<
+      string,
+      {
+        label: string;
+        stops: Array<{
+          id: string;
+          name: string;
+          address: string | null;
+          phone: string | null;
+          streetName: string;
+          houseNumber: number | null;
+          priorityScore: number | null;
+          nextStepDueAt: string | null;
+        }>;
+      }
+    >();
+    for (const customer of visible) {
+      // Canvassing list = active pipeline only, and a stop needs a door.
+      if (customer.statusId && terminalStatusIds.has(customer.statusId)) {
+        continue;
+      }
+      if (!customer.address?.trim()) continue;
+      const territory = customerTerritory(customer);
+      const { streetName, houseNumber } = streetSortKey(customer.address);
+      const group = groups.get(territory.key) ?? {
+        label: territory.label,
+        stops: [],
+      };
+      group.stops.push({
+        id: customer.id,
+        name: customer.name,
+        address: customer.address,
+        phone: customer.phone,
+        streetName,
+        houseNumber,
+        priorityScore: customer.priorityScore,
+        nextStepDueAt: customer.nextStepDueAt,
+      });
+      groups.set(territory.key, group);
+    }
+
+    const territories = [...groups.entries()]
+      .map(([key, group]) => ({
+        key,
+        label: group.label,
+        count: group.stops.length,
+        // Stops whose follow-up is due now or already overdue — the
+        // "knock these first" count on the territory card.
+        dueCount: group.stops.filter(
+          (stop) => stop.nextStepDueAt !== null && stop.nextStepDueAt <= nowIso
+        ).length,
+        stops: group.stops.toSorted(
+          (a, b) =>
+            a.streetName.localeCompare(b.streetName) ||
+            (a.houseNumber ?? Number.MAX_SAFE_INTEGER) -
+              (b.houseNumber ?? Number.MAX_SAFE_INTEGER) ||
+            a.name.localeCompare(b.name)
+        ),
+      }))
+      .toSorted((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+
+    return c.json({ territories });
   });
 
   app.openapi(getCustomerRoute, async (c) => {
@@ -2484,6 +2795,126 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
       ...key,
       matchedCustomerId: matched?.id ?? null,
     });
+  });
+
+  // PILE-662 — Landlord / building scorecard. Ronnie's `XRF!!` leads are
+  // NYC buildings/landlords, not POS merchants: score them on PLUTO /
+  // ACRIS / HPD attributes (Local Law 31 XRF window, unit count,
+  // violations) instead of the SMB merchant ICP.
+  const buildingScorecardRoute = createRoute({
+    method: "post",
+    path: "/workspaces/{organizationId}/customers/{id}/building-scorecard",
+    tags: ["customers"],
+    middleware: [rls("customer:edit")],
+    description:
+      "Score a building/landlord lead from PLUTO / ACRIS / HPD attributes. Pass `attrs` to score what you have; leave `fetchFromPluto` on (default) to backfill missing attributes from NYC Open Data PLUTO + HPD registrations first. Writes score/tier/XRF eligibility onto the customer and a building_scorecard memory fact.",
+    request: {
+      params: orgIdParam,
+      body: {
+        content: {
+          "application/json": {
+            schema: z
+              .object({
+                attrs: buildingAttributesSchema.optional(),
+                fetchFromPluto: z.boolean().optional(),
+              })
+              .optional(),
+          },
+        },
+      },
+    },
+    responses: {
+      200: {
+        description: "Building scorecard breakdown applied to the customer",
+        content: {
+          "application/json": {
+            schema: z.object({
+              customerId: z.string(),
+              attributes: buildingAttributesSchema,
+              breakdown: z.object({
+                score: z.number(),
+                tier: z.enum(["A", "B", "C", "D"]),
+                xrfLeadPaintEligible: z.boolean(),
+                portfolioScale: z.enum([
+                  "large_multifamily",
+                  "mid_multifamily",
+                  "small_multifamily",
+                  "single_or_commercial",
+                ]),
+                whyNow: z.string(),
+                factors: z.array(
+                  z.object({
+                    key: z.string(),
+                    label: z.string(),
+                    points: z.number(),
+                    detail: z.string(),
+                  })
+                ),
+              }),
+            }),
+          },
+        },
+      },
+      404: { description: "Customer not found" },
+    },
+  });
+
+  app.openapi(buildingScorecardRoute, async (c) => {
+    const { organizationId, id } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
+    const customer = await stub.getCustomer(id);
+    if (!customer) return notFound("Customer not found");
+
+    // Caller attrs merge over attributes previously persisted in
+    // customFields — re-scores enrich, they don't reset.
+    let storedFields: Record<string, string> = {};
+    try {
+      storedFields =
+        typeof customer.customFields === "string"
+          ? (JSON.parse(customer.customFields) as Record<string, string>)
+          : ((customer.customFields ?? {}) as Record<string, string>);
+    } catch {
+      storedFields = {};
+    }
+    let merged = mergeBuildingAttrs(
+      buildingAttrsFromCustomFields(storedFields),
+      input?.attrs
+    );
+
+    if (input?.fetchFromPluto !== false && merged.unitsTotal == null) {
+      const lookedUp = await lookupNycBuildingSocrata(
+        customer.address ?? customer.name,
+        customer.neighborhood
+      );
+      merged = mergeBuildingAttrs(lookedUp, merged);
+    }
+
+    const breakdown = scoreBuildingLead(merged);
+
+    await stub.updateCustomer(id, {
+      priorityScore: breakdown.score,
+      fitScore: breakdown.score,
+      fitStatus: breakdown.xrfLeadPaintEligible ? "fits" : "unknown",
+      signal: breakdown.whyNow,
+      customFields: {
+        ...buildingAttrsToCustomFields(merged),
+        xrfLeadPaintEligible: String(breakdown.xrfLeadPaintEligible),
+        buildingTier: breakdown.tier,
+        buildingScale: breakdown.portfolioScale,
+        whyNow: breakdown.whyNow,
+      },
+    });
+
+    await stub.memoryRemember({
+      entityType: "customer",
+      entityId: customer.id,
+      kind: "building_scorecard",
+      fact: JSON.stringify({ attributes: merged, breakdown }),
+    });
+
+    return c.json({ customerId: id, attributes: merged, breakdown }, 200);
   });
 
   const replyIngestRoute = createRoute({

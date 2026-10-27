@@ -10,11 +10,15 @@ import { runTriageRules } from "../global/triage-rules.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
+import { normalizeDocumentSlug } from "../workspace/data/index.js";
 import {
   DEFAULT_ICP_RULES,
   DEFAULT_SIGNAL_RULES,
+  type MerchantAttrs,
+  type MerchantRankBreakdown,
   type MerchantSignal,
   normalizePhoneE164,
+  normalizeStreetAddress,
   parseCustomerSignalFacts,
   rankMerchantSignals,
 } from "../workspace/signals-engine.js";
@@ -295,6 +299,530 @@ function quoteRequestVolumeCents(item: QuoteRequestItem): number | null {
     : null;
 }
 
+// ---- PILE-656: Vortex merchant-statement join + statement OCR ----
+//
+// Vortex's merchant_statements + analyzeStatement produce *measured*
+// card volume, fees, and effective rate for merchants already processing
+// through Vortex. The sync joins those first-party TPV figures back onto
+// the matching Pile customer so ranking reads real numbers, not
+// rep-reported estimates. The matching ladder mirrors the quote-request
+// sync (PILE-655): explicit id → durable join key → contact email → name.
+
+const vortexMerchantItemSchema = z.object({
+  externalMerchantRef: z.string().min(1),
+  customerId: z.string().nullable().optional(),
+  businessName: z.string().nullable().optional(),
+  contactEmail: z.string().nullable().optional(),
+  monthlyVolumeCents: z.number(),
+  totalFeesCents: z.number().nullable().optional(),
+  effectiveRateBps: z.number().nullable().optional(),
+  transactionCount: z.number().nullable().optional(),
+  avgTicketCents: z.number().nullable().optional(),
+  statementPeriod: z.string().nullable().optional(),
+  processor: z.string().nullable().optional(),
+});
+
+type VortexMerchantItem = z.infer<typeof vortexMerchantItemSchema>;
+
+const vortexMerchantSyncBodySchema = z.object({
+  merchants: z.array(vortexMerchantItemSchema).optional(),
+  vortexOperatorKey: z.string().optional(),
+});
+
+const vortexMerchantSyncResultSchema = z.object({
+  synced: z.number().int(),
+  created: z.number().int(),
+  updated: z.number().int(),
+  customers: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      externalMerchantRef: z.string(),
+      measuredMonthlyVolumeCents: z.number().nullable(),
+      effectiveRateBps: z.number().nullable(),
+      score: z.number().nullable(),
+    })
+  ),
+});
+
+const VORTEX_MERCHANT_SOURCE = "vortex_merchant_statement";
+const FIRST_PARTY_TPV_SOURCE = "vortex_first_party_tpv";
+const STATEMENT_OCR_SOURCE = "statement_ocr";
+const SBA_LOAN_SOURCE = "sba_ppp";
+
+const STATEMENT_VISION_MODEL =
+  "@cf/meta/llama-3.2-11b-vision-instruct" as const;
+const STATEMENT_VISION_PROMPT = [
+  "You are reading a merchant card-processing statement.",
+  "Extract the statement's processing figures and reply with ONLY a JSON",
+  "object, no prose:",
+  '{"monthly_volume_cents": <int>, "total_fees_cents": <int>,',
+  '"effective_rate_bps": <int>, "processor": "<name>"}.',
+  "Use null for any figure you cannot read. The month's total/gross card",
+  "volume is the monthly volume.",
+].join(" ");
+
+// ---- PILE-659: SBA PPP/7(a) loan import ----
+//
+// Free payroll-derived revenue proxy. PPP loans were sized at 2.5x
+// monthly payroll, so the public loan file leaks a payroll figure; a
+// payroll→revenue ratio turns that into a monthly-volume estimate for
+// storefronts that never ran the calculator. 7(a) loans aren't
+// payroll-sized, so they carry the amount but no derived volume.
+
+const PPP_LOAN_TO_PAYROLL_MONTHS = 2.5;
+const DEFAULT_PAYROLL_TO_REVENUE_RATIO = 0.3;
+
+const pppLoanItemSchema = z.object({
+  loanId: z.string().nullable().optional(),
+  businessName: z.string().min(1),
+  address: z.string().nullable().optional(),
+  city: z.string().nullable().optional(),
+  state: z.string().nullable().optional(),
+  zip: z.string().nullable().optional(),
+  loanAmountDollars: z.number().nullable().optional(),
+  loanAmountCents: z.number().nullable().optional(),
+  jobsReported: z.number().nullable().optional(),
+  naicsCode: z.string().nullable().optional(),
+  approvalDate: z.string().nullable().optional(),
+  loanType: z.enum(["ppp", "7a"]).optional(),
+});
+
+type PppLoanItem = z.infer<typeof pppLoanItemSchema>;
+
+const pppLoanImportBodySchema = z.object({
+  loans: z.array(pppLoanItemSchema),
+  payrollToRevenueRatio: z.number().positive().max(1).optional(),
+});
+
+const pppLoanImportResultSchema = z.object({
+  imported: z.number().int(),
+  created: z.number().int(),
+  updated: z.number().int(),
+  customers: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      loanAmountCents: z.number().nullable(),
+      estMonthlyPayrollCents: z.number().nullable(),
+      estMonthlyVolumeCents: z.number().nullable(),
+      jobsReported: z.number().nullable(),
+      score: z.number().nullable(),
+    })
+  ),
+});
+
+const statementTranscribeBodySchema = z.object({
+  attachmentKey: z.string().optional(),
+  imageBase64: z.string().optional(),
+  extractedText: z.string().optional(),
+  monthlyVolumeCents: z.number().optional(),
+  totalFeesCents: z.number().optional(),
+  effectiveRateBps: z.number().optional(),
+  avgTicketCents: z.number().optional(),
+  processor: z.string().optional(),
+  statementPeriod: z.string().optional(),
+});
+
+const statementTranscribeResultSchema = z.object({
+  customerId: z.string(),
+  metrics: z.object({
+    monthlyVolumeCents: z.number().nullable(),
+    totalFeesCents: z.number().nullable(),
+    effectiveRateBps: z.number().nullable(),
+    processor: z.string().nullable(),
+  }),
+  score: z.number().nullable(),
+});
+
+type WorkspaceStub = ReturnType<typeof getWorkspaceStub>;
+
+/** The customer attributes the ranker reads — every stub customer
+ *  variant satisfies this shape. */
+interface RankableCustomer {
+  id: string;
+  vertical?: string | null;
+  address?: string | null;
+  phone?: string | null;
+}
+
+/** Finite non-negative number → rounded integer, else null — the shared
+ *  cents guard for upstream-supplied figures. */
+function finiteMetric(value: number | null | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? Math.round(value)
+    : null;
+}
+
+function envString(env: unknown, key: string): string | undefined {
+  const value = (env as Record<string, unknown>)[key];
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+/** Cents → "$48,231" display text for signal summaries. */
+function centsToDollarText(cents: number): string {
+  const dollars = cents / 100;
+  return dollars >= 1000
+    ? `$${Math.round(dollars).toLocaleString("en-US")}`
+    : `$${dollars.toFixed(2)}`;
+}
+
+/** Basis points → a compact percent label ("2.91%"). */
+function bpsToPercentText(bps: number): string {
+  return `${Number((bps / 100).toFixed(2))}%`;
+}
+
+/** Deterministic, id-safe fragment for signal ids. */
+function signalIdPart(raw: string): string {
+  return raw.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 48);
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
+}
+
+/** Shared signal-persist + re-rank tail used by every intake surface that
+ *  lands a revenue figure (visit intake, quote requests, merchant
+ *  statements, statement OCR, SBA loans). memoryRemember upserts on the
+ *  deterministic signal id — a re-run supersedes instead of stacking —
+ *  then the ranker recomputes from the merchant's whole signal set and
+ *  the scores land back on the customer row for the list sort. */
+async function persistSignalAndRank(opts: {
+  stub: WorkspaceStub;
+  customer: RankableCustomer;
+  signal: MerchantSignal;
+  estMonthlyVolumeCents?: number | null;
+  actorId: string;
+  extraAttrs?: MerchantAttrs;
+}): Promise<MerchantRankBreakdown> {
+  const { stub, customer, signal, actorId } = opts;
+  await stub.memoryRemember({
+    entityType: "customer",
+    entityId: customer.id,
+    kind: `signal:${signal.type}:${signal.id}`,
+    fact: JSON.stringify(signal),
+  });
+  const signals = parseCustomerSignalFacts(
+    await stub.memoryRecall({
+      entityType: "customer",
+      entityId: customer.id,
+      limit: 100,
+    })
+  );
+  const breakdown = rankMerchantSignals({
+    merchantId: customer.id,
+    merchantAttrs: {
+      vertical: (customer.vertical ?? "").toLowerCase(),
+      hasAddress: Boolean(customer.address),
+      hasPhone: Boolean(customer.phone),
+      ...(opts.estMonthlyVolumeCents != null
+        ? { estMonthlyVolumeCents: opts.estMonthlyVolumeCents }
+        : {}),
+      ...opts.extraAttrs,
+    },
+    signals,
+    config: {
+      motion: "smb_default",
+      icpRules: DEFAULT_ICP_RULES,
+      signalRules: DEFAULT_SIGNAL_RULES,
+    },
+  });
+  await stub.updateCustomer(
+    customer.id,
+    {
+      priorityScore: breakdown.priorityScore,
+      fitScore: breakdown.fitScore,
+      fitStatus: breakdown.fitRating,
+      customFields: {
+        whyNow: breakdown.whyNow,
+        whyNowSignalIds: breakdown.whyNowSignalIds.join(","),
+      },
+    },
+    actorId
+  );
+  return breakdown;
+}
+
+/** PILE-656 — measured statement figures → name-keyed customer custom
+ *  fields. The measured volume also lands under the canonical
+ *  `monthly_card_volume_cents` key (PILE-654) so re-ranks that read
+ *  volume back off the field map fire the ICP volume rule, and under
+ *  `estMonthlyVolumeCents` matching the quote-request spelling. */
+export function vortexMerchantCustomFields(
+  item: VortexMerchantItem
+): Record<string, string> {
+  const fields: Record<string, string> = {
+    externalMerchantRef: item.externalMerchantRef,
+    volumeSource: FIRST_PARTY_TPV_SOURCE,
+  };
+  const put = (key: string, value: number | null | undefined) => {
+    const metric = finiteMetric(value);
+    if (metric !== null) fields[key] = String(metric);
+  };
+  const volumeCents = finiteMetric(item.monthlyVolumeCents);
+  if (volumeCents !== null) {
+    fields.measuredMonthlyVolumeCents = String(volumeCents);
+    fields.estMonthlyVolumeCents = String(volumeCents);
+    fields.monthly_card_volume_cents = String(volumeCents);
+  }
+  put("totalFeesCents", item.totalFeesCents);
+  put("effectiveRateBps", item.effectiveRateBps);
+  put("averageTicketCents", item.avgTicketCents);
+  put("transactionCount", item.transactionCount);
+  if (item.statementPeriod?.trim()) {
+    fields.statementPeriod = item.statementPeriod.trim();
+  }
+  return fields;
+}
+
+export interface StatementMetrics {
+  monthlyVolumeCents: number | null;
+  totalFeesCents: number | null;
+  effectiveRateBps: number | null;
+  processor: string | null;
+}
+
+// Volume labels in priority order — "Total Volume" is the headline
+// figure on processor statements; gross/total sales are the fallbacks.
+const STATEMENT_VOLUME_RES = [
+  /total\s+(?:card\s+)?volume\b[^\d\n]{0,30}([\d,]+(?:\.\d{1,2})?)/i,
+  /monthly\s+(?:card\s+)?volume\b[^\d\n]{0,30}([\d,]+(?:\.\d{1,2})?)/i,
+  /gross\s+(?:card\s+)?(?:sales|volume)\b[^\d\n]{0,30}([\d,]+(?:\.\d{1,2})?)/i,
+  /total\s+(?:card\s+)?sales\b[^\d\n]{0,30}([\d,]+(?:\.\d{1,2})?)/i,
+];
+const STATEMENT_FEES_RE = /total\s+fees\b[^\d\n]{0,30}([\d,]+(?:\.\d{1,2})?)/i;
+const STATEMENT_RATE_RE =
+  /effective\s+rate\b[^\d\n]{0,30}([\d]+(?:\.\d+)?)\s*%?/i;
+
+const STATEMENT_PROCESSORS: Array<{ re: RegExp; name: string }> = [
+  { re: /\bsquare\b/i, name: "Square" },
+  { re: /\bclover\b/i, name: "Clover" },
+  { re: /\btoast\b/i, name: "Toast" },
+  { re: /\bstripe\b/i, name: "Stripe" },
+  { re: /\bfiserv\b|\bfirst\s*data\b/i, name: "Fiserv" },
+  { re: /\bworldpay\b/i, name: "Worldpay" },
+  { re: /\bglobal\s*payments\b/i, name: "Global Payments" },
+  { re: /\btsys\b/i, name: "TSYS" },
+  { re: /\bshift4\b/i, name: "Shift4" },
+  { re: /\bheartland\b/i, name: "Heartland" },
+  { re: /\blightspeed\b/i, name: "Lightspeed" },
+  { re: /\badyen\b/i, name: "Adyen" },
+  { re: /\bpaypal\b|\bbraintree\b/i, name: "PayPal" },
+  { re: /\belavon\b/i, name: "Elavon" },
+  {
+    re: /\bchase\s*(?:paymentech|merchant\s*services)\b/i,
+    name: "Chase Paymentech",
+  },
+  { re: /\bhelcim\b/i, name: "Helcim" },
+  { re: /\bstax\b/i, name: "Stax" },
+  { re: /\bauthorize\.?net\b/i, name: "Authorize.net" },
+];
+
+/** PILE-656 — pull the labelled processing figures out of statement text
+ *  (OCR output, pasted statements, or a vision model's prose reply).
+ *  Returns nulls per-field so a partial read still lands. */
+export function parseStatementMetricsFromText(text: string): StatementMetrics {
+  const money = (re: RegExp): number | null => {
+    const match = re.exec(text);
+    if (!match?.[1]) return null;
+    const amount = Number(match[1].replace(/,/g, ""));
+    return Number.isFinite(amount) && amount >= 0
+      ? Math.round(amount * 100)
+      : null;
+  };
+  let monthlyVolumeCents: number | null = null;
+  for (const re of STATEMENT_VOLUME_RES) {
+    monthlyVolumeCents = money(re);
+    if (monthlyVolumeCents !== null) break;
+  }
+  const rateMatch = STATEMENT_RATE_RE.exec(text);
+  const rateValue = rateMatch?.[1] ? Number(rateMatch[1]) : Number.NaN;
+  const processor =
+    STATEMENT_PROCESSORS.find((p) => p.re.test(text))?.name ?? null;
+  return {
+    monthlyVolumeCents,
+    totalFeesCents: money(STATEMENT_FEES_RE),
+    effectiveRateBps:
+      Number.isFinite(rateValue) && rateValue >= 0
+        ? Math.round(rateValue * 100)
+        : null,
+    processor,
+  };
+}
+
+/** PILE-656 — the vision model is prompted for JSON but may wrap it in
+ *  prose; pull the first {...} block and normalize the loose key
+ *  spellings (snake/camel, cents vs dollars, bps vs percent). Returns
+ *  null when no JSON object or no usable figure is present so the caller
+ *  can fall back to the regex text parse. */
+function parseStatementMetricsFromJson(text: string): StatementMetrics | null {
+  const block = /\{[\s\S]*\}/.exec(text);
+  if (!block) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(block[0]);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return null;
+  }
+  const rec = parsed as Record<string, unknown>;
+  const num = (...keys: string[]): number | null => {
+    for (const key of keys) {
+      const value = rec[key];
+      if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+        return value;
+      }
+      if (typeof value === "string") {
+        const n = Number(value.replace(/[$,\s]/g, ""));
+        if (Number.isFinite(n) && n >= 0) return n;
+      }
+    }
+    return null;
+  };
+  const whole = (...keys: string[]) => {
+    const n = num(...keys);
+    return n === null ? null : Math.round(n);
+  };
+  const dollars = (...keys: string[]) => {
+    const n = num(...keys);
+    return n === null ? null : Math.round(n * 100);
+  };
+  const ratePct = num(
+    "effectiveRatePercent",
+    "effective_rate_percent",
+    "effective_rate_pct",
+    "effectiveRate"
+  );
+  const processorRaw = rec.processor ?? rec.processor_name ?? rec.processorName;
+  const metrics: StatementMetrics = {
+    monthlyVolumeCents:
+      whole(
+        "monthlyVolumeCents",
+        "monthly_volume_cents",
+        "volumeCents",
+        "volume_cents"
+      ) ??
+      dollars(
+        "monthlyVolumeDollars",
+        "monthly_volume_dollars",
+        "totalVolumeDollars",
+        "total_volume_dollars"
+      ),
+    totalFeesCents:
+      whole("totalFeesCents", "total_fees_cents", "feesCents", "fees_cents") ??
+      dollars(
+        "totalFeesDollars",
+        "total_fees_dollars",
+        "feesDollars",
+        "fees_dollars"
+      ),
+    effectiveRateBps:
+      whole("effectiveRateBps", "effective_rate_bps") ??
+      (ratePct === null ? null : Math.round(ratePct * 100)),
+    processor:
+      typeof processorRaw === "string" && processorRaw.trim()
+        ? processorRaw.trim()
+        : null,
+  };
+  return Object.values(metrics).some((v) => v !== null) ? metrics : null;
+}
+
+/** Fill only the still-empty slots — explicitly supplied figures always
+ *  beat extracted ones. */
+function mergeStatementMetrics(
+  target: StatementMetrics,
+  parsed: StatementMetrics
+) {
+  if (target.monthlyVolumeCents === null) {
+    target.monthlyVolumeCents = parsed.monthlyVolumeCents;
+  }
+  if (target.totalFeesCents === null) {
+    target.totalFeesCents = parsed.totalFeesCents;
+  }
+  if (target.effectiveRateBps === null) {
+    target.effectiveRateBps = parsed.effectiveRateBps;
+  }
+  if (target.processor === null) target.processor = parsed.processor;
+}
+
+/** PILE-659 — the loan amount in integer cents, from whichever spelling
+ *  the import row carried. */
+function pppLoanAmountCents(item: PppLoanItem): number | null {
+  const cents = finiteMetric(item.loanAmountCents);
+  if (cents !== null) return cents;
+  const dollars = item.loanAmountDollars;
+  return typeof dollars === "number" && Number.isFinite(dollars) && dollars >= 0
+    ? Math.round(dollars * 100)
+    : null;
+}
+
+/** PILE-659 — PPP loan → monthly payroll (÷2.5) → monthly revenue
+ *  (÷payroll share of revenue). 7(a) loans aren't payroll-sized so they
+ *  return nulls — the loan amount itself still lands on the record. */
+export function pppLoanEstimates(input: {
+  loanAmountCents: number | null;
+  loanType?: "ppp" | "7a" | null;
+  payrollToRevenueRatio?: number;
+}): {
+  estMonthlyPayrollCents: number | null;
+  estMonthlyVolumeCents: number | null;
+} {
+  const loanAmountCents = finiteMetric(input.loanAmountCents);
+  if (loanAmountCents === null || input.loanType === "7a") {
+    return { estMonthlyPayrollCents: null, estMonthlyVolumeCents: null };
+  }
+  const ratio = input.payrollToRevenueRatio ?? DEFAULT_PAYROLL_TO_REVENUE_RATIO;
+  const estMonthlyPayrollCents = Math.round(
+    loanAmountCents / PPP_LOAN_TO_PAYROLL_MONTHS
+  );
+  return {
+    estMonthlyPayrollCents,
+    estMonthlyVolumeCents: Math.round(estMonthlyPayrollCents / ratio),
+  };
+}
+
+/** PILE-659 — loan facts → name-keyed customer custom fields. The
+ *  derived monthly volume lands under the canonical
+ *  `monthly_card_volume_cents` key so the ICP volume rule fires. */
+export function pppLoanCustomFields(
+  item: PppLoanItem,
+  payrollToRevenueRatio: number
+): Record<string, string> {
+  const fields: Record<string, string> = { inboundSource: SBA_LOAN_SOURCE };
+  const loanAmountCents = pppLoanAmountCents(item);
+  if (loanAmountCents !== null) {
+    fields.pppLoanAmountCents = String(loanAmountCents);
+  }
+  const { estMonthlyPayrollCents, estMonthlyVolumeCents } = pppLoanEstimates({
+    loanAmountCents,
+    loanType: item.loanType,
+    payrollToRevenueRatio,
+  });
+  if (estMonthlyPayrollCents !== null) {
+    fields.estMonthlyPayrollCents = String(estMonthlyPayrollCents);
+  }
+  if (estMonthlyVolumeCents !== null) {
+    fields.estMonthlyVolumeCents = String(estMonthlyVolumeCents);
+    fields.monthly_card_volume_cents = String(estMonthlyVolumeCents);
+  }
+  const jobs = finiteMetric(item.jobsReported);
+  if (jobs !== null) fields.jobsReported = String(jobs);
+  if (item.naicsCode?.trim()) fields.naicsCode = item.naicsCode.trim();
+  if (item.loanId?.trim()) fields.sbaLoanId = item.loanId.trim();
+  if (item.loanType) fields.sbaLoanType = item.loanType;
+  if (item.approvalDate?.trim()) {
+    fields.loanApprovalDate = item.approvalDate.trim();
+  }
+  return fields;
+}
+
 export function buildIntakeMarkdown(input: IntakeBody): string {
   const lines: (string | null)[] = [
     `# ${input.businessName} — visit intake`,
@@ -432,6 +960,89 @@ const quoteRequestSyncRoute = createRoute({
     },
     400: { description: "Invalid request" },
     502: { description: "Vortex API fetch failed" },
+  },
+});
+
+const vortexMerchantSyncRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/intake/vortex-merchants/sync",
+  tags: ["customers"],
+  middleware: [rls("settings:create")],
+  description:
+    'Join Vortex merchant-statement analysis (measured card volume, fees, effective rate — first-party TPV) onto Pile customers. Matches on explicit customerId, customFields.externalMerchantRef, externalId "vortex-merchant:<ref>", contact email, or case-insensitive business name; creates a customer when nothing matches. Writes the measured figures to customFields (incl. the canonical monthly_card_volume_cents), stamps the join key on the merchant\'s intake document when one exists, records a high-confidence revenue_estimate signal, and re-ranks. Pass merchants inline or an operator key to pull /v1/operator/merchant-statements.',
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    body: {
+      content: {
+        "application/json": { schema: vortexMerchantSyncBodySchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Vortex merchants synced",
+      content: {
+        "application/json": { schema: vortexMerchantSyncResultSchema },
+      },
+    },
+    400: { description: "Invalid request" },
+    502: { description: "Vortex API fetch failed" },
+  },
+});
+
+const statementTranscribeRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/intake/{customerId}/transcribe-statement",
+  tags: ["customers"],
+  middleware: [rls("settings:create")],
+  description:
+    "Read processing figures off a merchant statement. Explicit figures win; otherwise extractedText is regex-parsed, or imageBase64/an R2 attachmentKey goes through Workers AI vision (when bound). Writes estMonthlyVolumeCents/monthly_card_volume_cents/totalFeesCents/effectiveRateBps to customFields, records a statement_ocr revenue_estimate signal, and re-ranks the merchant.",
+  request: {
+    params: z.object({
+      organizationId: z.string(),
+      customerId: z.string(),
+    }),
+    body: {
+      content: {
+        "application/json": { schema: statementTranscribeBodySchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Statement transcribed",
+      content: {
+        "application/json": { schema: statementTranscribeResultSchema },
+      },
+    },
+    400: { description: "Invalid request" },
+    404: { description: "Customer not found" },
+  },
+});
+
+const pppLoanImportRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/intake/ppp-loans/import",
+  tags: ["customers"],
+  middleware: [rls("settings:create")],
+  description:
+    'Import SBA PPP/7(a) loan rows as a free payroll-derived revenue proxy: PPP loans were sized at 2.5x monthly payroll, and payrollToRevenueRatio (default 0.30) turns that into an estimated monthly volume. Matches existing customers on externalId "sba-ppp:<loanId>" or case-insensitive business name + street address; writes loan facts and the derived figures to customFields, records a sba_ppp revenue_estimate signal, and re-ranks.',
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    body: {
+      content: {
+        "application/json": { schema: pppLoanImportBodySchema },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "SBA loans imported",
+      content: {
+        "application/json": { schema: pppLoanImportResultSchema },
+      },
+    },
+    400: { description: "Invalid request" },
   },
 });
 
@@ -622,11 +1233,6 @@ export function registerIntakeRoutes(app: OpenAPIHono<AppContext>) {
     const estVolumeCents = parseMoneyToCents(input.pricing?.monthlyCardVolume);
     if (estVolumeCents !== null) {
       try {
-        const dollars = estVolumeCents / 100;
-        const volumeText =
-          dollars >= 1000
-            ? `$${Math.round(dollars).toLocaleString("en-US")}`
-            : `$${dollars.toFixed(2)}`;
         const signal: MerchantSignal = {
           id: `sig_intake_${intakeId}`,
           merchantId: customer.id,
@@ -639,49 +1245,15 @@ export function registerIntakeRoutes(app: OpenAPIHono<AppContext>) {
               ? `/workspaces/${organizationId}/documents/${documentId}`
               : `intake:${intakeId}`),
           strength: 90,
-          summary: `Reported monthly card volume ≈ ${volumeText}/mo (intake)`,
+          summary: `Reported monthly card volume ≈ ${centsToDollarText(estVolumeCents)}/mo (intake)`,
         };
-        await stub.memoryRemember({
-          entityType: "customer",
-          entityId: customer.id,
-          kind: `signal:${signal.type}:${signal.id}`,
-          fact: JSON.stringify(signal),
+        await persistSignalAndRank({
+          stub,
+          customer,
+          signal,
+          estMonthlyVolumeCents: estVolumeCents,
+          actorId: identity.id,
         });
-        const signals = parseCustomerSignalFacts(
-          await stub.memoryRecall({
-            entityType: "customer",
-            entityId: customer.id,
-            limit: 100,
-          })
-        );
-        const breakdown = rankMerchantSignals({
-          merchantId: customer.id,
-          merchantAttrs: {
-            vertical: (customer.vertical ?? "").toLowerCase(),
-            hasAddress: Boolean(customer.address),
-            hasPhone: Boolean(customer.phone),
-            estMonthlyVolumeCents: estVolumeCents,
-          },
-          signals,
-          config: {
-            motion: "smb_default",
-            icpRules: DEFAULT_ICP_RULES,
-            signalRules: DEFAULT_SIGNAL_RULES,
-          },
-        });
-        await stub.updateCustomer(
-          customer.id,
-          {
-            priorityScore: breakdown.priorityScore,
-            fitScore: breakdown.fitScore,
-            fitStatus: breakdown.fitRating,
-            customFields: {
-              whyNow: breakdown.whyNow,
-              whyNowSignalIds: breakdown.whyNowSignalIds.join(","),
-            },
-          },
-          identity.id
-        );
       } catch {
         // Signal + rank persistence is best-effort — a door-knock submit
         // still lands customer, fields, and the intake document.
@@ -707,20 +1279,15 @@ export function registerIntakeRoutes(app: OpenAPIHono<AppContext>) {
     const body = c.req.valid("json");
     const identity = c.var.workspaceIdentity;
     const stub = getWorkspaceStub(c.env, organizationId);
-    const envVars = c.env as Record<string, unknown>;
-    const envString = (key: string) => {
-      const value = envVars[key];
-      return typeof value === "string" && value.length > 0 ? value : undefined;
-    };
 
     const base = (
-      envString("VORTEX_API_URL") ?? "https://api.vortex.nyc"
+      envString(c.env, "VORTEX_API_URL") ?? "https://api.vortex.nyc"
     ).replace(/\/+$/, "");
 
     let items: QuoteRequestItem[] | undefined = body.quoteRequests;
     if (items === undefined) {
       const operatorKey =
-        body.vortexOperatorKey ?? envString("VORTEX_OPERATOR_API_KEY");
+        body.vortexOperatorKey ?? envString(c.env, "VORTEX_OPERATOR_API_KEY");
       if (!operatorKey) {
         throw new VortexError({
           code: "BAD_REQUEST",
@@ -909,14 +1476,10 @@ export function registerIntakeRoutes(app: OpenAPIHono<AppContext>) {
       // Self-reported monthly volume is a rankable revenue signal — same
       // persist-then-rank shape as the rep-collected intake figures
       // (PILE-654). Deterministic signal id keeps a re-sync an upsert.
+      let score: number | null = customer.priorityScore ?? null;
       const estVolumeCents = quoteRequestVolumeCents(item);
       if (estVolumeCents !== null) {
         try {
-          const dollars = estVolumeCents / 100;
-          const volumeText =
-            dollars >= 1000
-              ? `$${Math.round(dollars).toLocaleString("en-US")}`
-              : `$${dollars.toFixed(2)}`;
           const createdMs = item.createdAt
             ? Date.parse(item.createdAt)
             : Number.NaN;
@@ -924,57 +1487,24 @@ export function registerIntakeRoutes(app: OpenAPIHono<AppContext>) {
             ? new Date(createdMs).toISOString()
             : new Date().toISOString();
           const signal: MerchantSignal = {
-            id: `sig_vortex_quote_${item.id.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 48)}`,
+            id: `sig_vortex_quote_${signalIdPart(item.id)}`,
             merchantId: customer.id,
             type: "revenue_estimate",
             observedAt,
             source: VORTEX_QUOTE_SOURCE,
             evidenceUrl,
             strength: 90,
-            summary: `Self-reported monthly card volume ≈ ${volumeText}/mo (pricing calculator)`,
+            summary: `Self-reported monthly card volume ≈ ${centsToDollarText(estVolumeCents)}/mo (pricing calculator)`,
           };
-          await stub.memoryRemember({
-            entityType: "customer",
-            entityId: customer.id,
-            kind: `signal:${signal.type}:${signal.id}`,
-            fact: JSON.stringify(signal),
+          const breakdown = await persistSignalAndRank({
+            stub,
+            customer,
+            signal,
+            estMonthlyVolumeCents: estVolumeCents,
+            actorId: identity.id,
+            extraAttrs: { hasPhone: Boolean(customer.phone ?? phone) },
           });
-          const signals = parseCustomerSignalFacts(
-            await stub.memoryRecall({
-              entityType: "customer",
-              entityId: customer.id,
-              limit: 100,
-            })
-          );
-          const breakdown = rankMerchantSignals({
-            merchantId: customer.id,
-            merchantAttrs: {
-              vertical: (customer.vertical ?? "").toLowerCase(),
-              hasAddress: Boolean(customer.address),
-              hasPhone: Boolean(customer.phone ?? phone),
-              estMonthlyVolumeCents: estVolumeCents,
-            },
-            signals,
-            config: {
-              motion: "smb_default",
-              icpRules: DEFAULT_ICP_RULES,
-              signalRules: DEFAULT_SIGNAL_RULES,
-            },
-          });
-          customer =
-            (await stub.updateCustomer(
-              customer.id,
-              {
-                priorityScore: breakdown.priorityScore,
-                fitScore: breakdown.fitScore,
-                fitStatus: breakdown.fitRating,
-                customFields: {
-                  whyNow: breakdown.whyNow,
-                  whyNowSignalIds: breakdown.whyNowSignalIds.join(","),
-                },
-              },
-              identity.id
-            )) ?? customer;
+          score = breakdown.priorityScore;
         } catch {
           // Signal + rank persistence is best-effort — the customer,
           // contact, and deal records above are the durable outcome.
@@ -986,7 +1516,7 @@ export function registerIntakeRoutes(app: OpenAPIHono<AppContext>) {
         name: customer.name,
         externalId: customer.externalId ?? externalId,
         estMonthlyVolumeCents: estVolumeCents,
-        score: customer.priorityScore ?? null,
+        score,
       });
     }
 
@@ -996,6 +1526,613 @@ export function registerIntakeRoutes(app: OpenAPIHono<AppContext>) {
         created,
         updated,
         customers: synced,
+      },
+      200
+    );
+  });
+
+  // PILE-656 — Vortex merchant-statement join. Items arrive inline or are
+  // pulled from the operator API; each carries *measured* first-party
+  // TPV, the strongest revenue figure in the system.
+  app.openapi(vortexMerchantSyncRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const identity = c.var.workspaceIdentity;
+    const stub = getWorkspaceStub(c.env, organizationId);
+
+    const base = (
+      envString(c.env, "VORTEX_API_URL") ?? "https://api.vortex.nyc"
+    ).replace(/\/+$/, "");
+    const statementsUrl = `${base}/v1/operator/merchant-statements`;
+
+    let items: VortexMerchantItem[] | undefined = body.merchants;
+    if (items === undefined) {
+      const operatorKey =
+        body.vortexOperatorKey ?? envString(c.env, "VORTEX_OPERATOR_API_KEY");
+      if (!operatorKey) {
+        throw new VortexError({
+          code: "BAD_REQUEST",
+          status: 400,
+          message:
+            "Provide merchants inline or a Vortex operator API key (vortexOperatorKey / VORTEX_OPERATOR_API_KEY)",
+        });
+      }
+      const res = await fetch(statementsUrl, {
+        headers: { Authorization: `Bearer ${operatorKey}` },
+      });
+      if (!res.ok) {
+        throw new VortexError({
+          code: "AGENT_ERROR",
+          status: 502,
+          message: `Vortex merchant-statements fetch failed (HTTP ${res.status})`,
+        });
+      }
+      const payload = (await res.json()) as unknown;
+      const rec = (payload ?? {}) as Record<string, unknown>;
+      const rawItems: unknown[] =
+        [payload, rec.merchants, rec.merchantStatements, rec.items].find(
+          (v): v is unknown[] => Array.isArray(v)
+        ) ?? [];
+      // Rows that fail the item shape (e.g. no externalMerchantRef) are
+      // skipped rather than sinking the whole batch — the upstream
+      // payload is not ours to fix.
+      items = rawItems
+        .map((row) => vortexMerchantItemSchema.safeParse(row))
+        .filter((r) => r.success)
+        .map((r) => r.data);
+    }
+
+    // Match indexes over the existing customer book — explicit id and
+    // the merchant-ref join key are hard keys; the email index is built
+    // lazily on the first email-only lookup, and the name match is the
+    // last resort for merchants that predate the join key.
+    const existing = await stub.listCustomers();
+    type CustomerRow = (typeof existing)[number];
+    const byId = new Map<string, CustomerRow>();
+    const byExternalId = new Map<string, CustomerRow>();
+    const byMerchantRef = new Map<string, CustomerRow>();
+    const byName = new Map<string, CustomerRow>();
+    for (const row of existing) {
+      byId.set(row.id, row);
+      if (row.externalId) byExternalId.set(row.externalId, row);
+      const ref = row.customFields.externalMerchantRef;
+      if (ref) byMerchantRef.set(ref, row);
+      const nameKey = row.name.trim().toLowerCase();
+      if (nameKey && !byName.has(nameKey)) byName.set(nameKey, row);
+    }
+    const byEmail = new Map<string, CustomerRow>();
+    let emailIndexBuilt = false;
+    const emailIndex = async () => {
+      if (emailIndexBuilt) return byEmail;
+      emailIndexBuilt = true;
+      await Promise.all(
+        existing.map(async (cust) => {
+          for (const contact of await stub.listContacts(cust.id)) {
+            if (contact.channel !== "email") continue;
+            const key = contact.value.trim().toLowerCase();
+            if (key && !byEmail.has(key)) byEmail.set(key, cust);
+          }
+        })
+      );
+      return byEmail;
+    };
+
+    let created = 0;
+    let updated = 0;
+    const synced: z.infer<typeof vortexMerchantSyncResultSchema>["customers"] =
+      [];
+
+    for (const item of items) {
+      const ref = item.externalMerchantRef.trim();
+      const externalId = `vortex-merchant:${ref}`;
+      const email = item.contactEmail?.trim().toLowerCase() || null;
+      const name =
+        item.businessName?.trim() ||
+        email?.split("@")[0] ||
+        `Vortex merchant ${ref}`;
+      const fields = vortexMerchantCustomFields(item);
+      const measuredCents = finiteMetric(item.monthlyVolumeCents);
+      const rateBps = finiteMetric(item.effectiveRateBps);
+
+      let customer = item.customerId ? byId.get(item.customerId) : undefined;
+      if (!customer) {
+        customer = byMerchantRef.get(ref) ?? byExternalId.get(externalId);
+      }
+      if (!customer && email) {
+        customer = (await emailIndex()).get(email);
+      }
+      if (!customer) {
+        const nameKey = name.trim().toLowerCase();
+        if (nameKey) customer = byName.get(nameKey);
+      }
+      if (!customer) {
+        try {
+          customer = await stub.createCustomer({
+            name,
+            externalId,
+            processor: item.processor?.trim() || null,
+            source: VORTEX_MERCHANT_SOURCE,
+            customFields: fields,
+          });
+          created += 1;
+        } catch {
+          continue;
+        }
+      } else {
+        updated += 1;
+        // Enrich, never clobber: scalars only fill empty slots while the
+        // statement custom fields always reflect the latest analysis.
+        const patch: Parameters<typeof stub.updateCustomer>[1] = {
+          customFields: fields,
+        };
+        if (!customer.externalId) patch.externalId = externalId;
+        if (!customer.processor && item.processor?.trim()) {
+          patch.processor = item.processor.trim();
+        }
+        try {
+          customer =
+            (await stub.updateCustomer(customer.id, patch, identity.id)) ??
+            customer;
+        } catch {
+          // Field write refused — keep the matched row; the signal below
+          // still carries the revenue data.
+        }
+      }
+      byId.set(customer.id, customer);
+      byExternalId.set(externalId, customer);
+      byMerchantRef.set(ref, customer);
+      const nameKey = customer.name.trim().toLowerCase();
+      if (nameKey && !byName.has(nameKey)) byName.set(nameKey, customer);
+      if (email && !byEmail.has(email)) byEmail.set(email, customer);
+      const customerId = customer.id;
+
+      if (email) {
+        await stub.upsertContact({
+          customerId,
+          type: "business_channel",
+          role: null,
+          channel: "email",
+          value: email,
+          label: name,
+          status: "verified",
+          confidence: "high",
+          source: VORTEX_MERCHANT_SOURCE,
+          evidenceUri: statementsUrl,
+        });
+      }
+
+      // The rep-facing intake document (`intake-<externalId>` slug) gets
+      // the join key too, so the visit record cites the Vortex merchant.
+      if (customer.externalId) {
+        try {
+          const slug = normalizeDocumentSlug(`intake-${customer.externalId}`);
+          const doc = slug
+            ? (await stub.listDocuments({ slug }))[0]
+            : undefined;
+          if (doc && doc.contentFormat === "markdown") {
+            const refLine = `- **Vortex merchant ref:** ${ref}`;
+            const content = doc.content.includes("**Vortex merchant ref:**")
+              ? doc.content.replace(
+                  /- \*\*Vortex merchant ref:\*\*[^\n]*/m,
+                  refLine
+                )
+              : `${doc.content.trimEnd()}\n\n${refLine}\n`;
+            if (content !== doc.content) {
+              await stub.updateDocument(doc.id, { content }, identity.id);
+            }
+          }
+        } catch {
+          // Document update is best-effort — the customer join stands.
+        }
+      }
+
+      // Measured TPV is the strongest revenue_estimate the system emits
+      // (strength 100). Deterministic signal id keeps a re-sync an
+      // upsert, then the ranker recomputes from the real figure.
+      let score: number | null = customer.priorityScore ?? null;
+      if (measuredCents !== null) {
+        try {
+          const signal: MerchantSignal = {
+            id: `sig_vortex_tpv_${signalIdPart(ref)}`,
+            merchantId: customer.id,
+            type: "revenue_estimate",
+            observedAt: new Date().toISOString(),
+            source: VORTEX_MERCHANT_SOURCE,
+            evidenceUrl: statementsUrl,
+            strength: 100,
+            summary: `Measured card volume ${centsToDollarText(measuredCents)}/mo${
+              rateBps !== null
+                ? ` (effective rate ${bpsToPercentText(rateBps)})`
+                : ""
+            }`,
+          };
+          const breakdown = await persistSignalAndRank({
+            stub,
+            customer,
+            signal,
+            estMonthlyVolumeCents: measuredCents,
+            actorId: identity.id,
+          });
+          score = breakdown.priorityScore;
+        } catch {
+          // Signal + rank persistence is best-effort — the customer join
+          // and field writes above are the durable outcome.
+        }
+      }
+
+      synced.push({
+        id: customer.id,
+        name: customer.name,
+        externalMerchantRef: ref,
+        measuredMonthlyVolumeCents: measuredCents,
+        effectiveRateBps: rateBps,
+        score,
+      });
+    }
+
+    return c.json(
+      {
+        synced: synced.length,
+        created,
+        updated,
+        customers: synced,
+      },
+      200
+    );
+  });
+
+  // PILE-656 — statement-photo transcription. Rep-snapped statements sit
+  // in R2 as JPEGs/PNGs; explicit figures win, pasted/OCR'd text is
+  // regex-parsed, and images go through Workers AI vision when bound.
+  app.openapi(statementTranscribeRoute, async (c) => {
+    const { organizationId, customerId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const identity = c.var.workspaceIdentity;
+    const stub = getWorkspaceStub(c.env, organizationId);
+
+    let customer = await stub.getCustomer(customerId);
+    if (!customer) {
+      throw new VortexError({
+        code: "NOT_FOUND",
+        status: 404,
+        message: "Customer not found",
+      });
+    }
+
+    const metrics = {
+      monthlyVolumeCents: finiteMetric(body.monthlyVolumeCents),
+      totalFeesCents: finiteMetric(body.totalFeesCents),
+      effectiveRateBps: finiteMetric(body.effectiveRateBps),
+      avgTicketCents: finiteMetric(body.avgTicketCents),
+      processor: body.processor?.trim() || null,
+      statementPeriod: body.statementPeriod?.trim() || null,
+    };
+
+    // Extraction only runs when the caller didn't already know the
+    // volume — explicit figures always win.
+    if (metrics.monthlyVolumeCents === null) {
+      if (body.extractedText?.trim()) {
+        mergeStatementMetrics(
+          metrics,
+          parseStatementMetricsFromText(body.extractedText)
+        );
+      } else {
+        let imageBase64 = body.imageBase64?.trim() || null;
+        if (!imageBase64 && body.attachmentKey) {
+          // The key must point at this workspace's uploads — same
+          // prefix the /files read route enforces.
+          if (!body.attachmentKey.startsWith(`${organizationId}/`)) {
+            throw new VortexError({
+              code: "BAD_REQUEST",
+              status: 400,
+              message: "Statement attachment does not belong to this workspace",
+            });
+          }
+          const object = await c.env.ATTACHMENTS_BUCKET.get(body.attachmentKey);
+          if (!object) {
+            throw new VortexError({
+              code: "BAD_REQUEST",
+              status: 400,
+              message: "Statement attachment not found",
+            });
+          }
+          imageBase64 = bytesToBase64(
+            new Uint8Array(await object.arrayBuffer())
+          );
+        }
+        const ai = c.env.AI;
+        if (imageBase64 && ai) {
+          try {
+            const out = await ai.run(STATEMENT_VISION_MODEL, {
+              image: imageBase64,
+              prompt: STATEMENT_VISION_PROMPT,
+              max_tokens: 400,
+            });
+            const text = typeof out.response === "string" ? out.response : "";
+            if (text.trim()) {
+              mergeStatementMetrics(
+                metrics,
+                parseStatementMetricsFromJson(text) ??
+                  parseStatementMetricsFromText(text)
+              );
+            }
+          } catch {
+            // Vision is best-effort — whatever was supplied still lands.
+          }
+        }
+      }
+    }
+
+    const hasAnyMetric =
+      metrics.monthlyVolumeCents !== null ||
+      metrics.totalFeesCents !== null ||
+      metrics.effectiveRateBps !== null ||
+      metrics.avgTicketCents !== null ||
+      metrics.processor !== null ||
+      metrics.statementPeriod !== null;
+    if (!hasAnyMetric) {
+      throw new VortexError({
+        code: "BAD_REQUEST",
+        status: 400,
+        message:
+          "No statement metrics could be extracted — pass extractedText, imageBase64/attachmentKey with Workers AI bound, or explicit figures",
+      });
+    }
+
+    const fields: Record<string, string> = {
+      statementSource: STATEMENT_OCR_SOURCE,
+    };
+    if (metrics.monthlyVolumeCents !== null) {
+      fields.estMonthlyVolumeCents = String(metrics.monthlyVolumeCents);
+      fields.monthly_card_volume_cents = String(metrics.monthlyVolumeCents);
+    }
+    if (metrics.totalFeesCents !== null) {
+      fields.totalFeesCents = String(metrics.totalFeesCents);
+    }
+    if (metrics.effectiveRateBps !== null) {
+      fields.effectiveRateBps = String(metrics.effectiveRateBps);
+    }
+    if (metrics.avgTicketCents !== null) {
+      fields.averageTicketCents = String(metrics.avgTicketCents);
+    }
+    if (metrics.statementPeriod) {
+      fields.statementPeriod = metrics.statementPeriod;
+    }
+    const patch: Parameters<typeof stub.updateCustomer>[1] = {
+      customFields: fields,
+    };
+    if (!customer.processor && metrics.processor) {
+      patch.processor = metrics.processor;
+    }
+    try {
+      customer =
+        (await stub.updateCustomer(customer.id, patch, identity.id)) ??
+        customer;
+    } catch {
+      // Field write refused — the signal below still carries the figure.
+    }
+
+    // An OCR'd statement figure sits between rep-reported (90) and
+    // first-party TPV (100) — it is measured, not self-reported.
+    let score: number | null = customer.priorityScore ?? null;
+    if (metrics.monthlyVolumeCents !== null) {
+      try {
+        const signal: MerchantSignal = {
+          id: `sig_statement_ocr_${customer.id}`,
+          merchantId: customer.id,
+          type: "revenue_estimate",
+          observedAt: new Date().toISOString(),
+          source: STATEMENT_OCR_SOURCE,
+          evidenceUrl: body.attachmentKey
+            ? `/workspaces/${organizationId}/files?key=${encodeURIComponent(body.attachmentKey)}`
+            : `statement-ocr:${customer.id}`,
+          strength: 95,
+          summary: `Measured card volume ${centsToDollarText(metrics.monthlyVolumeCents)}/mo from a photographed statement${
+            metrics.effectiveRateBps !== null
+              ? ` (effective rate ${bpsToPercentText(metrics.effectiveRateBps)})`
+              : ""
+          }`,
+        };
+        const breakdown = await persistSignalAndRank({
+          stub,
+          customer,
+          signal,
+          estMonthlyVolumeCents: metrics.monthlyVolumeCents,
+          actorId: identity.id,
+        });
+        score = breakdown.priorityScore;
+      } catch {
+        // Signal + rank persistence is best-effort — the field write is
+        // the durable outcome.
+      }
+    }
+
+    return c.json(
+      {
+        customerId: customer.id,
+        metrics: {
+          monthlyVolumeCents: metrics.monthlyVolumeCents,
+          totalFeesCents: metrics.totalFeesCents,
+          effectiveRateBps: metrics.effectiveRateBps,
+          processor: metrics.processor,
+        },
+        score,
+      },
+      200
+    );
+  });
+
+  // PILE-659 — SBA PPP/7(a) loan import. The public loan file is the
+  // strongest free revenue proxy for storefronts: PPP loan amount ÷ 2.5
+  // is monthly payroll, and a payroll→revenue ratio turns that into a
+  // monthly-volume estimate.
+  app.openapi(pppLoanImportRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const identity = c.var.workspaceIdentity;
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const ratio =
+      body.payrollToRevenueRatio ?? DEFAULT_PAYROLL_TO_REVENUE_RATIO;
+
+    // Match indexes — `sba-ppp:<loanId>` is the hard key; name+street is
+    // the fallback for rows that predate the import (or loans whose id
+    // the extract lost).
+    const existing = await stub.listCustomers();
+    type CustomerRow = (typeof existing)[number];
+    const byExternalId = new Map<string, CustomerRow>();
+    const byName = new Map<string, CustomerRow[]>();
+    for (const row of existing) {
+      if (row.externalId) byExternalId.set(row.externalId, row);
+      const nameKey = row.name.trim().toLowerCase();
+      if (nameKey) {
+        const rows = byName.get(nameKey) ?? [];
+        rows.push(row);
+        byName.set(nameKey, rows);
+      }
+    }
+
+    let created = 0;
+    let updated = 0;
+    const imported: z.infer<typeof pppLoanImportResultSchema>["customers"] = [];
+
+    for (const loan of body.loans) {
+      const name = loan.businessName.trim();
+      const loanId = loan.loanId?.trim() || null;
+      const externalId = loanId ? `sba-ppp:${loanId}` : null;
+      const loanAmountCents = pppLoanAmountCents(loan);
+      const jobs = finiteMetric(loan.jobsReported);
+      const { estMonthlyPayrollCents, estMonthlyVolumeCents } =
+        pppLoanEstimates({
+          loanAmountCents,
+          loanType: loan.loanType,
+          payrollToRevenueRatio: ratio,
+        });
+      const fields = pppLoanCustomFields(loan, ratio);
+      const address =
+        [loan.address, loan.city, loan.state, loan.zip]
+          .map((part) => part?.trim())
+          .filter((part): part is string => Boolean(part))
+          .join(", ") || null;
+
+      let customer = externalId ? byExternalId.get(externalId) : undefined;
+      if (!customer) {
+        const candidates = byName.get(name.toLowerCase()) ?? [];
+        const loanAddr = normalizeStreetAddress(loan.address);
+        if (loanAddr) {
+          // The stored address is the fuller string ("123 Main St,
+          // Brooklyn, NY") — match when either normalized form is a
+          // prefix of the other.
+          customer = candidates.find((row) => {
+            const stored = normalizeStreetAddress(row.address);
+            return (
+              stored === loanAddr ||
+              (stored.length > 0 &&
+                (stored.startsWith(loanAddr) || loanAddr.startsWith(stored)))
+            );
+          });
+        } else {
+          customer = candidates[0];
+        }
+      }
+      if (!customer) {
+        try {
+          customer = await stub.createCustomer({
+            name,
+            externalId,
+            address,
+            source: SBA_LOAN_SOURCE,
+            customFields: fields,
+          });
+          created += 1;
+        } catch {
+          continue;
+        }
+      } else {
+        updated += 1;
+        const patch: Parameters<typeof stub.updateCustomer>[1] = {
+          customFields: fields,
+        };
+        if (!customer.externalId && externalId) {
+          patch.externalId = externalId;
+        }
+        if (!customer.address && address) patch.address = address;
+        try {
+          customer =
+            (await stub.updateCustomer(customer.id, patch, identity.id)) ??
+            customer;
+        } catch {
+          // Field write refused — keep the matched row; the signal below
+          // still carries the estimate.
+        }
+      }
+      const customerId = customer.id;
+      if (externalId) byExternalId.set(externalId, customer);
+      const nameKey = customer.name.trim().toLowerCase();
+      if (nameKey) {
+        const rows = byName.get(nameKey) ?? [];
+        if (!rows.some((row) => row.id === customerId)) {
+          rows.push(customer);
+        }
+        byName.set(nameKey, rows);
+      }
+
+      // The payroll-derived estimate is a proxy, not a measurement —
+      // strength 75 vs the 90+ of reported/measured figures.
+      // Deterministic signal id keeps a re-import an upsert.
+      let score: number | null = customer.priorityScore ?? null;
+      if (loanAmountCents !== null || estMonthlyVolumeCents !== null) {
+        try {
+          const loanLabel =
+            loan.loanType === "7a" ? "SBA 7(a) loan" : "SBA PPP loan";
+          const signal: MerchantSignal = {
+            id: `sig_sba_ppp_${signalIdPart(loanId ?? `${name}-${loan.zip ?? ""}`)}`,
+            merchantId: customerId,
+            type: "revenue_estimate",
+            observedAt: new Date().toISOString(),
+            source: SBA_LOAN_SOURCE,
+            evidenceUrl: "https://data.sba.gov/dataset/ppp-foia",
+            strength: 75,
+            summary: `${loanLabel} ${
+              loanAmountCents !== null
+                ? centsToDollarText(loanAmountCents)
+                : "unknown amount"
+            }${jobs !== null ? ` (${jobs} jobs)` : ""}${
+              estMonthlyVolumeCents !== null
+                ? ` → est. revenue ≈ ${centsToDollarText(estMonthlyVolumeCents)}/mo`
+                : ""
+            }`,
+          };
+          const breakdown = await persistSignalAndRank({
+            stub,
+            customer,
+            signal,
+            estMonthlyVolumeCents,
+            actorId: identity.id,
+          });
+          score = breakdown.priorityScore;
+        } catch {
+          // Signal + rank persistence is best-effort — the customer and
+          // field writes are the durable outcome.
+        }
+      }
+
+      imported.push({
+        id: customerId,
+        name: customer.name,
+        loanAmountCents,
+        estMonthlyPayrollCents,
+        estMonthlyVolumeCents,
+        jobsReported: jobs,
+        score,
+      });
+    }
+
+    return c.json(
+      {
+        imported: imported.length,
+        created,
+        updated,
+        customers: imported,
       },
       200
     );

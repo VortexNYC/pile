@@ -13,8 +13,12 @@ import {
   intakePricingCustomFields,
   parseMoneyToCents,
   parseMonthlyTxCount,
+  parseStatementMetricsFromText,
+  pppLoanCustomFields,
+  pppLoanEstimates,
   quoteRequestCustomFields,
   quoteRequestName,
+  vortexMerchantCustomFields,
 } from "./intake.js";
 
 async function seedWorkspace() {
@@ -791,6 +795,903 @@ describe("quote-request helpers (PILE-655)", () => {
       monthlyVolumeCents: Number.NaN,
     });
     expect("estMonthlyVolumeCents" in junk).toBe(false);
+  });
+});
+
+describe("vortex merchant-statement sync (PILE-656)", () => {
+  let organizationId: string;
+  let token: string;
+
+  const syncResultSchema = z.object({
+    synced: z.number(),
+    created: z.number(),
+    updated: z.number(),
+    customers: z.array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        externalMerchantRef: z.string(),
+        measuredMonthlyVolumeCents: z.number().nullable(),
+        effectiveRateBps: z.number().nullable(),
+        score: z.number().nullable(),
+      })
+    ),
+  });
+
+  function workspaceStub() {
+    return env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+  }
+
+  beforeAll(async () => {
+    ({ organizationId, token } = await seedWorkspace());
+  });
+
+  it("joins measured TPV onto an existing customer by contact email, writes customFields, stamps the intake doc, and ranks a strength-100 revenue_estimate", async () => {
+    // Seed a merchant the way the field team does — a visit intake with
+    // an owner email and an intake document.
+    const intakeRes = await post(
+      `/workspaces/${organizationId}/intake`,
+      {
+        intakeId: "visit-tpv",
+        businessName: "Measured Corner Deli",
+        owner: { name: "Meg Owner", email: "owner@measured.example" },
+      },
+      token
+    );
+    expect(intakeRes.status).toBe(201);
+    const intakeResult = z
+      .object({ customerId: z.string() })
+      .parse(await intakeRes.json());
+
+    const res = await post(
+      `/workspaces/${organizationId}/intake/vortex-merchants/sync`,
+      {
+        merchants: [
+          {
+            externalMerchantRef: "vm_123",
+            businessName: "Measured Corner Deli",
+            contactEmail: "OWNER@measured.example",
+            monthlyVolumeCents: 6_000_000,
+            totalFeesCents: 171_000,
+            effectiveRateBps: 285,
+            avgTicketCents: 4_000,
+            transactionCount: 1_500,
+            statementPeriod: "2026-09",
+            processor: "Square",
+          },
+          {
+            // No match anywhere — a brand-new Vortex merchant joins the
+            // book as a fresh customer.
+            externalMerchantRef: "vm_999",
+            businessName: "Brand New Spot",
+            monthlyVolumeCents: 2_000_000,
+          },
+        ],
+      },
+      token
+    );
+    expect(res.status).toBe(200);
+    const body = syncResultSchema.parse(await res.json());
+    expect(body.synced).toBe(2);
+    expect(body.updated).toBe(1);
+    expect(body.created).toBe(1);
+
+    const joined = body.customers[0]!;
+    expect(joined.id).toBe(intakeResult.customerId);
+    expect(joined.externalMerchantRef).toBe("vm_123");
+    expect(joined.measuredMonthlyVolumeCents).toBe(6_000_000);
+    expect(joined.effectiveRateBps).toBe(285);
+    expect(joined.score).not.toBeNull();
+    expect(joined.score).toBeGreaterThan(0);
+
+    const created = body.customers[1]!;
+    expect(created.name).toBe("Brand New Spot");
+
+    // customFields carry the measured figure under every key the rest of
+    // the system reads, incl. the canonical PILE-654 volume key.
+    const customerRes = await api(
+      `/workspaces/${organizationId}/customers/${joined.id}`,
+      {},
+      token
+    );
+    const customer = z
+      .object({
+        externalId: z.string().nullable(),
+        processor: z.string().nullable(),
+        customFields: z.record(z.string(), z.string()),
+        priorityScore: z.number().nullable(),
+      })
+      .parse(await customerRes.json());
+    // The intake-issued externalId (the intakeId) is kept — the join key
+    // lives in customFields instead of clobbering it.
+    expect(customer.externalId).toBe("visit-tpv");
+    expect(customer.processor).toBe("Square");
+    expect(customer.customFields.externalMerchantRef).toBe("vm_123");
+    expect(customer.customFields.measuredMonthlyVolumeCents).toBe("6000000");
+    expect(customer.customFields.estMonthlyVolumeCents).toBe("6000000");
+    expect(customer.customFields.monthly_card_volume_cents).toBe("6000000");
+    expect(customer.customFields.totalFeesCents).toBe("171000");
+    expect(customer.customFields.effectiveRateBps).toBe("285");
+    expect(customer.customFields.averageTicketCents).toBe("4000");
+    expect(customer.customFields.statementPeriod).toBe("2026-09");
+    expect(customer.customFields.volumeSource).toBe("vortex_first_party_tpv");
+    expect(customer.priorityScore).toBe(joined.score);
+
+    // The linked intake document got the join key too.
+    const stub = workspaceStub();
+    const [doc] = await stub.listDocuments({ slug: "intake-visit-tpv" });
+    expect(doc).toBeDefined();
+    expect(doc!.content).toContain("**Vortex merchant ref:** vm_123");
+
+    // The created merchant carries the vortex-merchant externalId.
+    const createdRes = await api(
+      `/workspaces/${organizationId}/customers/${created.id}`,
+      {},
+      token
+    );
+    const createdCustomer = z
+      .object({
+        externalId: z.string().nullable(),
+        source: z.string().nullable(),
+        customFields: z.record(z.string(), z.string()),
+      })
+      .parse(await createdRes.json());
+    expect(createdCustomer.externalId).toBe("vortex-merchant:vm_999");
+    expect(createdCustomer.source).toBe("vortex_merchant_statement");
+    expect(createdCustomer.customFields.externalMerchantRef).toBe("vm_999");
+
+    // Strength-100 measured signal drove the rank, and the ICP volume
+    // rule fired off the canonical field.
+    const sigRes = await api(
+      `/workspaces/${organizationId}/customers/${joined.id}/signals`,
+      {},
+      token
+    );
+    const sigBody = z
+      .object({
+        signals: z.array(
+          z.object({
+            type: z.string(),
+            source: z.string().optional(),
+            strength: z.number().optional(),
+            summary: z.string().nullable().optional(),
+          })
+        ),
+        breakdown: z.object({
+          matchedIcpRules: z.array(z.string()),
+          signalContributions: z.array(z.object({ type: z.string() })),
+        }),
+      })
+      .parse(await sigRes.json());
+    const revenue = sigBody.signals.find((s) => s.type === "revenue_estimate");
+    expect(revenue?.source).toBe("vortex_merchant_statement");
+    expect(revenue?.strength).toBe(100);
+    expect(revenue?.summary).toBe(
+      "Measured card volume $60,000/mo (effective rate 2.85%)"
+    );
+    expect(sigBody.breakdown.signalContributions.map((c) => c.type)).toContain(
+      "revenue_estimate"
+    );
+    expect(sigBody.breakdown.matchedIcpRules).toContain(
+      "icp-est-monthly-card-volume"
+    );
+  });
+
+  it("re-sync matches on the join key and refreshes figures; a name-only row joins by case-insensitive business name", async () => {
+    // First pass mints the merchant + its join key.
+    const first = await post(
+      `/workspaces/${organizationId}/intake/vortex-merchants/sync`,
+      {
+        merchants: [
+          {
+            externalMerchantRef: "vm_resync",
+            businessName: "Resync Retail",
+            contactEmail: "resync@retail.example",
+            monthlyVolumeCents: 2_000_000,
+          },
+        ],
+      },
+      token
+    );
+    expect(first.status).toBe(200);
+    const firstBody = syncResultSchema.parse(await first.json());
+    expect(firstBody.created).toBe(1);
+    const customerId = firstBody.customers[0]!.id;
+
+    // Second pass: same ref with fresh figures (customFields join key),
+    // plus a different ref for the same business name — the name match
+    // joins it onto the same customer instead of duplicating.
+    const second = await post(
+      `/workspaces/${organizationId}/intake/vortex-merchants/sync`,
+      {
+        merchants: [
+          {
+            externalMerchantRef: "vm_resync",
+            monthlyVolumeCents: 5_500_000,
+            effectiveRateBps: 310,
+          },
+          {
+            externalMerchantRef: "vm_resync_alias",
+            businessName: "resync retail",
+            monthlyVolumeCents: 5_500_000,
+          },
+        ],
+      },
+      token
+    );
+    expect(second.status).toBe(200);
+    const secondBody = syncResultSchema.parse(await second.json());
+    expect(secondBody.synced).toBe(2);
+    expect(secondBody.created).toBe(0);
+    expect(secondBody.updated).toBe(2);
+    expect(secondBody.customers.map((c) => c.id)).toEqual([
+      customerId,
+      customerId,
+    ]);
+
+    const customerRes = await api(
+      `/workspaces/${organizationId}/customers/${customerId}`,
+      {},
+      token
+    );
+    const customer = z
+      .object({ customFields: z.record(z.string(), z.string()) })
+      .parse(await customerRes.json());
+    expect(customer.customFields.measuredMonthlyVolumeCents).toBe("5500000");
+    expect(customer.customFields.monthly_card_volume_cents).toBe("5500000");
+    expect(customer.customFields.effectiveRateBps).toBe("310");
+    // The latest write wins the single join-key slot.
+    expect(customer.customFields.externalMerchantRef).toBe("vm_resync_alias");
+
+    // An explicit customerId pin beats every fuzzy key.
+    const pinned = await post(
+      `/workspaces/${organizationId}/intake/vortex-merchants/sync`,
+      {
+        merchants: [
+          {
+            externalMerchantRef: "vm_other",
+            customerId,
+            businessName: "Completely Different Name",
+            monthlyVolumeCents: 1_000_000,
+          },
+        ],
+      },
+      token
+    );
+    const pinnedBody = syncResultSchema.parse(await pinned.json());
+    expect(pinnedBody.customers[0]!.id).toBe(customerId);
+    expect(pinnedBody.updated).toBe(1);
+    expect(pinnedBody.created).toBe(0);
+  });
+
+  it("pulls merchant statements from the Vortex API when an operator key is supplied", async () => {
+    const seen: { url: string; auth: string | null }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url =
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url;
+        seen.push({
+          url,
+          auth: new Headers(init?.headers).get("authorization"),
+        });
+        return Response.json({
+          merchants: [
+            {
+              externalMerchantRef: "vm_remote",
+              businessName: "Remote Statement Co",
+              contactEmail: "remote@statement.example",
+              monthlyVolumeCents: 3_500_000,
+              effectiveRateBps: 260,
+              processor: "Toast",
+            },
+          ],
+        });
+      }
+    );
+    try {
+      const res = await post(
+        `/workspaces/${organizationId}/intake/vortex-merchants/sync`,
+        { vortexOperatorKey: "op-key-456" },
+        token
+      );
+      expect(res.status).toBe(200);
+      const body = syncResultSchema.parse(await res.json());
+      expect(body.synced).toBe(1);
+      expect(body.created).toBe(1);
+      expect(body.customers[0]!.name).toBe("Remote Statement Co");
+      expect(body.customers[0]!.externalMerchantRef).toBe("vm_remote");
+      expect(body.customers[0]!.measuredMonthlyVolumeCents).toBe(3_500_000);
+      expect(body.customers[0]!.score).toBeGreaterThan(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.url).toBe(
+      "https://api.vortex.nyc/v1/operator/merchant-statements"
+    );
+    expect(seen[0]!.auth).toBe("Bearer op-key-456");
+  });
+
+  it("returns 400 when neither inline merchants nor an operator key is provided", async () => {
+    const res = await post(
+      `/workspaces/${organizationId}/intake/vortex-merchants/sync`,
+      {},
+      token
+    );
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("statement transcription (PILE-656)", () => {
+  let organizationId: string;
+  let token: string;
+  let customerId: string;
+
+  const resultSchema = z.object({
+    customerId: z.string(),
+    metrics: z.object({
+      monthlyVolumeCents: z.number().nullable(),
+      totalFeesCents: z.number().nullable(),
+      effectiveRateBps: z.number().nullable(),
+      processor: z.string().nullable(),
+    }),
+    score: z.number().nullable(),
+  });
+
+  beforeAll(async () => {
+    ({ organizationId, token } = await seedWorkspace());
+    const res = await post(
+      `/workspaces/${organizationId}/intake`,
+      { intakeId: "visit-ocr", businessName: "Statement Snap Deli" },
+      token
+    );
+    const body = z.object({ customerId: z.string() }).parse(await res.json());
+    customerId = body.customerId;
+  });
+
+  it("extracts volume, fees, effective rate and processor from statement text, writes fields and ranks a revenue_estimate", async () => {
+    const text = [
+      "SQUARE MERCHANT STATEMENT",
+      "Statement Period: 2026-09-01 to 2026-09-30",
+      "Total Volume: $48,231.19",
+      "Total Fees: $1,402.17",
+      "Effective Rate: 2.91%",
+      "Transactions: 1,692",
+    ].join("\n");
+
+    const res = await post(
+      `/workspaces/${organizationId}/intake/${customerId}/transcribe-statement`,
+      { extractedText: text, statementPeriod: "2026-09" },
+      token
+    );
+    expect(res.status).toBe(200);
+    const body = resultSchema.parse(await res.json());
+    expect(body.customerId).toBe(customerId);
+    expect(body.metrics.monthlyVolumeCents).toBe(4_823_119);
+    expect(body.metrics.totalFeesCents).toBe(140_217);
+    expect(body.metrics.effectiveRateBps).toBe(291);
+    expect(body.metrics.processor).toBe("Square");
+    expect(body.score).not.toBeNull();
+    expect(body.score).toBeGreaterThan(0);
+
+    const customerRes = await api(
+      `/workspaces/${organizationId}/customers/${customerId}`,
+      {},
+      token
+    );
+    const customer = z
+      .object({
+        processor: z.string().nullable(),
+        customFields: z.record(z.string(), z.string()),
+      })
+      .parse(await customerRes.json());
+    expect(customer.customFields.estMonthlyVolumeCents).toBe("4823119");
+    expect(customer.customFields.monthly_card_volume_cents).toBe("4823119");
+    expect(customer.customFields.totalFeesCents).toBe("140217");
+    expect(customer.customFields.effectiveRateBps).toBe("291");
+    expect(customer.customFields.statementSource).toBe("statement_ocr");
+    expect(customer.customFields.statementPeriod).toBe("2026-09");
+    expect(customer.processor).toBe("Square");
+
+    const sigRes = await api(
+      `/workspaces/${organizationId}/customers/${customerId}/signals`,
+      {},
+      token
+    );
+    const sigBody = z
+      .object({
+        signals: z.array(
+          z.object({
+            type: z.string(),
+            source: z.string().optional(),
+            strength: z.number().optional(),
+            summary: z.string().nullable().optional(),
+          })
+        ),
+        breakdown: z.object({
+          matchedIcpRules: z.array(z.string()),
+        }),
+      })
+      .parse(await sigRes.json());
+    const revenue = sigBody.signals.find((s) => s.type === "revenue_estimate");
+    expect(revenue?.source).toBe("statement_ocr");
+    expect(revenue?.strength).toBe(95);
+    expect(revenue?.summary).toContain("$48,231");
+    expect(revenue?.summary).toContain("2.91%");
+    expect(sigBody.breakdown.matchedIcpRules).toContain(
+      "icp-est-monthly-card-volume"
+    );
+  });
+
+  it("reads a statement photo through Workers AI vision and normalizes the JSON reply", async () => {
+    const calls: { model: string; inputs: Record<string, unknown> }[] = [];
+    const original = env.AI;
+    env.AI = {
+      run: async (model: string, inputs: unknown) => {
+        calls.push({ model, inputs: inputs as Record<string, unknown> });
+        return {
+          response: JSON.stringify({
+            monthly_volume_cents: 7_500_000,
+            total_fees_cents: 210_000,
+            effective_rate_bps: 280,
+            processor: "Toast",
+          }),
+        };
+      },
+    } as typeof env.AI;
+    try {
+      const res = await post(
+        `/workspaces/${organizationId}/intake/${customerId}/transcribe-statement`,
+        { imageBase64: "aW1hZ2VieXRlcw==" },
+        token
+      );
+      expect(res.status).toBe(200);
+      const body = resultSchema.parse(await res.json());
+      expect(body.metrics.monthlyVolumeCents).toBe(7_500_000);
+      expect(body.metrics.totalFeesCents).toBe(210_000);
+      expect(body.metrics.effectiveRateBps).toBe(280);
+      expect(body.metrics.processor).toBe("Toast");
+      expect(body.score).toBeGreaterThan(0);
+    } finally {
+      env.AI = original;
+    }
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.model).toBe("@cf/meta/llama-3.2-11b-vision-instruct");
+    expect(calls[0]!.inputs.image).toBe("aW1hZ2VieXRlcw==");
+  });
+
+  it("loads the image from an R2 attachmentKey and falls back to the text parser on a prose AI reply", async () => {
+    const key = `${organizationId}/files/stmts/page1.jpg`;
+    await env.ATTACHMENTS_BUCKET.put(
+      key,
+      new Uint8Array([0xff, 0xd8, 0xff, 0x01])
+    );
+
+    const original = env.AI;
+    env.AI = {
+      run: async () => ({
+        // The model ignored the JSON instruction — the regex reader
+        // still pulls the labelled figures out of its prose.
+        response:
+          "This statement shows Total Volume $30,000 with Total Fees $930.00 at an Effective Rate: 3.10% from Clover.",
+      }),
+    } as typeof env.AI;
+    try {
+      const res = await post(
+        `/workspaces/${organizationId}/intake/${customerId}/transcribe-statement`,
+        { attachmentKey: key },
+        token
+      );
+      expect(res.status).toBe(200);
+      const body = resultSchema.parse(await res.json());
+      expect(body.metrics.monthlyVolumeCents).toBe(3_000_000);
+      expect(body.metrics.totalFeesCents).toBe(93_000);
+      expect(body.metrics.effectiveRateBps).toBe(310);
+      expect(body.metrics.processor).toBe("Clover");
+    } finally {
+      env.AI = original;
+    }
+  });
+
+  it("keeps an explicitly supplied volume without touching extraction", async () => {
+    const calls: unknown[] = [];
+    const original = env.AI;
+    env.AI = {
+      run: async (model: string, inputs: unknown) => {
+        calls.push({ model, inputs });
+        return { response: "{}" };
+      },
+    } as typeof env.AI;
+    try {
+      const res = await post(
+        `/workspaces/${organizationId}/intake/${customerId}/transcribe-statement`,
+        {
+          monthlyVolumeCents: 1_234_500,
+          extractedText: "Total Volume: $999,999.99",
+          processor: "Helcim",
+        },
+        token
+      );
+      expect(res.status).toBe(200);
+      const body = resultSchema.parse(await res.json());
+      expect(body.metrics.monthlyVolumeCents).toBe(1_234_500);
+      expect(body.metrics.processor).toBe("Helcim");
+    } finally {
+      env.AI = original;
+    }
+    expect(calls).toHaveLength(0);
+  });
+
+  it("rejects attachments outside the workspace prefix, missing customers, and empty extractions", async () => {
+    const foreign = await post(
+      `/workspaces/${organizationId}/intake/${customerId}/transcribe-statement`,
+      { attachmentKey: "other-org/files/x.jpg" },
+      token
+    );
+    expect(foreign.status).toBe(400);
+
+    const missing = await post(
+      `/workspaces/${organizationId}/intake/no-such-customer/transcribe-statement`,
+      { extractedText: "Total Volume: $10,000" },
+      token
+    );
+    expect(missing.status).toBe(404);
+
+    const nothing = await post(
+      `/workspaces/${organizationId}/intake/${customerId}/transcribe-statement`,
+      {},
+      token
+    );
+    expect(nothing.status).toBe(400);
+  });
+});
+
+describe("sba ppp/7a loan import (PILE-659)", () => {
+  let organizationId: string;
+  let token: string;
+
+  const importResultSchema = z.object({
+    imported: z.number(),
+    created: z.number(),
+    updated: z.number(),
+    customers: z.array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        loanAmountCents: z.number().nullable(),
+        estMonthlyPayrollCents: z.number().nullable(),
+        estMonthlyVolumeCents: z.number().nullable(),
+        jobsReported: z.number().nullable(),
+        score: z.number().nullable(),
+      })
+    ),
+  });
+
+  beforeAll(async () => {
+    ({ organizationId, token } = await seedWorkspace());
+  });
+
+  it("imports PPP loans, derives payroll→revenue estimates, writes fields and ranks a revenue_estimate", async () => {
+    const res = await post(
+      `/workspaces/${organizationId}/intake/ppp-loans/import`,
+      {
+        loans: [
+          {
+            loanId: "ppp-1001",
+            businessName: "Loan Bodega LLC",
+            address: "500 Fulton St",
+            city: "Brooklyn",
+            state: "NY",
+            zip: "11201",
+            loanAmountCents: 25_000_000,
+            jobsReported: 12,
+            naicsCode: "722511",
+            approvalDate: "2021-03-15",
+            loanType: "ppp",
+          },
+          {
+            // Dollars spelling + no loanId.
+            businessName: "NoId Coffee",
+            loanAmountDollars: 50_000,
+            jobsReported: 5,
+          },
+          {
+            // 7(a) loans aren't payroll-sized — the amount lands but no
+            // payroll/volume derivation.
+            loanId: "7a-2001",
+            businessName: "Seven A Shop",
+            loanAmountCents: 10_000_000,
+            loanType: "7a",
+          },
+        ],
+      },
+      token
+    );
+    expect(res.status).toBe(200);
+    const body = importResultSchema.parse(await res.json());
+    expect(body.imported).toBe(3);
+    expect(body.created).toBe(3);
+    expect(body.updated).toBe(0);
+
+    // $250,000 loan ÷ 2.5 = $100,000/mo payroll; ÷0.30 = $333,333/mo.
+    const bodega = body.customers[0]!;
+    expect(bodega.loanAmountCents).toBe(25_000_000);
+    expect(bodega.estMonthlyPayrollCents).toBe(10_000_000);
+    expect(bodega.estMonthlyVolumeCents).toBe(33_333_333);
+    expect(bodega.jobsReported).toBe(12);
+    expect(bodega.score).not.toBeNull();
+    expect(bodega.score).toBeGreaterThan(0);
+
+    const coffee = body.customers[1]!;
+    expect(coffee.loanAmountCents).toBe(5_000_000);
+    expect(coffee.estMonthlyPayrollCents).toBe(2_000_000);
+    expect(coffee.estMonthlyVolumeCents).toBe(6_666_667);
+
+    const sevenA = body.customers[2]!;
+    expect(sevenA.loanAmountCents).toBe(10_000_000);
+    expect(sevenA.estMonthlyPayrollCents).toBeNull();
+    expect(sevenA.estMonthlyVolumeCents).toBeNull();
+
+    const customerRes = await api(
+      `/workspaces/${organizationId}/customers/${bodega.id}`,
+      {},
+      token
+    );
+    const customer = z
+      .object({
+        externalId: z.string().nullable(),
+        source: z.string().nullable(),
+        address: z.string().nullable(),
+        customFields: z.record(z.string(), z.string()),
+      })
+      .parse(await customerRes.json());
+    expect(customer.externalId).toBe("sba-ppp:ppp-1001");
+    expect(customer.source).toBe("sba_ppp");
+    expect(customer.address).toBe("500 Fulton St, Brooklyn, NY, 11201");
+    expect(customer.customFields.pppLoanAmountCents).toBe("25000000");
+    expect(customer.customFields.estMonthlyPayrollCents).toBe("10000000");
+    expect(customer.customFields.estMonthlyVolumeCents).toBe("33333333");
+    expect(customer.customFields.monthly_card_volume_cents).toBe("33333333");
+    expect(customer.customFields.jobsReported).toBe("12");
+    expect(customer.customFields.naicsCode).toBe("722511");
+    expect(customer.customFields.inboundSource).toBe("sba_ppp");
+
+    const sigRes = await api(
+      `/workspaces/${organizationId}/customers/${bodega.id}/signals`,
+      {},
+      token
+    );
+    const sigBody = z
+      .object({
+        signals: z.array(
+          z.object({
+            type: z.string(),
+            source: z.string().optional(),
+            strength: z.number().optional(),
+            summary: z.string().nullable().optional(),
+          })
+        ),
+        breakdown: z.object({
+          matchedIcpRules: z.array(z.string()),
+          signalContributions: z.array(z.object({ type: z.string() })),
+        }),
+      })
+      .parse(await sigRes.json());
+    const revenue = sigBody.signals.find((s) => s.type === "revenue_estimate");
+    expect(revenue?.source).toBe("sba_ppp");
+    expect(revenue?.strength).toBe(75);
+    expect(revenue?.summary).toBe(
+      "SBA PPP loan $250,000 (12 jobs) → est. revenue ≈ $333,333/mo"
+    );
+    expect(sigBody.breakdown.signalContributions.map((c) => c.type)).toContain(
+      "revenue_estimate"
+    );
+    expect(sigBody.breakdown.matchedIcpRules).toContain(
+      "icp-est-monthly-card-volume"
+    );
+
+    // The 7(a) row signals on the loan amount alone.
+    const sevenASigRes = await api(
+      `/workspaces/${organizationId}/customers/${sevenA.id}/signals`,
+      {},
+      token
+    );
+    const sevenABody = z
+      .object({
+        signals: z.array(
+          z.object({
+            type: z.string(),
+            summary: z.string().nullable().optional(),
+          })
+        ),
+      })
+      .parse(await sevenASigRes.json());
+    const sevenARevenue = sevenABody.signals.find(
+      (s) => s.type === "revenue_estimate"
+    );
+    expect(sevenARevenue?.summary).toBe("SBA 7(a) loan $100,000");
+  });
+
+  it("dedupes re-imports on the sba-ppp externalId and name+address", async () => {
+    const first = await post(
+      `/workspaces/${organizationId}/intake/ppp-loans/import`,
+      {
+        loans: [
+          {
+            loanId: "ppp-3000",
+            businessName: "Duplex Diner",
+            address: "77 Nostrand Ave",
+            loanAmountCents: 12_500_000,
+            jobsReported: 8,
+          },
+        ],
+      },
+      token
+    );
+    expect(first.status).toBe(200);
+    const firstBody = importResultSchema.parse(await first.json());
+    expect(firstBody.created).toBe(1);
+    const customerId = firstBody.customers[0]!.id;
+
+    const second = await post(
+      `/workspaces/${organizationId}/intake/ppp-loans/import`,
+      {
+        loans: [
+          // Same loanId — externalId dedupe.
+          {
+            loanId: "ppp-3000",
+            businessName: "Duplex Diner",
+            loanAmountCents: 12_500_000,
+            jobsReported: 8,
+          },
+          // Same business + street, no id — name/address dedupe.
+          {
+            businessName: "DUPLEX DINER",
+            address: "77 Nostrand Avenue",
+            loanAmountCents: 12_500_000,
+            jobsReported: 9,
+          },
+        ],
+        // Custom ratio: payroll is half of revenue.
+        payrollToRevenueRatio: 0.5,
+      },
+      token
+    );
+    expect(second.status).toBe(200);
+    const secondBody = importResultSchema.parse(await second.json());
+    expect(secondBody.imported).toBe(2);
+    expect(secondBody.created).toBe(0);
+    expect(secondBody.updated).toBe(2);
+    expect(secondBody.customers.map((c) => c.id)).toEqual([
+      customerId,
+      customerId,
+    ]);
+
+    // $125,000 ÷ 2.5 = $50,000 payroll; ÷0.5 = $100,000/mo.
+    const customerRes = await api(
+      `/workspaces/${organizationId}/customers/${customerId}`,
+      {},
+      token
+    );
+    const customer = z
+      .object({
+        externalId: z.string().nullable(),
+        customFields: z.record(z.string(), z.string()),
+      })
+      .parse(await customerRes.json());
+    expect(customer.externalId).toBe("sba-ppp:ppp-3000");
+    expect(customer.customFields.estMonthlyPayrollCents).toBe(
+      "5_000_000".replace(/_/g, "")
+    );
+    expect(customer.customFields.monthly_card_volume_cents).toBe("10000000");
+    expect(customer.customFields.jobsReported).toBe("9");
+  });
+});
+
+describe("statement + loan helper units (PILE-656/PILE-659)", () => {
+  it("parseStatementMetricsFromText reads labelled figures and tolerates junk", () => {
+    const parsed = parseStatementMetricsFromText(
+      [
+        "CLOVER MERCHANT SERVICES",
+        "Total Volume: $48,231.19",
+        "Total Fees: $1,402.17",
+        "Effective Rate: 2.91%",
+      ].join("\n")
+    );
+    expect(parsed).toEqual({
+      monthlyVolumeCents: 4_823_119,
+      totalFeesCents: 140_217,
+      effectiveRateBps: 291,
+      processor: "Clover",
+    });
+
+    const gross = parseStatementMetricsFromText(
+      "Monthly Volume $22,500\nGross Sales $22,500"
+    );
+    expect(gross.monthlyVolumeCents).toBe(2_250_000);
+
+    const empty = parseStatementMetricsFromText("no figures here");
+    expect(empty).toEqual({
+      monthlyVolumeCents: null,
+      totalFeesCents: null,
+      effectiveRateBps: null,
+      processor: null,
+    });
+  });
+
+  it("vortexMerchantCustomFields writes measured figures under every canonical key", () => {
+    const fields = vortexMerchantCustomFields({
+      externalMerchantRef: "vm_x",
+      monthlyVolumeCents: 6_000_000,
+      totalFeesCents: 171_000,
+      effectiveRateBps: 285,
+      statementPeriod: "2026-09",
+    });
+    expect(fields.externalMerchantRef).toBe("vm_x");
+    expect(fields.measuredMonthlyVolumeCents).toBe("6000000");
+    expect(fields.estMonthlyVolumeCents).toBe("6000000");
+    expect(fields.monthly_card_volume_cents).toBe("6000000");
+    expect(fields.totalFeesCents).toBe("171000");
+    expect(fields.effectiveRateBps).toBe("285");
+    expect(fields.statementPeriod).toBe("2026-09");
+    expect(fields.volumeSource).toBe("vortex_first_party_tpv");
+
+    const junk = vortexMerchantCustomFields({
+      externalMerchantRef: "vm_y",
+      monthlyVolumeCents: Number.NaN,
+    });
+    expect("measuredMonthlyVolumeCents" in junk).toBe(false);
+  });
+
+  it("pppLoanEstimates reverses the 2.5x payroll sizing and skips 7(a)", () => {
+    expect(
+      pppLoanEstimates({ loanAmountCents: 25_000_000, loanType: "ppp" })
+    ).toEqual({
+      estMonthlyPayrollCents: 10_000_000,
+      estMonthlyVolumeCents: 33_333_333,
+    });
+    expect(
+      pppLoanEstimates({
+        loanAmountCents: 25_000_000,
+        payrollToRevenueRatio: 0.5,
+      })
+    ).toEqual({
+      estMonthlyPayrollCents: 10_000_000,
+      estMonthlyVolumeCents: 20_000_000,
+    });
+    expect(
+      pppLoanEstimates({ loanAmountCents: 10_000_000, loanType: "7a" })
+    ).toEqual({ estMonthlyPayrollCents: null, estMonthlyVolumeCents: null });
+    expect(pppLoanEstimates({ loanAmountCents: null })).toEqual({
+      estMonthlyPayrollCents: null,
+      estMonthlyVolumeCents: null,
+    });
+
+    const fields = pppLoanCustomFields(
+      {
+        businessName: "X",
+        loanId: "ppp-1",
+        loanAmountDollars: 50_000,
+        jobsReported: 5,
+        naicsCode: "722511",
+        loanType: "ppp",
+      },
+      0.3
+    );
+    expect(fields.pppLoanAmountCents).toBe("5000000");
+    expect(fields.estMonthlyPayrollCents).toBe("2000000");
+    expect(fields.monthly_card_volume_cents).toBe("6666667");
+    expect(fields.jobsReported).toBe("5");
+    expect(fields.inboundSource).toBe("sba_ppp");
   });
 });
 

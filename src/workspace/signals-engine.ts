@@ -109,6 +109,12 @@ export interface MerchantAttrs {
   /** PILE-654 — reported monthly card volume in integer cents, written
    *  to the `monthly_card_volume_cents` custom field by /intake. */
   estMonthlyVolumeCents?: number;
+  /** PILE-663 — explicit opt-in: storefronts count as targets even without a
+   *  collected volume figure (e.g. a storefront-sourced lead sheet). */
+  allowStorefronts?: boolean;
+  /** PILE-663 — set internally by rankMerchantSignals when a storefront
+   *  merchant has revenue proof; drives `icp-storefront-with-volume`. */
+  storefrontWithVolume?: boolean;
   [key: string]: unknown;
 }
 
@@ -223,6 +229,78 @@ export function generateWhyNow(contributions: SignalContribution[]): {
   };
 }
 
+// ---- PILE-663: storefront exclusion-bias relief ----
+
+/** Vertical keywords treated as storefront (card-present) businesses. */
+export const STOREFRONT_VERTICAL_KEYWORDS = [
+  "restaurant",
+  "bar",
+  "cafe",
+  "nightclub",
+  "retail",
+  "grocery",
+  "salon",
+  "bakery",
+  "pizzeria",
+  "deli",
+  "bistro",
+  "taqueria",
+  "barber",
+  "boutique",
+];
+
+/** The default exclusion rule that buries storefronts by -40. */
+export const STOREFRONT_EXCLUSION_RULE_ID =
+  "icp-vertical-pos-bound-restaurant-penalty";
+
+/** Signal types that prove a storefront is a card-present revenue business
+ *  (collected/estimated dollars or a switch/pain event worth competing on). */
+const STOREFRONT_RELIEF_SIGNAL_TYPES = new Set([
+  "revenue_estimate",
+  "pos_detected",
+  "ownership_change",
+  "tax_warrant",
+  "warrant",
+  "violation",
+  "award",
+  "ucc_filing",
+  "payment_award",
+]);
+
+/** Monthly-volume floor (in cents) that counts as proven card volume —
+ *  aligned with the `icp-est-monthly-card-volume` gte threshold. */
+export const STOREFRONT_VOLUME_THRESHOLD_CENTS = 1_000_000;
+
+export function isStorefrontVertical(vertical?: string | null): boolean {
+  const v = (vertical ?? "").toLowerCase();
+  if (!v) return false;
+  return STOREFRONT_VERTICAL_KEYWORDS.some((k) => v.includes(k));
+}
+
+/** PILE-663 — a storefront with a positive revenue signal is a card-present
+ *  rate-competition target, not a POS exclusion. True when the merchant has
+ *  an intake/collected volume ≥ threshold, an explicit `allowStorefronts`
+ *  opt-in, or a revenue/pain/switch signal on record. */
+export function hasStorefrontRevenueProof(
+  merchantAttrs: MerchantAttrs,
+  signals: MerchantSignal[],
+  merchantId?: string
+): boolean {
+  if (merchantAttrs.allowStorefronts === true) return true;
+  if (
+    typeof merchantAttrs.estMonthlyVolumeCents === "number" &&
+    merchantAttrs.estMonthlyVolumeCents >= STOREFRONT_VOLUME_THRESHOLD_CENTS
+  ) {
+    return true;
+  }
+  return signals.some(
+    (s) =>
+      (!merchantId || s.merchantId === merchantId) &&
+      STOREFRONT_RELIEF_SIGNAL_TYPES.has(s.type) &&
+      s.strength > 0
+  );
+}
+
 /** U-031 (PILE-508): ordered Ranker v2 combining ICP Fit + decayed Signals +
  *  3-signal stack bonus. */
 export function rankMerchantSignals(input: {
@@ -234,7 +312,22 @@ export function rankMerchantSignals(input: {
 }): MerchantRankBreakdown {
   const nowIso = input.nowIso ?? new Date().toISOString();
   const nowMs = Date.parse(nowIso);
-  const icp = evaluateIcpFit(input.merchantAttrs, input.config.icpRules);
+  // PILE-663 — storefront with revenue proof: lift the POS-storefront
+  // exclusion penalty and fire `icp-storefront-with-volume` instead.
+  const storefrontRelief =
+    isStorefrontVertical(input.merchantAttrs.vertical) &&
+    hasStorefrontRevenueProof(
+      input.merchantAttrs,
+      input.signals,
+      input.merchantId
+    );
+  const icpRules = storefrontRelief
+    ? input.config.icpRules.filter((r) => r.id !== STOREFRONT_EXCLUSION_RULE_ID)
+    : input.config.icpRules;
+  const icpAttrs: MerchantAttrs = storefrontRelief
+    ? { ...input.merchantAttrs, storefrontWithVolume: true }
+    : input.merchantAttrs;
+  const icp = evaluateIcpFit(icpAttrs, icpRules);
 
   const ruleByType = new Map(input.config.signalRules.map((r) => [r.type, r]));
   const contributions: SignalContribution[] = [];
@@ -793,6 +886,9 @@ export const DEFAULT_ICP_RULES: IcpRule[] = [
     weight: 25,
   },
   {
+    // PILE-663 — storefront verticals are excluded by default, but
+    // rankMerchantSignals lifts this penalty (and fires
+    // `icp-storefront-with-volume`) when the merchant has proven revenue.
     id: "icp-vertical-pos-bound-restaurant-penalty",
     motion: "smb_default",
     field: "vertical",
@@ -802,10 +898,27 @@ export const DEFAULT_ICP_RULES: IcpRule[] = [
       "bar",
       "cafe",
       "nightclub",
+      "retail",
+      "grocery",
+      "salon",
+      "bakery",
+      "pizzeria",
+      "deli",
       "restaurant / pos (excluded)",
       "restaurant (pos excluded)",
     ],
     weight: -40,
+  },
+  {
+    // PILE-663 — a storefront merchant with proven card volume is a
+    // card-present rate-competition target. `rankMerchantSignals` sets
+    // merchantAttrs.storefrontWithVolume when volume/pain proof exists.
+    id: "icp-storefront-with-volume",
+    motion: "smb_default",
+    field: "storefrontWithVolume",
+    op: "eq",
+    value: true,
+    weight: 20,
   },
   {
     id: "icp-has-address",

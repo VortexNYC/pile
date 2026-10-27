@@ -8263,6 +8263,18 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "customers territories list": {
+    method: "GET",
+    path: "/workspaces/{organizationId}/customers/territories",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "customers get": {
     method: "GET",
     path: "/workspaces/{organizationId}/customers/{id}",
@@ -9220,6 +9232,31 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "domain",
         flag: "domain",
+      },
+    ],
+  },
+  "customers building scorecard create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/{id}/building-scorecard",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "id",
+        flag: "id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "attrs",
+        flag: "attrs",
+      },
+      {
+        name: "fetchFromPluto",
+        flag: "fetch-from-pluto",
       },
     ],
   },
@@ -14337,6 +14374,101 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "vortexOperatorKey",
         flag: "vortex-operator-key",
+      },
+    ],
+  },
+  "intake vortex merchants sync create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/intake/vortex-merchants/sync",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "merchants",
+        flag: "merchants",
+      },
+      {
+        name: "vortexOperatorKey",
+        flag: "vortex-operator-key",
+      },
+    ],
+  },
+  "intake transcribe statement create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/intake/{customerId}/transcribe-statement",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "customerId",
+        flag: "customer-id",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "attachmentKey",
+        flag: "attachment-key",
+      },
+      {
+        name: "imageBase64",
+        flag: "image-base64",
+      },
+      {
+        name: "extractedText",
+        flag: "extracted-text",
+      },
+      {
+        name: "monthlyVolumeCents",
+        flag: "monthly-volume-cents",
+      },
+      {
+        name: "totalFeesCents",
+        flag: "total-fees-cents",
+      },
+      {
+        name: "effectiveRateBps",
+        flag: "effective-rate-bps",
+      },
+      {
+        name: "avgTicketCents",
+        flag: "avg-ticket-cents",
+      },
+      {
+        name: "processor",
+        flag: "processor",
+      },
+      {
+        name: "statementPeriod",
+        flag: "statement-period",
+      },
+    ],
+  },
+  "intake ppp loans import create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/intake/ppp-loans/import",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "loans",
+        flag: "loans",
+      },
+      {
+        name: "payrollToRevenueRatio",
+        flag: "payroll-to-revenue-ratio",
       },
     ],
   },

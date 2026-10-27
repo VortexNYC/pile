@@ -2986,6 +2986,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getWorkspacesOrganizationIdCustomersTerritories",
+    "description": "List customer territories — Group active customers with addresses into canvassing territories (neighborhood field, then borough / postal code / city parsed from the address). Stops inside each territory sort by street name then house number so a field rep gets a ready-to-walk route list per neighborhood. (GET /workspaces/{organizationId}/customers/territories) Path params (top-level, required): organizationId.",
+    "method": "GET",
+    "path": "/workspaces/{organizationId}/customers/territories",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "getWorkspacesOrganizationIdCustomertiers",
     "description": "List customer tiers (GET /workspaces/{organizationId}/customer-tiers) Path params (top-level, required): organizationId.",
     "method": "GET",
@@ -12157,6 +12174,104 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdCustomersIdBuildingscorecard",
+    "description": "Create customer building scorecard — Score a building/landlord lead from PLUTO / ACRIS / HPD attributes. Pass `attrs` to score what you have; leave `fetchFromPluto` on (default) to backfill missing attributes from NYC Open Data PLUTO + HPD registrations first. Writes score/tier/XRF eligibility onto the customer and a building_scorecard memory fact. (POST /workspaces/{organizationId}/customers/{id}/building-scorecard) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: attrs, fetchFromPluto.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers/{id}/building-scorecard",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "attrs": {
+              "type": "object",
+              "properties": {
+                "bbl": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "bin": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "address": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "borough": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "zipcode": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "unitsRes": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "unitsTotal": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "buildingSqft": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "assessedTotalDollars": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "yearBuilt": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "lastSalePriceDollars": {
+                  "type": "number",
+                  "nullable": true
+                },
+                "lastSaleDate": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "hpdRegistrationId": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "hpdManagingAgent": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "hpdOwnerName": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "openViolationsCount": {
+                  "type": "number",
+                  "nullable": true
+                }
+              }
+            },
+            "fetchFromPluto": {
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      "required": [
+        "id",
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdCustomersIdComments",
     "description": "Create customer comment (POST /workspaces/{organizationId}/customers/{id}/comments) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: body* (* = required).",
     "method": "POST",
@@ -14827,6 +14942,151 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdIntakeCustomerIdTranscribestatement",
+    "description": "Create intake transcribe statement — Read processing figures off a merchant statement. Explicit figures win; otherwise extractedText is regex-parsed, or imageBase64/an R2 attachmentKey goes through Workers AI vision (when bound). Writes estMonthlyVolumeCents/monthly_card_volume_cents/totalFeesCents/effectiveRateBps to customFields, records a statement_ocr revenue_estimate signal, and re-ranks the merchant. (POST /workspaces/{organizationId}/intake/{customerId}/transcribe-statement) Path params (top-level, required): organizationId, customerId. Request body goes in the \"body\" object; fields: attachmentKey, imageBase64, extractedText, monthlyVolumeCents, totalFeesCents, effectiveRateBps, avgTicketCents, processor, statementPeriod.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/intake/{customerId}/transcribe-statement",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "customerId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "attachmentKey": {
+              "type": "string"
+            },
+            "imageBase64": {
+              "type": "string"
+            },
+            "extractedText": {
+              "type": "string"
+            },
+            "monthlyVolumeCents": {
+              "type": "number"
+            },
+            "totalFeesCents": {
+              "type": "number"
+            },
+            "effectiveRateBps": {
+              "type": "number"
+            },
+            "avgTicketCents": {
+              "type": "number"
+            },
+            "processor": {
+              "type": "string"
+            },
+            "statementPeriod": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "customerId",
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdIntakePpploansImport",
+    "description": "Create intake ppp loan import — Import SBA PPP/7(a) loan rows as a free payroll-derived revenue proxy: PPP loans were sized at 2.5x monthly payroll, and payrollToRevenueRatio (default 0.30) turns that into an estimated monthly volume. Matches existing customers on externalId \"sba-ppp:<loanId>\" or case-insensitive business name + street address; writes loan facts and the derived figures to customFields, records a sba_ppp revenue_estimate signal, and re-ranks. (POST /workspaces/{organizationId}/intake/ppp-loans/import) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: loans*, payrollToRevenueRatio (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/intake/ppp-loans/import",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "loans": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "loanId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "businessName": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "address": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "city": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "state": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "zip": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "loanAmountDollars": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "loanAmountCents": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "jobsReported": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "naicsCode": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "approvalDate": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "loanType": {
+                    "type": "string",
+                    "enum": [
+                      "ppp",
+                      "7a"
+                    ]
+                  }
+                },
+                "required": [
+                  "businessName"
+                ]
+              }
+            },
+            "payrollToRevenueRatio": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 1
+            }
+          },
+          "required": [
+            "loans"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdIntakeQuoterequestsSync",
     "description": "Create intake quote request sync — Import Vortex pricing-calculator quote requests (/v1/operator/quote-requests) as inbound leads. Each row upserts a customer keyed on externalId \"vortex-quote:<id>\", writes the self-reported volume figures to customFields, upserts the contact, opens a lead-stage deal unless the merchant is already in the pipeline, and records a revenue_estimate signal. Pass quoteRequests inline or an operator key to pull from the Vortex API. (POST /workspaces/{organizationId}/intake/quote-requests/sync) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: quoteRequests, vortexOperatorKey.",
     "method": "POST",
@@ -14904,6 +15164,86 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 },
                 "required": [
                   "id"
+                ]
+              }
+            },
+            "vortexOperatorKey": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdIntakeVortexmerchantsSync",
+    "description": "Create intake vortex merchant sync — Join Vortex merchant-statement analysis (measured card volume, fees, effective rate — first-party TPV) onto Pile customers. Matches on explicit customerId, customFields.externalMerchantRef, externalId \"vortex-merchant:<ref>\", contact email, or case-insensitive business name; creates a customer when nothing matches. Writes the measured figures to customFields (incl. the canonical monthly_card_volume_cents), stamps the join key on the merchant's intake document when one exists, records a high-confidence revenue_estimate signal, and re-ranks. Pass merchants inline or an operator key to pull /v1/operator/merchant-statements. (POST /workspaces/{organizationId}/intake/vortex-merchants/sync) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: merchants, vortexOperatorKey.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/intake/vortex-merchants/sync",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "merchants": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "externalMerchantRef": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "customerId": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "businessName": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "contactEmail": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "monthlyVolumeCents": {
+                    "type": "number"
+                  },
+                  "totalFeesCents": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "effectiveRateBps": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "transactionCount": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "avgTicketCents": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "statementPeriod": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "processor": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "externalMerchantRef",
+                  "monthlyVolumeCents"
                 ]
               }
             },

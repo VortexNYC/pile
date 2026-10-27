@@ -20443,6 +20443,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/customers/territories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List customer territories
+         * @description Group active customers with addresses into canvassing territories (neighborhood field, then borough / postal code / city parsed from the address). Stops inside each territory sort by street name then house number so a field rep gets a ready-to-walk route list per neighborhood.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Canvassing territories with ordered stops */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            territories: {
+                                key: string;
+                                label: string;
+                                count: number;
+                                dueCount: number;
+                                stops: {
+                                    id: string;
+                                    name: string;
+                                    address: string | null;
+                                    phone: string | null;
+                                    streetName: string;
+                                    houseNumber: number | null;
+                                    priorityScore: number | null;
+                                    nextStepDueAt: string | null;
+                                }[];
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workspaces/{organizationId}/customers/{id}": {
         parameters: {
             query?: never;
@@ -22341,6 +22399,114 @@ export interface paths {
                             matchedCustomerId: string | null;
                         };
                     };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/customers/{id}/building-scorecard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create customer building scorecard
+         * @description Score a building/landlord lead from PLUTO / ACRIS / HPD attributes. Pass `attrs` to score what you have; leave `fetchFromPluto` on (default) to backfill missing attributes from NYC Open Data PLUTO + HPD registrations first. Writes score/tier/XRF eligibility onto the customer and a building_scorecard memory fact.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        attrs?: {
+                            bbl?: string | null;
+                            bin?: string | null;
+                            address?: string | null;
+                            borough?: string | null;
+                            zipcode?: string | null;
+                            unitsRes?: number | null;
+                            unitsTotal?: number | null;
+                            buildingSqft?: number | null;
+                            assessedTotalDollars?: number | null;
+                            yearBuilt?: number | null;
+                            lastSalePriceDollars?: number | null;
+                            lastSaleDate?: string | null;
+                            hpdRegistrationId?: string | null;
+                            hpdManagingAgent?: string | null;
+                            hpdOwnerName?: string | null;
+                            openViolationsCount?: number | null;
+                        };
+                        fetchFromPluto?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Building scorecard breakdown applied to the customer */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            customerId: string;
+                            attributes: {
+                                bbl?: string | null;
+                                bin?: string | null;
+                                address?: string | null;
+                                borough?: string | null;
+                                zipcode?: string | null;
+                                unitsRes?: number | null;
+                                unitsTotal?: number | null;
+                                buildingSqft?: number | null;
+                                assessedTotalDollars?: number | null;
+                                yearBuilt?: number | null;
+                                lastSalePriceDollars?: number | null;
+                                lastSaleDate?: string | null;
+                                hpdRegistrationId?: string | null;
+                                hpdManagingAgent?: string | null;
+                                hpdOwnerName?: string | null;
+                                openViolationsCount?: number | null;
+                            };
+                            breakdown: {
+                                score: number;
+                                /** @enum {string} */
+                                tier: "A" | "B" | "C" | "D";
+                                xrfLeadPaintEligible: boolean;
+                                /** @enum {string} */
+                                portfolioScale: "large_multifamily" | "mid_multifamily" | "small_multifamily" | "single_or_commercial";
+                                whyNow: string;
+                                factors: {
+                                    key: string;
+                                    label: string;
+                                    points: number;
+                                    detail: string;
+                                }[];
+                            };
+                        };
+                    };
+                };
+                /** @description Customer not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
                 };
             };
         };
@@ -35541,6 +35707,253 @@ export interface paths {
                 };
                 /** @description Vortex API fetch failed */
                 502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/intake/vortex-merchants/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create intake vortex merchant sync
+         * @description Join Vortex merchant-statement analysis (measured card volume, fees, effective rate — first-party TPV) onto Pile customers. Matches on explicit customerId, customFields.externalMerchantRef, externalId "vortex-merchant:<ref>", contact email, or case-insensitive business name; creates a customer when nothing matches. Writes the measured figures to customFields (incl. the canonical monthly_card_volume_cents), stamps the join key on the merchant's intake document when one exists, records a high-confidence revenue_estimate signal, and re-ranks. Pass merchants inline or an operator key to pull /v1/operator/merchant-statements.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        merchants?: {
+                            externalMerchantRef: string;
+                            customerId?: string | null;
+                            businessName?: string | null;
+                            contactEmail?: string | null;
+                            monthlyVolumeCents: number;
+                            totalFeesCents?: number | null;
+                            effectiveRateBps?: number | null;
+                            transactionCount?: number | null;
+                            avgTicketCents?: number | null;
+                            statementPeriod?: string | null;
+                            processor?: string | null;
+                        }[];
+                        vortexOperatorKey?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Vortex merchants synced */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            synced: number;
+                            created: number;
+                            updated: number;
+                            customers: {
+                                id: string;
+                                name: string;
+                                externalMerchantRef: string;
+                                measuredMonthlyVolumeCents: number | null;
+                                effectiveRateBps: number | null;
+                                score: number | null;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Invalid request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Vortex API fetch failed */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/intake/{customerId}/transcribe-statement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create intake transcribe statement
+         * @description Read processing figures off a merchant statement. Explicit figures win; otherwise extractedText is regex-parsed, or imageBase64/an R2 attachmentKey goes through Workers AI vision (when bound). Writes estMonthlyVolumeCents/monthly_card_volume_cents/totalFeesCents/effectiveRateBps to customFields, records a statement_ocr revenue_estimate signal, and re-ranks the merchant.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    customerId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        attachmentKey?: string;
+                        imageBase64?: string;
+                        extractedText?: string;
+                        monthlyVolumeCents?: number;
+                        totalFeesCents?: number;
+                        effectiveRateBps?: number;
+                        avgTicketCents?: number;
+                        processor?: string;
+                        statementPeriod?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Statement transcribed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            customerId: string;
+                            metrics: {
+                                monthlyVolumeCents: number | null;
+                                totalFeesCents: number | null;
+                                effectiveRateBps: number | null;
+                                processor: string | null;
+                            };
+                            score: number | null;
+                        };
+                    };
+                };
+                /** @description Invalid request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Customer not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/intake/ppp-loans/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create intake ppp loan import
+         * @description Import SBA PPP/7(a) loan rows as a free payroll-derived revenue proxy: PPP loans were sized at 2.5x monthly payroll, and payrollToRevenueRatio (default 0.30) turns that into an estimated monthly volume. Matches existing customers on externalId "sba-ppp:<loanId>" or case-insensitive business name + street address; writes loan facts and the derived figures to customFields, records a sba_ppp revenue_estimate signal, and re-ranks.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        loans: {
+                            loanId?: string | null;
+                            businessName: string;
+                            address?: string | null;
+                            city?: string | null;
+                            state?: string | null;
+                            zip?: string | null;
+                            loanAmountDollars?: number | null;
+                            loanAmountCents?: number | null;
+                            jobsReported?: number | null;
+                            naicsCode?: string | null;
+                            approvalDate?: string | null;
+                            /** @enum {string} */
+                            loanType?: "ppp" | "7a";
+                        }[];
+                        payrollToRevenueRatio?: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description SBA loans imported */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            imported: number;
+                            created: number;
+                            updated: number;
+                            customers: {
+                                id: string;
+                                name: string;
+                                loanAmountCents: number | null;
+                                estMonthlyPayrollCents: number | null;
+                                estMonthlyVolumeCents: number | null;
+                                jobsReported: number | null;
+                                score: number | null;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Invalid request */
+                400: {
                     headers: {
                         [name: string]: unknown;
                     };
