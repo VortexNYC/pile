@@ -422,6 +422,7 @@ export async function nudgeLane(
       {
         organizationId,
         backupRef: session.sandboxBackupRef ?? null,
+        computeBackend: session.computeBackend,
       }
     );
     await stub

@@ -497,6 +497,7 @@ export function registerCommentRoutes(app: OpenAPIHono<AppContext>) {
                 {
                   organizationId,
                   backupRef: active.session.sandboxBackupRef ?? null,
+                  computeBackend: active.session.computeBackend,
                 }
               );
               if (delivered) {

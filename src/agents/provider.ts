@@ -114,13 +114,18 @@ export interface AgentProvider {
     model?: string,
     sessionContext?: AgentDispatchContext
   ): Promise<AgentProviderSession>;
-  poll(sessionId: string): Promise<AgentProviderSession>;
+  /**
+   * `pin` is the compute backend recorded on the session row at dispatch
+   * (PILE-474) — callers that loaded the session pass it through so a
+   * COMPUTE_PROVIDER flip mid-flight can't retarget in-flight lanes.
+   */
+  poll(sessionId: string, pin?: string | null): Promise<AgentProviderSession>;
   /**
    * Terminate the provider-side run. Optional — providers that can't cancel
    * remotely simply omit this and the tracker marks the session canceled
    * locally.
    */
-  cancel?(sessionId: string): Promise<void>;
+  cancel?(sessionId: string, pin?: string | null): Promise<void>;
   /**
    * Deliver a follow-up prompt into a session whose sandbox is still alive
    * (kept after a terminal run for the resume window — PILE-210). Returns
@@ -132,21 +137,29 @@ export interface AgentProvider {
     prompt: string,
     issue: Issue,
     gitIdentity?: GitIdentity | null,
-    ctx?: { organizationId?: string; backupRef?: string | null }
+    ctx?: {
+      organizationId?: string;
+      backupRef?: string | null;
+      computeBackend?: string | null;
+    }
   ): Promise<boolean>;
   /**
    * Snapshot the lane's worktree to durable storage before its kept sandbox
    * is destroyed (reaper or window expiry). Returns a backup ref the session
    * row stores; sendPrompt revives the lane by restoring it.
    */
-  backupTerminalSandbox?(trackerSessionId: string): Promise<string | null>;
+  backupTerminalSandbox?(
+    trackerSessionId: string,
+    pin?: string | null
+  ): Promise<string | null>;
   /**
    * Optional live state for the provider and underlying compute. Used by the
    * session state endpoint to expose raw provider/compute details.
    */
   getState?(
     providerSessionId: string,
-    trackerSessionId: string
+    trackerSessionId: string,
+    pin?: string | null
   ): Promise<AgentProviderState | null>;
   /**
    * Optional: fetch the text of whatever the agent is currently asking, when

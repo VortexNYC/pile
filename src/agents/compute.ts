@@ -1337,7 +1337,11 @@ export class FailoverBackend implements ComputeBackend {
     }
   }
 
-  findSandbox(...a: Parameters<ComputeBackend["findSandbox"]>[0] extends never ? never : [string, string, string?]) {
+  findSandbox(
+    ...a: Parameters<ComputeBackend["findSandbox"]>[0] extends never
+      ? never
+      : [string, string, string?]
+  ) {
     return this.pick().findSandbox(...a);
   }
   startRunner(...a: [ComputeSandbox, string, string, Record<string, string>?]) {
@@ -1368,9 +1372,17 @@ export class FailoverBackend implements ComputeBackend {
     return this.pick().backupWorktree?.(...a) ?? Promise.resolve(null);
   }
   restoreWorktree(...a: [string, string]) {
-    return this.pick().restoreWorktree?.(...a) ?? Promise.reject(new Error("no restoreWorktree"));
+    return (
+      this.pick().restoreWorktree?.(...a) ??
+      Promise.reject(new Error("no restoreWorktree"))
+    );
   }
-  mountCache(...a: [ComputeSandbox, { organizationId: string; repo: string; readOnly: boolean }]) {
+  mountCache(
+    ...a: [
+      ComputeSandbox,
+      { organizationId: string; repo: string; readOnly: boolean },
+    ]
+  ) {
     return this.pick().mountCache?.(...a) ?? Promise.resolve(null);
   }
   saveCache(...a: [ComputeSandbox, { organizationId: string; repo: string }]) {
@@ -1385,6 +1397,15 @@ export class FailoverBackend implements ComputeBackend {
   health() {
     return this.pick().health();
   }
+}
+
+/** Narrow a session row's `compute_backend` column (TEXT, nullable) to the
+ *  pin `computeBackend` accepts — anything unexpected falls back to the
+ *  live flag rather than pinning a lane to garbage. */
+export function toComputePin(
+  value: string | null | undefined
+): ComputeBackend["kind"] | undefined {
+  return value === "daytona" || value === "cloudflare" ? value : undefined;
 }
 
 export function computeBackend(

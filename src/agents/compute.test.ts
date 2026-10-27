@@ -9,6 +9,7 @@ import {
   computeBackend,
   isComputeInfraError,
   laneCachePrefix,
+  toComputePin,
 } from "./compute.js";
 import type { ComputeSandbox, SandboxHandle } from "./compute.js";
 import type { LaneSandboxBase } from "./lane-sandbox.js";
@@ -63,6 +64,40 @@ describe("computeBackend", () => {
       SANDBOX: {} as NonNullable<AppEnv["SANDBOX"]>,
     };
     expect(computeBackend(env, "cursor-cli").kind).toBe("cloudflare");
+  });
+
+  // PILE-474 — a flag flip mid-flight must not retarget in-flight lanes:
+  // the session row's compute_backend wins over COMPUTE_PROVIDER.
+  it("honors the session-pinned backend over a flipped COMPUTE_PROVIDER", () => {
+    const env = {
+      ...baseEnv(),
+      COMPUTE_PROVIDER: "cloudflare",
+      SANDBOX: {} as NonNullable<AppEnv["SANDBOX"]>,
+      DAYTONA_API_KEY: "key",
+    };
+    expect(computeBackend(env, undefined, "daytona").kind).toBe("daytona");
+    const daytonaEnv = {
+      ...baseEnv(),
+      COMPUTE_PROVIDER: "daytona",
+      DAYTONA_API_KEY: "key",
+      SANDBOX: {} as NonNullable<AppEnv["SANDBOX"]>,
+    };
+    expect(computeBackend(daytonaEnv, undefined, "cloudflare").kind).toBe(
+      "cloudflare"
+    );
+  });
+});
+
+describe("toComputePin", () => {
+  it("narrows valid backend names", () => {
+    expect(toComputePin("daytona")).toBe("daytona");
+    expect(toComputePin("cloudflare")).toBe("cloudflare");
+  });
+
+  it("falls back for null/unknown values", () => {
+    expect(toComputePin(null)).toBeUndefined();
+    expect(toComputePin(undefined)).toBeUndefined();
+    expect(toComputePin("kubernetes")).toBeUndefined();
   });
 });
 
@@ -141,29 +176,29 @@ describe("DaytonaBackend sandbox create timeout (PILE-466)", () => {
   });
 });
 
+const stubDaytona = () =>
+  fetchStub((url, init) => {
+    if (url === "https://daytona.test/sandbox" && init?.method === "POST") {
+      return new Response(
+        JSON.stringify({ ...daytonaRecord, state: "creating" }),
+        { status: 200 }
+      );
+    }
+    return new Response(JSON.stringify(daytonaRecord), { status: 200 });
+  });
+
+const createBody = (
+  calls: { url: string; init?: RequestInit }[]
+): Record<string, unknown> => {
+  const create = calls.find(
+    (c) => c.url === "https://daytona.test/sandbox" && c.init?.method === "POST"
+  );
+  return JSON.parse(String(create?.init?.body)) as Record<string, unknown>;
+};
+
 // PILE-475 — warm pools only claim sandboxes with no custom env, volumes,
 // or secrets; the create body must stay eligible.
 describe("DaytonaBackend warm-pool eligibility (PILE-475)", () => {
-  const stubDaytona = () =>
-    fetchStub((url, init) => {
-      if (url === "https://daytona.test/sandbox" && init?.method === "POST") {
-        return new Response(
-          JSON.stringify({ ...daytonaRecord, state: "creating" }),
-          { status: 200 }
-        );
-      }
-      return new Response(JSON.stringify(daytonaRecord), { status: 200 });
-    });
-  const createBody = (
-    calls: { url: string; init?: RequestInit }[]
-  ): Record<string, unknown> => {
-    const create = calls.find(
-      (c) =>
-        c.url === "https://daytona.test/sandbox" && c.init?.method === "POST"
-    );
-    return JSON.parse(String(create?.init?.body)) as Record<string, unknown>;
-  };
-
   it("omits the env key entirely when the lane env is empty", async () => {
     const calls = stubDaytona();
     await computeBackend(daytonaTestEnv()).createSandbox({
@@ -348,33 +383,38 @@ function fakeSandbox(
   };
 }
 
-describe("LaneSandboxBackend (sandbox-sdk 1.0)", () => {
-  function fakeLaneNs() {
-    const calls: string[] = [];
-    const stub = {
-      provision: vi.fn(async () => {}),
-      spawn: vi.fn(async (o: { processId: string; command: string }) => {
-        calls.push(`spawn:${o.processId}:${o.command}`);
-      }),
-      hasProcess: vi.fn(async () => true),
-      processState: vi.fn(async (): Promise<import('./lane-sandbox.js').LaneProcessState> => ({ running: true, exitCode: null })),
-      sessionBusy: vi.fn(async () => false),
-      readFile: vi.fn(async () => null),
-      putFiles: vi.fn(async () => {}),
-      tail: vi.fn(async () => "tail-bytes"),
-      probe: vi.fn(async () => true),
-      destroy: vi.fn(async () => {}),
-    };
-    const ns = {
-      getByName: vi.fn(() => stub),
-    };
-    return {
-      ns: ns as unknown as AppEnv["SANDBOX_LANE"],
-      stub,
-      calls,
-    };
-  }
+function fakeLaneNs() {
+  const calls: string[] = [];
+  const stub = {
+    provision: vi.fn(async () => {}),
+    spawn: vi.fn(async (o: { processId: string; command: string }) => {
+      calls.push(`spawn:${o.processId}:${o.command}`);
+    }),
+    hasProcess: vi.fn(async () => true),
+    processState: vi.fn(
+      async (): Promise<import("./lane-sandbox.js").LaneProcessState> => ({
+        running: true,
+        exitCode: null,
+      })
+    ),
+    sessionBusy: vi.fn(async () => false),
+    readFile: vi.fn(async () => null),
+    putFiles: vi.fn(async () => {}),
+    tail: vi.fn(async () => "tail-bytes"),
+    probe: vi.fn(async () => true),
+    destroy: vi.fn(async () => {}),
+  };
+  const ns = {
+    getByName: vi.fn(() => stub),
+  };
+  return {
+    ns: ns as unknown as AppEnv["SANDBOX_LANE"],
+    stub,
+    calls,
+  };
+}
 
+describe("LaneSandboxBackend (sandbox-sdk 1.0)", () => {
   it("LANE_SDK=v1 selects the lane backend on SANDBOX_LANE*", () => {
     const { ns } = fakeLaneNs();
     const env = {

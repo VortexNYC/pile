@@ -1784,6 +1784,8 @@ export const workspaceMigrations = {
       { idx: 98, when: 98, tag: "v99", breakpoints: true },
       { idx: 99, when: 99, tag: "v100", breakpoints: true },
       { idx: 100, when: 100, tag: "v101", breakpoints: true },
+      { idx: 101, when: 101, tag: "v102", breakpoints: true },
+      { idx: 102, when: 102, tag: "v103", breakpoints: true },
     ],
   },
   migrations: {

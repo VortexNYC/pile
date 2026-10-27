@@ -227,7 +227,8 @@ async function captureHangReport(
       : withTimeout(
           provider.getState(
             session.providerSessionId ?? session.id,
-            session.id
+            session.id,
+            session.computeBackend
           ),
           probeTimeoutMs,
           "getState"
@@ -270,7 +271,11 @@ async function cancelSession(
   }
   try {
     if (provider?.cancel)
-      await withTimeout(provider.cancel(remoteId), probeTimeoutMs, "cancel");
+      await withTimeout(
+        provider.cancel(remoteId, session.computeBackend),
+        probeTimeoutMs,
+        "cancel"
+      );
   } catch (err) {
     console.error("agent session cancel failed", {
       session: session.id,
@@ -1178,7 +1183,10 @@ async function reapTerminalArtifacts(
       // follow-up restores it onto a fresh container instead of cold-cloning.
       if (provider.backupTerminalSandbox) {
         const backupRef = await provider
-          .backupTerminalSandbox(session.providerSessionId ?? session.id)
+          .backupTerminalSandbox(
+            session.providerSessionId ?? session.id,
+            session.computeBackend
+          )
           .catch(() => null);
         if (backupRef) {
           await stub
@@ -1187,7 +1195,10 @@ async function reapTerminalArtifacts(
         }
       }
       if (provider.cancel) {
-        await provider.cancel(session.providerSessionId ?? session.id);
+        await provider.cancel(
+          session.providerSessionId ?? session.id,
+          session.computeBackend
+        );
       }
       // Push updatedAt past the reap window so this session isn't retried
       // every sweep.
@@ -1657,7 +1668,7 @@ export async function sweepAgentSessions(
         let probedState: AgentProviderState | null | undefined;
         try {
           const polled = await withTimeout(
-            provider.poll(remoteId),
+            provider.poll(remoteId, session.computeBackend),
             probeTimeoutMs,
             "poll"
           );
@@ -1890,7 +1901,7 @@ export async function sweepAgentSessions(
 
           if (provider.getState) {
             const state = await withTimeout(
-              provider.getState(remoteId, session.id),
+              provider.getState(remoteId, session.id, session.computeBackend),
               probeTimeoutMs,
               "getState"
             );
