@@ -197,8 +197,7 @@ describe("CodexCliAgentProvider", () => {
 
     const createCall = fetchSpy.mock.calls.find(
       ([input, init]) =>
-        String(input).split("?")[0] ===
-          "https://app.daytona.io/api/sandbox" &&
+        String(input).split("?")[0] === "https://app.daytona.io/api/sandbox" &&
         (init as RequestInit | undefined)?.method === "POST"
     );
     expect(createCall).toBeDefined();
@@ -209,9 +208,7 @@ describe("CodexCliAgentProvider", () => {
     const upload = fetchSpy.mock.calls.find(
       ([input, init]) =>
         String(input).includes("/files/upload-v2") &&
-        decodeURIComponent(String(input)).includes(
-          "path=/tmp/pile/lane.env"
-        ) &&
+        decodeURIComponent(String(input)).includes("path=/tmp/pile/lane.env") &&
         (init as RequestInit | undefined)?.method === "POST"
     );
     expect(upload).toBeDefined();

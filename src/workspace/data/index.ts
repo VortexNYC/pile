@@ -909,7 +909,9 @@ export type NotificationType =
   | "draft_pending"
   // PILE-425 — an agent type breached its spend/token caps; the CoS alert
   // channel fires `agent.cap_exceeded` event automations alongside this.
-  | "agent_cap_exceeded";
+  | "agent_cap_exceeded"
+  // PILE-674 — a customer follow-up (nextStepDueAt) crossed due.
+  | "follow_up_due";
 
 export type RecipientType = "user" | "agent";
 

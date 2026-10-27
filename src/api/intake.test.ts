@@ -1,5 +1,5 @@
 import { env } from "cloudflare:test";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { createD1 } from "../global/db.js";
@@ -13,6 +13,8 @@ import {
   intakePricingCustomFields,
   parseMoneyToCents,
   parseMonthlyTxCount,
+  quoteRequestCustomFields,
+  quoteRequestName,
 } from "./intake.js";
 
 async function seedWorkspace() {
@@ -449,6 +451,345 @@ describe("buildIntakeMarkdown", () => {
     expect(md).toContain("**Under contract:** yes");
     expect(md).not.toContain("**Contract end:**");
     expect(md).toContain("- none captured");
+  });
+});
+
+describe("vortex quote-requests sync (PILE-655)", () => {
+  let organizationId: string;
+  let token: string;
+
+  const syncResultSchema = z.object({
+    synced: z.number(),
+    created: z.number(),
+    updated: z.number(),
+    customers: z.array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        externalId: z.string().nullable(),
+        estMonthlyVolumeCents: z.number().nullable(),
+        score: z.number().nullable(),
+      })
+    ),
+  });
+
+  function workspaceStub() {
+    const stub = env.WORKSPACE_DURABLE_OBJECT.get(
+      env.WORKSPACE_DURABLE_OBJECT.idFromName(organizationId)
+    );
+    return stub;
+  }
+
+  beforeAll(async () => {
+    ({ organizationId, token } = await seedWorkspace());
+  });
+
+  it("imports inline quote requests as customers with volume fields, contacts, lead deals and a revenue_estimate signal", async () => {
+    const res = await post(
+      `/workspaces/${organizationId}/intake/quote-requests/sync`,
+      {
+        quoteRequests: [
+          {
+            id: "qr-001",
+            businessName: "Calculator Corner Deli",
+            contactEmail: "Owner@CornerDeli.example",
+            contactName: "Cora Owner",
+            contactPhone: "+1 555 0142",
+            monthlyVolumeCents: 4_000_000,
+            avgTicketCents: 2850,
+            currentProcessor: "Square",
+            effectiveRateBps: 290,
+            estimatedAnnualSavingsCents: 120_000,
+            notes: "asked about handhelds",
+            createdAt: "2026-10-20T12:00:00Z",
+          },
+          {
+            // No business name — falls back to the email local part.
+            id: "qr-002",
+            contactEmail: "lonely@nowhere.example",
+          },
+        ],
+      },
+      token
+    );
+    expect(res.status).toBe(200);
+    const body = syncResultSchema.parse(await res.json());
+    expect(body.synced).toBe(2);
+    expect(body.created).toBe(2);
+    expect(body.updated).toBe(0);
+
+    const first = body.customers[0]!;
+    expect(first.name).toBe("Calculator Corner Deli");
+    expect(first.externalId).toBe("vortex-quote:qr-001");
+    expect(first.estMonthlyVolumeCents).toBe(4_000_000);
+    expect(first.score).not.toBeNull();
+    expect(first.score).toBeGreaterThan(0);
+    expect(body.customers[1]!.name).toBe("lonely");
+    expect(body.customers[1]!.estMonthlyVolumeCents).toBeNull();
+
+    const customerRes = await api(
+      `/workspaces/${organizationId}/customers/${first.id}`,
+      {},
+      token
+    );
+    const customer = z
+      .object({
+        name: z.string(),
+        externalId: z.string().nullable(),
+        processor: z.string().nullable(),
+        source: z.string().nullable(),
+        customFields: z.record(z.string(), z.string()),
+      })
+      .parse(await customerRes.json());
+    expect(customer.externalId).toBe("vortex-quote:qr-001");
+    expect(customer.processor).toBe("Square");
+    expect(customer.source).toBe("vortex_quote_calculator");
+    expect(customer.customFields.estMonthlyVolumeCents).toBe("4000000");
+    expect(customer.customFields.averageTicketCents).toBe("2850");
+    expect(customer.customFields.currentProcessor).toBe("Square");
+    expect(customer.customFields.effectiveRateBps).toBe("290");
+    expect(customer.customFields.estimatedAnnualSavingsCents).toBe("120000");
+    expect(customer.customFields.vortexQuoteRequestId).toBe("qr-001");
+    expect(customer.customFields.inboundSource).toBe("vortex_quote_calculator");
+
+    // Contact upserted on the customer — normalized lowercase email.
+    const stub = workspaceStub();
+    const contacts = await stub.listContacts(first.id);
+    const emails = contacts.filter((ct) => ct.channel === "email");
+    expect(emails).toHaveLength(1);
+    expect(emails[0]!.value).toBe("owner@cornerdeli.example");
+    expect(contacts.some((ct) => ct.channel === "phone")).toBe(true);
+
+    // Lead-stage deal opened for the inbound merchant.
+    const deals = await stub.listDeals();
+    const customerDeals = deals.filter((d) => d.customerId === first.id);
+    expect(customerDeals).toHaveLength(1);
+    expect(customerDeals[0]!.stage).toBe("lead");
+    expect(customerDeals[0]!.externalId).toBe("vortex-quote:qr-001");
+
+    // The reported volume ranked: revenue_estimate signal + persisted score.
+    const sigRes = await api(
+      `/workspaces/${organizationId}/customers/${first.id}/signals`,
+      {},
+      token
+    );
+    const sigBody = z
+      .object({
+        signals: z.array(
+          z.object({
+            type: z.string(),
+            summary: z.string().nullable().optional(),
+            source: z.string().optional(),
+          })
+        ),
+        breakdown: z.object({
+          priorityScore: z.number(),
+          matchedIcpRules: z.array(z.string()),
+          signalContributions: z.array(z.object({ type: z.string() })),
+        }),
+      })
+      .parse(await sigRes.json());
+    const revenue = sigBody.signals.find((s) => s.type === "revenue_estimate");
+    expect(revenue?.source).toBe("vortex_quote_calculator");
+    expect(revenue?.summary).toContain("$40,000");
+    expect(sigBody.breakdown.signalContributions.map((c) => c.type)).toContain(
+      "revenue_estimate"
+    );
+    expect(sigBody.breakdown.matchedIcpRules).toContain(
+      "icp-est-monthly-card-volume"
+    );
+  });
+
+  it("re-sync updates the same customer instead of duplicating (externalId + email dedupe)", async () => {
+    const first = await post(
+      `/workspaces/${organizationId}/intake/quote-requests/sync`,
+      {
+        quoteRequests: [
+          {
+            id: "qr-repeat",
+            businessName: "Repeat Retail",
+            contactEmail: "repeat@retail.example",
+            monthlyVolumeCents: 2_000_000,
+            currentProcessor: "Clover",
+          },
+        ],
+      },
+      token
+    );
+    expect(first.status).toBe(200);
+    const firstBody = syncResultSchema.parse(await first.json());
+    expect(firstBody.created).toBe(1);
+    const customerId = firstBody.customers[0]!.id;
+
+    // Second sync: same quote-request id with refreshed figures, plus a
+    // *new* id for the same merchant email — both must resolve to the one
+    // customer row instead of minting duplicates.
+    const second = await post(
+      `/workspaces/${organizationId}/intake/quote-requests/sync`,
+      {
+        quoteRequests: [
+          {
+            id: "qr-repeat",
+            businessName: "Repeat Retail",
+            contactEmail: "repeat@retail.example",
+            monthlyVolumeCents: 5_000_000,
+          },
+          {
+            id: "qr-repeat-2",
+            contactEmail: "REPEAT@retail.example",
+          },
+        ],
+      },
+      token
+    );
+    expect(second.status).toBe(200);
+    const secondBody = syncResultSchema.parse(await second.json());
+    expect(secondBody.synced).toBe(2);
+    expect(secondBody.created).toBe(0);
+    expect(secondBody.updated).toBe(2);
+    expect(secondBody.customers.map((cust) => cust.id)).toEqual([
+      customerId,
+      customerId,
+    ]);
+
+    const customerRes = await api(
+      `/workspaces/${organizationId}/customers/${customerId}`,
+      {},
+      token
+    );
+    const customer = z
+      .object({
+        externalId: z.string().nullable(),
+        customFields: z.record(z.string(), z.string()),
+      })
+      .parse(await customerRes.json());
+    expect(customer.externalId).toBe("vortex-quote:qr-repeat");
+    // Latest figures win on the always-upserted custom fields.
+    expect(customer.customFields.estMonthlyVolumeCents).toBe("5000000");
+
+    const stub = workspaceStub();
+    const contacts = await stub.listContacts(customerId);
+    expect(contacts.filter((ct) => ct.channel === "email")).toHaveLength(1);
+
+    const deals = await stub.listDeals();
+    const customerDeals = deals.filter((d) => d.customerId === customerId);
+    expect(customerDeals).toHaveLength(1);
+    expect(customerDeals[0]!.stage).toBe("lead");
+  });
+
+  it("pulls quote requests from the Vortex API when an operator key is supplied", async () => {
+    const seen: { url: string; auth: string | null }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url =
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : input.url;
+        seen.push({
+          url,
+          auth: new Headers(init?.headers).get("authorization"),
+        });
+        return Response.json({
+          quoteRequests: [
+            {
+              id: "qr-remote-1",
+              merchantName: "Remote Merchant Co",
+              contactEmail: "remote@merchant.example",
+              contactPhone: "5550100",
+              monthlyVolumeCents: 2_500_000,
+              avgTicketCents: 6200,
+              currentProcessor: "Toast",
+            },
+          ],
+        });
+      }
+    );
+    try {
+      const res = await post(
+        `/workspaces/${organizationId}/intake/quote-requests/sync`,
+        {
+          vortexApiUrl: "https://vortex.test",
+          vortexOperatorKey: "op-key-123",
+        },
+        token
+      );
+      expect(res.status).toBe(200);
+      const body = syncResultSchema.parse(await res.json());
+      expect(body.synced).toBe(1);
+      expect(body.created).toBe(1);
+      expect(body.customers[0]!.name).toBe("Remote Merchant Co");
+      expect(body.customers[0]!.externalId).toBe("vortex-quote:qr-remote-1");
+      expect(body.customers[0]!.estMonthlyVolumeCents).toBe(2_500_000);
+      expect(body.customers[0]!.score).toBeGreaterThan(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.url).toBe("https://vortex.test/v1/operator/quote-requests");
+    expect(seen[0]!.auth).toBe("Bearer op-key-123");
+  });
+
+  it("returns 400 when neither inline quoteRequests nor an operator key is provided", async () => {
+    const res = await post(
+      `/workspaces/${organizationId}/intake/quote-requests/sync`,
+      {},
+      token
+    );
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("quote-request helpers (PILE-655)", () => {
+  it("names merchants from business/contact/email fallbacks", () => {
+    expect(quoteRequestName({ id: "a", businessName: "  Deli Co  " })).toBe(
+      "Deli Co"
+    );
+    expect(quoteRequestName({ id: "b", merchantName: "Merchant LLC" })).toBe(
+      "Merchant LLC"
+    );
+    expect(quoteRequestName({ id: "c", companyName: "Company Inc" })).toBe(
+      "Company Inc"
+    );
+    expect(quoteRequestName({ id: "d", contactName: "Sam Shop" })).toBe(
+      "Sam Shop"
+    );
+    expect(
+      quoteRequestName({ id: "e", contactEmail: "owner@shop.example" })
+    ).toBe("owner");
+    expect(quoteRequestName({ id: "f" })).toBe("Quote request f");
+  });
+
+  it("writes finite volume fields and skips junk numbers", () => {
+    const fields = quoteRequestCustomFields({
+      id: "qr-x",
+      monthlyVolumeCents: 4_000_000,
+      avgTicketCents: 2850,
+      effectiveRateBps: 290,
+      estimatedAnnualSavingsCents: 120_000,
+      currentProcessor: " Square ",
+    });
+    expect(fields.estMonthlyVolumeCents).toBe("4000000");
+    expect(fields.averageTicketCents).toBe("2850");
+    expect(fields.effectiveRateBps).toBe("290");
+    expect(fields.estimatedAnnualSavingsCents).toBe("120000");
+    expect(fields.currentProcessor).toBe("Square");
+    expect(fields.vortexQuoteRequestId).toBe("qr-x");
+    expect(fields.inboundSource).toBe("vortex_quote_calculator");
+
+    const empty = quoteRequestCustomFields({ id: "qr-y" });
+    expect(empty).toEqual({
+      vortexQuoteRequestId: "qr-y",
+      inboundSource: "vortex_quote_calculator",
+    });
+    const junk = quoteRequestCustomFields({
+      id: "qr-z",
+      monthlyVolumeCents: Number.NaN,
+    });
+    expect("estMonthlyVolumeCents" in junk).toBe(false);
   });
 });
 

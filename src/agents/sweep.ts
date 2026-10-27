@@ -1,5 +1,6 @@
 import { and, isNotNull, lte, or, sql } from "drizzle-orm";
 
+import { notifyDueCustomerFollowUps } from "../api/customers.js";
 import { createD1, type D1Client } from "../global/db.js";
 import { getInstallationTokenForRepo } from "../global/github-auth.js";
 import type { PileRepoConfig } from "../global/pile-repo-config.js";
@@ -1638,6 +1639,7 @@ export async function sweepAgentSessions(
         env.WORKSPACE_DURABLE_OBJECT.idFromName(id)
       );
       await stub.setOrganizationId(id);
+      await notifyDueCustomerFollowUps(stub, id, new Date(now)).catch(() => {});
       // VTX-621 — lift auto-managed pauses whose condition cleared:
       // rate-limit holds once the reset instant passes, concurrency-cap
       // holds once live lanes fall under the cap. Operator/spend-cap

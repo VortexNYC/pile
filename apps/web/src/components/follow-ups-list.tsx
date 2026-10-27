@@ -1,10 +1,12 @@
 import { Badge } from "@cloudflare/kumo/components/badge";
-import { CalendarCheck } from "@phosphor-icons/react";
+import { Button } from "@cloudflare/kumo/components/button";
+import { CalendarCheck, DoorOpen } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 
 import { ownerDisplayName } from "@/components/customers-list";
+import { QuickKnockDialog } from "@/components/quick-knock-dialog";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap } from "@/lib/api";
@@ -41,6 +43,9 @@ export function followUpsCustomerArgs(
  *  all three sections. */
 export function FollowUpsList() {
   const workspace = useWorkspace();
+  // PILE-671 — the same stoop quick-add lives on the follow-ups tab; a rep
+  // working the due list shouldn't switch views to log a door knock.
+  const [knockOpen, setKnockOpen] = useState(false);
   // Frozen per mount so the query key is stable across re-renders.
   const dueBefore = useMemo(() => followUpDueBefore(), []);
   const now = useMemo(() => Date.now(), []);
@@ -78,93 +83,111 @@ export function FollowUpsList() {
   const total =
     buckets.overdue.length + buckets.today.length + buckets.upcoming.length;
 
-  if (customers.isPending) return <LoadingState label="Loading follow-ups" />;
-  if (customers.isError) {
-    return (
+  let content: ReactNode;
+  if (customers.isPending) {
+    content = <LoadingState label="Loading follow-ups" />;
+  } else if (customers.isError) {
+    content = (
       <ErrorState
         error={customers.error}
         onRetry={() => void customers.refetch()}
       />
     );
-  }
-  if (total === 0) {
-    return (
+  } else if (total === 0) {
+    content = (
       <EmptyState
         icon={<CalendarCheck size={40} />}
         title="Nothing due"
         description="No customer has a next step due in the next 7 days. Log a touch on the Customers tab to schedule one."
       />
     );
+  } else {
+    content = (
+      <div className="flex flex-col gap-5">
+        {FOLLOW_UP_SECTIONS.map(({ key, title }) => {
+          const rows = buckets[key];
+          if (rows.length === 0) return null;
+          return (
+            <section key={key} className="flex flex-col gap-1.5">
+              <h3
+                className={`text-xs font-semibold uppercase tracking-wider ${
+                  key === "overdue" ? "text-red-500" : "text-kumo-subtle"
+                }`}
+              >
+                {title} · {rows.length}
+              </h3>
+              <div className="divide-y divide-kumo-line rounded border border-kumo-line bg-kumo-base">
+                {rows.map((customer) => {
+                  const stage = customer.statusId
+                    ? (statusById.get(customer.statusId) ?? null)
+                    : null;
+                  return (
+                    <div
+                      key={customer.id}
+                      className="flex items-center gap-3 px-3 py-2 text-sm"
+                    >
+                      <Link
+                        to="/$slug/customers/$customerId"
+                        params={{
+                          slug: workspace.slug,
+                          customerId: customer.id,
+                        }}
+                        className="min-w-0 flex-1 truncate font-medium text-kumo-link hover:underline"
+                      >
+                        {customer.name}
+                      </Link>
+                      <span className="hidden max-w-[40%] truncate text-kumo-subtle sm:inline">
+                        {customer.nextStepText ?? "—"}
+                      </span>
+                      {stage && (
+                        <Badge variant="secondary">
+                          <span
+                            aria-hidden
+                            className="mr-1 inline-block size-1.5 rounded-full"
+                            style={{ backgroundColor: stageColor(stage) }}
+                          />
+                          {stage.name}
+                        </Badge>
+                      )}
+                      <span className="w-20 truncate text-xs text-kumo-subtle">
+                        {ownerDisplayName(customer.ownerId)}
+                      </span>
+                      <span
+                        className={`w-24 text-right font-mono text-xs ${
+                          key === "overdue"
+                            ? "font-medium text-red-500"
+                            : "text-kumo-subtle"
+                        }`}
+                      >
+                        {customer.nextStepDueAt
+                          ? formatRelative(customer.nextStepDueAt, now)
+                          : "—"}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    );
   }
 
   return (
-    <div className="flex flex-col gap-5">
-      {FOLLOW_UP_SECTIONS.map(({ key, title }) => {
-        const rows = buckets[key];
-        if (rows.length === 0) return null;
-        return (
-          <section key={key} className="flex flex-col gap-1.5">
-            <h3
-              className={`text-xs font-semibold uppercase tracking-wider ${
-                key === "overdue" ? "text-red-500" : "text-kumo-subtle"
-              }`}
-            >
-              {title} · {rows.length}
-            </h3>
-            <div className="divide-y divide-kumo-line rounded border border-kumo-line bg-kumo-base">
-              {rows.map((customer) => {
-                const stage = customer.statusId
-                  ? (statusById.get(customer.statusId) ?? null)
-                  : null;
-                return (
-                  <div
-                    key={customer.id}
-                    className="flex items-center gap-3 px-3 py-2 text-sm"
-                  >
-                    <Link
-                      to="/$slug/customers/$customerId"
-                      params={{
-                        slug: workspace.slug,
-                        customerId: customer.id,
-                      }}
-                      className="min-w-0 flex-1 truncate font-medium text-kumo-link hover:underline"
-                    >
-                      {customer.name}
-                    </Link>
-                    <span className="hidden max-w-[40%] truncate text-kumo-subtle sm:inline">
-                      {customer.nextStepText ?? "—"}
-                    </span>
-                    {stage && (
-                      <Badge variant="secondary">
-                        <span
-                          aria-hidden
-                          className="mr-1 inline-block size-1.5 rounded-full"
-                          style={{ backgroundColor: stageColor(stage) }}
-                        />
-                        {stage.name}
-                      </Badge>
-                    )}
-                    <span className="w-20 truncate text-xs text-kumo-subtle">
-                      {ownerDisplayName(customer.ownerId)}
-                    </span>
-                    <span
-                      className={`w-24 text-right font-mono text-xs ${
-                        key === "overdue"
-                          ? "font-medium text-red-500"
-                          : "text-kumo-subtle"
-                      }`}
-                    >
-                      {customer.nextStepDueAt
-                        ? formatRelative(customer.nextStepDueAt, now)
-                        : "—"}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        );
-      })}
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-end">
+        <Button
+          variant="primary"
+          size="sm"
+          icon={<DoorOpen />}
+          onClick={() => setKnockOpen(true)}
+        >
+          Log a Knock
+        </Button>
+      </div>
+      {content}
+      <QuickKnockDialog open={knockOpen} onOpenChange={setKnockOpen} />
     </div>
   );
 }

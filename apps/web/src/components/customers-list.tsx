@@ -2,7 +2,7 @@ import { Badge } from "@cloudflare/kumo/components/badge";
 import { Button } from "@cloudflare/kumo/components/button";
 import { Input } from "@cloudflare/kumo/components/input";
 import { Tabs } from "@cloudflare/kumo/components/tabs";
-import { Buildings, Plus, X } from "@phosphor-icons/react";
+import { Buildings, DoorOpen, Plus, X } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
@@ -16,6 +16,7 @@ import {
 } from "@/components/customers-display-menu";
 import { EntityHover } from "@/components/entity-hover";
 import { LogTouchDialog } from "@/components/log-touch-dialog";
+import { QuickKnockDialog } from "@/components/quick-knock-dialog";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
@@ -347,6 +348,8 @@ export function CustomersList() {
     id: string;
     name: string;
   } | null>(null);
+  // PILE-671 — mobile "Log a Knock" quick-add.
+  const [knockOpen, setKnockOpen] = useState(false);
 
   // Sheets-style display prefs — row density and column visibility —
   // persisted per user via me/view-preferences. Row color is the
@@ -712,6 +715,14 @@ export function CustomersList() {
             hiddenColumns={hiddenColumns}
             onToggleColumn={toggleColumn}
           />
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<DoorOpen />}
+            onClick={() => setKnockOpen(true)}
+          >
+            Log a Knock
+          </Button>
           <Button
             variant="secondary"
             size="sm"
@@ -1313,6 +1324,7 @@ export function CustomersList() {
           if (!o) setLogTouchTarget(null);
         }}
       />
+      <QuickKnockDialog open={knockOpen} onOpenChange={setKnockOpen} />
     </div>
   );
 }

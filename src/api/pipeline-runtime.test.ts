@@ -695,9 +695,7 @@ describe("pipeline runtime (PILE-401/405/413)", () => {
       { method: "POST", body: JSON.stringify({ title: "orphan parent" }) },
       admin
     );
-    const parent = z
-      .object({ id: z.string() })
-      .parse(await parentRes.json());
+    const parent = z.object({ id: z.string() }).parse(await parentRes.json());
     const childRes = await fetch(
       `/workspaces/${org}/issues`,
       {

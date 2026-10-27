@@ -4550,7 +4550,7 @@ describe("setOrganizationId memoization (PILE-645)", () => {
       const next = crypto.randomUUID();
       await instance.setOrganizationId(next);
       expect(Reflect.get(instance, "persistedOrganizationId")).toBe(next);
-      expect(instance.organizationId).toBe(next);
+      expect(Reflect.get(instance, "organizationId")).toBe(next);
     });
   });
 });

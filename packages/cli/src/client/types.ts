@@ -9624,6 +9624,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{organizationId}/substeps/{issueId}/rerun": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create substep rerun */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                    issueId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Re-dispatch queued for the sub-step */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {boolean} */
+                            ok: true;
+                            issueId: string;
+                            ownerAgent: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dispatch/pile": {
         parameters: {
             query?: never;
@@ -20702,6 +20746,8 @@ export interface paths {
                         note?: string;
                         nextStepText?: string | null;
                         nextStepDueAt?: string | null;
+                        quotedAmountCents?: number;
+                        dealTitle?: string;
                     };
                 };
             };
@@ -20761,6 +20807,32 @@ export interface paths {
                             };
                             stageAdvanced: boolean;
                             stageBlocked: boolean;
+                            deal: {
+                                id: string;
+                                organizationId: string;
+                                customerId: string;
+                                name: string;
+                                externalId: string | null;
+                                /** @enum {string} */
+                                stage: "lead" | "qualified" | "proposal" | "negotiation" | "won" | "lost";
+                                amountCents: number | null;
+                                currency: string | null;
+                                expectedCloseAt: string | null;
+                                description: string | null;
+                                closedAt: string | null;
+                                archivedAt: string | null;
+                                nextStepText: string | null;
+                                nextStepDueAt: string | null;
+                                needsHuman: boolean | null;
+                                needsHumanReason: string | null;
+                                priorityScore: number | null;
+                                contactIds: string[];
+                                customFields: {
+                                    [key: string]: string;
+                                };
+                                createdAt: string;
+                                updatedAt: string;
+                            } | null;
                         };
                     };
                 };
@@ -20770,6 +20842,206 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/customers/quick-knock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create customer quick knock
+         * @description Mobile log-a-knock quick-add (PILE-671): dedupes on normalized name or street address so a second knock at the same building updates the existing customer, then logs the interaction with the same outcome→stage/next-step rules as POST /customers/{id}/interactions and optionally bridges a quoted amount into a proposal-stage deal.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        name: string;
+                        addressLine1?: string;
+                        city?: string;
+                        state?: string;
+                        postalCode?: string;
+                        phone?: string;
+                        /** @enum {string} */
+                        outcome: "talked" | "sent_info" | "needs_email" | "quoted" | "callback" | "no_answer" | "not_interested" | "spam";
+                        summary?: string;
+                        /** @enum {string} */
+                        channel?: "visit" | "call" | "email" | "sms" | "note";
+                        /** @enum {string} */
+                        nextStepPreset?: "tomorrow" | "three_days" | "next_week" | "none";
+                        nextStepDueAt?: string | null;
+                        nextStepText?: string | null;
+                        quotedAmountCents?: number;
+                        dealTitle?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Knock logged against a found-or-created customer */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            customer: {
+                                id: string;
+                                organizationId: string;
+                                name: string;
+                                url: string | null;
+                                domain: string | null;
+                                bookingUrl: string | null;
+                                notes: string | null;
+                                logoUrl: string | null;
+                                externalId: string | null;
+                                phone: string | null;
+                                address: string | null;
+                                vertical: string | null;
+                                neighborhood: string | null;
+                                source: string | null;
+                                sourceSessionId: string | null;
+                                sourceAgentSlug: string | null;
+                                readiness: string | null;
+                                nextAction: string | null;
+                                fit: string | null;
+                                fitScore: number | null;
+                                fitStatus: string | null;
+                                processor: string | null;
+                                evidenceUri: string | null;
+                                tierId: string | null;
+                                statusId: string | null;
+                                ownerId: string | null;
+                                nextStepText: string | null;
+                                nextStepDueAt: string | null;
+                                needsHuman: boolean | null;
+                                needsHumanReason: string | null;
+                                priorityScore: number | null;
+                                customFields: {
+                                    [key: string]: string;
+                                };
+                                createdAt: string;
+                                updatedAt: string;
+                            };
+                            event: {
+                                id: string;
+                                customerId: string;
+                                /** @enum {string} */
+                                outcome: "talked" | "sent_info" | "needs_email" | "quoted" | "callback" | "no_answer" | "not_interested" | "spam";
+                                note: string | null;
+                                createdAt: string;
+                                /** @enum {string} */
+                                channel: "visit" | "call" | "email" | "sms" | "note";
+                            };
+                            deal: {
+                                id: string;
+                                organizationId: string;
+                                customerId: string;
+                                name: string;
+                                externalId: string | null;
+                                /** @enum {string} */
+                                stage: "lead" | "qualified" | "proposal" | "negotiation" | "won" | "lost";
+                                amountCents: number | null;
+                                currency: string | null;
+                                expectedCloseAt: string | null;
+                                description: string | null;
+                                closedAt: string | null;
+                                archivedAt: string | null;
+                                nextStepText: string | null;
+                                nextStepDueAt: string | null;
+                                needsHuman: boolean | null;
+                                needsHumanReason: string | null;
+                                priorityScore: number | null;
+                                contactIds: string[];
+                                customFields: {
+                                    [key: string]: string;
+                                };
+                                createdAt: string;
+                                updatedAt: string;
+                            } | null;
+                            created: boolean;
+                            stageAdvanced: boolean;
+                            stageBlocked: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/customers/follow-ups/notify-due": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create customer follow up notify due
+         * @description Scan customers whose nextStepDueAt is past due (terminal stages excluded) and emit a follow_up_due notification to the customer owner — once per (customer, due date).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        now?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Due-follow-up scan result */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            scanned: number;
+                            notified: number;
+                            notifications: {
+                                customerId: string;
+                                customerName: string;
+                                recipientId: string;
+                                type: string;
+                                title: string;
+                                body: string;
+                                nextStepDueAt: string;
+                            }[];
+                        };
+                    };
                 };
             };
         };
@@ -35180,6 +35452,95 @@ export interface paths {
                 };
                 /** @description Invalid request */
                 400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/intake/quote-requests/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create intake quote request sync
+         * @description Import Vortex pricing-calculator quote requests (/v1/operator/quote-requests) as inbound leads. Each row upserts a customer keyed on externalId "vortex-quote:<id>", writes the self-reported volume figures to customFields, upserts the contact, opens a lead-stage deal unless the merchant is already in the pipeline, and records a revenue_estimate signal. Pass quoteRequests inline or an operator key to pull from the Vortex API.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        quoteRequests?: {
+                            id: string;
+                            businessName?: string | null;
+                            merchantName?: string | null;
+                            companyName?: string | null;
+                            contactEmail?: string | null;
+                            contactName?: string | null;
+                            contactPhone?: string | null;
+                            monthlyVolumeCents?: number | null;
+                            avgTicketCents?: number | null;
+                            currentProcessor?: string | null;
+                            effectiveRateBps?: number | null;
+                            estimatedAnnualSavingsCents?: number | null;
+                            notes?: string | null;
+                            createdAt?: string | null;
+                        }[];
+                        vortexApiUrl?: string;
+                        vortexOperatorKey?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Quote requests synced */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            synced: number;
+                            created: number;
+                            updated: number;
+                            customers: {
+                                id: string;
+                                name: string;
+                                externalId: string | null;
+                                estMonthlyVolumeCents: number | null;
+                                score: number | null;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Invalid request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Vortex API fetch failed */
+                502: {
                     headers: {
                         [name: string]: unknown;
                     };

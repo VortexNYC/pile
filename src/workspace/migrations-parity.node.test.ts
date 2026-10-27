@@ -9,14 +9,14 @@ import { workspaceMigrations } from "./migrations.js";
 // silently never applies (v102/v103 shipped that way). Scan the source so
 // declared consts, journal tags, and map refs can't drift apart. Node pool
 // — workerd has no fs.
+const byNum = (a: string, b: string) => Number(a) - Number(b);
+
 describe("workspaceMigrations source parity", () => {
   it("every declared vN const is journaled and mapped", () => {
     const src = readFileSync(
       new URL("./migrations.ts", import.meta.url),
       "utf8"
     );
-    const num = (s: string) => Number(s);
-    const byNum = (a: string, b: string) => num(a) - num(b);
     const declared = new Set(
       [...src.matchAll(/^const v(\d+) = /gm)].map((m) => m[1]!)
     );
@@ -26,7 +26,9 @@ describe("workspaceMigrations source parity", () => {
     const mapped = new Set(
       [...src.matchAll(/m\d{4}: v(\d+)/g)].map((m) => m[1]!)
     );
-    expect([...declared].sort(byNum)).toEqual([...journaled].sort(byNum));
-    expect([...declared].sort(byNum)).toEqual([...mapped].sort(byNum));
+    expect([...declared].toSorted(byNum)).toEqual(
+      [...journaled].toSorted(byNum)
+    );
+    expect([...declared].toSorted(byNum)).toEqual([...mapped].toSorted(byNum));
   });
 });

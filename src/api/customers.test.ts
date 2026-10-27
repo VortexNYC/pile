@@ -1617,3 +1617,353 @@ describe("customers list bounded contract (PILE-653)", () => {
     expect(row).not.toHaveProperty("organizationId");
   });
 });
+
+describe("log-touch → deal bridging (PILE-673)", () => {
+  let organizationId = "";
+  let token = "";
+
+  const dealShape = z.object({
+    id: z.string(),
+    customerId: z.string(),
+    name: z.string(),
+    stage: z.string(),
+    amountCents: z.number().nullable(),
+    currency: z.string().nullable(),
+  });
+
+  const interactionResponse = z.object({
+    interaction: z.object({ id: z.string(), outcome: z.string() }),
+    customer: z.object({ id: z.string(), name: z.string() }),
+    deal: dealShape.nullable(),
+  });
+
+  beforeAll(async () => {
+    ({ organizationId, token } = await seedWorkspace());
+  });
+
+  async function logTouch(customerId: string, body: Record<string, unknown>) {
+    return fetch(
+      `/workspaces/${organizationId}/customers/${customerId}/interactions`,
+      { method: "POST", body: JSON.stringify(body) },
+      token
+    );
+  }
+
+  it("auto-creates a proposal deal when a quoted amount lands on the touch", async () => {
+    const customer = await createCustomer(organizationId, token, "Quote Me Co");
+
+    const res = await logTouch(customer.id, {
+      outcome: "quoted",
+      note: "6 units told him 225",
+      quotedAmountCents: 22500,
+    });
+    expect(res.status).toBe(201);
+    const body = interactionResponse.parse(await res.json());
+    expect(body.deal).not.toBeNull();
+    expect(body.deal!.customerId).toBe(customer.id);
+    expect(body.deal!.name).toBe("Quote Me Co — Quote");
+    expect(body.deal!.stage).toBe("proposal");
+    expect(body.deal!.amountCents).toBe(22500);
+    expect(body.deal!.currency).toBe("USD");
+
+    // The deal is a real pipeline row — readable through the deals API.
+    const deals = await fetch(
+      `/workspaces/${organizationId}/deals?customerId=${customer.id}`,
+      {},
+      token
+    );
+    expect(deals.status).toBe(200);
+    const { deals: rows } = z
+      .object({ deals: z.array(dealShape) })
+      .parse(await deals.json());
+    expect(rows.map((d) => d.id)).toContain(body.deal!.id);
+  });
+
+  it("honors dealTitle and returns deal=null when no amount is sent", async () => {
+    const customer = await createCustomer(organizationId, token, "Named Quote");
+
+    const titled = await logTouch(customer.id, {
+      outcome: "quoted",
+      quotedAmountCents: 150000,
+      dealTitle: "Rooftop unit swap",
+    });
+    expect(titled.status).toBe(201);
+    const titledBody = interactionResponse.parse(await titled.json());
+    expect(titledBody.deal!.name).toBe("Rooftop unit swap");
+    expect(titledBody.deal!.amountCents).toBe(150000);
+
+    const plain = await logTouch(customer.id, { outcome: "talked" });
+    expect(plain.status).toBe(201);
+    expect(interactionResponse.parse(await plain.json()).deal).toBeNull();
+  });
+});
+
+describe("quick-knock mobile add (PILE-671)", () => {
+  let organizationId = "";
+  let token = "";
+
+  const quickKnockResponse = z.object({
+    customer: z.object({
+      id: z.string(),
+      name: z.string(),
+      address: z.string().nullable(),
+      ownerId: z.string().nullable(),
+      nextStepDueAt: z.string().nullable(),
+      nextStepText: z.string().nullable(),
+    }),
+    event: z.object({
+      id: z.string(),
+      customerId: z.string(),
+      outcome: z.string(),
+      note: z.string().nullable(),
+      channel: z.string(),
+      createdAt: z.string(),
+    }),
+    deal: z
+      .object({
+        id: z.string(),
+        name: z.string(),
+        stage: z.string(),
+        amountCents: z.number().nullable(),
+      })
+      .nullable(),
+    created: z.boolean(),
+    stageAdvanced: z.boolean(),
+    stageBlocked: z.boolean(),
+  });
+
+  beforeAll(async () => {
+    ({ organizationId, token } = await seedWorkspace());
+  });
+
+  async function knock(body: Record<string, unknown>) {
+    return fetch(
+      `/workspaces/${organizationId}/customers/quick-knock`,
+      { method: "POST", body: JSON.stringify(body) },
+      token
+    );
+  }
+
+  it("creates a customer, logs the knock, and schedules the preset next step", async () => {
+    const before = Date.now();
+    const res = await knock({
+      name: "Stoop Corp",
+      addressLine1: "100 Stoop Ave",
+      phone: "718-555-0100",
+      outcome: "talked",
+      summary: "Owner wants pricing",
+      channel: "visit",
+      nextStepPreset: "tomorrow",
+    });
+    expect(res.status).toBe(201);
+    const body = quickKnockResponse.parse(await res.json());
+    expect(body.created).toBe(true);
+    expect(body.customer.name).toBe("Stoop Corp");
+    // Split address fields compose into the customer.address blob with
+    // Brooklyn/NY defaults.
+    expect(body.customer.address).toContain("100 Stoop Ave");
+    expect(body.customer.address).toContain("Brooklyn, NY");
+    expect(body.customer.ownerId).toBe("user-customers");
+    expect(body.event.customerId).toBe(body.customer.id);
+    expect(body.event.outcome).toBe("talked");
+    expect(body.event.channel).toBe("visit");
+    expect(body.event.note).toBe("Owner wants pricing");
+    // The one-tap preset lands ~24h out; the outcome default text applies.
+    expect(Date.parse(body.customer.nextStepDueAt!)).toBeGreaterThan(before);
+    expect(body.customer.nextStepText).toBe("Follow up after conversation");
+    expect(body.deal).toBeNull();
+  });
+
+  it("dedupes repeat knocks on normalized name and address", async () => {
+    const first = quickKnockResponse.parse(
+      await (
+        await knock({
+          name: "Dedup Deli",
+          addressLine1: "44 Knock Blvd",
+          outcome: "no_answer",
+        })
+      ).json()
+    );
+    expect(first.created).toBe(true);
+
+    // Same merchant, different casing/punctuation → same row.
+    const byName = quickKnockResponse.parse(
+      await (await knock({ name: "dedup deli", outcome: "no_answer" })).json()
+    );
+    expect(byName.created).toBe(false);
+    expect(byName.customer.id).toBe(first.customer.id);
+
+    // A different name at the same building → same row.
+    const byAddress = quickKnockResponse.parse(
+      await (
+        await knock({
+          name: "Totally Different LLC",
+          addressLine1: "44 Knock Blvd",
+          outcome: "callback",
+        })
+      ).json()
+    );
+    expect(byAddress.created).toBe(false);
+    expect(byAddress.customer.id).toBe(first.customer.id);
+  });
+
+  it("bridges a quoted knock into a proposal deal", async () => {
+    const res = await knock({
+      name: "Quote Barn",
+      addressLine1: "9 Bid Rd",
+      outcome: "quoted",
+      quotedAmountCents: 22500,
+      nextStepPreset: "three_days",
+    });
+    expect(res.status).toBe(201);
+    const body = quickKnockResponse.parse(await res.json());
+    expect(body.created).toBe(true);
+    expect(body.deal).not.toBeNull();
+    expect(body.deal!.name).toBe("Quote Barn — Quote");
+    expect(body.deal!.stage).toBe("proposal");
+    expect(body.deal!.amountCents).toBe(22500);
+    expect(body.customer.nextStepText).toBe("Follow up on quote");
+  });
+});
+
+describe("follow-up due notifications (PILE-674)", () => {
+  let organizationId = "";
+  let token = "";
+
+  const notifyResponse = z.object({
+    scanned: z.number().int(),
+    notified: z.number().int(),
+    notifications: z.array(
+      z.object({
+        customerId: z.string(),
+        customerName: z.string(),
+        recipientId: z.string(),
+        type: z.string(),
+        title: z.string(),
+        body: z.string(),
+        nextStepDueAt: z.string(),
+      })
+    ),
+  });
+
+  beforeAll(async () => {
+    ({ organizationId, token } = await seedWorkspace());
+  });
+
+  async function notifyDue() {
+    return fetch(
+      `/workspaces/${organizationId}/customers/follow-ups/notify-due`,
+      { method: "POST", body: JSON.stringify({}) },
+      token
+    );
+  }
+
+  it("emits one notification per (customer, dueAt) and never duplicates", async () => {
+    const past = "2020-01-01T00:00:00.000Z";
+    const create = await fetch(
+      `/workspaces/${organizationId}/customers`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "Overdue Plumbing",
+          ownerId: "user-customers",
+          nextStepText: "Call back the owner",
+          nextStepDueAt: past,
+        }),
+      },
+      token
+    );
+    expect(create.status).toBe(201);
+    const customer = z.object({ id: z.string() }).parse(await create.json());
+
+    const first = await notifyDue();
+    expect(first.status).toBe(200);
+    const firstBody = notifyResponse.parse(await first.json());
+    expect(firstBody.scanned).toBeGreaterThanOrEqual(1);
+    expect(firstBody.notified).toBe(1);
+    const note = firstBody.notifications.find(
+      (n) => n.customerId === customer.id
+    );
+    expect(note).toBeDefined();
+    expect(note!.recipientId).toBe("user-customers");
+    expect(note!.type).toBe("follow_up_due");
+    expect(note!.title).toBe("Follow-up due: Overdue Plumbing");
+    expect(note!.body).toBe("Call back the owner (due 2020-01-01)");
+    expect(note!.nextStepDueAt).toBe(past);
+
+    // The in-app feed surfaces it for the owner.
+    const feed = await fetch(
+      `/workspaces/${organizationId}/notifications`,
+      {},
+      token
+    );
+    expect(feed.status).toBe(200);
+    const { notifications } = z
+      .object({
+        notifications: z.array(
+          z.object({
+            issueId: z.string(),
+            type: z.string(),
+            metadata: z.unknown().nullable(),
+          })
+        ),
+      })
+      .parse(await feed.json());
+    const row = notifications.find(
+      (n) => n.issueId === customer.id && n.type === "follow_up_due"
+    );
+    expect(row).toBeDefined();
+    expect(
+      (row!.metadata as { resourceType?: string; resourceId?: string })
+        .resourceType
+    ).toBe("customer");
+
+    // Second scan — the claim suppresses the duplicate.
+    const second = await notifyDue();
+    expect(second.status).toBe(200);
+    const secondBody = notifyResponse.parse(await second.json());
+    expect(secondBody.notified).toBe(0);
+    expect(secondBody.notifications).toHaveLength(0);
+  });
+
+  it("skips terminal-stage customers and re-fires when the due date moves", async () => {
+    const statusRes = await fetch(
+      `/workspaces/${organizationId}/customer-statuses`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "Closed Won",
+          key: "closed_won",
+          type: "terminal",
+        }),
+      },
+      token
+    );
+    expect(statusRes.status).toBe(201);
+    const closedWon = z
+      .object({ id: z.string() })
+      .parse(await statusRes.json());
+
+    const create = await fetch(
+      `/workspaces/${organizationId}/customers`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "Already Won",
+          statusId: closedWon.id,
+          nextStepDueAt: "2020-02-02T00:00:00.000Z",
+        }),
+      },
+      token
+    );
+    expect(create.status).toBe(201);
+    const wonCustomer = z.object({ id: z.string() }).parse(await create.json());
+
+    const res = await notifyDue();
+    expect(res.status).toBe(200);
+    const body = notifyResponse.parse(await res.json());
+    expect(
+      body.notifications.find((n) => n.customerId === wonCustomer.id)
+    ).toBeUndefined();
+  });
+});
