@@ -402,6 +402,7 @@ const memberFeedbackRoute = createRoute({
 });
 
 const tokenRoute = createRoute({
+  security: [],
   method: "post",
   path: "/support/capture/token",
   tags: ["support-capture"],
@@ -460,6 +461,7 @@ async function verifyTurnstile(
 }
 
 const uploadSessionRoute = createRoute({
+  security: [],
   method: "post",
   path: "/support/capture/upload-session",
   tags: ["support-capture"],
@@ -488,6 +490,7 @@ const uploadSessionRoute = createRoute({
 });
 
 const uploadRoute = createRoute({
+  security: [],
   method: "post",
   path: "/support/capture/upload/{sessionId}/{attachmentType}/{fileName}",
   tags: ["support-capture"],
@@ -523,6 +526,7 @@ const uploadRoute = createRoute({
 });
 
 const finalizeRoute = createRoute({
+  security: [],
   method: "post",
   path: "/support/capture/finalize",
   tags: ["support-capture"],
@@ -546,6 +550,7 @@ const finalizeRoute = createRoute({
 });
 
 const metadataRoute = createRoute({
+  security: [],
   method: "post",
   path: "/support/capture/metadata",
   tags: ["support-capture"],
@@ -571,6 +576,7 @@ const metadataRoute = createRoute({
 });
 
 const viewArtifactRoute = createRoute({
+  security: [],
   method: "get",
   path: "/support/capture/artifacts/{attachmentId}",
   tags: ["support-capture"],
@@ -590,6 +596,7 @@ const viewArtifactRoute = createRoute({
 });
 
 const captureSessionRoute = createRoute({
+  security: [],
   method: "get",
   path: "/support/capture/sessions/{sessionId}",
   tags: ["support-capture"],
@@ -628,6 +635,7 @@ const captureSessionRoute = createRoute({
 });
 
 const shareTicketRoute = createRoute({
+  security: [],
   method: "get",
   path: "/support/capture/public/{ticketId}",
   tags: ["support-capture"],
@@ -838,6 +846,7 @@ const jamIntercomOptedOutSchema = z
   .passthrough();
 
 const jamIntercomRecordedRoute = createRoute({
+  security: [],
   method: "post",
   path: "/support/webhooks/jam/{publicKeyId}/intercom/recorded",
   tags: ["support-capture"],
@@ -876,6 +885,7 @@ const jamIntercomRecordedRoute = createRoute({
 });
 
 const jamIntercomOptedOutRoute = createRoute({
+  security: [],
   method: "post",
   path: "/support/webhooks/jam/{publicKeyId}/intercom/opted-out",
   tags: ["support-capture"],
@@ -914,6 +924,7 @@ const jamIntercomOptedOutRoute = createRoute({
 });
 
 const jamRecordingLinkCreatedRoute = createRoute({
+  security: [],
   method: "post",
   path: "/support/webhooks/jam/{publicKeyId}/recording-links",
   tags: ["support-capture"],
@@ -952,6 +963,7 @@ const jamRecordingLinkCreatedRoute = createRoute({
 });
 
 const jamWebhookRoute = createRoute({
+  security: [],
   method: "post",
   path: "/support/webhooks/jam/{publicKeyId}",
   tags: ["support-capture"],

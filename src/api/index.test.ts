@@ -147,7 +147,7 @@ describe("API integration", () => {
         token,
         body: JSON.stringify({
           linearId: "linear-state-1",
-          name: "Todo",
+          name: "Blocked",
           type: "backlog",
         }),
       }),
@@ -155,7 +155,7 @@ describe("API integration", () => {
     );
     expect(create.status).toBe(201);
     const state = await create.json<{ id: string; name: string }>();
-    expect(state.name).toBe("Todo");
+    expect(state.name).toBe("Blocked");
 
     const list = await app.fetch(
       request("/workspaces/" + organizationId + "/states", { token }),
@@ -179,13 +179,13 @@ describe("API integration", () => {
       request("/workspaces/" + organizationId + "/states/" + state.id, {
         method: "PATCH",
         token,
-        body: JSON.stringify({ name: "In Progress", type: "started" }),
+        body: JSON.stringify({ name: "Icebox", type: "started" }),
       }),
       env
     );
     expect(patch.status).toBe(200);
     const updated = await patch.json<{ name: string }>();
-    expect(updated.name).toBe("In Progress");
+    expect(updated.name).toBe("Icebox");
 
     const del = await app.fetch(
       request("/workspaces/" + organizationId + "/states/" + state.id, {

@@ -104,6 +104,7 @@ function conversationBody(conversation: IntercomWebhookConversation): string {
 }
 
 export const intercomWebhookRoute = createRoute({
+  security: [],
   method: "post",
   path: "/intercom/{organizationId}",
   tags: ["webhooks"],

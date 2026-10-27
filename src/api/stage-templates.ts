@@ -244,6 +244,7 @@ const seedStageTemplatesRoute = createRoute({
           schema: z.object({
             templates: z.array(stageTemplateSchema),
             skipped: z.number().int(),
+            agentTypesSeeded: z.number().int(),
           }),
         },
       },
@@ -326,6 +327,7 @@ export function registerStageTemplateRoutes(app: OpenAPIHono<AppContext>) {
       {
         templates: result.created.map(toTemplateResponse),
         skipped: result.skipped,
+        agentTypesSeeded: result.agentTypesSeeded,
       },
       200
     );

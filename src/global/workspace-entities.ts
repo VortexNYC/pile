@@ -16,6 +16,7 @@ import {
   projects,
   roadmaps,
   states,
+  supportTicketLabels,
   team,
   teamMember,
 } from "./schema.js";
@@ -279,8 +280,27 @@ export async function createLabel(
   values: {
     name: string;
     color?: string | null;
+    kind?: "issue" | "support";
   }
 ) {
+  // VTX-752 — labels are unique per (workspace, name, kind). A repeated
+  // create returns the canonical row instead of minting the "daytona"-style
+  // duplicates the ticket reported.
+  const kind = values.kind ?? "issue";
+  const existing = await db
+    .select()
+    .from(labels)
+    .where(
+      and(
+        eq(labels.organizationId, organizationId),
+        eq(labels.name, values.name),
+        eq(labels.kind, kind)
+      )
+    )
+    .get();
+  if (existing) {
+    return existing;
+  }
   const id = crypto.randomUUID();
   const ts = now();
   await db.insert(labels).values({
@@ -288,6 +308,7 @@ export async function createLabel(
     organizationId,
     name: values.name,
     color: values.color ?? null,
+    kind,
     createdAt: ts,
   });
   return db.select().from(labels).where(eq(labels.id, id)).get();
@@ -302,6 +323,35 @@ export async function updateLabel(
     color: string | null;
   }>
 ) {
+  if (values.name !== undefined) {
+    // VTX-752 — a rename onto an existing (name, kind) pair would mint the
+    // duplicate the unique index forbids; reject it instead.
+    const current = await db
+      .select()
+      .from(labels)
+      .where(and(eq(labels.organizationId, organizationId), eq(labels.id, id)))
+      .get();
+    if (!current) {
+      return undefined;
+    }
+    const collision = await db
+      .select({ id: labels.id })
+      .from(labels)
+      .where(
+        and(
+          eq(labels.organizationId, organizationId),
+          eq(labels.name, values.name),
+          eq(labels.kind, current.kind)
+        )
+      )
+      .get();
+    if (collision && collision.id !== id) {
+      throw VortexError.fromCode(
+        "CONFLICT",
+        `A ${current.kind} label named "${values.name}" already exists`
+      );
+    }
+  }
   await db
     .update(labels)
     .set(values)
@@ -365,6 +415,22 @@ export async function createState(
   if (existing) {
     return existing;
   }
+  // VTX-752 — states are unique per (workspace, name): a repeated create
+  // with a fresh linearId but a name the workspace already has returns the
+  // canonical row rather than minting the second "Backlog".
+  const sameName = await db
+    .select()
+    .from(states)
+    .where(
+      and(
+        eq(states.organizationId, organizationId),
+        eq(states.name, values.name)
+      )
+    )
+    .get();
+  if (sameName) {
+    return sameName;
+  }
   const id = crypto.randomUUID();
   const ts = now();
   await db.insert(states).values({
@@ -391,6 +457,25 @@ export async function updateState(
     position: string | null;
   }>
 ) {
+  if (values.name !== undefined) {
+    // VTX-752 — a rename onto an existing state name would mint a dup.
+    const collision = await db
+      .select({ id: states.id })
+      .from(states)
+      .where(
+        and(
+          eq(states.organizationId, organizationId),
+          eq(states.name, values.name)
+        )
+      )
+      .get();
+    if (collision && collision.id !== id) {
+      throw VortexError.fromCode(
+        "CONFLICT",
+        `A state named "${values.name}" already exists`
+      );
+    }
+  }
   await db
     .update(states)
     .set(values)
@@ -410,6 +495,120 @@ export async function deleteState(
   await db
     .delete(states)
     .where(and(eq(states.organizationId, organizationId), eq(states.id, id)));
+}
+
+// ---- dedupe (VTX-752) ----
+// Unguarded creates minted duplicate labels ("daytona" twice) and duplicate
+// standard states. These merges collapse each (name[, kind]) group to the
+// oldest row — the canonical pick the migration bakes in — repoint every
+// D1-side reference, delete the dup rows, and return the dup→canonical map
+// so the caller can repoint DO-side references (issue label_ids CSVs,
+// git_automation_states.state_id) in the same pass.
+
+type DedupeResult = {
+  merged: number;
+  idMap: Record<string, string>;
+};
+
+const pickCanonical = <T extends { id: string; createdAt: string }>(
+  group: T[]
+): T =>
+  group.toSorted(
+    (a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)
+  )[0];
+
+export async function mergeDuplicateLabels(
+  db: D1Client,
+  organizationId: string
+): Promise<DedupeResult> {
+  const rows = await db
+    .select()
+    .from(labels)
+    .where(eq(labels.organizationId, organizationId))
+    .all();
+  const groups = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const key = `${row.kind}${row.name}`;
+    groups.set(key, [...(groups.get(key) ?? []), row]);
+  }
+  const idMap: Record<string, string> = {};
+  let merged = 0;
+  for (const group of groups.values()) {
+    if (group.length < 2) {
+      continue;
+    }
+    const canonical = pickCanonical(group);
+    for (const dup of group) {
+      if (dup.id === canonical.id) {
+        continue;
+      }
+      idMap[dup.id] = canonical.id;
+      // Repoint support-ticket joins; rows that would collide on
+      // (ticketId, labelId) are deleted instead.
+      const joins = await db
+        .select()
+        .from(supportTicketLabels)
+        .where(eq(supportTicketLabels.labelId, dup.id))
+        .all();
+      for (const join of joins) {
+        const already = await db
+          .select({ id: supportTicketLabels.id })
+          .from(supportTicketLabels)
+          .where(
+            and(
+              eq(supportTicketLabels.ticketId, join.ticketId),
+              eq(supportTicketLabels.labelId, canonical.id)
+            )
+          )
+          .get();
+        if (already) {
+          await db
+            .delete(supportTicketLabels)
+            .where(eq(supportTicketLabels.id, join.id));
+        } else {
+          await db
+            .update(supportTicketLabels)
+            .set({ labelId: canonical.id })
+            .where(eq(supportTicketLabels.id, join.id));
+        }
+      }
+      await db.delete(labels).where(eq(labels.id, dup.id));
+      merged += 1;
+    }
+  }
+  return { merged, idMap };
+}
+
+export async function mergeDuplicateStates(
+  db: D1Client,
+  organizationId: string
+): Promise<DedupeResult> {
+  const rows = await db
+    .select()
+    .from(states)
+    .where(eq(states.organizationId, organizationId))
+    .all();
+  const groups = new Map<string, typeof rows>();
+  for (const row of rows) {
+    groups.set(row.name, [...(groups.get(row.name) ?? []), row]);
+  }
+  const idMap: Record<string, string> = {};
+  let merged = 0;
+  for (const group of groups.values()) {
+    if (group.length < 2) {
+      continue;
+    }
+    const canonical = pickCanonical(group);
+    for (const dup of group) {
+      if (dup.id === canonical.id) {
+        continue;
+      }
+      idMap[dup.id] = canonical.id;
+      await db.delete(states).where(eq(states.id, dup.id));
+      merged += 1;
+    }
+  }
+  return { merged, idMap };
 }
 
 // Memberships

@@ -88,7 +88,11 @@ import {
 } from "../global/schema.js";
 import { safeJSON } from "../global/team-metadata.js";
 import { getDefaultTeam, getTeamById } from "../global/teams.js";
-import { listLabels } from "../global/workspace-entities.js";
+import {
+  listLabels,
+  mergeDuplicateLabels,
+  mergeDuplicateStates,
+} from "../global/workspace-entities.js";
 import { getWorkspaceMembership } from "../global/workspaces.js";
 import { getWorkspaceById } from "../global/workspaces.js";
 import { VortexError } from "../platform/errors.js";
@@ -5406,7 +5410,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     actor: { actorId?: string | null; actorType?: string | null } = {}
   ) {
     await this.ready;
-    const result = data.seedStageTemplates(
+    const result = await data.seedStageTemplates(
       this.db,
       this.organizationId,
       actor.actorId
@@ -5422,6 +5426,55 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           skipped: { from: null, to: result.skipped },
         },
         { actorType: actor.actorType }
+      );
+    }
+    return result;
+  }
+
+  /** VTX-752 — merge same-name labels/states and re-point every reference:
+   *  the D1 merges collapse the global rows and return dup→canonical maps,
+   *  then the DO-side helpers rewrite issue `label_ids` CSVs and
+   *  `git_automation_states.state_id` in this workspace's SQLite. */
+  async dedupeWorkspaceEntities(actor: { actorId?: string | null } = {}) {
+    await this.ready;
+    const d1 = createD1(this.env.D1);
+    const labelsResult = await mergeDuplicateLabels(d1, this.organizationId);
+    const statesResult = await mergeDuplicateStates(d1, this.organizationId);
+    const validLabelIds = new Set(
+      (await listLabels(d1, this.organizationId)).map((l) => l.id)
+    );
+    const issuesRepointed = await data.repointIssueLabelIds(
+      this.db,
+      this.organizationId,
+      labelsResult.idMap,
+      validLabelIds
+    );
+    const gitAutomationsRepointed = await data.repointGitAutomationStates(
+      this.db,
+      this.organizationId,
+      statesResult.idMap
+    );
+    const result = {
+      labelsMerged: labelsResult.merged,
+      statesMerged: statesResult.merged,
+      issuesRepointed,
+      gitAutomationsRepointed,
+    };
+    if (result.labelsMerged > 0 || result.statesMerged > 0) {
+      this.audit(
+        "workspace.entities_deduped",
+        "workspace",
+        this.organizationId,
+        actor.actorId,
+        {
+          labelsMerged: { from: null, to: result.labelsMerged },
+          statesMerged: { from: null, to: result.statesMerged },
+          issuesRepointed: { from: null, to: result.issuesRepointed },
+          gitAutomationsRepointed: {
+            from: null,
+            to: result.gitAutomationsRepointed,
+          },
+        }
       );
     }
     return result;

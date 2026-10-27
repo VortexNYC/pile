@@ -139,6 +139,7 @@ const gitlabWebhookPayloadSchema = z.union([
 ]);
 
 export const gitlabWebhookRoute = createRoute({
+  security: [],
   method: "post",
   path: "/gitlab",
   tags: ["gitlab"],

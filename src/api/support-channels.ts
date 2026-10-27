@@ -346,6 +346,7 @@ export function registerSupportChannelRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(
     createRoute({
+      security: [],
       method: "post",
       path: "/support/incoming/{channelId}",
       tags: ["support-channels"],
@@ -444,6 +445,7 @@ export function registerSupportChannelRoutes(app: OpenAPIHono<AppContext>) {
   // per-IP hourly cap plus a server-side channel pinned by env.
   app.openapi(
     createRoute({
+      security: [],
       method: "post",
       path: "/support/feedback",
       tags: ["support-channels"],

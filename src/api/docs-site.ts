@@ -10,6 +10,7 @@ import { getWorkspaceStub } from "./stub.js";
 // No auth: published docs are public by definition.
 
 const indexRoute = createRoute({
+  security: [],
   method: "get",
   path: "/docs/{organizationId}/{spaceId}/llms.txt",
   tags: ["docs-site"],
@@ -26,6 +27,7 @@ const indexRoute = createRoute({
 });
 
 const pageRoute = createRoute({
+  security: [],
   method: "get",
   path: "/docs/{organizationId}/{spaceId}/{slug}",
   tags: ["docs-site"],

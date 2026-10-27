@@ -83,6 +83,7 @@ import {
   registerOAuthRoutes,
 } from "./oauth-clients.js";
 import { registerObservabilityRoutes } from "./observability.js";
+import { bearerAuthScheme, openapiDocumentConfig } from "./openapi-doc.js";
 import { registerPipelineRuntimeRoutes } from "./pipeline-runtime.js";
 import { registerPrRoutes } from "./pr.js";
 import { registerProjectMemberRoutes } from "./project-members.js";
@@ -565,11 +566,14 @@ app.get("/llms-full.txt", (c) => {
   return c.text(`# Pile — full documentation\n${body}`);
 });
 
-app.get("/.well-known/security.txt", (c) =>
-  c.text(
-    "Contact: mailto:security@vortexnyc.com\nPreferred-Languages: en\nCanonical: https://pile.nyc/.well-known/security.txt\n"
-  )
-);
+app.get("/.well-known/security.txt", (c) => {
+  // RFC 9116 — Expires is mandatory and should sit under a year out; rolling
+  // it forward ~90 days per request keeps the file self-refreshing.
+  const expires = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+  return c.text(
+    `Contact: mailto:security@vortexnyc.com\nExpires: ${expires.toISOString()}\nPreferred-Languages: en\nCanonical: https://pile.nyc/.well-known/security.txt\n`
+  );
+});
 
 // PILE-619 — first-party agent kit discovery manifest.
 app.get("/.well-known/mcp.json", (c) => {
@@ -610,6 +614,12 @@ app.get("/docs/:name", (c) => {
   return c.text(doc, 200, { "Content-Type": "text/markdown; charset=utf-8" });
 });
 
+app.openAPIRegistry.registerComponent(
+  "securitySchemes",
+  "bearerAuth",
+  bearerAuthScheme
+);
+
 app.doc("/openapi.json", {
   openapi: "3.0.0",
   info: {
@@ -617,6 +627,7 @@ app.doc("/openapi.json", {
     version: "0.1.0",
     description: "Agent-native issue tracker on Cloudflare Workers.",
   },
+  ...openapiDocumentConfig,
 });
 
 app.all("/mcp", async (c) => {

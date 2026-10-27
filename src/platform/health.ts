@@ -21,6 +21,7 @@ const healthBodySchema = z.object({
 export function registerHealthRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(
     createRoute({
+      security: [],
       method: "get",
       path: "/health",
       tags: ["platform"],

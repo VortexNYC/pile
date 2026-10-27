@@ -467,6 +467,7 @@ export function registerSupportContactRoutes(app: OpenAPIHono<AppContext>) {
   // (no existence oracle). Per-IP hourly cap.
   app.openapi(
     createRoute({
+      security: [],
       method: "post",
       path: "/support/unsubscribe",
       tags: ["support-contacts"],

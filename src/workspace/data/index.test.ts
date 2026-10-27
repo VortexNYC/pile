@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/durable-sqlite";
 import { beforeAll, describe, expect, it } from "vitest";
 
+import { hasAgentProvider } from "../../agents/index.js";
 import type { WorkerEnv } from "../../platform/middleware.js";
 import type { WorkspaceDO } from "../durable-object.js";
 import { workspaceSchema } from "../schema-map.js";
@@ -40,6 +41,12 @@ import {
   getImportReceipt,
   listImportReceipts,
   stageKey,
+  DEFAULT_AGENT_TYPES,
+  DEFAULT_STAGE_TEMPLATES,
+  createGitAutomationState,
+  listGitAutomationStates,
+  repointGitAutomationStates,
+  repointIssueLabelIds,
   updateStageTemplate,
   createTriageRule,
   getTriageRule,
@@ -1351,8 +1358,12 @@ describe("stage template data layer", () => {
   });
 
   it("seeds the seven pipeline stages idempotently", async () => {
-    await withDb((db) => {
-      const first = seedStageTemplates(db, WORKSPACE_ID);
+    // Seeding also installs DEFAULT_AGENT_TYPES (VTX-755) — a fresh org
+    // keeps the scout→flue registry row from leaking into the agentSlug
+    // scoping tests that resolve scout on WORKSPACE_ID.
+    const org = `org_${crypto.randomUUID()}`;
+    await withDb(async (db) => {
+      const first = await seedStageTemplates(db, org);
       expect(first.created.length).toBe(22);
       expect(first.skipped).toBe(0);
       const statuses = new Set(first.created.map((t) => t.status));
@@ -1374,13 +1385,105 @@ describe("stage template data layer", () => {
       );
 
       // Operator edits survive a re-seed; deleted rows come back.
-      const seeded = seedStageTemplates(db, WORKSPACE_ID);
+      const seeded = await seedStageTemplates(db, org);
       expect(seeded.created.length).toBe(0);
       expect(seeded.skipped).toBe(22);
-      deleteStageTemplate(db, WORKSPACE_ID, first.created[0]!.id);
-      const again = seedStageTemplates(db, WORKSPACE_ID);
+      deleteStageTemplate(db, org, first.created[0]!.id);
+      const again = await seedStageTemplates(db, org);
       expect(again.created.length).toBe(1);
       expect(again.skipped).toBe(21);
+    });
+  });
+
+  // VTX-755 — the seed registry is the contract: every template owner slug
+  // must resolve to a registered agent type (and every type to a known
+  // provider) or /pipeline/lint reports unresolved_owner_template.
+  it("reconciles every template ownerAgent to a registered agent type", async () => {
+    // A fresh organization keeps this seed off WORKSPACE_ID — other tests
+    // resolve `scout` to a provider there and a registry row would leak.
+    const org = `org_${crypto.randomUUID()}`;
+    await withDb(async (db) => {
+      const registry = new Map(DEFAULT_AGENT_TYPES.map((t) => [t.slug, t]));
+      expect(registry.size).toBe(DEFAULT_AGENT_TYPES.length);
+      for (const t of DEFAULT_AGENT_TYPES) {
+        expect(t.slug).toBe(stageKey(t.slug));
+        expect(hasAgentProvider(t.providerAgentId)).toBe(true);
+      }
+      for (const t of DEFAULT_STAGE_TEMPLATES) {
+        if (t.ownerAgent) {
+          expect(
+            registry.has(t.ownerAgent),
+            `template ${t.stepKey} owns to unregistered ${t.ownerAgent}`
+          ).toBe(true);
+        }
+      }
+      const seeded = await seedStageTemplates(db, org);
+      expect(seeded.agentTypesSeeded).toBe(DEFAULT_AGENT_TYPES.length);
+      const types = await db
+        .select()
+        .from(workspaceAgentTypes)
+        .where(eq(workspaceAgentTypes.organizationId, org))
+        .all();
+      const slugs = new Set(types.map((t) => t.slug));
+      for (const t of seeded.created) {
+        if (t.ownerAgent) {
+          expect(slugs.has(t.ownerAgent)).toBe(true);
+        }
+      }
+    });
+  });
+
+  // VTX-752 — DO-side repoints: label dedupe rewrites issue label_ids
+  // CSVs (dup→canonical, dead ids dropped); state dedupe re-points
+  // git_automation_states.state_id.
+  it("repoints issue label CSVs and git automation states after dedupe", async () => {
+    const org = `org_${crypto.randomUUID()}`;
+    await withDb(async (db) => {
+      const now = new Date().toISOString();
+      const issueId = crypto.randomUUID();
+      db.insert(workspaceIssues)
+        .values({
+          id: issueId,
+          organizationId: org,
+          teamId: "team-1",
+          title: "labelled",
+          status: "backlog",
+          priority: "medium",
+          labelIds: "lbl-a,lbl-dup,lbl-gone,lbl-a",
+          createdAt: now,
+          updatedAt: now,
+        })
+        .run();
+      const auto = await createGitAutomationState(db, org, {
+        stateId: "st-dup",
+        prState: "merged",
+      });
+      const untouched = await createGitAutomationState(db, org, {
+        stateId: "st-other",
+        prState: "opened",
+      });
+      const issues = await repointIssueLabelIds(
+        db,
+        org,
+        { "lbl-dup": "lbl-a" },
+        new Set(["lbl-a", "lbl-b"])
+      );
+      expect(issues).toBe(1);
+      const row = db
+        .select({ labelIds: workspaceIssues.labelIds })
+        .from(workspaceIssues)
+        .where(eq(workspaceIssues.id, issueId))
+        .get();
+      expect(row?.labelIds).toBe("lbl-a");
+      const autos = await repointGitAutomationStates(db, org, {
+        "st-dup": "st-keep",
+      });
+      expect(autos).toBe(1);
+      const rows = await listGitAutomationStates(db, org);
+      expect(rows.find((r) => r.id === auto?.id)?.stateId).toBe("st-keep");
+      expect(rows.find((r) => r.id === untouched?.id)?.stateId).toBe(
+        "st-other"
+      );
     });
   });
 

@@ -3070,6 +3070,96 @@ export function extractEventField(
  *  `hardware_needed` field. The stages hang on the customer record: the
  *  merchant's stage is its customer status, and the deal is the parent
  *  issue linked to that customer. */
+// VTX-755 — canonical registry of the pipeline owner slugs referenced by
+// DEFAULT_STAGE_TEMPLATES. The templates shipped owner slugs that had no
+// agent-type row, so /pipeline/lint reported 17 unresolved owners; seeding
+// installs these alongside the templates so every ownerAgent resolves.
+// "human" kinds own steps without a dispatch lane (field visits, wet
+// signatures, hardware logistics); their providerAgentId still names a
+// real provider so the lint's provider check stays clean.
+export const DEFAULT_AGENT_TYPES: ReadonlyArray<{
+  slug: string;
+  name: string;
+  providerAgentId: string;
+  kind: "agent" | "human";
+}> = [
+  { slug: "scout", name: "Scout", providerAgentId: "flue", kind: "agent" },
+  {
+    slug: "profiler",
+    name: "Profiler",
+    providerAgentId: "flue",
+    kind: "agent",
+  },
+  {
+    slug: "detective",
+    name: "Detective",
+    providerAgentId: "flue",
+    kind: "agent",
+  },
+  {
+    slug: "field_dispatcher",
+    name: "Field dispatcher",
+    providerAgentId: "flue",
+    kind: "human",
+  },
+  { slug: "ranker", name: "Ranker", providerAgentId: "flue", kind: "agent" },
+  {
+    slug: "courier",
+    name: "Courier",
+    providerAgentId: "flue",
+    kind: "agent",
+  },
+  { slug: "chaser", name: "Chaser", providerAgentId: "flue", kind: "agent" },
+  { slug: "booker", name: "Booker", providerAgentId: "flue", kind: "agent" },
+  {
+    slug: "briefer",
+    name: "Briefer",
+    providerAgentId: "flue",
+    kind: "agent",
+  },
+  {
+    slug: "recorder",
+    name: "Recorder",
+    providerAgentId: "flue",
+    kind: "agent",
+  },
+  {
+    slug: "analyst",
+    name: "Analyst",
+    providerAgentId: "flue",
+    kind: "agent",
+  },
+  { slug: "quoter", name: "Quoter", providerAgentId: "flue", kind: "agent" },
+  { slug: "closer", name: "Closer", providerAgentId: "flue", kind: "agent" },
+  { slug: "clerk", name: "Clerk", providerAgentId: "flue", kind: "agent" },
+  {
+    slug: "underwriter",
+    name: "Underwriter",
+    providerAgentId: "flue",
+    kind: "agent",
+  },
+  { slug: "signer", name: "Signer", providerAgentId: "flue", kind: "human" },
+  { slug: "tailor", name: "Tailor", providerAgentId: "flue", kind: "agent" },
+  {
+    slug: "outfitter",
+    name: "Outfitter",
+    providerAgentId: "flue",
+    kind: "human",
+  },
+  {
+    slug: "integrator",
+    name: "Integrator",
+    providerAgentId: "flue",
+    kind: "agent",
+  },
+  {
+    slug: "activator",
+    name: "Activator",
+    providerAgentId: "flue",
+    kind: "agent",
+  },
+];
+
 export const DEFAULT_STAGE_TEMPLATES: ReadonlyArray<{
   entityType: StageEntityType;
   status: string;
@@ -3267,12 +3357,40 @@ export const DEFAULT_STAGE_TEMPLATES: ReadonlyArray<{
 
 /** Installs the default pipeline templates. Idempotent — existing
  *  (entity_type, status, step_key) rows are skipped so re-seeding after an
- *  edit never stomps operator changes; a deleted row is re-created. */
-export function seedStageTemplates(
+ *  edit never stomps operator changes; a deleted row is re-created.
+ *  VTX-755 — seeds the canonical DEFAULT_AGENT_TYPES owners first
+ *  (insert-only) so every template ownerAgent resolves at lint. */
+export async function seedStageTemplates(
   db: WorkspaceDb,
   organizationId: string,
   actorId?: string | null
 ) {
+  // unresolved ownerAgent slugs (VTX-755). Insert-only — an operator's
+  // re-pointed provider or renamed type is never stomped.
+  let agentTypesSeeded = 0;
+  for (const def of DEFAULT_AGENT_TYPES) {
+    const existing = db
+      .select({ id: workspaceAgentTypes.id })
+      .from(workspaceAgentTypes)
+      .where(
+        and(
+          eq(workspaceAgentTypes.organizationId, organizationId),
+          eq(workspaceAgentTypes.slug, def.slug)
+        )
+      )
+      .get();
+    if (existing) {
+      continue;
+    }
+    await upsertAgentType(db, organizationId, {
+      slug: def.slug,
+      name: def.name,
+      providerAgentId: def.providerAgentId,
+      kind: def.kind,
+      createdBy: actorId ?? null,
+    });
+    agentTypesSeeded += 1;
+  }
   const created: StageTemplate[] = [];
   let skipped = 0;
   for (const def of DEFAULT_STAGE_TEMPLATES) {
@@ -3307,7 +3425,7 @@ export function seedStageTemplates(
       })
     );
   }
-  return { created, skipped };
+  return { created, skipped, agentTypesSeeded };
 }
 
 /** Re-point still-waiting dependents of a dead session onto its retry —
@@ -7843,6 +7961,76 @@ export async function deleteGitAutomationState(
       )
     );
   return true;
+}
+
+// VTX-752 — after the D1 label dedupe, rewrite every issue's `label_ids`
+// CSV: dup ids map to their canonical id, dead ids are dropped, and the
+// surviving order is preserved. Returns the number of issues rewritten.
+export async function repointIssueLabelIds(
+  db: WorkspaceDb,
+  organizationId: string,
+  idMap: Record<string, string>,
+  validIds?: ReadonlySet<string>
+): Promise<number> {
+  const rows = await db
+    .select({ id: workspaceIssues.id, labelIds: workspaceIssues.labelIds })
+    .from(workspaceIssues)
+    .where(eq(workspaceIssues.organizationId, organizationId))
+    .all();
+  let updated = 0;
+  for (const row of rows) {
+    const ids = (row.labelIds ?? "").split(",").filter(Boolean);
+    if (ids.length === 0) {
+      continue;
+    }
+    const seen = new Set<string>();
+    const next = ids
+      .map((id) => idMap[id] ?? id)
+      .filter((id) => {
+        // Post-migration dead refs — ids the dedupe deleted outright —
+        // are dropped rather than left dangling in the CSV.
+        if (validIds && !validIds.has(id)) {
+          return false;
+        }
+        if (seen.has(id)) {
+          return false;
+        }
+        seen.add(id);
+        return true;
+      });
+    const csv = next.join(",");
+    if (csv !== (row.labelIds ?? "")) {
+      await db
+        .update(workspaceIssues)
+        .set({ labelIds: csv })
+        .where(eq(workspaceIssues.id, row.id));
+      updated += 1;
+    }
+  }
+  return updated;
+}
+
+// VTX-752 — after the D1 state dedupe, re-point git automation rows whose
+// state_id named a duplicate row at its canonical survivor.
+export async function repointGitAutomationStates(
+  db: WorkspaceDb,
+  organizationId: string,
+  idMap: Record<string, string>
+): Promise<number> {
+  const rows = await listGitAutomationStates(db, organizationId);
+  let updated = 0;
+  for (const row of rows) {
+    const canonical = idMap[row.stateId];
+    if (!canonical) {
+      continue;
+    }
+    await db
+      .update(gitAutomationStates)
+      .set({ stateId: canonical })
+      .where(eq(gitAutomationStates.id, row.id));
+    updated += 1;
+  }
+  return updated;
 }
 
 export interface GitAutomationTargetBranchInput {

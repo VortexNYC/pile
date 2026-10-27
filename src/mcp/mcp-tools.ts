@@ -15013,6 +15013,23 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdDedupe",
+    "description": "Create dedupe — Merge duplicate labels (per name+kind) and states (per name) onto the oldest row and re-point every reference. Idempotent — a second run merges nothing. (POST /workspaces/{organizationId}/dedupe) Path params (top-level, required): organizationId.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/dedupe",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdDocuments",
     "description": "Create document (POST /workspaces/{organizationId}/documents) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: title*, icon, content, contentFormat, slug, projectId, issueId, initiativeId, parentDocumentId, spaceId, isTemplate (* = required).",
     "method": "POST",

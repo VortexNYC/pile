@@ -165,6 +165,7 @@ const mappingIdParam = z.object({
 });
 
 const ingestExternalEventRoute = createRoute({
+  security: [],
   method: "post",
   path: "/workspaces/{organizationId}/external-events/{source}",
   tags: ["external-events"],
