@@ -11965,6 +11965,8 @@ export interface paths {
                             status?: number;
                             duration?: number;
                             timestamp?: string;
+                            requestBody?: string;
+                            responseBody?: string;
                         }[];
                         userEvents?: {
                             type: string;
@@ -11982,6 +11984,8 @@ export interface paths {
                         }[];
                         screenshotDataUrl?: string;
                         recordingDataUrl?: string;
+                        replayEvents?: unknown[];
+                        includeNetworkBodies?: boolean;
                     };
                 };
             };
@@ -12127,6 +12131,9 @@ export interface paths {
                         deviceInfo?: {
                             [key: string]: unknown;
                         };
+                        multipart?: boolean;
+                        replayEvents?: unknown[];
+                        includeNetworkBodies?: boolean;
                     };
                 };
             };
@@ -12141,6 +12148,9 @@ export interface paths {
                             uploadUrl: string;
                             r2Key: string;
                             sessionId: string;
+                            uploadId?: string;
+                            partUploadUrl?: string;
+                            shareUrl?: string;
                             uploads?: {
                                 uploadUrl: string;
                                 r2Key: string;
@@ -12201,6 +12211,112 @@ export interface paths {
                             r2Key: string;
                         };
                     };
+                };
+                /** @description Invalid or expired session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/support/capture/sessions/{sessionId}/upload/part": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update support capture session upload part */
+        put: {
+            parameters: {
+                query: {
+                    partNumber: number;
+                    uploadId: string;
+                };
+                header: {
+                    "x-pile-capture-token": string;
+                };
+                path: {
+                    sessionId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Multipart part uploaded */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                            partNumber: number;
+                            etag: string;
+                        };
+                    };
+                };
+                /** @description No active multipart upload for this session */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid or expired session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        /** Create support capture session upload part */
+        post: {
+            parameters: {
+                query: {
+                    partNumber: number;
+                    uploadId: string;
+                };
+                header: {
+                    "x-pile-capture-token": string;
+                };
+                path: {
+                    sessionId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Multipart part uploaded */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                            partNumber: number;
+                            etag: string;
+                        };
+                    };
+                };
+                /** @description No active multipart upload for this session */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
                 };
                 /** @description Invalid or expired session */
                 401: {
@@ -12390,6 +12506,8 @@ export interface paths {
                             expiresAt: string;
                             ticketId: string | null;
                             reference: string | null;
+                            viewCount: number;
+                            lastViewedAt: string | null;
                             uploads: {
                                 attachmentType: string;
                                 contentType?: string | null;
@@ -12444,9 +12562,12 @@ export interface paths {
                         "application/json": {
                             ticketId: string;
                             title: string;
+                            viewCount: number;
+                            lastViewedAt: string | null;
                             attachments: {
                                 /** @enum {string} */
-                                type: "screenshot" | "video" | "debugger_json" | "log" | "network" | "replay";
+                                type: "screenshot" | "video" | "debugger_json" | "log" | "network" | "replay" | "transcript";
+                                fileName?: string | null;
                                 contentType?: string;
                                 url?: string;
                                 size?: number;
@@ -12455,6 +12576,66 @@ export interface paths {
                     };
                 };
                 /** @description Ticket not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/support/capture/share/{sessionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get support capture share */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    sessionId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Public capture share (session-scoped, available before finalize) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            sessionId: string;
+                            status: string;
+                            ticketId: string | null;
+                            title: string | null;
+                            viewCount: number;
+                            lastViewedAt: string | null;
+                            attachments: {
+                                /** @enum {string} */
+                                type: "screenshot" | "video" | "debugger_json" | "log" | "network" | "replay" | "transcript";
+                                fileName?: string | null;
+                                contentType?: string;
+                                url?: string;
+                                size?: number;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Capture session not found */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -35967,6 +36148,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List status */
+        get: operations["getPublicStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -36919,6 +37117,91 @@ export interface operations {
                 };
                 content: {
                     "text/plain": string;
+                };
+            };
+        };
+    };
+    getPublicStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All components operational */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        status: "operational" | "degraded";
+                        version: string;
+                        sha: string | null;
+                        timestamp: string;
+                        components: {
+                            api: {
+                                /** @enum {string} */
+                                status: "operational" | "degraded";
+                                latencyMs?: number;
+                            };
+                            database: {
+                                /** @enum {string} */
+                                status: "operational" | "degraded";
+                                latencyMs?: number;
+                            };
+                            durableObjects: {
+                                /** @enum {string} */
+                                status: "operational" | "degraded";
+                                latencyMs?: number;
+                            };
+                            storage: {
+                                /** @enum {string} */
+                                status: "operational" | "degraded";
+                                latencyMs?: number;
+                            };
+                        };
+                    };
+                };
+            };
+            /** @description One or more components degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        status: "operational" | "degraded";
+                        version: string;
+                        sha: string | null;
+                        timestamp: string;
+                        components: {
+                            api: {
+                                /** @enum {string} */
+                                status: "operational" | "degraded";
+                                latencyMs?: number;
+                            };
+                            database: {
+                                /** @enum {string} */
+                                status: "operational" | "degraded";
+                                latencyMs?: number;
+                            };
+                            durableObjects: {
+                                /** @enum {string} */
+                                status: "operational" | "degraded";
+                                latencyMs?: number;
+                            };
+                            storage: {
+                                /** @enum {string} */
+                                status: "operational" | "degraded";
+                                latencyMs?: number;
+                            };
+                        };
+                    };
                 };
             };
         };

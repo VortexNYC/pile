@@ -112,12 +112,27 @@ const uploadSessionBodySchema = z.object({
   visibility: z.enum(["public", "private"]).optional(),
   metadata: z.record(z.string(), z.unknown()).default({}),
   deviceInfo: z.record(z.string(), z.unknown()).optional(),
+  // PILE-665 — when true the server mints an R2 multipart upload for the
+  // declared video artifact so the client can stream MediaRecorder chunks
+  // while recording instead of buffering the whole video.
+  multipart: z.boolean().optional(),
+  // PILE-675 — rrweb DOM replay events, persisted as a replay.json artifact
+  // rather than in the session metadata column (the array is large).
+  replayEvents: z.array(z.unknown()).max(50_000).optional(),
+  // PILE-675 — opt-in flag telling ingest to keep bounded network
+  // request/response bodies on network entries.
+  includeNetworkBodies: z.boolean().optional(),
 });
 
 const uploadSessionResponseSchema = z.object({
   uploadUrl: z.string(),
   r2Key: z.string(),
   sessionId: z.string(),
+  // PILE-665 — present when a multipart upload was minted for the session.
+  uploadId: z.string().optional(),
+  partUploadUrl: z.string().optional(),
+  // PILE-665 — public share link is known before recording finishes.
+  shareUrl: z.string().optional(),
   uploads: z
     .array(
       z.object({
@@ -347,6 +362,10 @@ const memberFeedbackBodySchema = z.object({
         status: z.number().int().min(0).max(999).optional(),
         duration: z.number().nonnegative().max(3_600_000).optional(),
         timestamp: feedbackTimestampSchema,
+        // PILE-675 — only persisted when includeNetworkBodies is true, and
+        // always bounded + credential-scrubbed server-side.
+        requestBody: z.string().max(65_536).optional(),
+        responseBody: z.string().max(65_536).optional(),
       })
     )
     .max(400)
@@ -375,6 +394,11 @@ const memberFeedbackBodySchema = z.object({
     .optional(),
   screenshotDataUrl: z.string().max(10_000_000).optional(),
   recordingDataUrl: z.string().max(40_000_000).optional(),
+  // PILE-675 — rrweb DOM replay events persisted as a replay.json artifact.
+  replayEvents: z.array(z.unknown()).max(50_000).optional(),
+  // PILE-675 — opt-in to keep bounded request/response bodies on network
+  // entries in the generated artifacts.
+  includeNetworkBodies: z.boolean().optional(),
 });
 
 const memberFeedbackRoute = createRoute({
@@ -614,6 +638,9 @@ const captureSessionRoute = createRoute({
             expiresAt: z.string(),
             ticketId: z.string().nullable(),
             reference: z.string().nullable(),
+            // PILE-669 — share-link engagement surfaced to agents/console.
+            viewCount: z.number(),
+            lastViewedAt: z.string().nullable(),
             uploads: z.array(
               z.object({
                 attachmentType: z.string(),
@@ -630,6 +657,22 @@ const captureSessionRoute = createRoute({
       description: "Session not found",
     },
   },
+});
+
+const shareAttachmentSchema = z.object({
+  type: z.enum([
+    "screenshot",
+    "video",
+    "debugger_json",
+    "log",
+    "network",
+    "replay",
+    "transcript",
+  ]),
+  fileName: z.string().nullable().optional(),
+  contentType: z.string().optional(),
+  url: z.string().optional(),
+  size: z.number().optional(),
 });
 
 const shareTicketRoute = createRoute({
@@ -650,21 +693,10 @@ const shareTicketRoute = createRoute({
           schema: z.object({
             ticketId: z.string(),
             title: z.string(),
-            attachments: z.array(
-              z.object({
-                type: z.enum([
-                  "screenshot",
-                  "video",
-                  "debugger_json",
-                  "log",
-                  "network",
-                  "replay",
-                ]),
-                contentType: z.string().optional(),
-                url: z.string().optional(),
-                size: z.number().optional(),
-              })
-            ),
+            // PILE-669 — how often the share link was opened and when last.
+            viewCount: z.number(),
+            lastViewedAt: z.string().nullable(),
+            attachments: z.array(shareAttachmentSchema),
           }),
         },
       },
@@ -673,6 +705,89 @@ const shareTicketRoute = createRoute({
       description: "Ticket not found",
     },
   },
+});
+
+const sessionShareRoute = createRoute({
+  security: [],
+  method: "get",
+  path: "/support/capture/share/{sessionId}",
+  tags: ["support-capture"],
+  request: {
+    params: z.object({
+      sessionId: z.string(),
+    }),
+  },
+  responses: {
+    200: {
+      description:
+        "Public capture share (session-scoped, available before finalize)",
+      content: {
+        "application/json": {
+          schema: z.object({
+            sessionId: z.string(),
+            status: z.string(),
+            ticketId: z.string().nullable(),
+            title: z.string().nullable(),
+            viewCount: z.number(),
+            lastViewedAt: z.string().nullable(),
+            attachments: z.array(shareAttachmentSchema),
+          }),
+        },
+      },
+    },
+    404: {
+      description: "Capture session not found",
+    },
+  },
+});
+
+const uploadPartQuerySchema = z.object({
+  partNumber: z.coerce.number().int().min(1).max(10_000),
+  uploadId: z.string().min(1),
+});
+
+const uploadPartResponseSchema = z.object({
+  ok: z.boolean(),
+  partNumber: z.number(),
+  etag: z.string(),
+});
+
+const uploadPartRouteSpec = {
+  security: [],
+  path: "/support/capture/sessions/{sessionId}/upload/part",
+  tags: ["support-capture"],
+  middleware: [publicRateLimit({ bucket: "capture-upload-part", max: 600 })],
+  request: {
+    params: z.object({ sessionId: z.string() }),
+    query: uploadPartQuerySchema,
+    headers: z.object({
+      "x-pile-capture-token": z.string(),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Multipart part uploaded",
+      content: {
+        "application/json": { schema: uploadPartResponseSchema },
+      },
+    },
+    400: {
+      description: "No active multipart upload for this session",
+    },
+    401: {
+      description: "Invalid or expired session",
+    },
+  },
+};
+
+const uploadPartPutRoute = createRoute({
+  method: "put",
+  ...uploadPartRouteSpec,
+});
+
+const uploadPartPostRoute = createRoute({
+  method: "post",
+  ...uploadPartRouteSpec,
 });
 
 const jamAuthorSchema = z
@@ -1362,6 +1477,492 @@ const linkToResponse = (
   origin: string
 ) => ({ ...link, url: `${origin}/cap/${link.token}` });
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+// PILE-675 — bounded network body retention: bodies only persist when the
+// submission opted in, capped at 16KB and scrubbed by the artifact writer.
+const MAX_NETWORK_BODY_CHARS = 16 * 1024;
+
+function boundNetworkBody(value: string | undefined | null): string | null {
+  if (typeof value !== "string" || value.length === 0) return null;
+  const bounded =
+    value.length > MAX_NETWORK_BODY_CHARS
+      ? value.slice(0, MAX_NETWORK_BODY_CHARS)
+      : value;
+  // Scrub the raw body before it gets embedded — once the artifact is
+  // serialized the escapes hide the secrets from the whole-text pass.
+  return scrubCaptureText(bounded);
+}
+
+/** PILE-665 — one streamed recording part: PUT/POST /upload/part. */
+async function streamUploadPart(
+  c: Context<AppContext>,
+  {
+    sessionId,
+    partNumber,
+    uploadId,
+  }: { sessionId: string; partNumber: number; uploadId: string }
+): Promise<{ ok: boolean; partNumber: number; etag: string }> {
+  const token = c.req.header("x-pile-capture-token");
+  if (token !== sessionId) {
+    throw new VortexError({
+      status: 401,
+      code: "UNAUTHORIZED",
+      message: "Invalid capture token",
+    });
+  }
+
+  const db = createD1(c.env.D1);
+  const session = await getCaptureSession(db, sessionId);
+  if (!session) {
+    throw new VortexError({
+      status: 401,
+      code: "UNAUTHORIZED",
+      message: "Invalid capture session",
+    });
+  }
+  assertSessionActive(session);
+
+  const bucket = c.env.ATTACHMENTS_BUCKET;
+  if (!bucket) {
+    throw new VortexError({
+      status: 500,
+      code: "CONFIG_ERROR",
+      message: "Attachments bucket not configured",
+    });
+  }
+
+  const meta = session.metadata;
+  const objectKey =
+    typeof meta.multipartObjectKey === "string"
+      ? meta.multipartObjectKey
+      : null;
+  if (
+    typeof meta.multipartUploadId !== "string" ||
+    meta.multipartUploadId !== uploadId ||
+    !objectKey ||
+    meta.multipartCompleted === true
+  ) {
+    throw new VortexError({
+      status: 400,
+      code: "BAD_REQUEST",
+      message: "Multipart upload is not active for this session",
+    });
+  }
+
+  const body = await c.req.arrayBuffer();
+  const uploadedPart = await bucket
+    .resumeMultipartUpload(objectKey, uploadId)
+    .uploadPart(partNumber, body);
+
+  // Parts arrive sequentially from the recorder, but a retried part number
+  // replaces its earlier record instead of duplicating it.
+  const existing = Array.isArray(meta.multipartParts)
+    ? meta.multipartParts
+    : [];
+  const parts = [
+    ...existing.filter(
+      (part) => !(isRecord(part) && part.partNumber === partNumber)
+    ),
+    {
+      partNumber,
+      etag: uploadedPart.etag,
+      sizeBytes: body.byteLength,
+    },
+  ];
+  await updateCaptureSessionMetadata(db, session.id, {
+    multipartParts: parts,
+  });
+
+  return { ok: true, partNumber, etag: uploadedPart.etag };
+}
+
+/**
+ * PILE-665 — a recording streamed via /upload/part lands as an open R2
+ * multipart upload. Completing it materializes the object so the artifact
+ * registration in finalize sees it like any other upload. Idempotent via
+ * the multipartCompleted flag.
+ */
+async function completeStreamedCaptureUpload(
+  bucket: R2Bucket | undefined,
+  db: D1Client,
+  session: { id: string; metadata: Record<string, unknown> }
+): Promise<void> {
+  if (!bucket) return;
+  const meta = session.metadata;
+  const uploadId =
+    typeof meta.multipartUploadId === "string" ? meta.multipartUploadId : null;
+  const objectKey =
+    typeof meta.multipartObjectKey === "string"
+      ? meta.multipartObjectKey
+      : null;
+  if (!uploadId || !objectKey || meta.multipartCompleted === true) return;
+
+  const rawParts = Array.isArray(meta.multipartParts)
+    ? meta.multipartParts
+    : [];
+  const parts = rawParts
+    .filter(
+      (part): part is { partNumber: number; etag: string } =>
+        isRecord(part) &&
+        typeof part.partNumber === "number" &&
+        typeof part.etag === "string"
+    )
+    .toSorted((a, b) => a.partNumber - b.partNumber);
+  if (parts.length === 0) return;
+
+  await bucket.resumeMultipartUpload(objectKey, uploadId).complete(parts);
+  await updateCaptureSessionMetadata(db, session.id, {
+    multipartCompleted: true,
+  });
+}
+
+/** PILE-669 — bump the view counters stored on the capture session. */
+async function recordShareView(
+  db: D1Client,
+  sessionId: string,
+  meta: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const viewCount = typeof meta.viewCount === "number" ? meta.viewCount : 0;
+  const updated = await updateCaptureSessionMetadata(db, sessionId, {
+    viewCount: viewCount + 1,
+    lastViewedAt: new Date().toISOString(),
+  });
+  return updated.metadata;
+}
+
+type ShareAttachmentRow = {
+  type: string;
+  fileName: string | null;
+  contentType: string | null;
+  url: string | null;
+  size: number | null;
+  r2Key: string | null;
+};
+
+type TranscriptSegment = { start: number; end: number; text: string };
+
+async function loadShareTranscript(
+  bucket: R2Bucket | undefined,
+  attachments: ShareAttachmentRow[]
+): Promise<{ text: string | null; segments: TranscriptSegment[] }> {
+  const row = attachments.find((a) => a.fileName === "transcript.json");
+  if (!bucket || !row?.r2Key) return { text: null, segments: [] };
+  try {
+    const object = await bucket.get(row.r2Key);
+    if (!object) return { text: null, segments: [] };
+    const data = (await object.json()) as Record<string, unknown>;
+    const text = typeof data.text === "string" ? data.text : null;
+    const rawSegments = Array.isArray(data.segments) ? data.segments : [];
+    const segments = rawSegments
+      .filter(
+        (segment): segment is TranscriptSegment =>
+          isRecord(segment) &&
+          typeof segment.start === "number" &&
+          typeof segment.end === "number" &&
+          typeof segment.text === "string" &&
+          segment.text.trim().length > 0
+      )
+      .slice(0, 500);
+    return { text, segments };
+  } catch {
+    return { text: null, segments: [] };
+  }
+}
+
+/** PILE-668 — error/network counts for the device-info sidebar, read from
+ *  the uploaded debugger.json when one exists. */
+async function loadShareEventStats(
+  bucket: R2Bucket | undefined,
+  attachments: ShareAttachmentRow[]
+): Promise<{ errors: number | null; networkRequests: number | null }> {
+  const row = attachments.find(
+    (a) => a.fileName === "debugger.json" && a.type === "debugger_json"
+  );
+  if (!bucket || !row?.r2Key) {
+    return { errors: null, networkRequests: null };
+  }
+  try {
+    const object = await bucket.get(row.r2Key);
+    if (!object) return { errors: null, networkRequests: null };
+    const data = (await object.json()) as Record<string, unknown>;
+    const count = (key: string) =>
+      Array.isArray(data[key]) ? (data[key] as unknown[]).length : null;
+    const errorLogs = Array.isArray(data.logs)
+      ? data.logs.filter((entry) => isRecord(entry) && entry.level === "error")
+          .length
+      : 0;
+    const errors = count("errors");
+    return {
+      errors: errors === null ? null : errors + errorLogs,
+      networkRequests: count("networkRequests"),
+    };
+  } catch {
+    return { errors: null, networkRequests: null };
+  }
+}
+
+function formatSegmentTimestamp(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  return h > 0
+    ? `${h}:${String(mm).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+    : `${m}:${String(s).padStart(2, "0")}`;
+}
+
+/**
+ * PILE-668 — the public watch page: Cap/Loom-style layout with the
+ * recording front and center, clickable VTT captions, a transcript panel
+ * whose timestamps seek the video, and a device/session sidebar.
+ * Self-contained — no external assets, works on any modern browser.
+ */
+function renderShareWatchPage(opts: {
+  title: string;
+  videoUrl: string | null;
+  videoContentType: string | null;
+  vttUrl: string | null;
+  screenshotUrls: string[];
+  replayUrl: string | null;
+  transcriptText: string | null;
+  transcriptSegments: TranscriptSegment[];
+  infoRows: { label: string; value: string }[];
+  artifactLinks: { label: string; url: string }[];
+  pending: boolean;
+}): string {
+  const title = escapeHtml(opts.title);
+
+  const player = opts.videoUrl
+    ? `<video id="capture-video" controls preload="metadata" src="${escapeHtml(
+        opts.videoUrl
+      )}"${
+        opts.videoContentType
+          ? ` type="${escapeHtml(opts.videoContentType)}"`
+          : ""
+      }>${
+        opts.vttUrl
+          ? `<track kind="captions" src="${escapeHtml(
+              opts.vttUrl
+            )}" srclang="en" label="English" default>`
+          : ""
+      }</video>`
+    : opts.pending
+      ? `<div class="pending">The recording is still being processed — refresh in a moment.</div>`
+      : "";
+
+  const screenshots = opts.screenshotUrls
+    .map(
+      (url) =>
+        `<img class="screenshot" src="${escapeHtml(
+          url
+        )}" alt="Captured screenshot">`
+    )
+    .join("");
+
+  const segments = opts.transcriptSegments
+    .map(
+      (segment) =>
+        `<button type="button" class="seg" data-seek="${segment.start}">` +
+        `<span class="seg-ts">${formatSegmentTimestamp(segment.start)}</span>` +
+        `<span class="seg-text">${escapeHtml(segment.text.trim())}</span>` +
+        `</button>`
+    )
+    .join("");
+  const transcript =
+    segments.length > 0
+      ? `<section class="transcript"><h2>Transcript</h2><div class="segs">${segments}</div></section>`
+      : opts.transcriptText
+        ? `<section class="transcript"><h2>Transcript</h2><p class="transcript-plain">${escapeHtml(
+            opts.transcriptText
+          )}</p></section>`
+        : "";
+
+  const info = opts.infoRows
+    .map(
+      (row) =>
+        `<div class="info-row"><dt>${escapeHtml(row.label)}</dt>` +
+        `<dd>${escapeHtml(row.value)}</dd></div>`
+    )
+    .join("");
+
+  const links = opts.artifactLinks
+    .map(
+      (link) =>
+        `<li><a href="${escapeHtml(link.url)}">${escapeHtml(
+          link.label
+        )}</a></li>`
+    )
+    .join("");
+  const artifactsBlock = links
+    ? `<div class="info-block"><h2>Attachments</h2><ul class="links">${links}</ul></div>`
+    : "";
+
+  const replayBlock = opts.replayUrl
+    ? `<p class="replay"><a href="${escapeHtml(
+        opts.replayUrl
+      )}">Watch DOM session replay</a></p>`
+    : "";
+
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title>
+<style>
+  *{box-sizing:border-box}
+  body{font-family:system-ui,-apple-system,sans-serif;margin:0;background:#0a0a0a;color:#eee;min-height:100vh}
+  .wrap{max-width:1120px;margin:0 auto;padding:32px 20px 64px}
+  h1{font-size:20px;font-weight:600;margin:0 0 4px}
+  .sub{color:#888;font-size:13px;margin-bottom:24px}
+  .layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:24px;align-items:start}
+  @media (max-width:880px){.layout{grid-template-columns:1fr}}
+  video#capture-video{width:100%;max-height:70vh;border-radius:10px;background:#000;display:block}
+  .pending{border:1px dashed #333;border-radius:10px;padding:48px 24px;text-align:center;color:#888}
+  img.screenshot{max-width:100%;border-radius:10px;margin-top:16px}
+  .transcript{margin-top:24px}
+  .transcript h2,.sidebar h2,.info-block h2{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#888;margin:0 0 10px}
+  .segs{display:flex;flex-direction:column;gap:2px;max-height:320px;overflow-y:auto;border:1px solid #222;border-radius:8px;padding:6px}
+  .seg{display:flex;gap:10px;align-items:baseline;text-align:left;background:none;border:0;color:#ddd;font:inherit;font-size:13px;padding:6px 8px;border-radius:6px;cursor:pointer}
+  .seg:hover{background:#1a1a1a}
+  .seg-ts{color:#7ee787;font-variant-numeric:tabular-nums;flex:none;font-size:12px}
+  .transcript-plain{color:#ccc;font-size:14px;line-height:1.6;white-space:pre-wrap}
+  .sidebar{border:1px solid #222;border-radius:10px;padding:16px;background:#111}
+  .info-row{margin-bottom:10px}
+  .info-row dt{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#777;margin-bottom:2px}
+  .info-row dd{margin:0;font-size:13px;color:#ddd;word-break:break-word}
+  .links{list-style:none;margin:0;padding:0}
+  .links li{margin:6px 0}
+  .links a,.replay a{color:#7ee787;font-size:13px}
+  .info-block{margin-top:18px}
+</style></head><body><div class="wrap">
+<h1>${title}</h1>
+<div class="sub">Shared capture</div>
+<div class="layout">
+<div class="main">${player}${screenshots}${replayBlock}${transcript}</div>
+<aside class="sidebar"><h2>Device &amp; Session Info</h2><dl>${info}</dl>${artifactsBlock}</aside>
+</div>
+</div>
+<script>
+document.addEventListener("click",function(e){
+  var t=e.target&&e.target.closest?e.target.closest("[data-seek]"):null;
+  if(!t)return;
+  var v=document.getElementById("capture-video");
+  if(!v)return;
+  var s=parseFloat(t.getAttribute("data-seek")||"0");
+  if(isNaN(s))return;
+  v.currentTime=s;
+  v.play();
+});
+</script>
+</body></html>`;
+}
+
+/**
+ * PILE-668 — assembles the watch page from a session's metadata and the
+ * ticket's attachment rows: video + VTT track + transcript segments +
+ * device/session sidebar rows. Reporter-identifying fields (email,
+ * fullName) are deliberately excluded from the public page.
+ */
+async function buildShareWatchPageHtml(
+  bucket: R2Bucket | undefined,
+  opts: {
+    title: string;
+    meta: Record<string, unknown>;
+    sessionCreatedAt: string;
+    viewCount: number;
+    lastViewedAt: string | null;
+    attachments: ShareAttachmentRow[];
+    pending: boolean;
+  }
+): Promise<string> {
+  const { attachments, meta } = opts;
+  const video = attachments.find((a) => a.type === "video" && a.url);
+  const vtt = attachments.find(
+    (a) => a.type === "transcript" && a.fileName === "transcript.vtt" && a.url
+  );
+  const replay = attachments.find((a) => a.type === "replay" && a.url);
+  const screenshotUrls = attachments
+    .filter((a) => a.type === "screenshot" && a.url)
+    .map((a) => a.url as string);
+
+  const [{ text: transcriptText, segments }, stats] = await Promise.all([
+    loadShareTranscript(bucket, attachments),
+    loadShareEventStats(bucket, attachments),
+  ]);
+
+  const infoRows: { label: string; value: string }[] = [];
+  const url = typeof meta.url === "string" ? meta.url : null;
+  if (url) infoRows.push({ label: "Page", value: url });
+
+  const deviceInfo = isRecord(meta.deviceInfo) ? meta.deviceInfo : null;
+  const userAgent =
+    typeof deviceInfo?.userAgent === "string"
+      ? deviceInfo.userAgent
+      : typeof meta.userAgent === "string"
+        ? meta.userAgent
+        : null;
+  if (userAgent) infoRows.push({ label: "Browser / OS", value: userAgent });
+
+  const viewport = isRecord(deviceInfo?.viewport)
+    ? deviceInfo.viewport
+    : isRecord(meta.viewport)
+      ? meta.viewport
+      : null;
+  if (
+    viewport &&
+    typeof viewport.width === "number" &&
+    typeof viewport.height === "number"
+  ) {
+    infoRows.push({
+      label: "Viewport",
+      value: `${viewport.width} × ${viewport.height}`,
+    });
+  }
+
+  infoRows.push({ label: "Recorded", value: opts.sessionCreatedAt });
+  infoRows.push({ label: "Views", value: String(opts.viewCount) });
+  if (opts.lastViewedAt) {
+    infoRows.push({ label: "Last viewed", value: opts.lastViewedAt });
+  }
+  if (stats.errors !== null) {
+    infoRows.push({ label: "Errors", value: String(stats.errors) });
+  }
+  if (stats.networkRequests !== null) {
+    infoRows.push({
+      label: "Network requests",
+      value: String(stats.networkRequests),
+    });
+  }
+
+  const artifactLinks = attachments
+    .filter(
+      (a) =>
+        a.url &&
+        a.type !== "video" &&
+        a.type !== "screenshot" &&
+        !(a.type === "transcript" && a.fileName === "transcript.vtt")
+    )
+    .map((a) => ({ label: a.fileName ?? a.type, url: a.url as string }));
+
+  return renderShareWatchPage({
+    title: opts.title,
+    videoUrl: video?.url ?? null,
+    videoContentType: video?.contentType ?? null,
+    vttUrl: vtt?.url ?? null,
+    screenshotUrls,
+    replayUrl: replay?.url ?? null,
+    transcriptText,
+    transcriptSegments: segments,
+    infoRows,
+    artifactLinks,
+    pending: opts.pending,
+  });
+}
+
 export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(createPublicKeyRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
@@ -1525,6 +2126,7 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
       `network-requests: ${input.networkRequests?.length ?? 0}`,
       `user-events: ${input.userEvents?.length ?? 0}`,
       `errors: ${input.errors?.length ?? 0}`,
+      `replay-events: ${input.replayEvents?.length ?? 0}`,
       `recording: ${recording ? "attached" : "none"}`,
     ].filter((line): line is string => line !== null);
 
@@ -1577,17 +2179,27 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
         });
       }
 
-      const networkRequests = (input.networkRequests ?? []).map((request) => ({
-        network_url: request.url,
-        network_method: request.method,
-        network_status: request.status ?? null,
-        duration_ms: request.duration ?? null,
-        is_error:
-          request.status === undefined
-            ? false
-            : request.status === 0 || request.status >= 400,
-        timestamp: request.timestamp ?? submittedAt,
-      }));
+      // PILE-675 — request/response bodies persist only when the
+      // submission opted in, bounded to 16KB and scrubbed on write.
+      const includeBodies = input.includeNetworkBodies === true;
+      const networkRequests = (input.networkRequests ?? []).map((request) => {
+        const entry: Record<string, unknown> = {
+          network_url: request.url,
+          network_method: request.method,
+          network_status: request.status ?? null,
+          duration_ms: request.duration ?? null,
+          is_error:
+            request.status === undefined
+              ? false
+              : request.status === 0 || request.status >= 400,
+          timestamp: request.timestamp ?? submittedAt,
+        };
+        if (includeBodies) {
+          entry.request_body = boundNetworkBody(request.requestBody);
+          entry.response_body = boundNetworkBody(request.responseBody);
+        }
+        return entry;
+      });
 
       const userEvents = (input.userEvents ?? []).map((userEvent) => ({
         event_type: "interactivity",
@@ -1697,13 +2309,20 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
               metadata: userEvent.metadata ?? null,
             })),
             logs: consoleLogs,
-            networkRequests: (input.networkRequests ?? []).map((request) => ({
-              method: request.method,
-              url: request.url,
-              status: request.status ?? null,
-              duration: request.duration ?? null,
-              timestamp: request.timestamp ?? submittedAt,
-            })),
+            networkRequests: (input.networkRequests ?? []).map((request) => {
+              const entry: Record<string, unknown> = {
+                method: request.method,
+                url: request.url,
+                status: request.status ?? null,
+                duration: request.duration ?? null,
+                timestamp: request.timestamp ?? submittedAt,
+              };
+              if (includeBodies) {
+                entry.requestBody = boundNetworkBody(request.requestBody);
+                entry.responseBody = boundNetworkBody(request.responseBody);
+              }
+              return entry;
+            }),
             errors: (input.errors ?? []).map((error) => ({
               message: error.message,
               stack: error.stack ?? null,
@@ -1729,6 +2348,16 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
           fileName: recording.fileName,
           contentType: recording.contentType,
           body: recording.body,
+        });
+      }
+
+      // PILE-675 — raw rrweb DOM replay events for deterministic replay.
+      if (input.replayEvents && input.replayEvents.length > 0) {
+        artifacts.push({
+          type: "replay",
+          fileName: "replay.json",
+          contentType: "application/json",
+          body: jsonArtifactBytes(input.replayEvents),
         });
       }
 
@@ -1985,13 +2614,63 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
       ),
     ];
 
-    const { metadata: customMetadata, artifacts: _artifacts, ...rest } = body;
+    const {
+      metadata: customMetadata,
+      artifacts: _artifacts,
+      replayEvents: bodyReplayEvents,
+      ...rest
+    } = body;
+    // Replay events may arrive top-level or inside metadata (older SDKs
+    // route everything through the metadata bag). Either way they are too
+    // large for the D1 metadata column — they persist as replay.json in R2.
+    const { replayEvents: metaReplayEvents, ...safeCustomMetadata } =
+      customMetadata && typeof customMetadata === "object"
+        ? customMetadata
+        : { replayEvents: undefined };
+    const replayEvents =
+      Array.isArray(bodyReplayEvents) && bodyReplayEvents.length > 0
+        ? bodyReplayEvents
+        : Array.isArray(metaReplayEvents) && metaReplayEvents.length > 0
+          ? metaReplayEvents
+          : null;
+
+    const bucket = c.env.ATTACHMENTS_BUCKET;
+
+    // PILE-675 — rrweb DOM replay → replay.json capture artifact.
+    if (
+      replayEvents &&
+      bucket &&
+      !nextUploads.some(
+        (u) => u.attachmentType === "replay" && u.fileName === "replay.json"
+      )
+    ) {
+      const replayKey = buildCaptureArtifactKey(
+        session.organizationId,
+        session.id,
+        { attachmentType: "replay", fileName: "replay.json" }
+      );
+      const replayBytes = jsonArtifactBytes(replayEvents);
+      await bucket.put(
+        replayKey,
+        new Blob([replayBytes as BlobPart], {
+          type: "application/json",
+        }),
+        { httpMetadata: { contentType: "application/json" } }
+      );
+      nextUploads.push({
+        attachmentType: "replay",
+        contentType: "application/json",
+        fileName: "replay.json",
+        r2Key: replayKey,
+        uploaded: true,
+        size: replayBytes.byteLength,
+      });
+    }
+
     const merged: Record<string, unknown> = {
       ...session.metadata,
       ...rest,
-      ...(customMetadata && typeof customMetadata === "object"
-        ? customMetadata
-        : {}),
+      ...safeCustomMetadata,
       uploads: nextUploads,
     };
     // Recording-link sessions always publish: the recorder must get a
@@ -1999,13 +2678,44 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
     if (session.linkId) {
       merged.visibility = "public";
     }
+
+    // PILE-665 — mint an R2 multipart upload for the declared video so the
+    // client streams MediaRecorder chunks via /upload/part while recording.
+    let multipartUploadId: string | undefined;
+    if (body.multipart === true && bucket) {
+      const target =
+        uploads.find((u) => u.attachmentType === "video") ?? uploads[0];
+      if (target) {
+        const multipart = await bucket.createMultipartUpload(target.r2Key, {
+          httpMetadata: { contentType: target.contentType },
+        });
+        multipartUploadId = multipart.uploadId;
+        merged.multipartUploadId = multipart.uploadId;
+        merged.multipartObjectKey = target.r2Key;
+        merged.multipartParts = [];
+        merged.multipartCompleted = false;
+      }
+    }
+
     await updateCaptureSessionMetadata(db, session.id, merged);
 
+    const origin = new URL(c.req.url).origin;
     const first = uploads[0];
     return c.json({
       uploadUrl: first?.uploadUrl ?? "",
       r2Key: first?.r2Key ?? "",
       sessionId: session.id,
+      ...(multipartUploadId
+        ? {
+            uploadId: multipartUploadId,
+            partUploadUrl: `/support/capture/sessions/${session.id}/upload/part`,
+          }
+        : {}),
+      // PILE-665/668 — the share link is session-scoped so it is valid the
+      // moment recording starts, long before a ticket exists.
+      ...(merged.visibility === "public"
+        ? { shareUrl: `${origin}/support/capture/share/${session.id}` }
+        : {}),
       uploads: uploads.map(
         ({ uploadUrl, r2Key, attachmentType, fileName }) => ({
           uploadUrl,
@@ -2079,6 +2789,22 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
     return c.json({ r2Key });
   });
 
+  app.openapi(uploadPartPutRoute, async (c) => {
+    const { sessionId } = c.req.valid("param");
+    const { partNumber, uploadId } = c.req.valid("query");
+    return c.json(
+      await streamUploadPart(c, { sessionId, partNumber, uploadId })
+    );
+  });
+
+  app.openapi(uploadPartPostRoute, async (c) => {
+    const { sessionId } = c.req.valid("param");
+    const { partNumber, uploadId } = c.req.valid("query");
+    return c.json(
+      await streamUploadPart(c, { sessionId, partNumber, uploadId })
+    );
+  });
+
   app.openapi(finalizeRoute, async (c) => {
     const token = c.req.header("x-pile-capture-token");
     if (!token) {
@@ -2117,6 +2843,10 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
     }
 
     assertSessionActive(session);
+
+    // PILE-665 — completing the multipart upload materializes the R2
+    // object so the artifact registration below sees the video.
+    await completeStreamedCaptureUpload(c.env.ATTACHMENTS_BUCKET, db, session);
 
     const meta = session.metadata;
     const email = typeof meta.email === "string" ? meta.email : null;
@@ -2391,12 +3121,22 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
           ).filter((k): k is string => k !== null)
         : []
     );
+    const viewCount =
+      typeof session.metadata.viewCount === "number"
+        ? session.metadata.viewCount
+        : 0;
+    const lastViewedAt =
+      typeof session.metadata.lastViewedAt === "string"
+        ? session.metadata.lastViewedAt
+        : null;
     return c.json({
       sessionId: session.id,
       status: session.status,
       expiresAt: session.expiresAt,
       ticketId: session.ticketId,
       reference,
+      viewCount,
+      lastViewedAt,
       uploads: uploads.map((u) => ({
         attachmentType: u.attachmentType,
         contentType: u.contentType ?? null,
@@ -2424,7 +3164,11 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
     }
 
     const [session] = await db
-      .select({ metadata: supportCaptureSessions.metadata })
+      .select({
+        id: supportCaptureSessions.id,
+        metadata: supportCaptureSessions.metadata,
+        createdAt: supportCaptureSessions.createdAt,
+      })
       .from(supportCaptureSessions)
       .where(eq(supportCaptureSessions.ticketId, ticketId))
       .limit(1);
@@ -2439,53 +3183,141 @@ export function registerSupportCaptureRoutes(app: OpenAPIHono<AppContext>) {
       });
     }
 
+    // PILE-669 — every share-link open counts as a view.
+    const viewedMeta = await recordShareView(db, session.id, meta ?? {});
+    const viewCount =
+      typeof viewedMeta.viewCount === "number" ? viewedMeta.viewCount : 0;
+    const lastViewedAt =
+      typeof viewedMeta.lastViewedAt === "string"
+        ? viewedMeta.lastViewedAt
+        : null;
+
     const attachments = await db
       .select({
         type: supportTicketAttachments.type,
+        fileName: supportTicketAttachments.fileName,
         contentType: supportTicketAttachments.contentType,
         url: supportTicketAttachments.url,
         size: supportTicketAttachments.size,
+        r2Key: supportTicketAttachments.r2Key,
       })
       .from(supportTicketAttachments)
       .where(eq(supportTicketAttachments.ticketId, ticketId));
 
-    // Browsers get a minimal watch page (video player + artifact links);
-    // API/agent clients get the JSON artifact manifest.
+    // Browsers get the watch page; API/agent clients get the JSON manifest.
     if (c.req.header("accept")?.includes("text/html")) {
-      const blocks = attachments
-        .map((a) => {
-          const href = a.url ?? "";
-          if (!href) {
-            return "";
-          }
-          if (a.type === "video") {
-            return `<video controls src="${href}" style="width:100%;max-height:70vh;border-radius:8px"></video>`;
-          }
-          if (a.type === "replay") {
-            return `<p><a href="${href}" style="color:#7ee787">Watch DOM session replay</a></p>`;
-          }
-          if (a.type === "screenshot") {
-            return `<img src="${href}" style="max-width:100%;border-radius:8px">`;
-          }
-          return "";
-        })
-        .join("");
-      const title = ticket.title
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
       return c.html(
-        `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title>` +
-          `<style>body{font-family:system-ui,sans-serif;max-width:860px;margin:40px auto;padding:0 16px;background:#0a0a0a;color:#eee}h1{font-size:20px;font-weight:600}</style>` +
-          `</head><body><h1>${title}</h1>${blocks || "<p>No attachments.</p>"}</body></html>`
+        await buildShareWatchPageHtml(c.env.ATTACHMENTS_BUCKET, {
+          title: ticket.title,
+          meta: viewedMeta,
+          sessionCreatedAt: session.createdAt,
+          viewCount,
+          lastViewedAt,
+          attachments,
+          pending: false,
+        })
       );
     }
 
     return c.json({
       ticketId: ticket.id,
       title: ticket.title,
+      viewCount,
+      lastViewedAt,
       attachments: attachments.map((a) => ({
         type: a.type,
+        fileName: a.fileName,
+        contentType: a.contentType,
+        url: a.url,
+        size: a.size,
+      })),
+    });
+  });
+
+  // PILE-665/668 — session-scoped share link: valid the moment recording
+  // starts, so the recorder can hand out a watch URL before finalize. Once
+  // the session lands a ticket it serves the same watch page/manifest.
+  app.openapi(sessionShareRoute, async (c) => {
+    const { sessionId } = c.req.valid("param");
+    const db = createD1(c.env.D1);
+
+    const session = await getCaptureSession(db, sessionId);
+    if (!session) {
+      throw new VortexError({
+        status: 404,
+        code: "NOT_FOUND",
+        message: "Capture session not found",
+      });
+    }
+    const meta = session.metadata;
+    if (meta.visibility !== "public") {
+      throw new VortexError({
+        status: 404,
+        code: "NOT_FOUND",
+        message: "Capture session not found",
+      });
+    }
+
+    const viewedMeta = await recordShareView(db, session.id, meta);
+    const viewCount =
+      typeof viewedMeta.viewCount === "number" ? viewedMeta.viewCount : 0;
+    const lastViewedAt =
+      typeof viewedMeta.lastViewedAt === "string"
+        ? viewedMeta.lastViewedAt
+        : null;
+
+    const ticket = session.ticketId
+      ? await db
+          .select({ id: supportTickets.id, title: supportTickets.title })
+          .from(supportTickets)
+          .where(eq(supportTickets.id, session.ticketId))
+          .limit(1)
+          .then((rows) => rows[0] ?? null)
+      : null;
+
+    const attachments: ShareAttachmentRow[] = ticket
+      ? await db
+          .select({
+            type: supportTicketAttachments.type,
+            fileName: supportTicketAttachments.fileName,
+            contentType: supportTicketAttachments.contentType,
+            url: supportTicketAttachments.url,
+            size: supportTicketAttachments.size,
+            r2Key: supportTicketAttachments.r2Key,
+          })
+          .from(supportTicketAttachments)
+          .where(eq(supportTicketAttachments.ticketId, ticket.id))
+      : [];
+
+    const title =
+      ticket?.title ??
+      (typeof viewedMeta.title === "string" ? viewedMeta.title : null) ??
+      "Shared capture";
+
+    if (c.req.header("accept")?.includes("text/html")) {
+      return c.html(
+        await buildShareWatchPageHtml(c.env.ATTACHMENTS_BUCKET, {
+          title,
+          meta: viewedMeta,
+          sessionCreatedAt: session.createdAt,
+          viewCount,
+          lastViewedAt,
+          attachments,
+          pending: ticket === null,
+        })
+      );
+    }
+
+    return c.json({
+      sessionId: session.id,
+      status: session.status,
+      ticketId: ticket?.id ?? null,
+      title,
+      viewCount,
+      lastViewedAt,
+      attachments: attachments.map((a) => ({
+        type: a.type,
+        fileName: a.fileName,
         contentType: a.contentType,
         url: a.url,
         size: a.size,

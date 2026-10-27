@@ -1772,6 +1772,16 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "getPublicStatus",
+    "description": "List status (GET /status)",
+    "method": "GET",
+    "path": "/status",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
     "name": "getWorkspaces",
     "description": "List workspaces (GET /workspaces)",
     "method": "GET",
@@ -18245,7 +18255,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdSupportFeedback",
-    "description": "Create support feedback (POST /workspaces/{organizationId}/support/feedback) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: kind*, title*, description*, url, userAgent, viewport, deviceInfo, consoleErrors, consoleLogs, networkRequests, userEvents, errors, screenshotDataUrl, recordingDataUrl (* = required).",
+    "description": "Create support feedback (POST /workspaces/{organizationId}/support/feedback) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: kind*, title*, description*, url, userAgent, viewport, deviceInfo, consoleErrors, consoleLogs, networkRequests, userEvents, errors, screenshotDataUrl, recordingDataUrl, replayEvents, includeNetworkBodies (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/support/feedback",
     "inputSchema": {
@@ -18388,6 +18398,14 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                   "timestamp": {
                     "type": "string",
                     "maxLength": 60
+                  },
+                  "requestBody": {
+                    "type": "string",
+                    "maxLength": 65536
+                  },
+                  "responseBody": {
+                    "type": "string",
+                    "maxLength": 65536
                   }
                 },
                 "required": [
@@ -18464,6 +18482,16 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "recordingDataUrl": {
               "type": "string",
               "maxLength": 40000000
+            },
+            "replayEvents": {
+              "type": "array",
+              "items": {
+                "nullable": true
+              },
+              "maxItems": 50000
+            },
+            "includeNetworkBodies": {
+              "type": "boolean"
             }
           },
           "required": [

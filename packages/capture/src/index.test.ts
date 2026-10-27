@@ -2,6 +2,59 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { initCapture } from "./index.js";
 
+// The DOM-facing media/replay layers don't exist in the test environment —
+// fake a recording controller that emits MediaRecorder-style chunks and a
+// replay recorder that always has events buffered.
+vi.mock("./media.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./media.js")>();
+  return {
+    ...actual,
+    startDisplayRecording: vi.fn(
+      async (options?: { onChunk?: (chunk: Blob, index: number) => void }) => {
+        const emit = (blob: Blob, index: number) =>
+          options?.onChunk?.(blob, index);
+        emit(new Blob(["chunk-a"], { type: "video/webm" }), 0);
+        emit(new Blob(["chunk-b"], { type: "video/webm" }), 1);
+        return {
+          startedAt: Date.now(),
+          stream: {
+            getTracks: () => [],
+            getVideoTracks: () => [],
+          } as unknown as MediaStream,
+          stop: async () => {
+            emit(new Blob(["chunk-c"], { type: "video/webm" }), 2);
+            return {
+              blob: new Blob(["chunk-a", "chunk-b", "chunk-c"], {
+                type: "video/webm",
+              }),
+              durationMs: 5,
+            };
+          },
+        };
+      }
+    ),
+  };
+});
+
+vi.mock("./replay.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./replay.js")>();
+  return {
+    ...actual,
+    startDomRecording: vi.fn(async () => ({
+      get active() {
+        return true;
+      },
+      get degraded() {
+        return false;
+      },
+      stop() {},
+      snapshot: () => [
+        { type: 4, data: { href: "https://x.test" }, timestamp: Date.now() },
+      ],
+    })),
+  };
+});
+
 interface FetchCall {
   url: string;
   method: string;
@@ -34,6 +87,7 @@ function stubFetch() {
     if (urlStr.endsWith("/support/capture/upload-session")) {
       const parsed = JSON.parse(String(init?.body)) as {
         artifacts?: Array<{ attachmentType: string; fileName?: string }>;
+        multipart?: boolean;
       };
       const artifacts = parsed.artifacts ?? [
         { attachmentType: "screenshot", fileName: "screenshot.png" },
@@ -44,6 +98,13 @@ function stubFetch() {
             "/support/capture/upload/tok_123/screenshot/screenshot.png",
           r2Key: "k1",
           sessionId: "tok_123",
+          ...(parsed.multipart === true
+            ? {
+                uploadId: "up_1",
+                partUploadUrl: "/support/capture/sessions/tok_123/upload/part",
+                shareUrl: "https://pile.nyc/share/tok_123",
+              }
+            : {}),
           uploads: artifacts.map((a) => ({
             uploadUrl: `/support/capture/upload/tok_123/${a.attachmentType}/${a.fileName ?? a.attachmentType}`,
             r2Key: `k_${a.attachmentType}_${a.fileName ?? "x"}`,
@@ -54,8 +115,17 @@ function stubFetch() {
         { status: 200, headers: { "content-type": "application/json" } }
       );
     }
+    if (urlStr.includes("/upload/part")) {
+      return new Response(
+        JSON.stringify({ ok: true, partNumber: 1, etag: "etag-1" }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }
     if (urlStr.includes("/support/capture/upload/")) {
       return new Response(JSON.stringify({ r2Key: "k" }), { status: 200 });
+    }
+    if (urlStr.endsWith("/support/capture/metadata")) {
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
     }
     if (urlStr.endsWith("/support/capture/finalize")) {
       return new Response(
@@ -214,6 +284,81 @@ describe("initCapture", () => {
     await capture.start();
     const result = await capture.stop({ email: "r@e.com" });
     expect(result.ticketId).toBe("ticket_1");
+    capture.destroy();
+  });
+
+  it("streams MediaRecorder chunks as multipart parts with streamParts (PILE-665)", async () => {
+    const capture = initCapture({ publicKey: "pk_test", streamParts: true });
+    await capture.start({ video: true });
+    const result = await capture.stop({ email: "r@e.com" });
+    expect(result.ticketId).toBe("ticket_1");
+
+    // One session for the whole flow — the recording never double-mints.
+    const tokenCalls = calls.filter((c) =>
+      c.url.endsWith("/support/capture/token")
+    );
+    expect(tokenCalls.length).toBe(1);
+
+    // The first upload-session asked for a multipart upload.
+    const sessionCalls = calls.filter((c) => c.url.endsWith("/upload-session"));
+    expect(sessionCalls.length).toBe(2);
+    const mintBody = JSON.parse(String(sessionCalls[0]?.body)) as {
+      multipart?: boolean;
+    };
+    expect(mintBody.multipart).toBe(true);
+
+    // Small chunks coalesced into a single PUT part (5 MiB part floor).
+    const partCalls = calls.filter((c) => c.url.includes("/upload/part"));
+    expect(partCalls.length).toBe(1);
+    expect(partCalls[0]!.method).toBe("PUT");
+    expect(partCalls[0]!.url).toContain("partNumber=1");
+    expect(partCalls[0]!.url).toContain("uploadId=up_1");
+    expect(partCalls[0]!.headers["x-pile-capture-token"]).toBe("tok_123");
+    expect(String(partCalls[0]!.body)).toBe("chunk-achunk-bchunk-c");
+
+    // No part failure → the one-shot video upload fallback stayed cold.
+    const videoUploads = calls.filter((c) =>
+      c.url.includes("/upload/tok_123/video/")
+    );
+    expect(videoUploads.length).toBe(0);
+
+    const finalizeCalls = calls.filter((c) => c.url.endsWith("/finalize"));
+    expect(finalizeCalls.length).toBe(1);
+    capture.destroy();
+  });
+
+  it("attaches replay.json alongside replay.html with includeDomReplay (PILE-675)", async () => {
+    const capture = initCapture({
+      publicKey: "pk_test",
+      includeDomReplay: true,
+    });
+    await capture.start();
+    await capture.stop({ email: "r@e.com" });
+
+    const sessionCall = calls.find((c) => c.url.endsWith("/upload-session"));
+    const body = JSON.parse(String(sessionCall?.body)) as {
+      artifacts: Array<{ attachmentType: string; fileName: string }>;
+    };
+    const replayFiles = body.artifacts
+      .filter((a) => a.attachmentType === "replay")
+      .map((a) => a.fileName);
+    expect(replayFiles).toContain("replay.html");
+    expect(replayFiles).toContain("replay.json");
+    capture.destroy();
+  });
+
+  it("wires includeNetworkBodies into the submission metadata (PILE-675)", async () => {
+    const capture = initCapture({
+      publicKey: "pk_test",
+      includeNetworkBodies: false,
+    });
+    await capture.report({ email: "r@e.com", title: "bodies off" });
+
+    const sessionCall = calls.find((c) => c.url.endsWith("/upload-session"));
+    const body = JSON.parse(String(sessionCall?.body)) as {
+      metadata: { includeNetworkBodies?: boolean };
+    };
+    expect(body.metadata.includeNetworkBodies).toBe(false);
     capture.destroy();
   });
 });

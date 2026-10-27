@@ -199,7 +199,18 @@ export interface RecordingController {
   stream: MediaStream;
 }
 
-export async function startDisplayRecording(): Promise<RecordingController> {
+export interface DisplayRecordingOptions {
+  /**
+   * PILE-665 — called for every MediaRecorder chunk as it lands (1s
+   * timeslice), letting the caller stream R2 multipart parts while
+   * recording instead of buffering the whole video.
+   */
+  onChunk?: (chunk: Blob, index: number) => void;
+}
+
+export async function startDisplayRecording(
+  options?: DisplayRecordingOptions
+): Promise<RecordingController> {
   const stream = await requestDisplayStream(true);
   assertBrowserTabSurface(stream);
   const warmupVideo = document.createElement("video");
@@ -221,6 +232,7 @@ export async function startDisplayRecording(): Promise<RecordingController> {
   const recorder = new MediaRecorder(stream, recorderOptions);
   const startedAt = Date.now();
   const chunks: Blob[] = [];
+  let chunkIndex = 0;
 
   let resolveStop:
     | ((value: { blob: Blob; durationMs: number }) => void)
@@ -236,6 +248,8 @@ export async function startDisplayRecording(): Promise<RecordingController> {
   recorder.addEventListener("dataavailable", (event) => {
     if (event.data && event.data.size > 0) {
       chunks.push(event.data);
+      options?.onChunk?.(event.data, chunkIndex);
+      chunkIndex += 1;
     }
   });
   recorder.addEventListener(

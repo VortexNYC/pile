@@ -27023,6 +27023,14 @@
                         "timestamp": {
                           "type": "string",
                           "maxLength": 60
+                        },
+                        "requestBody": {
+                          "type": "string",
+                          "maxLength": 65536
+                        },
+                        "responseBody": {
+                          "type": "string",
+                          "maxLength": 65536
                         }
                       },
                       "required": [
@@ -27099,6 +27107,16 @@
                   "recordingDataUrl": {
                     "type": "string",
                     "maxLength": 40000000
+                  },
+                  "replayEvents": {
+                    "type": "array",
+                    "items": {
+                      "nullable": true
+                    },
+                    "maxItems": 50000
+                  },
+                  "includeNetworkBodies": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -27342,6 +27360,19 @@
                     "additionalProperties": {
                       "nullable": true
                     }
+                  },
+                  "multipart": {
+                    "type": "boolean"
+                  },
+                  "replayEvents": {
+                    "type": "array",
+                    "items": {
+                      "nullable": true
+                    },
+                    "maxItems": 50000
+                  },
+                  "includeNetworkBodies": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -27366,6 +27397,15 @@
                       "type": "string"
                     },
                     "sessionId": {
+                      "type": "string"
+                    },
+                    "uploadId": {
+                      "type": "string"
+                    },
+                    "partUploadUrl": {
+                      "type": "string"
+                    },
+                    "shareUrl": {
                       "type": "string"
                     },
                     "uploads": {
@@ -27493,6 +27533,164 @@
           }
         },
         "summary": "POST /support/capture/upload/{sessionId}/{attachmentType}/{fileName}"
+      }
+    },
+    "/support/capture/sessions/{sessionId}/upload/part": {
+      "put": {
+        "security": [],
+        "tags": [
+          "support-capture"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "sessionId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            },
+            "required": true,
+            "name": "partNumber",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "uploadId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "x-pile-capture-token",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Multipart part uploaded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "partNumber": {
+                      "type": "number"
+                    },
+                    "etag": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "partNumber",
+                    "etag"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No active multipart upload for this session"
+          },
+          "401": {
+            "description": "Invalid or expired session"
+          }
+        },
+        "summary": "Update support capture session upload part"
+      },
+      "post": {
+        "security": [],
+        "tags": [
+          "support-capture"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "sessionId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            },
+            "required": true,
+            "name": "partNumber",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "uploadId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "x-pile-capture-token",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Multipart part uploaded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "partNumber": {
+                      "type": "number"
+                    },
+                    "etag": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "partNumber",
+                    "etag"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No active multipart upload for this session"
+          },
+          "401": {
+            "description": "Invalid or expired session"
+          }
+        },
+        "summary": "Create support capture session upload part"
       }
     },
     "/support/capture/finalize": {
@@ -27655,6 +27853,13 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "viewCount": {
+                      "type": "number"
+                    },
+                    "lastViewedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "uploads": {
                       "type": "array",
                       "items": {
@@ -27688,6 +27893,8 @@
                     "expiresAt",
                     "ticketId",
                     "reference",
+                    "viewCount",
+                    "lastViewedAt",
                     "uploads"
                   ]
                 }
@@ -27731,6 +27938,13 @@
                     "title": {
                       "type": "string"
                     },
+                    "viewCount": {
+                      "type": "number"
+                    },
+                    "lastViewedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "attachments": {
                       "type": "array",
                       "items": {
@@ -27744,8 +27958,13 @@
                               "debugger_json",
                               "log",
                               "network",
-                              "replay"
+                              "replay",
+                              "transcript"
                             ]
+                          },
+                          "fileName": {
+                            "type": "string",
+                            "nullable": true
                           },
                           "contentType": {
                             "type": "string"
@@ -27766,6 +27985,8 @@
                   "required": [
                     "ticketId",
                     "title",
+                    "viewCount",
+                    "lastViewedAt",
                     "attachments"
                   ]
                 }
@@ -27777,6 +27998,108 @@
           }
         },
         "summary": "Get support capture public"
+      }
+    },
+    "/support/capture/share/{sessionId}": {
+      "get": {
+        "security": [],
+        "tags": [
+          "support-capture"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "sessionId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Public capture share (session-scoped, available before finalize)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sessionId": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "ticketId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "title": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "viewCount": {
+                      "type": "number"
+                    },
+                    "lastViewedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "attachments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "screenshot",
+                              "video",
+                              "debugger_json",
+                              "log",
+                              "network",
+                              "replay",
+                              "transcript"
+                            ]
+                          },
+                          "fileName": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "contentType": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "size": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "type"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "sessionId",
+                    "status",
+                    "ticketId",
+                    "title",
+                    "viewCount",
+                    "lastViewedAt",
+                    "attachments"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Capture session not found"
+          }
+        },
+        "summary": "Get support capture share"
       }
     },
     "/support/webhooks/jam/{publicKeyId}": {
@@ -76385,6 +76708,256 @@
           }
         },
         "summary": "Create intake ppp loan import"
+      }
+    },
+    "/status": {
+      "get": {
+        "operationId": "getPublicStatus",
+        "security": [],
+        "tags": [
+          "system"
+        ],
+        "responses": {
+          "200": {
+            "description": "All components operational",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "operational",
+                        "degraded"
+                      ]
+                    },
+                    "version": {
+                      "type": "string"
+                    },
+                    "sha": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string"
+                    },
+                    "components": {
+                      "type": "object",
+                      "properties": {
+                        "api": {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "operational",
+                                "degraded"
+                              ]
+                            },
+                            "latencyMs": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "status"
+                          ]
+                        },
+                        "database": {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "operational",
+                                "degraded"
+                              ]
+                            },
+                            "latencyMs": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "status"
+                          ]
+                        },
+                        "durableObjects": {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "operational",
+                                "degraded"
+                              ]
+                            },
+                            "latencyMs": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "status"
+                          ]
+                        },
+                        "storage": {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "operational",
+                                "degraded"
+                              ]
+                            },
+                            "latencyMs": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "status"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "api",
+                        "database",
+                        "durableObjects",
+                        "storage"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "version",
+                    "sha",
+                    "timestamp",
+                    "components"
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "One or more components degraded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "operational",
+                        "degraded"
+                      ]
+                    },
+                    "version": {
+                      "type": "string"
+                    },
+                    "sha": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string"
+                    },
+                    "components": {
+                      "type": "object",
+                      "properties": {
+                        "api": {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "operational",
+                                "degraded"
+                              ]
+                            },
+                            "latencyMs": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "status"
+                          ]
+                        },
+                        "database": {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "operational",
+                                "degraded"
+                              ]
+                            },
+                            "latencyMs": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "status"
+                          ]
+                        },
+                        "durableObjects": {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "operational",
+                                "degraded"
+                              ]
+                            },
+                            "latencyMs": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "status"
+                          ]
+                        },
+                        "storage": {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "operational",
+                                "degraded"
+                              ]
+                            },
+                            "latencyMs": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "status"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "api",
+                        "database",
+                        "durableObjects",
+                        "storage"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status",
+                    "version",
+                    "sha",
+                    "timestamp",
+                    "components"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "List status"
       }
     }
   }
