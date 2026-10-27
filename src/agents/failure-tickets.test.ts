@@ -163,6 +163,8 @@ function failedSession(
     parentSessionId: null,
     spawnDepth: 0,
     laneDbRef: null,
+    computeBackend: null,
+    sandboxId: null,
     purpose: null,
     endedAt: null,
     secondaryRepos: null,

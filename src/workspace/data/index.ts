@@ -1441,6 +1441,10 @@ export async function updateAgentSession(
     stepKey: string | null;
     /** PILE-426 — serialized plan checklist JSON (or null to clear). */
     plan: string | null;
+    /** PILE-474 — the compute backend this lane's sandbox lives on. */
+    computeBackend: string | null;
+    /** PILE-474 — the backend's sandbox handle for resume/cancel. */
+    sandboxId: string | null;
   }>
 ) {
   const existing = await getAgentSession(db, organizationId, id);
@@ -1510,6 +1514,9 @@ export async function updateAgentSession(
   if (input.guidance !== undefined) set.guidance = input.guidance;
   if (input.stepKey !== undefined) set.stepKey = input.stepKey;
   if (input.plan !== undefined) set.plan = input.plan;
+  if (input.computeBackend !== undefined)
+    set.computeBackend = input.computeBackend;
+  if (input.sandboxId !== undefined) set.sandboxId = input.sandboxId;
   // A retry/redispatch lane inherits the review history of the lane it
   // replaces, so the next review still range-diffs from the last verdict.
   if (

@@ -1387,8 +1387,14 @@ export class FailoverBackend implements ComputeBackend {
   }
 }
 
-export function computeBackend(env: AppEnv, agentId?: string): ComputeBackend {
-  const provider = env.COMPUTE_PROVIDER ?? "daytona";
+export function computeBackend(
+  env: AppEnv,
+  agentId?: string,
+  /** PILE-474 — the backend pinned on the session row at start(); a
+   *  COMPUTE_PROVIDER flip mid-flight must not retarget in-flight lanes. */
+  pinned?: ComputeBackend["kind"]
+): ComputeBackend {
+  const provider = pinned ?? env.COMPUTE_PROVIDER ?? "daytona";
   if (provider === "cloudflare") {
     // sandbox-sdk 1.0 lanes (PILE-473/474): LANE_SDK=v1 routes through the
     // LaneSandbox DOs on SANDBOX_LANE* bindings. Missing binding is a config

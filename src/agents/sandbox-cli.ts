@@ -18,6 +18,7 @@ import {
   type LanePermissions,
 } from "../global/pile-repo-config.js";
 import { scrubLaneText } from "../global/redact.js";
+import { getWorkspaceStub } from "../api/stub.js";
 import type { AppEnv } from "../platform/env.js";
 import { VortexError } from "../platform/errors.js";
 import type { WorkerEnv } from "../platform/middleware.js";
@@ -903,6 +904,23 @@ export class SandboxCliAgentProvider implements AgentProvider {
                 agentLabel: this.id,
                 env: {},
               });
+              // PILE-474 — pin the session to this backend + handle for its
+              // lifetime so a COMPUTE_PROVIDER flip mid-flight can't
+              // retarget poll/cancel/sendPrompt to the other provider.
+              if (
+                "WORKSPACE_DURABLE_OBJECT" in this.env &&
+                organizationId
+              ) {
+                await getWorkspaceStub(
+                  this.env as WorkerEnv,
+                  organizationId
+                )
+                  .updateAgentSession(sessionId, {
+                    computeBackend: compute.kind,
+                    sandboxId: sandbox.id,
+                  })
+                  .catch(() => {});
+              }
               await this.note(
                 organizationId,
                 sessionId,

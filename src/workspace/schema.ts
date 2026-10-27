@@ -1122,6 +1122,11 @@ export const workspaceAgentSessions = sqliteTable(
     // Lane-scoped preview DB (PILE-212): JSON handle describing the
     // provisioned branch/role so teardown can run on terminal state.
     laneDbRef: text("lane_db_ref" as string),
+    // PILE-474 — the compute backend this lane's sandbox lives on +
+    // its handle, pinned at start() so a COMPUTE_PROVIDER flip mid-flight
+    // can't retarget poll/cancel/sendPrompt/getState to the wrong backend.
+    computeBackend: text("compute_backend" as string),
+    sandboxId: text("sandbox_id" as string),
     // "preflight" marks a planner-critique lane (VTX-209): repo-less session
     // on the target provider whose only job is to flag missing/ambiguous
     // ticket context before tokens get spent implementing the wrong thing.
