@@ -4,8 +4,10 @@ import {
   applyFieldWriteWithProvenance,
   backfillSignalsFromSourceItems,
   computeSmbMatchKey,
+  DEFAULT_ICP_RULES,
   DEFAULT_SIGNAL_RULES,
   detectPosTechnographics,
+  estMonthlyVolumeCentsFromFields,
   identifyContactWithConsent,
   mapPostHogEventToSignal,
   parseCustomerSignalFacts,
@@ -305,5 +307,66 @@ describe("Unify-parity Signals, Ranker v2, Provenance & Technographics (PILE-507
         },
       ])
     ).toHaveLength(1);
+  });
+
+  it("ranks reported card volume — revenue_estimate signal rule + ICP gte predicate (PILE-654)", () => {
+    const rule = DEFAULT_SIGNAL_RULES.find(
+      (r) => r.type === "revenue_estimate"
+    );
+    expect(rule?.polarity).toBe("positive");
+
+    const config = {
+      motion: "smb_default",
+      icpRules: DEFAULT_ICP_RULES,
+      signalRules: DEFAULT_SIGNAL_RULES,
+    };
+    const breakdown = rankMerchantSignals({
+      merchantId: "m-vol",
+      merchantAttrs: { estMonthlyVolumeCents: 4_000_000 },
+      signals: [
+        {
+          id: "sig_intake_visit-1",
+          merchantId: "m-vol",
+          type: "revenue_estimate",
+          observedAt: NOW,
+          source: "intake",
+          evidenceUrl: "intake:visit-1",
+          strength: 90,
+          summary: "Reported monthly card volume ≈ $40,000/mo (intake)",
+        },
+      ],
+      config,
+      nowIso: NOW,
+    });
+    expect(breakdown.matchedIcpRules).toContain("icp-est-monthly-card-volume");
+    expect(breakdown.signalContributions[0]?.type).toBe("revenue_estimate");
+    expect(breakdown.priorityScore).toBeGreaterThan(0);
+    expect(breakdown.whyNow).toContain("$40,000");
+
+    const low = rankMerchantSignals({
+      merchantId: "m-vol",
+      merchantAttrs: { estMonthlyVolumeCents: 500_000 },
+      signals: [],
+      config,
+      nowIso: NOW,
+    });
+    expect(low.matchedIcpRules).not.toContain("icp-est-monthly-card-volume");
+  });
+
+  it("reads estMonthlyVolumeCents back from custom-field maps (PILE-654)", () => {
+    expect(
+      estMonthlyVolumeCentsFromFields({ monthly_card_volume_cents: "4000000" })
+    ).toBe(4_000_000);
+    expect(
+      estMonthlyVolumeCentsFromFields(
+        JSON.stringify({ monthly_card_volume_cents: "2500000" })
+      )
+    ).toBe(2_500_000);
+    expect(
+      estMonthlyVolumeCentsFromFields({ monthly_card_volume_cents: "40-50k" })
+    ).toBeUndefined();
+    expect(estMonthlyVolumeCentsFromFields({})).toBeUndefined();
+    expect(estMonthlyVolumeCentsFromFields(null)).toBeUndefined();
+    expect(estMonthlyVolumeCentsFromFields("not json")).toBeUndefined();
   });
 });

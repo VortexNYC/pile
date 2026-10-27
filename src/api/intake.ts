@@ -10,6 +10,13 @@ import { runTriageRules } from "../global/triage-rules.js";
 import { VortexError } from "../platform/errors.js";
 import type { AppContext } from "../platform/middleware.js";
 import { rls } from "../platform/rls.js";
+import {
+  DEFAULT_ICP_RULES,
+  DEFAULT_SIGNAL_RULES,
+  type MerchantSignal,
+  parseCustomerSignalFacts,
+  rankMerchantSignals,
+} from "../workspace/signals-engine.js";
 import { getWorkspaceStub } from "./stub.js";
 
 // Field spec: the "Merchant Visit Intake Checklist" doc in the Sales space.
@@ -117,6 +124,74 @@ function list(label: string, values: string[] | undefined): string | null {
 
 function bool(label: string, value: boolean | undefined): string | null {
   return value === undefined ? null : `- **${label}:** ${value ? "yes" : "no"}`;
+}
+
+/** PILE-654 — parse a freeform money answer ("$40k", "42,000", "3500.50")
+ *  to integer cents. Returns null when the string isn't one clean amount
+ *  ("40-50k seasonal", "depends") so the raw text is kept under the
+ *  non-cents key instead of being silently dropped. */
+export function parseMoneyToCents(raw: string | undefined): number | null {
+  if (!raw) return null;
+  const match = /^\$?\s*([\d,]+(?:\.\d{1,2})?)\s*k?$/i.exec(raw.trim());
+  if (!match?.[1]) return null;
+  const amount = Number(match[1].replace(/,/g, ""));
+  if (!Number.isFinite(amount) || amount < 0) return null;
+  const dollars = /k$/i.test(raw.trim()) ? amount * 1000 : amount;
+  return Math.round(dollars * 100);
+}
+
+/** PILE-654 — parse a clean transactions-per-day figure to a monthly
+ *  count (per-day × 30, rounded). Anything messier stays raw. */
+export function parseMonthlyTxCount(raw: string | undefined): number | null {
+  if (!raw) return null;
+  const match = /^([\d,]+(?:\.\d+)?)$/.exec(raw.trim());
+  if (!match?.[1]) return null;
+  const perDay = Number(match[1].replace(/,/g, ""));
+  return Number.isFinite(perDay) && perDay >= 0
+    ? Math.round(perDay * 30)
+    : null;
+}
+
+/** PILE-654 — freeform pricing answers → name-keyed customer custom
+ *  fields. Parseable money lands as `*_cents`; a value that won't parse
+ *  cleanly stays under its raw text key so nothing is lost. */
+export function intakePricingCustomFields(
+  input: IntakeBody
+): Record<string, string> {
+  const pricing = input.pricing;
+  if (!pricing) return {};
+  const fields: Record<string, string> = {};
+  const putMoney = (keyCents: string, keyRaw: string, raw?: string) => {
+    const cents = parseMoneyToCents(raw);
+    if (cents !== null) fields[keyCents] = String(cents);
+    else if (raw?.trim()) fields[keyRaw] = raw.trim();
+  };
+  putMoney(
+    "monthly_card_volume_cents",
+    "monthly_card_volume",
+    pricing.monthlyCardVolume
+  );
+  putMoney("avg_ticket_cents", "average_ticket", pricing.averageTicket);
+  putMoney("etf_cents", "etf", pricing.earlyTerminationFee);
+  const monthlyTx = parseMonthlyTxCount(pricing.transactionsPerDay);
+  if (monthlyTx !== null) fields.monthly_tx_count = String(monthlyTx);
+  else if (pricing.transactionsPerDay?.trim()) {
+    fields.transactions_per_day = pricing.transactionsPerDay.trim();
+  }
+  if (pricing.currentProcessor?.trim()) {
+    fields.current_processor = pricing.currentProcessor.trim();
+  }
+  if (pricing.cardMix?.trim()) fields.card_mix = pricing.cardMix.trim();
+  if (pricing.channelMix?.trim()) {
+    fields.channel_mix = pricing.channelMix.trim();
+  }
+  if (pricing.contractEnd?.trim()) {
+    fields.contract_end = pricing.contractEnd.trim();
+  }
+  if (pricing.monthlySalesTotals?.trim()) {
+    fields.monthly_sales_totals = pricing.monthlySalesTotals.trim();
+  }
+  return fields;
 }
 
 export function buildIntakeMarkdown(input: IntakeBody): string {
@@ -326,6 +401,26 @@ export function registerIntakeRoutes(app: OpenAPIHono<AppContext>) {
       }
     }
 
+    // PILE-654 — promote the pricing answers to structured custom fields
+    // on the customer row so ranking and agent queries can read the
+    // merchant's real numbers, not just the markdown doc. Best-effort:
+    // the intake document below is the durable record, so a colliding
+    // typed field definition must never block a rep mid-submit.
+    const pricingFields = intakePricingCustomFields(input);
+    if (Object.keys(pricingFields).length > 0) {
+      try {
+        customer =
+          (await stub.updateCustomer(
+            customer.id,
+            { customFields: pricingFields },
+            identity.id
+          )) ?? customer;
+      } catch {
+        // Field write refused (e.g. a workspace-typed definition
+        // collision) — the raw answers remain in the intake document.
+      }
+    }
+
     // Owner contact — support contacts key on email, so a phone-only owner is
     // recorded in the intake document instead of minting a fake address.
     let contactId: string | null = null;
@@ -391,6 +486,80 @@ export function registerIntakeRoutes(app: OpenAPIHono<AppContext>) {
         createdById: identity.id,
       });
       documentId = doc.id;
+    }
+
+    // PILE-654 — a reported monthly card volume is a rankable revenue
+    // signal, not just a field. Deterministic signal id keyed on intakeId
+    // keeps a retried submit an upsert (same memory kind supersedes, no
+    // stacked duplicate signals). Rank right away and persist the scores
+    // so the customer list's priorityScore sort reflects the figure.
+    const estVolumeCents = parseMoneyToCents(input.pricing?.monthlyCardVolume);
+    if (estVolumeCents !== null) {
+      try {
+        const dollars = estVolumeCents / 100;
+        const volumeText =
+          dollars >= 1000
+            ? `$${Math.round(dollars).toLocaleString("en-US")}`
+            : `$${dollars.toFixed(2)}`;
+        const signal: MerchantSignal = {
+          id: `sig_intake_${intakeId}`,
+          merchantId: customer.id,
+          type: "revenue_estimate",
+          observedAt: new Date().toISOString(),
+          source: "intake",
+          evidenceUrl:
+            input.statementFiles?.[0]?.url ??
+            (documentId
+              ? `/workspaces/${organizationId}/documents/${documentId}`
+              : `intake:${intakeId}`),
+          strength: 90,
+          summary: `Reported monthly card volume ≈ ${volumeText}/mo (intake)`,
+        };
+        await stub.memoryRemember({
+          entityType: "customer",
+          entityId: customer.id,
+          kind: `signal:${signal.type}:${signal.id}`,
+          fact: JSON.stringify(signal),
+        });
+        const signals = parseCustomerSignalFacts(
+          await stub.memoryRecall({
+            entityType: "customer",
+            entityId: customer.id,
+            limit: 100,
+          })
+        );
+        const breakdown = rankMerchantSignals({
+          merchantId: customer.id,
+          merchantAttrs: {
+            vertical: (customer.vertical ?? "").toLowerCase(),
+            hasAddress: Boolean(customer.address),
+            hasPhone: Boolean(customer.phone),
+            estMonthlyVolumeCents: estVolumeCents,
+          },
+          signals,
+          config: {
+            motion: "smb_default",
+            icpRules: DEFAULT_ICP_RULES,
+            signalRules: DEFAULT_SIGNAL_RULES,
+          },
+        });
+        await stub.updateCustomer(
+          customer.id,
+          {
+            priorityScore: breakdown.priorityScore,
+            fitScore: breakdown.fitScore,
+            fitStatus: breakdown.fitRating,
+            customFields: {
+              whyNow: breakdown.whyNow,
+              whyNowSignalIds: breakdown.whyNowSignalIds.join(","),
+            },
+          },
+          identity.id
+        );
+      } catch {
+        // Signal + rank persistence is best-effort — a door-knock submit
+        // still lands customer, fields, and the intake document.
+      }
     }
 
     const result = {

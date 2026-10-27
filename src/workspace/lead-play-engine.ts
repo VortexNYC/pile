@@ -52,6 +52,9 @@ export interface AudienceCandidateMerchant {
   suppressed?: boolean;
   signalTypes?: string[];
   whyNow?: string | null;
+  /** PILE-654 — reported monthly card volume in cents (intake-derived);
+   *  feeds `estMonthlyVolumeCents` ranker attrs and audience predicates. */
+  estMonthlyVolumeCents?: number | null;
 }
 
 export function evaluateAudiencePredicate(
@@ -81,6 +84,9 @@ export function evaluateAudiencePredicate(
     hasAddress: Boolean(merchant.address),
     hasPhone: Boolean(merchant.phone),
     hasDomain: Boolean(merchant.domain),
+    // null (not 0) when unknown — a merchant with no reported volume must
+    // not satisfy an lte predicate as if it processed nothing.
+    estMonthlyVolumeCents: merchant.estMonthlyVolumeCents ?? null,
   };
   const actual = record[pred.field];
   switch (pred.op) {
@@ -290,6 +296,7 @@ export function runMerchantLeadPlay(input: {
       vertical: (input.merchant.vertical ?? "").toLowerCase(),
       hasAddress: Boolean(input.merchant.address),
       hasPhone: Boolean(input.merchant.phone),
+      estMonthlyVolumeCents: input.merchant.estMonthlyVolumeCents ?? undefined,
     },
     signals: allSignals,
     config: {

@@ -37,6 +37,7 @@ import {
   DEFAULT_ICP_RULES,
   DEFAULT_SIGNAL_RULES,
   detectPosTechnographics,
+  estMonthlyVolumeCentsFromFields,
   type MerchantSignal,
   parseCustomerSignalFacts,
   planDetectiveWaterfall,
@@ -1837,6 +1838,9 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
         vertical: (customer.vertical ?? "").toLowerCase(),
         hasAddress: Boolean(customer.address),
         hasPhone: Boolean(customer.phone),
+        estMonthlyVolumeCents: estMonthlyVolumeCentsFromFields(
+          customer.customFields
+        ),
       },
       signals,
       config: {
@@ -1891,6 +1895,9 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
         vertical: (customer.vertical ?? "").toLowerCase(),
         hasAddress: Boolean(customer.address),
         hasPhone: Boolean(customer.phone),
+        estMonthlyVolumeCents: estMonthlyVolumeCentsFromFields(
+          customer.customFields
+        ),
       },
       signals,
       config: {
@@ -2319,6 +2326,9 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
           suppressed,
           signalTypes: [...new Set(signals.map((s) => s.type))],
           whyNow,
+          estMonthlyVolumeCents: estMonthlyVolumeCentsFromFields(
+            cust.customFields
+          ),
         };
       })
     );
@@ -2411,6 +2421,9 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
         priorityScore: customer.priorityScore,
         fitScore: customer.fitScore,
         fitStatus: customer.fitStatus,
+        estMonthlyVolumeCents: estMonthlyVolumeCentsFromFields(
+          customer.customFields
+        ),
       },
       signals: priorSignals,
       html: input.html,
@@ -2535,6 +2548,9 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
           fitStatus: cust.fitStatus,
           suppressed,
           whyNow,
+          estMonthlyVolumeCents: estMonthlyVolumeCentsFromFields(
+            cust.customFields
+          ),
         };
       })
     );
