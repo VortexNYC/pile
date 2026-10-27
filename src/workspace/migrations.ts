@@ -1680,6 +1680,11 @@ const v56 = `CREATE TABLE IF NOT EXISTS issue_shares (
 );
 CREATE INDEX IF NOT EXISTS issue_shares_issue_idx ON issue_shares (organization_id, issue_id)`;
 
+// PILE-474 — the compute backend a lane's sandbox lives on + its handle;
+// pinned at start() so poll/cancel/sendPrompt survive provider flag flips.
+const v103 = `ALTER TABLE agent_sessions ADD COLUMN compute_backend TEXT`;
+const v104 = `ALTER TABLE agent_sessions ADD COLUMN sandbox_id TEXT`;
+
 export const workspaceMigrations = {
   journal: {
     entries: [
@@ -1785,6 +1790,8 @@ export const workspaceMigrations = {
       { idx: 99, when: 99, tag: "v100", breakpoints: true },
       { idx: 100, when: 100, tag: "v101", breakpoints: true },
       { idx: 101, when: 101, tag: "v102", breakpoints: false },
+      { idx: 102, when: 102, tag: "v103", breakpoints: true },
+      { idx: 103, when: 103, tag: "v104", breakpoints: true },
     ],
   },
   migrations: {
@@ -1890,5 +1897,7 @@ export const workspaceMigrations = {
     m0099: v100,
     m0100: v101,
     m0101: v102,
+    m0102: v103,
+    m0103: v104,
   },
 } satisfies Parameters<typeof migrate>[1];

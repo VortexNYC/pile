@@ -283,7 +283,11 @@ export class DaytonaBackend implements ComputeBackend {
       body: JSON.stringify({
         name: opts.name,
         snapshot: this.env.DAYTONA_SNAPSHOT ?? "daytona-vm-small",
-        env: opts.env,
+        // PILE-475 — warm pools only claim sandboxes with no custom env,
+        // volumes, or secrets. Lane secrets ride /tmp/pile/lane.env via
+        // putFiles instead, so omit the key entirely when the env is empty;
+        // keeping DAYTONA_VOLUME_ID unset is the other eligibility gate.
+        ...(Object.keys(opts.env).length > 0 ? { env: opts.env } : {}),
         labels: {
           "vortex.session": opts.sessionId,
           "vortex.org": opts.organizationId,
@@ -1436,6 +1440,15 @@ export class FailoverBackend implements ComputeBackend {
   }
 }
 
+/** Narrow a session row's `compute_backend` column (TEXT, nullable) to the
+ *  pin `computeBackend` accepts — anything unexpected falls back to the
+ *  live flag rather than pinning a lane to garbage. */
+export function toComputePin(
+  value: string | null | undefined
+): ComputeBackend["kind"] | undefined {
+  return value === "daytona" || value === "cloudflare" ? value : undefined;
+}
+
 function resolveLaneV1Binding(env: AppEnv, agentId?: string) {
   const specific = agentId
     ? (
@@ -1451,8 +1464,14 @@ function resolveLaneV1Binding(env: AppEnv, agentId?: string) {
   return (specific ? env[specific] : undefined) ?? env.SANDBOX_LANE;
 }
 
-export function computeBackend(env: AppEnv, agentId?: string): ComputeBackend {
-  const provider = env.COMPUTE_PROVIDER ?? "daytona";
+export function computeBackend(
+  env: AppEnv,
+  agentId?: string,
+  /** PILE-474 — the backend pinned on the session row at start(); a
+   *  COMPUTE_PROVIDER flip mid-flight must not retarget in-flight lanes. */
+  pinned?: ComputeBackend["kind"]
+): ComputeBackend {
+  const provider = pinned ?? env.COMPUTE_PROVIDER ?? "daytona";
   if (provider === "cloudflare") {
     // sandbox-sdk 1.0 lanes (PILE-473/474 / VTX-602): LANE_SDK=v1 routes
     // through the LaneSandbox DOs on SANDBOX_LANE* bindings, with optional

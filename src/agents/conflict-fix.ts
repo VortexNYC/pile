@@ -17,7 +17,11 @@ import {
   type AgentSession,
 } from "../types/workspace.js";
 import type { WorkspaceDO } from "../workspace/durable-object.js";
-import { computeBackend, type ComputeBackend } from "./compute.js";
+import {
+  computeBackend,
+  toComputePin,
+  type ComputeBackend,
+} from "./compute.js";
 import { loadProviderConfig } from "./credentials.js";
 import { resolveAgentEnv } from "./daytona.js";
 
@@ -307,7 +311,11 @@ async function backendFor(
   const effectiveEnv = resolveAgentEnv(env, providerConfig ?? undefined);
   return deps?.compute
     ? deps.compute(effectiveEnv, session.agentId)
-    : computeBackend(effectiveEnv, session.agentId);
+    : computeBackend(
+        effectiveEnv,
+        session.agentId,
+        toComputePin(session.computeBackend)
+      );
 }
 
 export function parseFixResult(raw: string | null): {

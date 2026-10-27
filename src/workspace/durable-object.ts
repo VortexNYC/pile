@@ -10309,6 +10309,29 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.listPendingDomainEvents(this.db, this.organizationId);
   }
 
+  /** PILE-424 — re-run a single sub-step: emits a fresh substep.actionable
+   *  so the normal drain path handles caps, gates, and external routing.
+   *  Each call is a distinct event (prior runs are kept); the payload is
+   *  rebuilt from the issue so a stale one can't be replayed. */
+  async rerunSubstep(issueId: string): Promise<Issue | undefined> {
+    const issue = await this.getIssue(issueId);
+    if (!issue?.parentId || !issue.ownerAgent) return undefined;
+    await this.emitDomainEvent(
+      "substep.actionable",
+      {
+        issueId: issue.id,
+        parentId: issue.parentId,
+        stepKey: issue.stepKey,
+        ownerAgent: issue.ownerAgent,
+        required: issue.required,
+        rerun: true,
+        nonce: crypto.randomUUID(),
+      },
+      `rerun:${issue.id}:${crypto.randomUUID()}`
+    );
+    return issue;
+  }
+
   markDomainEvent(id: string, status: "delivered" | "failed", error?: string) {
     return data.markDomainEvent(this.db, id, status, error);
   }

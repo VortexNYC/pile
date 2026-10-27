@@ -21,3 +21,18 @@ path = '''(^|/)\.devin/'''
 [[rules.allowlists]]
 description = "Intentionally committed agent skills and rules under .devin/"
 paths = ['''(^|/)\.devin/(skills|rules)/''']
+
+# Synthetic fixtures only — test files carry fake PEMs, JWTs, and API keys
+# to exercise auth and secret-redaction paths (e.g. sso-saml, support-
+# capture). Generated bundles embed docs/source text, not secrets.
+[allowlist]
+description = "Test files embed synthetic credentials by design; generated bundles are derived content"
+paths = [
+  '''\.test\.tsx?$''',
+  '''src/assets/(docs-bundle|capture\.iife|chat\.iife)\.ts$''',
+  '''(^|/)docs/.*\.md$''',
+]
+# phc_* PostHog project keys are public client-side identifiers shipped in
+# the browser bundle by design — personal keys use the phx_ shape and still
+# flag.
+regexes = ['''phc_[A-Za-z0-9]{32,}''']

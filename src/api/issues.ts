@@ -2743,7 +2743,10 @@ export function registerIssueRoutes(app: OpenAPIHono<AppContext>) {
         );
         if (provider.cancel) {
           await provider
-            .cancel(active.session.providerSessionId ?? active.session.id)
+            .cancel(
+              active.session.providerSessionId ?? active.session.id,
+              active.session.computeBackend
+            )
             .catch((err) => console.error("unassign cancel failed", err));
         }
         await stub.applyAgentSessionResult(

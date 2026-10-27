@@ -36,6 +36,11 @@ interface ActionablePayload {
   stepKey: string | null;
   ownerAgent: string | null;
   required: boolean;
+  /** PILE-424 — explicit reruns re-drive closed/failed steps. */
+  rerun?: boolean;
+  /** PILE-424 — per-rerun nonce; keeps each rerun's conversation key
+   *  distinct so a rerun starts a new run instead of resuming the last. */
+  nonce?: string;
 }
 
 interface AllDonePayload {
@@ -370,8 +375,15 @@ async function handleSubstepActionable(
 ): Promise<void> {
   const issue = await stub.getIssue(payload.issueId);
   if (!issue || !issue.ownerAgent) return;
-  // Only dispatch work that's still open and doesn't already have a live lane.
-  if (issue.status !== "todo" && issue.status !== "in_progress") return;
+  // Only dispatch work that's still open — except explicit reruns, which
+  // exist to re-drive a closed or failed step (PILE-424).
+  if (
+    !payload.rerun &&
+    issue.status !== "todo" &&
+    issue.status !== "in_progress"
+  )
+    return;
+  // Don't stack a second live lane on a step that's already running.
   const existingSessions = await stub.listAgentSessions({ issueId: issue.id });
   if (
     existingSessions.some(
@@ -380,6 +392,7 @@ async function handleSubstepActionable(
   ) {
     return;
   }
+  const keySuffix = payload.nonce ? `-${payload.nonce}` : "";
   const owner = await resolveOwner(stub, issue.ownerAgent);
   if (owner?.kind === "human") return;
   if (owner?.kind === "external") {
@@ -400,7 +413,8 @@ async function handleSubstepActionable(
         stepKey: issue.stepKey ?? null,
         title: issue.title,
         agent: owner.slug,
-        conversationKey: conversationKey(payload.parentId, owner.slug),
+        conversationKey:
+          conversationKey(payload.parentId, owner.slug) + keySuffix,
         parent: parentIssue
           ? { id: parentIssue.id, title: parentIssue.title }
           : null,
@@ -415,7 +429,43 @@ async function handleSubstepActionable(
     // "chief_of_staff" agent type gets dispatched with the orphan step;
     // if none exists, fall back to a comment a human can triage.
     const chief = await resolveOwner(stub, "chief_of_staff");
-    if (chief && chief.kind !== "human") {
+    if (chief && chief.kind === "external" && chief.endpointUrl) {
+      const parent =
+        payload.parentId && payload.parentId !== issue.id
+          ? await stub.getIssue(payload.parentId)
+          : null;
+      await dispatchExternal(
+        env,
+        stub,
+        chief,
+        {
+          event: "substep.orphaned",
+          organizationId,
+          issueId: issue.id,
+          parentId: payload.parentId,
+          stepKey: issue.stepKey ?? null,
+          issue: {
+            id: issue.id,
+            identifier: issue.identifier,
+            title: issue.title,
+          },
+          parent: parent
+            ? {
+                id: parent.id,
+                identifier: parent.identifier,
+                title: parent.title,
+              }
+            : null,
+          agent: chief.slug,
+          conversationKey:
+            conversationKey(payload.parentId, chief.slug) + keySuffix,
+        },
+        ctx,
+        { issueId: issue.id }
+      );
+      return;
+    }
+    if (chief && chief.kind !== "human" && chief.kind !== "external") {
       const parent =
         payload.parentId && payload.parentId !== issue.id
           ? await stub.getIssue(payload.parentId)
@@ -446,7 +496,8 @@ async function handleSubstepActionable(
             jobSpec: chief.jobSpec,
             toolScope: chief.toolScope,
           },
-          conversationKey: conversationKey(payload.parentId, chief.slug),
+          conversationKey:
+            conversationKey(payload.parentId, chief.slug) + keySuffix,
         }
       );
       return;
@@ -495,7 +546,8 @@ async function handleSubstepActionable(
           jobSpec: owner.jobSpec,
           toolScope: owner.toolScope,
         },
-        conversationKey: conversationKey(payload.parentId, owner.slug),
+        conversationKey:
+          conversationKey(payload.parentId, owner.slug) + keySuffix,
       }
     );
   } catch (dispatchErr) {
@@ -511,7 +563,8 @@ async function handleSubstepActionable(
         issueTitle: issue.title,
         issueIdentifier: issue.identifier,
         agentSlug: owner.slug,
-        conversationKey: conversationKey(payload.parentId, owner.slug),
+        conversationKey:
+          conversationKey(payload.parentId, owner.slug) + keySuffix,
         error:
           dispatchErr instanceof Error
             ? dispatchErr.message

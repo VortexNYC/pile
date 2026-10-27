@@ -22767,6 +22767,63 @@
         "summary": "List pipeline lint"
       }
     },
+    "/workspaces/{organizationId}/substeps/{issueId}/rerun": {
+      "post": {
+        "tags": [
+          "pipeline"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "issueId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Re-dispatch queued for the sub-step",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "issueId": {
+                      "type": "string"
+                    },
+                    "ownerAgent": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "issueId",
+                    "ownerAgent"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create substep rerun"
+      }
+    },
     "/dispatch/pile": {
       "post": {
         "tags": [

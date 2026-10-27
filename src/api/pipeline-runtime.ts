@@ -318,6 +318,33 @@ const pipelineLintRoute = createRoute({
   },
 });
 
+// PILE-424 — re-run a single sub-step: re-emits substep.actionable so the
+// drain path applies caps, gates, and external routing uniformly; prior
+// runs are kept (each rerun is a fresh domain event).
+const rerunSubstepRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/substeps/{issueId}/rerun",
+  tags: ["pipeline"],
+  middleware: [rls("workspace:write")],
+  request: {
+    params: z.object({ organizationId: z.string(), issueId: z.string() }),
+  },
+  responses: {
+    200: {
+      description: "Re-dispatch queued for the sub-step",
+      content: {
+        "application/json": {
+          schema: z.object({
+            ok: z.literal(true),
+            issueId: z.string(),
+            ownerAgent: z.string(),
+          }),
+        },
+      },
+    },
+  },
+});
+
 /** Strip the encrypted webhook bearer from responses — the wire exposes
  *  hasEndpointSecret, never the ciphertext or plaintext. */
 function serializeAgentType<T extends { endpointSecret?: unknown }>(
@@ -472,6 +499,17 @@ export function registerPipelineRuntimeRoutes(app: OpenAPIHono<AppContext>) {
       }
     }
     return c.json({ findings }, 200);
+  });
+
+  app.openapi(rerunSubstepRoute, async (c) => {
+    const { organizationId, issueId } = c.req.valid("param");
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const issue = await stub.rerunSubstep(issueId);
+    const ownerAgent = issue?.ownerAgent;
+    if (!issue || !ownerAgent) {
+      notFound("Sub-step not found or has no owner agent to dispatch");
+    }
+    return c.json({ ok: true as const, issueId: issue.id, ownerAgent }, 200);
   });
 
   app.openapi(deleteAgentTypeRoute, async (c) => {

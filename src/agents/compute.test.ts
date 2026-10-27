@@ -9,6 +9,7 @@ import {
   computeBackend,
   isComputeInfraError,
   laneCachePrefix,
+  toComputePin,
 } from "./compute.js";
 import type { ComputeSandbox, SandboxHandle } from "./compute.js";
 import type { LaneSandboxBase } from "./lane-sandbox.js";
@@ -63,6 +64,40 @@ describe("computeBackend", () => {
       SANDBOX: {} as NonNullable<AppEnv["SANDBOX"]>,
     };
     expect(computeBackend(env, "cursor-cli").kind).toBe("cloudflare");
+  });
+
+  // PILE-474 — a flag flip mid-flight must not retarget in-flight lanes:
+  // the session row's compute_backend wins over COMPUTE_PROVIDER.
+  it("honors the session-pinned backend over a flipped COMPUTE_PROVIDER", () => {
+    const env = {
+      ...baseEnv(),
+      COMPUTE_PROVIDER: "cloudflare",
+      SANDBOX: {} as NonNullable<AppEnv["SANDBOX"]>,
+      DAYTONA_API_KEY: "key",
+    };
+    expect(computeBackend(env, undefined, "daytona").kind).toBe("daytona");
+    const daytonaEnv = {
+      ...baseEnv(),
+      COMPUTE_PROVIDER: "daytona",
+      DAYTONA_API_KEY: "key",
+      SANDBOX: {} as NonNullable<AppEnv["SANDBOX"]>,
+    };
+    expect(computeBackend(daytonaEnv, undefined, "cloudflare").kind).toBe(
+      "cloudflare"
+    );
+  });
+});
+
+describe("toComputePin", () => {
+  it("narrows valid backend names", () => {
+    expect(toComputePin("daytona")).toBe("daytona");
+    expect(toComputePin("cloudflare")).toBe("cloudflare");
+  });
+
+  it("falls back for null/unknown values", () => {
+    expect(toComputePin(null)).toBeUndefined();
+    expect(toComputePin(undefined)).toBeUndefined();
+    expect(toComputePin("kubernetes")).toBeUndefined();
   });
 });
 
@@ -138,6 +173,77 @@ describe("DaytonaBackend sandbox create timeout (PILE-466)", () => {
     expect(poll?.init?.signal).toBe(signals.get(30_000));
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+});
+
+const stubDaytona = () =>
+  fetchStub((url, init) => {
+    if (url === "https://daytona.test/sandbox" && init?.method === "POST") {
+      return new Response(
+        JSON.stringify({ ...daytonaRecord, state: "creating" }),
+        { status: 200 }
+      );
+    }
+    return new Response(JSON.stringify(daytonaRecord), { status: 200 });
+  });
+
+const createBody = (
+  calls: { url: string; init?: RequestInit }[]
+): Record<string, unknown> => {
+  const create = calls.find(
+    (c) => c.url === "https://daytona.test/sandbox" && c.init?.method === "POST"
+  );
+  return JSON.parse(String(create?.init?.body)) as Record<string, unknown>;
+};
+
+// PILE-475 — warm pools only claim sandboxes with no custom env, volumes,
+// or secrets; the create body must stay eligible.
+describe("DaytonaBackend warm-pool eligibility (PILE-475)", () => {
+  it("omits the env key entirely when the lane env is empty", async () => {
+    const calls = stubDaytona();
+    await computeBackend(daytonaTestEnv()).createSandbox({
+      name: "vortex-devin-x",
+      sessionId: "sess-1",
+      organizationId: "org-1",
+      agentLabel: "devin-cli",
+      env: {},
+    });
+    const body = createBody(calls);
+    expect(body).not.toHaveProperty("env");
+    expect(body).not.toHaveProperty("volumes");
+    vi.unstubAllGlobals();
+  });
+
+  it("still sends env when a caller passes one", async () => {
+    const calls = stubDaytona();
+    await computeBackend(daytonaTestEnv()).createSandbox({
+      name: "vortex-devin-x",
+      sessionId: "sess-1",
+      organizationId: "org-1",
+      agentLabel: "devin-cli",
+      env: { FLAG: "1" },
+    });
+    expect(createBody(calls).env).toEqual({ FLAG: "1" });
+    vi.unstubAllGlobals();
+  });
+
+  it("mounts a volume only when DAYTONA_VOLUME_ID is set (warm pools opt out)", async () => {
+    const calls = stubDaytona();
+    const env = {
+      ...daytonaTestEnv(),
+      DAYTONA_VOLUME_ID: "vol-1",
+    } as AppEnv;
+    await computeBackend(env).createSandbox({
+      name: "vortex-devin-x",
+      sessionId: "sess-1",
+      organizationId: "org-1",
+      agentLabel: "devin-cli",
+      env: {},
+    });
+    expect(createBody(calls).volumes).toEqual([
+      { volumeId: "vol-1", mountPath: "/home/daytona/cache" },
+    ]);
+    vi.unstubAllGlobals();
   });
 });
 

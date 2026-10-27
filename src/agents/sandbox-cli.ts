@@ -5,6 +5,7 @@
 // default, follow-up support — never a copied provider class.
 import { z } from "zod";
 
+import { getWorkspaceStub } from "../api/stub.js";
 import {
   getRepoScopedInstallationToken,
   type RepoScopedToken,
@@ -30,6 +31,7 @@ import {
   asComputeInfraError,
   computeBackend,
   serializeLaneEnv,
+  toComputePin,
 } from "./compute.js";
 import type { ComputeBackend, ComputeSandbox, SandboxFile } from "./compute.js";
 import {
@@ -517,8 +519,10 @@ export class SandboxCliAgentProvider implements AgentProvider {
     await closeAgentSessionSpan(this.env as WorkerEnv, organizationId, spanId);
   }
 
-  private requireCompute(): ComputeBackend {
-    return this.d.compute ?? computeBackend(this.env, this.d.id);
+  private requireCompute(pin?: string | null): ComputeBackend {
+    return (
+      this.d.compute ?? computeBackend(this.env, this.d.id, toComputePin(pin))
+    );
   }
 
   // Repo-scoped installation token for one lane, downscoped to the lane's
@@ -792,10 +796,12 @@ export class SandboxCliAgentProvider implements AgentProvider {
       ISSUE_IDENTIFIER: issue.identifier ?? issue.id,
       AGENT_LABEL: this.d.displayLabel,
       MODEL: model,
-      // Daytona mounts DAYTONA_VOLUME_ID at /home/daytona/cache; on CF
-      // sandboxes this is just a local dir — harmless, keeps the path
-      // consistent for the runner's pnpm-store cache.
-      npm_config_store_dir: "/home/daytona/cache/pnpm-store",
+      // PILE-460 — only redirect the pnpm store when the cache volume is
+      // actually mounted; on the mountpoint-s3 FUSE volume pnpm dies with
+      // ENOSYS, and with no volume at all the default store is fine.
+      ...(this.env.DAYTONA_VOLUME_ID
+        ? { npm_config_store_dir: "/home/daytona/cache/pnpm-store" }
+        : {}),
       ...laneRestrictionEnv(this.env),
       ...options.extra,
     };
@@ -967,6 +973,17 @@ export class SandboxCliAgentProvider implements AgentProvider {
                 agentLabel: this.id,
                 env: {},
               });
+              // PILE-474 — pin the session to this backend + handle for its
+              // lifetime so a COMPUTE_PROVIDER flip mid-flight can't
+              // retarget poll/cancel/sendPrompt to the other provider.
+              if ("WORKSPACE_DURABLE_OBJECT" in this.env && organizationId) {
+                await getWorkspaceStub(this.env as WorkerEnv, organizationId)
+                  .updateAgentSession(sessionId, {
+                    computeBackend: compute.kind,
+                    sandboxId: sandbox.id,
+                  })
+                  .catch(() => {});
+              }
               await this.note(
                 organizationId,
                 sessionId,
@@ -1154,8 +1171,11 @@ export class SandboxCliAgentProvider implements AgentProvider {
     };
   }
 
-  async poll(sessionId: string): Promise<AgentProviderSession> {
-    const compute = this.requireCompute();
+  async poll(
+    sessionId: string,
+    pin?: string | null
+  ): Promise<AgentProviderSession> {
+    const compute = this.requireCompute(pin);
     const sandbox = await compute.findSandbox(
       sessionId,
       this.sandboxName(sessionId),
@@ -1254,7 +1274,10 @@ export class SandboxCliAgentProvider implements AgentProvider {
             priority: "medium",
           } as Issue,
           null,
-          { organizationId: sandbox.organizationId ?? undefined }
+          {
+            organizationId: sandbox.organizationId ?? undefined,
+            computeBackend: pin,
+          }
         );
         if (resumed) {
           await compute.putFiles(sandbox, [
@@ -1398,10 +1421,11 @@ export class SandboxCliAgentProvider implements AgentProvider {
    * revives the lane on a fresh container instead of a cold clone.
    */
   async backupTerminalSandbox(
-    trackerSessionId: string
+    trackerSessionId: string,
+    pin?: string | null
   ): Promise<string | null> {
     if (!this.d.followup) return null;
-    const compute = this.requireCompute();
+    const compute = this.requireCompute(pin);
     if (!compute.backupWorktree) return null;
     const sandbox = await compute.findSandbox(
       trackerSessionId,
@@ -1423,10 +1447,14 @@ export class SandboxCliAgentProvider implements AgentProvider {
     prompt: string,
     issue: Issue,
     gitIdentity?: GitIdentity | null,
-    ctx?: { organizationId?: string; backupRef?: string | null }
+    ctx?: {
+      organizationId?: string;
+      backupRef?: string | null;
+      computeBackend?: string | null;
+    }
   ): Promise<boolean> {
     if (!this.d.followup) return false;
-    const compute = this.requireCompute();
+    const compute = this.requireCompute(ctx?.computeBackend);
     const name = this.sandboxName(trackerSessionId);
     let sandbox = await compute.findSandbox(
       trackerSessionId,
@@ -1563,8 +1591,8 @@ export class SandboxCliAgentProvider implements AgentProvider {
     return true;
   }
 
-  async cancel(sessionId: string): Promise<void> {
-    const compute = this.requireCompute();
+  async cancel(sessionId: string, pin?: string | null): Promise<void> {
+    const compute = this.requireCompute(pin);
     const name = this.sandboxName(sessionId);
     const sandbox = await compute.findSandbox(sessionId, name, RESULT_PATH);
     // findSandbox can miss a sleeping/idle container (process record gone,
@@ -1596,9 +1624,10 @@ export class SandboxCliAgentProvider implements AgentProvider {
 
   async getState(
     providerSessionId: string,
-    _trackerSessionId: string
+    _trackerSessionId: string,
+    pin?: string | null
   ): Promise<AgentProviderState | null> {
-    const compute = this.requireCompute();
+    const compute = this.requireCompute(pin);
     const sandbox = await compute.findSandbox(
       providerSessionId,
       this.sandboxName(providerSessionId),

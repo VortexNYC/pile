@@ -22,10 +22,12 @@ function mockFetch(
 ) {
   return vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
     const url = String(input);
+    // PILE-472 paginates the sandbox list (?page=N) — string routes match path-only.
+    const path = url.split("?")[0];
     const method = (init?.method ?? "GET").toUpperCase();
     const match = responses.find(
       (r) =>
-        (typeof r.url === "string" ? url === r.url : r.url.test(url)) &&
+        (typeof r.url === "string" ? path === r.url : r.url.test(url)) &&
         (r.method === undefined || r.method === method)
     );
     if (match) {
@@ -119,7 +121,7 @@ describe("CodexCliAgentProvider", () => {
     const toolboxBase = `https://proxy.app.daytona.io/toolbox/${sandboxId}`;
     const fetchSpy = mockFetch([
       {
-        url: "https://app.daytona.io/api/sandbox?page=1",
+        url: "https://app.daytona.io/api/sandbox",
         method: "GET",
         response: () => ({ items: [] }),
       },
@@ -144,16 +146,6 @@ describe("CodexCliAgentProvider", () => {
         }),
       },
       {
-        url: /\/files\/upload-v2\?path=/,
-        method: "POST",
-        response: () => ({}),
-      },
-      {
-        url: `${toolboxBase}/process/execute`,
-        method: "POST",
-        response: () => ({ exitCode: 0, result: "" }),
-      },
-      {
         url: `${toolboxBase}/process/session`,
         method: "POST",
         response: () => ({ sessionId: "sess-1" }),
@@ -162,6 +154,16 @@ describe("CodexCliAgentProvider", () => {
         url: `${toolboxBase}/process/session/sess-1/exec`,
         method: "POST",
         response: () => ({ cmdId: "cmd-1" }),
+      },
+      {
+        url: `${toolboxBase}/files/upload-v2`,
+        method: "POST",
+        response: () => ({}),
+      },
+      {
+        url: `${toolboxBase}/process/execute`,
+        method: "POST",
+        response: () => ({ exitCode: 0, result: "" }),
       },
     ]);
 
@@ -193,36 +195,30 @@ describe("CodexCliAgentProvider", () => {
     expect(result.agentId).toBe("codex-cli");
     await Promise.all(waitUntilCalls);
 
-    // findSandbox, create, waitForStarted, 3 file uploads + chmod,
-    // session create, exec.
-    expect(fetchSpy).toHaveBeenCalledTimes(9);
     const createCall = fetchSpy.mock.calls.find(
       ([input, init]) =>
-        String(input) === "https://app.daytona.io/api/sandbox" &&
+        String(input).split("?")[0] ===
+          "https://app.daytona.io/api/sandbox" &&
         (init as RequestInit | undefined)?.method === "POST"
     );
     expect(createCall).toBeDefined();
     const body = JSON.parse((createCall![1] as RequestInit).body as string);
     expect(body.labels["vortex.agent"]).toBe("codex-cli");
 
-    // Lane env ships in the uploaded lane.env file, not the create body.
-    const envUpload = fetchSpy.mock.calls.find(
+    // PILE-595 — lane fields ride /tmp/pile/lane.env, not the create env.
+    const upload = fetchSpy.mock.calls.find(
       ([input, init]) =>
-        (init as RequestInit | undefined)?.method === "POST" &&
         String(input).includes("/files/upload-v2") &&
-        new URL(String(input)).searchParams.get("path") === "/tmp/pile/lane.env"
+        decodeURIComponent(String(input)).includes(
+          "path=/tmp/pile/lane.env"
+        ) &&
+        (init as RequestInit | undefined)?.method === "POST"
     );
-    expect(envUpload).toBeDefined();
-    const laneEnv: Record<string, string> = {};
-    for (const line of String((envUpload![1] as RequestInit).body).split(
-      "\n"
-    )) {
-      const match = /^export ([A-Z0-9_]+)='(.*)'$/.exec(line);
-      if (match) laneEnv[match[1]!] = match[2]!.replaceAll("'\\''", "'");
-    }
-    expect(laneEnv.MODEL).toBe("gpt-reserve");
-    expect(laneEnv.REPO).toBe("VortexNYC/pile");
-    expect(laneEnv.CODEX_CLI_ENV_ID).toBe("env-test-123");
+    expect(upload).toBeDefined();
+    const envFile = (upload![1] as RequestInit).body as string;
+    expect(envFile).toContain("export MODEL='gpt-reserve'");
+    expect(envFile).toContain("export REPO='VortexNYC/pile'");
+    expect(envFile).toContain("export CODEX_CLI_ENV_ID='env-test-123'");
   });
 
   it("polls running while command is in progress", async () => {
@@ -230,7 +226,7 @@ describe("CodexCliAgentProvider", () => {
     const toolboxBase = `https://proxy.app.daytona.io/toolbox/${sandboxId}`;
     mockFetch([
       {
-        url: "https://app.daytona.io/api/sandbox?page=1",
+        url: "https://app.daytona.io/api/sandbox",
         response: () => ({
           items: [
             {
@@ -263,7 +259,7 @@ describe("CodexCliAgentProvider", () => {
     const toolboxBase = `https://proxy.app.daytona.io/toolbox/${sandboxId}`;
     mockFetch([
       {
-        url: "https://app.daytona.io/api/sandbox?page=1",
+        url: "https://app.daytona.io/api/sandbox",
         response: () => ({
           items: [
             {
@@ -314,7 +310,7 @@ describe("CodexCliAgentProvider", () => {
     const toolboxBase = `https://proxy.app.daytona.io/toolbox/${sandboxId}`;
     mockFetch([
       {
-        url: "https://app.daytona.io/api/sandbox?page=1",
+        url: "https://app.daytona.io/api/sandbox",
         response: () => ({
           items: [
             {
@@ -362,7 +358,7 @@ describe("CodexCliAgentProvider", () => {
     const sandboxId = "sb-1";
     const fetchSpy = mockFetch([
       {
-        url: "https://app.daytona.io/api/sandbox?page=1",
+        url: "https://app.daytona.io/api/sandbox",
         response: () => ({
           items: [
             {

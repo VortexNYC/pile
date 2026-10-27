@@ -372,6 +372,8 @@ function sessionEnv(session: { status: string }) {
   const stub = {
     setOrganizationId: vi.fn(async () => undefined),
     getAgentSession: vi.fn(async () => session),
+    // PILE-474 — start() pins compute_backend/sandbox_id onto the row.
+    updateAgentSession: vi.fn(async () => session),
     addAgentActivity: vi.fn(async () => ({ id: "act-1" })),
     closeAgentActivity: vi.fn(async () => undefined),
   };

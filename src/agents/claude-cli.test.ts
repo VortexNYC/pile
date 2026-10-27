@@ -37,8 +37,8 @@ function mockDaytona() {
     name: "vortex-claude-sess1",
     toolboxProxyUrl: "https://proxy.app.daytona.io/toolbox",
   };
-  const routes: Array<[string, string | RegExp, unknown]> = [
-    ["GET", "https://app.daytona.io/api/sandbox?page=1", { items: [] }],
+  const routes: Array<[string, string, unknown]> = [
+    ["GET", "https://app.daytona.io/api/sandbox", { items: [] }],
     [
       "POST",
       "https://app.daytona.io/api/sandbox",
@@ -49,18 +49,16 @@ function mockDaytona() {
       `https://app.daytona.io/api/sandbox/${sandboxId}`,
       { ...sandbox, state: "started" },
     ],
-    ["POST", /\/files\/upload-v2\?path=/, {}],
-    ["POST", `${toolbox}/process/execute`, { exitCode: 0, result: "" }],
     ["POST", `${toolbox}/process/session`, { sessionId: "sess-1" }],
     ["POST", `${toolbox}/process/session/sess-1/exec`, { cmdId: "cmd-1" }],
+    ["POST", `${toolbox}/files/upload-v2`, {}],
+    ["POST", `${toolbox}/process/execute`, { exitCode: 0, result: "" }],
   ];
   return vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
     const method = (init?.method ?? "GET").toUpperCase();
-    const hit = routes.find(
-      ([m, u]) =>
-        m === method &&
-        (typeof u === "string" ? u === String(input) : u.test(String(input)))
-    );
+    // PILE-472 paginates the sandbox list (?page=N) — match path-only.
+    const path = String(input).split("?")[0];
+    const hit = routes.find(([m, u]) => m === method && u === path);
     return Promise.resolve(
       hit
         ? new Response(JSON.stringify(hit[2]), {
@@ -90,17 +88,27 @@ async function dispatchEnv(
   });
   expect(result.agentId).toBe("claude-cli");
   await Promise.all(pending);
+  const create = fetchSpy.mock.calls.find(
+    ([input, init]) =>
+      String(input).split("?")[0] ===
+        "https://app.daytona.io/api/sandbox" &&
+      (init as RequestInit | undefined)?.method === "POST"
+  );
+  expect(create).toBeDefined();
+  // PILE-595 — credentials ride /tmp/pile/lane.env, not the create env.
   const upload = fetchSpy.mock.calls.find(
     ([input, init]) =>
-      (init as RequestInit | undefined)?.method === "POST" &&
       String(input).includes("/files/upload-v2") &&
-      new URL(String(input)).searchParams.get("path") === "/tmp/pile/lane.env"
+      decodeURIComponent(String(input)).includes("path=/tmp/pile/lane.env") &&
+      (init as RequestInit | undefined)?.method === "POST"
   );
   expect(upload).toBeDefined();
+  const envFile = (upload![1] as RequestInit).body as string;
   const laneEnv: Record<string, string> = {};
-  for (const line of String((upload![1] as RequestInit).body).split("\n")) {
-    const match = /^export ([A-Z0-9_]+)='(.*)'$/.exec(line);
-    if (match) laneEnv[match[1]!] = match[2]!.replaceAll("'\\''", "'");
+  for (const line of envFile.split("\n")) {
+    const m = /^export ([A-Z0-9_]+)=(.*)$/.exec(line);
+    if (!m) continue;
+    laneEnv[m[1]] = m[2].replace(/^'|'$/g, "").replaceAll("'\\''", "'");
   }
   return laneEnv;
 }

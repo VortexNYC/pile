@@ -3151,7 +3151,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     if (provider.cancel) {
       const remote = session.providerSessionId ?? sessionId;
       await provider
-        .cancel(remote)
+        .cancel(remote, session.computeBackend)
         .catch((err) => console.error("provider cancel failed", err));
     }
 
@@ -3227,7 +3227,10 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
         resolveAgentEnv(c.env, providerConfig ?? undefined)
       );
       if (provider.cancel) {
-        await provider.cancel(session.providerSessionId ?? sessionId);
+        await provider.cancel(
+          session.providerSessionId ?? sessionId,
+          session.computeBackend
+        );
       }
     } catch (err) {
       console.error("stop provider cancel failed", {
@@ -3387,7 +3390,10 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     );
     const effectiveEnv = resolveAgentEnv(c.env, providerConfig ?? undefined);
     const provider = getAgentProvider(session.agentId, effectiveEnv);
-    const polled = await provider.poll(session.providerSessionId ?? sessionId);
+    const polled = await provider.poll(
+      session.providerSessionId ?? sessionId,
+      session.computeBackend
+    );
 
     const updated = await stub.applyAgentSessionResult(
       sessionId,
@@ -3444,7 +3450,11 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
     }
 
     const remoteId = session.providerSessionId ?? sessionId;
-    const state = await provider.getState(remoteId, sessionId);
+    const state = await provider.getState(
+      remoteId,
+      sessionId,
+      session.computeBackend
+    );
     if (!state) {
       return c.json(
         { message: "Provider or compute not configured for this agent" },
@@ -3665,6 +3675,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
           {
             organizationId,
             backupRef: session.sandboxBackupRef ?? null,
+            computeBackend: session.computeBackend,
           }
         )
       : false;
@@ -3749,6 +3760,7 @@ export function registerAgentSessionRoutes(app: OpenAPIHono<AppContext>) {
             {
               organizationId,
               backupRef: session.sandboxBackupRef ?? null,
+              computeBackend: session.computeBackend,
             }
           )
         : false;

@@ -623,13 +623,20 @@ export async function dispatchAgent(
     // Workspace-wide lane ceiling for container-backed lanes — the CF
     // container apps are bounded (max_instances) and an uncapped queue of
     // concurrent lanes wedges provisioning for everyone. Promote is exempt:
-    // it moves a parked lane. Daytona lanes are provider-quota bound, not ours.
+    // it moves a parked lane. Daytona lanes are provider-quota bound, not
+    // ours. PILE-474 — the cap is per backend: sessions pinned to Daytona
+    // don't count against the CF pool and vice versa. Unpinned (legacy)
+    // rows count against whichever backend this dispatch resolves to —
+    // they predate the column, so their backend is unknowable.
+    const dispatchBackend = computeBackend(env, agentId).kind;
     const liveCount = (await stub.listAgentSessions({ limit: 200 })).filter(
-      (s) => !["completed", "failed", "canceled"].includes(s.status)
+      (s) =>
+        !["completed", "failed", "canceled"].includes(s.status) &&
+        (s.computeBackend === dispatchBackend || s.computeBackend === null)
     ).length;
     if (
       liveCount >= MAX_ACTIVE_LANES_PER_WORKSPACE &&
-      computeBackend(env, agentId).kind === "cloudflare"
+      dispatchBackend === "cloudflare"
     ) {
       throw new VortexError({
         code: "CONFLICT",
