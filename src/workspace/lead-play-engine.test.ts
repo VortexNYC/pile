@@ -65,6 +65,58 @@ describe("lead-play-engine (PILE-514..527, PILE-549..563)", () => {
     expect(matched.map((m) => m.id)).toEqual(["m-1"]);
   });
 
+  it("predicates and lead play rank on reported monthly card volume (PILE-654)", () => {
+    const volumeMerchants = [
+      { id: "m-big", name: "Big Deli", estMonthlyVolumeCents: 5_000_000 },
+      { id: "m-small", name: "Small Cart", estMonthlyVolumeCents: 400_000 },
+      { id: "m-unknown", name: "Unknown Co" },
+    ];
+    // gte hits only reported volume; lte must not treat unknown as zero.
+    expect(
+      queryDynamicAudience(volumeMerchants, {
+        logic: "and",
+        predicates: [
+          { field: "estMonthlyVolumeCents", op: "gte", value: 1_000_000 },
+        ],
+      }).map((m) => m.id)
+    ).toEqual(["m-big"]);
+    expect(
+      queryDynamicAudience(volumeMerchants, {
+        logic: "and",
+        predicates: [
+          { field: "estMonthlyVolumeCents", op: "lte", value: 6_000_000 },
+        ],
+      })
+        .map((m) => m.id)
+        .toSorted()
+    ).toEqual(["m-big", "m-small"]);
+
+    const receipt = runMerchantLeadPlay({
+      merchant: {
+        id: "m-big",
+        name: "Big Deli",
+        vertical: "retail",
+        estMonthlyVolumeCents: 5_000_000,
+      },
+      signals: [
+        {
+          id: "sig_intake_v1",
+          merchantId: "m-big",
+          type: "revenue_estimate",
+          source: "intake",
+          observedAt: NOW,
+          evidenceUrl: "intake:visit-1",
+          strength: 90,
+        },
+      ],
+      nowIso: NOW,
+    });
+    expect(receipt.breakdown.matchedIcpRules).toContain(
+      "icp-est-monthly-card-volume"
+    );
+    expect(receipt.breakdown.priorityScore).toBeGreaterThan(0);
+  });
+
   it("enforces vendor budget hard-stops and book ownership guards (PILE-549, PILE-553)", () => {
     const budgetOk = checkVendorBudgetHardStop(
       { vendor: "reacher", monthlyCapCents: 5000, spentThisMonthCents: 4900 },

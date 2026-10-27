@@ -19,6 +19,7 @@ export type SignalType =
   | "stalled_onboarding"
   | "review_velocity_spike"
   | "hiring_activity"
+  | "revenue_estimate"
   | "negative_closure";
 
 export interface MerchantSignal {
@@ -98,6 +99,39 @@ export interface RankingConfig {
   stackBonusMultiplier?: number;
 }
 
+/** Attributes a ranker call site knows about a merchant. The index
+ *  signature keeps the shape open for workspace-specific keys; the named
+ *  fields are the ones ICP rules conventionally predicate on. */
+export interface MerchantAttrs {
+  vertical?: string;
+  hasAddress?: boolean;
+  hasPhone?: boolean;
+  /** PILE-654 — reported monthly card volume in integer cents, written
+   *  to the `monthly_card_volume_cents` custom field by /intake. */
+  estMonthlyVolumeCents?: number;
+  [key: string]: unknown;
+}
+
+/** PILE-654 — read the intake-derived monthly card volume back off a
+ *  customer's custom-field map (a `Record<string, string>` from the DO,
+ *  or the same map as a JSON string). Returns undefined when the field is
+ *  absent or non-numeric so gte/lte rules simply don't fire. */
+export function estMonthlyVolumeCentsFromFields(
+  fields: unknown
+): number | undefined {
+  try {
+    const map =
+      typeof fields === "string" ? (JSON.parse(fields) as unknown) : fields;
+    if (!map || typeof map !== "object") return undefined;
+    const raw = (map as Record<string, unknown>).monthly_card_volume_cents;
+    if (raw === null || raw === undefined || raw === "") return undefined;
+    const cents = typeof raw === "number" ? raw : Number(raw);
+    return Number.isFinite(cents) && cents >= 0 ? Math.round(cents) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export interface SignalContribution {
   signalId: string;
   type: string;
@@ -131,7 +165,7 @@ export function scoreToRating(score: number): IntelRating {
 }
 
 export function evaluateIcpFit(
-  merchantAttrs: Record<string, unknown>,
+  merchantAttrs: MerchantAttrs,
   rules: IcpRule[]
 ): { fitScore: number; rating: IntelRating; matchedRules: string[] } {
   let raw = 50; // neutral baseline
@@ -193,7 +227,7 @@ export function generateWhyNow(contributions: SignalContribution[]): {
  *  3-signal stack bonus. */
 export function rankMerchantSignals(input: {
   merchantId: string;
-  merchantAttrs: Record<string, unknown>;
+  merchantAttrs: MerchantAttrs;
   signals: MerchantSignal[];
   config: RankingConfig;
   nowIso?: string;
@@ -675,6 +709,16 @@ export const DEFAULT_SIGNAL_RULES: SignalRuleConfig[] = [
   },
   { type: "pricing_view", polarity: "positive", weight: 25, activeForDays: 30 },
   {
+    // PILE-654 — a rep-collected volume estimate from /intake is the only
+    // source of true merchant numbers, so it decays slowly.
+    type: "revenue_estimate",
+    polarity: "positive",
+    weight: 40,
+    activeForDays: 180,
+    halfLifeDays: 90,
+    label: "Reported card volume",
+  },
+  {
     type: "stalled_onboarding",
     polarity: "positive",
     weight: 35,
@@ -778,6 +822,17 @@ export const DEFAULT_ICP_RULES: IcpRule[] = [
     op: "eq",
     value: true,
     weight: 10,
+  },
+  {
+    // PILE-654 — ≥ $10k/mo reported card volume is a real merchant, not a
+    // hobby stand; the figure comes from the intake monthly_card_volume_cents
+    // custom field (merchantAttrs.estMonthlyVolumeCents).
+    id: "icp-est-monthly-card-volume",
+    motion: "smb_default",
+    field: "estMonthlyVolumeCents",
+    op: "gte",
+    value: 1_000_000,
+    weight: 15,
   },
 ];
 

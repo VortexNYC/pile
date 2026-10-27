@@ -1027,6 +1027,72 @@ describe("customer sales fields (readiness/fit)", () => {
     expect(customer.processor).toBe("toast");
   });
 
+  it("feeds monthly_card_volume_cents into merchantAttrs, ICP ranking, and audience predicates (PILE-654)", async () => {
+    const created = await fetch(
+      `/workspaces/${organizationId}/customers`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: "Reported Volume Deli",
+          customFields: { monthly_card_volume_cents: "4000000" },
+        }),
+      },
+      token
+    );
+    expect(created.status).toBe(201);
+    const createdBody = (await created.json()) as {
+      id?: string;
+      customer?: { id?: string };
+    };
+    const custId = (createdBody.customer?.id ?? createdBody.id)!;
+
+    // POST /customers/:id/signals re-ranks with estMonthlyVolumeCents in
+    // merchantAttrs — the ICP gte rule on reported volume fires.
+    const sigRes = await fetch(
+      `/workspaces/${organizationId}/customers/${custId}/signals`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          type: "revenue_estimate",
+          source: "intake",
+          evidenceUrl: "https://pile.example/intake/visit-vol",
+          strength: 90,
+          summary: "Reported monthly card volume ≈ $40,000/mo (intake)",
+        }),
+      },
+      token
+    );
+    expect(sigRes.status).toBe(201);
+    const sigBody = (await sigRes.json()) as {
+      breakdown: { matchedIcpRules: string[]; priorityScore: number };
+    };
+    expect(sigBody.breakdown.matchedIcpRules).toContain(
+      "icp-est-monthly-card-volume"
+    );
+    expect(sigBody.breakdown.priorityScore).toBeGreaterThan(0);
+
+    // Audience gte/lte predicates read the same field off the candidate
+    // row — high-volume merchant matches, a no-volume row does not.
+    const audRes = await fetch(
+      `/workspaces/${organizationId}/customers/audience-query`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          logic: "and",
+          predicates: [
+            { field: "estMonthlyVolumeCents", op: "gte", value: 1_000_000 },
+          ],
+        }),
+      },
+      token
+    );
+    expect(audRes.status).toBe(200);
+    const audBody = (await audRes.json()) as {
+      merchants: Array<{ id: string }>;
+    };
+    expect(audBody.merchants.map((m) => m.id)).toContain(custId);
+  });
+
   it("records customer signals, computes Ranker v2 breakdown + Why Now, evaluates send-gate, and resolves SMB dedup keys (PILE-478..533)", async () => {
     const created = await fetch(
       `/workspaces/${organizationId}/customers`,
