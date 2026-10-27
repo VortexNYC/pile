@@ -1638,6 +1638,9 @@ export async function sweepAgentSessions(
         env.WORKSPACE_DURABLE_OBJECT.idFromName(id)
       );
       await stub.setOrganizationId(id);
+      const { notifyDueCustomerFollowUps } =
+        await import("../api/customers.js");
+      await notifyDueCustomerFollowUps(stub, id, new Date(now)).catch(() => {});
       // VTX-621 — lift auto-managed pauses whose condition cleared:
       // rate-limit holds once the reset instant passes, concurrency-cap
       // holds once live lanes fall under the cap. Operator/spend-cap

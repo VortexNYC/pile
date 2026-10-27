@@ -29,7 +29,11 @@ import { CfAgentProvider } from "./cf-agent.js";
 import { ClaudeCliAgentProvider } from "./claude-cli.js";
 import { CodexCliAgentProvider } from "./codex-cli.js";
 import { CodexAgentProvider } from "./codex.js";
-import { computeBackend, isComputeInfraError } from "./compute.js";
+import {
+  computeBackend,
+  isComputeInfraError,
+  type ComputeBackend,
+} from "./compute.js";
 import { loadProviderConfig } from "./credentials.js";
 import { CursorCliAgentProvider } from "./cursor-cli.js";
 import { CursorAgentProvider } from "./cursor.js";
@@ -628,21 +632,39 @@ export async function dispatchAgent(
     // don't count against the CF pool and vice versa. Unpinned (legacy)
     // rows count against whichever backend this dispatch resolves to —
     // they predate the column, so their backend is unknowable.
-    const dispatchBackend = computeBackend(env, agentId).kind;
-    const liveCount = (await stub.listAgentSessions({ limit: 200 })).filter(
-      (s) =>
-        !["completed", "failed", "canceled"].includes(s.status) &&
-        (s.computeBackend === dispatchBackend || s.computeBackend === null)
-    ).length;
-    if (
-      liveCount >= MAX_ACTIVE_LANES_PER_WORKSPACE &&
-      dispatchBackend === "cloudflare"
-    ) {
-      throw new VortexError({
-        code: "CONFLICT",
-        status: 409,
-        message: `Workspace has ${liveCount} active agent sessions (max ${MAX_ACTIVE_LANES_PER_WORKSPACE}) — wait for lanes to finish`,
-      });
+    const activeSessions = (
+      await stub.listAgentSessions({ limit: 200 })
+    ).filter((s) => !["completed", "failed", "canceled"].includes(s.status));
+    // Resolve the dispatch backend lazily: computeBackend() throws
+    // CONFIG_ERROR when neither DAYTONA_API_KEY nor a SANDBOX binding is
+    // configured, but remote API providers never touch sandbox compute —
+    // and below the lane ceiling the backend is irrelevant anyway.
+    if (activeSessions.length >= MAX_ACTIVE_LANES_PER_WORKSPACE) {
+      let dispatchBackend: ComputeBackend["kind"] | null;
+      try {
+        dispatchBackend = computeBackend(env, agentId).kind;
+      } catch (err) {
+        // Unconfigured compute can't back a Cloudflare container lane, so
+        // the CF container pool cap doesn't apply to this dispatch.
+        if (err instanceof VortexError && err.code === "CONFIG_ERROR") {
+          dispatchBackend = null;
+        } else {
+          throw err;
+        }
+      }
+      const liveCount = activeSessions.filter(
+        (s) => s.computeBackend === dispatchBackend || s.computeBackend === null
+      ).length;
+      if (
+        liveCount >= MAX_ACTIVE_LANES_PER_WORKSPACE &&
+        dispatchBackend === "cloudflare"
+      ) {
+        throw new VortexError({
+          code: "CONFLICT",
+          status: 409,
+          message: `Workspace has ${liveCount} active agent sessions (max ${MAX_ACTIVE_LANES_PER_WORKSPACE}) — wait for lanes to finish`,
+        });
+      }
     }
     if (
       dedupe &&

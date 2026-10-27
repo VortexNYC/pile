@@ -39,6 +39,8 @@ import {
   detectPosTechnographics,
   estMonthlyVolumeCentsFromFields,
   type MerchantSignal,
+  normalizeSmbName,
+  normalizeStreetAddress,
   parseCustomerSignalFacts,
   planDetectiveWaterfall,
   rankMerchantSignals,
@@ -524,6 +526,10 @@ const logInteractionBodySchema = z.object({
   note: z.string().max(4000).optional(),
   nextStepText: z.string().nullable().optional(),
   nextStepDueAt: z.string().nullable().optional(),
+  // PILE-673 — when the rep quotes a number at the door, bridge it into a
+  // real deals row (stage "proposal") so the pipeline reflects quoted $.
+  quotedAmountCents: z.number().int().positive().max(1_000_000_000).optional(),
+  dealTitle: z.string().trim().min(1).max(200).optional(),
 });
 
 const customerInteractionSchema = z.object({
@@ -532,6 +538,39 @@ const customerInteractionSchema = z.object({
   outcome: z.enum(CUSTOMER_TOUCH_OUTCOMES),
   note: z.string().nullable(),
   createdAt: z.string(),
+});
+
+// Mirrors the deals API response shape — kept local so a deal created by a
+// knock doesn't pull the whole deals module in for one schema.
+const dealSchema = z.object({
+  id: z.string(),
+  organizationId: z.string(),
+  customerId: z.string(),
+  name: z.string(),
+  externalId: z.string().nullable(),
+  stage: z.enum([
+    "lead",
+    "qualified",
+    "proposal",
+    "negotiation",
+    "won",
+    "lost",
+  ]),
+  amountCents: z.number().nullable(),
+  currency: z.string().nullable(),
+  expectedCloseAt: z.string().nullable(),
+  description: z.string().nullable(),
+  closedAt: z.string().nullable(),
+  archivedAt: z.string().nullable(),
+  nextStepText: z.string().nullable(),
+  nextStepDueAt: z.string().nullable(),
+  needsHuman: z.boolean().nullable(),
+  needsHumanReason: z.string().nullable(),
+  priorityScore: z.number().nullable(),
+  contactIds: z.array(z.string()),
+  customFields: z.record(z.string(), z.string()),
+  createdAt: z.string(),
+  updatedAt: z.string(),
 });
 
 const logCustomerInteractionRoute = createRoute({
@@ -557,11 +596,128 @@ const logCustomerInteractionRoute = createRoute({
             customer: customerSchema,
             stageAdvanced: z.boolean(),
             stageBlocked: z.boolean(),
+            // PILE-673 — the auto-created quote deal, or null when the touch
+            // carried no quotedAmountCents.
+            deal: dealSchema.nullable(),
           }),
         },
       },
     },
     404: { description: "Customer not found" },
+  },
+});
+
+// PILE-671 — mobile "Log a Knock" stoop capture: one call finds-or-creates
+// the merchant row, logs the touch, schedules the next step, and (when a
+// quote was named) opens the proposal deal.
+const KNOCK_CHANNELS = ["visit", "call", "email", "sms", "note"] as const;
+const NEXT_STEP_PRESETS = [
+  "tomorrow",
+  "three_days",
+  "next_week",
+  "none",
+] as const;
+
+const quickKnockBodySchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  addressLine1: z.string().trim().max(300).optional(),
+  city: z.string().trim().max(120).optional(),
+  state: z.string().trim().max(60).optional(),
+  postalCode: z.string().trim().max(20).optional(),
+  phone: z.string().trim().max(60).optional(),
+  outcome: z.enum(CUSTOMER_TOUCH_OUTCOMES),
+  summary: z.string().max(2000).optional(),
+  channel: z.enum(KNOCK_CHANNELS).optional(),
+  // One-tap due-date presets; an explicit nextStepDueAt wins over both.
+  nextStepPreset: z.enum(NEXT_STEP_PRESETS).optional(),
+  nextStepDueAt: z.string().nullable().optional(),
+  nextStepText: z.string().nullable().optional(),
+  quotedAmountCents: z.number().int().positive().max(1_000_000_000).optional(),
+  dealTitle: z.string().trim().min(1).max(200).optional(),
+});
+
+const quickKnockRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/customers/quick-knock",
+  tags: ["customers"],
+  middleware: [rls("customer:create", "customer:edit")],
+  description:
+    "Mobile log-a-knock quick-add (PILE-671): dedupes on normalized name or street address so a second knock at the same building updates the existing customer, then logs the interaction with the same outcome→stage/next-step rules as POST /customers/{id}/interactions and optionally bridges a quoted amount into a proposal-stage deal.",
+  request: {
+    params: orgParam,
+    body: {
+      content: { "application/json": { schema: quickKnockBodySchema } },
+    },
+  },
+  responses: {
+    201: {
+      description: "Knock logged against a found-or-created customer",
+      content: {
+        "application/json": {
+          schema: z.object({
+            customer: customerSchema,
+            event: customerInteractionSchema.extend({
+              channel: z.enum(KNOCK_CHANNELS),
+            }),
+            deal: dealSchema.nullable(),
+            created: z.boolean(),
+            stageAdvanced: z.boolean(),
+            stageBlocked: z.boolean(),
+          }),
+        },
+      },
+    },
+  },
+});
+
+// PILE-674 — due-follow-up notification scan. The sweep/UI calls this;
+// each (customer, nextStepDueAt) pair notifies exactly once thanks to a
+// follow_up_notified memory claim on the customer record.
+const notifyDueFollowUpsRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/customers/follow-ups/notify-due",
+  tags: ["customers"],
+  middleware: [rls("customer:edit")],
+  description:
+    "Scan customers whose nextStepDueAt is past due (terminal stages excluded) and emit a follow_up_due notification to the customer owner — once per (customer, due date).",
+  request: {
+    params: orgParam,
+    body: {
+      content: {
+        "application/json": {
+          schema: z
+            .object({
+              // Scan-as-of override — tests and backfills pin the clock.
+              now: z.string().datetime({ offset: true }).optional(),
+            })
+            .optional(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Due-follow-up scan result",
+      content: {
+        "application/json": {
+          schema: z.object({
+            scanned: z.number().int(),
+            notified: z.number().int(),
+            notifications: z.array(
+              z.object({
+                customerId: z.string(),
+                customerName: z.string(),
+                recipientId: z.string(),
+                type: z.string(),
+                title: z.string(),
+                body: z.string(),
+                nextStepDueAt: z.string(),
+              })
+            ),
+          }),
+        },
+      },
+    },
   },
 });
 
@@ -1076,6 +1232,215 @@ export function toCustomerSummary(row: {
   };
 }
 
+// ---- PILE-671/673/674 field-sales helpers ----
+
+/** Compose the customers.address blob from the quick-knock's split fields.
+ *  City/state default to Brooklyn/NY only once a street line exists —
+ *  "Brooklyn, NY" alone isn't a real address to dedupe on. */
+function composeKnockAddress(input: {
+  addressLine1?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+}): string | undefined {
+  if (!input.addressLine1) return undefined;
+  const city = input.city ?? "Brooklyn";
+  const state = input.state ?? "NY";
+  return [input.addressLine1, `${city}, ${state}`, input.postalCode]
+    .filter((part): part is string => Boolean(part))
+    .join(", ");
+}
+
+// Same slug rule customer_statuses keys use (touch-outcomes keeps an
+// identical private copy to stay dependency-free for the web bundle).
+function statusSlugKey(row: { key: string | null; name: string }): string {
+  return (
+    row.key ??
+    row.name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+  );
+}
+
+/** The stage a brand-new customer should open in: terminal outcomes land
+ *  in a dead/disqualified column, everything else starts as a prospect.
+ *  The touch's own outcome→status advance runs on top afterward. */
+async function resolveKnockStatusId(
+  stub: ReturnType<typeof getWorkspaceStub>,
+  terminal: boolean
+): Promise<string | null> {
+  const statuses = await stub.listCustomerStatuses();
+  const preferred = terminal
+    ? ["disqualified", "lost", "dead"]
+    : ["prospect", "new", "contacted", "qualified"];
+  for (const key of preferred) {
+    const hit = statuses.find((s) => statusSlugKey(s) === key);
+    if (hit) return hit.id;
+  }
+  return null;
+}
+
+const DAY_MS = 86_400_000;
+
+/** nextStepDueAt for the knock: an explicit ISO wins, then the one-tap
+ *  preset, then `undefined` so the outcome default applies. */
+function resolveKnockDueAt(input: {
+  outcome?: string;
+  nextStepDueAt?: string | null;
+  nextStepPreset?: "tomorrow" | "three_days" | "next_week" | "none";
+}): string | null | undefined {
+  if (input.nextStepDueAt !== undefined) return input.nextStepDueAt;
+  if (
+    input.nextStepPreset === undefined &&
+    (input.outcome === "not_interested" || input.outcome === "spam")
+  ) {
+    return undefined;
+  }
+  const now = Date.now();
+  switch (input.nextStepPreset) {
+    case "tomorrow":
+      return new Date(now + DAY_MS).toISOString();
+    case "three_days":
+      return new Date(now + 3 * DAY_MS).toISOString();
+    case "next_week":
+      return new Date(now + 7 * DAY_MS).toISOString();
+    case "none":
+      return null;
+    default:
+      return undefined;
+  }
+}
+
+/** PILE-673 — the shared "quoted at the door" bridge: a proposal-stage
+ *  deal carrying the quoted amount, titled "Merchant — Quote" unless the
+ *  rep named it. Null when no amount came in. */
+async function createQuoteDeal(
+  stub: ReturnType<typeof getWorkspaceStub>,
+  customer: { id: string; name: string },
+  quotedAmountCents: number | undefined,
+  dealTitle: string | undefined
+) {
+  if (quotedAmountCents === undefined) return null;
+  try {
+    return await stub.createDeal({
+      customerId: customer.id,
+      name: dealTitle || `${customer.name} — Quote`,
+      stage: "proposal",
+      amountCents: quotedAmountCents,
+      currency: "USD",
+    });
+  } catch {
+    return null;
+  }
+}
+
+// Pipeline stages that mean "done" — due follow-ups stop pinging them.
+const FOLLOW_UP_TERMINAL_KEYS = new Set([
+  "closed_won",
+  "closed_lost",
+  "disqualified",
+]);
+
+/**
+ * PILE-674 — scan customers whose nextStepDueAt is past due and notify the
+ * owner once per (customer, due date). The claim rides customer memory
+ * (kind "follow_up_notified", fact = the dueAt it fired for) so a rescan —
+ * or a later due date — never double-pings; each new due date fires once.
+ *
+ * `fallbackRecipientId` covers rows with no owner — the caller passes its
+ * own member id (sessions and workspace API keys are always members).
+ */
+export async function notifyDueCustomerFollowUps(
+  stub: ReturnType<typeof getWorkspaceStub>,
+  organizationId: string,
+  now: Date = new Date(),
+  fallbackRecipientId?: string | null
+) {
+  const nowIso = now.toISOString();
+  const [due, statuses] = await Promise.all([
+    stub.listCustomers({ dueBefore: nowIso }),
+    stub.listCustomerStatuses(),
+  ]);
+  const statusById = new Map(statuses.map((s) => [s.id, s]));
+  const candidates = due.filter((customer) => {
+    if (!customer.nextStepDueAt || customer.nextStepDueAt > nowIso) {
+      return false;
+    }
+    const status = customer.statusId ? statusById.get(customer.statusId) : null;
+    if (!status) return true;
+    return (
+      status.type !== "terminal" &&
+      !FOLLOW_UP_TERMINAL_KEYS.has(statusSlugKey(status))
+    );
+  });
+
+  // Per-customer: check → notify → claim stays ordered; customers fan out
+  // in parallel.
+  const emitted = await Promise.all(
+    candidates.map(async (customer) => {
+      const dueAt = customer.nextStepDueAt!;
+      const recipientId = customer.ownerId ?? fallbackRecipientId ?? null;
+      // No one to ping — leave the claim unwritten so assigning an owner
+      // (or a member calling again) can still trigger the notification.
+      if (!recipientId) return null;
+      const claimKind = `follow_up_notified:${dueAt}`;
+      const prior = await stub.memoryRecall({
+        entityType: "customer",
+        entityId: customer.id,
+        kind: claimKind,
+        limit: 1,
+      });
+      if (prior.some((row) => row.fact === dueAt)) return null;
+      const title = `Follow-up due: ${customer.name}`;
+      const body = customer.nextStepText
+        ? `${customer.nextStepText} (due ${dueAt.slice(0, 10)})`
+        : `Follow-up due ${dueAt.slice(0, 10)}`;
+      await stub.createNotification({
+        recipientId,
+        recipientType: "user",
+        // The notifications table anchors on a subject id in `issueId` —
+        // support tickets already reuse it for ticket ids; here it carries
+        // the customer id, with the real target fields in metadata.
+        issueId: customer.id,
+        type: "follow_up_due",
+        metadata: {
+          title,
+          body,
+          resourceType: "customer",
+          resourceId: customer.id,
+          nextStepDueAt: dueAt,
+          organizationId,
+        },
+      });
+      await stub.memoryRemember({
+        entityType: "customer",
+        entityId: customer.id,
+        kind: claimKind,
+        fact: dueAt,
+      });
+      return {
+        customerId: customer.id,
+        customerName: customer.name,
+        recipientId,
+        type: "follow_up_due",
+        title,
+        body,
+        nextStepDueAt: dueAt,
+      };
+    })
+  );
+  const notifications = emitted.filter(
+    (n): n is NonNullable<typeof n> => n !== null
+  );
+  return {
+    scanned: candidates.length,
+    notified: notifications.length,
+    notifications,
+  };
+}
+
 export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listCustomersRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
@@ -1279,6 +1644,14 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     await stub.setOrganizationId(organizationId);
     const result = await stub.logCustomerInteraction(id, input, identity.id);
     if (!result) return notFound("Customer not found");
+    // PILE-673 — a quoted amount on the touch bridges straight into the
+    // pipeline: proposal-stage deal named after the merchant (or dealTitle).
+    const deal = await createQuoteDeal(
+      stub,
+      result.customer,
+      input.quotedAmountCents,
+      input.dealTitle
+    );
     // Stage auto-advance emits record.stage_entered — drain it into
     // dispatches like the PATCH path does (sweep is the backstop).
     getExecutionCtx(c)?.waitUntil(
@@ -1296,9 +1669,115 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
         customer: result.customer,
         stageAdvanced: result.stageAdvanced,
         stageBlocked: result.stageBlocked,
+        deal,
       },
       201
     );
+  });
+
+  app.openapi(quickKnockRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const identity = c.var.workspaceIdentity;
+    const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
+    const ownerId = identity.id === "api-token" ? null : identity.id;
+
+    // Dedup on normalized name or street address — a second knock at the
+    // same building updates the existing row instead of duplicating it.
+    const normalizedName = normalizeSmbName(input.name);
+    const normalizedAddress = normalizeStreetAddress(input.addressLine1);
+    const existing = (await stub.listCustomers()).find((row) => {
+      if (
+        normalizedName.length > 0 &&
+        normalizeSmbName(row.name) === normalizedName
+      ) {
+        return true;
+      }
+      if (normalizedAddress.length === 0) return false;
+      const rowStreet = normalizeStreetAddress(
+        (row.address ?? "").split(",")[0]
+      );
+      return rowStreet === normalizedAddress;
+    });
+
+    let created = false;
+    let customer = existing;
+    if (!customer) {
+      const terminal =
+        input.outcome === "not_interested" || input.outcome === "spam";
+      customer = await stub.createCustomer({
+        name: input.name,
+        address: composeKnockAddress(input),
+        phone: input.phone ?? null,
+        source: "field_knock",
+        ownerId,
+        statusId: await resolveKnockStatusId(stub, terminal),
+      });
+      created = true;
+    }
+
+    // Same outcome → next-step/stage machinery as the per-customer touch.
+    const result = await stub.logCustomerInteraction(
+      customer.id,
+      {
+        outcome: input.outcome,
+        note: input.summary,
+        nextStepText:
+          input.nextStepText !== undefined
+            ? input.nextStepText
+            : input.nextStepPreset === "none"
+              ? null
+              : undefined,
+        nextStepDueAt: resolveKnockDueAt(input),
+      },
+      identity.id
+    );
+    if (!result) return notFound("Customer not found");
+
+    const deal = await createQuoteDeal(
+      stub,
+      result.customer,
+      input.quotedAmountCents,
+      input.dealTitle
+    );
+    getExecutionCtx(c)?.waitUntil(
+      drainDomainEvents(c.env, stub, organizationId, getExecutionCtx(c))
+    );
+    return c.json(
+      {
+        customer: result.customer,
+        event: {
+          id: result.interactionId,
+          customerId: customer.id,
+          outcome: input.outcome,
+          note: input.summary ?? null,
+          channel: input.channel ?? "visit",
+          createdAt: result.createdAt,
+        },
+        deal,
+        created,
+        stageAdvanced: result.stageAdvanced,
+        stageBlocked: result.stageBlocked,
+      },
+      201
+    );
+  });
+
+  app.openapi(notifyDueFollowUpsRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const input = c.req.valid("json");
+    const identity = c.var.workspaceIdentity;
+    const stub = getWorkspaceStub(c.env, organizationId);
+    await stub.setOrganizationId(organizationId);
+    const now = input?.now ? new Date(input.now) : new Date();
+    const result = await notifyDueCustomerFollowUps(
+      stub,
+      organizationId,
+      now,
+      identity.id === "api-token" ? null : identity.id
+    );
+    return c.json(result, 200);
   });
 
   app.openapi(deleteCustomerRoute, async (c) => {

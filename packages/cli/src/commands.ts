@@ -3955,6 +3955,22 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "substeps rerun create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/substeps/{issueId}/rerun",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+      {
+        name: "issueId",
+        flag: "issue",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "dispatch pile create": {
     method: "POST",
     path: "/dispatch/pile",
@@ -8458,6 +8474,100 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "nextStepDueAt",
         flag: "next-step-due-at",
+      },
+      {
+        name: "quotedAmountCents",
+        flag: "quoted-amount-cents",
+      },
+      {
+        name: "dealTitle",
+        flag: "deal-title",
+      },
+    ],
+  },
+  "customers quick knock create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/quick-knock",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "name",
+        flag: "name",
+      },
+      {
+        name: "addressLine1",
+        flag: "address-line1",
+      },
+      {
+        name: "city",
+        flag: "city",
+      },
+      {
+        name: "state",
+        flag: "state",
+      },
+      {
+        name: "postalCode",
+        flag: "postal-code",
+      },
+      {
+        name: "phone",
+        flag: "phone",
+      },
+      {
+        name: "outcome",
+        flag: "outcome",
+      },
+      {
+        name: "summary",
+        flag: "summary",
+      },
+      {
+        name: "channel",
+        flag: "channel",
+      },
+      {
+        name: "nextStepPreset",
+        flag: "next-step-preset",
+      },
+      {
+        name: "nextStepDueAt",
+        flag: "next-step-due-at",
+      },
+      {
+        name: "nextStepText",
+        flag: "next-step-text",
+      },
+      {
+        name: "quotedAmountCents",
+        flag: "quoted-amount-cents",
+      },
+      {
+        name: "dealTitle",
+        flag: "deal-title",
+      },
+    ],
+  },
+  "customers follow ups notify due create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/follow-ups/notify-due",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "now",
+        flag: "now",
       },
     ],
   },
@@ -14206,6 +14316,27 @@ export const COMMANDS: Record<string, CommandDef> = {
       {
         name: "statementFiles",
         flag: "statement-files",
+      },
+    ],
+  },
+  "intake quote requests sync create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/intake/quote-requests/sync",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "quoteRequests",
+        flag: "quote-requests",
+      },
+      {
+        name: "vortexOperatorKey",
+        flag: "vortex-operator-key",
       },
     ],
   },

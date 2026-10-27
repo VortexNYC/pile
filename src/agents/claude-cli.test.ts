@@ -90,8 +90,7 @@ async function dispatchEnv(
   await Promise.all(pending);
   const create = fetchSpy.mock.calls.find(
     ([input, init]) =>
-      String(input).split("?")[0] ===
-        "https://app.daytona.io/api/sandbox" &&
+      String(input).split("?")[0] === "https://app.daytona.io/api/sandbox" &&
       (init as RequestInit | undefined)?.method === "POST"
   );
   expect(create).toBeDefined();

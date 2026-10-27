@@ -10,9 +10,7 @@ import {
 describe("route permission harvesting (VTX-753)", () => {
   it("tags rls middleware with its allowed specs", () => {
     const mw = rls("issue:view");
-    expect((mw as Record<symbol, unknown>)[RLS_ALLOWED_SPECS]).toEqual([
-      "issue:view",
-    ]);
+    expect(mw[RLS_ALLOWED_SPECS]).toEqual(["issue:view"]);
   });
 
   it("collects method+path → specs from route configs", () => {

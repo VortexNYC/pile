@@ -51,6 +51,15 @@ export function dateInputToIso(value: string): string | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
+/** PILE-673 — dollars as typed → integer cents for quotedAmountCents.
+ *  "225" → 22500, "225.50" → 22550; blank/unparseable/non-positive → null. */
+export function quotedAmountCents(amount: string): number | null {
+  if (!amount.trim()) return null;
+  const dollars = Number.parseFloat(amount);
+  if (!Number.isFinite(dollars) || dollars <= 0) return null;
+  return Math.round(dollars * 100);
+}
+
 /** "Log touch" — Ronnie's post-knock record: pick the outcome, optionally
  *  adjust the note / next step, and the API applies the stage auto-advance
  *  and next-step defaults. */
@@ -71,12 +80,15 @@ export function LogTouchDialog({
   const [note, setNote] = useState("");
   const [nextStepText, setNextStepText] = useState("");
   const [nextStepDate, setNextStepDate] = useState("");
+  // PILE-673 — dollars as typed ("225" → 22500 cents server-side).
+  const [quotedAmount, setQuotedAmount] = useState("");
 
   // Re-seed the draft each time the dialog targets a new customer.
   useEffect(() => {
     if (open) {
       setOutcome("talked");
       setNote("");
+      setQuotedAmount("");
       const prefill = nextStepPrefill("talked");
       setNextStepText(prefill.text);
       setNextStepDate(prefill.date);
@@ -109,8 +121,11 @@ export function LogTouchDialog({
         note?: string;
         nextStepText?: string;
         nextStepDueAt?: string;
+        quotedAmountCents?: number;
       } = { outcome };
       if (note.trim()) body.note = note.trim();
+      const cents = quotedAmountCents(quotedAmount);
+      if (cents !== null) body.quotedAmountCents = cents;
       // Only send overrides the user actually changed — the server fills
       // outcome defaults otherwise.
       if (nextStepText !== prefill.text && nextStepText !== "")
@@ -143,10 +158,15 @@ export function LogTouchDialog({
       }
     },
     onError: (error) => toastError(error, "Could not log touch"),
-    onSettled: () =>
-      queryClient.invalidateQueries({
+    onSettled: () => {
+      void queryClient.invalidateQueries({
         queryKey: wsKey(workspace.id, "customers"),
-      }),
+      });
+      // A quoted amount bridges into the pipeline — refresh deals too.
+      void queryClient.invalidateQueries({
+        queryKey: wsKey(workspace.id, "deals"),
+      });
+    },
   });
 
   return (
@@ -212,6 +232,17 @@ export function LogTouchDialog({
             />
           </div>
           <Input
+            label="Quoted amount ($)"
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="0.01"
+            value={quotedAmount}
+            required={false}
+            placeholder={outcome === "quoted" ? "225" : "Optional — e.g. 225"}
+            onChange={(e) => setQuotedAmount(e.target.value)}
+          />
+          <Input
             label="Next step"
             value={nextStepText}
             required={false}
@@ -226,16 +257,19 @@ export function LogTouchDialog({
             onChange={(e) => setNextStepDate(e.target.value)}
           />
           <div className="flex justify-end gap-2">
-            <DialogClose asChild>
-              <Button variant="ghost" type="button">
-                Cancel
-              </Button>
-            </DialogClose>
+            <Button
+              variant="ghost"
+              type="button"
+              onClick={() => onOpenChange(false)}
+            >
+              Cancel
+            </Button>
             <Button type="submit" variant="primary" loading={submit.isPending}>
               Log touch
             </Button>
           </div>
         </form>
+        <DialogClose />
       </Dialog>
     </DialogRoot>
   );

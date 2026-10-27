@@ -14,6 +14,7 @@ import {
   DEFAULT_ICP_RULES,
   DEFAULT_SIGNAL_RULES,
   type MerchantSignal,
+  normalizePhoneE164,
   parseCustomerSignalFacts,
   rankMerchantSignals,
 } from "../workspace/signals-engine.js";
@@ -112,6 +113,53 @@ const intakeResultSchema = z.object({
   deduped: z.boolean(),
 });
 
+// PILE-655 — Vortex `/v1/operator/quote-requests`: merchants who ran the
+// public pricing calculator leave self-reported volume figures plus
+// contact info. Each quote request is an inbound lead.
+
+const quoteRequestItemSchema = z.object({
+  id: z.string().min(1),
+  // Vortex has shipped all three spellings across versions of the
+  // calculator payload — accept each and pick the first non-empty.
+  businessName: z.string().nullable().optional(),
+  merchantName: z.string().nullable().optional(),
+  companyName: z.string().nullable().optional(),
+  contactEmail: z.string().nullable().optional(),
+  contactName: z.string().nullable().optional(),
+  contactPhone: z.string().nullable().optional(),
+  monthlyVolumeCents: z.number().nullable().optional(),
+  avgTicketCents: z.number().nullable().optional(),
+  currentProcessor: z.string().nullable().optional(),
+  effectiveRateBps: z.number().nullable().optional(),
+  estimatedAnnualSavingsCents: z.number().nullable().optional(),
+  notes: z.string().nullable().optional(),
+  createdAt: z.string().nullable().optional(),
+});
+
+type QuoteRequestItem = z.infer<typeof quoteRequestItemSchema>;
+
+const quoteRequestSyncBodySchema = z.object({
+  quoteRequests: z.array(quoteRequestItemSchema).optional(),
+  vortexOperatorKey: z.string().optional(),
+});
+
+const quoteRequestSyncResultSchema = z.object({
+  synced: z.number().int(),
+  created: z.number().int(),
+  updated: z.number().int(),
+  customers: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      externalId: z.string().nullable(),
+      estMonthlyVolumeCents: z.number().nullable(),
+      score: z.number().nullable(),
+    })
+  ),
+});
+
+const VORTEX_QUOTE_SOURCE = "vortex_quote_calculator";
+
 function line(label: string, value: string | undefined | null): string | null {
   return value ? `- **${label}:** ${value}` : null;
 }
@@ -192,6 +240,59 @@ export function intakePricingCustomFields(
     fields.monthly_sales_totals = pricing.monthlySalesTotals.trim();
   }
   return fields;
+}
+
+/** PILE-655 — display name for a quote-request merchant: the business
+ *  name under any of its payload spellings, then the contact person,
+ *  then the email local part. */
+export function quoteRequestName(item: QuoteRequestItem): string {
+  const emailLocal = item.contactEmail?.trim().split("@")[0];
+  const name =
+    item.businessName?.trim() ||
+    item.merchantName?.trim() ||
+    item.companyName?.trim() ||
+    item.contactName?.trim() ||
+    emailLocal;
+  return name || `Quote request ${item.id}`;
+}
+
+/** PILE-655 — quote-request pricing figures → name-keyed customer custom
+ *  fields (camelCase keys, matching the Vortex payload spelling). The
+ *  monthly volume also lands under the canonical `monthly_card_volume_cents`
+ *  key from PILE-654 so re-ranks that read volume back off the field map
+ *  (`estMonthlyVolumeCentsFromFields`) still fire the ICP volume rule.
+ *  Numeric fields only land when finite so a garbage upstream value can't
+ *  poison the field map. */
+export function quoteRequestCustomFields(
+  item: QuoteRequestItem
+): Record<string, string> {
+  const fields: Record<string, string> = {
+    vortexQuoteRequestId: item.id,
+    inboundSource: VORTEX_QUOTE_SOURCE,
+  };
+  const put = (key: string, value: number | null | undefined) => {
+    if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+      fields[key] = String(Math.round(value));
+    }
+  };
+  put("estMonthlyVolumeCents", item.monthlyVolumeCents);
+  put("monthly_card_volume_cents", item.monthlyVolumeCents);
+  put("averageTicketCents", item.avgTicketCents);
+  put("effectiveRateBps", item.effectiveRateBps);
+  put("estimatedAnnualSavingsCents", item.estimatedAnnualSavingsCents);
+  if (item.currentProcessor?.trim()) {
+    fields.currentProcessor = item.currentProcessor.trim();
+  }
+  return fields;
+}
+
+/** PILE-655 — the quote-request volume figure as a rankable cents value,
+ *  or null when the calculator row didn't report one. */
+function quoteRequestVolumeCents(item: QuoteRequestItem): number | null {
+  const raw = item.monthlyVolumeCents;
+  return typeof raw === "number" && Number.isFinite(raw) && raw >= 0
+    ? Math.round(raw)
+    : null;
 }
 
 export function buildIntakeMarkdown(input: IntakeBody): string {
@@ -306,6 +407,31 @@ const intakeRoute = createRoute({
       content: { "application/json": { schema: intakeResultSchema } },
     },
     400: { description: "Invalid request" },
+  },
+});
+
+const quoteRequestSyncRoute = createRoute({
+  method: "post",
+  path: "/workspaces/{organizationId}/intake/quote-requests/sync",
+  tags: ["customers"],
+  middleware: [rls("settings:create")],
+  description:
+    'Import Vortex pricing-calculator quote requests (/v1/operator/quote-requests) as inbound leads. Each row upserts a customer keyed on externalId "vortex-quote:<id>", writes the self-reported volume figures to customFields, upserts the contact, opens a lead-stage deal unless the merchant is already in the pipeline, and records a revenue_estimate signal. Pass quoteRequests inline or an operator key to pull from the Vortex API.',
+  request: {
+    params: z.object({ organizationId: z.string() }),
+    body: {
+      content: { "application/json": { schema: quoteRequestSyncBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Quote requests synced",
+      content: {
+        "application/json": { schema: quoteRequestSyncResultSchema },
+      },
+    },
+    400: { description: "Invalid request" },
+    502: { description: "Vortex API fetch failed" },
   },
 });
 
@@ -571,6 +697,308 @@ export function registerIntakeRoutes(app: OpenAPIHono<AppContext>) {
       deduped,
     };
     return deduped ? c.json(result, 200) : c.json(result, 201);
+  });
+
+  // PILE-655 — Vortex quote-request sync. Items arrive inline or are
+  // pulled from the operator API; each is an inbound lead carrying the
+  // merchant's own volume figures.
+  app.openapi(quoteRequestSyncRoute, async (c) => {
+    const { organizationId } = c.req.valid("param");
+    const body = c.req.valid("json");
+    const identity = c.var.workspaceIdentity;
+    const stub = getWorkspaceStub(c.env, organizationId);
+    const envVars = c.env as Record<string, unknown>;
+    const envString = (key: string) => {
+      const value = envVars[key];
+      return typeof value === "string" && value.length > 0 ? value : undefined;
+    };
+
+    const base = (
+      envString("VORTEX_API_URL") ?? "https://api.vortex.nyc"
+    ).replace(/\/+$/, "");
+
+    let items: QuoteRequestItem[] | undefined = body.quoteRequests;
+    if (items === undefined) {
+      const operatorKey =
+        body.vortexOperatorKey ?? envString("VORTEX_OPERATOR_API_KEY");
+      if (!operatorKey) {
+        throw new VortexError({
+          code: "BAD_REQUEST",
+          status: 400,
+          message:
+            "Provide quoteRequests inline or a Vortex operator API key (vortexOperatorKey / VORTEX_OPERATOR_API_KEY)",
+        });
+      }
+      const res = await fetch(`${base}/v1/operator/quote-requests`, {
+        headers: { Authorization: `Bearer ${operatorKey}` },
+      });
+      if (!res.ok) {
+        throw new VortexError({
+          code: "AGENT_ERROR",
+          status: 502,
+          message: `Vortex quote-requests fetch failed (HTTP ${res.status})`,
+        });
+      }
+      const payload = (await res.json()) as unknown;
+      const rawItems: unknown[] = Array.isArray(payload)
+        ? payload
+        : Array.isArray((payload as { quoteRequests?: unknown })?.quoteRequests)
+          ? ((payload as { quoteRequests: unknown[] }).quoteRequests ?? [])
+          : Array.isArray((payload as { items?: unknown })?.items)
+            ? ((payload as { items: unknown[] }).items ?? [])
+            : [];
+      // Rows that fail the item shape (e.g. no id) are skipped rather than
+      // sinking the whole batch — the upstream payload is not ours to fix.
+      items = rawItems
+        .map((row) => quoteRequestItemSchema.safeParse(row))
+        .filter((r) => r.success)
+        .map((r) => r.data);
+    }
+
+    // Match indexes over the existing customer book — externalId is the
+    // hard key; normalized email/business-name catch merchants who came
+    // in through another import before their first quote request.
+    const existing = await stub.listCustomers();
+    type CustomerRow = (typeof existing)[number];
+    const byExternalId = new Map<string, CustomerRow>();
+    const byName = new Map<string, CustomerRow>();
+    for (const row of existing) {
+      if (row.externalId) byExternalId.set(row.externalId, row);
+      const nameKey = row.name.trim().toLowerCase();
+      if (nameKey && !byName.has(nameKey)) byName.set(nameKey, row);
+    }
+    // Email match needs each merchant's contacts — built lazily on the
+    // first email-only lookup so a fully keyed batch never pays for it.
+    const byEmail = new Map<string, CustomerRow>();
+    let emailIndexBuilt = false;
+    const emailIndex = async () => {
+      if (emailIndexBuilt) return byEmail;
+      emailIndexBuilt = true;
+      await Promise.all(
+        existing.map(async (cust) => {
+          for (const contact of await stub.listContacts(cust.id)) {
+            if (contact.channel !== "email") continue;
+            const key = contact.value.trim().toLowerCase();
+            if (key && !byEmail.has(key)) byEmail.set(key, cust);
+          }
+        })
+      );
+      return byEmail;
+    };
+
+    const deals = await stub.listDeals();
+    let created = 0;
+    let updated = 0;
+    const synced: z.infer<typeof quoteRequestSyncResultSchema>["customers"] =
+      [];
+
+    for (const item of items) {
+      const externalId = `vortex-quote:${item.id}`;
+      const name = quoteRequestName(item);
+      const email = item.contactEmail?.trim().toLowerCase() || null;
+      const phone = normalizePhoneE164(item.contactPhone) || null;
+      const evidenceUrl = `${base}/v1/operator/quote-requests`;
+      const fields = quoteRequestCustomFields(item);
+
+      let customer: CustomerRow | undefined = byExternalId.get(externalId);
+      if (!customer && email) {
+        customer = (await emailIndex()).get(email);
+      }
+      if (!customer) {
+        const nameKey = name.trim().toLowerCase();
+        if (nameKey) customer = byName.get(nameKey);
+      }
+      if (!customer) {
+        try {
+          customer = await stub.createCustomer({
+            name,
+            externalId,
+            phone,
+            processor: item.currentProcessor?.trim() || null,
+            notes: item.notes ?? null,
+            source: VORTEX_QUOTE_SOURCE,
+            customFields: fields,
+          });
+          created += 1;
+        } catch {
+          continue;
+        }
+      } else {
+        updated += 1;
+        // Enrich, never clobber: scalars only fill empty slots while the
+        // quote-request custom fields always reflect the latest figures.
+        const patch: Parameters<typeof stub.updateCustomer>[1] = {
+          customFields: fields,
+        };
+        if (!customer.externalId) patch.externalId = externalId;
+        if (!customer.processor && item.currentProcessor?.trim()) {
+          patch.processor = item.currentProcessor.trim();
+        }
+        if (!customer.phone && phone) patch.phone = phone;
+        if (!customer.notes && item.notes) patch.notes = item.notes;
+        try {
+          customer =
+            (await stub.updateCustomer(customer.id, patch, identity.id)) ??
+            customer;
+        } catch {
+          // Field-write refused — keep the matched row; the signal below
+          // still carries the revenue data.
+        }
+      }
+      byExternalId.set(externalId, customer);
+      const nameKey = customer.name.trim().toLowerCase();
+      if (nameKey && !byName.has(nameKey)) byName.set(nameKey, customer);
+      if (email && !byEmail.has(email)) {
+        byEmail.set(email, customer);
+      }
+      const customerId = customer.id;
+
+      // Contact — email and phone upsert independently so either alone
+      // still lands.
+      if (email) {
+        await stub.upsertContact({
+          customerId: customer.id,
+          type: item.contactName?.trim() ? "named_person" : "business_channel",
+          role: item.contactName?.trim() ? "owner" : null,
+          channel: "email",
+          value: email,
+          label: item.contactName?.trim() || name,
+          status: "verified",
+          confidence: "high",
+          source: VORTEX_QUOTE_SOURCE,
+          evidenceUri: evidenceUrl,
+        });
+      }
+      if (phone) {
+        await stub.upsertContact({
+          customerId: customer.id,
+          type: item.contactName?.trim() ? "named_person" : "business_channel",
+          role: item.contactName?.trim() ? "owner" : null,
+          channel: "phone",
+          value: phone,
+          label: item.contactName?.trim() || name,
+          status: "verified",
+          confidence: "high",
+          source: VORTEX_QUOTE_SOURCE,
+          evidenceUri: evidenceUrl,
+        });
+      }
+
+      // Inbound lead: open a lead-stage deal unless the merchant is
+      // already in the pipeline (the quote-request deal itself dedupes on
+      // externalId, so a re-sync never re-enters at lead).
+      const openDeal = deals.find(
+        (deal) =>
+          deal.customerId === customerId &&
+          deal.stage !== "won" &&
+          deal.stage !== "lost"
+      );
+      if (!openDeal) {
+        const deal = await stub.createDeal({
+          customerId,
+          name,
+          externalId,
+          stage: "lead",
+          amountCents: item.estimatedAnnualSavingsCents ?? null,
+          description:
+            item.notes ?? "Inbound lead from the Vortex pricing calculator",
+        });
+        deals.push(deal);
+      }
+
+      // Self-reported monthly volume is a rankable revenue signal — same
+      // persist-then-rank shape as the rep-collected intake figures
+      // (PILE-654). Deterministic signal id keeps a re-sync an upsert.
+      const estVolumeCents = quoteRequestVolumeCents(item);
+      if (estVolumeCents !== null) {
+        try {
+          const dollars = estVolumeCents / 100;
+          const volumeText =
+            dollars >= 1000
+              ? `$${Math.round(dollars).toLocaleString("en-US")}`
+              : `$${dollars.toFixed(2)}`;
+          const createdMs = item.createdAt
+            ? Date.parse(item.createdAt)
+            : Number.NaN;
+          const observedAt = Number.isFinite(createdMs)
+            ? new Date(createdMs).toISOString()
+            : new Date().toISOString();
+          const signal: MerchantSignal = {
+            id: `sig_vortex_quote_${item.id.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 48)}`,
+            merchantId: customer.id,
+            type: "revenue_estimate",
+            observedAt,
+            source: VORTEX_QUOTE_SOURCE,
+            evidenceUrl,
+            strength: 90,
+            summary: `Self-reported monthly card volume ≈ ${volumeText}/mo (pricing calculator)`,
+          };
+          await stub.memoryRemember({
+            entityType: "customer",
+            entityId: customer.id,
+            kind: `signal:${signal.type}:${signal.id}`,
+            fact: JSON.stringify(signal),
+          });
+          const signals = parseCustomerSignalFacts(
+            await stub.memoryRecall({
+              entityType: "customer",
+              entityId: customer.id,
+              limit: 100,
+            })
+          );
+          const breakdown = rankMerchantSignals({
+            merchantId: customer.id,
+            merchantAttrs: {
+              vertical: (customer.vertical ?? "").toLowerCase(),
+              hasAddress: Boolean(customer.address),
+              hasPhone: Boolean(customer.phone ?? phone),
+              estMonthlyVolumeCents: estVolumeCents,
+            },
+            signals,
+            config: {
+              motion: "smb_default",
+              icpRules: DEFAULT_ICP_RULES,
+              signalRules: DEFAULT_SIGNAL_RULES,
+            },
+          });
+          customer =
+            (await stub.updateCustomer(
+              customer.id,
+              {
+                priorityScore: breakdown.priorityScore,
+                fitScore: breakdown.fitScore,
+                fitStatus: breakdown.fitRating,
+                customFields: {
+                  whyNow: breakdown.whyNow,
+                  whyNowSignalIds: breakdown.whyNowSignalIds.join(","),
+                },
+              },
+              identity.id
+            )) ?? customer;
+        } catch {
+          // Signal + rank persistence is best-effort — the customer,
+          // contact, and deal records above are the durable outcome.
+        }
+      }
+
+      synced.push({
+        id: customer.id,
+        name: customer.name,
+        externalId: customer.externalId ?? externalId,
+        estMonthlyVolumeCents: estVolumeCents,
+        score: customer.priorityScore ?? null,
+      });
+    }
+
+    return c.json(
+      {
+        synced: synced.length,
+        created,
+        updated,
+        customers: synced,
+      },
+      200
+    );
   });
 }
 

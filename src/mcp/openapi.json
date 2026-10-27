@@ -43523,6 +43523,17 @@
                   "nextStepDueAt": {
                     "type": "string",
                     "nullable": true
+                  },
+                  "quotedAmountCents": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 1000000000
+                  },
+                  "dealTitle": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
                   }
                 },
                 "required": [
@@ -43757,13 +43768,132 @@
                     },
                     "stageBlocked": {
                       "type": "boolean"
+                    },
+                    "deal": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "customerId": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "externalId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "stage": {
+                          "type": "string",
+                          "enum": [
+                            "lead",
+                            "qualified",
+                            "proposal",
+                            "negotiation",
+                            "won",
+                            "lost"
+                          ]
+                        },
+                        "amountCents": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "currency": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "expectedCloseAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "description": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "closedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "archivedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "nextStepText": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "nextStepDueAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "needsHuman": {
+                          "type": "boolean",
+                          "nullable": true
+                        },
+                        "needsHumanReason": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "priorityScore": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "contactIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "customFields": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "customerId",
+                        "name",
+                        "externalId",
+                        "stage",
+                        "amountCents",
+                        "currency",
+                        "expectedCloseAt",
+                        "description",
+                        "closedAt",
+                        "archivedAt",
+                        "nextStepText",
+                        "nextStepDueAt",
+                        "needsHuman",
+                        "needsHumanReason",
+                        "priorityScore",
+                        "contactIds",
+                        "customFields",
+                        "createdAt",
+                        "updatedAt"
+                      ]
                     }
                   },
                   "required": [
                     "interaction",
                     "customer",
                     "stageAdvanced",
-                    "stageBlocked"
+                    "stageBlocked",
+                    "deal"
                   ]
                 }
               }
@@ -43774,6 +43904,589 @@
           }
         },
         "summary": "Create customer interaction"
+      }
+    },
+    "/workspaces/{organizationId}/customers/quick-knock": {
+      "post": {
+        "tags": [
+          "customers"
+        ],
+        "description": "Mobile log-a-knock quick-add (PILE-671): dedupes on normalized name or street address so a second knock at the same building updates the existing customer, then logs the interaction with the same outcome→stage/next-step rules as POST /customers/{id}/interactions and optionally bridges a quoted amount into a proposal-stage deal.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "addressLine1": {
+                    "type": "string",
+                    "maxLength": 300
+                  },
+                  "city": {
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "state": {
+                    "type": "string",
+                    "maxLength": 60
+                  },
+                  "postalCode": {
+                    "type": "string",
+                    "maxLength": 20
+                  },
+                  "phone": {
+                    "type": "string",
+                    "maxLength": 60
+                  },
+                  "outcome": {
+                    "type": "string",
+                    "enum": [
+                      "talked",
+                      "sent_info",
+                      "needs_email",
+                      "quoted",
+                      "callback",
+                      "no_answer",
+                      "not_interested",
+                      "spam"
+                    ]
+                  },
+                  "summary": {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "channel": {
+                    "type": "string",
+                    "enum": [
+                      "visit",
+                      "call",
+                      "email",
+                      "sms",
+                      "note"
+                    ]
+                  },
+                  "nextStepPreset": {
+                    "type": "string",
+                    "enum": [
+                      "tomorrow",
+                      "three_days",
+                      "next_week",
+                      "none"
+                    ]
+                  },
+                  "nextStepDueAt": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "nextStepText": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "quotedAmountCents": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 1000000000
+                  },
+                  "dealTitle": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "name",
+                  "outcome"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Knock logged against a found-or-created customer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "customer": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "url": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "domain": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "bookingUrl": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "notes": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "logoUrl": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "externalId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "phone": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "address": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "vertical": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "neighborhood": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "source": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "sourceSessionId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "sourceAgentSlug": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "readiness": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "nextAction": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "fit": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "fitScore": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "fitStatus": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "processor": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "evidenceUri": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "tierId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "statusId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "ownerId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "nextStepText": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "nextStepDueAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "needsHuman": {
+                          "type": "boolean",
+                          "nullable": true
+                        },
+                        "needsHumanReason": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "priorityScore": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "customFields": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "name",
+                        "url",
+                        "domain",
+                        "bookingUrl",
+                        "notes",
+                        "logoUrl",
+                        "externalId",
+                        "phone",
+                        "address",
+                        "vertical",
+                        "neighborhood",
+                        "source",
+                        "sourceSessionId",
+                        "sourceAgentSlug",
+                        "readiness",
+                        "nextAction",
+                        "fit",
+                        "fitScore",
+                        "fitStatus",
+                        "processor",
+                        "evidenceUri",
+                        "tierId",
+                        "statusId",
+                        "ownerId",
+                        "nextStepText",
+                        "nextStepDueAt",
+                        "needsHuman",
+                        "needsHumanReason",
+                        "priorityScore",
+                        "customFields",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    },
+                    "event": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "customerId": {
+                          "type": "string"
+                        },
+                        "outcome": {
+                          "type": "string",
+                          "enum": [
+                            "talked",
+                            "sent_info",
+                            "needs_email",
+                            "quoted",
+                            "callback",
+                            "no_answer",
+                            "not_interested",
+                            "spam"
+                          ]
+                        },
+                        "note": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "channel": {
+                          "type": "string",
+                          "enum": [
+                            "visit",
+                            "call",
+                            "email",
+                            "sms",
+                            "note"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "customerId",
+                        "outcome",
+                        "note",
+                        "createdAt",
+                        "channel"
+                      ]
+                    },
+                    "deal": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "organizationId": {
+                          "type": "string"
+                        },
+                        "customerId": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "externalId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "stage": {
+                          "type": "string",
+                          "enum": [
+                            "lead",
+                            "qualified",
+                            "proposal",
+                            "negotiation",
+                            "won",
+                            "lost"
+                          ]
+                        },
+                        "amountCents": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "currency": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "expectedCloseAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "description": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "closedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "archivedAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "nextStepText": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "nextStepDueAt": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "needsHuman": {
+                          "type": "boolean",
+                          "nullable": true
+                        },
+                        "needsHumanReason": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "priorityScore": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "contactIds": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "customFields": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organizationId",
+                        "customerId",
+                        "name",
+                        "externalId",
+                        "stage",
+                        "amountCents",
+                        "currency",
+                        "expectedCloseAt",
+                        "description",
+                        "closedAt",
+                        "archivedAt",
+                        "nextStepText",
+                        "nextStepDueAt",
+                        "needsHuman",
+                        "needsHumanReason",
+                        "priorityScore",
+                        "contactIds",
+                        "customFields",
+                        "createdAt",
+                        "updatedAt"
+                      ]
+                    },
+                    "created": {
+                      "type": "boolean"
+                    },
+                    "stageAdvanced": {
+                      "type": "boolean"
+                    },
+                    "stageBlocked": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "customer",
+                    "event",
+                    "deal",
+                    "created",
+                    "stageAdvanced",
+                    "stageBlocked"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create customer quick knock"
+      }
+    },
+    "/workspaces/{organizationId}/customers/follow-ups/notify-due": {
+      "post": {
+        "tags": [
+          "customers"
+        ],
+        "description": "Scan customers whose nextStepDueAt is past due (terminal stages excluded) and emit a follow_up_due notification to the customer owner — once per (customer, due date).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "now": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Due-follow-up scan result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "scanned": {
+                      "type": "integer"
+                    },
+                    "notified": {
+                      "type": "integer"
+                    },
+                    "notifications": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "customerId": {
+                            "type": "string"
+                          },
+                          "customerName": {
+                            "type": "string"
+                          },
+                          "recipientId": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "body": {
+                            "type": "string"
+                          },
+                          "nextStepDueAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "customerId",
+                          "customerName",
+                          "recipientId",
+                          "type",
+                          "title",
+                          "body",
+                          "nextStepDueAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "scanned",
+                    "notified",
+                    "notifications"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create customer follow up notify due"
       }
     },
     "/workspaces/{organizationId}/customers/purge": {
@@ -74664,6 +75377,174 @@
           }
         },
         "summary": "Create intake"
+      }
+    },
+    "/workspaces/{organizationId}/intake/quote-requests/sync": {
+      "post": {
+        "tags": [
+          "customers"
+        ],
+        "description": "Import Vortex pricing-calculator quote requests (/v1/operator/quote-requests) as inbound leads. Each row upserts a customer keyed on externalId \"vortex-quote:<id>\", writes the self-reported volume figures to customFields, upserts the contact, opens a lead-stage deal unless the merchant is already in the pipeline, and records a revenue_estimate signal. Pass quoteRequests inline or an operator key to pull from the Vortex API.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "quoteRequests": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "businessName": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "merchantName": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "companyName": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "contactEmail": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "contactName": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "contactPhone": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "monthlyVolumeCents": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "avgTicketCents": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "currentProcessor": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "effectiveRateBps": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "estimatedAnnualSavingsCents": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "notes": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  },
+                  "vortexOperatorKey": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Quote requests synced",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "synced": {
+                      "type": "integer"
+                    },
+                    "created": {
+                      "type": "integer"
+                    },
+                    "updated": {
+                      "type": "integer"
+                    },
+                    "customers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "externalId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "estMonthlyVolumeCents": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "score": {
+                            "type": "number",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "externalId",
+                          "estMonthlyVolumeCents",
+                          "score"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "synced",
+                    "created",
+                    "updated",
+                    "customers"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "502": {
+            "description": "Vortex API fetch failed"
+          }
+        },
+        "summary": "Create intake quote request sync"
       }
     }
   }

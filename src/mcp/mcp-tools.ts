@@ -12090,6 +12090,32 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     }
   },
   {
+    "name": "postWorkspacesOrganizationIdCustomersFollowupsNotifydue",
+    "description": "Create customer follow up notify due — Scan customers whose nextStepDueAt is past due (terminal stages excluded) and emit a follow_up_due notification to the customer owner — once per (customer, due date). (POST /workspaces/{organizationId}/customers/follow-ups/notify-due) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: now.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers/follow-ups/notify-due",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "now": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
     "name": "postWorkspacesOrganizationIdCustomersIdAttachments",
     "description": "Create customer attachment (POST /workspaces/{organizationId}/customers/{id}/attachments) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: fileName*, contentType, contentBase64* (* = required).",
     "method": "POST",
@@ -12165,7 +12191,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdCustomersIdInteractions",
-    "description": "Create customer interaction — Log a field-sales touch (door knock / call outcome). Writes the interaction to customer memory, applies the outcome's default nextStepText/nextStepDueAt/needsHuman unless the body overrides them, and auto-advances statusId per the outcome→status-key map resolved against this workspace's customer_statuses. When the PILE-412 stage gate refuses the advance, the touch still lands and the response flags stageBlocked. (POST /workspaces/{organizationId}/customers/{id}/interactions) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: outcome*, note, nextStepText, nextStepDueAt (* = required).",
+    "description": "Create customer interaction — Log a field-sales touch (door knock / call outcome). Writes the interaction to customer memory, applies the outcome's default nextStepText/nextStepDueAt/needsHuman unless the body overrides them, and auto-advances statusId per the outcome→status-key map resolved against this workspace's customer_statuses. When the PILE-412 stage gate refuses the advance, the touch still lands and the response flags stageBlocked. (POST /workspaces/{organizationId}/customers/{id}/interactions) Path params (top-level, required): organizationId, id. Request body goes in the \"body\" object; fields: outcome*, note, nextStepText, nextStepDueAt, quotedAmountCents, dealTitle (* = required).",
     "method": "POST",
     "path": "/workspaces/{organizationId}/customers/{id}/interactions",
     "inputSchema": {
@@ -12205,6 +12231,16 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             "nextStepDueAt": {
               "type": "string",
               "nullable": true
+            },
+            "quotedAmountCents": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 1000000000
+            },
+            "dealTitle": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
             }
           },
           "required": [
@@ -12792,6 +12828,111 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
               "type": "boolean"
             }
           }
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdCustomersQuickknock",
+    "description": "Create customer quick knock — Mobile log-a-knock quick-add (PILE-671): dedupes on normalized name or street address so a second knock at the same building updates the existing customer, then logs the interaction with the same outcome→stage/next-step rules as POST /customers/{id}/interactions and optionally bridges a quoted amount into a proposal-stage deal. (POST /workspaces/{organizationId}/customers/quick-knock) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: name*, addressLine1, city, state, postalCode, phone, outcome*, summary, channel, nextStepPreset, nextStepDueAt, nextStepText, quotedAmountCents, dealTitle (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers/quick-knock",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "addressLine1": {
+              "type": "string",
+              "maxLength": 300
+            },
+            "city": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "state": {
+              "type": "string",
+              "maxLength": 60
+            },
+            "postalCode": {
+              "type": "string",
+              "maxLength": 20
+            },
+            "phone": {
+              "type": "string",
+              "maxLength": 60
+            },
+            "outcome": {
+              "type": "string",
+              "enum": [
+                "talked",
+                "sent_info",
+                "needs_email",
+                "quoted",
+                "callback",
+                "no_answer",
+                "not_interested",
+                "spam"
+              ]
+            },
+            "summary": {
+              "type": "string",
+              "maxLength": 2000
+            },
+            "channel": {
+              "type": "string",
+              "enum": [
+                "visit",
+                "call",
+                "email",
+                "sms",
+                "note"
+              ]
+            },
+            "nextStepPreset": {
+              "type": "string",
+              "enum": [
+                "tomorrow",
+                "three_days",
+                "next_week",
+                "none"
+              ]
+            },
+            "nextStepDueAt": {
+              "type": "string",
+              "nullable": true
+            },
+            "nextStepText": {
+              "type": "string",
+              "nullable": true
+            },
+            "quotedAmountCents": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 1000000000
+            },
+            "dealTitle": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          "required": [
+            "name",
+            "outcome"
+          ]
         }
       },
       "required": [
@@ -14678,6 +14819,98 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "required": [
             "businessName"
           ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdIntakeQuoterequestsSync",
+    "description": "Create intake quote request sync — Import Vortex pricing-calculator quote requests (/v1/operator/quote-requests) as inbound leads. Each row upserts a customer keyed on externalId \"vortex-quote:<id>\", writes the self-reported volume figures to customFields, upserts the contact, opens a lead-stage deal unless the merchant is already in the pipeline, and records a revenue_estimate signal. Pass quoteRequests inline or an operator key to pull from the Vortex API. (POST /workspaces/{organizationId}/intake/quote-requests/sync) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: quoteRequests, vortexOperatorKey.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/intake/quote-requests/sync",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "quoteRequests": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "businessName": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "merchantName": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "companyName": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "contactEmail": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "contactName": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "contactPhone": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "monthlyVolumeCents": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "avgTicketCents": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "currentProcessor": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "effectiveRateBps": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "estimatedAnnualSavingsCents": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "notes": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "createdAt": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "id"
+                ]
+              }
+            },
+            "vortexOperatorKey": {
+              "type": "string"
+            }
+          }
         }
       },
       "required": [
@@ -16998,6 +17231,27 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         }
       },
       "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdSubstepsIssueIdRerun",
+    "description": "Create substep rerun (POST /workspaces/{organizationId}/substeps/{issueId}/rerun) Path params (top-level, required): organizationId, issueId.",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/substeps/{issueId}/rerun",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "issueId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "issueId",
         "organizationId"
       ]
     }
