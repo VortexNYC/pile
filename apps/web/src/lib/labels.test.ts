@@ -7,6 +7,7 @@ import {
   isIssueStatus,
   isTicketStatus,
   notificationLabel,
+  notificationRoute,
   notificationTarget,
   sessionStatusVariant,
   slugify,
@@ -59,6 +60,20 @@ describe("labels", () => {
     expect(
       notificationTarget({ type: "issue_deleted", issueId: "iss_5" })
     ).toBeNull();
+  });
+  it("resolves each notification kind to its typed route (PILE-652)", () => {
+    expect(notificationRoute("acme", { kind: "issue", id: "i1" })).toEqual({
+      to: "/$slug/issues/$issueId",
+      params: { slug: "acme", issueId: "i1" },
+    });
+    expect(notificationRoute("acme", { kind: "document", id: "d1" })).toEqual({
+      to: "/$slug/documents/$documentId",
+      params: { slug: "acme", documentId: "d1" },
+    });
+    expect(notificationRoute("acme", { kind: "ticket", id: "t1" })).toEqual({
+      to: "/$slug/tickets/$ticketId",
+      params: { slug: "acme", ticketId: "t1" },
+    });
   });
   it("flattens block content", () => {
     expect(documentText("plain")).toBe("plain");

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { visibleSettingsPaths } from "./app-sidebar";
+import { navItemVisible, visibleSettingsPaths } from "./app-sidebar";
 
 describe("visibleSettingsPaths", () => {
   it("shows Developer to members — self-serve API keys are not admin-gated", () => {
@@ -26,5 +26,17 @@ describe("visibleSettingsPaths", () => {
       "settings/developer",
       "settings/agents",
     ]);
+  });
+});
+
+describe("navItemVisible (PILE-652)", () => {
+  it("keeps chrome mounted while permissions are in flight or errored", () => {
+    expect(navItemVisible(false, false)).toBe(true);
+    expect(navItemVisible(false, true)).toBe(true);
+  });
+
+  it("hides a surface only on a loaded, explicit denial", () => {
+    expect(navItemVisible(true, false)).toBe(false);
+    expect(navItemVisible(true, true)).toBe(true);
   });
 });
