@@ -20,6 +20,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { useDisplayPrefs } from "@/hooks/use-display-prefs";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, stageGateBlockMessage, unwrap } from "@/lib/api";
+import { type CustomerListRow, fetchAllCustomers } from "@/lib/crm-lists";
 import { orderedStages, stageColor, stageRowTint } from "@/lib/customer-stages";
 import { isFollowUpOverdue } from "@/lib/follow-ups";
 import { formatRelative } from "@/lib/labels";
@@ -284,6 +285,43 @@ export function rankedCounts<K extends string>(
   return Array.from(counts.entries()).toSorted((a, b) => b[1] - a[1]);
 }
 
+/** Lift the list row into the sheet's render model — full-column fields are
+ *  read defensively so summary rows (which omit them) degrade to nulls
+ *  instead of breaking the table (PILE-653). */
+export function enrichCustomerRow(c: CustomerListRow) {
+  const extra = c as Record<string, unknown>;
+  const classified = classifyCustomerRow({
+    name: c.name,
+    vertical: typeof extra.vertical === "string" ? extra.vertical : null,
+    source: typeof extra.source === "string" ? extra.source : null,
+  });
+  const ownerId = typeof extra.ownerId === "string" ? extra.ownerId : null;
+  return {
+    raw: c,
+    ownerId,
+    statusId: c.statusId,
+    url: typeof extra.url === "string" ? extra.url : null,
+    logoUrl: typeof extra.logoUrl === "string" ? extra.logoUrl : null,
+    ownerName: ownerDisplayName(ownerId),
+    nextStepText:
+      typeof extra.nextStepText === "string" ? extra.nextStepText : null,
+    nextStepDueAt:
+      typeof extra.nextStepDueAt === "string" ? extra.nextStepDueAt : null,
+    phone: typeof extra.phone === "string" ? extra.phone : null,
+    address: typeof extra.address === "string" ? extra.address : null,
+    neighborhood:
+      typeof extra.neighborhood === "string" ? extra.neighborhood : null,
+    signal: typeof extra.signal === "string" ? extra.signal : null,
+    evidenceUri:
+      typeof extra.evidenceUri === "string" ? extra.evidenceUri : null,
+    priorityScore:
+      typeof extra.priorityScore === "number" ? extra.priorityScore : null,
+    fitScore: typeof extra.fitScore === "number" ? extra.fitScore : null,
+    fitStatus: typeof extra.fitStatus === "string" ? extra.fitStatus : null,
+    classified,
+  };
+}
+
 /** Notion Database / Google Sheets / Linear style dense tabular view with
  * Side Peek drawer, inline Owner assignment, sortable columns, and CSV export. */
 export function CustomersList() {
@@ -324,16 +362,11 @@ export function CustomersList() {
   const columnVisible = (col: CustomerColumnKey) =>
     isColumnVisible(hiddenColumns, col);
 
+  // PILE-653 — /customers is a bounded list now; the sheet needs every
+  // row, so follow nextCursor pages rather than trusting the first 500.
   const customers = useQuery({
     queryKey: key,
-    queryFn: async () =>
-      (
-        await unwrap(
-          api.GET("/workspaces/{organizationId}/customers", {
-            params: { path: { organizationId: workspace.id } },
-          })
-        )
-      ).customers,
+    queryFn: () => fetchAllCustomers({ organizationId: workspace.id }),
     staleTime: 30_000,
   });
 
@@ -426,40 +459,10 @@ export function CustomersList() {
     onError: (err) => toastError(err, "Could not pull leads"),
   });
 
-  const enrichedRows = useMemo(() => {
-    const raw = customers.data ?? [];
-    return raw.map((c) => {
-      const extra = c as Record<string, unknown>;
-      const classified = classifyCustomerRow({
-        name: c.name,
-        vertical: typeof extra.vertical === "string" ? extra.vertical : null,
-        source: typeof extra.source === "string" ? extra.source : null,
-      });
-      const ownerId = typeof extra.ownerId === "string" ? extra.ownerId : null;
-      return {
-        raw: c,
-        ownerId,
-        statusId: c.statusId,
-        ownerName: ownerDisplayName(ownerId),
-        nextStepText:
-          typeof extra.nextStepText === "string" ? extra.nextStepText : null,
-        nextStepDueAt:
-          typeof extra.nextStepDueAt === "string" ? extra.nextStepDueAt : null,
-        phone: typeof extra.phone === "string" ? extra.phone : null,
-        address: typeof extra.address === "string" ? extra.address : null,
-        neighborhood:
-          typeof extra.neighborhood === "string" ? extra.neighborhood : null,
-        signal: typeof extra.signal === "string" ? extra.signal : null,
-        evidenceUri:
-          typeof extra.evidenceUri === "string" ? extra.evidenceUri : null,
-        priorityScore:
-          typeof extra.priorityScore === "number" ? extra.priorityScore : null,
-        fitScore: typeof extra.fitScore === "number" ? extra.fitScore : null,
-        fitStatus: typeof extra.fitStatus === "string" ? extra.fitStatus : null,
-        classified,
-      };
-    });
-  }, [customers.data]);
+  const enrichedRows = useMemo(
+    () => (customers.data ?? []).map(enrichCustomerRow),
+    [customers.data]
+  );
 
   const ownerOptions = useMemo(
     () =>
@@ -766,7 +769,7 @@ export function CustomersList() {
       )}
 
       {/* Main Content + Optional Notion Side Peek Drawer */}
-      <div className="flex items-start gap-3">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
         <div className="min-w-0 flex-1">
           {customers.isPending ? (
             <LoadingState label="Loading sheet" />
@@ -920,7 +923,7 @@ export function CustomersList() {
                           <div className="flex items-center justify-between gap-2">
                             <EntityHover
                               title={customer.name}
-                              description={customer.url}
+                              description={row.url}
                             >
                               <Link
                                 to="/$slug/customers/$customerId"
@@ -933,8 +936,8 @@ export function CustomersList() {
                               >
                                 <CompanyLogo
                                   name={customer.name}
-                                  logoUrl={customer.logoUrl}
-                                  url={customer.url}
+                                  logoUrl={row.logoUrl}
+                                  url={row.url}
                                 />
                                 <span className="truncate max-w-[190px]">
                                   {customer.name}
@@ -1143,7 +1146,7 @@ export function CustomersList() {
 
         {/* Notion-Style Side Peek Drawer */}
         {peekRow && (
-          <div className="w-96 shrink-0 rounded border border-kumo-line bg-kumo-base p-4 text-xs shadow-sm">
+          <div className="w-full shrink-0 rounded border border-kumo-line bg-kumo-base p-4 text-xs shadow-sm lg:w-96">
             <div className="flex items-start justify-between gap-2 border-b border-kumo-line pb-3">
               <div className="flex flex-col gap-1">
                 <span className="text-sm font-semibold text-kumo-default">

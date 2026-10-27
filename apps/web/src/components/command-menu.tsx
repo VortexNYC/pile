@@ -34,6 +34,12 @@ export function paletteDeepQueryEnabled(open: boolean, query: string) {
  * under the slug produces a router path — `navigate` resolves it
  * client-side and applies the /app basepath, so selection never falls back
  * to a full-page load. */
+/** PILE-653 — the palette's customer feed rides the bounded contract:
+ *  server-side `q`, summary rows, capped page. */
+export function paletteCustomersQuery(query: string) {
+  return { q: query || undefined, limit: 8, summary: "1" } as const;
+}
+
 export function paletteRoute(slug: string, href: string): string {
   return `/${slug}${href.startsWith("/") ? href : `/${href}`}`;
 }
@@ -118,7 +124,10 @@ export function CommandMenu() {
       (
         await unwrap(
           api.GET("/workspaces/{organizationId}/customers", {
-            params: { path: { organizationId: workspace.id } },
+            params: {
+              path: { organizationId: workspace.id },
+              query: paletteCustomersQuery(query),
+            },
           })
         )
       ).customers,

@@ -19,6 +19,7 @@ import { ErrorState, LoadingState } from "@/components/states";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap } from "@/lib/api";
+import { fetchAllCustomers } from "@/lib/crm-lists";
 import { formatRelative } from "@/lib/labels";
 import { toastError, toastSuccess } from "@/lib/toast";
 
@@ -42,6 +43,18 @@ const STAGE_LABELS: Record<string, string> = {
   won: "Won",
   lost: "Lost",
 };
+
+/** PILE-653 — the workspace issue list is one bounded fetch; resolve the
+ *  deal's linked ids against it in link order instead of one GET per row. */
+export function pickLinkedIssues<T extends { id: string }>(
+  issues: readonly T[],
+  linkedIds: readonly string[]
+): T[] {
+  const byId = new Map(issues.map((i) => [i.id, i]));
+  return linkedIds
+    .map((id) => byId.get(id))
+    .filter((i): i is T => i !== undefined);
+}
 
 function money(cents: number | null, currency: string | null): string {
   if (cents === null) return "—";
@@ -77,15 +90,9 @@ function DealDetail() {
   });
 
   const customers = useQuery({
-    queryKey: wsKey(workspace.id, "customers"),
-    queryFn: async () =>
-      (
-        await unwrap(
-          api.GET("/workspaces/{organizationId}/customers", {
-            params: { path: { organizationId: workspace.id } },
-          })
-        )
-      ).customers,
+    queryKey: wsKey(workspace.id, "customers", "summary"),
+    queryFn: () =>
+      fetchAllCustomers({ organizationId: workspace.id, summary: true }),
   });
 
   const contacts = useQuery({
@@ -106,37 +113,32 @@ function DealDetail() {
       (
         await unwrap(
           api.GET("/workspaces/{organizationId}/issues", {
-            params: { path: { organizationId: workspace.id } },
+            params: {
+              path: { organizationId: workspace.id },
+              query: { limit: 200 },
+            },
           })
         )
       ).issues,
   });
 
-  const linkedIssues = useQuery({
+  // Just the link ids — the rows come from the shared issues list above,
+  // not one GET per linked issue.
+  const linkedIssueIds = useQuery({
     queryKey: wsKey(workspace.id, "deals", dealId, "issues"),
-    queryFn: async () => {
-      const { issueIds } = await unwrap(
-        api.GET("/workspaces/{organizationId}/deals/{dealId}/issues", {
-          params: { path: { organizationId: workspace.id, dealId } },
-        })
-      );
-      const issues = await Promise.all(
-        issueIds.map(async (id) => {
-          try {
-            const res = await unwrap(
-              api.GET("/workspaces/{organizationId}/issues/{id}", {
-                params: { path: { organizationId: workspace.id, id } },
-              })
-            );
-            return res;
-          } catch {
-            return null;
-          }
-        })
-      );
-      return issues.filter((i): i is NonNullable<typeof i> => i !== null);
-    },
+    queryFn: async () =>
+      (
+        await unwrap(
+          api.GET("/workspaces/{organizationId}/deals/{dealId}/issues", {
+            params: { path: { organizationId: workspace.id, dealId } },
+          })
+        )
+      ).issueIds,
   });
+  const linkedIssues = pickLinkedIssues(
+    allIssues.data ?? [],
+    linkedIssueIds.data ?? []
+  );
 
   const patch = useMutation({
     mutationFn: (body: Record<string, unknown>) =>
@@ -163,8 +165,9 @@ function DealDetail() {
     onSuccess: () => {
       toastSuccess("Deal deleted");
       void navigate({
-        to: "/$slug/tickets",
+        to: "/$slug/sales",
         params: { slug: workspace.slug },
+        search: { tab: "deals" },
       });
     },
     onError: (error) => toastError(error),
@@ -330,11 +333,11 @@ function DealDetail() {
               </h3>
               <LinkIssues
                 issues={allIssues.data ?? []}
-                linked={new Set((linkedIssues.data ?? []).map((i) => i.id))}
+                linked={new Set(linkedIssues.map((i) => i.id))}
                 onLink={(id) => linkIssue.mutate(id)}
                 pending={linkIssue.isPending}
               />
-              {(linkedIssues.data ?? []).map((issue) => (
+              {linkedIssues.map((issue) => (
                 <div key={issue.id}>
                   <Link
                     to="/$slug/issues/$issueId"

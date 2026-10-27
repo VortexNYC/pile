@@ -48,7 +48,29 @@ import {
   hiddenIssueIdsForIdentity,
   resolveVisibleIssueRef,
 } from "./issue-access.js";
+import {
+  decodeCursor,
+  limitQueryParam,
+  matchesSearchQuery,
+  pageByCreatedCursor,
+} from "./list-args.js";
 import { getWorkspaceStub } from "./stub.js";
+
+/** PILE-653 — `?summary=1` list shape: the picker/badge fields only. The
+ *  heavy columns (notes, customFields, signal evidence) stay on the full
+ *  row so dropdowns stop paying for them. */
+const customerSummarySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  domain: z.string().nullable(),
+  statusId: z.string().nullable(),
+  ownerId: z.string().nullable(),
+  nextStepText: z.string().nullable(),
+  nextStepDueAt: z.string().nullable(),
+  needsHuman: z.boolean().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
 
 const customerSchema = z.object({
   id: z.string(),
@@ -306,6 +328,9 @@ const orgIdParam = z.object({
 // Bookkeeper / CPA Partner records in the main Vortex workspace.
 const VORTEX_MAIN_PARTNER_OWNER_ID = "0r5mlhiV0owDDL59vzGnfTTqwNBuGHgE";
 
+export const CUSTOMER_LIST_DEFAULT_LIMIT = 500;
+export const CUSTOMER_LIST_MAX_LIMIT = 1000;
+
 const listCustomersRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/customers",
@@ -330,6 +355,24 @@ const listCustomersRoute = createRoute({
         description:
           "Exact-match lookup by canonical domain (input is normalized first)",
       }),
+      // PILE-653 — bounded list contract, same shape as /issues:
+      // (createdAt,id) keyset pages via cursor, nextCursor while pages fill.
+      limit: limitQueryParam(
+        CUSTOMER_LIST_DEFAULT_LIMIT,
+        CUSTOMER_LIST_MAX_LIMIT
+      ).openapi({
+        description: `Page size, default ${CUSTOMER_LIST_DEFAULT_LIMIT}, max ${CUSTOMER_LIST_MAX_LIMIT}`,
+      }),
+      cursor: z.string().optional().openapi({
+        description: "Opaque page cursor from a previous nextCursor",
+      }),
+      q: z.string().optional().openapi({
+        description: "Case-insensitive substring match on name, domain, or url",
+      }),
+      summary: z.string().optional().openapi({
+        description:
+          "summary=1 → light picker rows (id, name, domain, statusId, ownerId, nextStepText, nextStepDueAt, needsHuman, timestamps)",
+      }),
     }),
   },
   responses: {
@@ -337,7 +380,12 @@ const listCustomersRoute = createRoute({
       description: "Customer list",
       content: {
         "application/json": {
-          schema: z.object({ customers: z.array(customerSchema) }),
+          schema: z.object({
+            customers: z.array(
+              z.union([customerSchema, customerSummarySchema])
+            ),
+            nextCursor: z.string().optional(),
+          }),
         },
       },
     },
@@ -991,11 +1039,56 @@ async function loadCustomerSignals(
   return parseCustomerSignalFacts(facts);
 }
 
+/** PILE-653 — `q` matches name, canonical domain, or url (rows without a
+ *  domain still carry a url, so searching hosts needs both). */
+export function customerMatchesQuery(
+  row: { name?: string | null; domain?: string | null; url?: string | null },
+  q: string
+): boolean {
+  return matchesSearchQuery([row.name, row.domain, row.url], q);
+}
+
+/** The `summary=1` projection — a plain pick so no heavy column leaks. */
+export function toCustomerSummary(row: {
+  id: string;
+  name: string;
+  domain: string | null;
+  statusId: string | null;
+  ownerId: string | null;
+  nextStepText: string | null;
+  nextStepDueAt: string | null;
+  needsHuman: boolean | null;
+  createdAt: string;
+  updatedAt: string;
+}) {
+  return {
+    id: row.id,
+    name: row.name,
+    domain: row.domain,
+    statusId: row.statusId,
+    ownerId: row.ownerId,
+    nextStepText: row.nextStepText,
+    nextStepDueAt: row.nextStepDueAt,
+    needsHuman: row.needsHuman,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
 export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listCustomersRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
-    const { cold, dueBefore, needsHuman, externalId, domain } =
-      c.req.valid("query");
+    const {
+      cold,
+      dueBefore,
+      needsHuman,
+      externalId,
+      domain,
+      limit,
+      cursor,
+      q,
+      summary,
+    } = c.req.valid("query");
     const stub = getWorkspaceStub(c.env, organizationId);
     await stub.setOrganizationId(organizationId);
     const allCustomers = await stub.listCustomers({
@@ -1012,8 +1105,20 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
       !isAdmin && identity.type === "user" && hasAssignedOwners
         ? allCustomers.filter((row) => row.ownerId === identity.id)
         : allCustomers;
+    const searched = q
+      ? visibleCustomers.filter((row) => customerMatchesQuery(row, q))
+      : visibleCustomers;
+    const { page, nextCursor } = pageByCreatedCursor(searched, {
+      limit,
+      cursor: cursor ? decodeCursor(cursor) : undefined,
+    });
+    const rows =
+      summary === "1" || summary === "true"
+        ? page.map(toCustomerSummary)
+        : page;
     return c.json({
-      customers: visibleCustomers,
+      customers: rows,
+      nextCursor,
     });
   });
 

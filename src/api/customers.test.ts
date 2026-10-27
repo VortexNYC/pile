@@ -1478,3 +1478,76 @@ describe("customer interactions — log-touch (PILE-651)", () => {
     expect(bad.status).toBe(400);
   });
 });
+
+describe("customers list bounded contract (PILE-653)", () => {
+  let organizationId = "";
+  let token = "";
+
+  beforeAll(async () => {
+    ({ organizationId, token } = await seedWorkspace());
+    for (const [i, name] of ["Alpha Co", "Beta LLC", "Gamma Inc"].entries()) {
+      const res = await fetch(
+        `/workspaces/${organizationId}/customers`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            name,
+            domain: `${name.toLowerCase().replace(/\s/g, "")}.example.com`,
+            notes: `note-${i}`,
+          }),
+        },
+        token
+      );
+      expect(res.status).toBe(201);
+    }
+  });
+
+  const listRaw = async (query: string) => {
+    const res = await fetch(
+      `/workspaces/${organizationId}/customers?${query}`,
+      {},
+      token
+    );
+    expect(res.status).toBe(200);
+    return (await res.json()) as {
+      customers: Record<string, unknown>[];
+      nextCursor?: string;
+    };
+  };
+
+  it("honors limit and follows nextCursor pages", async () => {
+    const first = await listRaw("limit=2");
+    expect(first.customers).toHaveLength(2);
+    expect(first.nextCursor).toBeDefined();
+
+    const second = await listRaw(
+      `limit=2&cursor=${encodeURIComponent(first.nextCursor!)}`
+    );
+    expect(second.customers).toHaveLength(1);
+    expect(second.nextCursor).toBeUndefined();
+    expect(second.customers.map((c) => c.id)).not.toContain(
+      first.customers[0]?.id
+    );
+  });
+
+  it("filters server-side by q across name and domain", async () => {
+    const byName = await listRaw("q=alpha");
+    expect(byName.customers).toHaveLength(1);
+    expect(byName.customers[0]?.name).toBe("Alpha Co");
+    const byDomain = await listRaw("q=gammainc.example.com");
+    expect(byDomain.customers).toHaveLength(1);
+    expect(await listRaw("q=nomatch")).toMatchObject({ customers: [] });
+  });
+
+  it("summary=1 returns the light picker row only", async () => {
+    const res = await listRaw("summary=1&limit=1");
+    const row = res.customers[0]!;
+    expect(row).toHaveProperty("id");
+    expect(row).toHaveProperty("name");
+    expect(row).toHaveProperty("statusId");
+    expect(row).toHaveProperty("needsHuman");
+    expect(row).not.toHaveProperty("notes");
+    expect(row).not.toHaveProperty("customFields");
+    expect(row).not.toHaveProperty("organizationId");
+  });
+});

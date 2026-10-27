@@ -3060,7 +3060,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdCustomers",
-    "description": "List customers (GET /workspaces/{organizationId}/customers) Path params (top-level, required): organizationId. Query params (top-level, optional): dueBefore, cold, needsHuman, externalId, domain.",
+    "description": "List customers (GET /workspaces/{organizationId}/customers) Path params (top-level, required): organizationId. Query params (top-level, optional): dueBefore, cold, needsHuman, externalId, domain, limit, cursor, q, summary.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/customers",
     "inputSchema": {
@@ -3087,6 +3087,25 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         "domain": {
           "type": "string",
           "description": "Exact-match lookup by canonical domain (input is normalized first)"
+        },
+        "limit": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 1,
+          "maximum": 1000,
+          "description": "Page size, default 500, max 1000"
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque page cursor from a previous nextCursor"
+        },
+        "q": {
+          "type": "string",
+          "description": "Case-insensitive substring match on name, domain, or url"
+        },
+        "summary": {
+          "type": "string",
+          "description": "summary=1 → light picker rows (id, name, domain, statusId, ownerId, nextStepText, nextStepDueAt, needsHuman, timestamps)"
         }
       },
       "required": [
@@ -3407,7 +3426,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "getWorkspacesOrganizationIdDeals",
-    "description": "List deals (GET /workspaces/{organizationId}/deals) Path params (top-level, required): organizationId. Query params (top-level, optional): customerId, contactId, includeArchived, stage, dueBefore, cold, needsHuman.",
+    "description": "List deals (GET /workspaces/{organizationId}/deals) Path params (top-level, required): organizationId. Query params (top-level, optional): customerId, contactId, includeArchived, stage, dueBefore, cold, needsHuman, limit, cursor, q, summary.",
     "method": "GET",
     "path": "/workspaces/{organizationId}/deals",
     "inputSchema": {
@@ -3446,6 +3465,25 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         },
         "needsHuman": {
           "type": "string"
+        },
+        "limit": {
+          "type": "integer",
+          "nullable": true,
+          "minimum": 1,
+          "maximum": 1000,
+          "description": "Page size, default 500, max 1000"
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque page cursor from a previous nextCursor"
+        },
+        "q": {
+          "type": "string",
+          "description": "Case-insensitive substring match on deal name"
+        },
+        "summary": {
+          "type": "string",
+          "description": "summary=1 → pipeline/picker rows without description, contactIds, or customFields"
         }
       },
       "required": [

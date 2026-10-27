@@ -11,6 +11,21 @@ function hostOf(url: string | null | undefined): string | null {
   }
 }
 
+/** Image candidates in fallback order — the record's logoUrl, then the
+ *  domain's favicon. The retired Clearbit Logo API used to sit between
+ *  them; every row fired a doomed request for it (PILE-653). */
+export function logoCandidates(input: {
+  logoUrl?: string | null;
+  domain?: string | null;
+  url?: string | null;
+}): string[] {
+  const host = hostOf(input.domain ?? input.url);
+  return [
+    input.logoUrl ?? null,
+    host ? `https://www.google.com/s2/favicons?domain=${host}&sz=64` : null,
+  ].filter((c): c is string => c !== null);
+}
+
 /** Company mark — the record's logoUrl, then the domain's public logo,
  * then favicon, then a letter avatar. The Attio look for free. */
 export function CompanyLogo({
@@ -27,12 +42,7 @@ export function CompanyLogo({
   size?: number;
 }) {
   const [failed, setFailed] = useState(0);
-  const host = hostOf(domain ?? url);
-  const candidates = [
-    logoUrl ?? null,
-    host ? `https://logo.clearbit.com/${host}` : null,
-    host ? `https://www.google.com/s2/favicons?domain=${host}&sz=64` : null,
-  ].filter((c): c is string => c !== null);
+  const candidates = logoCandidates({ logoUrl, domain, url });
   const src = candidates[failed];
 
   if (!src) {

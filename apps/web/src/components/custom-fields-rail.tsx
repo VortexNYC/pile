@@ -5,6 +5,12 @@ import { RailSection } from "@/components/entity-page";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap } from "@/lib/api";
 
+/** PILE-653 — entities with no field definitions never have values; gate
+ *  the values fetch on the defs response instead of paying it per entity. */
+export function hasFieldDefs(defs: readonly unknown[] | undefined): boolean {
+  return (defs?.length ?? 0) > 0;
+}
+
 /** The rail section for custom fields — defined in Settings → Fields,
  * edited here per entity. */
 export function CustomFieldsRail({
@@ -44,6 +50,7 @@ export function CustomFieldsRail({
           })
         )
       ).values,
+    enabled: hasFieldDefs(defs.data),
   });
 
   const set = useMutation({

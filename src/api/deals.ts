@@ -10,6 +10,12 @@ import { isAdminIdentity } from "../platform/permissions.js";
 import { rls } from "../platform/rls.js";
 import type { DealStage } from "../workspace/data/index.js";
 import { getExecutionCtx } from "./execution-ctx.js";
+import {
+  decodeCursor,
+  limitQueryParam,
+  matchesSearchQuery,
+  pageByCreatedCursor,
+} from "./list-args.js";
 import { getWorkspaceStub } from "./stub.js";
 
 const stageEnum = z.enum([
@@ -45,6 +51,25 @@ const dealSchema = z.object({
   customFields: z.record(z.string(), z.string()),
   createdAt: z.string(),
   updatedAt: z.string(),
+});
+
+/** PILE-653 — `?summary=1` list shape: the pipeline/picker fields only —
+ *  description, contactIds, customFields and the hygiene blobs stay on the
+ *  full row. */
+const dealSummarySchema = dealSchema.pick({
+  id: true,
+  customerId: true,
+  name: true,
+  stage: true,
+  amountCents: true,
+  currency: true,
+  expectedCloseAt: true,
+  closedAt: true,
+  archivedAt: true,
+  nextStepDueAt: true,
+  needsHuman: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
 const createDealSchema = z.object({
@@ -106,6 +131,9 @@ const dealIdParam = z.object({
   dealId: z.string(),
 });
 
+export const DEAL_LIST_DEFAULT_LIMIT = 500;
+export const DEAL_LIST_MAX_LIMIT = 1000;
+
 const listDealsRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/deals",
@@ -127,6 +155,24 @@ const listDealsRoute = createRoute({
           "cold=true → open deals with no nextStepText and no nextStepDueAt",
       }),
       needsHuman: z.string().optional(),
+      // PILE-653 — bounded list contract, same shape as /issues:
+      // (createdAt,id) keyset pages via cursor, nextCursor while pages fill.
+      limit: limitQueryParam(
+        DEAL_LIST_DEFAULT_LIMIT,
+        DEAL_LIST_MAX_LIMIT
+      ).openapi({
+        description: `Page size, default ${DEAL_LIST_DEFAULT_LIMIT}, max ${DEAL_LIST_MAX_LIMIT}`,
+      }),
+      cursor: z.string().optional().openapi({
+        description: "Opaque page cursor from a previous nextCursor",
+      }),
+      q: z.string().optional().openapi({
+        description: "Case-insensitive substring match on deal name",
+      }),
+      summary: z.string().optional().openapi({
+        description:
+          "summary=1 → pipeline/picker rows without description, contactIds, or customFields",
+      }),
     }),
   },
   responses: {
@@ -134,7 +180,10 @@ const listDealsRoute = createRoute({
       description: "Deal list",
       content: {
         "application/json": {
-          schema: z.object({ deals: z.array(dealSchema) }),
+          schema: z.object({
+            deals: z.array(z.union([dealSchema, dealSummarySchema])),
+            nextCursor: z.string().optional(),
+          }),
         },
       },
     },
@@ -229,11 +278,63 @@ const deleteDealRoute = createRoute({
   },
 });
 
+/** PILE-653 — `q` matches the deal name; pickers search by what renders. */
+export function dealMatchesQuery(
+  row: { name?: string | null },
+  q: string
+): boolean {
+  return matchesSearchQuery([row.name], q);
+}
+
+/** The `summary=1` projection — pipeline/picker fields, no blobs. */
+export function toDealSummary(row: {
+  id: string;
+  customerId: string;
+  name: string;
+  stage: DealStage;
+  amountCents: number | null;
+  currency: string | null;
+  expectedCloseAt: string | null;
+  closedAt: string | null;
+  archivedAt: string | null;
+  nextStepDueAt: string | null;
+  needsHuman: boolean | null;
+  createdAt: string;
+  updatedAt: string;
+}) {
+  return {
+    id: row.id,
+    customerId: row.customerId,
+    name: row.name,
+    stage: row.stage,
+    amountCents: row.amountCents,
+    currency: row.currency,
+    expectedCloseAt: row.expectedCloseAt,
+    closedAt: row.closedAt,
+    archivedAt: row.archivedAt,
+    nextStepDueAt: row.nextStepDueAt,
+    needsHuman: row.needsHuman,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
 export function registerDealRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(listDealsRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
-    const { customerId, includeArchived, stage, dueBefore, cold, needsHuman } =
-      c.req.valid("query");
+    const {
+      customerId,
+      contactId,
+      includeArchived,
+      stage,
+      dueBefore,
+      cold,
+      needsHuman,
+      limit,
+      cursor,
+      q,
+      summary,
+    } = c.req.valid("query");
     const stub = getWorkspaceStub(c.env, organizationId);
     const all = await stub.listDeals({
       includeArchived: includeArchived === "true",
@@ -242,10 +343,21 @@ export function registerDealRoutes(app: OpenAPIHono<AppContext>) {
       cold: cold === "true",
       needsHuman: needsHuman === "true",
     });
-    const deals = customerId
-      ? all.filter((d) => d.customerId === customerId)
-      : all;
-    return c.json({ deals: [...deals] }, 200);
+    const scoped = all.filter((d) => {
+      if (customerId && d.customerId !== customerId) return false;
+      // contactId was declared on the route but never applied — the
+      // contact page listed every deal in the workspace.
+      if (contactId && !d.contactIds.includes(contactId)) return false;
+      if (q && !dealMatchesQuery(d, q)) return false;
+      return true;
+    });
+    const { page, nextCursor } = pageByCreatedCursor(scoped, {
+      limit,
+      cursor: cursor ? decodeCursor(cursor) : undefined,
+    });
+    const deals =
+      summary === "1" || summary === "true" ? page.map(toDealSummary) : page;
+    return c.json({ deals, nextCursor }, 200);
   });
 
   app.openapi(createDealRoute, async (c) => {

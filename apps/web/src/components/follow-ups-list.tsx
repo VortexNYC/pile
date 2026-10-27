@@ -8,6 +8,7 @@ import { ownerDisplayName } from "@/components/customers-list";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap } from "@/lib/api";
+import { fetchAllCustomers } from "@/lib/crm-lists";
 import { stageColor } from "@/lib/customer-stages";
 import {
   type FollowUpBuckets,
@@ -26,6 +27,15 @@ export const FOLLOW_UP_SECTIONS: ReadonlyArray<{
   { key: "upcoming", title: "Next 7 days" },
 ];
 
+/** PILE-653 — the follow-ups fetch args: summary rows (the view only reads
+ *  picker fields) + the dueBefore window. */
+export function followUpsCustomerArgs(
+  organizationId: string,
+  dueBefore: string
+): { organizationId: string; summary: true; dueBefore: string } {
+  return { organizationId, summary: true, dueBefore };
+}
+
 /** Sales → Follow-ups: every customer whose nextStepDueAt lands inside the
  *  next week, split overdue → today → upcoming. One `dueBefore` query feeds
  *  all three sections. */
@@ -37,17 +47,10 @@ export function FollowUpsList() {
 
   const customers = useQuery({
     queryKey: wsKey(workspace.id, "customers", "followups", dueBefore),
-    queryFn: async () =>
-      (
-        await unwrap(
-          api.GET("/workspaces/{organizationId}/customers", {
-            params: {
-              path: { organizationId: workspace.id },
-              query: { dueBefore },
-            },
-          })
-        )
-      ).customers,
+    // PILE-653 — summary rows carry every field this view reads; follow
+    // nextCursor pages so a busy week doesn't truncate at the cap.
+    queryFn: () =>
+      fetchAllCustomers(followUpsCustomerArgs(workspace.id, dueBefore)),
     staleTime: 30_000,
   });
 

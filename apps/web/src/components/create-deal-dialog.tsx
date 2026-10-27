@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
 import { api, unwrap } from "@/lib/api";
+import { fetchAllCustomers } from "@/lib/crm-lists";
 import { toastError, toastSuccess } from "@/lib/toast";
 
 const STAGES = [
@@ -22,6 +23,11 @@ const STAGES = [
   ["won", "Won"],
   ["lost", "Lost"],
 ] as const;
+
+/** "12.50" → 1250; empty/unparseable input means no amount. */
+export function parseDealAmountCents(amount: string): number | null {
+  return amount ? Math.round(parseFloat(amount) * 100) : null;
+}
 
 /** New-deal dialog — same create grammar as issue/ticket/customer. */
 export function CreateDealDialog({
@@ -49,15 +55,9 @@ export function CreateDealDialog({
   const [currency, setCurrency] = useState("USD");
 
   const customers = useQuery({
-    queryKey: wsKey(workspace.id, "customers"),
-    queryFn: async () =>
-      (
-        await unwrap(
-          api.GET("/workspaces/{organizationId}/customers", {
-            params: { path: { organizationId: workspace.id } },
-          })
-        )
-      ).customers,
+    queryKey: wsKey(workspace.id, "customers", "summary"),
+    queryFn: () =>
+      fetchAllCustomers({ organizationId: workspace.id, summary: true }),
     enabled: open,
   });
 
@@ -70,7 +70,7 @@ export function CreateDealDialog({
             customerId,
             name: name.trim(),
             stage: stage as never,
-            amountCents: amount ? Math.round(parseFloat(amount) * 100) : null,
+            amountCents: parseDealAmountCents(amount),
             currency: currency || null,
           },
         })

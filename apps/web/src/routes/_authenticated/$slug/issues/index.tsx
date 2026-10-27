@@ -72,6 +72,10 @@ export function sessionGroupLabels(
   );
 }
 
+/** PILE-653 — the sessions panel embedded on /issues is ambient, not the
+ *  operator's focus — 15s polling instead of the dedicated page's 3s. */
+export const ISSUES_PAGE_SESSION_POLL_MS = 15_000;
+
 export const Route = createFileRoute("/_authenticated/$slug/issues/")({
   component: IssuesList,
   validateSearch: (search: Record<string, unknown>): IssuesSearch => ({
@@ -491,6 +495,7 @@ function IssuesList() {
           <SessionsList
             groupBy="issue"
             groupLabels={sessionGroupLabels(allIssues)}
+            pollMs={ISSUES_PAGE_SESSION_POLL_MS}
           />
         </div>
       ) : null}

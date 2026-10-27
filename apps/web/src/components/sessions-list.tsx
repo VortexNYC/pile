@@ -31,10 +31,14 @@ export const AGENT_SESSIONS_LIST_QUERY = {
   limit: "200",
 } as const;
 
+/** Default live poll cadence for surfaces dedicated to watching lanes. */
+export const SESSIONS_POLL_MS = 3000;
+
 export function useAgentSessions({
   issueId,
   agentSlug,
-}: { issueId?: string; agentSlug?: string } = {}) {
+  pollMs = SESSIONS_POLL_MS,
+}: { issueId?: string; agentSlug?: string; pollMs?: number } = {}) {
   const workspace = useWorkspace();
   return useQuery({
     queryKey: wsKey(workspace.id, "sessions", { issueId, agentSlug }),
@@ -52,7 +56,7 @@ export function useAgentSessions({
     placeholderData: keepPreviousData,
     refetchInterval: (query) =>
       (query.state.data ?? []).some((s) => !TERMINAL.has(s.status))
-        ? 3000
+        ? pollMs
         : false,
   });
 }
@@ -159,14 +163,17 @@ export function SessionsList({
   agentSlug,
   groupBy,
   groupLabels,
+  pollMs,
 }: {
   issueId?: string;
   agentSlug?: string;
   groupBy?: "agent" | "issue";
   /** Display name per scope key (agentId or issueId); raw key otherwise. */
   groupLabels?: Readonly<Record<string, string>>;
+  /** Live poll cadence while any lane is non-terminal (default 3s). */
+  pollMs?: number;
 } = {}) {
-  const sessions = useAgentSessions({ issueId, agentSlug });
+  const sessions = useAgentSessions({ issueId, agentSlug, pollMs });
 
   if (sessions.isPending) return <LoadingState label="Loading sessions" />;
   if (sessions.isError) {

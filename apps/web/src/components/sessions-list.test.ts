@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   AGENT_SESSIONS_LIST_QUERY,
+  SESSIONS_POLL_MS,
   groupSessionsByScope,
   scopeGroupTitle,
 } from "./sessions-list";
@@ -120,5 +121,11 @@ describe("AGENT_SESSIONS_LIST_QUERY (PILE-645)", () => {
       summary: "1",
       limit: "200",
     });
+  });
+});
+
+describe("SESSIONS_POLL_MS (PILE-653)", () => {
+  it("keeps the dedicated-surface cadence at 3s", () => {
+    expect(SESSIONS_POLL_MS).toBe(3000);
   });
 });

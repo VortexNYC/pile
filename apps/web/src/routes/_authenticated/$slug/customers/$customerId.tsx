@@ -32,6 +32,11 @@ const OWNER_OPTIONS = [
   },
 ] as const;
 
+/** PILE-653 — the customer's deals rail rides the bounded list contract. */
+export function customerDealsQuery(customerId: string) {
+  return { customerId, summary: "1", limit: 500 } as const;
+}
+
 export const Route = createFileRoute(
   "/_authenticated/$slug/customers/$customerId"
 )({
@@ -137,7 +142,7 @@ function CustomerEditor({
           api.GET("/workspaces/{organizationId}/deals", {
             params: {
               path: { organizationId: workspace.id },
-              query: { customerId: customer.id },
+              query: customerDealsQuery(customer.id),
             },
           })
         )
