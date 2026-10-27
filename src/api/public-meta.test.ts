@@ -30,6 +30,14 @@ describe("public meta routes", () => {
     expect(body).toContain(
       "Canonical: https://pile.nyc/.well-known/security.txt"
     );
+    // VTX-757 — RFC 9116 requires Expires; the route rolls it ~90 days
+    // forward per request so the file is never stale.
+    const expiresLine = body.split("\n").find((l) => l.startsWith("Expires: "));
+    expect(expiresLine).toBeDefined();
+    const expires = Date.parse(expiresLine!.slice("Expires: ".length));
+    expect(Number.isNaN(expires)).toBe(false);
+    expect(expires).toBeGreaterThan(Date.now());
+    expect(expires).toBeLessThan(Date.now() + 366 * 24 * 60 * 60 * 1000);
   });
 
   it("/ serves the landing page", async () => {

@@ -20,7 +20,7 @@ A coding or ops agent can register its own run as a **session** — a first-clas
 Session transcripts are ephemeral; findings should land in a **document** linked to the work:
 
 ```bash
-curl -s -X POST "https://<host>/workspaces/{org}/documents" \
+curl -s -X POST "https://pile.nyc/workspaces/{org}/documents" \
   -H "Authorization: Bearer $KEY" \
   -H "Content-Type: application/json" \
   -d '{

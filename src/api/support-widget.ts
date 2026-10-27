@@ -161,6 +161,7 @@ const widgetSessionBodySchema = z.object({
 });
 
 const widgetSessionRoute = createRoute({
+  security: [],
   method: "post",
   path: "/support/widget/{key}/session",
   tags: ["support-widget"],
@@ -191,6 +192,7 @@ const widgetMessageBodySchema = z.object({
 });
 
 const widgetMessageRoute = createRoute({
+  security: [],
   method: "post",
   path: "/support/widget/{key}/messages",
   tags: ["support-widget"],
@@ -221,6 +223,7 @@ const widgetMessageRoute = createRoute({
 });
 
 const widgetMessagesRoute = createRoute({
+  security: [],
   method: "get",
   path: "/support/widget/{key}/messages",
   tags: ["support-widget"],
@@ -257,6 +260,7 @@ const widgetVoteBodySchema = z.object({
 });
 
 const widgetVoteRoute = createRoute({
+  security: [],
   method: "post",
   path: "/support/widget/{key}/votes",
   tags: ["support-widget"],
@@ -284,6 +288,7 @@ const widgetVoteRoute = createRoute({
 });
 
 const widgetUnvoteRoute = createRoute({
+  security: [],
   method: "delete",
   path: "/support/widget/{key}/votes/{ticketId}",
   tags: ["support-widget"],
@@ -316,6 +321,7 @@ const widgetBoardItemSchema = z.object({
 });
 
 const widgetBoardRoute = createRoute({
+  security: [],
   method: "get",
   path: "/support/widget/{key}/board",
   tags: ["support-widget"],
@@ -340,6 +346,7 @@ const widgetBoardRoute = createRoute({
 });
 
 const widgetChangelogRoute = createRoute({
+  security: [],
   method: "get",
   path: "/support/widget/{key}/changelog",
   tags: ["support-widget"],
@@ -375,6 +382,7 @@ const widgetIdeaBodySchema = z.object({
 });
 
 const widgetIdeaRoute = createRoute({
+  security: [],
   method: "post",
   path: "/support/widget/{key}/ideas",
   tags: ["support-widget"],

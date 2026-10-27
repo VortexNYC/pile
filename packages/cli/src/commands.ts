@@ -13815,6 +13815,18 @@ export const COMMANDS: Record<string, CommandDef> = {
     query: [],
     body: [],
   },
+  "dedupe create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/dedupe",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [],
+  },
   "slack list": {
     method: "GET",
     path: "/workspaces/{organizationId}/slack",

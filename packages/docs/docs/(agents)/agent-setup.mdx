@@ -9,17 +9,18 @@ Humans and agents use the same API. An agent that can call the API can do anythi
 
 <Steps>
   <Step title="Get a workspace API key">
-    In the app: **Settings → Developer → New key**, scoped to the workspace. Or `POST /workspaces/{organizationId}/tokens`. Save the raw secret — it's shown once.
+    In the app: **Settings → Developer → New key**, scoped to the workspace. Or
+    `POST /workspaces/{organizationId}/tokens`. Save the raw secret — it's shown
+    once.
   </Step>
   <Step title="Pick a surface">
-    - **MCP** — best for coding agents (Cursor, Claude Code, Devin). Every API operation is a tool. `https://<host>/mcp`
-    - **CLI** — `@vortex-api/pile`, typed commands for every route
-    - **SDK** — `openapi-fetch` client for TypeScript apps
-    - **HTTP** — plain `Authorization: Bearer` for anything else
+    - **MCP** — best for coding agents (Cursor, Claude Code, Devin). Every API
+    operation is a tool. `https://pile.nyc/mcp` - **CLI** — `@vortex-api/pile`,
+    typed commands for every route - **SDK** — `openapi-fetch` client for
+    TypeScript apps - **HTTP** — plain `Authorization: Bearer` for anything else
   </Step>
   <Step title="Verify">
-    ```bash
-    curl -s https://<host>/workspaces -H "Authorization: Bearer $KEY"
+    ```bash curl -s https://pile.nyc/workspaces -H "Authorization: Bearer $KEY"
     ```
   </Step>
 </Steps>

@@ -53,10 +53,24 @@ Pile is a single Cloudflare Worker with a D1 database for global metadata and a 
   </Step>
   <Step title="Verify">
     ```bash
-    curl -fsS https://<your-worker>/health
+    curl -fsS https://<your-worker>.workers.dev/health
     ```
+
+    Replace `<your-worker>` with the name from your `wrangler.toml` `name`
+    field — or your custom domain if you mapped one. The production
+    deployment lives at `https://pile.nyc`; everything below applies to
+    your host instead.
+
   </Step>
 </Steps>
+
+## First run
+
+The fresh deployment has no users yet:
+
+1. Open `https://<your-worker>.workers.dev` and sign up — the onboarding flow creates your first workspace. Grab its `org_*` ID under **Settings**.
+2. Mint a workspace API key under **Settings → Developer → New key** (or `POST /workspaces/{organizationId}/tokens`). Save the raw secret; it's shown once.
+3. Point any client at your host — `https://<your-worker>.workers.dev` for REST, `https://<your-worker>.workers.dev/mcp` for MCP — with `Authorization: Bearer <key>`.
 
 ## Local dev
 

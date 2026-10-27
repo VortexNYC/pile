@@ -49,6 +49,7 @@ const zendeskWebhookPayloadSchema = z.object({
 });
 
 export const zendeskSupportWebhookRoute = createRoute({
+  security: [],
   method: "post",
   path: "/support/webhooks/zendesk/{organizationId}",
   tags: ["support-channels"],

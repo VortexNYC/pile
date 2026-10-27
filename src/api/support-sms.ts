@@ -16,6 +16,7 @@ import { getExecutionCtx } from "./execution-ctx.js";
 export function registerSupportSmsRoutes(app: OpenAPIHono<AppContext>) {
   app.openapi(
     createRoute({
+      security: [],
       method: "post",
       path: "/support/sms/inbound",
       tags: ["support-sms"],

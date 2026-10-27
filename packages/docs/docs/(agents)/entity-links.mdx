@@ -11,7 +11,7 @@ Links are the product. Every record in a workspace can carry directed edges to a
 
 ```bash
 curl -s -X POST \
-  "https://<host>/workspaces/{org}/entities/{entityType}/{entityId}/links" \
+  "https://pile.nyc/workspaces/{org}/entities/{entityType}/{entityId}/links" \
   -H "Authorization: Bearer $KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -27,7 +27,7 @@ curl -s -X POST \
 ## Read links
 
 ```bash
-curl -s "https://<host>/workspaces/{org}/entities/{type}/{id}/links" \
+curl -s "https://pile.nyc/workspaces/{org}/entities/{type}/{id}/links" \
   -H "Authorization: Bearer $KEY"
 ```
 

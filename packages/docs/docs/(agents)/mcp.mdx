@@ -5,7 +5,7 @@ description: The Pile MCP server exposes every OpenAPI operation as a typed tool
 
 # MCP server
 
-`https://<host>/mcp` speaks Streamable HTTP MCP. Every OpenAPI operation is generated into a tool — over 600 of them — so the MCP surface and the REST surface never drift.
+`https://pile.nyc/mcp` speaks Streamable HTTP MCP. Every OpenAPI operation is generated into a tool — over 600 of them — so the MCP surface and the REST surface never drift.
 
 ## Connect a client
 
@@ -13,14 +13,29 @@ description: The Pile MCP server exposes every OpenAPI operation as a typed tool
 {
   "mcpServers": {
     "pile": {
-      "url": "https://<host>/mcp",
+      "url": "https://pile.nyc/mcp",
       "headers": { "Authorization": "Bearer <workspace-api-key>" }
     }
   }
 }
 ```
 
-That config works in Cursor; Claude Code, Devin, and other MCP clients take the same shape (URL + bearer header). The key's workspace scope applies to every tool call.
+That config works in Cursor and other MCP clients that accept a URL plus headers. The key's workspace scope applies to every tool call.
+
+### Claude Code
+
+Claude Code connects over Streamable HTTP with a bearer header:
+
+```bash
+claude mcp add --transport http pile https://pile.nyc/mcp \
+  --header "Authorization: Bearer <workspace-api-key>"
+```
+
+Verify with `claude mcp list` — `pile` should show as connected. To register it for a single project only, add `--scope local`; to check the wiring from inside a session, ask Claude to list tools from `pile`.
+
+### Devin and other agents
+
+Devin, Codex, and API-first agents can skip MCP entirely and call the REST surface — every tool maps one-to-one onto an OpenAPI operation (`https://pile.nyc/openapi.json`). If the client does support MCP, the JSON block above is the shape it needs.
 
 ## Tool shape
 

@@ -5,7 +5,25 @@
     "version": "0.1.0",
     "description": "OpenAPI source of truth for REST, CLI, and MCP surfaces."
   },
+  "servers": [
+    {
+      "url": "https://pile.nyc",
+      "description": "Production. Self-hosted deployments serve the same API from the deployed worker's host."
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
   "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Workspace API key (`Authorization: Bearer <key>`). Issue keys under Settings → Developer or POST /workspaces/{organizationId}/tokens."
+      }
+    },
     "schemas": {
       "Issue": {
         "type": "object",
@@ -16557,6 +16575,7 @@
     },
     "/webhooks/agent/{organizationId}/{agentId}": {
       "post": {
+        "security": [],
         "tags": [
           "agent-providers"
         ],
@@ -21475,11 +21494,15 @@
                     },
                     "skipped": {
                       "type": "integer"
+                    },
+                    "agentTypesSeeded": {
+                      "type": "integer"
                     }
                   },
                   "required": [
                     "templates",
-                    "skipped"
+                    "skipped",
+                    "agentTypesSeeded"
                   ]
                 }
               }
@@ -22902,6 +22925,7 @@
     },
     "/workspaces/{organizationId}/external-events/{source}": {
       "post": {
+        "security": [],
         "tags": [
           "external-events"
         ],
@@ -27061,6 +27085,7 @@
     },
     "/support/capture/token": {
       "post": {
+        "security": [],
         "tags": [
           "support-capture"
         ],
@@ -27148,6 +27173,7 @@
     },
     "/support/capture/upload-session": {
       "post": {
+        "security": [],
         "tags": [
           "support-capture"
         ],
@@ -27336,6 +27362,7 @@
     },
     "/support/capture/upload/{sessionId}/{attachmentType}/{fileName}": {
       "post": {
+        "security": [],
         "tags": [
           "support-capture"
         ],
@@ -27409,6 +27436,7 @@
     },
     "/support/capture/finalize": {
       "post": {
+        "security": [],
         "tags": [
           "support-capture"
         ],
@@ -27453,6 +27481,7 @@
     },
     "/support/capture/metadata": {
       "post": {
+        "security": [],
         "tags": [
           "support-capture"
         ],
@@ -27499,6 +27528,7 @@
     },
     "/support/capture/artifacts/{attachmentId}": {
       "get": {
+        "security": [],
         "tags": [
           "support-capture"
         ],
@@ -27525,6 +27555,7 @@
     },
     "/support/capture/sessions/{sessionId}": {
       "get": {
+        "security": [],
         "tags": [
           "support-capture"
         ],
@@ -27611,6 +27642,7 @@
     },
     "/support/capture/public/{ticketId}": {
       "get": {
+        "security": [],
         "tags": [
           "support-capture"
         ],
@@ -27688,6 +27720,7 @@
     },
     "/support/webhooks/jam/{publicKeyId}": {
       "post": {
+        "security": [],
         "tags": [
           "support-capture"
         ],
@@ -28069,6 +28102,7 @@
     },
     "/support/webhooks/jam/{publicKeyId}/intercom/recorded": {
       "post": {
+        "security": [],
         "tags": [
           "support-capture"
         ],
@@ -28169,6 +28203,7 @@
     },
     "/support/webhooks/jam/{publicKeyId}/intercom/opted-out": {
       "post": {
+        "security": [],
         "tags": [
           "support-capture"
         ],
@@ -28261,6 +28296,7 @@
     },
     "/support/webhooks/jam/{publicKeyId}/recording-links": {
       "post": {
+        "security": [],
         "tags": [
           "support-capture"
         ],
@@ -29101,6 +29137,7 @@
     },
     "/support/widget/{key}/session": {
       "post": {
+        "security": [],
         "tags": [
           "support-widget"
         ],
@@ -29219,6 +29256,7 @@
     },
     "/support/widget/{key}/messages": {
       "post": {
+        "security": [],
         "tags": [
           "support-widget"
         ],
@@ -29299,6 +29337,7 @@
         "summary": "Create support widget message"
       },
       "get": {
+        "security": [],
         "tags": [
           "support-widget"
         ],
@@ -29380,6 +29419,7 @@
     },
     "/support/widget/{key}/votes": {
       "post": {
+        "security": [],
         "tags": [
           "support-widget"
         ],
@@ -29456,6 +29496,7 @@
     },
     "/support/widget/{key}/votes/{ticketId}": {
       "delete": {
+        "security": [],
         "tags": [
           "support-widget"
         ],
@@ -29514,6 +29555,7 @@
     },
     "/support/widget/{key}/board": {
       "get": {
+        "security": [],
         "tags": [
           "support-widget"
         ],
@@ -29604,6 +29646,7 @@
     },
     "/support/widget/{key}/changelog": {
       "get": {
+        "security": [],
         "tags": [
           "support-widget"
         ],
@@ -29673,6 +29716,7 @@
     },
     "/support/widget/{key}/ideas": {
       "post": {
+        "security": [],
         "tags": [
           "support-widget"
         ],
@@ -30910,6 +30954,7 @@
     },
     "/support/webhooks/intercom/{organizationId}": {
       "post": {
+        "security": [],
         "tags": [
           "support-channels"
         ],
@@ -30966,6 +31011,7 @@
     },
     "/support/webhooks/zendesk/{organizationId}": {
       "post": {
+        "security": [],
         "tags": [
           "support-channels"
         ],
@@ -31030,6 +31076,7 @@
     },
     "/support/webhooks/plain/{organizationId}": {
       "post": {
+        "security": [],
         "tags": [
           "support-channels"
         ],
@@ -31086,6 +31133,7 @@
     },
     "/support/webhooks/slack/{organizationId}": {
       "post": {
+        "security": [],
         "tags": [
           "support-channels"
         ],
@@ -31153,6 +31201,7 @@
     },
     "/support/incoming/{channelId}": {
       "post": {
+        "security": [],
         "tags": [
           "support-channels"
         ],
@@ -31247,6 +31296,7 @@
     },
     "/support/feedback": {
       "post": {
+        "security": [],
         "tags": [
           "support-channels"
         ],
@@ -32425,6 +32475,7 @@
     },
     "/billing/webhook": {
       "post": {
+        "security": [],
         "tags": [
           "billing"
         ],
@@ -40696,6 +40747,7 @@
     },
     "/docs/{organizationId}/{spaceId}/llms.txt": {
       "get": {
+        "security": [],
         "tags": [
           "docs-site"
         ],
@@ -40737,6 +40789,7 @@
     },
     "/docs/{organizationId}/{spaceId}/{slug}": {
       "get": {
+        "security": [],
         "tags": [
           "docs-site"
         ],
@@ -41272,6 +41325,7 @@
     },
     "/webhooks/comms/{organizationId}/{source}": {
       "post": {
+        "security": [],
         "tags": [
           "comms"
         ],
@@ -48796,6 +48850,7 @@
     },
     "/public/leads/{organizationId}": {
       "post": {
+        "security": [],
         "tags": [
           "leads"
         ],
@@ -49148,6 +49203,7 @@
     },
     "/support/unsubscribe": {
       "post": {
+        "security": [],
         "tags": [
           "support-contacts"
         ],
@@ -51112,6 +51168,7 @@
     },
     "/workspaces/{organizationId}/board": {
       "get": {
+        "security": [],
         "tags": [
           "support-tickets"
         ],
@@ -56892,6 +56949,7 @@
     },
     "/workspaces/{organizationId}/changelog": {
       "get": {
+        "security": [],
         "tags": [
           "changelog"
         ],
@@ -61796,6 +61854,7 @@
     },
     "/support/sms/inbound": {
       "post": {
+        "security": [],
         "tags": [
           "support-sms"
         ],
@@ -72469,6 +72528,7 @@
     },
     "/notion/{organizationId}/{workspaceId}": {
       "post": {
+        "security": [],
         "tags": [
           "notion"
         ],
@@ -72611,6 +72671,57 @@
           }
         },
         "summary": "List readiness"
+      }
+    },
+    "/workspaces/{organizationId}/dedupe": {
+      "post": {
+        "tags": [
+          "hardening"
+        ],
+        "description": "Merge duplicate labels (per name+kind) and states (per name) onto the oldest row and re-point every reference. Idempotent — a second run merges nothing.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "name": "organizationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dedupe counts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "labelsMerged": {
+                      "type": "integer"
+                    },
+                    "statesMerged": {
+                      "type": "integer"
+                    },
+                    "issuesRepointed": {
+                      "type": "integer"
+                    },
+                    "gitAutomationsRepointed": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "labelsMerged",
+                    "statesMerged",
+                    "issuesRepointed",
+                    "gitAutomationsRepointed"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Create dedupe"
       }
     },
     "/workspaces/{organizationId}/slack": {
@@ -72798,6 +72909,7 @@
     },
     "/health": {
       "get": {
+        "security": [],
         "tags": [
           "platform"
         ],
@@ -72918,6 +73030,7 @@
         "tags": [
           "Auth"
         ],
+        "security": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -72953,6 +73066,7 @@
         "tags": [
           "Auth"
         ],
+        "security": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -72988,6 +73102,7 @@
         "tags": [
           "Auth"
         ],
+        "security": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -73023,6 +73138,7 @@
         "tags": [
           "Auth"
         ],
+        "security": [],
         "responses": {
           "200": {
             "description": "Success",
@@ -73045,6 +73161,7 @@
         "tags": [
           "Auth"
         ],
+        "security": [],
         "responses": {
           "200": {
             "description": "Success",
@@ -73067,6 +73184,7 @@
         "tags": [
           "Auth"
         ],
+        "security": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -73102,6 +73220,7 @@
         "tags": [
           "Auth"
         ],
+        "security": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -73137,6 +73256,7 @@
         "tags": [
           "Auth"
         ],
+        "security": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -73172,6 +73292,7 @@
         "tags": [
           "Auth"
         ],
+        "security": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -73207,6 +73328,7 @@
         "tags": [
           "Auth"
         ],
+        "security": [],
         "parameters": [
           {
             "schema": {
@@ -73239,6 +73361,7 @@
         "tags": [
           "Auth"
         ],
+        "security": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -73274,6 +73397,7 @@
         "tags": [
           "Auth"
         ],
+        "security": [],
         "responses": {
           "200": {
             "description": "Success",
@@ -73296,6 +73420,7 @@
         "tags": [
           "Auth"
         ],
+        "security": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -73331,6 +73456,7 @@
         "tags": [
           "Auth"
         ],
+        "security": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -73366,6 +73492,7 @@
         "tags": [
           "Auth"
         ],
+        "security": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -73401,6 +73528,7 @@
         "tags": [
           "Auth"
         ],
+        "security": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -73436,6 +73564,7 @@
         "tags": [
           "Auth"
         ],
+        "security": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -73471,6 +73600,7 @@
         "tags": [
           "Auth"
         ],
+        "security": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -73506,6 +73636,7 @@
         "tags": [
           "Auth"
         ],
+        "security": [],
         "responses": {
           "200": {
             "description": "Success",
@@ -73528,6 +73659,7 @@
         "tags": [
           "Auth"
         ],
+        "security": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -73563,6 +73695,7 @@
         "tags": [
           "Auth"
         ],
+        "security": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -73598,6 +73731,7 @@
         "tags": [
           "Auth"
         ],
+        "security": [],
         "responses": {
           "200": {
             "description": "Success",
@@ -73620,6 +73754,7 @@
         "tags": [
           "Auth"
         ],
+        "security": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -73655,6 +73790,7 @@
         "tags": [
           "Auth"
         ],
+        "security": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -73690,6 +73826,7 @@
         "tags": [
           "Auth"
         ],
+        "security": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -73725,6 +73862,7 @@
         "tags": [
           "Auth"
         ],
+        "security": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -73760,6 +73898,7 @@
         "tags": [
           "Auth"
         ],
+        "security": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -73795,6 +73934,7 @@
         "tags": [
           "Auth"
         ],
+        "security": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -73830,6 +73970,7 @@
         "tags": [
           "Auth"
         ],
+        "security": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -73865,6 +74006,7 @@
         "tags": [
           "Auth"
         ],
+        "security": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -73900,6 +74042,7 @@
         "tags": [
           "Auth"
         ],
+        "security": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -73935,6 +74078,7 @@
         "tags": [
           "Auth"
         ],
+        "security": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -73966,6 +74110,7 @@
     },
     "/github": {
       "post": {
+        "security": [],
         "tags": [
           "github"
         ],
@@ -73994,6 +74139,7 @@
     },
     "/gitlab": {
       "post": {
+        "security": [],
         "tags": [
           "gitlab"
         ],
@@ -74022,6 +74168,7 @@
     },
     "/intercom/{organizationId}": {
       "post": {
+        "security": [],
         "tags": [
           "webhooks"
         ],

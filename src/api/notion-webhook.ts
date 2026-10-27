@@ -178,6 +178,7 @@ export async function processNotionWebhookPayload(
 }
 
 const notionWebhookRoute = createRoute({
+  security: [],
   method: "post",
   path: "/notion/{organizationId}/{workspaceId}",
   tags: ["notion"],

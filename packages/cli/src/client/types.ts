@@ -9025,6 +9025,7 @@ export interface paths {
                         "application/json": {
                             templates: components["schemas"]["StageTemplate"][];
                             skipped: number;
+                            agentTypesSeeded: number;
                         };
                     };
                 };
@@ -34076,6 +34077,52 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/dedupe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create dedupe
+         * @description Merge duplicate labels (per name+kind) and states (per name) onto the oldest row and re-point every reference. Idempotent — a second run merges nothing.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Dedupe counts */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            labelsMerged: number;
+                            statesMerged: number;
+                            issuesRepointed: number;
+                            gitAutomationsRepointed: number;
+                        };
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
