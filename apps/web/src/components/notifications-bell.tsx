@@ -12,11 +12,18 @@ import { api, unwrap, unwrapEmpty } from "@/lib/api";
 import {
   formatRelative,
   notificationLabel,
+  notificationRoute,
   notificationTarget,
 } from "@/lib/labels";
 import { toastError } from "@/lib/toast";
 
 const POLL_MS = 30_000;
+
+/** Bell badge caps at "99+" so a triple-digit count never stretches the
+ * pill. */
+export function unreadBadgeLabel(count: number): string {
+  return count > 99 ? "99+" : String(count);
+}
 
 export function NotificationsBell() {
   const workspace = useWorkspace();
@@ -97,7 +104,7 @@ export function NotificationsBell() {
       />
       {count > 0 ? (
         <span aria-hidden className="-ml-4 -mt-5">
-          <Badge variant="red">{count > 99 ? "99+" : count}</Badge>
+          <Badge variant="red">{unreadBadgeLabel(count)}</Badge>
         </span>
       ) : null}
       <Popover.Content className="w-80">
@@ -138,22 +145,7 @@ export function NotificationsBell() {
                     const target = notificationTarget(item);
                     if (!target) return;
                     setOpen(false);
-                    if (target.kind === "document") {
-                      void navigate({
-                        to: "/$slug/documents/$documentId",
-                        params: { slug: workspace.slug, documentId: target.id },
-                      });
-                    } else if (target.kind === "ticket") {
-                      void navigate({
-                        to: "/$slug/tickets/$ticketId",
-                        params: { slug: workspace.slug, ticketId: target.id },
-                      });
-                    } else {
-                      void navigate({
-                        to: "/$slug/issues/$issueId",
-                        params: { slug: workspace.slug, issueId: target.id },
-                      });
-                    }
+                    void navigate(notificationRoute(workspace.slug, target));
                   }}
                 >
                   <span className="flex w-full items-center gap-2">

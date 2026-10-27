@@ -10,10 +10,29 @@ import { useState } from "react";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
 import { wsKey } from "@/hooks/use-workspace";
 import { api, unwrap, unwrapEmpty } from "@/lib/api";
-import { formatRelative, notificationLabel } from "@/lib/labels";
+import {
+  formatRelative,
+  notificationLabel,
+  notificationRoute,
+  notificationTarget,
+} from "@/lib/labels";
 import { toastError } from "@/lib/toast";
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Split the feed into "This week" and "Older" sections. */
+export function bucketNotifications<T extends { createdAt: string }>(
+  items: readonly T[],
+  now: number = Date.now()
+): { thisWeek: T[]; older: T[] } {
+  const thisWeek: T[] = [];
+  const older: T[] = [];
+  for (const item of items) {
+    const age = now - new Date(item.createdAt).getTime();
+    (age < WEEK_MS ? thisWeek : older).push(item);
+  }
+  return { thisWeek, older };
+}
 
 /** The inbox — same list for the /inbox route and the bell drawer. */
 export function InboxList({
@@ -80,13 +99,7 @@ export function InboxList({
   const items = (feed.data ?? []).filter((item) =>
     tab === "unread" ? !item.read : true
   );
-  const now = Date.now();
-  const thisWeek = items.filter(
-    (i) => now - new Date(i.createdAt).getTime() < WEEK_MS
-  );
-  const older = items.filter(
-    (i) => now - new Date(i.createdAt).getTime() >= WEEK_MS
-  );
+  const { thisWeek, older } = bucketNotifications(items);
   const unreadCount = (feed.data ?? []).filter((i) => !i.read).length;
 
   const section = (title: string, rows: typeof items) =>
@@ -105,13 +118,10 @@ export function InboxList({
                   onClick={() => {
                     if (!item.read) markRead.mutate(item.id);
                     onNavigate?.();
-                    void navigate({
-                      to: "/$slug/issues/$issueId",
-                      params: {
-                        slug,
-                        issueId: item.issueId,
-                      },
-                    });
+                    const target = notificationTarget(item);
+                    if (target) {
+                      void navigate(notificationRoute(slug, target));
+                    }
                   }}
                 >
                   {item.read ? (

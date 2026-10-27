@@ -1,5 +1,6 @@
 import { CommandPalette } from "@cloudflare/kumo/components/command-palette";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 
 import { useWorkspace, wsKey } from "@/hooks/use-workspace";
@@ -29,8 +30,17 @@ export function paletteDeepQueryEnabled(open: boolean, query: string) {
   return open && query.trim().length > 0;
 }
 
+/** ⌘K items carry workspace-relative hrefs (`/issues/ISS-4`). Joining them
+ * under the slug produces a router path — `navigate` resolves it
+ * client-side and applies the /app basepath, so selection never falls back
+ * to a full-page load. */
+export function paletteRoute(slug: string, href: string): string {
+  return `/${slug}${href.startsWith("/") ? href : `/${href}`}`;
+}
+
 export function CommandMenu() {
   const workspace = useWorkspace();
+  const navigate = useNavigate();
 
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -192,7 +202,7 @@ export function CommandMenu() {
   ]);
 
   const go = (item: CommandItem) => {
-    window.location.assign(`/app/${workspace.slug}${item.href}`);
+    void navigate({ to: paletteRoute(workspace.slug, item.href) });
     setOpen(false);
   };
 

@@ -26,11 +26,41 @@ import { markdownHeadings } from "@/lib/headings";
 import { documentText, formatRelative } from "@/lib/labels";
 import { toastError, toastSuccess } from "@/lib/toast";
 
+import { DOCUMENTS_LIST_QUERY } from "./index";
+
 export const Route = createFileRoute(
   "/_authenticated/$slug/documents/$documentId"
 )({
   component: DocumentDetail,
 });
+
+/** Cache key for the detail page's title-only document index. Kept under
+ * the "documents" subtree (so saves/deletes still invalidate it) but off
+ * the bare list key — the index fetches `summary=1` rows while
+ * `wsKey(org, "documents")` is the full-shape list, and sharing the key
+ * let either payload clobber the other. */
+export function documentIndexQueryKey(organizationId: string) {
+  return wsKey(organizationId, "documents", "index");
+}
+
+/** Walk `parentDocumentId` links root-first for the breadcrumb trail.
+ * The hop cap guards against a malformed parent cycle. */
+export function documentAncestors<
+  T extends { id: string; parentDocumentId: string | null },
+>(documents: readonly T[], parentDocumentId: string | null): T[] {
+  const byId = new Map(documents.map((d) => [d.id, d]));
+  const chain: T[] = [];
+  let cursor = parentDocumentId;
+  let hops = 0;
+  while (cursor && hops < 6) {
+    const parent = byId.get(cursor);
+    if (!parent) break;
+    chain.unshift(parent);
+    cursor = parent.parentDocumentId;
+    hops += 1;
+  }
+  return chain;
+}
 
 function DocumentDetail() {
   const { documentId } = Route.useParams();
@@ -159,12 +189,15 @@ function DocumentDetail() {
       ).documents,
   });
   const allDocs = useQuery({
-    queryKey: wsKey(organizationId, "documents"),
+    queryKey: documentIndexQueryKey(organizationId),
     queryFn: async () =>
       (
         await unwrap(
           api.GET("/workspaces/{organizationId}/documents", {
-            params: { path: { organizationId } },
+            params: {
+              path: { organizationId },
+              query: { ...DOCUMENTS_LIST_QUERY },
+            },
           })
         )
       ).documents,
@@ -182,19 +215,10 @@ function DocumentDetail() {
   const text = documentText(data.content);
   const subPages = children.data ?? [];
   const headings = markdownHeadings(text);
-  const byId = new Map((allDocs.data ?? []).map((d) => [d.id, d]));
-  const ancestors: typeof subPages = [];
-  {
-    let cursor = data.parentDocumentId;
-    let hops = 0;
-    while (cursor && hops < 6) {
-      const parent = byId.get(cursor);
-      if (!parent) break;
-      ancestors.unshift(parent);
-      cursor = parent.parentDocumentId;
-      hops += 1;
-    }
-  }
+  const ancestors = documentAncestors(
+    allDocs.data ?? [],
+    data.parentDocumentId
+  );
   const backlinkRows = (backlinks.data ?? []).map((id) => ({
     id,
     title:

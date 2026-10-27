@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { sessionGroupLabels } from "./index";
+import { issuesListQuery, sessionGroupLabels } from "./index";
 
 describe("sessionGroupLabels", () => {
   it("labels issues by identifier and title", () => {
@@ -22,5 +22,27 @@ describe("sessionGroupLabels", () => {
 
   it("returns an empty map for no issues", () => {
     expect(sessionGroupLabels([])).toEqual({});
+  });
+});
+
+describe("issuesListQuery (PILE-652)", () => {
+  it("maps URL drill-down params onto the wire contract", () => {
+    expect(
+      issuesListQuery({ search: "fix", status: "in_progress", team: "team-1" })
+    ).toEqual({
+      limit: 50,
+      search: "fix",
+      status: "in_progress",
+      teamId: "team-1",
+    });
+  });
+
+  it("leaves unset filters undefined so the API returns the unfiltered list", () => {
+    expect(issuesListQuery({})).toEqual({
+      limit: 50,
+      search: undefined,
+      status: undefined,
+      teamId: undefined,
+    });
   });
 });

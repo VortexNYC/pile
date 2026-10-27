@@ -87,10 +87,31 @@ export const Route = createFileRoute("/_authenticated/$slug/issues/")({
   }),
 });
 
+/** URL drill-down params (`/issues?status=&team=` — overview badges link
+ * here) map onto the API's server-side filters. `team` is the URL spelling
+ * of the wire contract's `teamId`. */
+export function issuesListQuery(args: {
+  search?: string;
+  status?: IssueStatus;
+  team?: string;
+}): {
+  limit: number;
+  search?: string;
+  status?: IssueStatus;
+  teamId?: string;
+} {
+  return {
+    limit: 50,
+    search: args.search,
+    status: args.status,
+    teamId: args.team,
+  };
+}
+
 function IssuesList() {
   const workspace = useWorkspace();
   const permissions = usePermissions(workspace.id);
-  const { status, q } = Route.useSearch();
+  const { status, team, q } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const search = useDeferredValue(q);
 
@@ -145,13 +166,16 @@ function IssuesList() {
     });
 
   const issues = useInfiniteQuery({
-    queryKey: wsKey(workspace.id, "issues", { search }),
+    queryKey: wsKey(workspace.id, "issues", { search, status, team }),
     queryFn: ({ pageParam }) =>
       unwrap(
         api.GET("/workspaces/{organizationId}/issues", {
           params: {
             path: { organizationId: workspace.id },
-            query: { limit: 50, search, cursor: pageParam },
+            query: {
+              ...issuesListQuery({ search, status, team }),
+              cursor: pageParam,
+            },
           },
         })
       ),
@@ -224,10 +248,10 @@ function IssuesList() {
         ) : allIssues.length === 0 ? (
           <EmptyState
             icon={<ListChecks size={40} />}
-            title={status || q ? "No matching issues" : "No issues yet"}
+            title={status || team || q ? "No matching issues" : "No issues yet"}
             description={
-              status || q
-                ? "Try a different search or status."
+              status || team || q
+                ? "Try a different search or filter."
                 : "Create the first issue to start tracking work."
             }
           />
