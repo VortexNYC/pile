@@ -11,6 +11,7 @@ import type { AppContext, WorkerEnv } from "../platform/middleware.js";
 import { canAccess } from "../platform/permissions.js";
 import { isAdminIdentity } from "../platform/permissions.js";
 import { rls } from "../platform/rls.js";
+import { blockNoteToPlainText, searchSnippet } from "../workspace/search.js";
 import { assertIssueAccess } from "./issue-access.js";
 import { resolveMentions } from "./mentions.js";
 import { getWorkspaceStub } from "./stub.js";
@@ -857,21 +858,32 @@ const unwatchRoute = createRoute({
   },
 });
 
+// VTX-758 — search hits carry metadata + a body excerpt, never the full
+// `content` (a 50-doc page used to ship ~150 KB of BlockNote JSON). Fetch
+// the body via GET /documents/{id} when needed.
+const documentSearchHitSchema = documentSchema
+  .omit({ content: true })
+  .extend({ score: z.number(), snippet: z.string() });
+
 const searchRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/documents/search",
+  summary: "Search documents by title and body",
   tags: ["documents"],
   middleware: [rls("document:view")],
   request: {
     params: z.object({ organizationId: z.string() }),
-    query: z.object({ q: z.string().min(1) }),
+    query: z.object({
+      q: z.string().min(1),
+      limit: z.coerce.number().int().min(1).max(100).optional(),
+    }),
   },
   responses: {
     200: {
       description: "Matching documents",
       content: {
         "application/json": {
-          schema: z.object({ documents: z.array(documentSchema) }),
+          schema: z.object({ documents: z.array(documentSearchHitSchema) }),
         },
       },
     },
@@ -1113,13 +1125,27 @@ export function registerDocumentRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(searchRoute, async (c) => {
     const { organizationId } = c.req.valid("param");
-    const { q } = c.req.valid("query");
+    const { q, limit } = c.req.valid("query");
     const stub = getWorkspaceStub(c.env, organizationId);
-    const ids = await stub.searchDocuments(q);
+    const hits = await stub.searchDocuments(q, limit ?? 20);
     const docs = (
-      await Promise.all(ids.map((id) => stub.getDocument(id)))
+      await Promise.all(hits.map((hit) => stub.getDocument(hit.id)))
     ).filter((d) => d !== undefined);
-    return c.json({ documents: docs.map(toResponse) });
+    const scoreById = new Map(hits.map((hit) => [hit.id, hit.score]));
+    return c.json({
+      documents: docs.map((doc) => {
+        const { content: _content, ...rest } = toResponse(doc);
+        const body =
+          doc.contentFormat === "markdown"
+            ? doc.content
+            : blockNoteToPlainText(doc.content);
+        return {
+          ...rest,
+          score: scoreById.get(doc.id) ?? 0,
+          snippet: searchSnippet(body || doc.title, q),
+        };
+      }),
+    });
   });
 
   app.openapi(getRoute, async (c) => {

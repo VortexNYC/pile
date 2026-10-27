@@ -20,6 +20,9 @@ export const MCP_TOOL_ALIASES: Readonly<Record<string, string>> = {
   list_issues: "getWorkspacesOrganizationIdIssues",
   get_issue: "getWorkspacesOrganizationIdIssuesId",
   create_issue: "postWorkspacesOrganizationIdIssues",
+  update_issues_batch: "postWorkspacesOrganizationIdIssuesBatch",
+  // VTX-772 — the old name misdescribed a batch UPDATE as a create. Kept as
+  // a deprecated alias so existing callers don't hard-break.
   create_issues_batch: "postWorkspacesOrganizationIdIssuesBatch",
   update_issue: "patchWorkspacesOrganizationIdIssuesId",
   delete_issue: "deleteWorkspacesOrganizationIdIssuesId",
@@ -144,6 +147,12 @@ export const MCP_TOOL_ALIASES: Readonly<Record<string, string>> = {
   set_support_ticket_labels:
     "putWorkspacesOrganizationIdSupportTicketsTicketIdLabels",
   list_support_inbox: "getWorkspacesOrganizationIdSupportInbox",
+};
+
+/** Aliases kept for compatibility that newer callers should not pick —
+ * mapped to their replacement name for the "Deprecated" hint (VTX-772). */
+export const MCP_TOOL_DEPRECATED_ALIASES: Readonly<Record<string, string>> = {
+  create_issues_batch: "update_issues_batch",
 };
 
 const ALIASES_BY_TARGET = new Map<string, string[]>();

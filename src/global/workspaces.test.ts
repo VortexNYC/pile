@@ -87,3 +87,20 @@ describe("workspace defaultTeamId", () => {
     );
   });
 });
+
+describe("seconds-as-ms timestamp repair (VTX-751)", () => {
+  it("reinterprets sub-2000 createdAt reads as unix seconds", async () => {
+    const db = createD1(env.D1);
+    const id = `org-${crypto.randomUUID()}`;
+    // 1788810284 seconds = 2026-09-07; stored in a ms column it reads as 1970.
+    await db.insert(organization).values({
+      id,
+      name: "Legacy seconds row",
+      slug: id,
+      createdAt: new Date(1788810284),
+      updatedAt: new Date(),
+    });
+    const ws = await getWorkspaceById(db, id);
+    expect(ws?.createdAt).toBe("2026-09-07T19:44:44.000Z");
+  });
+});

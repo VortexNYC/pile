@@ -579,12 +579,23 @@ export async function removeMemorySearchDocument(
 
 // ---- searches ----
 
-export async function searchIssues(
+/** A scored search hit. `id` is the entity id (issue id, document id, or
+ * memory id) — deduplicated across the entry kinds that roll up to it. */
+export interface RankedSearchHit {
+  id: string;
+  score: number;
+}
+
+/** Identifier hits outrank every BM25 content match — "VTX-123" should
+ * always surface the exact issue first in merged result lists. */
+const IDENTIFIER_HIT_SCORE = 1e12;
+
+export async function searchIssuesRanked(
   index: WorkspaceSearchIndex,
   query: string,
   teamIds: string[],
   limit = 1000
-): Promise<string[]> {
+): Promise<RankedSearchHit[]> {
   // Only issue-attached entries answer an issue query — documents and
   // unattached memories (issueId "") must not consume the result limit.
   const inScope = (entry: IndexedEntry) =>
@@ -594,7 +605,7 @@ export async function searchIssues(
 
   // Identifier hits rank first — "VTX-123" or any substring of it should
   // surface the exact issue ahead of content matches.
-  const out: string[] = [];
+  const out: RankedSearchHit[] = [];
   const seen = new Set<string>();
   if (queryLower.length > 0) {
     for (const entry of index.entries) {
@@ -607,7 +618,7 @@ export async function searchIssues(
         const key = entry.issueId || entry.id;
         if (seen.has(key)) continue;
         seen.add(key);
-        out.push(key);
+        out.push({ id: key, score: IDENTIFIER_HIT_SCORE });
         if (out.length >= limit) return out;
       }
     }
@@ -625,7 +636,42 @@ export async function searchIssues(
     const key = entry.issueId || entry.id;
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push(key);
+    out.push({ id: key, score: scores.get(slot) ?? 0 });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+export async function searchIssues(
+  index: WorkspaceSearchIndex,
+  query: string,
+  teamIds: string[],
+  limit = 1000
+): Promise<string[]> {
+  return (await searchIssuesRanked(index, query, teamIds, limit)).map(
+    (hit) => hit.id
+  );
+}
+
+export async function searchDocumentsRanked(
+  index: WorkspaceSearchIndex,
+  query: string,
+  limit = 50
+): Promise<RankedSearchHit[]> {
+  const scores = scoreSlots(
+    index,
+    query,
+    { title: 2, description: 0, body: 1 },
+    1,
+    (entry) => entry.kind === "document"
+  );
+  const out: RankedSearchHit[] = [];
+  const seen = new Set<string>();
+  for (const slot of rankedSlots(scores)) {
+    const documentId = index.entries[slot].documentId;
+    if (!documentId || seen.has(documentId)) continue;
+    seen.add(documentId);
+    out.push({ id: documentId, score: scores.get(slot) ?? 0 });
     if (out.length >= limit) break;
   }
   return out;
@@ -636,18 +682,30 @@ export async function searchDocuments(
   query: string,
   limit = 50
 ): Promise<string[]> {
+  return (await searchDocumentsRanked(index, query, limit)).map(
+    (hit) => hit.id
+  );
+}
+
+export async function searchMemoriesRanked(
+  index: WorkspaceSearchIndex,
+  query: string,
+  limit = 50
+): Promise<RankedSearchHit[]> {
   const scores = scoreSlots(
     index,
     query,
     { title: 2, description: 0, body: 1 },
     1,
-    (entry) => entry.kind === "document"
+    (entry) => entry.kind === "memory"
   );
-  const out: string[] = [];
+  const out: RankedSearchHit[] = [];
+  const seen = new Set<string>();
   for (const slot of rankedSlots(scores)) {
-    const documentId = index.entries[slot].documentId;
-    if (!documentId) continue;
-    out.push(documentId);
+    const memoryId = index.entries[slot].memoryId;
+    if (!memoryId || seen.has(memoryId)) continue;
+    seen.add(memoryId);
+    out.push({ id: memoryId, score: scores.get(slot) ?? 0 });
     if (out.length >= limit) break;
   }
   return out;
@@ -658,23 +716,32 @@ export async function searchMemories(
   query: string,
   limit = 50
 ): Promise<string[]> {
-  const scores = scoreSlots(
-    index,
-    query,
-    { title: 2, description: 0, body: 1 },
-    1,
-    (entry) => entry.kind === "memory"
-  );
-  const out: string[] = [];
-  const seen = new Set<string>();
-  for (const slot of rankedSlots(scores)) {
-    const memoryId = index.entries[slot].memoryId;
-    if (!memoryId || seen.has(memoryId)) continue;
-    seen.add(memoryId);
-    out.push(memoryId);
-    if (out.length >= limit) break;
+  return (await searchMemoriesRanked(index, query, limit)).map((hit) => hit.id);
+}
+
+/** VTX-758 — a short excerpt for result lists: a ~200-char window centered
+ * on the first query-term match, or the text's opening when no term hits.
+ * Terms are the same lowercase alphanumeric tokens the index uses. */
+export function searchSnippet(
+  text: string,
+  query: string,
+  maxLength = 200
+): string {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxLength) return normalized;
+  const terms = queryTerms(query);
+  const lower = normalized.toLowerCase();
+  let anchor = -1;
+  for (const term of terms) {
+    const at = lower.indexOf(term);
+    if (at !== -1 && (anchor === -1 || at < anchor)) anchor = at;
   }
-  return out;
+  if (anchor === -1) return `${normalized.slice(0, maxLength)}…`;
+  const start = Math.max(0, anchor - Math.floor(maxLength / 3));
+  const end = Math.min(normalized.length, start + maxLength);
+  const prefix = start > 0 ? "…" : "";
+  const suffix = end < normalized.length ? "…" : "";
+  return `${prefix}${normalized.slice(start, end).trim()}${suffix}`;
 }
 
 export interface SimilarIssueHit {

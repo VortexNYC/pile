@@ -8,6 +8,7 @@ import { member as memberTable, user as userTable } from "../global/schema.js";
 import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "./auth.js";
+import { resolveApiKeyIdentity } from "./middleware.js";
 import { createAdminHeaders } from "./test-auth.js";
 
 async function seedWorkspace() {
@@ -161,5 +162,22 @@ describe("workspaceAuthMiddleware", () => {
         )
       );
     expect((await adminProbe()).status).toBe(403);
+  });
+});
+
+describe("resolveApiKeyIdentity (VTX-753)", () => {
+  it("resolves a scoped key to its clamped workspace identity", async () => {
+    const { organizationId, userId, token } = await seedWorkspace();
+    const identity = await resolveApiKeyIdentity(env, token);
+    expect(identity.organizationId).toBe(organizationId);
+    expect(identity.id).toBe(userId);
+    expect(identity.permissions).toContain("read");
+    expect(identity.permissions).not.toContain("admin");
+  });
+
+  it("rejects an invalid token", async () => {
+    await expect(
+      resolveApiKeyIdentity(env, "not-a-real-key")
+    ).rejects.toThrow();
   });
 });

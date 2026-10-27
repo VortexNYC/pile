@@ -307,7 +307,9 @@ describe("label/state dedupe (VTX-752)", () => {
     ]);
     // Idempotent — a second pass merges nothing.
     expect((await mergeDuplicateLabels(db, orgId)).merged).toBe(0);
-    await db.run(sql`CREATE UNIQUE INDEX IF NOT EXISTS labels_unique_name_kind_idx ON labels (organization_id, name, kind)`);
+    await db.run(
+      sql`CREATE UNIQUE INDEX IF NOT EXISTS labels_unique_name_kind_idx ON labels (organization_id, name, kind)`
+    );
   });
 
   it("mergeDuplicateStates keeps the oldest row and deletes the rest", async () => {
@@ -336,6 +338,33 @@ describe("label/state dedupe (VTX-752)", () => {
     expect(result.merged).toBe(1);
     expect(result.idMap["st-dup"]).toBe("st-keep");
     expect((await listStates(db, orgId)).map((s) => s.id)).toEqual(["st-keep"]);
-    await db.run(sql`CREATE UNIQUE INDEX IF NOT EXISTS states_unique_name_idx ON states (organization_id, name)`);
+    await db.run(
+      sql`CREATE UNIQUE INDEX IF NOT EXISTS states_unique_name_idx ON states (organization_id, name)`
+    );
+  });
+});
+
+describe("legacy timestamp normalization (VTX-751)", () => {
+  it("normalizes SQLite-format state timestamps to ISO-8601 UTC", async () => {
+    const db = createD1(env.D1);
+    const organizationId = `org-${crypto.randomUUID()}`;
+    await db.insert(organization).values({
+      id: organizationId,
+      name: organizationId,
+      slug: organizationId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await db.insert(states).values({
+      id: `st-${crypto.randomUUID()}`,
+      organizationId,
+      linearId: "legacy",
+      name: "Legacy",
+      type: "unstarted",
+      createdAt: "2026-09-07 20:14:42",
+    });
+    const rows = await listStates(db, organizationId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.createdAt).toBe("2026-09-07T20:14:42.000Z");
   });
 });

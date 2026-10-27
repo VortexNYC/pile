@@ -4,8 +4,10 @@ import { z } from "zod";
 
 import { createD1 } from "../global/db.js";
 import { user as userTable } from "../global/schema.js";
+import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
+import { createAdminHeaders } from "../platform/test-auth.js";
 import { MCP_TOOL_ALIASES } from "./mcp-aliases.js";
 import { MCP_TOOLS } from "./mcp-tools.js";
 
@@ -75,8 +77,79 @@ async function workspaceAdminHeaders(
   return new Headers({ Authorization: `Bearer ${parsed.key}` });
 }
 
+async function workspaceScopedHeaders(
+  organizationId: string,
+  userId: string,
+  permissions: string[]
+): Promise<Headers> {
+  const auth = await createAuth(env);
+  const result = await auth.api.createApiKey({
+    body: {
+      userId,
+      name: `test-workspace-${permissions.join("-")}`,
+      rateLimitEnabled: false,
+      metadata: {
+        organizationId,
+        permissions: permissions.join(","),
+      },
+      permissions: { workspace: permissions },
+    },
+  });
+  const parsed = z.object({ key: z.string() }).parse(result);
+  return new Headers({ Authorization: `Bearer ${parsed.key}` });
+}
+
+let filterWorkspace: { organizationId: string; userId: string } | null = null;
+
+async function seedFilterWorkspace() {
+  if (filterWorkspace) return filterWorkspace;
+  const db = createD1(env.D1);
+  const now = new Date();
+  const userId = `mcp-filter-${crypto.randomUUID()}`;
+  await db
+    .insert(userTable)
+    .values({
+      id: userId,
+      name: "MCP Filter User",
+      email: `${userId}@example.com`,
+      emailVerified: true,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoNothing({ target: [userTable.email] });
+  const workspace = await createWorkspace(
+    db,
+    env,
+    await createAdminHeaders(env, userId),
+    {
+      name: "MCP filter workspace",
+      slug: `mcp-filter-${crypto.randomUUID()}`,
+      ownerId: userId,
+    }
+  );
+  filterWorkspace = { organizationId: workspace.id, userId };
+  return filterWorkspace;
+}
+
+async function listTools(
+  authHeaders?: Headers
+): Promise<{ name: string; description?: string }[]> {
+  const res = await app.fetch(
+    mcpRequest(
+      { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} },
+      authHeaders
+    ),
+    env
+  );
+  expect(res.status).toBe(200);
+  const body = (await res.json()) as {
+    result?: { tools?: { name: string; description?: string }[] };
+  };
+  return body.result?.tools ?? [];
+}
+
 describe("MCP integration", () => {
-  it("initializes and lists tools", async () => {
+  it("initializes, and lists no tools for anonymous callers (VTX-753)", async () => {
     const initRes = await app.fetch(
       mcpRequest({
         jsonrpc: "2.0",
@@ -97,21 +170,15 @@ describe("MCP integration", () => {
     };
     expect(initBody.result?.protocolVersion).toBe("2024-11-05");
 
-    const listRes = await app.fetch(
-      mcpRequest({
-        jsonrpc: "2.0",
-        id: 2,
-        method: "tools/list",
-        params: {},
-      }),
-      env
-    );
+    // Anonymous callers can't invoke anything, so they see nothing.
+    expect(await listTools()).toEqual([]);
+  });
 
-    expect(listRes.status).toBe(200);
-    const listBody = (await listRes.json()) as {
-      result?: { tools?: { name: string; description?: string }[] };
-    };
-    const tools = listBody.result?.tools ?? [];
+  it("lists the full generated surface for a workspace admin key", async () => {
+    const { organizationId, userId } = await seedFilterWorkspace();
+    const tools = await listTools(
+      await workspaceAdminHeaders(organizationId, userId)
+    );
     expect(tools.length).toBe(
       MCP_TOOLS.length + Object.keys(MCP_TOOL_ALIASES).length
     );
@@ -225,6 +292,8 @@ describe("MCP integration", () => {
   });
 
   it("propagates auth failures back to the caller", async () => {
+    // Anonymous callers see no tools, so the call itself fails as an
+    // unregistered tool rather than reaching the API.
     const res = await app.fetch(
       mcpRequest({
         jsonrpc: "2.0",
@@ -243,8 +312,131 @@ describe("MCP integration", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       result?: { isError: boolean; content: { text: string }[] };
+      error?: { code?: number; message?: string };
     };
-    expect(body.result?.isError).toBe(true);
+    expect(body.result?.isError === true || body.error !== undefined).toBe(
+      true
+    );
+  });
+});
+
+describe("tools/list permission filtering (VTX-753)", () => {
+  it("hides write and admin tools from a read-only workspace key", async () => {
+    const { organizationId, userId } = await seedFilterWorkspace();
+    const tools = await listTools(
+      await workspaceScopedHeaders(organizationId, userId, ["read"])
+    );
+    const names = new Set(tools.map((tool) => tool.name));
+
+    // Read-permitted tools stay visible.
+    for (const name of [
+      "list_issues",
+      "get_issue",
+      "search",
+      "list_documents",
+      "list_workspaces",
+      "memory_recall",
+    ]) {
+      expect(names.has(name), `expected ${name} to be listed`).toBe(true);
+    }
+
+    // Write/admin tools the key can never invoke are hidden.
+    for (const name of [
+      "create_issue",
+      "update_issue",
+      "delete_issue",
+      "update_issues_batch",
+      "create_issues_batch",
+      "getWorkspacesOrganizationIdReadiness",
+      "getWorkspacesOrganizationIdExport",
+    ]) {
+      expect(names.has(name), `expected ${name} to be hidden`).toBe(false);
+    }
+  });
+
+  it("never lists auth, webhook, or ingest tools for any caller", async () => {
+    const { organizationId, userId } = await seedFilterWorkspace();
+    const tools = await listTools(
+      await workspaceAdminHeaders(organizationId, userId)
+    );
+    const names = new Set(tools.map((tool) => tool.name));
+    for (const name of [
+      "adminUpdateUser",
+      "impersonateUser",
+      "setUserPassword",
+      "deleteUser",
+      "banUser",
+      "setRole",
+      "revokeUserSessions",
+      "signInEmail",
+      "signUpEmail",
+      "resetPassword",
+      "postBillingWebhook",
+      "postGitlab",
+      "postIntercomOrganizationId",
+    ]) {
+      expect(names.has(name), `expected ${name} to be off-surface`).toBe(false);
+    }
+
+    // An unregistered tool is also uncallable — tools/call fails.
+    const res = await app.fetch(
+      mcpRequest(
+        {
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/call",
+          params: { name: "adminUpdateUser", arguments: { body: {} } },
+        },
+        await workspaceAdminHeaders(organizationId, userId)
+      ),
+      env
+    );
+    const body = (await res.json()) as {
+      result?: { isError?: boolean };
+      error?: { message?: string };
+    };
+    expect(body.result?.isError === true || body.error !== undefined).toBe(
+      true
+    );
+  });
+});
+
+describe("tool naming (VTX-772)", () => {
+  it("exposes update_issues_batch and marks create_issues_batch deprecated", async () => {
+    const { organizationId, userId } = await seedFilterWorkspace();
+    const tools = await listTools(
+      await workspaceAdminHeaders(organizationId, userId)
+    );
+    const renamed = tools.find((tool) => tool.name === "update_issues_batch");
+    expect(renamed).toBeDefined();
+    const legacy = tools.find((tool) => tool.name === "create_issues_batch");
+    expect(legacy).toBeDefined();
+    expect(legacy?.description).toContain("Deprecated");
+    expect(legacy?.description).toContain("update_issues_batch");
+  });
+});
+
+describe("generated schema validity (VTX-749)", () => {
+  it("emits no boolean exclusiveMinimum/exclusiveMaximum (JSON Schema 2020-12)", () => {
+    const violations: string[] = [];
+    const walk = (node: unknown, toolName: string): void => {
+      if (Array.isArray(node)) {
+        for (const item of node) walk(item, toolName);
+        return;
+      }
+      if (typeof node !== "object" || node === null) return;
+      for (const [key, value] of Object.entries(node)) {
+        if (
+          (key === "exclusiveMinimum" || key === "exclusiveMaximum") &&
+          typeof value !== "number"
+        ) {
+          violations.push(`${toolName}: ${key}=${String(value)}`);
+        }
+        walk(value, toolName);
+      }
+    };
+    for (const tool of MCP_TOOLS) walk(tool.inputSchema, tool.name);
+    expect(violations).toEqual([]);
   });
 });
 

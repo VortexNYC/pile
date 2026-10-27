@@ -544,10 +544,57 @@ describe("space permission routes (PILE-447)", () => {
       token
     );
     expect(res.status).toBe(200);
+    const raw = (await res.json()) as { documents: { content?: unknown }[] };
+    const body = z
+      .object({
+        documents: z.array(
+          z.object({
+            id: z.string(),
+            score: z.number(),
+            snippet: z.string(),
+          })
+        ),
+      })
+      .parse(raw);
+    expect(body.documents.map((d) => d.id)).toContain(doc.id);
+
+    // VTX-758 — hits carry a score and an excerpt, never the full body.
+    const hit = body.documents.find((d) => d.id === doc.id);
+    expect(hit?.snippet).toContain("UniqueTokenVtx649SearchProof");
+    expect(
+      raw.documents.every((d) => !("content" in d) || d.content === undefined)
+    ).toBe(true);
+  });
+
+  it("honours ?limit on document search (VTX-758)", async () => {
+    const { organizationId, token } = await seedWorkspace();
+    const marker = `limitproof${crypto.randomUUID().slice(0, 8)}`;
+    for (let i = 0; i < 3; i++) {
+      const created = await fetch(
+        `/workspaces/${organizationId}/documents`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            title: `${marker} doc ${i}`,
+            contentFormat: "markdown",
+            content: `${marker} body ${i}`,
+          }),
+        },
+        token
+      );
+      expect(created.status).toBe(201);
+    }
+
+    const res = await fetch(
+      `/workspaces/${organizationId}/documents/search?q=${marker}&limit=2`,
+      {},
+      token
+    );
+    expect(res.status).toBe(200);
     const body = z
       .object({ documents: z.array(z.object({ id: z.string() })) })
       .parse(await res.json());
-    expect(body.documents.map((d) => d.id)).toContain(doc.id);
+    expect(body.documents.length).toBeLessThanOrEqual(2);
   });
 
   it("returns content: '' with ?summary=1 but full content on GET /{id} (PILE-645)", async () => {

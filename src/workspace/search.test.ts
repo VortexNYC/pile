@@ -15,6 +15,8 @@ import {
   removeIssueDocuments,
   removeMemorySearchDocument,
   searchDocuments,
+  searchDocumentsRanked,
+  searchSnippet,
   searchIssues,
   searchMemories,
   searchSchema,
@@ -496,5 +498,45 @@ describe("large-workspace scale (PILE-612)", () => {
     );
     expect(dups[0]?.issueId).toBe("iss-needle");
     expect(dups[0]?.score).toBe(1);
+  });
+});
+
+describe("searchSnippet (VTX-758)", () => {
+  it("returns the full text when short", () => {
+    expect(searchSnippet("short text", "query")).toBe("short text");
+  });
+
+  it("windows around the first query-term match", () => {
+    const text = `${"a ".repeat(200)}needleTerm here ${"b ".repeat(200)}`;
+    const snippet = searchSnippet(text, "needleTerm");
+    expect(snippet).toContain("needleTerm");
+    expect(snippet.length).toBeLessThanOrEqual(210);
+  });
+
+  it("falls back to the opening when no term matches", () => {
+    const text = `zzz ${"c ".repeat(200)}`;
+    const snippet = searchSnippet(text, "nomatch");
+    expect(snippet.endsWith("…")).toBe(true);
+  });
+});
+
+describe("ranked search hits (VTX-758)", () => {
+  it("returns ids with positive BM25 scores", async () => {
+    const index = createWorkspaceSearchIndex();
+    await insert(index, {
+      id: "d-1",
+      kind: "document",
+      issueId: "",
+      teamId: "",
+      identifier: "",
+      title: "zebroid rollout plan",
+      description: "",
+      body: "the zebroid rollout covers everything",
+      status: "",
+      documentId: "d-1",
+    });
+    const hits = await searchDocumentsRanked(index, "zebroid");
+    expect(hits.map((h) => h.id)).toEqual(["d-1"]);
+    expect(hits[0]?.score).toBeGreaterThan(0);
   });
 });

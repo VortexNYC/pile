@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { aliasesFor, MCP_TOOL_ALIASES } from "./mcp-aliases.js";
+import {
+  aliasesFor,
+  MCP_TOOL_ALIASES,
+  MCP_TOOL_DEPRECATED_ALIASES,
+} from "./mcp-aliases.js";
 
 describe("MCP tool aliases", () => {
   it("maps memory_recall and memory_remember to workspace memory operations (VTX-645)", () => {
@@ -76,6 +80,24 @@ describe("MCP tool aliases", () => {
     );
     expect(MCP_TOOL_ALIASES.agent_recap).toBe(
       "getWorkspacesOrganizationIdAgentRecap"
+    );
+  });
+});
+
+describe("deprecated aliases (VTX-772)", () => {
+  it("update_issues_batch is the canonical name; create_issues_batch is a deprecated alias", () => {
+    expect(MCP_TOOL_ALIASES.update_issues_batch).toBe(
+      "postWorkspacesOrganizationIdIssuesBatch"
+    );
+    expect(MCP_TOOL_ALIASES.create_issues_batch).toBe(
+      "postWorkspacesOrganizationIdIssuesBatch"
+    );
+    expect(MCP_TOOL_DEPRECATED_ALIASES.create_issues_batch).toBe(
+      "update_issues_batch"
+    );
+    expect(MCP_TOOL_DEPRECATED_ALIASES.update_issues_batch).toBeUndefined();
+    expect(aliasesFor("postWorkspacesOrganizationIdIssuesBatch")).toEqual(
+      expect.arrayContaining(["update_issues_batch", "create_issues_batch"])
     );
   });
 });

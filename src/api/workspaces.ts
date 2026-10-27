@@ -17,7 +17,10 @@ import {
 } from "../global/workspaces.js";
 import { createAuth } from "../platform/auth.js";
 import { VortexError } from "../platform/errors.js";
-import { toApiKeyWorkspaceIdentity } from "../platform/identity.js";
+import {
+  apiKeyWorkspaceScope,
+  toApiKeyWorkspaceIdentity,
+} from "../platform/identity.js";
 import {
   requireHumanSession,
   type AppContext,
@@ -389,6 +392,34 @@ export function registerWorkspaceRoutes(app: OpenAPIHono<AppContext>) {
 
   app.openapi(listWorkspacesRoute, async (c) => {
     const db = createD1(c.env.D1);
+    // VTX-751 — a workspace-scoped API key resolves a session for its owner
+    // through requireHumanSession, which used to leak every workspace the
+    // OWNER belongs to. A key only authorizes its bound workspace, so
+    // answer with just that one.
+    const token = (c.req.header("Authorization") ?? "")
+      .replace(/^Bearer\s+/i, "")
+      .trim();
+    if (token) {
+      const auth = await createAuth(c.env);
+      const result: unknown = await auth.api
+        .verifyApiKey({ body: { key: token } })
+        .catch(() => null);
+      if (
+        result &&
+        typeof result === "object" &&
+        "valid" in result &&
+        result.valid &&
+        "key" in result &&
+        result.key
+      ) {
+        const scopedOrganizationId = apiKeyWorkspaceScope(result.key);
+        if (scopedOrganizationId !== undefined) {
+          const item = await getWorkspaceById(db, scopedOrganizationId);
+          return c.json({ workspaces: item ? [item] : [] });
+        }
+      }
+      // Non-API-key bearer credentials fall through to the session list.
+    }
     const userId = c.get("userId");
     if (!userId) {
       throw new VortexError({

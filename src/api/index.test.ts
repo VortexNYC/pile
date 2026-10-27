@@ -19,6 +19,7 @@ import { createWorkspace } from "../global/workspaces.js";
 import app from "../index.js";
 import { createAuth } from "../platform/auth.js";
 import type { WorkerEnv } from "../platform/middleware.js";
+import { routePermissionsFor } from "../platform/rls.js";
 import { createAdminHeaders } from "../platform/test-auth.js";
 
 declare module "cloudflare:test" {
@@ -3865,5 +3866,21 @@ describe("agent kit discovery manifest (PILE-619)", () => {
     expect(body.resources).toContain(
       "pile://workspaces/{organizationId}/memory/profile/{entityType}/{entityId}"
     );
+  });
+});
+
+describe("route permission registry (VTX-753)", () => {
+  it("exposes each route's rls grants for the MCP tool filter", () => {
+    // Registration wrapped app.openapi harvests declared rls() specs.
+    expect(
+      routePermissionsFor("GET", "/workspaces/{organizationId}/issues")
+    ).toEqual(["issue:view"]);
+    expect(
+      routePermissionsFor("GET", "/workspaces/{organizationId}/readiness")
+    ).toEqual(["admin"]);
+    // Routes without rls declare no required grants.
+    expect(
+      routePermissionsFor("GET", "/workspaces/{organizationId}/me/permissions")
+    ).toBeUndefined();
   });
 });

@@ -6912,6 +6912,10 @@ export const COMMANDS: Record<string, CommandDef> = {
         name: "q",
         flag: "q",
       },
+      {
+        name: "limit",
+        flag: "limit",
+      },
     ],
     body: [],
   },

@@ -4034,6 +4034,7 @@
     },
     "/workspaces/{organizationId}/issues/batch": {
       "post": {
+        "summary": "Apply one patch to up to 100 existing issues (updates, not creates)",
         "tags": [
           "issues"
         ],
@@ -4260,8 +4261,7 @@
               }
             }
           }
-        },
-        "summary": "Create issue batch"
+        }
       }
     },
     "/workspaces/{organizationId}/issues/{id}/dispatch": {
@@ -31544,6 +31544,7 @@
     },
     "/workspaces/{organizationId}/me/permissions": {
       "get": {
+        "summary": "Get the caller's workspace permissions",
         "tags": [
           "memberships"
         ],
@@ -31584,8 +31585,7 @@
               }
             }
           }
-        },
-        "summary": "List me permissions"
+        }
       }
     },
     "/workspaces/{organizationId}/available-users": {
@@ -36722,6 +36722,7 @@
     },
     "/workspaces/{organizationId}/documents/search": {
       "get": {
+        "summary": "Search documents by title and body",
         "tags": [
           "documents"
         ],
@@ -36741,6 +36742,16 @@
             },
             "required": true,
             "name": "q",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "required": false,
+            "name": "limit",
             "in": "query"
           }
         ],
@@ -36769,22 +36780,6 @@
                           "icon": {
                             "type": "string",
                             "nullable": true
-                          },
-                          "content": {
-                            "anyOf": [
-                              {
-                                "type": "array",
-                                "items": {
-                                  "type": "object",
-                                  "additionalProperties": {
-                                    "nullable": true
-                                  }
-                                }
-                              },
-                              {
-                                "type": "string"
-                              }
-                            ]
                           },
                           "contentFormat": {
                             "type": "string",
@@ -36837,6 +36832,12 @@
                           "trashedAt": {
                             "type": "string",
                             "nullable": true
+                          },
+                          "score": {
+                            "type": "number"
+                          },
+                          "snippet": {
+                            "type": "string"
                           }
                         },
                         "required": [
@@ -36844,7 +36845,6 @@
                           "organizationId",
                           "title",
                           "icon",
-                          "content",
                           "contentFormat",
                           "slug",
                           "projectId",
@@ -36857,7 +36857,9 @@
                           "updatedById",
                           "createdAt",
                           "updatedAt",
-                          "trashedAt"
+                          "trashedAt",
+                          "score",
+                          "snippet"
                         ]
                       }
                     }
@@ -36869,8 +36871,7 @@
               }
             }
           }
-        },
-        "summary": "List document search"
+        }
       }
     },
     "/workspaces/{organizationId}/documents/{id}": {
@@ -70797,6 +70798,7 @@
     },
     "/workspaces/{organizationId}/search": {
       "post": {
+        "summary": "Search issues, documents, and memory",
         "tags": [
           "search"
         ],
@@ -70866,19 +70868,59 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "issue",
+                              "document",
+                              "memory"
+                            ]
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "identifier": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "snippet": {
+                            "type": "string"
+                          },
+                          "score": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "id",
+                          "identifier",
+                          "title",
+                          "snippet",
+                          "score"
+                        ]
+                      }
                     }
                   },
                   "required": [
                     "issueIds",
                     "documentIds",
-                    "memoryIds"
+                    "memoryIds",
+                    "results"
                   ]
                 }
               }
             }
           }
-        },
-        "summary": "Create search"
+        }
       }
     },
     "/workspaces/{organizationId}/teams": {
@@ -72614,6 +72656,7 @@
     },
     "/workspaces/{organizationId}/readiness": {
       "get": {
+        "summary": "Get workspace readiness checks",
         "tags": [
           "hardening"
         ],
@@ -72669,8 +72712,7 @@
               }
             }
           }
-        },
-        "summary": "List readiness"
+        }
       }
     },
     "/workspaces/{organizationId}/dedupe": {

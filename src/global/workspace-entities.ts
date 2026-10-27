@@ -23,6 +23,15 @@ import {
 
 const now = () => new Date().toISOString();
 
+/** VTX-751 — text timestamp columns mix ISO-8601 application writes with
+ * legacy SQLite `CURRENT_TIMESTAMP` defaults ("YYYY-MM-DD HH:MM:SS", no
+ * timezone marker). Normalize everything the API returns to ISO-8601 UTC. */
+function toIsoTimestamp(value: string): string {
+  if (value.includes("T")) return value;
+  const parsed = new Date(`${value.replace(" ", "T")}Z`);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString();
+}
+
 // Projects
 
 export function listProjects(db: D1Client, organizationId: string) {
@@ -258,20 +267,41 @@ export async function deleteCycle(
 
 // Labels
 
-export function listLabels(db: D1Client, organizationId: string) {
-  return db
+type LabelRow = typeof labels.$inferSelect;
+type StateRow = typeof states.$inferSelect;
+
+function mapLabelRow(row: LabelRow): LabelRow {
+  return {
+    ...row,
+    createdAt: toIsoTimestamp(row.createdAt),
+    updatedAt: toIsoTimestamp(row.updatedAt),
+  };
+}
+
+function mapStateRow(row: StateRow): StateRow {
+  return { ...row, createdAt: toIsoTimestamp(row.createdAt) };
+}
+
+export async function listLabels(db: D1Client, organizationId: string) {
+  const rows = await db
     .select()
     .from(labels)
     .where(eq(labels.organizationId, organizationId))
     .all();
+  return rows.map(mapLabelRow);
 }
 
-export function getLabel(db: D1Client, organizationId: string, id: string) {
-  return db
+export async function getLabel(
+  db: D1Client,
+  organizationId: string,
+  id: string
+) {
+  const row = await db
     .select()
     .from(labels)
     .where(and(eq(labels.organizationId, organizationId), eq(labels.id, id)))
     .get();
+  return row === undefined ? undefined : mapLabelRow(row);
 }
 
 export async function createLabel(
@@ -311,7 +341,8 @@ export async function createLabel(
     kind,
     createdAt: ts,
   });
-  return db.select().from(labels).where(eq(labels.id, id)).get();
+  const row = await db.select().from(labels).where(eq(labels.id, id)).get();
+  return row === undefined ? undefined : mapLabelRow(row);
 }
 
 export async function updateLabel(
@@ -356,11 +387,12 @@ export async function updateLabel(
     .update(labels)
     .set(values)
     .where(and(eq(labels.organizationId, organizationId), eq(labels.id, id)));
-  return db
+  const row = await db
     .select()
     .from(labels)
     .where(and(eq(labels.organizationId, organizationId), eq(labels.id, id)))
     .get();
+  return row === undefined ? undefined : mapLabelRow(row);
 }
 
 export async function deleteLabel(
@@ -375,20 +407,26 @@ export async function deleteLabel(
 
 // States
 
-export function listStates(db: D1Client, organizationId: string) {
-  return db
+export async function listStates(db: D1Client, organizationId: string) {
+  const rows = await db
     .select()
     .from(states)
     .where(eq(states.organizationId, organizationId))
     .all();
+  return rows.map(mapStateRow);
 }
 
-export function getState(db: D1Client, organizationId: string, id: string) {
-  return db
+export async function getState(
+  db: D1Client,
+  organizationId: string,
+  id: string
+) {
+  const row = await db
     .select()
     .from(states)
     .where(and(eq(states.organizationId, organizationId), eq(states.id, id)))
     .get();
+  return row === undefined ? undefined : mapStateRow(row);
 }
 
 export async function createState(
@@ -413,7 +451,7 @@ export async function createState(
     )
     .get();
   if (existing) {
-    return existing;
+    return mapStateRow(existing);
   }
   // VTX-752 — states are unique per (workspace, name): a repeated create
   // with a fresh linearId but a name the workspace already has returns the
@@ -443,7 +481,8 @@ export async function createState(
     position: values.position ?? null,
     createdAt: ts,
   });
-  return db.select().from(states).where(eq(states.id, id)).get();
+  const row = await db.select().from(states).where(eq(states.id, id)).get();
+  return row === undefined ? undefined : mapStateRow(row);
 }
 
 export async function updateState(
@@ -480,11 +519,12 @@ export async function updateState(
     .update(states)
     .set(values)
     .where(and(eq(states.organizationId, organizationId), eq(states.id, id)));
-  return db
+  const row = await db
     .select()
     .from(states)
     .where(and(eq(states.organizationId, organizationId), eq(states.id, id)))
     .get();
+  return row === undefined ? undefined : mapStateRow(row);
 }
 
 export async function deleteState(

@@ -70,6 +70,62 @@ describe("workspaces API", () => {
     expect(body.workspaces).toHaveLength(0);
   });
 
+  it("scopes GET /workspaces to the API key's own workspace (VTX-751)", async () => {
+    const cookie = await getSessionCookie();
+    const onboard = async () => {
+      const res = await app.fetch(
+        new Request(onboardUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Cookie: cookie,
+            Origin: origin,
+          },
+          body: JSON.stringify({
+            name: "Key Scoped",
+            slug: `key-scoped-${crypto.randomUUID()}`,
+          }),
+        }),
+        env
+      );
+      expect(res.status).toBe(201);
+      return (await res.json()) as {
+        workspace: { id: string };
+        token: string;
+      };
+    };
+    const ws1 = await onboard();
+    const ws2 = await onboard();
+
+    // A session sees every workspace the user belongs to.
+    const sessionRes = await app.fetch(
+      new Request(new URL("/workspaces", origin).toString(), {
+        headers: { Cookie: cookie, Origin: origin },
+      }),
+      env
+    );
+    const sessionBody = (await sessionRes.json()) as {
+      workspaces: { id: string }[];
+    };
+    const sessionIds = sessionBody.workspaces.map((w) => w.id);
+    expect(sessionIds).toContain(ws1.workspace.id);
+    expect(sessionIds).toContain(ws2.workspace.id);
+
+    // The workspace-scoped key only authorizes its own workspace — listing
+    // must not leak the owner's other workspaces.
+    const keyRes = await app.fetch(
+      new Request(new URL("/workspaces", origin).toString(), {
+        headers: { Authorization: `Bearer ${ws1.token}`, Origin: origin },
+      }),
+      env
+    );
+    expect(keyRes.status).toBe(200);
+    const keyBody = (await keyRes.json()) as {
+      workspaces: { id: string }[];
+    };
+    expect(keyBody.workspaces.map((w) => w.id)).toEqual([ws1.workspace.id]);
+  });
+
   it("onboards a workspace with a default team and admin token", async () => {
     const cookie = await getSessionCookie();
     const res = await app.fetch(
