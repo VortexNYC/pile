@@ -47,6 +47,7 @@ const readinessSchema = z.object({
 const readinessRoute = createRoute({
   method: "get",
   path: "/workspaces/{organizationId}/readiness",
+  summary: "Get workspace readiness checks",
   tags: ["hardening"],
   middleware: [rls("admin")],
   request: {

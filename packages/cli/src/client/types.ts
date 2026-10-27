@@ -1868,7 +1868,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create issue batch */
+        /** Apply one patch to up to 100 existing issues (updates, not creates) */
         post: {
             parameters: {
                 query?: never;
@@ -14438,7 +14438,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List me permissions */
+        /** Get the caller's workspace permissions */
         get: {
             parameters: {
                 query?: never;
@@ -17353,11 +17353,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List document search */
+        /** Search documents by title and body */
         get: {
             parameters: {
                 query: {
                     q: string;
+                    limit?: number;
                 };
                 header?: never;
                 path: {
@@ -17379,9 +17380,6 @@ export interface paths {
                                 organizationId: string;
                                 title: string;
                                 icon: string | null;
-                                content: {
-                                    [key: string]: unknown;
-                                }[] | string;
                                 /** @enum {string} */
                                 contentFormat: "blocks" | "markdown" | "canvas";
                                 slug: string | null;
@@ -17396,6 +17394,8 @@ export interface paths {
                                 createdAt: string;
                                 updatedAt: string;
                                 trashedAt: string | null;
+                                score: number;
+                                snippet: string;
                             }[];
                         };
                     };
@@ -32925,7 +32925,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create search */
+        /** Search issues, documents, and memory */
         post: {
             parameters: {
                 query?: never;
@@ -32957,6 +32957,15 @@ export interface paths {
                             issueIds: string[];
                             documentIds: string[];
                             memoryIds: string[];
+                            results: {
+                                /** @enum {string} */
+                                type: "issue" | "document" | "memory";
+                                id: string;
+                                identifier: string | null;
+                                title: string;
+                                snippet: string;
+                                score: number;
+                            }[];
                         };
                     };
                 };
@@ -34045,7 +34054,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List readiness */
+        /** Get workspace readiness checks */
         get: {
             parameters: {
                 query?: never;

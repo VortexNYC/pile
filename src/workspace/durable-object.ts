@@ -127,6 +127,7 @@ import {
   type IssueViewer,
   type ListIssuesArgs,
   type RealtimeEvent,
+  type SearchResultItem,
   RATE_LIMIT_HOLD_MS,
   RATE_LIMIT_PAUSE_PREFIX,
 } from "../types/workspace.js";
@@ -193,9 +194,13 @@ import {
   removeMemorySearchDocument,
   similarityTerms,
   titleOverlapScore,
-  searchDocuments,
+  searchDocumentsRanked,
   searchIssues,
+  searchIssuesRanked,
   searchMemories,
+  searchMemoriesRanked,
+  searchSnippet,
+  type RankedSearchHit,
   type CommentForSearch,
   type MemoryForSearch,
   type SearchDocument,
@@ -4140,13 +4145,14 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     return data.listDocumentWatchers(this.db, documentId);
   }
 
-  async searchDocuments(query: string, limit = 50): Promise<string[]> {
+  async searchDocuments(query: string, limit = 50): Promise<RankedSearchHit[]> {
     const index = await this.ensureSearchIndex();
-    return searchDocuments(index, query, limit);
+    return searchDocumentsRanked(index, query, limit);
   }
 
-  // `teamIds` is the caller's resolved visibility set — an empty array means
-  // no issues are in scope (never "unfiltered").
+  // VTX-758 — one hydrated hit per result: the id arrays stay for callers
+  // that only need references; `results` carries title/snippet/score so a
+  // client can render a result list without a follow-up fetch per id.
   async searchAll(
     query: string,
     teamIds: string[],
@@ -4157,20 +4163,23 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     issueIds: string[];
     documentIds: string[];
     memoryIds: string[];
+    results: SearchResultItem[];
   }> {
     const index = await this.ensureSearchIndex();
-    const [issueIds, documentIds, memoryIds] = await Promise.all([
+    const [issueHits, documentHits, memoryHits] = await Promise.all([
       teamIds.length > 0
-        ? searchIssues(index, query, teamIds, limit)
+        ? searchIssuesRanked(index, query, teamIds, limit)
         : Promise.resolve([]),
-      searchDocuments(index, query, limit),
-      searchMemories(index, query, limit),
+      searchDocumentsRanked(index, query, limit),
+      searchMemoriesRanked(index, query, limit),
     ]);
     const hidden = new Set(this.hiddenIssueIdsFor(viewer));
-    let visibleDocs = documentIds;
+    const visibleIssueHits = issueHits.filter((hit) => !hidden.has(hit.id));
+    let visibleDocHits = documentHits;
     // PILE-409: restricted-space docs and grant-gated docs don't leak
     // through search. Admins see everything; others need a grant.
-    if (documentIds.length > 0 && docViewer && !docViewer.admin) {
+    if (documentHits.length > 0 && docViewer && !docViewer.admin) {
+      const documentIds = documentHits.map((hit) => hit.id);
       const restrictedSpaces = data.restrictedSpaceIds(
         this.db,
         this.organizationId
@@ -4196,19 +4205,142 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
             .all()
         ).map((d) => [d.id, d.spaceId])
       );
-      visibleDocs = documentIds.filter((id) => {
-        if (granted.has(id)) return true;
-        const spaceId = spaceByDoc.get(id);
+      visibleDocHits = documentHits.filter((hit) => {
+        if (granted.has(hit.id)) return true;
+        const spaceId = spaceByDoc.get(hit.id);
         if (spaceId && restrictedSpaces.has(spaceId)) return false;
-        if (grantGated.has(id)) return false;
+        if (grantGated.has(hit.id)) return false;
         return true;
       });
     }
+    const results = await this.hydrateSearchResults(
+      query,
+      visibleIssueHits,
+      visibleDocHits,
+      memoryHits,
+      limit
+    );
     return {
-      issueIds: issueIds.filter((id) => !hidden.has(id)),
-      documentIds: visibleDocs,
-      memoryIds,
+      issueIds: visibleIssueHits.map((hit) => hit.id),
+      documentIds: visibleDocHits.map((hit) => hit.id),
+      memoryIds: memoryHits.map((hit) => hit.id),
+      results,
     };
+  }
+
+  // Hydrates the top-ranked hits across types. Entities are batch-fetched
+  // per type — deleted rows simply drop out of the result list.
+  private async hydrateSearchResults(
+    query: string,
+    issueHits: RankedSearchHit[],
+    documentHits: RankedSearchHit[],
+    memoryHits: RankedSearchHit[],
+    limit: number
+  ): Promise<SearchResultItem[]> {
+    const merged = [
+      ...issueHits.map((hit) => ({ ...hit, type: "issue" as const })),
+      ...documentHits.map((hit) => ({ ...hit, type: "document" as const })),
+      ...memoryHits.map((hit) => ({ ...hit, type: "memory" as const })),
+    ]
+      .toSorted((a, b) => b.score - a.score)
+      .slice(0, limit);
+
+    const idsFor = (type: "issue" | "document" | "memory") =>
+      merged.filter((hit) => hit.type === type).map((hit) => hit.id);
+    const issueIds = idsFor("issue");
+    const documentIds = idsFor("document");
+    const memoryIds = idsFor("memory");
+
+    const [issueRows, documentRows, memoryRows] = await Promise.all([
+      issueIds.length > 0
+        ? this.db
+            .select({
+              id: workspaceIssues.id,
+              identifier: workspaceIssues.identifier,
+              title: workspaceIssues.title,
+              description: workspaceIssues.description,
+            })
+            .from(workspaceIssues)
+            .where(inArrayJson(workspaceIssues.id, issueIds))
+            .all()
+        : Promise.resolve([]),
+      documentIds.length > 0
+        ? this.db
+            .select({
+              id: workspaceDocuments.id,
+              title: workspaceDocuments.title,
+              content: workspaceDocuments.content,
+              contentFormat: workspaceDocuments.contentFormat,
+            })
+            .from(workspaceDocuments)
+            .where(inArrayJson(workspaceDocuments.id, documentIds))
+            .all()
+        : Promise.resolve([]),
+      memoryIds.length > 0
+        ? this.db
+            .select({
+              id: workspaceMemory.id,
+              entityType: workspaceMemory.entityType,
+              entityId: workspaceMemory.entityId,
+              kind: workspaceMemory.kind,
+              fact: workspaceMemory.fact,
+            })
+            .from(workspaceMemory)
+            .where(inArrayJson(workspaceMemory.id, memoryIds))
+            .all()
+        : Promise.resolve([]),
+    ]);
+
+    const issueById = new Map(issueRows.map((row) => [row.id, row]));
+    const documentById = new Map(documentRows.map((row) => [row.id, row]));
+    const memoryById = new Map(memoryRows.map((row) => [row.id, row]));
+
+    return merged.flatMap((hit): SearchResultItem[] => {
+      if (hit.type === "issue") {
+        const row = issueById.get(hit.id);
+        if (!row) return [];
+        return [
+          {
+            type: "issue" as const,
+            id: row.id,
+            identifier: row.identifier,
+            title: row.title,
+            snippet: searchSnippet(row.description ?? row.title, query),
+            score: hit.score,
+          },
+        ];
+      }
+      if (hit.type === "document") {
+        const row = documentById.get(hit.id);
+        if (!row) return [];
+        const body =
+          row.contentFormat === "markdown"
+            ? row.content
+            : blockNoteToPlainText(row.content);
+        return [
+          {
+            type: "document" as const,
+            id: row.id,
+            identifier: null,
+            title: row.title,
+            snippet: searchSnippet(body || row.title, query),
+            score: hit.score,
+          },
+        ];
+      }
+      const row = memoryById.get(hit.id);
+      if (!row) return [];
+      return [
+        {
+          type: "memory" as const,
+          id: row.id,
+          identifier: null,
+          title: `${row.entityType}:${row.entityId} (${row.kind})`,
+          snippet: searchSnippet(row.fact, query),
+          score: hit.score,
+        },
+      ];
+    });
   }
 
   async findSimilarIssues(

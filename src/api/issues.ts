@@ -1044,6 +1044,8 @@ const batchUpdateIssuesSchema = z.object({
 const batchUpdateIssuesRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/issues/batch",
+  summary:
+    "Apply one patch to up to 100 existing issues (updates, not creates)",
   tags: ["issues"],
   middleware: [rls("issue:create")],
   request: {

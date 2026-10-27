@@ -130,9 +130,32 @@ describe("workspace search", () => {
       issueIds: string[];
       documentIds: string[];
       memoryIds: string[];
+      results: {
+        type: string;
+        id: string;
+        identifier: string | null;
+        title: string;
+        snippet: string;
+        score: number;
+      }[];
     }>();
     expect(body.issueIds).toContain(issue.id);
     expect(body.documentIds).toEqual([]);
     expect(body.memoryIds).toContain(memoryId);
+
+    // VTX-758 — hydrated results carry title/snippet/score.
+    const issueHit = body.results.find(
+      (r) => r.type === "issue" && r.id === issue.id
+    );
+    expect(issueHit).toBeDefined();
+    expect(issueHit?.identifier).toBe(issue.identifier);
+    expect(issueHit?.title).toContain(`zebroid-${marker}`);
+    expect(typeof issueHit?.score).toBe("number");
+
+    const memoryHit = body.results.find(
+      (r) => r.type === "memory" && r.id === memoryId
+    );
+    expect(memoryHit).toBeDefined();
+    expect(memoryHit?.snippet).toContain(`zebroid-${marker}`);
   });
 });

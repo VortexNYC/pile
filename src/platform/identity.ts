@@ -45,6 +45,26 @@ function parseApiKeyMetadata(metadata: unknown) {
   }
 }
 
+/** The workspace an API key is scoped to, or undefined when the key carries
+ * no `metadata.organizationId` (an account-level key that cannot call
+ * workspace routes). Non-throwing counterpart of
+ * toApiKeyWorkspaceIdentity's metadata check — used by the MCP server to
+ * decide which tools a key may see (VTX-753). */
+export function apiKeyWorkspaceScope(input: unknown): string | undefined {
+  const keyResult = apiKeyResultSchema.safeParse(input);
+  if (!keyResult.success) return undefined;
+  try {
+    const metadata = keyResult.data.metadata;
+    const parsed =
+      typeof metadata === "string"
+        ? apiKeyMetadataSchema.safeParse(JSON.parse(metadata))
+        : apiKeyMetadataSchema.safeParse(metadata);
+    return parsed.success ? parsed.data.organizationId : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function toApiKeyWorkspaceIdentity(input: unknown): WorkspaceIdentity {
   const keyResult = apiKeyResultSchema.safeParse(input);
   if (!keyResult.success) {

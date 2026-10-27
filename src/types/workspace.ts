@@ -193,6 +193,18 @@ export interface IssueViewer {
   grantedOnly?: boolean;
 }
 
+/** VTX-758 — one hydrated hit in POST /search's `results` array. */
+export interface SearchResultItem {
+  type: "issue" | "document" | "memory";
+  id: string;
+  /** Issue identifier (e.g. ISS-42); null for documents and memories. */
+  identifier: string | null;
+  title: string;
+  /** ~200-char excerpt centered on the first query-term match. */
+  snippet: string;
+  score: number;
+}
+
 export interface ListIssuesArgs {
   limit?: number;
   cursor?: IssueCursor;

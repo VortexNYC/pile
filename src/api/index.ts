@@ -18,6 +18,7 @@ import {
 } from "../platform/middleware.js";
 import { observabilityMiddleware } from "../platform/observability.js";
 import { reportWorkerException } from "../platform/posthog.js";
+import { collectRoutePermissions } from "../platform/rls.js";
 import { securityMiddleware } from "../platform/security.js";
 import { registerActivityRoutes } from "./activities.js";
 import { registerActivityFeedRoutes } from "./activity-feed.js";
@@ -139,6 +140,23 @@ const app = new OpenAPIHono<AppContext>({
     }
   },
 });
+
+// VTX-753 — harvest each route's declared rls() grants as it registers so
+// the MCP server can reduce tools/list to what a caller's key authorizes.
+// The wrap is transparent: it records metadata, then delegates.
+{
+  type OpenapiRegister = (typeof app)["openapi"];
+  const inner: OpenapiRegister = app.openapi.bind(app);
+  const collect = (
+    route: { method?: unknown; path?: unknown; middleware?: unknown },
+    handler: unknown,
+    hook?: unknown
+  ): unknown => {
+    collectRoutePermissions(route);
+    return Reflect.apply(inner, app, [route, handler, hook]);
+  };
+  app.openapi = collect as OpenapiRegister;
+}
 
 app.onError((err, c) => {
   console.error("unhandled route error", c.req.path, err);

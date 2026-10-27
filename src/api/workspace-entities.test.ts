@@ -5,7 +5,9 @@ import { z } from "zod";
 
 import { createD1 } from "../global/db.js";
 import {
+  labels,
   member,
+  states,
   team,
   teamMember,
   user as userTable,
@@ -210,5 +212,60 @@ describe("membership retirement endpoints (PILE-623)", () => {
       adminToken
     );
     expect(res.status).toBe(400);
+  });
+});
+
+describe("legacy timestamp normalization (VTX-751)", () => {
+  it("returns ISO-8601 timestamps for SQLite-format states and labels", async () => {
+    const { db, organizationId, adminToken } = await seed([]);
+    // Rows written before the API normalized timestamps carry SQLite's
+    // CURRENT_TIMESTAMP shape ("YYYY-MM-DD HH:MM:SS", no timezone).
+    const legacy = "2026-09-07 20:14:42";
+    await db.insert(states).values({
+      id: `st-${crypto.randomUUID()}`,
+      organizationId,
+      linearId: "legacy-todo",
+      name: "Legacy Todo",
+      type: "unstarted",
+      createdAt: legacy,
+    });
+    const labelId = `lbl-${crypto.randomUUID()}`;
+    await db.insert(labels).values({
+      id: labelId,
+      organizationId,
+      name: "legacy-label",
+      createdAt: legacy,
+      updatedAt: legacy,
+    });
+
+    const statesRes = await fetch(
+      `/workspaces/${organizationId}/states`,
+      {},
+      adminToken
+    );
+    expect(statesRes.status).toBe(200);
+    const statesBody = z
+      .object({ states: z.array(z.object({ createdAt: z.string() })) })
+      .parse(await statesRes.json());
+    for (const row of statesBody.states) {
+      expect(row.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+      expect(row.createdAt.endsWith("Z")).toBe(true);
+    }
+    const legacyState = statesBody.states.find(
+      (row) => row.createdAt === "2026-09-07T20:14:42.000Z"
+    );
+    expect(legacyState).toBeDefined();
+
+    const labelsRes = await fetch(
+      `/workspaces/${organizationId}/labels/${labelId}`,
+      {},
+      adminToken
+    );
+    expect(labelsRes.status).toBe(200);
+    const labelBody = z
+      .object({ createdAt: z.string(), updatedAt: z.string() })
+      .parse(await labelsRes.json());
+    expect(labelBody.createdAt).toBe("2026-09-07T20:14:42.000Z");
+    expect(labelBody.updatedAt).toBe("2026-09-07T20:14:42.000Z");
   });
 });

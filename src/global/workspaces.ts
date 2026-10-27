@@ -49,6 +49,14 @@ export interface WorkspaceRecord {
   updatedAt: string;
 }
 
+// VTX-751 — some pre-migration organization rows were written with
+// unix-SECONDS values into a millisecond-mode column, so they read back as
+// 1970 dates. A sub-2000 timestamp can only be that artifact — reinterpret
+// it as seconds.
+function repairEpochSeconds(date: Date): Date {
+  return date.getUTCFullYear() < 2000 ? new Date(date.getTime() * 1000) : date;
+}
+
 // The team's isDefault flag is authoritative; org metadata only mirrors it
 // and is missing on workspaces that predate setDefaultTeam.
 function buildWorkspaceRecord(
@@ -64,8 +72,8 @@ function buildWorkspaceRecord(
     key: meta.key,
     ownerId: ownerId ?? "",
     defaultTeamId: defaultTeamId ?? null,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
+    createdAt: repairEpochSeconds(row.createdAt).toISOString(),
+    updatedAt: repairEpochSeconds(row.updatedAt).toISOString(),
   };
 }
 

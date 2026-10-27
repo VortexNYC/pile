@@ -7,8 +7,23 @@ import {
 import { CfWorkerJsonSchemaValidator } from "@modelcontextprotocol/server/validators/cf-worker";
 import { z } from "zod";
 
-import type { WorkerEnv } from "../platform/middleware.js";
-import { aliasesFor, MCP_TOOL_ALIASES } from "./mcp-aliases.js";
+import {
+  apiKeyWorkspaceScope,
+  type WorkspaceIdentity,
+} from "../platform/identity.js";
+import {
+  clampApiKeyIdentity,
+  verifyApiKeyToken,
+  type WorkerEnv,
+} from "../platform/middleware.js";
+import { canAccess } from "../platform/permissions.js";
+import { routePermissionsFor } from "../platform/rls.js";
+import { getSessionUserId } from "../platform/session.js";
+import {
+  aliasesFor,
+  MCP_TOOL_ALIASES,
+  MCP_TOOL_DEPRECATED_ALIASES,
+} from "./mcp-aliases.js";
 import { MCP_TOOLS } from "./mcp-tools.js";
 
 type HonoApp = {
@@ -45,14 +60,93 @@ const ALIAS_TOOLS = Object.entries(MCP_TOOL_ALIASES).map(([alias, target]) => {
     throw new Error(`MCP alias ${alias} points at unknown tool ${target}`);
   }
   const generated = GENERATED_TOOLS[index];
+  const deprecated = MCP_TOOL_DEPRECATED_ALIASES[alias];
   return {
     ...generated,
     name: alias,
-    description: `${MCP_TOOLS[index].description} Same as ${target}.`,
+    description: `${deprecated ? `Deprecated — use ${deprecated} instead. ` : ""}${MCP_TOOLS[index].description} Same as ${target}.`,
   };
 });
 
 const TOOLS = [...GENERATED_TOOLS, ...ALIAS_TOOLS];
+
+// VTX-753 — tools/list is scoped to the caller: a workspace API key sees
+// only the tools its resolved permissions can actually invoke, an
+// unauthenticated caller sees none, and session/account-level credentials
+// see the full generated surface (their grant set varies per workspace, so
+// per-call rls remains the enforcement point).
+type McpCaller =
+  | { kind: "workspace-key"; identity: WorkspaceIdentity }
+  | { kind: "account" }
+  | { kind: "anonymous" };
+
+async function resolveMcpCaller(
+  request: Request,
+  env: WorkerEnv
+): Promise<McpCaller> {
+  const header = request.headers.get("authorization") ?? "";
+  const token = header.replace(/^Bearer\s+/i, "").trim();
+  if (token) {
+    try {
+      const key = await verifyApiKeyToken(env, token);
+      if (apiKeyWorkspaceScope(key) !== undefined) {
+        return {
+          kind: "workspace-key",
+          identity: await clampApiKeyIdentity(env, key),
+        };
+      }
+      // A verified key with no workspace metadata is an account-level
+      // credential — it cannot reach workspace routes, so it gets the
+      // account surface only.
+      return { kind: "account" };
+    } catch {
+      // Not a usable API key (invalid, expired, or a non-key bearer
+      // credential) — fall through to the session check.
+    }
+  }
+  const userId = await getSessionUserId(env, request).catch(() => null);
+  return userId ? { kind: "account" } : { kind: "anonymous" };
+}
+
+const WORKSPACE_SCOPED_PATH = "/workspaces/{organizationId}/";
+
+/** Mirror of the rls() gate for visibility filtering: any listed spec that
+ * passes canAccess suffices. `project:*` specs resolve against per-project
+ * membership at call time — a bare key can't prove them at list time, so
+ * project-role-only tools are hidden. */
+function keySatisfiesPermissions(
+  permissions: string[],
+  required: readonly string[] | undefined
+): boolean {
+  if (required === undefined || required.length === 0) return true;
+  if (canAccess(permissions, "admin")) return true;
+  const resourceSpecs = required.filter(
+    (spec) => spec !== "project:lead" && spec !== "project:member"
+  );
+  if (resourceSpecs.length === 0) return false;
+  return resourceSpecs.some((spec) => {
+    const [resource, action] = spec.includes(":")
+      ? (spec.split(":", 2) as [string, string])
+      : (["workspace", spec] as const);
+    return canAccess(permissions, action, resource);
+  });
+}
+
+function toolsForCaller(caller: McpCaller) {
+  if (caller.kind === "anonymous") return [];
+  if (caller.kind === "account") return TOOLS;
+  return TOOLS.filter((tool) => {
+    if (!tool.path.startsWith(WORKSPACE_SCOPED_PATH)) {
+      // Account-level routes (/workspaces list/create, /workspaces/{id})
+      // authenticate on the key owner's session — visible to any verified key.
+      return true;
+    }
+    return keySatisfiesPermissions(
+      caller.identity.permissions,
+      routePermissionsFor(tool.method, tool.path)
+    );
+  });
+}
 
 // VTX-750 — a list call over MCP used to return every document with its
 // full body (~700KB for one workspace). List endpoints that offer a light
@@ -82,7 +176,8 @@ export async function handleMcpRequest(
     version: "0.1.0",
   });
 
-  for (const tool of TOOLS) {
+  const caller = await resolveMcpCaller(request, env);
+  for (const tool of toolsForCaller(caller)) {
     server.registerTool(
       tool.name,
       {
