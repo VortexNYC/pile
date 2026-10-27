@@ -44415,7 +44415,8 @@
                 "type": "object",
                 "properties": {
                   "now": {
-                    "type": "string"
+                    "type": "string",
+                    "format": "date-time"
                   }
                 }
               }
@@ -75466,9 +75467,6 @@
                         "id"
                       ]
                     }
-                  },
-                  "vortexApiUrl": {
-                    "type": "string"
                   },
                   "vortexOperatorKey": {
                     "type": "string"

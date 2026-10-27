@@ -501,7 +501,7 @@ describe("vortex quote-requests sync (PILE-655)", () => {
             effectiveRateBps: 290,
             estimatedAnnualSavingsCents: 120_000,
             notes: "asked about handhelds",
-            createdAt: "2026-10-20T12:00:00Z",
+            createdAt: new Date().toISOString(),
           },
           {
             // No business name — falls back to the email local part.
@@ -711,7 +711,6 @@ describe("vortex quote-requests sync (PILE-655)", () => {
       const res = await post(
         `/workspaces/${organizationId}/intake/quote-requests/sync`,
         {
-          vortexApiUrl: "https://vortex.test",
           vortexOperatorKey: "op-key-123",
         },
         token
@@ -729,7 +728,9 @@ describe("vortex quote-requests sync (PILE-655)", () => {
     }
 
     expect(seen).toHaveLength(1);
-    expect(seen[0]!.url).toBe("https://vortex.test/v1/operator/quote-requests");
+    expect(seen[0]!.url).toBe(
+      "https://api.vortex.nyc/v1/operator/quote-requests"
+    );
     expect(seen[0]!.auth).toBe("Bearer op-key-123");
   });
 

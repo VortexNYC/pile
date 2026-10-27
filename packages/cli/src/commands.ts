@@ -14335,10 +14335,6 @@ export const COMMANDS: Record<string, CommandDef> = {
         flag: "quote-requests",
       },
       {
-        name: "vortexApiUrl",
-        flag: "vortex-api-url",
-      },
-      {
         name: "vortexOperatorKey",
         flag: "vortex-operator-key",
       },

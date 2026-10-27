@@ -677,7 +677,7 @@ const notifyDueFollowUpsRoute = createRoute({
   method: "post",
   path: "/workspaces/{organizationId}/customers/follow-ups/notify-due",
   tags: ["customers"],
-  middleware: [rls("customer:view")],
+  middleware: [rls("customer:edit")],
   description:
     "Scan customers whose nextStepDueAt is past due (terminal stages excluded) and emit a follow_up_due notification to the customer owner — once per (customer, due date).",
   request: {
@@ -688,7 +688,7 @@ const notifyDueFollowUpsRoute = createRoute({
           schema: z
             .object({
               // Scan-as-of override — tests and backfills pin the clock.
-              now: z.string().optional(),
+              now: z.string().datetime({ offset: true }).optional(),
             })
             .optional(),
         },
@@ -1287,10 +1287,17 @@ const DAY_MS = 86_400_000;
 /** nextStepDueAt for the knock: an explicit ISO wins, then the one-tap
  *  preset, then `undefined` so the outcome default applies. */
 function resolveKnockDueAt(input: {
+  outcome?: string;
   nextStepDueAt?: string | null;
   nextStepPreset?: "tomorrow" | "three_days" | "next_week" | "none";
 }): string | null | undefined {
   if (input.nextStepDueAt !== undefined) return input.nextStepDueAt;
+  if (
+    input.nextStepPreset === undefined &&
+    (input.outcome === "not_interested" || input.outcome === "spam")
+  ) {
+    return undefined;
+  }
   const now = Date.now();
   switch (input.nextStepPreset) {
     case "tomorrow":
@@ -1316,13 +1323,17 @@ async function createQuoteDeal(
   dealTitle: string | undefined
 ) {
   if (quotedAmountCents === undefined) return null;
-  return stub.createDeal({
-    customerId: customer.id,
-    name: dealTitle || `${customer.name} — Quote`,
-    stage: "proposal",
-    amountCents: quotedAmountCents,
-    currency: "USD",
-  });
+  try {
+    return await stub.createDeal({
+      customerId: customer.id,
+      name: dealTitle || `${customer.name} — Quote`,
+      stage: "proposal",
+      amountCents: quotedAmountCents,
+      currency: "USD",
+    });
+  } catch {
+    return null;
+  }
 }
 
 // Pipeline stages that mean "done" — due follow-ups stop pinging them.
@@ -1370,17 +1381,18 @@ export async function notifyDueCustomerFollowUps(
   const emitted = await Promise.all(
     candidates.map(async (customer) => {
       const dueAt = customer.nextStepDueAt!;
-      const prior = await stub.memoryRecall({
-        entityType: "customer",
-        entityId: customer.id,
-        kind: "follow_up_notified",
-        limit: 5,
-      });
-      if (prior.some((row) => row.fact === dueAt)) return null;
       const recipientId = customer.ownerId ?? fallbackRecipientId ?? null;
       // No one to ping — leave the claim unwritten so assigning an owner
       // (or a member calling again) can still trigger the notification.
       if (!recipientId) return null;
+      const claimKind = `follow_up_notified:${dueAt}`;
+      const prior = await stub.memoryRecall({
+        entityType: "customer",
+        entityId: customer.id,
+        kind: claimKind,
+        limit: 1,
+      });
+      if (prior.some((row) => row.fact === dueAt)) return null;
       const title = `Follow-up due: ${customer.name}`;
       const body = customer.nextStepText
         ? `${customer.nextStepText} (due ${dueAt.slice(0, 10)})`
@@ -1405,7 +1417,7 @@ export async function notifyDueCustomerFollowUps(
       await stub.memoryRemember({
         entityType: "customer",
         entityId: customer.id,
-        kind: "follow_up_notified",
+        kind: claimKind,
         fact: dueAt,
       });
       return {
@@ -1676,11 +1688,17 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     const normalizedName = normalizeSmbName(input.name);
     const normalizedAddress = normalizeStreetAddress(input.addressLine1);
     const existing = (await stub.listCustomers()).find((row) => {
-      if (normalizeSmbName(row.name) === normalizedName) return true;
-      return (
-        normalizedAddress.length > 0 &&
-        normalizeStreetAddress(row.address).includes(normalizedAddress)
+      if (
+        normalizedName.length > 0 &&
+        normalizeSmbName(row.name) === normalizedName
+      ) {
+        return true;
+      }
+      if (normalizedAddress.length === 0) return false;
+      const rowStreet = normalizeStreetAddress(
+        (row.address ?? "").split(",")[0]
       );
+      return rowStreet === normalizedAddress;
     });
 
     let created = false;

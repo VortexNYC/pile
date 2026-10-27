@@ -21017,6 +21017,7 @@ export interface paths {
             requestBody?: {
                 content: {
                     "application/json": {
+                        /** Format: date-time */
                         now?: string;
                     };
                 };
@@ -35506,7 +35507,6 @@ export interface paths {
                             notes?: string | null;
                             createdAt?: string | null;
                         }[];
-                        vortexApiUrl?: string;
                         vortexOperatorKey?: string;
                     };
                 };

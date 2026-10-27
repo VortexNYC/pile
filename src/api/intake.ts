@@ -15,7 +15,6 @@ import {
   DEFAULT_SIGNAL_RULES,
   type MerchantSignal,
   normalizePhoneE164,
-  normalizeSmbName,
   parseCustomerSignalFacts,
   rankMerchantSignals,
 } from "../workspace/signals-engine.js";
@@ -141,7 +140,6 @@ type QuoteRequestItem = z.infer<typeof quoteRequestItemSchema>;
 
 const quoteRequestSyncBodySchema = z.object({
   quoteRequests: z.array(quoteRequestItemSchema).optional(),
-  vortexApiUrl: z.string().optional(),
   vortexOperatorKey: z.string().optional(),
 });
 
@@ -716,9 +714,7 @@ export function registerIntakeRoutes(app: OpenAPIHono<AppContext>) {
     };
 
     const base = (
-      body.vortexApiUrl ??
-      envString("VORTEX_API_URL") ??
-      "https://api.vortex.nyc"
+      envString("VORTEX_API_URL") ?? "https://api.vortex.nyc"
     ).replace(/\/+$/, "");
 
     let items: QuoteRequestItem[] | undefined = body.quoteRequests;
@@ -768,7 +764,7 @@ export function registerIntakeRoutes(app: OpenAPIHono<AppContext>) {
     const byName = new Map<string, CustomerRow>();
     for (const row of existing) {
       if (row.externalId) byExternalId.set(row.externalId, row);
-      const nameKey = normalizeSmbName(row.name);
+      const nameKey = row.name.trim().toLowerCase();
       if (nameKey && !byName.has(nameKey)) byName.set(nameKey, row);
     }
     // Email match needs each merchant's contacts — built lazily on the
@@ -809,20 +805,24 @@ export function registerIntakeRoutes(app: OpenAPIHono<AppContext>) {
         customer = (await emailIndex()).get(email);
       }
       if (!customer) {
-        const nameKey = normalizeSmbName(name);
+        const nameKey = name.trim().toLowerCase();
         if (nameKey) customer = byName.get(nameKey);
       }
       if (!customer) {
-        customer = await stub.createCustomer({
-          name,
-          externalId,
-          phone,
-          processor: item.currentProcessor?.trim() || null,
-          notes: item.notes ?? null,
-          source: VORTEX_QUOTE_SOURCE,
-          customFields: fields,
-        });
-        created += 1;
+        try {
+          customer = await stub.createCustomer({
+            name,
+            externalId,
+            phone,
+            processor: item.currentProcessor?.trim() || null,
+            notes: item.notes ?? null,
+            source: VORTEX_QUOTE_SOURCE,
+            customFields: fields,
+          });
+          created += 1;
+        } catch {
+          continue;
+        }
       } else {
         updated += 1;
         // Enrich, never clobber: scalars only fill empty slots while the
@@ -846,9 +846,9 @@ export function registerIntakeRoutes(app: OpenAPIHono<AppContext>) {
         }
       }
       byExternalId.set(externalId, customer);
-      const nameKey = normalizeSmbName(customer.name);
+      const nameKey = customer.name.trim().toLowerCase();
       if (nameKey && !byName.has(nameKey)) byName.set(nameKey, customer);
-      if (emailIndexBuilt && email && !byEmail.has(email)) {
+      if (email && !byEmail.has(email)) {
         byEmail.set(email, customer);
       }
       const customerId = customer.id;

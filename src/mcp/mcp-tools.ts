@@ -12104,7 +12104,8 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "type": "object",
           "properties": {
             "now": {
-              "type": "string"
+              "type": "string",
+              "format": "date-time"
             }
           }
         }
@@ -14827,7 +14828,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     "name": "postWorkspacesOrganizationIdIntakeQuoterequestsSync",
-    "description": "Create intake quote request sync — Import Vortex pricing-calculator quote requests (/v1/operator/quote-requests) as inbound leads. Each row upserts a customer keyed on externalId \"vortex-quote:<id>\", writes the self-reported volume figures to customFields, upserts the contact, opens a lead-stage deal unless the merchant is already in the pipeline, and records a revenue_estimate signal. Pass quoteRequests inline or an operator key to pull from the Vortex API. (POST /workspaces/{organizationId}/intake/quote-requests/sync) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: quoteRequests, vortexApiUrl, vortexOperatorKey.",
+    "description": "Create intake quote request sync — Import Vortex pricing-calculator quote requests (/v1/operator/quote-requests) as inbound leads. Each row upserts a customer keyed on externalId \"vortex-quote:<id>\", writes the self-reported volume figures to customFields, upserts the contact, opens a lead-stage deal unless the merchant is already in the pipeline, and records a revenue_estimate signal. Pass quoteRequests inline or an operator key to pull from the Vortex API. (POST /workspaces/{organizationId}/intake/quote-requests/sync) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: quoteRequests, vortexOperatorKey.",
     "method": "POST",
     "path": "/workspaces/{organizationId}/intake/quote-requests/sync",
     "inputSchema": {
@@ -14905,9 +14906,6 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                   "id"
                 ]
               }
-            },
-            "vortexApiUrl": {
-              "type": "string"
             },
             "vortexOperatorKey": {
               "type": "string"

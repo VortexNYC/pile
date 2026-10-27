@@ -181,7 +181,11 @@ export function QuickKnockDialog({
                   key={value}
                   type="button"
                   aria-pressed={outcome === value}
-                  onClick={() => setOutcome(value)}
+                  onClick={() => {
+                    setOutcome(value);
+                    if (value === "not_interested") setNextStep("none");
+                    else if (nextStep === "none") setNextStep("tomorrow");
+                  }}
                   className={`min-h-11 rounded-lg border px-2 text-sm font-medium transition-colors ${
                     outcome === value
                       ? "border-kumo-default bg-kumo-tint text-kumo-default"
