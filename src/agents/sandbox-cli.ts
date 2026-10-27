@@ -751,10 +751,12 @@ export class SandboxCliAgentProvider implements AgentProvider {
       ISSUE_IDENTIFIER: issue.identifier ?? issue.id,
       AGENT_LABEL: this.d.displayLabel,
       MODEL: model,
-      // Daytona mounts DAYTONA_VOLUME_ID at /home/daytona/cache; on CF
-      // sandboxes this is just a local dir — harmless, keeps the path
-      // consistent for the runner's pnpm-store cache.
-      npm_config_store_dir: "/home/daytona/cache/pnpm-store",
+      // PILE-460 — only redirect the pnpm store when the cache volume is
+      // actually mounted; on the mountpoint-s3 FUSE volume pnpm dies with
+      // ENOSYS, and with no volume at all the default store is fine.
+      ...(this.env.DAYTONA_VOLUME_ID
+        ? { npm_config_store_dir: "/home/daytona/cache/pnpm-store" }
+        : {}),
       ...laneRestrictionEnv(this.env),
       ...options.extra,
     };
