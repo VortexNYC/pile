@@ -22,10 +22,12 @@ function mockFetch(
 ) {
   return vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
     const url = String(input);
+    // PILE-472 paginates the sandbox list (?page=N) — string routes match path-only.
+    const path = url.split("?")[0];
     const method = (init?.method ?? "GET").toUpperCase();
     const match = responses.find(
       (r) =>
-        (typeof r.url === "string" ? url === r.url : r.url.test(url)) &&
+        (typeof r.url === "string" ? path === r.url : r.url.test(url)) &&
         (r.method === undefined || r.method === method)
     );
     if (match) {
@@ -153,6 +155,16 @@ describe("CodexCliAgentProvider", () => {
         method: "POST",
         response: () => ({ cmdId: "cmd-1" }),
       },
+      {
+        url: `${toolboxBase}/files/upload-v2`,
+        method: "POST",
+        response: () => ({}),
+      },
+      {
+        url: `${toolboxBase}/process/execute`,
+        method: "POST",
+        response: () => ({ exitCode: 0, result: "" }),
+      },
     ]);
 
     const provider = new CodexCliAgentProvider(cliEnv());
@@ -183,18 +195,30 @@ describe("CodexCliAgentProvider", () => {
     expect(result.agentId).toBe("codex-cli");
     await Promise.all(waitUntilCalls);
 
-    expect(fetchSpy).toHaveBeenCalledTimes(5);
     const createCall = fetchSpy.mock.calls.find(
       ([input, init]) =>
-        String(input) === "https://app.daytona.io/api/sandbox" &&
+        String(input).split("?")[0] ===
+          "https://app.daytona.io/api/sandbox" &&
         (init as RequestInit | undefined)?.method === "POST"
     );
     expect(createCall).toBeDefined();
     const body = JSON.parse((createCall![1] as RequestInit).body as string);
-    expect(body.env.MODEL).toBe("gpt-reserve");
-    expect(body.env.REPO).toBe("VortexNYC/pile");
-    expect(body.env.CODEX_CLI_ENV_ID).toBe("env-test-123");
     expect(body.labels["vortex.agent"]).toBe("codex-cli");
+
+    // PILE-595 — lane fields ride /tmp/pile/lane.env, not the create env.
+    const upload = fetchSpy.mock.calls.find(
+      ([input, init]) =>
+        String(input).includes("/files/upload-v2") &&
+        decodeURIComponent(String(input)).includes(
+          "path=/tmp/pile/lane.env"
+        ) &&
+        (init as RequestInit | undefined)?.method === "POST"
+    );
+    expect(upload).toBeDefined();
+    const envFile = (upload![1] as RequestInit).body as string;
+    expect(envFile).toContain("export MODEL='gpt-reserve'");
+    expect(envFile).toContain("export REPO='VortexNYC/pile'");
+    expect(envFile).toContain("export CODEX_CLI_ENV_ID='env-test-123'");
   });
 
   it("polls running while command is in progress", async () => {
