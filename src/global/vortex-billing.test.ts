@@ -246,7 +246,7 @@ describe("submitUsageEvent", () => {
 });
 
 describe("createCheckoutSession", () => {
-  it("sends customerExternalId + lineItems and returns the hosted checkoutUrl", async () => {
+  it("sends customerId + items and returns the hosted checkoutUrl", async () => {
     const organizationId = await seedOrg();
     await linkAccount(organizationId, "bcust_9", "bacc_9");
     const calls = captureFetch(() => ({
@@ -280,13 +280,13 @@ describe("createCheckoutSession", () => {
     const body = req.body as Record<string, unknown>;
     expect(body).toEqual({
       mode: "subscription",
-      customerExternalId: organizationId,
+      customerId: "bcust_9",
       billingAccountId: "bacc_9",
-      lineItems: [{ priceId: "bprice_paid_monthly", quantity: 1 }],
+      items: [{ priceId: "bprice_paid_monthly", quantity: 1 }],
       metadata: { source: "pile", orgId: organizationId },
     });
-    expect(body).not.toHaveProperty("customerId");
-    expect(body).not.toHaveProperty("items");
+    expect(body).not.toHaveProperty("customerExternalId");
+    expect(body).not.toHaveProperty("lineItems");
     expect(body).not.toHaveProperty("environment");
     expect(body).not.toHaveProperty("merchantAccountId");
   });
