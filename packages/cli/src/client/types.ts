@@ -37243,7 +37243,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description All components operational */
+            /** @description All components operational (HTML status page when Accept includes text/html) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -37278,9 +37278,10 @@ export interface operations {
                             };
                         };
                     };
+                    "text/html": string;
                 };
             };
-            /** @description One or more components degraded */
+            /** @description One or more components degraded (HTML status page when Accept includes text/html) */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -37315,6 +37316,7 @@ export interface operations {
                             };
                         };
                     };
+                    "text/html": string;
                 };
             };
         };

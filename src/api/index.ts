@@ -104,6 +104,7 @@ import {
 import { registerSmsRoutes } from "./sms.js";
 import { registerStageTemplateRoutes } from "./stage-templates.js";
 import { registerStateRoutes } from "./states.js";
+import { renderStatusPageHtml } from "./status-page.js";
 import { getWorkspaceStub } from "./stub.js";
 import { registerSupportCaptureRoutes } from "./support-capture.js";
 import { registerSupportChannelRoutes } from "./support-channels.js";
@@ -667,18 +668,26 @@ app.openapi(
     tags: ["system"],
     responses: {
       200: {
-        description: "All components operational",
+        description:
+          "All components operational (HTML status page when Accept includes text/html)",
         content: {
           "application/json": {
             schema: publicStatusSchema,
           },
+          "text/html": {
+            schema: z.string(),
+          },
         },
       },
       503: {
-        description: "One or more components degraded",
+        description:
+          "One or more components degraded (HTML status page when Accept includes text/html)",
         content: {
           "application/json": {
             schema: publicStatusSchema,
+          },
+          "text/html": {
+            schema: z.string(),
           },
         },
       },
@@ -715,16 +724,21 @@ app.openapi(
       (envVars.COMMIT_SHA as string | undefined) ??
       null;
 
-    return c.json(
-      {
-        status: operational ? ("operational" as const) : ("degraded" as const),
-        version: "0.1.1",
-        sha,
-        timestamp: new Date().toISOString(),
-        components,
-      },
-      operational ? 200 : 503
-    );
+    const report = {
+      status: operational ? ("operational" as const) : ("degraded" as const),
+      version: "0.1.1",
+      sha,
+      timestamp: new Date().toISOString(),
+      components,
+    };
+    const statusCode = operational ? 200 : 503;
+
+    // Browsers get a self-contained status page; API clients and monitors
+    // keep the JSON contract. Same probe result either way.
+    if (c.req.header("accept")?.includes("text/html")) {
+      return c.html(renderStatusPageHtml(report), statusCode);
+    }
+    return c.json(report, statusCode);
   }
 );
 
