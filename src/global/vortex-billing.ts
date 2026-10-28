@@ -243,14 +243,14 @@ export async function createCheckoutSession(
         env,
         `pile-checkout-${organizationId}-${crypto.randomUUID()}`
       ),
-      // CreateCheckoutSessionRequest: `customerExternalId` is the merchant's
-      // own ref (our org id / externalCustomerRef), `lineItems` — not
-      // `items` — carries { priceId, quantity }.
+      // Runtime-verified against api.vortex.nyc (PILE-166): the live
+      // validator wants `customerId` + `items` — the spec's
+      // `customerExternalId`/`lineItems` are rejected with a bare 400.
       body: JSON.stringify({
         mode: "subscription",
-        customerExternalId: organizationId,
+        customerId: account.vortexCustomerId,
         billingAccountId: account.vortexBillingAccountId ?? undefined,
-        lineItems: [{ priceId, quantity: 1 }],
+        items: [{ priceId, quantity: 1 }],
         metadata: { source: "pile", orgId: organizationId },
       }),
     }
