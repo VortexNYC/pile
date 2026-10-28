@@ -22964,7 +22964,7 @@ export interface paths {
                          * @default nyc_dob_contractors_and_trades
                          * @enum {string}
                          */
-                        preset?: "nyc_dob_contractors_and_trades" | "nyc_bic_commercial_haulers" | "nyc_dob_permit_issuances" | "nyc_home_improvement_contractors" | "nyc_auto_and_garages" | "nyc_b2b_and_specialty_dealers" | "nyc_bookkeepers_and_cpas" | "nyc_vc_and_accelerators" | "nyc_tech_and_software_startups" | "us_nppes_medical_and_dental" | "us_sec_form_d_tech_startups";
+                        preset?: "nyc_dob_contractors_and_trades" | "nyc_bic_commercial_haulers" | "nyc_dob_permit_issuances" | "nyc_home_improvement_contractors" | "nyc_auto_and_garages" | "nyc_b2b_and_specialty_dealers" | "nyc_bookkeepers_and_cpas" | "nyc_vc_and_accelerators" | "nyc_tech_and_software_startups" | "us_nppes_medical_and_dental" | "us_sec_form_d_tech_startups" | "nyc_dob_permit_job_value" | "nys_tax_warrants" | "nys_ucc_filings" | "irs_990_nonprofits" | "nyc_checkbook";
                         borough?: string;
                         /** @default 15 */
                         limit?: number;
@@ -23193,6 +23193,119 @@ export interface paths {
                                 updatedCount: number;
                                 nextOffset: number;
                             }[];
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{organizationId}/customers/sms-inbound": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create customer sms inbound
+         * @description Inbound SMS agent webhook (PILE-395). An SMS provider (Sendblue-style) POSTs each inbound text; a deterministic parser performs CRM ops on the sender's customer record — knock/visit logging, quoted-$ → proposal deal, follow-up scheduling, and 'what's due' list. Auth is a shared webhook secret via ?secret= or the x-sms-secret header compared against SMS_INBOUND_SECRET; the endpoint refuses (503 NOT_CONFIGURED) when the secret is unset so inbound is never unauthenticated. Retries dedupe on messageId.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        from: string;
+                        text: string;
+                        to?: string;
+                        messageId?: string;
+                        receivedAt?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description SMS interpreted — actions taken plus the SMS reply text */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {boolean} */
+                            ok: true;
+                            deduplicated: boolean;
+                            customer: {
+                                id: string;
+                                name: string;
+                                phone: string | null;
+                                statusId: string | null;
+                                nextStepText: string | null;
+                                nextStepDueAt: string | null;
+                            } | null;
+                            actions: ({
+                                /** @enum {string} */
+                                type: "interaction_logged";
+                                interactionId: string;
+                                outcome: string;
+                            } | {
+                                /** @enum {string} */
+                                type: "deal_created";
+                                dealId: string;
+                                amountCents: number;
+                            } | {
+                                /** @enum {string} */
+                                type: "follow_up_set";
+                                nextStepDueAt: string;
+                                nextStepText: string | null;
+                            } | {
+                                /** @enum {string} */
+                                type: "due_list";
+                                items: {
+                                    customerId: string;
+                                    name: string;
+                                    nextStepText: string | null;
+                                    nextStepDueAt: string | null;
+                                }[];
+                            })[];
+                            replyText: string;
+                        };
+                    };
+                };
+                /** @description Missing or invalid webhook secret */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            code: string;
+                            message: string;
+                        };
+                    };
+                };
+                /** @description SMS_INBOUND_SECRET not configured */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            code: string;
+                            message: string;
                         };
                     };
                 };

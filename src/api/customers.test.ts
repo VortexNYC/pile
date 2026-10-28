@@ -1,7 +1,8 @@
 import { env } from "cloudflare:test";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { PRESET_NON_POS_SMB_SOURCES } from "../agents/collectors.js";
 import { createD1 } from "../global/db.js";
 import { user as userTable } from "../global/schema.js";
 import { createWorkspace } from "../global/workspaces.js";
@@ -2286,5 +2287,59 @@ describe("customer territories (PILE-672)", () => {
       `/workspaces/${organizationId}/customers/territories`
     );
     expect(res.status).toBe(401);
+  });
+});
+
+describe("pull-leads preset enum (pile-review)", () => {
+  let organizationId = "";
+  let token = "";
+
+  beforeAll(async () => {
+    ({ organizationId, token } = await seedWorkspace());
+  });
+
+  it("accepts every preset in PRESET_NON_POS_SMB_SOURCES — the five revenue presets no longer 400", async () => {
+    // Registry pulls are stubbed empty — the exercise is enum acceptance
+    // (a missing enum member 400s before any fetch happens).
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("[]", { status: 200 }))
+    );
+    try {
+      const schema = z.object({
+        sourceName: z.string(),
+        pulledCount: z.number(),
+        createdCount: z.number(),
+        updatedCount: z.number(),
+        leads: z.array(z.record(z.string(), z.unknown())),
+      });
+      for (const preset of Object.keys(PRESET_NON_POS_SMB_SOURCES)) {
+        const res = await fetch(
+          `/workspaces/${organizationId}/customers/pull-leads`,
+          {
+            method: "POST",
+            body: JSON.stringify({ preset, enrichWebsites: false }),
+          },
+          token
+        );
+        expect(res.status, `preset ${preset} must not 400`).toBe(200);
+        const body = schema.parse(await res.json());
+        expect(body.pulledCount).toBe(0);
+      }
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("still rejects an unknown preset", async () => {
+    const res = await fetch(
+      `/workspaces/${organizationId}/customers/pull-leads`,
+      {
+        method: "POST",
+        body: JSON.stringify({ preset: "usaspending" }),
+      },
+      token
+    );
+    expect(res.status).toBe(400);
   });
 });

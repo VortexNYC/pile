@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
+import { PRESET_NON_POS_SMB_SOURCES } from "./collectors.js";
 import {
   allowedLaneTools,
   allowedWorkspaceLaneTools,
@@ -707,5 +708,134 @@ describe("workspace lane tools", () => {
   it("exposes the send-gate and dedup tools by name", () => {
     expect(wsTool("customer_send_gate").name).toBe("customer_send_gate");
     expect(wsTool("customer_dedup_key").name).toBe("customer_dedup_key");
+  });
+});
+
+describe("customer_pull_leads + source_collect revenue persistence (pile-review)", () => {
+  it("customer_pull_leads preset enum accepts every PRESET_NON_POS_SMB_SOURCES id", () => {
+    const pullTool = wsTool("customer_pull_leads");
+    for (const preset of Object.keys(PRESET_NON_POS_SMB_SOURCES)) {
+      const parsed = pullTool.inputSchema.parse({ preset }) as {
+        preset: string;
+      };
+      expect(parsed.preset).toBe(preset);
+    }
+    expect(() =>
+      pullTool.inputSchema.parse({ preset: "not_a_preset" })
+    ).toThrow();
+  });
+
+  it("customer_pull_leads persists estMonthlyVolumeCents + raw into customFields", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify([
+              {
+                vendor: "1220 EXHIBITS INC",
+                fiscalyear: "2025-2026",
+                paymentamount: "120000.00",
+              },
+            ]),
+            { status: 200 }
+          )
+      )
+    );
+    try {
+      const { ws, calls } = fakeWorkspace([]);
+      const memWrites: Array<{ kind: string; fact: string }> = [];
+      const baseRemember = ws.memoryRemember.bind(ws);
+      ws.memoryRemember = async (input) => {
+        memWrites.push(input);
+        return baseRemember(input);
+      };
+      const out = (await wsTool("customer_pull_leads").run(wsCtx(ws), {
+        preset: "nyc_checkbook",
+        limit: 5,
+      })) as { createdCount: number; leads: unknown[] };
+      expect(out.createdCount).toBe(1);
+      // $120,000 annual payment → 12_000_000 cents / 12 = 1_000_000/mo.
+      const createdFields = calls.createCustomer[0]?.customFields as
+        | Record<string, string>
+        | undefined;
+      expect(createdFields).toMatchObject({
+        estMonthlyVolumeCents: "1000000",
+        monthly_card_volume_cents: "1000000",
+      });
+      expect(createdFields?.leadSourceRaw).toContain("120000.00");
+      expect(memWrites[0]?.kind).toContain("signal:award:");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("source_collect persists volume customFields and a merchant signal fact", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify([
+              {
+                vendor: "KINGS EQUIPMENT LEASING LLC",
+                fiscalyear: "2025-2026",
+                paymentamount: "240000.00",
+              },
+            ]),
+            { status: 200 }
+          )
+      )
+    );
+    try {
+      const { ws, calls } = fakeWorkspace([]);
+      const memWrites: Array<{ kind: string; fact: string }> = [];
+      const baseRemember = ws.memoryRemember.bind(ws);
+      ws.memoryRemember = async (input) => {
+        memWrites.push(input);
+        return baseRemember(input);
+      };
+      ws.listMerchantSources = async () => [
+        {
+          id: "src-checkbook",
+          name: "NYC Checkbook",
+          kind: "nyc_checkbook",
+          config: JSON.stringify({
+            domain: "data.ny.gov",
+            dataset: "85j2-hzta",
+            name_field: "vendor",
+            id_field: "vendor",
+            amount_field: "paymentamount",
+            amount_key: "paymentAmountCents",
+          }),
+          cursorField: null,
+          cursorValue: null,
+          signal: "award",
+          enabled: 1,
+        },
+      ];
+      ws.createMarketRun = async () => ({ id: "run-1" });
+      const out = (await wsTool("source_collect").run(wsCtx(ws), {
+        sourceId: "src-checkbook",
+      })) as { collected: number };
+      expect(out.collected).toBe(1);
+      // $240,000 annual payment → 24_000_000 cents / 12 = 2_000_000/mo.
+      expect(calls.createCustomer[0]?.customFields).toMatchObject({
+        estMonthlyVolumeCents: "2000000",
+        monthly_card_volume_cents: "2000000",
+      });
+      const signalWrite = memWrites.find((m) =>
+        m.kind.startsWith("signal:award:")
+      );
+      expect(signalWrite).toBeDefined();
+      const parsed = JSON.parse(signalWrite!.fact) as {
+        merchantId: string;
+        type: string;
+      };
+      expect(parsed.type).toBe("award");
+      expect(parsed.merchantId).toBe("cust-1");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

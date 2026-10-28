@@ -1,12 +1,29 @@
-FROM daytonaio/sandbox:0.9.0
+# PILE-460 — image for the `vortex-devin-runner` Daytona snapshot used by the
+# devin-cli provider (selected via DAYTONA_SNAPSHOT / provider computeSnapshot;
+# see src/agents/compute.ts). The snapshot is created through Daytona's API,
+# not by this repo: when rebuilding it, request explicit resources of
+# 2 vCPU / 4 GiB memory — Daytona's undersized defaults are a known cause of
+# sandbox start failures.
+FROM daytonaio/sandbox:0.10.0
 
 USER root
+ENV HOME=/root
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git python3 curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-RUN mkdir -p /root/.local/bin \
-    && (curl -fsSL https://cli.devin.ai/install.sh | bash || true) \
-    && test -x /root/.local/bin/devin
+# The installer ends by running `devin setup`, an interactive wizard that
+# always exits non-zero without a TTY. Strip that tail invocation so the
+# script's own `set -euo pipefail` makes real failures — manifest fetch,
+# download, checksum, unsupported target — fail the image build instead of
+# shipping a dead snapshot (no `|| true` here on purpose). If upstream ever
+# moves the setup call, this sed silently no-ops and the wizard's non-zero
+# exit still fails the build loudly.
+RUN curl -fsSL https://cli.devin.ai/install.sh -o /tmp/devin-install.sh \
+    && sed -i '/COMPILED_BIN_NAME" setup/d' /tmp/devin-install.sh \
+    && bash /tmp/devin-install.sh \
+    && rm -f /tmp/devin-install.sh \
+    && test -x /root/.local/bin/devin \
+    && timeout 60 /root/.local/bin/devin --version
 ENV PATH="/root/.local/bin:${PATH}"

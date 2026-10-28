@@ -857,6 +857,37 @@ describe("revenue-signal collectors (PILE-660/661/663)", () => {
     ).toBe("trades");
   });
 
+  it("franchise-name regex only excludes actual storefronts — franchise-named trades classify as trades", () => {
+    // "Subway Electrical" is a contractor that happens to share a franchise
+    // name — it must not be excluded as a locked-in POS restaurant.
+    expect(
+      classifyMerchantLead({
+        name: "Subway Electrical Corp",
+        vertical: "ELECTRICAL FIRM",
+      }).sheetKey
+    ).toBe("trades");
+    expect(
+      classifyMerchantLead({
+        name: "Dunkin Plumbing & Heating",
+        vertical: "MASTER PLUMBER",
+      }).sheetKey
+    ).toBe("trades");
+    // A real QSR franchise is still excluded even when storefronts are
+    // opted in.
+    expect(
+      classifyMerchantLead(
+        { name: "Subway #10234", vertical: "restaurant" },
+        { includeStorefronts: true }
+      ).sheetKey
+    ).toBe("excluded_pos");
+    expect(
+      classifyMerchantLead(
+        { name: "Dunkin' Donuts", vertical: "cafe" },
+        { includeStorefronts: true }
+      ).sheetKey
+    ).toBe("excluded_pos");
+  });
+
   it("pullSource handles kind=places via Google Places Text Search with X-Goog headers + foot-traffic raw fields (PILE-663)", async () => {
     const calls: Array<{ url: string; init?: RequestInit }> = [];
     vi.stubGlobal(
@@ -1003,6 +1034,82 @@ describe("revenue-signal collectors (PILE-660/661/663)", () => {
       rating: 4.4,
       userRatingCount: 512,
     });
+    vi.unstubAllGlobals();
+  });
+
+  it("places source sends pageToken from cursorValue so collects advance past page 1", async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+        return new Response(
+          JSON.stringify({ places: [], nextPageToken: "tok-p3" }),
+          { status: 200 }
+        );
+      })
+    );
+    const source = {
+      id: "places-cursor",
+      name: "places-cursor",
+      kind: "places",
+      config: JSON.stringify({ textQuery: "delis", apiKey: "k" }),
+      cursorField: null,
+      cursorValue: "tok-p2",
+      signal: "contact_found",
+    };
+    const out = await pullSource(source);
+    // The persisted cursor is sent as pageToken — the next collect resumes
+    // at page 3 instead of re-pulling paid page 1.
+    expect(bodies[0]).toMatchObject({ pageToken: "tok-p2" });
+    expect(out.newCursor).toBe("tok-p3");
+
+    // First pull (no cursor) sends no pageToken.
+    await pullSource({ ...source, cursorValue: null });
+    expect(bodies[1]).not.toHaveProperty("pageToken");
+    vi.unstubAllGlobals();
+  });
+
+  it("num() treats blank amount cells as missing — never a $0 (PILE review)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify([
+              {
+                vendor: "BLANK AMOUNT CO",
+                paymentamount: "",
+              },
+              {
+                vendor: "REAL AMOUNT CO",
+                paymentamount: "1200.50",
+              },
+            ]),
+            { status: 200 }
+          )
+      )
+    );
+    const out = await pullSource({
+      id: "amounts",
+      name: "amounts",
+      kind: "nyc_checkbook",
+      config: JSON.stringify({
+        domain: "data.ny.gov",
+        dataset: "85j2-hzta",
+        name_field: "vendor",
+        id_field: "vendor",
+        amount_field: "paymentamount",
+        amount_key: "paymentAmountCents",
+      }),
+      cursorField: null,
+      cursorValue: null,
+      signal: "award",
+    });
+    // Number("") === 0 would have minted a fake $0 figure.
+    expect(out.candidates[0]?.raw?.paymentAmountCents).toBeUndefined();
+    expect(out.candidates[0]?.estMonthlyVolumeCents).toBeNull();
+    expect(out.candidates[1]?.raw?.paymentAmountCents).toBe(120_050);
     vi.unstubAllGlobals();
   });
 

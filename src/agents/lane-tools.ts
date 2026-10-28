@@ -30,7 +30,6 @@ import {
 } from "../workspace/signals-engine.js";
 import {
   type MerchantSourceRow,
-  type NonPosSmbPresetId,
   PRESET_NON_POS_SMB_SOURCES,
   pullSource,
   scoreCandidate,
@@ -1079,6 +1078,54 @@ function isEmptyValue(value: unknown): boolean {
   );
 }
 
+/** PILE-657/658/660/661 — collector/enrichment revenue fields → name-keyed
+ *  customer custom fields. The volume estimate lands under both spellings;
+ *  `monthly_card_volume_cents` is the canonical key re-ranks read back off
+ *  the field map (same contract as the intake routes). */
+function leadRevenueCustomFields(cand: {
+  estMonthlyVolumeCents?: number | null;
+  raw?: Record<string, unknown> | null;
+  placesRating?: number | null;
+  placesUserRatingCount?: number | null;
+  inferredRevenue?: string | null;
+  employeeCount?: number | null;
+}): Record<string, string> {
+  const fields: Record<string, string> = {};
+  if (
+    typeof cand.estMonthlyVolumeCents === "number" &&
+    Number.isFinite(cand.estMonthlyVolumeCents)
+  ) {
+    const cents = String(Math.max(0, Math.round(cand.estMonthlyVolumeCents)));
+    fields.estMonthlyVolumeCents = cents;
+    fields.monthly_card_volume_cents = cents;
+  }
+  if (
+    typeof cand.placesRating === "number" &&
+    Number.isFinite(cand.placesRating)
+  ) {
+    fields.placesRating = String(cand.placesRating);
+  }
+  if (
+    typeof cand.placesUserRatingCount === "number" &&
+    Number.isFinite(cand.placesUserRatingCount)
+  ) {
+    fields.placesUserRatingCount = String(cand.placesUserRatingCount);
+  }
+  if (typeof cand.inferredRevenue === "string" && cand.inferredRevenue.trim()) {
+    fields.inferredRevenue = cand.inferredRevenue.trim();
+  }
+  if (
+    typeof cand.employeeCount === "number" &&
+    Number.isFinite(cand.employeeCount)
+  ) {
+    fields.employeeCount = String(cand.employeeCount);
+  }
+  if (cand.raw && Object.keys(cand.raw).length > 0) {
+    fields.leadSourceRaw = JSON.stringify(cand.raw).slice(0, 4000);
+  }
+  return fields;
+}
+
 const BLOCKED_HOSTS =
   /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|\[f|\[[0:]+\]?$)/i;
 
@@ -1896,7 +1943,8 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
         try {
           const { candidates, newCursor } = await pullSource(source, ctx.env);
           for (const c of candidates) {
-            await ctx.ws.createCustomer({
+            const customFields = leadRevenueCustomFields(c);
+            const customer = (await ctx.ws.createCustomer({
               name: c.name,
               externalId: c.externalId,
               domain: c.domain,
@@ -1909,7 +1957,34 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
               signalDate: c.signalDate,
               evidenceUri: c.evidenceUri,
               priorityScore: scoreCandidate(c),
-            });
+              ...(Object.keys(customFields).length > 0 ? { customFields } : {}),
+            })) as { id?: string } | undefined;
+            // PILE-660/661 — persist the candidate's signal as a merchant
+            // signal fact so rankMerchantSignals picks it up; collected
+            // revenue signals (e.g. 990 revenue_estimate) were previously
+            // dropped after landing on the customer row's `signal` column.
+            if (customer?.id) {
+              const sig: MerchantSignal = {
+                id: `sig_${c.externalId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 48)}`,
+                merchantId: customer.id,
+                type: c.signal || "new_license",
+                observedAt: c.signalDate
+                  ? new Date(c.signalDate).toISOString()
+                  : new Date().toISOString(),
+                source: source.name,
+                evidenceUrl: c.evidenceUri ?? `source:${source.id}`,
+                strength: 75,
+                summary: `${source.name}: ${c.name} (${c.externalId})`,
+              };
+              await ctx.ws.memoryRemember({
+                entityType: "customer",
+                entityId: customer.id,
+                kind: `signal:${sig.type}:${sig.id}`,
+                fact: JSON.stringify(sig),
+                sourceSessionId: ctx.sessionId,
+                sourceAgentSlug: ctx.agentSlug,
+              });
+            }
             produced++;
           }
           await ctx.ws.updateMerchantSource(source.id, {
@@ -2851,6 +2926,14 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
           "nyc_bookkeepers_and_cpas",
           "nyc_vc_and_accelerators",
           "nyc_tech_and_software_startups",
+          "us_nppes_medical_and_dental",
+          "us_sec_form_d_tech_startups",
+          // PILE-660/661 — free-registry revenue/pain presets.
+          "nyc_dob_permit_job_value",
+          "nys_tax_warrants",
+          "nys_ucc_filings",
+          "irs_990_nonprofits",
+          "nyc_checkbook",
         ])
         .default("nyc_dob_contractors_and_trades"),
       borough: z.string().optional(),
@@ -2858,8 +2941,7 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
       offset: z.number().int().min(0).optional(),
     }),
     async run(ctx, input) {
-      const source =
-        PRESET_NON_POS_SMB_SOURCES[input.preset as NonPosSmbPresetId];
+      const source = PRESET_NON_POS_SMB_SOURCES[input.preset];
       const sourceCfg = JSON.parse(source.config) as { borough_field?: string };
       const boroughCol = sourceCfg.borough_field ?? "address_borough";
       const extraWhere = input.borough
@@ -2908,6 +2990,12 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
         const matched =
           byExternalId.get(cand.externalId) ??
           (mk.matchKey ? byMatchKey.get(mk.matchKey) : undefined);
+        // PILE-660/661 — persist collector revenue fields (award/job/
+        // payment dollars → monthly card-volume estimate + raw payload)
+        // instead of dropping them at ingest.
+        const candFields = leadRevenueCustomFields(cand);
+        const customFields =
+          Object.keys(candFields).length > 0 ? candFields : undefined;
         const customer = (
           matched
             ? ((await ctx.ws.updateCustomer(matched.id, {
@@ -2917,6 +3005,7 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
                 neighborhood: cand.neighborhood ?? matched.neighborhood,
                 evidenceUri: cand.evidenceUri ?? matched.evidenceUri,
                 source: source.name,
+                ...(customFields ? { customFields } : {}),
               })) ?? matched)
             : await ctx.ws.createCustomer({
                 name: cand.name,
@@ -2928,6 +3017,7 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
                 neighborhood: cand.neighborhood ?? null,
                 evidenceUri: cand.evidenceUri ?? null,
                 source: source.name,
+                ...(customFields ? { customFields } : {}),
               })
         ) as (typeof existing)[number];
         if (matched) {
@@ -2970,6 +3060,11 @@ export const WORKSPACE_LANE_TOOLS: readonly WorkspaceLaneTool[] = [
             phone: customer.phone,
             processor: customer.processor,
             ownerId: customer.ownerId,
+            estMonthlyVolumeCents:
+              typeof cand.estMonthlyVolumeCents === "number" &&
+              Number.isFinite(cand.estMonthlyVolumeCents)
+                ? Math.max(0, Math.round(cand.estMonthlyVolumeCents))
+                : null,
           },
           signals: [signalObj],
         });

@@ -101,6 +101,7 @@ import {
   handleSlackOAuth,
   registerSlackRoutes,
 } from "./slack.js";
+import { registerSmsRoutes } from "./sms.js";
 import { registerStageTemplateRoutes } from "./stage-templates.js";
 import { registerStateRoutes } from "./states.js";
 import { getWorkspaceStub } from "./stub.js";
@@ -221,6 +222,16 @@ app.use("/workspaces/:organizationId/*", async (c, next) => {
     await next();
     return;
   }
+  // Inbound SMS webhook (PILE-395): the SMS provider posts with a shared
+  // secret (?secret= or x-sms-secret) instead of workspace credentials —
+  // verified inside the route.
+  if (
+    c.req.method === "POST" &&
+    /^\/workspaces\/[^/]+\/customers\/sms-inbound$/.test(c.req.path)
+  ) {
+    await next();
+    return;
+  }
   // Agent runners push log lines and fetch/upload the pnpm store cache with a
   // per-session HMAC token instead of a user/API-key identity — verified
   // inside the route handlers.
@@ -328,6 +339,7 @@ registerDocsSiteRoutes(app);
 registerAuditRoutes(app);
 registerCommsRoutes(app);
 registerCustomerRoutes(app);
+registerSmsRoutes(app);
 registerDealRoutes(app);
 registerDealIssueLinkRoutes(app);
 registerIssueDealRoutes(app);

@@ -9566,6 +9566,39 @@ export const COMMANDS: Record<string, CommandDef> = {
       },
     ],
   },
+  "customers sms inbound create": {
+    method: "POST",
+    path: "/workspaces/{organizationId}/customers/sms-inbound",
+    params: [
+      {
+        name: "organizationId",
+        flag: "workspace",
+      },
+    ],
+    query: [],
+    body: [
+      {
+        name: "from",
+        flag: "from",
+      },
+      {
+        name: "text",
+        flag: "text",
+      },
+      {
+        name: "to",
+        flag: "to",
+      },
+      {
+        name: "messageId",
+        flag: "message-id",
+      },
+      {
+        name: "receivedAt",
+        flag: "received-at",
+      },
+    ],
+  },
   "deals list": {
     method: "GET",
     path: "/workspaces/{organizationId}/deals",

@@ -319,10 +319,16 @@ async function cancelSession(
 // PILE-293 — a lane that exhausts its dispatch-time maxDuration is canceled
 // and escalated the PILE-270 way (issue.escalated + comment + triage) instead
 // of redispatched: a retry would spend the same budget on the same outcome.
+// PILE-271 — the session event mirrors into the domain-event outbox and the
+// `issue.escalated` automation fire pings the CoS/manager channel: external
+// agents subscribed on realtime/events pick the stuck lane up.
 async function escalateBudgetExceeded(
+  env: WorkerEnv,
   stub: DurableObjectStub<WorkspaceDO>,
+  organizationId: string,
   session: AgentSession,
-  maxDurationMinutes: number
+  maxDurationMinutes: number,
+  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
 ): Promise<void> {
   const effort = session.effort ? `, effort ${session.effort}` : "";
   try {
@@ -333,6 +339,8 @@ async function escalateBudgetExceeded(
       payload: {
         issueId: session.issueId,
         reason: "max_duration",
+        blockedOn: "run_budget",
+        requiresHuman: true,
         maxDurationMinutes,
         effort: session.effort ?? null,
         key: `escalated-${session.id}`,
@@ -345,6 +353,20 @@ async function escalateBudgetExceeded(
     });
     return;
   }
+  await fireEventAutomations(
+    env,
+    stub,
+    organizationId,
+    "issue.escalated",
+    issueEventTarget(stub, session.issueId),
+    `Lane ${session.agentId} (session ${session.id}) exhausted its ${maxDurationMinutes}m run budget — escalated to triage.`,
+    ctx
+  ).catch((err: unknown) => {
+    console.error("issue.escalated automation fire failed", {
+      session: session.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  });
   const body =
     `**Escalated — run budget exhausted.**\n\n` +
     `Lane \`${session.agentId}\` (session \`${session.id}\`) hit its ${maxDurationMinutes}m run budget (maxDuration${effort}) and was canceled.\n\n` +
@@ -385,9 +407,12 @@ async function escalateBudgetExceeded(
 // triage) and is never retried: a re-run spends the same budget on the same
 // scope. The receipt (`cap_exceeded`/`stop_reason`) carries the why.
 async function escalateSpendCapExceeded(
+  env: WorkerEnv,
   stub: DurableObjectStub<WorkspaceDO>,
+  organizationId: string,
   session: AgentSession,
-  breaches: CapBreach[]
+  breaches: CapBreach[],
+  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
 ): Promise<void> {
   const reason = describeCapBreach(breaches[0]);
   try {
@@ -398,6 +423,8 @@ async function escalateSpendCapExceeded(
       payload: {
         issueId: session.issueId,
         reason: "spend_cap",
+        blockedOn: "spend_cap",
+        requiresHuman: true,
         breaches,
         key: `escalated-${session.id}`,
       },
@@ -409,6 +436,22 @@ async function escalateSpendCapExceeded(
     });
     return;
   }
+  // PILE-271 — same escalation channel as the budget path: external
+  // manager agents on `issue.escalated` get pinged.
+  await fireEventAutomations(
+    env,
+    stub,
+    organizationId,
+    "issue.escalated",
+    issueEventTarget(stub, session.issueId),
+    `Lane ${session.agentId} (session ${session.id}) hit ${reason} — escalated to triage.`,
+    ctx
+  ).catch((err: unknown) => {
+    console.error("issue.escalated automation fire failed", {
+      session: session.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  });
   const body =
     `**Escalated — run spend cap exceeded.**\n\n` +
     `Lane \`${session.agentId}\` (session \`${session.id}\`) hit ${reason} and was canceled. ` +
@@ -592,6 +635,58 @@ async function markStaleAndAlert(
   });
 }
 
+// PILE-271 — a lane that dies with no retry left (or with a breaker
+// holding its redispatch) is stuck until a human picks it up: nothing
+// re-drives a dead session once the sweep moves on. The `issue.escalated`
+// session event is the PILE-270 marker — the DO mirrors it into the
+// domain-event outbox — and the event-automation fire is the
+// CoS/manager-agent channel, same shape as session.stale.
+async function escalateDeadLane(
+  env: WorkerEnv,
+  stub: DurableObjectStub<WorkspaceDO>,
+  organizationId: string,
+  session: AgentSession,
+  escalation: { reason: string; message: string; blockedOn?: string },
+  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
+): Promise<void> {
+  try {
+    await stub.addAgentSessionEvent({
+      sessionId: session.id,
+      type: "issue.escalated",
+      message: `${escalation.message} — escalated (requires human)`,
+      payload: {
+        issueId: session.issueId,
+        reason: escalation.reason,
+        blockedOn: escalation.blockedOn ?? null,
+        requiresHuman: true,
+        key: `escalated-${session.id}`,
+      },
+    });
+  } catch (err) {
+    console.error("dead-lane escalation event failed", {
+      session: session.id,
+      reason: escalation.reason,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return;
+  }
+  await fireEventAutomations(
+    env,
+    stub,
+    organizationId,
+    "issue.escalated",
+    issueEventTarget(stub, session.issueId),
+    escalation.message,
+    ctx
+  ).catch((err: unknown) => {
+    console.error("issue.escalated automation fire failed", {
+      session: session.id,
+      reason: escalation.reason,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  });
+}
+
 const MAX_AUTO_RETRIES = 1;
 // VTX-621 — cap on rate-limit re-parks: a stuck account parks, drains,
 // dies on the limit again, and re-parks — bound the loop so a lane
@@ -627,8 +722,24 @@ async function retryDeadLane(
   // the lane is terminal for good.
   const rateLimitRetryable =
     rateLimitPaused && (session.retryCount ?? 0) < MAX_RATE_LIMIT_PARKS;
-  if ((session.retryCount ?? 0) >= MAX_AUTO_RETRIES && !rateLimitRetryable)
+  if ((session.retryCount ?? 0) >= MAX_AUTO_RETRIES && !rateLimitRetryable) {
+    // PILE-271 — the retry budget is gone and nothing re-drives a dead
+    // lane: escalate so a human (or a subscribed manager agent) picks it
+    // up instead of the corpse sitting silent.
+    await escalateDeadLane(
+      env,
+      stub,
+      organizationId,
+      session,
+      {
+        reason: "retry_budget_exhausted",
+        message: `${cause} — auto-retry budget exhausted (${session.retryCount ?? 0}/${MAX_AUTO_RETRIES})`,
+        blockedOn: "retry_budget",
+      },
+      ctx
+    );
     return;
+  }
   // PILE-476 — per-issue breaker: cap failed starts for the same issue per
   // hour so a doomed lane stops burning spawn attempts. Distinct from the
   // fleet/agent breakers — those catch substrate outages, this catches a
@@ -653,6 +764,20 @@ async function retryDeadLane(
         payload: { issueId: session.issueId, failedStarts },
       })
       .catch(() => {});
+    // PILE-271 — the breaker only parks redispatch; the dead lane itself
+    // needs a human to look at why this issue keeps killing lanes.
+    await escalateDeadLane(
+      env,
+      stub,
+      organizationId,
+      session,
+      {
+        reason: "issue_breaker",
+        message: `issue breaker open — ${failedStarts} failed starts on this issue in the last hour`,
+        blockedOn: "issue_breaker",
+      },
+      ctx
+    );
     return;
   }
   // Fleet-wide breaker: during a substrate outage every retry spends a spawn
@@ -668,6 +793,20 @@ async function retryDeadLane(
       type: "error",
       message: `fleet breaker open — ${FLEET_UNHEALTHY_STREAK}+ consecutive infra-failure lanes org-wide; redispatch paused`,
     });
+    // PILE-271 — the breaker pauses redispatch but the dead lane never
+    // re-drives on its own; escalate so the outage doesn't strand it.
+    await escalateDeadLane(
+      env,
+      stub,
+      organizationId,
+      session,
+      {
+        reason: "fleet_breaker",
+        message: `fleet breaker open — ${FLEET_UNHEALTHY_STREAK}+ consecutive infra-failure lanes org-wide`,
+        blockedOn: "fleet_breaker",
+      },
+      ctx
+    );
     return;
   }
   // A review side lane redispatched through the issue would come back as a
@@ -682,6 +821,20 @@ async function retryDeadLane(
       type: "error",
       message: `${session.agentId} unhealthy — ${streak} consecutive infra-class terminations, redispatch paused`,
     });
+    // PILE-271 — same stranded-corpse case as the other breakers: the
+    // pause lifts on its own, the dead lane does not.
+    await escalateDeadLane(
+      env,
+      stub,
+      organizationId,
+      session,
+      {
+        reason: "provider_unhealthy",
+        message: `${session.agentId} unhealthy — ${streak} consecutive infra-class terminations`,
+        blockedOn: `agent:${session.agentId}`,
+      },
+      ctx
+    );
     return;
   }
   try {
@@ -1809,7 +1962,7 @@ export async function sweepAgentSessions(
             undefined,
             false
           );
-          await escalateBudgetExceeded(stub, session, budget);
+          await escalateBudgetExceeded(env, stub, id, session, budget, ctx);
           return;
         }
         // PILE-425 — hard per-run spend/token cap: the lane's live receipt
@@ -1857,7 +2010,14 @@ export async function sweepAgentSessions(
                   error: err instanceof Error ? err.message : String(err),
                 })
               );
-            await escalateSpendCapExceeded(stub, session, runBreaches);
+            await escalateSpendCapExceeded(
+              env,
+              stub,
+              id,
+              session,
+              runBreaches,
+              ctx
+            );
             return;
           }
         }

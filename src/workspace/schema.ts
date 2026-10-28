@@ -1505,6 +1505,9 @@ export const workspaceDomainEvents = sqliteTable(
         "substep.actionable",
         "substeps.all_required_done",
         "substep.review",
+        // PILE-271 — lane needs a human; mirrored off the escalation
+        // session event so external manager agents can subscribe.
+        "issue.escalated",
       ],
     }).notNull(),
     payload: text("payload" as string).notNull(),

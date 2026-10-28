@@ -4680,6 +4680,97 @@ describe("customer touch logging (PILE-651)", () => {
     );
     expect(result).toBeUndefined();
   });
+
+  it("ingestPulledLeadsBatch persists collector revenue fields and enrichment signals (pile-review)", async () => {
+    const stub = getStub();
+    const { batch, customer, facts } = await withWorkspace(
+      stub,
+      async (instance) => {
+        const ingestResult = await instance.ingestPulledLeadsBatch({
+          sourceName: "IRS 990 Nonprofits",
+          candidates: [
+            {
+              name: "Brooklyn Arts Fund",
+              externalId: "propublica990:ingest-1",
+              vertical: "Nonprofit (IRS 990)",
+              signal: "revenue_estimate",
+              signalDate: "2026-06-01",
+              evidenceUri:
+                "https://projects.propublica.org/nonprofits/organizations/113344556",
+              estMonthlyVolumeCents: 20_000_000,
+              placesRating: 4.6,
+              placesUserRatingCount: 210,
+              inferredRevenue: "$1M-$10M",
+              employeeCount: 42,
+              raw: { ein: "113344556", totalRevenueDollars: 2_400_000 },
+              signals: [
+                {
+                  id: "sig_gplaces_ingest_1",
+                  merchantId: "propublica990:ingest-1",
+                  type: "revenue_estimate",
+                  observedAt: "2026-10-01T00:00:00.000Z",
+                  source: "google_places",
+                  evidenceUrl: "https://places.googleapis.com/v1/places/ChIJ1",
+                  strength: 65,
+                  summary:
+                    "Google Places foot-traffic proxy: 4.6★ (210 reviews)",
+                },
+                {
+                  id: "sig_not_revenue",
+                  merchantId: "propublica990:ingest-1",
+                  type: "violation",
+                  observedAt: "2026-10-01T00:00:00.000Z",
+                  source: "nys",
+                  evidenceUrl: "https://data.ny.gov/x",
+                  strength: 50,
+                },
+              ],
+            },
+          ],
+        });
+        const customerId = ingestResult.leads[0]!.customerId;
+        const fetched = await instance.getCustomer(customerId);
+        const memoryFacts = await instance.memoryRecall({
+          entityType: "customer",
+          entityId: customerId,
+          limit: 50,
+        });
+        return { batch: ingestResult, customer: fetched, facts: memoryFacts };
+      }
+    );
+
+    // Revenue + enrichment fields land on customFields under the canonical
+    // spellings instead of being dropped at ingest.
+    expect(customer?.customFields).toMatchObject({
+      estMonthlyVolumeCents: "20000000",
+      monthly_card_volume_cents: "20000000",
+      placesRating: "4.6",
+      placesUserRatingCount: "210",
+      inferredRevenue: "$1M-$10M",
+      employeeCount: "42",
+    });
+    expect(customer?.customFields.leadSourceRaw).toContain("113344556");
+    expect(batch.leads[0]?.estMonthlyVolumeCents).toBe(20_000_000);
+
+    // The enrichment's revenue_estimate signal persists as a signal fact
+    // re-keyed onto the ingested customer; non-revenue entries stay out.
+    const revenueFact = facts.find((f) =>
+      f.kind.startsWith("signal:revenue_estimate:sig_gplaces_ingest_1")
+    );
+    expect(revenueFact).toBeDefined();
+    const parsed = JSON.parse(revenueFact!.fact) as {
+      merchantId: string;
+      type: string;
+      source: string;
+    };
+    expect(parsed.merchantId).toBe(customer!.id);
+    expect(parsed.type).toBe("revenue_estimate");
+    expect(facts.some((f) => f.kind.includes("sig_not_revenue"))).toBe(false);
+
+    // The volume figure reaches the ranker — the ICP volume rule fires and
+    // the lead gets a non-zero priority score.
+    expect(batch.leads[0]?.priorityScore).toBeGreaterThan(0);
+  });
 });
 
 describe("searchAll hydrated results (VTX-758)", () => {
@@ -4702,5 +4793,95 @@ describe("searchAll hydrated results (VTX-758)", () => {
     expect(hit?.snippet.length).toBeGreaterThan(0);
     expect(hit?.score).toBeGreaterThan(0);
     expect(hit?.identifier).toBeTruthy();
+  });
+});
+
+describe("issue.escalated domain event (PILE-271)", () => {
+  beforeAll(ensureWorkspace);
+  it("mirrors an issue.escalated session event into the outbox, deduped per session", async () => {
+    const stub = getStub();
+    const out = await withWorkspace(stub, async (instance) => {
+      const issue = await instance.createIssue({
+        title: "stuck lane escalation",
+      });
+      const session = await instance.createAgentSession({
+        agentId: "devin-cli",
+        issueId: issue.id,
+        status: "canceled",
+        provider: "devin-cli",
+        actorId: "u1",
+        actorType: "user",
+      });
+      await instance.addAgentSessionEvent({
+        sessionId: session.id,
+        type: "issue.escalated",
+        message: "auto-retry budget exhausted — escalated",
+        payload: {
+          issueId: issue.id,
+          reason: "retry_budget_exhausted",
+          blockedOn: "retry_budget",
+          key: `escalated-${session.id}`,
+        },
+      });
+      // A second escalation write on the same session must not
+      // double-dispatch subscribers — the outbox dedupes it.
+      await instance.addAgentSessionEvent({
+        sessionId: session.id,
+        type: "issue.escalated",
+        message: "escalated again",
+        payload: { issueId: issue.id, reason: "retry_budget_exhausted" },
+      });
+      const events = await instance.listPendingDomainEvents();
+      return { issue, session, events };
+    });
+    const escalated = out.events.filter(
+      (e) =>
+        e.type === "issue.escalated" &&
+        e.dedupeKey === `escalated:${out.session.id}`
+    );
+    expect(escalated).toHaveLength(1);
+    const payload = JSON.parse(escalated[0]?.payload ?? "{}") as Record<
+      string,
+      unknown
+    >;
+    expect(payload.issueId).toBe(out.issue.id);
+    expect(payload.issueIdentifier).toBe(out.issue.identifier);
+    expect(payload.sessionId).toBe(out.session.id);
+    expect(payload.reason).toBe("retry_budget_exhausted");
+    expect(payload.blockedOn).toBe("retry_budget");
+    expect(payload.requiresHuman).toBe(true);
+  });
+
+  it("does not emit a domain event for non-escalation session events", async () => {
+    const stub = getStub();
+    const events = await withWorkspace(stub, async (instance) => {
+      const issue = await instance.createIssue({
+        title: "quiet lane",
+      });
+      const session = await instance.createAgentSession({
+        agentId: "devin-cli",
+        issueId: issue.id,
+        status: "running",
+        provider: "devin-cli",
+        actorId: "u1",
+        actorType: "user",
+      });
+      await instance.addAgentSessionEvent({
+        sessionId: session.id,
+        type: "lane.guidance",
+        message: "guidance delivered",
+      });
+      const pending = await instance.listPendingDomainEvents();
+      return { sessionId: session.id, pending };
+    });
+    // Other tests share this workspace — scope the assertion to this
+    // session's escalation dedupe key.
+    expect(
+      events.pending.filter(
+        (e) =>
+          e.type === "issue.escalated" &&
+          e.dedupeKey === `escalated:${events.sessionId}`
+      )
+    ).toHaveLength(0);
   });
 });

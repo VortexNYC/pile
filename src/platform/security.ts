@@ -70,6 +70,9 @@ function isPublicPath(pathname: string): boolean {
     pathname.startsWith("/support/incoming/") ||
     pathname.startsWith("/support/capture/") ||
     pathname === "/support/sms/inbound" ||
+    // PILE-395 — inbound field-rep SMS webhook; the shared secret
+    // (?secret= / x-sms-secret) is the credential.
+    pathname.endsWith("/customers/sms-inbound") ||
     pathname.startsWith("/support/widget/") ||
     pathname.startsWith("/webhooks/agent/") ||
     pathname.startsWith("/webhooks/comms/") ||
