@@ -77010,7 +77010,7 @@
         ],
         "responses": {
           "200": {
-            "description": "All components operational",
+            "description": "All components operational (HTML status page when Accept includes text/html)",
             "content": {
               "application/json": {
                 "schema": {
@@ -77125,11 +77125,16 @@
                     "components"
                   ]
                 }
+              },
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
               }
             }
           },
           "503": {
-            "description": "One or more components degraded",
+            "description": "One or more components degraded (HTML status page when Accept includes text/html)",
             "content": {
               "application/json": {
                 "schema": {
@@ -77243,6 +77248,11 @@
                     "timestamp",
                     "components"
                   ]
+                }
+              },
+              "text/html": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
