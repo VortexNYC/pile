@@ -288,6 +288,58 @@ describe("billing webhook", () => {
     const billing = await res.json<{ plan: string }>();
     expect(billing.plan).toBe("paid");
   });
+
+  it("rejects signatures outside the timestamp tolerance", async () => {
+    if (!env.BILLING_WEBHOOK_SECRET) {
+      return;
+    }
+    const body = JSON.stringify({
+      type: "entitlement.granted",
+      data: { externalCustomerRef: "org_stale" },
+    });
+    // valid HMAC but stamped >5min ago — must still 401
+    const stale = await fetch("/billing/webhook", {
+      method: "POST",
+      headers: {
+        "Vortex-Signature": await signWebhook(
+          String(env.BILLING_WEBHOOK_SECRET),
+          body,
+          Date.now() - 10 * 60 * 1000
+        ),
+      },
+      body,
+    });
+    expect(stale.status).toBe(401);
+  });
+
+  it("accepts any matching v1 signature in a rotation header", async () => {
+    if (!env.BILLING_WEBHOOK_SECRET) {
+      return;
+    }
+    const seeded = await seedWorkspace();
+    const body = JSON.stringify({
+      type: "entitlement.revoked",
+      data: { externalCustomerRef: seeded.organizationId },
+    });
+    const t = Date.now();
+    const good = await signWebhook(String(env.BILLING_WEBHOOK_SECRET), body, t);
+    const v1 = good.split("v1=")[1];
+    const res = await fetch("/billing/webhook", {
+      method: "POST",
+      headers: {
+        // rotation: an old-signature v1 precedes the valid one
+        "Vortex-Signature": `t=${t},v1=${"0".repeat(64)},v1=${v1}`,
+      },
+      body,
+    });
+    expect(res.status).toBe(200);
+    const billing = await fetch(
+      `/workspaces/${seeded.organizationId}/billing`,
+      {},
+      seeded.adminToken
+    );
+    expect((await billing.json<{ plan: string }>()).plan).toBe("free");
+  });
 });
 
 describe("subscribe", () => {
