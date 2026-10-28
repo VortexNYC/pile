@@ -211,6 +211,54 @@ export async function ensureBillingCustomer(
 }
 
 /**
+ * Re-provision the billing link when the persisted customerId is stale —
+ * Vortex returns 404 "billing customer X not found" for ids that were
+ * provisioned under a different merchant/api-key scope (credentials rotate,
+ * sandbox orgs get recreated). A PUT /v1/customers ensure-upsert keyed on
+ * externalCustomerRef returns the real customer, which we persist over the
+ * stale link.
+ */
+async function relinkBillingCustomer(
+  env: AppEnv,
+  db: D1Client,
+  organizationId: string
+): Promise<{ vortexCustomerId: string; vortexBillingAccountId: string | null } | null> {
+  const res = await fetch(
+    `${env.VORTEX_BILLING_API_URL}/v1/customers?${scopeQuery(env)}`,
+    {
+      method: "PUT",
+      headers: authHeaders(env, `pile-relink-${organizationId}`),
+      body: JSON.stringify({
+        name: organizationId,
+        defaultCurrency: "USD",
+        externalCustomerRef: organizationId,
+        metadata: { source: "pile", orgId: organizationId },
+      }),
+    }
+  );
+  if (!res.ok) {
+    return null;
+  }
+  const body = (await res.json()) as VortexEnvelope;
+  const customerId = customerIdFrom(body.data);
+  if (!customerId) {
+    return null;
+  }
+  const billingAccountId =
+    billingAccountIdFrom(body.data) ??
+    (await ensureBillingAccountId(env, customerId, organizationId));
+  await db
+    .update(billingAccounts)
+    .set({
+      vortexCustomerId: customerId,
+      vortexBillingAccountId: billingAccountId,
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(billingAccounts.organizationId, organizationId));
+  return { vortexCustomerId: customerId, vortexBillingAccountId: billingAccountId };
+}
+
+/**
  * Create a Vortex checkout session for a subscription to the configured plan
  * price. Returns the hosted checkout URL, or null when the org isn't linked
  * or the call fails — callers fall back to a static upgrade URL.
@@ -235,26 +283,44 @@ export async function createCheckoutSession(
   if (!account?.vortexCustomerId) {
     return null;
   }
-  const res = await fetch(
-    `${env.VORTEX_BILLING_API_URL}/v1/checkout/sessions?${scopeQuery(env)}`,
-    {
-      method: "POST",
-      headers: authHeaders(
-        env,
-        `pile-checkout-${organizationId}-${crypto.randomUUID()}`
-      ),
-      // Runtime-verified against api.vortex.nyc (PILE-166): the live
-      // validator wants `customerId` + `items` — the spec's
-      // `customerExternalId`/`lineItems` are rejected with a bare 400.
-      body: JSON.stringify({
-        mode: "subscription",
-        customerId: account.vortexCustomerId,
-        billingAccountId: account.vortexBillingAccountId ?? undefined,
-        items: [{ priceId, quantity: 1 }],
-        metadata: { source: "pile", orgId: organizationId },
-      }),
-    }
+  const sendCheckout = (customerId: string, billingAccountId: string | null) =>
+    fetch(
+      `${env.VORTEX_BILLING_API_URL}/v1/checkout/sessions?${scopeQuery(env)}`,
+      {
+        method: "POST",
+        headers: authHeaders(
+          env,
+          `pile-checkout-${organizationId}-${crypto.randomUUID()}`
+        ),
+        // Runtime-verified against api.vortex.nyc (PILE-166): the live
+        // validator wants `customerId` + `items` — the spec's
+        // `customerExternalId`/`lineItems` are rejected with a bare 400.
+        body: JSON.stringify({
+          mode: "subscription",
+          customerId,
+          billingAccountId: billingAccountId ?? undefined,
+          items: [{ priceId, quantity: 1 }],
+          metadata: { source: "pile", orgId: organizationId },
+        }),
+      }
+    );
+
+  let res = await sendCheckout(
+    account.vortexCustomerId,
+    account.vortexBillingAccountId
   );
+  if (res.status === 404) {
+    // Stale customer link (provisioned under a different merchant/key) —
+    // ensure-upsert returns the real customer; retry once with it.
+    const relinked = await relinkBillingCustomer(env, db, organizationId);
+    if (!relinked) {
+      return null;
+    }
+    res = await sendCheckout(
+      relinked.vortexCustomerId,
+      relinked.vortexBillingAccountId
+    );
+  }
   if (!res.ok) {
     return null;
   }

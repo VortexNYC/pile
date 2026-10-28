@@ -290,4 +290,72 @@ describe("createCheckoutSession", () => {
     expect(body).not.toHaveProperty("environment");
     expect(body).not.toHaveProperty("merchantAccountId");
   });
+
+  it("relinks a stale customerId on 404 and retries checkout once", async () => {
+    const organizationId = await seedOrg();
+    await linkAccount(organizationId, "bcust_stale", "bacc_stale");
+    let checkoutAttempts = 0;
+    const calls = captureFetch((req) => {
+      if (req.url.includes("/v1/checkout/sessions")) {
+        checkoutAttempts += 1;
+        if (checkoutAttempts === 1) {
+          return {
+            status: 404,
+            body: {
+              code: "not_found",
+              message: "billing customer bcust_stale not found",
+            },
+          };
+        }
+        return {
+          status: 201,
+          body: {
+            data: {
+              checkoutUrl: "https://pay.vortex.test/checkout/cs_relinked",
+            },
+            requestId: "req_2",
+          },
+        };
+      }
+      if (req.url.includes("/v1/customers") && req.method === "PUT") {
+        return {
+          status: 200,
+          body: {
+            data: {
+              customerId: "bcust_real",
+              billingAccountId: "bacc_real",
+            },
+            requestId: "req_1",
+          },
+        };
+      }
+      throw new Error(`unexpected call ${req.url}`);
+    });
+    const db = createD1(env.D1);
+
+    const checkoutUrl = await createCheckoutSession(
+      vortexEnv,
+      db,
+      organizationId
+    );
+    expect(checkoutUrl).toBe(
+      "https://pay.vortex.test/checkout/cs_relinked"
+    );
+    expect(checkoutAttempts).toBe(2);
+    // PUT ensure re-ran and the retry carried the relinked ids.
+    expect(calls).toHaveLength(3);
+    const relink = calls[1]!;
+    expect(relink.method).toBe("PUT");
+    const retryBody = calls[2]!.body as Record<string, unknown>;
+    expect(retryBody.customerId).toBe("bcust_real");
+    expect(retryBody.billingAccountId).toBe("bacc_real");
+    // Persisted row now points at the real link.
+    const row = await db
+      .select()
+      .from(billingAccounts)
+      .where(eq(billingAccounts.organizationId, organizationId))
+      .get();
+    expect(row?.vortexCustomerId).toBe("bcust_real");
+    expect(row?.vortexBillingAccountId).toBe("bacc_real");
+  });
 });
