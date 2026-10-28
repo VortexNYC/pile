@@ -491,4 +491,60 @@ describe("Unify-parity Signals, Ranker v2, Provenance & Technographics (PILE-507
     );
     expect(opted.fitScore).toBeGreaterThanOrEqual(75);
   });
+
+  it("distress/detection signals do NOT lift the storefront -40 exclusion (pile-review)", () => {
+    const config = {
+      motion: "smb_default",
+      icpRules: DEFAULT_ICP_RULES,
+      signalRules: DEFAULT_SIGNAL_RULES,
+    };
+    const mkSignal = (type: string, id: string) => ({
+      id,
+      merchantId: "m-deli",
+      type,
+      observedAt: NOW,
+      source: "registry",
+      evidenceUrl: "https://data.ny.gov/x",
+      strength: 85,
+    });
+
+    // A deli with a violation is still a POS-bound storefront — violation,
+    // warrant, ucc_filing, award and pos_detected are not revenue proofs.
+    for (const type of [
+      "violation",
+      "warrant",
+      "tax_warrant",
+      "ucc_filing",
+      "award",
+      "pos_detected",
+    ]) {
+      const breakdown = rankMerchantSignals({
+        merchantId: "m-deli",
+        merchantAttrs: { vertical: "deli" },
+        signals: [mkSignal(type, `sig_${type}`)],
+        config,
+        nowIso: NOW,
+      });
+      expect(
+        breakdown.matchedIcpRules,
+        `${type} must keep the exclusion`
+      ).toContain("icp-vertical-pos-bound-restaurant-penalty");
+      expect(breakdown.matchedIcpRules).not.toContain(
+        "icp-storefront-with-volume"
+      );
+    }
+
+    // ownership_change is a genuine switch-pain event — it still lifts.
+    const switched = rankMerchantSignals({
+      merchantId: "m-deli",
+      merchantAttrs: { vertical: "deli" },
+      signals: [mkSignal("ownership_change", "sig_own")],
+      config,
+      nowIso: NOW,
+    });
+    expect(switched.matchedIcpRules).toContain("icp-storefront-with-volume");
+    expect(switched.matchedIcpRules).not.toContain(
+      "icp-vertical-pos-bound-restaurant-penalty"
+    );
+  });
 });

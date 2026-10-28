@@ -477,13 +477,17 @@ function signalIdPart(raw: string): string {
   return raw.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 48);
 }
 
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = "";
-  const CHUNK = 0x8000;
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+function base64ToBytes(b64: string): Uint8Array | null {
+  try {
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+  } catch {
+    return null;
   }
-  return btoa(binary);
 }
 
 /** Shared signal-persist + re-rank tail used by every intake surface that
@@ -1817,8 +1821,10 @@ export function registerIntakeRoutes(app: OpenAPIHono<AppContext>) {
           parseStatementMetricsFromText(body.extractedText)
         );
       } else {
-        let imageBase64 = body.imageBase64?.trim() || null;
-        if (!imageBase64 && body.attachmentKey) {
+        let imageBytes: Uint8Array | null = null;
+        if (body.imageBase64?.trim()) {
+          imageBytes = base64ToBytes(body.imageBase64.trim());
+        } else if (body.attachmentKey) {
           // The key must point at this workspace's uploads — same
           // prefix the /files read route enforces.
           if (!body.attachmentKey.startsWith(`${organizationId}/`)) {
@@ -1836,15 +1842,15 @@ export function registerIntakeRoutes(app: OpenAPIHono<AppContext>) {
               message: "Statement attachment not found",
             });
           }
-          imageBase64 = bytesToBase64(
-            new Uint8Array(await object.arrayBuffer())
-          );
+          imageBytes = new Uint8Array(await object.arrayBuffer());
         }
         const ai = c.env.AI;
-        if (imageBase64 && ai) {
+        if (imageBytes && imageBytes.length > 0 && ai) {
           try {
+            // The vision binding takes an int[] byte array (or a data: URL)
+            // — a bare base64 string is not a valid image payload.
             const out = await ai.run(STATEMENT_VISION_MODEL, {
-              image: imageBase64,
+              image: [...imageBytes],
               prompt: STATEMENT_VISION_PROMPT,
               max_tokens: 400,
             });

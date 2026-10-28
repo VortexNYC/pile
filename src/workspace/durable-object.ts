@@ -3179,6 +3179,16 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       contactFormUrl?: string | null;
       dosId?: string | null;
       dosFilingDate?: string | null;
+      /** PILE-657/658/660/661 — collector/enrichment revenue fields. These
+       *  used to be dropped at ingest; they now persist into customFields
+       *  and (for revenue_estimate signals) merchant signal facts. */
+      estMonthlyVolumeCents?: number | null;
+      raw?: Record<string, unknown> | null;
+      placesRating?: number | null;
+      placesUserRatingCount?: number | null;
+      inferredRevenue?: string | null;
+      employeeCount?: number | null;
+      signals?: MerchantSignal[];
     }>;
   }) {
     if (input.cursorKind && typeof input.nextOffset === "number") {
@@ -3222,6 +3232,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
       fitScore: number;
       whyNow: string;
       playStatus: string;
+      estMonthlyVolumeCents: number | null;
     }> = [];
     const incompleteForDetective: Array<{
       customerId: string;
@@ -3329,6 +3340,56 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         });
       }
 
+      // PILE-657/658/660/661 — collector-side revenue/enrichment fields
+      // used to be dropped at ingest. The volume estimate lands under both
+      // spellings (`monthly_card_volume_cents` is the canonical key
+      // re-ranks read back off the field map, matching the intake routes).
+      const estMonthlyVolumeCents =
+        typeof cand.estMonthlyVolumeCents === "number" &&
+        Number.isFinite(cand.estMonthlyVolumeCents)
+          ? Math.max(0, Math.round(cand.estMonthlyVolumeCents))
+          : null;
+      const candFields: Record<string, string | null> = {};
+      if (estMonthlyVolumeCents !== null) {
+        candFields.estMonthlyVolumeCents = String(estMonthlyVolumeCents);
+        candFields.monthly_card_volume_cents = String(estMonthlyVolumeCents);
+      }
+      if (
+        typeof cand.placesRating === "number" &&
+        Number.isFinite(cand.placesRating)
+      ) {
+        candFields.placesRating = String(cand.placesRating);
+      }
+      if (
+        typeof cand.placesUserRatingCount === "number" &&
+        Number.isFinite(cand.placesUserRatingCount)
+      ) {
+        candFields.placesUserRatingCount = String(cand.placesUserRatingCount);
+      }
+      if (
+        typeof cand.inferredRevenue === "string" &&
+        cand.inferredRevenue.trim()
+      ) {
+        candFields.inferredRevenue = cand.inferredRevenue.trim();
+      }
+      if (
+        typeof cand.employeeCount === "number" &&
+        Number.isFinite(cand.employeeCount)
+      ) {
+        candFields.employeeCount = String(cand.employeeCount);
+      }
+      if (cand.raw && Object.keys(cand.raw).length > 0) {
+        candFields.leadSourceRaw = JSON.stringify(cand.raw).slice(0, 4000);
+      }
+      if (Object.keys(candFields).length > 0) {
+        try {
+          this.applyCustomFields("customer", customer.id, candFields);
+        } catch {
+          // Field write refused (e.g. a re-typed definition) — the signal
+          // facts below still carry the revenue figures.
+        }
+      }
+
       const signals: MerchantSignal[] = [];
       const signalObj: MerchantSignal = {
         id: `sig_${cand.externalId.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 48)}`,
@@ -3377,6 +3438,29 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         );
       }
 
+      // PILE-657/658 — revenue_estimate signals emitted during enrichment
+      // (Places foot-traffic proxy, PDL inferred revenue) persist as
+      // merchant signal facts re-keyed onto the ingested customer so the
+      // ranker below — and every later re-rank via memoryRecall — sees
+      // them instead of dropping them at ingest.
+      for (const extra of cand.signals ?? []) {
+        if (extra.type !== "revenue_estimate") continue;
+        const persisted: MerchantSignal = {
+          ...extra,
+          merchantId: customer.id,
+          observedAt: extra.observedAt || new Date().toISOString(),
+        };
+        signals.push(persisted);
+        pendingMemoryWrites.push(
+          data.memoryRemember(this.db, this.organizationId, {
+            entityType: "customer",
+            entityId: customer.id,
+            kind: `signal:${persisted.type}:${persisted.id}`,
+            fact: JSON.stringify(persisted),
+          })
+        );
+      }
+
       const receipt = runMerchantLeadPlay({
         merchant: {
           id: customer.id,
@@ -3388,6 +3472,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
           phone: customer.phone,
           processor: cand.posGuess ?? customer.processor,
           ownerId: customer.ownerId,
+          estMonthlyVolumeCents,
         },
         signals,
         contactEmail: cand.email ?? null,
@@ -3429,6 +3514,7 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
         fitScore: receipt.breakdown.fitScore,
         whyNow: receipt.breakdown.whyNow,
         playStatus: receipt.status,
+        estMonthlyVolumeCents,
       });
     }
 
@@ -6700,8 +6786,47 @@ export class WorkspaceDO extends DurableObject<AppEnv> {
     });
   }
 
-  addAgentSessionEvent(input: data.AgentSessionEventInput) {
-    return data.addAgentSessionEvent(this.db, input);
+  async addAgentSessionEvent(input: data.AgentSessionEventInput) {
+    const event = await data.addAgentSessionEvent(this.db, input);
+    // PILE-271 — the `issue.escalated` session event is the escalation
+    // state transition (PILE-270's dedupe marker). Mirror it into the
+    // domain-event outbox once per session so the drain path and event
+    // automations reach external manager agents subscribed on
+    // realtime/events. The emit is best-effort: a missed outbox write
+    // must not fail the escalation's own event record.
+    if (input.type === "issue.escalated") {
+      await this.emitEscalationEvent(input).catch((err: unknown) => {
+        console.error("issue.escalated domain event emit failed", {
+          sessionId: input.sessionId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+    }
+    return event;
+  }
+
+  // PILE-271 — the escalation record realtime/event subscribers key off:
+  // which lane stopped, on which issue, and why it needs a human.
+  private async emitEscalationEvent(
+    input: data.AgentSessionEventInput
+  ): Promise<void> {
+    const payload = { ...input.payload };
+    const issueId =
+      typeof payload.issueId === "string"
+        ? payload.issueId
+        : ((await this.getAgentSession(input.sessionId))?.issueId ?? null);
+    const issue = issueId ? await this.getIssue(issueId) : undefined;
+    await this.emitDomainEvent(
+      "issue.escalated",
+      {
+        ...payload,
+        issueId,
+        issueIdentifier: issue?.identifier ?? null,
+        sessionId: input.sessionId,
+        requiresHuman: true,
+      },
+      `escalated:${input.sessionId}`
+    );
   }
 
   listAgentSessionEvents(

@@ -254,16 +254,13 @@ export const STOREFRONT_EXCLUSION_RULE_ID =
   "icp-vertical-pos-bound-restaurant-penalty";
 
 /** Signal types that prove a storefront is a card-present revenue business
- *  (collected/estimated dollars or a switch/pain event worth competing on). */
+ *  (collected/estimated dollars or a switch/pain event worth competing on).
+ *  Distress and detection signals — award, warrant, violation, ucc_filing,
+ *  pos_detected — deliberately do NOT lift the storefront exclusion: a deli
+ *  with a health violation is still a POS-bound storefront, not a +20 fit. */
 const STOREFRONT_RELIEF_SIGNAL_TYPES = new Set([
   "revenue_estimate",
-  "pos_detected",
   "ownership_change",
-  "tax_warrant",
-  "warrant",
-  "violation",
-  "award",
-  "ucc_filing",
   "payment_award",
 ]);
 

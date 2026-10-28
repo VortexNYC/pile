@@ -204,16 +204,6 @@ export function classifyMerchantLead(
     };
   }
 
-  // PILE-663 — hard locked-in POS franchises stay excluded even when the
-  // caller opts storefronts in; their POS stack is corporate-controlled.
-  if (HARD_POS_FRANCHISE_RE.test(n)) {
-    return {
-      sheetKey: "excluded_pos",
-      categoryLabel: "Restaurant / POS Franchise (Excluded)",
-      vortexWedge: "Excluded — Locked-In Corporate POS",
-    };
-  }
-
   const posBoundStorefront =
     v.includes("restaurant") ||
     v.includes("bar") ||
@@ -229,6 +219,21 @@ export function classifyMerchantLead(
   const nonPosStorefront = STOREFRONT_NON_POS_KEYWORDS.some((k) =>
     v.includes(k)
   );
+
+  // PILE-663 — hard locked-in POS franchises stay excluded even when the
+  // caller opts storefronts in; their POS stack is corporate-controlled.
+  // Only fires for actual storefront/QSR candidates — a franchise-named
+  // trades lead ("Subway Electrical") is a contractor, not a restaurant.
+  if (
+    HARD_POS_FRANCHISE_RE.test(n) &&
+    (posBoundStorefront || nonPosStorefront)
+  ) {
+    return {
+      sheetKey: "excluded_pos",
+      categoryLabel: "Restaurant / POS Franchise (Excluded)",
+      vortexWedge: "Excluded — Locked-In Corporate POS",
+    };
+  }
 
   if (posBoundStorefront || nonPosStorefront) {
     // PILE-663 — storefronts with card-present / rate-competition fit are
@@ -689,12 +694,12 @@ function str(v: unknown): string | null {
 /** Parses a registry dollar/number cell ("150000.00", "$5,000", 42) into a
  *  finite number, or undefined when the cell isn't numeric. */
 function num(v: unknown): number | undefined {
+  const cleaned = typeof v === "string" ? v.replace(/[$,\s]/g, "") : null;
+  // A blank amount cell ("", "   ", "$") is missing data — Number("")
+  // would silently parse it as 0.
+  if (cleaned !== null && cleaned.length === 0) return undefined;
   const n =
-    typeof v === "number"
-      ? v
-      : typeof v === "string"
-        ? Number(v.replace(/[$,\s]/g, ""))
-        : NaN;
+    typeof v === "number" ? v : cleaned !== null ? Number(cleaned) : NaN;
   return Number.isFinite(n) ? n : undefined;
 }
 
@@ -1345,6 +1350,9 @@ async function pullGooglePlacesSource(
     textQuery,
     maxResultCount: maxResults,
   };
+  // The prior page's nextPageToken rides the source cursor — send it so a
+  // collect picks up page 2+ instead of re-pulling paid page 1 forever.
+  if (source.cursorValue) body.pageToken = source.cursorValue;
   if (str(c.includedType)) body.includedType = str(c.includedType);
   const biasRaw = str(c.locationBias);
   if (biasRaw) {

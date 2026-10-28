@@ -3,7 +3,6 @@ import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 
 import {
-  type NonPosSmbPresetId,
   PRESET_NON_POS_SMB_SOURCES,
   pullSource,
 } from "../agents/collectors.js";
@@ -3502,6 +3501,12 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
                   "nyc_tech_and_software_startups",
                   "us_nppes_medical_and_dental",
                   "us_sec_form_d_tech_startups",
+                  // PILE-660/661 — free-registry revenue/pain presets.
+                  "nyc_dob_permit_job_value",
+                  "nys_tax_warrants",
+                  "nys_ucc_filings",
+                  "irs_990_nonprofits",
+                  "nyc_checkbook",
                 ])
                 .default("nyc_dob_contractors_and_trades"),
               borough: z.string().optional(),
@@ -3540,8 +3545,7 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
     const { organizationId } = c.req.valid("param");
     const input = c.req.valid("json");
     const stub = getWorkspaceStub(c.env, organizationId);
-    const source =
-      PRESET_NON_POS_SMB_SOURCES[input.preset as NonPosSmbPresetId];
+    const source = PRESET_NON_POS_SMB_SOURCES[input.preset];
     const cursorKind = `lead_cursor:${input.preset}`;
     let offset = input.offset;
     if (offset === undefined) {
@@ -3575,6 +3579,21 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
             string,
             string | undefined
           >;
+          // PILE-657/658 — Places Details foot-traffic enrichment and the
+          // PDL inferred-revenue vendor only run when their keys (and, for
+          // the paid vendor, a monthly budget envelope) are configured.
+          const vendorCapCents = Number(envVars.PAID_VENDOR_BUDGET_CENTS ?? "");
+          const paidVendorBudget =
+            Number.isFinite(vendorCapCents) && vendorCapCents > 0
+              ? {
+                  vendor: envVars.PAID_VENDOR_NAME ?? "pdl",
+                  monthlyCapCents: Math.floor(vendorCapCents),
+                  spentThisMonthCents: 0,
+                  requestedCents:
+                    Number(envVars.PAID_VENDOR_COST_PER_LOOKUP_CENTS ?? "") ||
+                    50,
+                }
+              : undefined;
           return Effect.runPromise(
             enrichCandidatesWithEffect(pulled.candidates, {
               concurrency: 6,
@@ -3586,6 +3605,9 @@ export function registerCustomerRoutes(app: OpenAPIHono<AppContext>) {
               firecrawlBaseUrl:
                 envVars.FIRECRAWL_BASE_URL ?? "https://firecrawl.pile.nyc",
               lookupDos: true,
+              googlePlacesApiKey: envVars.GOOGLE_PLACES_API_KEY,
+              pdlApiKey: envVars.PDL_API_KEY,
+              paidVendorBudget,
             })
           );
         })()

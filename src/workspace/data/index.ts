@@ -3922,7 +3922,11 @@ export type DomainEventType =
   | "record.stage_entered"
   | "substep.actionable"
   | "substeps.all_required_done"
-  | "substep.review";
+  | "substep.review"
+  // PILE-271 — a lane ended up needing a human (retry budget exhausted,
+  // breaker-blocked, budget/cap escalation): the escalation channel
+  // external manager agents subscribe on.
+  | "issue.escalated";
 export type DomainEvent = typeof workspaceDomainEvents.$inferSelect;
 export type StageConfig = typeof workspaceStageConfigs.$inferSelect;
 export type AgentType = typeof workspaceAgentTypes.$inferSelect;

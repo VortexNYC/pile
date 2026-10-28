@@ -12893,7 +12893,12 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
                 "nyc_vc_and_accelerators",
                 "nyc_tech_and_software_startups",
                 "us_nppes_medical_and_dental",
-                "us_sec_form_d_tech_startups"
+                "us_sec_form_d_tech_startups",
+                "nyc_dob_permit_job_value",
+                "nys_tax_warrants",
+                "nys_ucc_filings",
+                "irs_990_nonprofits",
+                "nyc_checkbook"
               ],
               "default": "nyc_dob_contractors_and_trades"
             },
@@ -13057,6 +13062,53 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
           "required": [
             "name",
             "outcome"
+          ]
+        }
+      },
+      "required": [
+        "organizationId"
+      ]
+    }
+  },
+  {
+    "name": "postWorkspacesOrganizationIdCustomersSmsinbound",
+    "description": "Create customer sms inbound — Inbound SMS agent webhook (PILE-395). An SMS provider (Sendblue-style) POSTs each inbound text; a deterministic parser performs CRM ops on the sender's customer record — knock/visit logging, quoted-$ → proposal deal, follow-up scheduling, and 'what's due' list. Auth is a shared webhook secret via ?secret= or the x-sms-secret header compared against SMS_INBOUND_SECRET; the endpoint refuses (503 NOT_CONFIGURED) when the secret is unset so inbound is never unauthenticated. Retries dedupe on messageId. (POST /workspaces/{organizationId}/customers/sms-inbound) Path params (top-level, required): organizationId. Request body goes in the \"body\" object; fields: from*, text*, to, messageId, receivedAt (* = required).",
+    "method": "POST",
+    "path": "/workspaces/{organizationId}/customers/sms-inbound",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "organizationId": {
+          "type": "string"
+        },
+        "body": {
+          "type": "object",
+          "properties": {
+            "from": {
+              "type": "string",
+              "minLength": 4,
+              "maxLength": 40
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            },
+            "to": {
+              "type": "string",
+              "maxLength": 40
+            },
+            "messageId": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "receivedAt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "from",
+            "text"
           ]
         }
       },

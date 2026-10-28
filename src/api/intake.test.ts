@@ -1266,7 +1266,11 @@ describe("statement transcription (PILE-656)", () => {
 
     expect(calls).toHaveLength(1);
     expect(calls[0]!.model).toBe("@cf/meta/llama-3.2-11b-vision-instruct");
-    expect(calls[0]!.inputs.image).toBe("aW1hZ2VieXRlcw==");
+    // The vision binding takes an int[] byte array — "aW1hZ2VieXRlcw==" is
+    // base64 for the ASCII bytes of "imagebytes".
+    expect(calls[0]!.inputs.image).toEqual([
+      ...new TextEncoder().encode("imagebytes"),
+    ]);
   });
 
   it("loads the image from an R2 attachmentKey and falls back to the text parser on a prose AI reply", async () => {
@@ -1276,14 +1280,18 @@ describe("statement transcription (PILE-656)", () => {
       new Uint8Array([0xff, 0xd8, 0xff, 0x01])
     );
 
+    const aiCalls: { model: string; inputs: Record<string, unknown> }[] = [];
     const original = env.AI;
     env.AI = {
-      run: async () => ({
-        // The model ignored the JSON instruction — the regex reader
-        // still pulls the labelled figures out of its prose.
-        response:
-          "This statement shows Total Volume $30,000 with Total Fees $930.00 at an Effective Rate: 3.10% from Clover.",
-      }),
+      run: async (model: string, inputs: unknown) => {
+        aiCalls.push({ model, inputs: inputs as Record<string, unknown> });
+        return {
+          // The model ignored the JSON instruction — the regex reader
+          // still pulls the labelled figures out of its prose.
+          response:
+            "This statement shows Total Volume $30,000 with Total Fees $930.00 at an Effective Rate: 3.10% from Clover.",
+        };
+      },
     } as typeof env.AI;
     try {
       const res = await post(
@@ -1300,6 +1308,10 @@ describe("statement transcription (PILE-656)", () => {
     } finally {
       env.AI = original;
     }
+
+    // The R2 object's raw bytes went to the vision model as int[].
+    expect(aiCalls).toHaveLength(1);
+    expect(aiCalls[0]!.inputs.image).toEqual([0xff, 0xd8, 0xff, 0x01]);
   });
 
   it("keeps an explicitly supplied volume without touching extraction", async () => {
