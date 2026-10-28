@@ -49,6 +49,20 @@ interface AllDonePayload {
   stepKey: string | null;
 }
 
+/** PILE-271 — mirrored off the `issue.escalated` session event by the DO
+ *  (dedupe `escalated:{sessionId}`): a lane hit a terminal dead end and
+ *  needs a human. Emitter-specific extras (prUrl, breaches, rounds, …)
+ *  pass through in the payload but the drain only needs the routing
+ *  fields. */
+interface EscalatedPayload {
+  issueId?: string | null;
+  issueIdentifier?: string | null;
+  sessionId?: string | null;
+  reason?: string;
+  blockedOn?: string | null;
+  requiresHuman?: boolean;
+}
+
 const DEAL_STAGES = [
   "lead",
   "qualified",
@@ -688,6 +702,107 @@ async function handleAllRequiredDone(
   }
 }
 
+/** PILE-271 — the escalation drain: a lane hit a terminal dead end
+ *  (retry/nudge budget, run budget, spend cap, breaker-blocked death) and
+ *  nothing re-drives it, so a human has to pick it up. The CoS external
+ *  endpoint gets `agent.escalated` (the manager-agent channel; no-op when
+ *  no external chief is registered) and the issue's routed human —
+ *  assignee, else the lane's actor — gets a `lane_needs_input`
+ *  notification, the same "manager channel + human fallback" shape as the
+ *  stale-lane and spend-cap alerts. The emitters that also fire
+ *  `issue.escalated` event automations keep that channel; this handler
+ *  doesn't re-fire them (they'd double-dispatch automation subscribers).
+ *
+ *  Idempotent: `claimMemoryOnce` stakes `escalation_drained:{sessionId}`
+ *  up front, so a replayed or re-drained event for the same dead lane
+ *  no-ops instead of re-paging. */
+async function handleIssueEscalated(
+  env: WorkerEnv,
+  stub: Stub,
+  organizationId: string,
+  eventId: string,
+  payload: EscalatedPayload,
+  ctx?: { waitUntil: (promise: Promise<unknown>) => void }
+): Promise<void> {
+  const issue = payload.issueId
+    ? await stub.getIssue(payload.issueId).catch(() => null)
+    : null;
+  const session = payload.sessionId
+    ? await stub.getAgentSession(payload.sessionId).catch(() => null)
+    : null;
+  const claimKey = payload.sessionId ?? eventId;
+  const claimed = await stub.claimMemoryOnce({
+    entityType: "issue",
+    entityId: issue?.id ?? payload.issueId ?? claimKey,
+    kind: `escalation_drained:${claimKey}`,
+    fact: JSON.stringify({
+      eventId,
+      issueId: issue?.id ?? payload.issueId ?? null,
+      sessionId: payload.sessionId ?? null,
+      reason: payload.reason ?? null,
+      blockedOn: payload.blockedOn ?? null,
+      drainedAt: new Date().toISOString(),
+    }),
+    sourceSessionId: payload.sessionId ?? null,
+    sourceAgentSlug: PIPELINE_ACTOR.id,
+  });
+  if (!claimed) return;
+  const reason = payload.reason ?? "lane requires a human";
+  const detail = payload.blockedOn
+    ? `${reason} (blocked on ${payload.blockedOn})`
+    : reason;
+  // Human fallback first — the notification is best-effort and must land
+  // even when the CoS endpoint is down (a failed page throws below, which
+  // marks the event failed and keeps it replayable).
+  if (issue) {
+    const humanAssignee =
+      issue.assigneeId && !issue.assigneeId.startsWith("lane:")
+        ? issue.assigneeId
+        : null;
+    const recipientId = humanAssignee ?? session?.actorId ?? null;
+    if (recipientId) {
+      await stub
+        .createNotification({
+          recipientId,
+          recipientType: humanAssignee
+            ? "user"
+            : (session?.actorType ?? "user"),
+          issueId: issue.id,
+          type: "lane_needs_input",
+          metadata: {
+            sessionId: payload.sessionId ?? null,
+            reason,
+            blockedOn: payload.blockedOn ?? null,
+            escalated: true,
+          },
+        })
+        .catch((err: unknown) => {
+          console.error("escalation notify failed", {
+            eventId,
+            sessionId: payload.sessionId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+    }
+  }
+  await pageChiefOfStaff(
+    env,
+    stub,
+    organizationId,
+    {
+      event: "agent.escalated",
+      issueId: issue?.id ?? payload.issueId ?? undefined,
+      issueTitle: issue?.title,
+      issueIdentifier: payload.issueIdentifier ?? issue?.identifier ?? null,
+      sessionId: payload.sessionId ?? undefined,
+      agentSlug: session?.agentId,
+      conversationKey: session?.conversationKey ?? null,
+      error: detail,
+    },
+    ctx
+  );
+}
+
 /** Drain pending domain events for one org. Failed deliveries stay
  *  `failed` with the error recorded — the sweep re-enters but does not
  *  retry them automatically (replays come through PILE-424's run
@@ -734,6 +849,15 @@ export async function drainDomainEvents(
           stub,
           organizationId,
           payload as unknown as SubstepReviewPayload,
+          ctx
+        );
+      } else if (event.type === "issue.escalated") {
+        await handleIssueEscalated(
+          env,
+          stub,
+          organizationId,
+          event.id,
+          payload as unknown as EscalatedPayload,
           ctx
         );
       }

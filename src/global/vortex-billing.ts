@@ -12,59 +12,123 @@ export function billingConfigured(env: AppEnv): boolean {
   );
 }
 
-type VortexCustomer = {
-  customerId?: string;
-  billingAccountId?: string;
-};
+/**
+ * Vortex scopes every /v1 route by `environment` + `merchantAccountId` as
+ * REQUIRED QUERY PARAMETERS — never body fields. The request schemas are
+ * `additionalProperties: false`, so sending them in the body 400s, and
+ * omitting them from the query 400s on missing required params.
+ */
+function scopeQuery(env: AppEnv): string {
+  return new URLSearchParams({
+    environment: env.VORTEX_BILLING_ENV ?? "production",
+    merchantAccountId: env.VORTEX_BILLING_MERCHANT_ID ?? "",
+  }).toString();
+}
 
+function authHeaders(
+  env: AppEnv,
+  idempotencyKey?: string
+): Record<string, string> {
+  return {
+    Authorization: `Bearer ${env.VORTEX_BILLING_API_KEY}`,
+    "Content-Type": "application/json",
+    ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined),
+  };
+}
+
+/** All Vortex responses wrap the resource in `{ data, requestId }`. */
+type VortexEnvelope = { data?: Record<string, unknown> };
+
+function stringField(
+  data: Record<string, unknown>,
+  key: string
+): string | null {
+  const v = data[key];
+  return typeof v === "string" && v.length > 0 ? v : null;
+}
+
+/**
+ * Pull a billingAccountId out of a Vortex `data` payload. The spec types
+ * `data` as a freeform object (ApiWriteEnvelope), so probe the shapes the
+ * customer/state payloads actually use: a flat id, a `defaultBillingAccountId`
+ * alias, a `billingAccounts[]` collection, or a nested `billingAccount`.
+ */
+function billingAccountIdFrom(
+  data: Record<string, unknown> | undefined
+): string | null {
+  if (!data) {
+    return null;
+  }
+  const flat =
+    stringField(data, "billingAccountId") ??
+    stringField(data, "defaultBillingAccountId");
+  if (flat) {
+    return flat;
+  }
+  const list = data.billingAccounts;
+  if (Array.isArray(list)) {
+    for (const item of list) {
+      if (item && typeof item === "object") {
+        const id = stringField(
+          item as Record<string, unknown>,
+          "billingAccountId"
+        );
+        if (id) {
+          return id;
+        }
+      }
+    }
+  }
+  const nested = data.billingAccount;
+  if (nested && typeof nested === "object") {
+    return stringField(nested as Record<string, unknown>, "billingAccountId");
+  }
+  return null;
+}
+
+function customerIdFrom(
+  data: Record<string, unknown> | undefined
+): string | null {
+  if (!data) {
+    return null;
+  }
+  const flat = stringField(data, "customerId");
+  if (flat) {
+    return flat;
+  }
+  const nested = data.customer;
+  if (nested && typeof nested === "object") {
+    return stringField(nested as Record<string, unknown>, "customerId");
+  }
+  return null;
+}
+
+/**
+ * Resolve the customer's billing account. The live spec has NO
+ * /v1/customers/{id}/billing-accounts collection — the ensure-upsert
+ * auto-provisions one, and `GET /v1/customers/{id}/state` is the
+ * customer-scoped read that exposes billing state. Returns null when no
+ * account is resolvable yet.
+ */
 async function ensureBillingAccountId(
   env: AppEnv,
   customerId: string,
   organizationId: string
 ): Promise<string | null> {
-  const base = env.VORTEX_BILLING_API_URL;
-  const headers = {
-    Authorization: `Bearer ${env.VORTEX_BILLING_API_KEY}`,
-    "Content-Type": "application/json",
-  };
-  const envParam = `environment=${env.VORTEX_BILLING_ENV ?? "production"}&merchantAccountId=${env.VORTEX_BILLING_MERCHANT_ID}`;
-  const list = await fetch(
-    `${base}/v1/customers/${customerId}/billing-accounts?${envParam}`,
-    { headers }
-  );
-  if (list.ok) {
-    const body = (await list.json()) as {
-      data?: { items?: Array<{ billingAccountId?: string }> };
-    };
-    const id = body.data?.items?.[0]?.billingAccountId;
-    if (id) {
-      return id;
-    }
-  }
-  // None exists yet — create a minimal manual-collection account so usage
-  // events have a billingAccountId to hang off.
   const res = await fetch(
-    `${base}/v1/customers/${customerId}/billing-accounts`,
-    {
-      method: "POST",
-      headers: { ...headers, "Idempotency-Key": `pile-ba-${organizationId}` },
-      body: JSON.stringify({
-        environment: env.VORTEX_BILLING_ENV ?? "production",
-        merchantAccountId: env.VORTEX_BILLING_MERCHANT_ID,
-        customerId,
-        invoiceDeliveryMode: "api_only",
-        collectionMode: "manual",
-        autoCollectionEnabled: false,
-      }),
-    }
+    `${env.VORTEX_BILLING_API_URL}/v1/customers/${customerId}/state?${scopeQuery(env)}`,
+    { headers: authHeaders(env) }
   );
   if (!res.ok) {
+    console.warn("vortex customer state lookup failed", {
+      organizationId,
+      customerId,
+      status: res.status,
+    });
     return null;
   }
-  const body = (await res.json()) as {
-    data?: { billingAccountId?: string };
-  };
-  return body.data?.billingAccountId ?? null;
+  const body = (await res.json()) as VortexEnvelope;
+  return billingAccountIdFrom(body.data);
 }
 
 /**
@@ -92,43 +156,38 @@ export async function ensureBillingCustomer(
     return null;
   }
 
-  // PUT /v1/customers is the ensure-upsert: dedupes on externalCustomerRef
-  // first, returns the same customerId on repeat calls (VOR-610).
-  const res = await fetch(`${env.VORTEX_BILLING_API_URL}/v1/customers`, {
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${env.VORTEX_BILLING_API_KEY}`,
-      "Content-Type": "application/json",
-      "Idempotency-Key": `pile-customer-${organizationId}`,
-    },
-    body: JSON.stringify({
-      environment: env.VORTEX_BILLING_ENV ?? "production",
-      merchantAccountId: env.VORTEX_BILLING_MERCHANT_ID,
-      name: organizationId,
-      defaultCurrency: "USD",
-      externalCustomerRef: organizationId,
-      metadata: { source: "pile", orgId: organizationId },
-    }),
-  });
-  let customer: VortexCustomer | null = null;
-  if (res.ok) {
-    const body = (await res.json()) as { data?: VortexCustomer };
-    customer = body.data ?? null;
-  } else {
+  // PUT /v1/customers is the ensure-upsert (CustomerEnsureRequest): dedupes
+  // on externalCustomerRef first, returns the same customerId on repeat calls.
+  // environment + merchantAccountId ride the query string — the body schema
+  // rejects them.
+  const res = await fetch(
+    `${env.VORTEX_BILLING_API_URL}/v1/customers?${scopeQuery(env)}`,
+    {
+      method: "PUT",
+      headers: authHeaders(env, `pile-customer-${organizationId}`),
+      body: JSON.stringify({
+        name: organizationId,
+        defaultCurrency: "USD",
+        externalCustomerRef: organizationId,
+        metadata: { source: "pile", orgId: organizationId },
+      }),
+    }
+  );
+  if (!res.ok) {
     throw new Error(`vortex customers: ${res.status}`);
   }
-  const customerId = customer?.customerId;
+  const body = (await res.json()) as VortexEnvelope;
+  const customerId = customerIdFrom(body.data);
   if (!customerId) {
     throw new Error("vortex customers: empty customerId");
   }
 
-  // The customer payload doesn't carry a billing account — resolve one
-  // separately so usage events can satisfy the contract.
-  const billingAccountId = await ensureBillingAccountId(
-    env,
-    customerId,
-    organizationId
-  );
+  // The ensure response may carry the auto-provisioned billing account;
+  // otherwise resolve it from customer state so usage events can satisfy
+  // the required billingAccountId.
+  const billingAccountId =
+    billingAccountIdFrom(body.data) ??
+    (await ensureBillingAccountId(env, customerId, organizationId));
 
   const ts = new Date().toISOString();
   await db
@@ -173,35 +232,52 @@ export async function createCheckoutSession(
     .from(billingAccounts)
     .where(eq(billingAccounts.organizationId, organizationId))
     .get();
-  if (!account?.vortexCustomerId || !account.vortexBillingAccountId) {
+  if (!account?.vortexCustomerId) {
     return null;
   }
   const res = await fetch(
-    `${env.VORTEX_BILLING_API_URL}/v1/checkout/sessions`,
+    `${env.VORTEX_BILLING_API_URL}/v1/checkout/sessions?${scopeQuery(env)}`,
     {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.VORTEX_BILLING_API_KEY}`,
-        "Content-Type": "application/json",
-        "Idempotency-Key": `pile-checkout-${organizationId}-${crypto.randomUUID()}`,
-      },
+      headers: authHeaders(
+        env,
+        `pile-checkout-${organizationId}-${crypto.randomUUID()}`
+      ),
+      // CreateCheckoutSessionRequest: `customerExternalId` is the merchant's
+      // own ref (our org id / externalCustomerRef), `lineItems` — not
+      // `items` — carries { priceId, quantity }.
       body: JSON.stringify({
-        environment: env.VORTEX_BILLING_ENV ?? "production",
-        merchantAccountId: env.VORTEX_BILLING_MERCHANT_ID,
         mode: "subscription",
-        customerId: account.vortexCustomerId,
-        billingAccountId: account.vortexBillingAccountId,
-        items: [{ priceId, quantity: 1 }],
+        customerExternalId: organizationId,
+        billingAccountId: account.vortexBillingAccountId ?? undefined,
+        lineItems: [{ priceId, quantity: 1 }],
+        metadata: { source: "pile", orgId: organizationId },
       }),
     }
   );
   if (!res.ok) {
     return null;
   }
-  const body = (await res.json()) as {
-    data?: { checkoutSession?: { checkoutUrl?: string } };
-  };
-  return body.data?.checkoutSession?.checkoutUrl ?? null;
+  const body = (await res.json()) as VortexEnvelope;
+  // checkoutUrl is a bearer secret returned only on the create response.
+  const data = body.data;
+  if (!data) {
+    return null;
+  }
+  const flat = stringField(data, "checkoutUrl");
+  if (flat) {
+    return flat;
+  }
+  for (const key of ["session", "checkoutSession"]) {
+    const nested = data[key];
+    if (nested && typeof nested === "object") {
+      const url = stringField(nested as Record<string, unknown>, "checkoutUrl");
+      if (url) {
+        return url;
+      }
+    }
+  }
+  return null;
 }
 
 /**
@@ -251,27 +327,36 @@ export async function submitUsageEvent(
         .where(eq(billingAccounts.organizationId, organizationId));
     }
   }
-  const idempotencyKey = `pile-usage-${crypto.randomUUID()}`;
-  const res = await fetch(`${env.VORTEX_BILLING_API_URL}/v1/usage-events`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.VORTEX_BILLING_API_KEY}`,
-      "Content-Type": "application/json",
-      "Idempotency-Key": idempotencyKey,
-    },
-    body: JSON.stringify({
-      environment: env.VORTEX_BILLING_ENV ?? "production",
-      merchantAccountId: env.VORTEX_BILLING_MERCHANT_ID,
+  // billingAccountId is a REQUIRED field on UsageEventCreateRequest — an
+  // event without it can never be accepted, so skip with a log rather than
+  // send a guaranteed-400 body.
+  if (!billingAccountId) {
+    console.warn("vortex usage-events skipped: no billingAccountId", {
+      organizationId,
       customerId: account.vortexCustomerId,
-      billingAccountId: billingAccountId ?? undefined,
-      meterId: env.VORTEX_BILLING_METER_ID,
-      eventName: "usage",
-      quantity: 1,
-      occurredAt: new Date().toISOString(),
-      idempotencyKey,
-      metadata,
-    }),
-  });
+    });
+    return;
+  }
+  const idempotencyKey = `pile-usage-${crypto.randomUUID()}`;
+  const res = await fetch(
+    `${env.VORTEX_BILLING_API_URL}/v1/usage-events?${scopeQuery(env)}`,
+    {
+      method: "POST",
+      headers: authHeaders(env, idempotencyKey),
+      // UsageEventCreateRequest — exactly these fields; environment and
+      // merchantAccountId are query params, not body fields.
+      body: JSON.stringify({
+        customerId: account.vortexCustomerId,
+        billingAccountId,
+        meterId: env.VORTEX_BILLING_METER_ID,
+        eventName: "usage",
+        quantity: 1,
+        occurredAt: new Date().toISOString(),
+        idempotencyKey,
+        metadata,
+      }),
+    }
+  );
   if (!res.ok) {
     throw new Error(`vortex usage-events: ${res.status}`);
   }
