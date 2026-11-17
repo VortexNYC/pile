@@ -2,20 +2,8 @@ import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AppEnv } from "../platform/env.js";
-import type { WorkerEnv } from "../platform/middleware.js";
 import { CfAgentProvider } from "./cf-agent.js";
 import { CursorAgentProvider } from "./cursor.js";
-import { DevinAgentProvider } from "./devin.js";
-
-function devinEnv(): WorkerEnv {
-  return {
-    ...env,
-    DEVIN_ORG_ID: "devin-org",
-    DEVIN_TOKEN: "devin-token",
-    DAYTONA_API_KEY: "daytona-key",
-    DAYTONA_API_URL: "https://daytona.test",
-  };
-}
 
 function cursorEnv(): AppEnv {
   return {
@@ -46,109 +34,6 @@ function jsonResponse(body: unknown, status = 200) {
 describe("agent providers", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-  });
-
-  describe("devin", () => {
-    it("poll maps terminal statuses and extracts pr details", async () => {
-      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-        jsonResponse({
-          session_id: "devin-123",
-          status: "exit",
-          status_detail: "merged",
-          pull_requests: [
-            {
-              url: "https://github.com/VortexNYC/pile/pull/1",
-              pr_state: "merged",
-            },
-          ],
-        })
-      );
-
-      const provider = new DevinAgentProvider(devinEnv());
-      const result = await provider.poll("devin-123");
-
-      expect(result.status).toBe("completed");
-      expect(result.result).toBe("merged");
-      expect(result.prUrl).toBe("https://github.com/VortexNYC/pile/pull/1");
-      expect(result.prState).toBe("merged");
-      expect(fetchSpy).toHaveBeenCalledOnce();
-      expect(String(fetchSpy.mock.calls[0]?.[0] ?? "")).toContain(
-        "/sessions/devin-123"
-      );
-    });
-
-    it("maps waiting_for_user to waiting (blocked on a question)", async () => {
-      vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-        jsonResponse({
-          session_id: "devin-123",
-          status: "running",
-          status_detail: "waiting_for_user",
-        })
-      );
-
-      const provider = new DevinAgentProvider(devinEnv());
-      const result = await provider.poll("devin-123");
-
-      expect(result.status).toBe("waiting");
-      expect(result.result).toBe("waiting_for_user");
-    });
-
-    it("latestElicitation returns the newest message item", async () => {
-      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-        jsonResponse({
-          items: [
-            { message: "do the thing" },
-            { message: "working on it" },
-            {
-              message: "Which environment should I target — staging or prod?",
-            },
-          ],
-          end_cursor: "abc",
-          has_next_page: false,
-          total: 3,
-        })
-      );
-
-      const provider = new DevinAgentProvider(devinEnv());
-      const question = await provider.latestElicitation("devin-123");
-
-      expect(question).toBe(
-        "Which environment should I target — staging or prod?"
-      );
-      expect(String(fetchSpy.mock.calls[0]?.[0] ?? "")).toContain(
-        "/sessions/devin-123/messages"
-      );
-    });
-
-    it("latestElicitation is null when the messages endpoint fails", async () => {
-      vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-        new Response("nope", { status: 404 })
-      );
-
-      const provider = new DevinAgentProvider(devinEnv());
-      expect(await provider.latestElicitation("devin-123")).toBeNull();
-    });
-
-    it("getState returns provider without compute", async () => {
-      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-        jsonResponse({
-          session_id: "devin-123",
-          status: "running",
-          status_detail: "working",
-        })
-      );
-
-      const provider = new DevinAgentProvider(devinEnv());
-      const state = await provider.getState("devin-123", "tracker-123");
-
-      expect(state).not.toBeNull();
-      if (!state) throw new Error("state is null");
-      expect((state.provider as Record<string, string>).session_id).toBe(
-        "devin-123"
-      );
-      expect(state.compute).toBeNull();
-      expect(fetchSpy).toHaveBeenCalledTimes(1);
-    });
   });
 
   describe("cursor", () => {

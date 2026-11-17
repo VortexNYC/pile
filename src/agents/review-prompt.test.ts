@@ -6,7 +6,6 @@ import type { WorkerEnv } from "../platform/middleware.js";
 import type { Issue } from "../types/workspace.js";
 import { CodexAgentProvider } from "./codex.js";
 import { CursorAgentProvider } from "./cursor.js";
-import { DevinAgentProvider } from "./devin.js";
 import { DOMAIN_REVIEW_PROMPT } from "./review-prompt.js";
 
 const issue: Issue = {
@@ -64,7 +63,6 @@ const requestSchema = z.object({
 });
 
 const providers = [
-  new DevinAgentProvider(providerEnv),
   new CodexAgentProvider(providerEnv),
   new CursorAgentProvider(providerEnv),
 ];

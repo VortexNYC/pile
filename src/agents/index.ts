@@ -45,7 +45,6 @@ import {
   type DedupeResult,
 } from "./dedupe.js";
 import { DevinCliAgentProvider } from "./devin-cli.js";
-import { DevinAgentProvider } from "./devin.js";
 import { guidanceRefs, renderGuidancePacks } from "./guidance.js";
 import {
   getLaneDbProvider,
@@ -72,7 +71,6 @@ export function reviewConcurrencyCap(cap: number): number {
 }
 
 const providers: Record<string, (env: WorkerEnv) => AgentProvider> = {
-  devin: (env) => new DevinAgentProvider(env),
   codex: (env) => new CodexAgentProvider(env),
   "codex-cli": (env) => new CodexCliAgentProvider(env),
   "devin-cli": (env) => new DevinCliAgentProvider(env),
